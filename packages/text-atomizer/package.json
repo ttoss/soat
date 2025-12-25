@@ -1,0 +1,20 @@
+{
+  "name": "@soat/text-atomizer",
+  "scripts": {
+    "build": "tsup",
+    "test": "jest --projects tests/unit"
+  },
+  "dependencies": {
+    "ollama": "^0.6.3"
+  },
+  "devDependencies": {
+    "@ttoss/config": "^1.35.12",
+    "@types/jest": "^30.0.0",
+    "jest": "^30.2.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0"
+  },
+  "files": [
+    "dist"
+  ]
+}

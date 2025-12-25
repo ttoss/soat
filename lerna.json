@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/@lerna-lite/cli/schemas/lerna-schema.json",
+  "version": "independent",
+  "npmClient": "pnpm",
+  "stream": true,
+  "command": {
+    "publish": {
+      "allowBranch": "main",
+      "noPrivate": true
+    },
+    "version": {
+      "conventionalCommits": true,
+      "createRelease": "github",
+      "message": "chore(release): publish packages",
+      "syncWorkspaceLock": true,
+      "allowPeerDependenciesUpdate": true
+    }
+  },
+  "ignoreChanges": ["**/__fixtures__/**", "**/tests/**"],
+  "packages": [
+    "challenge/packages/*",
+    "docs/*",
+    "packages/*",
+    "terezinha-farm/*"
+  ]
+}

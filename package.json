@@ -1,0 +1,43 @@
+{
+  "private": true,
+  "name": "ttoss-soat",
+  "version": "1.0.0",
+  "license": "MIT",
+  "contributors": [
+    "Pedro Arantes <arantespp@gmail.com> (https://arantespp.com)"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ttoss/ttoss.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ttoss/ttoss/issues"
+  },
+  "scripts": {
+    "prepare": "husky",
+    "syncpack:fix": "syncpack fix-mismatches",
+    "syncpack:list": "syncpack list-mismatches"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.1.0",
+    "@lerna-lite/changed": "^4.9.4",
+    "@lerna-lite/cli": "^4.9.4",
+    "@lerna-lite/list": "^4.9.4",
+    "@lerna-lite/version": "^4.9.4",
+    "@ttoss/config": "^1.35.12",
+    "@ttoss/eslint-config": "^1.26.6",
+    "@types/node": "^25.0.2",
+    "eslint": "^9.39.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.7.4",
+    "syncpack": "13.0.4",
+    "turbo": "^2.6.2",
+    "typescript": "~5.9.3"
+  },
+  "engines": {
+    "node": "^24.0.0",
+    "pnpm": "^10.0.0"
+  },
+  "packageManager": "pnpm@10.24.0"
+}
