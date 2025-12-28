@@ -1,0 +1,23 @@
+{
+  "name": "@soat/server",
+  "version": "0.0.1",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@ttoss/http-server": "^0.3.1",
+    "@ttoss/http-server-mcp": "^0.3.1",
+    "ollama": "^0.6.3",
+    "pg": "^8.16.3",
+    "pgvector": "^0.2.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.16.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0"
+  },
+  "files": [
+    "dist"
+  ]
+}
