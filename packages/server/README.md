@@ -68,7 +68,7 @@ ollama pull qwen3-embedding:0.6b
 pnpm dev
 ```
 
-The server will be running at `http://localhost:3000`.
+The server will be running at `http://localhost:5047`.
 
 ## API Reference
 
@@ -142,7 +142,7 @@ npx -y @modelcontextprotocol/inspector
 Configure the connection:
 
 - **Transport Type**: Streamable HTTP
-- **URL**: `http://localhost:3000/mcp`
+- **URL**: `http://localhost:5047/mcp`
 - **Connection Type**: Direct
 
 ### Using curl
@@ -150,7 +150,7 @@ Configure the connection:
 **Record a memory:**
 
 ```bash
-curl -X POST http://localhost:3000/api/memory/record \
+curl -X POST http://localhost:5047/api/memory/record \
      -H "Content-Type: application/json" \
      -d '{"content": "The capital of France is Paris."}'
 ```
@@ -158,7 +158,7 @@ curl -X POST http://localhost:3000/api/memory/record \
 **Recall memories:**
 
 ```bash
-curl -X POST http://localhost:3000/api/memory/recall \
+curl -X POST http://localhost:5047/api/memory/recall \
      -H "Content-Type: application/json" \
      -d '{"query": "What is the capital of France?", "limit": 5}'
 ```
@@ -169,7 +169,7 @@ The server uses the following default configuration:
 
 | Setting         | Default                | Description                 |
 | --------------- | ---------------------- | --------------------------- |
-| Port            | `3000`                 | HTTP server port            |
+| Port            | `5047`                 | HTTP server port            |
 | Database        | `postgres`             | PostgreSQL database name    |
 | DB Host         | `localhost`            | Database host               |
 | DB Port         | `5432`                 | Database port               |

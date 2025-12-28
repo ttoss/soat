@@ -13,6 +13,14 @@ app.use(mcpRouter.routes());
 app.use(apiRouter.routes());
 app.use(apiRouter.allowedMethods());
 
+/**
+ * S: 5
+ * O: 0
+ * A: 4
+ * T: 7
+ */
+const SOAT_PORT = 5047;
+
 // Establish database connection before starting the server
 const startServer = async () => {
   try {
@@ -22,9 +30,9 @@ const startServer = async () => {
     // eslint-disable-next-line no-console
     console.log('Database connected successfully');
 
-    app.listen(3000, () => {
+    app.listen(SOAT_PORT, () => {
       // eslint-disable-next-line no-console
-      console.log('SOAT Server is running on http://localhost:3000');
+      console.log(`SOAT Server is running on http://localhost:${SOAT_PORT}`);
     });
   } catch (error) {
     // eslint-disable-next-line no-console
