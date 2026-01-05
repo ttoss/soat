@@ -47,7 +47,7 @@ export const retrieve = async (args: {
   return data.Body as Buffer;
 };
 
-export const delete = async (args: {
+export const deleteFile = async (args: {
   id: string;
   config: StorageConfig;
 }): Promise<void> => {

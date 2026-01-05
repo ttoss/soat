@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 
 import { v4 as uuidv4 } from 'uuid';
 
-import { deleteFileRecord, getFileRecord } from './database';
+import { deleteFileRecord, getFileRecord, saveFileRecord } from './database';
 import * as gcs from './storage/gcs';
 import * as local from './storage/local';
 import * as s3 from './storage/s3';
@@ -85,7 +85,7 @@ export const deleteFile = async (args: {
 
   // Delete from storage
   const storage = getStorage({ config });
-  await storage.delete({ id, config });
+  await storage.deleteFile({ id, config });
 
   // Delete from database
   return deleteFileRecord(id);

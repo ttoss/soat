@@ -2,15 +2,7 @@
   "name": "@soat/files-core",
   "version": "0.0.0",
   "description": "Core package for saving and managing files with local, S3, and GCS storage",
-  "main": "dist/index.js",
-  "module": "dist/index.mjs",
-  "types": "dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
+  "exports": "./src/index.ts",
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",

@@ -13,6 +13,8 @@ export const save = async (args: {
     throw new Error('Local config not provided');
   }
   const filePath = path.join(config.local.path, id);
+  // Ensure directory exists
+  await fs.mkdir(config.local.path, { recursive: true });
   await fs.writeFile(filePath, content);
 };
 
@@ -28,7 +30,7 @@ export const retrieve = async (args: {
   return fs.readFile(filePath);
 };
 
-export const delete = async (args: {
+export const deleteFile = async (args: {
   id: string;
   config: StorageConfig;
 }): Promise<void> => {

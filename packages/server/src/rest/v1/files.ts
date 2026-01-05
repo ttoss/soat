@@ -4,19 +4,22 @@ import {
   listFileRecords,
   retrieveFileById,
   saveFile,
+  type StorageConfig,
 } from '@soat/files-core';
 import { Router } from '@ttoss/http-server';
 
-const defaultConfig = {
+import type { Context } from '../../Context';
+
+const defaultConfig: StorageConfig = {
   type: 'local',
   local: {
     path: '/tmp/files',
   },
 };
 
-const filesRouter = new Router();
+const filesRouter = new Router<unknown, Context>();
 
-filesRouter.get('/', async (ctx) => {
+filesRouter.get('/', async (ctx: Context) => {
   try {
     const files = await listFileRecords();
     ctx.status = 200;
@@ -30,7 +33,7 @@ filesRouter.get('/', async (ctx) => {
   }
 });
 
-filesRouter.post('/save', async (ctx) => {
+filesRouter.post('/upload', async (ctx: Context) => {
   try {
     const { content, options } = ctx.request.body;
     if (!content) {
@@ -50,7 +53,7 @@ filesRouter.post('/save', async (ctx) => {
   }
 });
 
-filesRouter.get('/:id', async (ctx) => {
+filesRouter.get('/:id', async (ctx: Context) => {
   try {
     const { id } = ctx.params;
     if (!id) {
@@ -76,7 +79,7 @@ filesRouter.get('/:id', async (ctx) => {
   }
 });
 
-filesRouter.delete('/:id', async (ctx) => {
+filesRouter.delete('/:id', async (ctx: Context) => {
   try {
     const { id } = ctx.params;
     if (!id) {

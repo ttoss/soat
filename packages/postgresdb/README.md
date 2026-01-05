@@ -37,6 +37,16 @@ import { models } from '@soat/postgresdb';
 const { File } = models;
 ```
 
+### Sync Database Schema
+
+To sync the database schema, you need to define a `env.<your_environment>` file with your database connection settings. Then run:
+
+```bash
+pnpm run sync -e <your_environment>
+```
+
+To alter the schema, add the flag `--alter`. Check the [@ttoss/postgresdb sync documentation](https://ttoss.dev/docs/modules/packages/postgresdb-cli/#sync) for more details.
+
 ## Development
 
 ### Building
@@ -79,6 +89,12 @@ pnpm sync -e dev
 
 ```bash
 pnpm db-dev:stop
+```
+
+If you need to remove containers and volumes, use:
+
+```bash
+pnpm db-dev:rm
 ```
 
 ## License

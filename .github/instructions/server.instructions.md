@@ -93,6 +93,39 @@ pnpm build
 
 This uses `tsup` to compile the TypeScript code.
 
+## Testing the REST API
+
+To test REST API endpoints during development:
+
+1. **Start the development server:**
+
+   ```bash
+   cd packages/server
+   pnpm dev
+   ```
+
+2. **Make requests using curl to `0.0.0.0:5047`:**
+
+   **Important:** Always use `0.0.0.0` instead of `localhost` when making curl requests to avoid connection issues.
+
+   Example endpoints:
+
+   ```bash
+   # List files
+   curl -X GET http://0.0.0.0:5047/api/v1/files
+
+   # Upload a file
+   curl -X POST http://0.0.0.0:5047/api/v1/files/upload \
+     -H "Content-Type: application/json" \
+     -d '{"content":"Hello World!","options":{"contentType":"text/plain","metadata":{"filename":"test.txt"}}}'
+
+   # Get file by ID
+   curl -X GET http://0.0.0.0:5047/api/v1/files/{file-id}
+
+   # Delete file
+   curl -X DELETE http://0.0.0.0:5047/api/v1/files/{file-id}
+   ```
+
 ## Dependencies
 
 The server depends on:

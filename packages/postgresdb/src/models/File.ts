@@ -2,8 +2,13 @@ import { Column, DataType, Model, Table } from '@ttoss/postgresdb';
 
 @Table({ tableName: 'files' })
 export class File extends Model {
-  @Column({ type: DataType.INTEGER, primaryKey: true, autoIncrement: true })
-  declare id: number;
+  @Column({
+    type: DataType.UUID,
+    primaryKey: true,
+    defaultValue: DataType.UUIDV4,
+  })
+  declare id: string;
+
   @Column({ type: DataType.STRING })
   declare filename?: string;
 

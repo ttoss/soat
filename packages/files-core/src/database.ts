@@ -10,7 +10,10 @@ export const saveFileRecord = async (args: {
   storagePath: string;
   metadata?: Record<string, unknown>;
 }): Promise<FileRecord> => {
-  const file = await models.File.create(args as any);
+  const file = await models.File.create({
+    ...args,
+    metadata: args.metadata ? JSON.stringify(args.metadata) : undefined,
+  } as any);
 
   return {
     id: file.id,
