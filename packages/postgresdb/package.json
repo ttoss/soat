@@ -1,0 +1,32 @@
+{
+  "private": true,
+  "name": "@soat/postgresdb",
+  "version": "0.0.0",
+  "description": "Database models and operations for SOAT packages",
+  "type": "module",
+  "exports": "./src/index.ts",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "pretest": "pnpm run build",
+    "test": "jest --projects tests/unit",
+    "sync": "ttoss-postgresdb sync",
+    "db-dev:start": "docker compose -f docker-compose.dev.yml up -d",
+    "db-dev:stop": "docker compose -f docker-compose.dev.yml down",
+    "db-dev:logs": "docker compose -f docker-compose.dev.yml logs -f"
+  },
+  "dependencies": {
+    "@ttoss/postgresdb": "^0.2.27"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^11.11.0",
+    "@ttoss/config": "^1.35.12",
+    "@ttoss/postgresdb-cli": "^0.1.22",
+    "@ttoss/test-utils": "^4.0.2",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.0.3",
+    "jest": "^30.2.0",
+    "tsup": "^8.5.1",
+    "typescript": "~5.9.3"
+  }
+}

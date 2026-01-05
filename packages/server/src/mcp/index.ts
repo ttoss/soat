@@ -1,0 +1,1 @@
+export { mcpRouter } from './server';

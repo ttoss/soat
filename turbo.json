@@ -1,0 +1,10 @@
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "globalEnv": ["DATABASE_*"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "build/**"]
+    }
+  }
+}

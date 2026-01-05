@@ -1,0 +1,34 @@
+{
+  "name": "@soat/documents-core",
+  "version": "0.0.0",
+  "description": "Core package for saving and managing documents with local, S3, and GCS storage",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@soat/files-core": "workspace:*",
+    "@google-cloud/storage": "^7.0.0",
+    "aws-sdk": "^2.0.0",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@ttoss/config": "^1.35.12",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.0.3",
+    "@types/uuid": "^10.0.0",
+    "jest": "^30.2.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0"
+  }
+}
