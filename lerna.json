@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/@lerna-lite/cli/schemas/lerna-schema.json",
-  "version": "0.0.0-alpha.1",
+  "version": "0.0.0-alpha.2",
   "npmClient": "pnpm",
   "stream": true,
   "command": {
@@ -16,6 +16,11 @@
       "allowPeerDependenciesUpdate": true
     }
   },
-  "ignoreChanges": ["**/__fixtures__/**", "**/tests/**"],
-  "packages": ["packages/*"]
+  "ignoreChanges": [
+    "**/__fixtures__/**",
+    "**/tests/**"
+  ],
+  "packages": [
+    "packages/*"
+  ]
 }
