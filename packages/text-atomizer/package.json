@@ -1,5 +1,6 @@
 {
   "name": "@soat/text-atomizer",
+  "version": "0.0.0-alpha.1",
   "scripts": {
     "build": "tsup",
     "test": "jest --projects tests/unit"
