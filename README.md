@@ -1,7 +1,7 @@
 # SOAT (Source of Agentic Truth)
 
 <p align="center">
-  <img src="./assets/banner.jpg" alt="SOAT Banner" width="100%">
+  <img src="./packages/website/static/img/hero.jpg" alt="SOAT Banner" width="100%">
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -38,20 +38,22 @@ As AI agents become more sophisticated, they need a reliable way to maintain con
 | [@soat/cli](./packages/cli)                     | Command-line interface (WIP)              |
 | [@soat/text-atomizer](./packages/text-atomizer) | Text analysis and decomposition utilities |
 
+## Documentation
+
+📚 **[Read the Full Documentation](https://soat.ttoss.dev)** – Learn how to set up the server, connect agents via MCP, and manage memory.
+
 ## Getting Started
 
-The quickest way to get started is to set up the SOAT server:
+The quickest way to get started is using Docker Compose.
 
-```bash
-# Clone the repository
-git clone https://github.com/ttoss/soat.git
-cd soat
+1. **Clone the repository**
 
-# Install dependencies
-pnpm install
-```
+   ```bash
+   git clone https://github.com/ttoss/soat.git
+   cd soat
+   ```
 
-Then follow the detailed setup instructions in the [Server README](./packages/server/README.md).
+2. **Follow the [Getting Started Guide](https://soat.ttoss.dev/docs/getting-started)** to spin up the server and database using Docker Compose.
 
 ## Architecture
 

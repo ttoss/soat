@@ -1,0 +1,698 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;400;600;700&family=Space+Grotesk:wght@400;600;700&display=swap');
+
+/**
+ * SOAT Brand Theme - Semantic Cosmos
+ * Based on SOAT Brand Identity Guidelines v1.1
+ * 
+ * This stylesheet applies the "Semantic Cosmos" visual identity:
+ * - Dark mode first approach
+ * - Core Cyan (#00E5FF) for dark theme glowing accents
+ * - Electric Blue (#1A73E8) for light theme
+ * - Deep Violet (#8E44AD) for gradients
+ * - Cosmic, glowing, futuristic aesthetic
+ */
+
+/* ===================================================================
+  TYPOGRAPHY - Space Grotesk for headers, Inter for body
+   =================================================================== */
+
+/* ===================================================================
+   LIGHT THEME - Electric Blue (#1A73E8)
+   Accessibility First - WCAG AA compliant
+   =================================================================== */
+:root {
+  /* Primary Colors - Electric Blue for light theme */
+  --ifm-color-primary: #1a73e8;
+  --ifm-color-primary-dark: #1567d3;
+  --ifm-color-primary-darker: #1461c7;
+  --ifm-color-primary-darkest: #1050a4;
+  --ifm-color-primary-light: #3181ea;
+  --ifm-color-primary-lighter: #3d88ec;
+  --ifm-color-primary-lightest: #609eef;
+
+  /* Deep Violet accent */
+  --soat-violet: #8e44ad;
+  --soat-violet-dark: #7d3c9d;
+  --soat-violet-light: #a855c7;
+
+  /* Typography - Per SOAT brandbook */
+  --ifm-font-family-base: 'Inter', sans-serif;
+  --ifm-heading-font-family: 'Space Grotesk', sans-serif;
+  --ifm-heading-font-weight: 600;
+  --ifm-font-weight-bold: 700;
+  --ifm-line-height-base: 1.7;
+  --ifm-font-size-base: 16px;
+
+  /* Surface & Background - Pure White and Pale Cosmos */
+  --ifm-background-color: #ffffff;
+  --ifm-background-surface-color: #f5f7fa;
+  --ifm-color-emphasis-100: #f5f7fa;
+  --ifm-color-emphasis-200: #ebeef3;
+  --ifm-color-emphasis-300: #dde1e8;
+
+  /* Text Colors - Deep Space Grey */
+  --ifm-font-color-base: #1a1f2c;
+  --ifm-heading-color: #1a1f2c;
+  --ifm-font-color-secondary: #515766;
+  --ifm-footer-link-color: #1a1f2c;
+
+  /* Borders and dividers */
+  --ifm-color-emphasis-400: #c4c9d4;
+  --ifm-hr-background-color: rgba(26, 31, 44, 0.08);
+  --soat-border-color: rgba(26, 31, 44, 0.1);
+
+  /* Docusaurus layout borders */
+  --ifm-toc-border-color: rgba(26, 31, 44, 0.08);
+
+  /* Code blocks */
+  --ifm-code-font-size: 0.92em;
+  --ifm-code-background: #f5f7fa;
+  --ifm-code-border-radius: 0.5rem;
+  --docusaurus-highlighted-code-line-bg: rgba(142, 68, 173, 0.1);
+
+  /* Spacing */
+  --ifm-spacing-horizontal: 1.5rem;
+  --ifm-spacing-vertical: 1.5rem;
+  --ifm-navbar-height: 4rem;
+
+  /* Transitions */
+  --ifm-transition-fast: 150ms;
+  --ifm-transition-slow: 300ms;
+}
+
+/* ===================================================================
+   DARK THEME - Core Cyan (#00E5FF) - The "Semantic Cosmos"
+   Dark Mode First - Glowing & High Contrast
+   =================================================================== */
+html[data-theme='dark'] {
+  /* Primary Colors - Core Cyan for cosmic glow */
+  --ifm-color-primary: #00e5ff;
+  --ifm-color-primary-dark: #00cee6;
+  --ifm-color-primary-darker: #00c3d9;
+  --ifm-color-primary-darkest: #00a0b3;
+  --ifm-color-primary-light: #1ae8ff;
+  --ifm-color-primary-lighter: #26e9ff;
+  --ifm-color-primary-lightest: #4dedff;
+
+  /* Deep Violet accent */
+  --soat-violet: #8e44ad;
+  --soat-violet-dark: #7d3c9d;
+  --soat-violet-light: #a855c7;
+
+  /* Surface & Background - Space Black and Nebula Navy */
+  --ifm-background-color: #080c14;
+  --ifm-background-surface-color: #161b22;
+  --ifm-color-emphasis-100: #161b22;
+  --ifm-color-emphasis-200: #1f2631;
+  --ifm-color-emphasis-300: #2a3340;
+
+  /* Text Colors - Starlight White */
+  --ifm-font-color-base: #f0f8ff;
+  --ifm-heading-color: #f0f8ff;
+  --ifm-font-color-secondary: #8f9bb3;
+
+  /* Borders and dividers with subtle glow */
+  --ifm-color-emphasis-400: #2a3340;
+  --ifm-hr-background-color: rgba(0, 229, 255, 0.12);
+
+  /* Docusaurus layout borders */
+  --ifm-toc-border-color: rgba(0, 229, 255, 0.06);
+
+  /* Code blocks with cosmic theme */
+  --ifm-code-background: #161b22;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 229, 255, 0.15);
+
+  /* Navbar and footer cosmic black */
+  --ifm-navbar-background-color: rgba(8, 12, 20, 0.85); /* More transparent */
+  --ifm-footer-background-color: #080c14;
+  --ifm-navbar-shadow: 0 1px 0 rgba(0, 229, 255, 0.1);
+  --soat-border-color-dark: rgba(0, 229, 255, 0.08);
+  --soat-border-color-dark-strong: rgba(0, 229, 255, 0.1);
+}
+
+html[data-theme='dark'] body {
+  background-image: radial-gradient(
+    circle at 50% 0%,
+    rgba(142, 68, 173, 0.15) 0%,
+    rgba(8, 12, 20, 0) 60%
+  );
+  min-height: 100vh;
+}
+
+/* ===================================================================
+   TYPOGRAPHY ENHANCEMENTS
+   =================================================================== */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--ifm-heading-font-family);
+  font-weight: var(--ifm-heading-font-weight);
+  letter-spacing: 0.02em;
+}
+
+h1 {
+  font-size: 2.5rem;
+  font-weight: 600;
+}
+
+h2 {
+  font-size: 2rem;
+  font-weight: 400;
+}
+
+/* ===================================================================
+   HOMEPAGE HERO - Brand gradient + better contrast
+   =================================================================== */
+.hero.hero--primary {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(142, 68, 173, 0.9) 0%,
+      rgba(26, 115, 232, 0.8) 100%
+    ),
+    url('/img/hero.jpg');
+  background-size: cover;
+  background-position: center;
+  border-bottom: 1px solid rgba(26, 31, 44, 0.08);
+  padding: 10rem 0;
+}
+
+.hero.hero--primary .hero__title,
+.hero.hero--primary .hero__subtitle {
+  color: #ffffff;
+}
+
+html[data-theme='dark'] .hero.hero--primary {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(8, 12, 20, 0.6) 0%,
+      rgba(22, 27, 34, 0.95) 100%
+    ),
+    url('/img/hero.jpg');
+  background-size: cover;
+  background-position: center;
+  border-bottom: 1px solid rgba(0, 229, 255, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+html[data-theme='dark'] .hero.hero--primary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: radial-gradient(
+    circle at 70% 30%,
+    rgba(142, 68, 173, 0.25) 0%,
+    transparent 50%
+  );
+  z-index: 0;
+}
+
+html[data-theme='dark'] .hero.hero--primary .hero__title {
+  position: relative;
+  z-index: 1;
+  background: linear-gradient(
+    135deg,
+    #ffffff 0%,
+    var(--ifm-color-primary) 50%,
+    var(--soat-violet) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 20px rgba(0, 229, 255, 0.3));
+}
+
+html[data-theme='dark'] .hero.hero--primary .hero__subtitle {
+  color: var(--ifm-font-color-base);
+}
+
+/* ===================================================================
+   NAVBAR - Futuristic cosmic navigation
+   =================================================================== */
+.theme-layout-navbar {
+  background: var(--ifm-background-color);
+  border-bottom: 1px solid var(--soat-border-color);
+  box-shadow: none;
+}
+
+[data-theme='dark'] .theme-layout-navbar {
+  background: var(--ifm-background-color);
+  border-bottom: 1px solid var(--soat-border-color-dark);
+  box-shadow: none;
+}
+
+/* Navbar links with hover glow effect */
+.navbar__link {
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  transition: all var(--ifm-transition-fast) ease;
+}
+
+[data-theme='dark'] .navbar__link:hover {
+  color: var(--ifm-color-primary);
+  text-shadow: 0 0 15px rgba(0, 229, 255, 0.8);
+}
+
+.navbar__link--active {
+  color: var(--ifm-color-primary);
+}
+
+[data-theme='dark'] .navbar__link--active {
+  text-shadow: 0 0 12px rgba(0, 229, 255, 0.6);
+  border-bottom: 2px solid var(--ifm-color-primary);
+}
+
+/* ===================================================================
+   SIDEBAR - Cosmic navigation menu
+   =================================================================== */
+.theme-doc-sidebar-container {
+  border-right: 1px solid var(--soat-border-color);
+}
+
+[data-theme='dark'] .theme-doc-sidebar-container {
+  background: var(--ifm-background-surface-color);
+  border-right: 1px solid var(--soat-border-color-dark);
+}
+
+/* Sidebar menu items */
+.theme-doc-sidebar-item-link,
+.theme-doc-sidebar-item-category {
+  transition: all var(--ifm-transition-fast) ease;
+  border-radius: 0.5rem;
+  margin: 0.25rem 0;
+}
+
+.theme-doc-sidebar-item-link:hover,
+.theme-doc-sidebar-item-category:hover {
+  background: var(--ifm-color-emphasis-100);
+}
+
+[data-theme='dark'] .theme-doc-sidebar-item-link:hover,
+[data-theme='dark'] .theme-doc-sidebar-item-category:hover {
+  background: rgba(0, 229, 255, 0.05);
+  box-shadow: 0 0 15px rgba(0, 229, 255, 0.1);
+}
+
+.menu__link {
+  font-weight: 400;
+}
+
+/* Active sidebar item with glow */
+.theme-doc-sidebar-item-link-level-1.menu__link--active {
+  background: var(--ifm-color-primary-lightest);
+  color: var(--ifm-color-primary-darkest);
+  font-weight: 400;
+}
+
+[data-theme='dark'] .theme-doc-sidebar-item-link-level-1.menu__link--active {
+  background: rgba(0, 229, 255, 0.1);
+  color: var(--ifm-color-primary);
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.2);
+  border-left: 3px solid var(--ifm-color-primary);
+}
+
+/* ===================================================================
+   MAIN CONTENT - Documentation pages
+   =================================================================== */
+.theme-layout-main {
+  background: var(--ifm-background-color);
+}
+
+.theme-doc-markdown {
+  max-width: 900px;
+}
+
+/* Document wrapper styling */
+.docs-wrapper {
+  background: var(--ifm-background-color);
+}
+
+[data-theme='dark'] .docs-wrapper {
+  background: var(--ifm-background-color);
+}
+
+/* ===================================================================
+   CODE BLOCKS - Futuristic code presentation
+   =================================================================== */
+.theme-code-block {
+  background: var(--ifm-code-background);
+  border-radius: var(--ifm-code-border-radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--soat-border-color);
+  margin: 1.5rem 0;
+}
+
+html[data-theme='dark'] .theme-code-block {
+  background: var(--ifm-code-background);
+  border: 1px solid var(--soat-border-color-dark);
+  box-shadow: 0 0 30px rgba(0, 229, 255, 0.05);
+}
+
+/* Inline code */
+code {
+  background: var(--ifm-code-background);
+  border: 1px solid var(--soat-border-color);
+  border-radius: 0.3rem;
+  padding: 0.15rem 0.4rem;
+  font-size: var(--ifm-code-font-size);
+}
+
+[data-theme='dark'] code {
+  background: rgba(0, 229, 255, 0.05);
+  border: 1px solid var(--soat-border-color-dark-strong);
+  color: var(--ifm-color-primary-lighter);
+}
+
+/* ===================================================================
+   ADMONITIONS - Cosmic alert boxes
+   =================================================================== */
+.theme-admonition {
+  border-radius: 0.75rem;
+  border-left-width: 2px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  margin: 1.5rem 0;
+}
+
+[data-theme='dark'] .theme-admonition {
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme='dark'] .theme-admonition-note {
+  background: rgba(0, 229, 255, 0.05);
+  border-left-color: var(--ifm-color-primary);
+}
+
+[data-theme='dark'] .theme-admonition-tip {
+  background: rgba(142, 68, 173, 0.05);
+  border-left-color: var(--soat-violet);
+}
+
+/* ===================================================================
+   TABLES - Sleek data presentation
+   =================================================================== */
+table {
+  border-radius: 0.5rem;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme='dark'] table {
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.05);
+}
+
+thead tr {
+  background: var(--ifm-color-emphasis-100);
+}
+
+[data-theme='dark'] thead tr {
+  background: rgba(0, 229, 255, 0.05);
+  border-bottom: 1px solid var(--soat-border-color-dark-strong);
+}
+
+tbody tr {
+  transition: all var(--ifm-transition-fast) ease;
+}
+
+[data-theme='dark'] tbody tr:hover {
+  background: rgba(0, 229, 255, 0.03);
+}
+
+/* ===================================================================
+   FOOTER - Cosmic footer design
+   =================================================================== */
+.theme-layout-footer {
+  background: var(--ifm-background-color);
+  border-top: 1px solid var(--soat-border-color);
+  padding: 3rem 0 2rem;
+}
+
+[data-theme='dark'] .theme-layout-footer {
+  background: var(--ifm-background-color);
+  border-top: 1px solid var(--soat-border-color-dark);
+}
+
+.theme-layout-footer-column {
+  margin-bottom: 2rem;
+}
+
+[data-theme='dark'] .footer__link-item:hover {
+  color: var(--ifm-color-primary);
+}
+
+[data-theme='dark'] .footer__copyright {
+  color: var(--ifm-font-color-base);
+}
+
+.footer__link-item {
+  font-weight: 400;
+  color: var(--ifm-font-color-base);
+}
+
+.footer__copyright {
+  font-weight: 400;
+  color: var(--ifm-font-color-secondary);
+}
+
+/* ===================================================================
+   BUTTONS & INTERACTIVE ELEMENTS
+   =================================================================== */
+.button {
+  border-radius: 0.5rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  transition: all var(--ifm-transition-fast) ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.button--primary {
+  background: linear-gradient(
+    135deg,
+    var(--ifm-color-primary) 0%,
+    var(--soat-violet) 100%
+  );
+  border: none;
+}
+
+[data-theme='dark'] .button--primary {
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.3);
+}
+
+.button--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme='dark'] .button--primary:hover {
+  box-shadow: 0 0 30px rgba(0, 229, 255, 0.5);
+}
+
+/* ===================================================================
+   BACK TO TOP BUTTON - Cosmic teleport
+   =================================================================== */
+.theme-back-to-top-button {
+  background: var(--ifm-color-primary);
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: all var(--ifm-transition-fast) ease;
+}
+
+[data-theme='dark'] .theme-back-to-top-button {
+  background: var(--ifm-color-primary);
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.5);
+}
+
+.theme-back-to-top-button:hover {
+  transform: translateY(-4px);
+}
+
+[data-theme='dark'] .theme-back-to-top-button:hover {
+  box-shadow: 0 0 30px rgba(0, 229, 255, 0.8);
+}
+
+/* ===================================================================
+   BLOG PAGES - Cosmic blog design
+   =================================================================== */
+.blog-list-page,
+.blog-post-page {
+  background: var(--ifm-background-color);
+}
+
+.blog-wrapper article {
+  border-radius: 1rem;
+  background: var(--ifm-background-surface-color);
+  padding: 2rem;
+  margin-bottom: 2rem;
+  transition: all var(--ifm-transition-slow) ease;
+  border: 1px solid rgba(26, 31, 44, 0.08);
+}
+
+[data-theme='dark'] .blog-wrapper article {
+  background: var(--ifm-background-surface-color);
+  border: 1px solid rgba(0, 229, 255, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme='dark'] .blog-wrapper article:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 30px rgba(0, 229, 255, 0.2);
+  border-color: rgba(0, 229, 255, 0.3);
+}
+
+/* ===================================================================
+   TAGS - Cosmic labels
+   =================================================================== */
+.badge {
+  border-radius: 2rem;
+  font-weight: 400;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid currentColor;
+}
+
+[data-theme='dark'] .badge {
+  background: rgba(0, 229, 255, 0.1);
+  border-color: rgba(0, 229, 255, 0.3);
+  color: var(--ifm-color-primary);
+}
+
+/* ===================================================================
+   BREADCRUMBS - Navigation trail
+   =================================================================== */
+.theme-doc-breadcrumbs {
+  margin-bottom: 1.5rem;
+}
+
+[data-theme='dark'] .breadcrumbs__link {
+  transition: all var(--ifm-transition-fast) ease;
+}
+
+[data-theme='dark'] .breadcrumbs__link:hover {
+  color: var(--ifm-color-primary);
+  text-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+}
+
+/* ===================================================================
+   TOC (Table of Contents) - Cosmic navigation sidebar
+   =================================================================== */
+.theme-doc-toc-desktop,
+.theme-doc-toc-mobile {
+  font-size: 0.9rem;
+}
+
+[data-theme='dark'] .table-of-contents__link {
+  color: var(--ifm-font-color-secondary);
+  transition: all var(--ifm-transition-fast) ease;
+}
+
+[data-theme='dark'] .table-of-contents__link:hover,
+[data-theme='dark'] .table-of-contents__link--active {
+  color: var(--ifm-color-primary);
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.4);
+}
+
+/* ===================================================================
+   PAGINATION - Navigation between pages
+   =================================================================== */
+.pagination-nav__link {
+  border: 1px solid var(--soat-border-color);
+  border-radius: 0.75rem;
+  transition: all var(--ifm-transition-fast) ease;
+}
+
+[data-theme='dark'] .pagination-nav__link {
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--soat-border-color-dark);
+}
+
+[data-theme='dark'] .pagination-nav__link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 229, 255, 0.2);
+  border-color: rgba(0, 229, 255, 0.3);
+}
+
+/* ===================================================================
+   SEARCH BAR - Cosmic search
+   =================================================================== */
+.navbar__search-input {
+  border-radius: 2rem;
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--soat-border-color);
+  padding: 0.5rem 1rem;
+  transition: all var(--ifm-transition-fast) ease;
+}
+
+[data-theme='dark'] .navbar__search-input {
+  background: rgba(0, 229, 255, 0.05);
+  border: 1px solid var(--soat-border-color-dark-strong);
+}
+
+[data-theme='dark'] .navbar__search-input:focus {
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.3);
+}
+
+/* ===================================================================
+   MOBILE RESPONSIVE - Cosmic mobile experience
+   =================================================================== */
+@media screen and (max-width: 996px) {
+  .theme-layout-navbar-sidebar-panel {
+    background: var(--ifm-background-color);
+  }
+
+  [data-theme='dark'] .theme-layout-navbar-sidebar-panel {
+    background: var(--ifm-background-color);
+    box-shadow: 0 0 40px rgba(0, 229, 255, 0.1);
+  }
+}
+
+/* ===================================================================
+   SCROLLBAR - Cosmic scrollbar design
+   =================================================================== */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--ifm-background-surface-color);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ifm-color-emphasis-400);
+  border-radius: 5px;
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: rgba(0, 229, 255, 0.3);
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 229, 255, 0.5);
+}
+
+/* ===================================================================
+   ANNOUNCEMENT BAR - Cosmic banner
+   =================================================================== */
+.theme-announcement-bar {
+  background: linear-gradient(
+    135deg,
+    var(--ifm-color-primary) 0%,
+    var(--soat-violet) 100%
+  );
+  color: white;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+[data-theme='dark'] .theme-announcement-bar {
+  background: linear-gradient(135deg, #00e5ff 0%, #8e44ad 100%);
+  box-shadow: 0 2px 20px rgba(0, 229, 255, 0.3);
+}

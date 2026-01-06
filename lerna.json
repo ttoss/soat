@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/@lerna-lite/cli/schemas/lerna-schema.json",
-  "version": "independent",
+  "version": "0.0.0-alpha.1",
   "npmClient": "pnpm",
   "stream": true,
   "command": {
@@ -17,10 +17,5 @@
     }
   },
   "ignoreChanges": ["**/__fixtures__/**", "**/tests/**"],
-  "packages": [
-    "challenge/packages/*",
-    "docs/*",
-    "packages/*",
-    "terezinha-farm/*"
-  ]
+  "packages": ["packages/*"]
 }
