@@ -1,6 +1,6 @@
 {
   "name": "@soat/files-core",
-  "version": "0.0.0",
+  "version": "0.0.0-alpha.1",
   "description": "Core package for saving and managing files with local, S3, and GCS storage",
   "exports": "./src/index.ts",
   "scripts": {
