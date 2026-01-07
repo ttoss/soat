@@ -131,21 +131,52 @@ In light mode, **Core Cyan (`#00E5FF`) is never functional text** and should not
 
 ## 5. Typography
 
-Typography should feel expansive, futuristic, and intelligent—fitting for a galactic scale.
+Typography should feel **engineered, precise, and systems-oriented**—matching the machine aesthetic of agent orchestration infrastructure.
 
 ### Primary Typeface (Headings): Space Grotesk
 
-A contemporary, technical grotesk that feels modern and “engineered” without leaning into sci-fi styling. It supports the Semantic Cosmos aesthetic while staying serious and readable across documentation and UI.
+A contemporary, technical grotesk that conveys **engineered precision** without sacrificing readability. Space Grotesk feels like infrastructure—modern, reliable, and built to last. It's the visual voice of a system, not a product.
 
-- **Weights:** 700 (Bold) for H1/H2, 600 (Semibold) for H3.
+**Why it works for orchestration:**
+
+- Technical without being sci-fi
+- Readable at all scales (from UI labels to hero headings)
+- Neutral enough for dense documentation
+- Geometric structure implies systematic thinking
+
+- **Weights:** 700 (Bold) for H1, 600 (Semibold) for H2/H3, 500 (Medium) for H4.
+- **Letter-spacing:** Slightly increased (0.02em–0.03em) for technical clarity.
 - **Example:** **SOAT: Persistent Memory for AI Agents.**
 
 ### Secondary Typeface (Body): Inter
 
-A highly legible UI typeface designed for long-form reading and product interfaces. Inter keeps the tone crisp and systems-oriented across docs, tables, and dense UI.
+A highly legible UI typeface purpose-built for **interface density and long-form technical documentation**. Inter was designed for screen readability at small sizes—essential for logs, tables, API references, and configuration files.
 
-- **Weights:** 400 (Regular) for body, 500 (Medium) for UI labels.
+**Why it works for orchestration:**
+
+- Optimized for developer tools and dashboards
+- Excellent readability in code-adjacent contexts
+- Wide language support for global teams
+- Tight spacing works in constrained UI layouts
+
+- **Weights:** 400 (Regular) for body text, 500 (Medium) for UI labels and emphasis, 600 (Semibold) for strong emphasis.
 - **Example:** SOAT stores, retrieves, and manages context through low-latency semantic recall.
+
+---
+
+### Typography Hierarchy (The System)
+
+| Element | Typeface       | Weight | Size (Desktop) | Letter-Spacing | Usage                            |
+| ------- | -------------- | ------ | -------------- | -------------- | -------------------------------- |
+| H1      | Space Grotesk  | 700    | 2.5rem         | 0.02em         | Page titles, hero headlines      |
+| H2      | Space Grotesk  | 600    | 2rem           | 0.02em         | Section headings                 |
+| H3      | Space Grotesk  | 600    | 1.5rem         | 0.02em         | Subsection headings              |
+| H4      | Space Grotesk  | 500    | 1.25rem        | 0.03em         | Minor headings, card titles      |
+| Body    | Inter          | 400    | 1rem (16px)    | 0.01em         | Paragraphs, lists, documentation |
+| UI Text | Inter          | 500    | 0.875rem       | 0.02em         | Buttons, labels, navigation      |
+| Code    | JetBrains Mono | 400    | 0.92em         | 0              | Code blocks, inline code         |
+
+**Note:** For code examples, use **JetBrains Mono** or **Fira Code**—monospace fonts designed for programming.
 
 ---
 

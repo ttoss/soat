@@ -1,17 +1,17 @@
 {
   "private": true,
   "name": "ttoss-soat",
-  "version": "0.0.0-alpha.1",
+  "version": "1.0.0",
   "license": "MIT",
   "contributors": [
     "Pedro Arantes <arantespp@gmail.com> (https://arantespp.com)"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ttoss/ttoss.git"
+    "url": "git+https://github.com/ttoss/soat.git"
   },
   "bugs": {
-    "url": "https://github.com/ttoss/ttoss/issues"
+    "url": "https://github.com/ttoss/soat/issues"
   },
   "scripts": {
     "prepare": "husky",
@@ -39,8 +39,5 @@
     "node": "^24.0.0",
     "pnpm": "^10.0.0"
   },
-  "packageManager": "pnpm@10.26.2",
-  "dependencies": {
-    "@ttoss/http-server": "^0.3.1"
-  }
+  "packageManager": "pnpm@10.26.2"
 }

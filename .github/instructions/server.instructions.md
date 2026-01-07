@@ -33,6 +33,15 @@ API routes are not defined directly in `src/index.ts` to maintain clean separati
 
 This structure ensures scalability and keeps the main entry point uncluttered as the API grows.
 
+#### OpenAPI Documentation
+
+When modifying or adding REST API endpoints, **always update the corresponding OpenAPI specification** in `src/rest/openapi/` and follow the guidelines outlined in `src/rest/openapi/README.md`. This includes:
+
+- Updating paths, schemas, request/response bodies, and error responses
+- Adding descriptive examples and operation IDs
+- Validating the spec before committing changes
+- Ensuring the spec remains in sync with the implementation
+
 ### MCP Structure
 
 The MCP (Model Context Protocol) folder is organized to separate concerns and maintain scalability:

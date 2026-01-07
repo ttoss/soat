@@ -1,0 +1,8 @@
+# Ignore all generated API docs
+*
+
+# But keep this gitignore file
+!.gitignore
+
+# And keep the directory structure
+!*/

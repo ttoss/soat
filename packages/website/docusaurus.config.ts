@@ -41,6 +41,7 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
+          docItemComponent: '@theme/ApiItem',
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl: 'https://github.com/ttoss/soat/edit/main/',
@@ -66,6 +67,28 @@ const config: Config = {
     ],
   ],
 
+  plugins: [
+    [
+      'docusaurus-plugin-openapi-docs',
+      {
+        id: 'api',
+        docsPluginId: 'classic',
+        config: {
+          files: {
+            specPath: '../server/src/rest/openapi/v1/files.yaml',
+            outputDir: 'docs/api/files',
+            sidebarOptions: {
+              groupPathsBy: 'tag',
+            },
+            hideSendButton: false,
+          },
+        },
+      },
+    ],
+  ],
+
+  themes: ['docusaurus-theme-openapi-docs'],
+
   themeConfig: {
     // Replace with your project's social card
     image: 'img/docusaurus-social-card.jpg',
@@ -79,6 +102,12 @@ const config: Config = {
         src: 'img/logo.svg',
       },
       items: [
+        {
+          type: 'docSidebar',
+          sidebarId: 'apiSidebar',
+          position: 'left',
+          label: 'API',
+        },
         {
           type: 'docSidebar',
           sidebarId: 'tutorialSidebar',
@@ -132,7 +161,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} SOAT, Inc. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} SOAT, a Terezinha Tech Operations (ttoss) project.`,
     },
     prism: {
       theme: prismThemes.github,

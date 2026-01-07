@@ -1,0 +1,227 @@
+openapi: 3.0.3
+info:
+  title: SOAT Files API
+  version: 1.0.0
+  description: API para gerenciar arquivos (Files resource)
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: http://0.0.0.0:5047/api/v1
+    description: Development server
+paths:
+  /files:
+    get:
+      tags:
+        - Files
+      summary: Lista todos os arquivos
+      description: Retorna uma lista com todos os arquivos armazenados
+      operationId: listFiles
+      responses:
+        '200':
+          description: Lista de arquivos retornada com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  files:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FileRecord'
+        '500':
+          description: Erro interno do servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /files/upload:
+    post:
+      tags:
+        - Files
+      summary: Faz upload de um arquivo
+      description: Cria um novo arquivo no sistema
+      operationId: uploadFile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+                  description: Conteúdo do arquivo
+                  example: 'Hello World!'
+                options:
+                  type: object
+                  properties:
+                    contentType:
+                      type: string
+                      example: text/plain
+                    metadata:
+                      type: object
+                      additionalProperties: true
+                      example:
+                        filename: test.txt
+      responses:
+        '200':
+          description: Arquivo criado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  file:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: 'abc123'
+        '400':
+          description: Requisição inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro interno do servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /files/{id}:
+    get:
+      tags:
+        - Files
+      summary: Obtém um arquivo por ID
+      description: Retorna os dados e metadados de um arquivo específico
+      operationId: getFileById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID do arquivo
+          schema:
+            type: string
+            example: 'abc123'
+      responses:
+        '200':
+          description: Arquivo encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  file:
+                    type: object
+                    description: Conteúdo do arquivo
+                  record:
+                    $ref: '#/components/schemas/FileRecord'
+        '400':
+          description: Requisição inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Arquivo não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro interno do servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Files
+      summary: Deleta um arquivo
+      description: Remove um arquivo do sistema pelo ID
+      operationId: deleteFile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID do arquivo a ser deletado
+          schema:
+            type: string
+            example: 'abc123'
+      responses:
+        '200':
+          description: Arquivo deletado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        '400':
+          description: Requisição inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Arquivo não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro interno do servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    FileRecord:
+      type: object
+      description: Metadados de um arquivo armazenado
+      properties:
+        id:
+          type: string
+          description: Identificador único do arquivo
+        name:
+          type: string
+          description: Nome do arquivo
+        size:
+          type: integer
+          description: Tamanho em bytes
+        contentType:
+          type: string
+          description: Tipo MIME do arquivo
+        createdAt:
+          type: string
+          format: date-time
+          description: Data de criação
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Metadados adicionais
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          description: Mensagem de erro
