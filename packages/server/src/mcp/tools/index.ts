@@ -1,3 +1,9 @@
 // Export all MCP tools here
-// export { recordMemoryTool } from './memory';
-// export { recallMemoryTool } from './memory';
+export {
+  createDocumentTool,
+  deleteDocumentTool,
+  getDocumentTool,
+  listDocumentsTool,
+  searchDocumentsTool,
+  updateDocumentTool,
+} from './documents';

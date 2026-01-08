@@ -9,15 +9,15 @@
   },
   "dependencies": {
     "@soat/documents-core": "workspace:*",
+    "@soat/embeddings-core": "workspace:*",
     "@soat/files-core": "workspace:*",
     "@soat/postgresdb": "workspace:*",
     "@ttoss/http-server": "^0.3.1",
     "@ttoss/http-server-mcp": "^0.3.1",
-    "@ttoss/postgresdb": "^0.2.27",
+    "@ttoss/postgresdb": "^0.3.0",
     "dotenv": "^17.2.3",
     "ollama": "^0.6.3",
-    "pg": "^8.16.3",
-    "pgvector": "^0.2.1"
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "@stoplight/spectral-cli": "^6.15.0",

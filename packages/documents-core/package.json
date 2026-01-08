@@ -2,8 +2,8 @@
   "name": "@soat/documents-core",
   "version": "0.0.0-alpha.2",
   "description": "Core package for saving and managing documents with local, S3, and GCS storage",
-  "main": "dist/index.js",
-  "module": "dist/index.mjs",
+  "type": "module",
+  "exports": "./src/index.ts",
   "types": "dist/index.d.ts",
   "files": [
     "dist"
@@ -17,9 +17,10 @@
     "test": "jest"
   },
   "dependencies": {
-    "@google-cloud/storage": "^7.0.0",
+    "@soat/embeddings-core": "workspace:*",
     "@soat/files-core": "workspace:*",
-    "aws-sdk": "^2.0.0",
+    "@soat/postgresdb": "workspace:*",
+    "@ttoss/postgresdb": "^0.3.0",
     "uuid": "^10.0.0"
   },
   "devDependencies": {

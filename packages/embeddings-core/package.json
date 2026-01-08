@@ -1,0 +1,23 @@
+{
+  "name": "@soat/embeddings-core",
+  "version": "0.0.0-alpha.1",
+  "description": "Core package for generating embeddings with Ollama and other providers",
+  "type": "module",
+  "exports": "./src/index.ts",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "jest"
+  },
+  "dependencies": {
+    "ollama": "^0.6.3"
+  },
+  "devDependencies": {
+    "@ttoss/config": "^1.35.12",
+    "@types/node": "^25.0.3",
+    "jest": "^30.2.0",
+    "tsup": "^8.5.1",
+    "typescript": "~5.9.3"
+  }
+}

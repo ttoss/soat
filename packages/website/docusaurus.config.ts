@@ -82,6 +82,14 @@ const config: Config = {
             },
             hideSendButton: false,
           },
+          documents: {
+            specPath: '../server/src/rest/openapi/v1/documents.yaml',
+            outputDir: 'docs/api/documents',
+            sidebarOptions: {
+              groupPathsBy: 'tag',
+            },
+            hideSendButton: false,
+          },
         },
       },
     ],
