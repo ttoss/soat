@@ -17,6 +17,7 @@ beforeAll(async () => {
 
   // Initialize database with container credentials
   const db = await initialize({
+    createVectorExtension: true,
     models,
     logging: false,
     username: postgresContainer.getUsername(),

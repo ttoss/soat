@@ -26,6 +26,7 @@
     "@lerna-lite/version": "^4.9.4",
     "@ttoss/config": "^1.35.12",
     "@ttoss/eslint-config": "^1.26.6",
+    "@ttoss/monorepo": "^1.28.0",
     "@types/node": "^25.0.3",
     "eslint": "^9.39.1",
     "husky": "^9.1.7",

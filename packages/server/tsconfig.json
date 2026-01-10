@@ -4,5 +4,5 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   },
-  "include": ["src", "../postgresdb/src"]
+  "include": ["src"]
 }

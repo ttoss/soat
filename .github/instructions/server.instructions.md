@@ -102,7 +102,9 @@ pnpm build
 
 This uses `tsup` to compile the TypeScript code.
 
-## Testing the REST API
+## Manual Testing
+
+### REST API Endpoints
 
 To test REST API endpoints during development:
 
@@ -135,12 +137,56 @@ To test REST API endpoints during development:
    curl -X DELETE http://0.0.0.0:5047/api/v1/files/{file-id}
    ```
 
-## Dependencies
+## Unit Testing
 
-The server depends on:
+Unit tests are located in the #file:../../packages/server/tests/unit/ folder. To run the unit tests for the server package, use the following command from the root directory:
 
-- PostgreSQL with pgvector extension
-- Ollama for AI models
-- Other packages in the workspace
+```bash
+pnpm --filter @soat/server test
+```
 
-Make sure to set up your database and environment variables as needed.
+### REST API Tests
+
+REST API tests are located in the #file:../../packages/server/tests/unit/tests/rest/ folder. These tests cover the various endpoints and functionalities of the REST API.
+
+- Each endpoint has corresponding test files that validate the expected behavior.
+- Use mocks on #file:../../packages/server/tests/unit/setupTests.ts to mock external dependencies only and isolate the tests.
+- Test the whole app, #file:../../packages/server/src/app.ts , to ensure all middleware and routes are properly integrated. Use supertest to simulate HTTP requests and validate responses.
+  In the example below, `saveFile` from `@soat/files-core` is mocked to test the file upload endpoint without actually saving a file.
+
+  ```ts
+  import { saveFile } from '@soat/files-core';
+  import { app } from 'src/app';
+  import request from 'supertest';
+
+  test('should create a file via REST API', async () => {
+    const savedFile = {
+      id: 'test-id',
+      filename: 'test.txt',
+      content: 'Hello, World!',
+      metadata: {},
+    };
+
+    jest.mocked(saveFile).mockResolvedValue(savedFile);
+
+    const response = await request(app.callback())
+      .post('/api/v1/files/upload')
+      .send({
+        content: 'Hello, World!',
+        options: { metadata: { filename: 'test.txt' } },
+      })
+      .set('Accept', 'application/json');
+
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual({
+      id: 'test-id',
+      filename: 'test.txt',
+      success: true,
+    });
+    expect(saveFile).toHaveBeenCalledWith({
+      config: { local: { path: '/tmp/files' }, type: 'local' },
+      content: 'Hello, World!',
+      options: { metadata: { filename: 'test.txt' } },
+    });
+  });
+  ```

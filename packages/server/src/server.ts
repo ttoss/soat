@@ -4,7 +4,7 @@ import 'dotenv/config';
 import { models } from '@soat/postgresdb';
 import { initialize } from '@ttoss/postgresdb';
 
-import app from './app';
+import { app } from './app';
 
 /**
  * SOAT = 5047

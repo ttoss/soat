@@ -42,8 +42,12 @@ filesRouter.post('/upload', async (ctx: Context) => {
       return;
     }
     const file = await saveFile({ config: defaultConfig, content, options });
-    ctx.status = 200;
-    ctx.body = { success: true, file: { id: file.id } };
+    ctx.status = 201;
+    ctx.body = {
+      success: true,
+      id: file.id,
+      filename: options?.metadata?.filename,
+    };
   } catch (error) {
     ctx.status = 500;
     ctx.body = {
