@@ -6,41 +6,53 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**SOAT** is an open-source framework designed to provide persistent memory capabilities for autonomous AI agents. It enables agents to store, retrieve, and manage information effectively using semantic search powered by vector embeddings.
+**SOAT** is an open-source framework designed to provide persistent memory capabilities for autonomous AI agents. It orchestrates the ingestion, storage, and retrieval of context using semantic search and vector embeddings.
 
 ## Why SOAT?
 
-As AI agents become more sophisticated, they need a reliable way to maintain context and recall past interactions. SOAT addresses this challenge by providing:
+Sophisticated AI agents require a scalable substrate to maintain state and recall context. SOAT provides that infrastructure by treating memory as a semantic cosmos rather than a flat datastore.
 
-- **Persistent Memory**: Agents can store information that persists across sessions
-- **Semantic Recall**: Retrieve relevant memories using natural language queries, not just exact matches
-- **MCP Integration**: Native support for [Model Context Protocol](https://modelcontextprotocol.io/), making it easy to integrate with AI assistants
-- **Simple REST API**: Standard HTTP endpoints for easy integration with any application
+- **Persistent Context**: Ingests and persists Documents and Files across agent lifecycles.
+- **Semantic Recall**: Instant illumination of relevant context via high-dimensional vector similarity.
+- **MCP Native**: First-class support for the [Model Context Protocol](https://modelcontextprotocol.io/), enabling seamless integration with agent runtimes.
+- **Interoperable**: Standard REST API for universal application access.
 
-## Features
+## Core Resources
 
-### 🧠 Memory Management
+SOAT exposes two primary resources for constructing agentic memory:
 
-- **Record Memory**: Store text content with automatically generated vector embeddings
-- **Recall Memory**: Retrieve semantically similar memories using natural language queries
-- **Vector Search**: Powered by [pgvector](https://github.com/pgvector/pgvector) for efficient similarity search
+### Documents
 
-### 🔌 Multiple Integration Options
+The fundamental unit of textual memory. Documents are ingested, atomized, and vectorized to enable granular semantic retrieval.
 
-- **MCP Server**: Full Model Context Protocol support for AI assistant integration
-- **REST API**: Simple HTTP endpoints for any application
+- **Ingestion**: Raw text processing with automatic embedding generation.
+- **Indexing**: Optimized generic text storage for high-recall queries.
 
-### 📦 Monorepo Packages
+### Files
 
-| Package                                         | Description                               |
-| ----------------------------------------------- | ----------------------------------------- |
-| [@soat/server](./packages/server)               | Memory server with MCP and REST APIs      |
-| [@soat/cli](./packages/cli)                     | Command-line interface (WIP)              |
-| [@soat/text-atomizer](./packages/text-atomizer) | Text analysis and decomposition utilities |
+Management of binary assets and unstructured data blobs.
+
+- **Storage**: Persistent handling of file objects.
+- **Association**: Linking binary assets to semantic context.
+
+## Featured Features
+
+### Integration & Protocols
+
+- **MCP Server**: Full Model Context Protocol implementation for direct LLM connection.
+- **REST API**: Robust HTTP endpoints for system-to-system integration.
+- **Vector Engine**: Powered by [pgvector](https://github.com/pgvector/pgvector) for efficient high-dimensional similarity search.
+
+### Packages
+
+| Package                           | Description                        |
+| --------------------------------- | ---------------------------------- |
+| [@soat/server](./packages/server) | Core memory server (MCP + REST).   |
+| [@soat/cli](./packages/cli)       | Command-line management interface. |
 
 ## Documentation
 
-📚 **[Read the Full Documentation](https://soat.ttoss.dev)** – Learn how to set up the server, connect agents via MCP, and manage memory.
+**[Read the Full Documentation](https://soat.ttoss.dev)** – System architecture, API references, and deployment guides.
 
 ## Getting Started
 

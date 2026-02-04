@@ -200,12 +200,13 @@ All supporting visuals should reinforce the Semantic Cosmos.
 
 Write like a systems engineer describing something powerful.
 
-- **Technical, not academic:** clear explanations; no unnecessary jargon.
-- **Confident, not loud:** state benefits plainly.
-- **Forward-looking:** emphasize autonomy, memory, and context.
-- **Concise:** respect developer attention.
+- **Technical, not academic:** Clear explanations; no unnecessary jargon.
+- **Confident, not loud:** State benefits plainly.
+- **Forward-looking:** Emphasize autonomy, context, and persistence.
+- **Concise:** Respect developer attention.
+- **No Emojis:** Do not use emojis in technical documentation, headers, or git commits. They contradict the engineered, precise aesthetic.
 
 **Examples**
 
-- **Do:** “SOAT provides low-latency semantic recall using vector embeddings.”
+- **Do:** “SOAT provides low-latency semantic recall for Documents and Files using vector embeddings.”
 - **Don’t:** “We use super-cool futuristic tech so your bot remembers stuff.”
