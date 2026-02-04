@@ -33,12 +33,13 @@
   --ifm-hover-overlay: rgba(26, 31, 44, 0.05);
 
   /* Text Colors - Deep Space Grey */
-  --ifm-font-color-base: #1a1f2c;
+  --ifm-font-color-base: #2a2f3c;
   --ifm-font-color-secondary: #515766;
   --ifm-heading-color: #1a1f2c;
   
   /* Borders */
   --ifm-border-color: rgba(26, 31, 44, 0.05);
+  --ifm-toc-border-color: rgba(26, 31, 44, 0.01);
   --ifm-color-emphasis-100: #f5f7fa;
   --ifm-color-emphasis-200: #ebeef3;
   --ifm-color-emphasis-300: #dde1e8;
@@ -70,7 +71,7 @@
      =================================================================== */
   
   /* Navbar */
-  --ifm-navbar-background-color: var(--ifm-background-color);
+  --ifm-navbar-background-color: rgba(255, 255, 255, 0.9);
   --ifm-navbar-height: 4rem;
   --ifm-navbar-shadow: 0 1px 0 var(--ifm-border-color);
   --ifm-navbar-item-padding-horizontal: 1rem;
@@ -99,9 +100,9 @@
   
   /* Menu/Sidebar */
   --ifm-menu-color-active: var(--ifm-color-primary);
-  --ifm-menu-color-background-active: var(--ifm-color-primary-lightest);
   --ifm-menu-color: var(--ifm-font-color-secondary);
-  
+  --doc-sidebar-width: 250px;
+
   /* Tables */
   --ifm-table-border-color: var(--ifm-color-emphasis-300);
   --ifm-table-stripe-background: var(--ifm-color-emphasis-100);
@@ -179,8 +180,7 @@ html[data-theme='dark'] {
 }
 
 .container {
-  padding: 3rem
-  
+  padding: 1rem;
 }
 
 html[data-theme='dark'] body {
@@ -263,6 +263,10 @@ html[data-theme='dark'] .navbar__link--active {
   border-left: 3px solid transparent;
 }
 
+.theme-doc-sidebar-menu.menu__list {
+  padding: 0.75rem 0rem;
+}
+
 html[data-theme='dark'] .theme-doc-sidebar-item-link-level-1.menu__link--active {
   box-shadow: 0 0 20px rgba(0, 229, 255, 0.2);
   border-left-color: var(--ifm-color-primary);
@@ -274,6 +278,10 @@ html[data-theme='dark'] .theme-doc-sidebar-item-link-level-1.menu__link--active 
 
 .menu__link--active {
   font-weight: 500;
+}
+
+.navbar__item {
+  font-weight: 400; 
 }
 
 /* ===================================================================
@@ -363,3 +371,18 @@ html[data-theme='dark'] .get > .menu__link::before { box-shadow: 0 0 8px rgba(0,
 html[data-theme='dark'] .post > .menu__link::before { box-shadow: 0 0 8px rgba(34, 197, 94, 0.3); }
 html[data-theme='dark'] .delete > .menu__link::before { box-shadow: 0 0 8px rgba(248, 113, 113, 0.3); }
 html[data-theme='dark'] .put > .menu__link::before { box-shadow: 0 0 8px rgba(96, 165, 250, 0.3); }
+
+/* ===================================================================
+   Doc Layout Adjustments
+   =================================================================== */
+.row .col:not(.col--3) {
+  max-width: none !important;
+  padding: 0rem 2rem;
+
+  @media (max-width: 768px) {
+    padding: 0rem 1rem;
+  }
+}
+.col.col--3 {
+  max-width: 225px;
+}
