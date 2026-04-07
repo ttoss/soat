@@ -12,30 +12,78 @@ Follow the packages documentation:
 
 ## Architecture
 
-The server src will have two folders: rest and mcp.
+The server src will have three folders: rest, mcp, and lib.
+
+### Business Logic Layer
+
+All business logic (database queries, data transformations) must live in `src/lib/`, organized by resource:
+
+- `src/lib/files.ts` - All file-related business logic (listFiles, getFile, createFile, deleteFile)
+- Additional resources follow the same pattern: `src/lib/<resource>.ts`
+
+Route handlers **must not** contain direct database calls. They are responsible only for HTTP concerns: parsing request bodies/params, calling lib functions, and setting response status/body.
+
+Lib functions **must always return plain mapped objects**, never raw model instances. This is required to avoid exposing sensitive or internal data (e.g., internal DB fields, hashed passwords, audit columns) through the API. Every function that queries the database must map the result to a plain object before returning it:
+
+```ts
+export const getFile = async (args: { id: string }) => {
+  const file = await db.File.findByPk(args.id);
+  if (!file) return null;
+  return {
+    id: file.id,
+    filename: file.filename,
+    // ... all fields explicitly mapped
+  };
+};
+```
 
 ### REST API Structure
 
 The REST API is organized by version and resource for better maintainability and versioning:
 
-- `src/rest/v1/documents.ts` - Contains all document-related endpoints and handlers for API version 1
-- Future versions will follow the same pattern: `src/rest/v2/documents.ts`, etc.
+- `src/rest/v1/files.ts` - Contains all file-related endpoints and handlers for API version 1
+- Future versions will follow the same pattern: `src/rest/v2/files.ts`, etc.
 
-Each version folder contains resource-specific files. Currently, only the documents resource is implemented, but additional resources can be added as separate files (e.g., `users.ts`, `analytics.ts`) within each version folder.
+Each version folder contains resource-specific files. Additional resources can be added as separate files (e.g., `users.ts`, `analytics.ts`) within each version folder.
 
 #### Router Organization
 
 API routes are not defined directly in `src/index.ts` to maintain clean separation of concerns:
 
 - `src/rest/router.ts` - Central REST API router that imports and mounts versioned routers
-- Version-specific routers (e.g., `src/rest/v1/documents.ts`) define the actual route handlers
+- Version-specific routers (e.g., `src/rest/v1/files.ts`) define the actual route handlers
 - `src/index.ts` remains focused on application setup, middleware, and mounting the main routers
 
 This structure ensures scalability and keeps the main entry point uncluttered as the API grows.
 
+#### Swagger JSDoc
+
+Every route handler **must** have an `@openapi` JSDoc block immediately before it. The JSDoc must match the handler's actual behavior (paths, status codes, request/response shapes).
+
+```ts
+/**
+ * @openapi
+ * /files:
+ *   get:
+ *     tags:
+ *       - Files
+ *     summary: List all files
+ *     operationId: listFiles
+ *     responses:
+ *       '200':
+ *         description: ...
+ */
+filesRouter.get('/files', async (ctx: Context) => { ... });
+```
+
 #### OpenAPI Documentation
 
-When modifying or adding REST API endpoints, **always update the corresponding OpenAPI specification** in `src/rest/openapi/` and follow the guidelines outlined in `src/rest/openapi/README.md`. This includes:
+When modifying or adding REST API endpoints, **always update both**:
+
+1. The `@openapi` JSDoc block on the route handler
+2. The corresponding OpenAPI specification in `src/rest/openapi/v1/<resource>.yaml`
+
+Follow the guidelines in `src/rest/openapi/README.md`. This includes:
 
 - Updating paths, schemas, request/response bodies, and error responses
 - Adding descriptive examples and operation IDs
@@ -56,23 +104,6 @@ The MCP (Model Context Protocol) folder is organized to separate concerns and ma
 - `src/mcp/prompts/` - Directory for prompt templates (if any)
 
 This structure allows for easy addition of new tools and resources while keeping the code organized and maintainable.
-
-### Core Functionality Guidelines
-
-**Important**: Core business logic and functionalities must be implemented in dedicated core packages (e.g., `@soat/documents-core`, `@soat/text-atomizer`) and never directly in the server folder.
-
-The server package should only contain:
-
-- HTTP routing and request handling
-- Middleware configuration
-- Integration with core packages
-- API versioning and structure
-
-This separation ensures:
-
-- Reusability of core logic across different interfaces (CLI, web, etc.)
-- Better testability of business logic
-- Cleaner architecture with clear boundaries
 
 ## Development
 
@@ -144,49 +175,3 @@ Unit tests are located in the #file:../../packages/server/tests/unit/ folder. To
 ```bash
 pnpm --filter @soat/server test
 ```
-
-### REST API Tests
-
-REST API tests are located in the #file:../../packages/server/tests/unit/tests/rest/ folder. These tests cover the various endpoints and functionalities of the REST API.
-
-- Each endpoint has corresponding test files that validate the expected behavior.
-- Use mocks on #file:../../packages/server/tests/unit/setupTests.ts to mock external dependencies only and isolate the tests.
-- Test the whole app, #file:../../packages/server/src/app.ts , to ensure all middleware and routes are properly integrated. Use supertest to simulate HTTP requests and validate responses.
-  In the example below, `saveFile` from `@soat/files-core` is mocked to test the file upload endpoint without actually saving a file.
-
-  ```ts
-  import { saveFile } from '@soat/files-core';
-  import { app } from 'src/app';
-  import request from 'supertest';
-
-  test('should create a file via REST API', async () => {
-    const savedFile = {
-      id: 'test-id',
-      filename: 'test.txt',
-      content: 'Hello, World!',
-      metadata: {},
-    };
-
-    jest.mocked(saveFile).mockResolvedValue(savedFile);
-
-    const response = await request(app.callback())
-      .post('/api/v1/files/upload')
-      .send({
-        content: 'Hello, World!',
-        options: { metadata: { filename: 'test.txt' } },
-      })
-      .set('Accept', 'application/json');
-
-    expect(response.status).toBe(201);
-    expect(response.body).toEqual({
-      id: 'test-id',
-      filename: 'test.txt',
-      success: true,
-    });
-    expect(saveFile).toHaveBeenCalledWith({
-      config: { local: { path: '/tmp/files' }, type: 'local' },
-      content: 'Hello, World!',
-      options: { metadata: { filename: 'test.txt' } },
-    });
-  });
-  ```

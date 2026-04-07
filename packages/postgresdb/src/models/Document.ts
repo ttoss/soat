@@ -24,6 +24,12 @@ export class Document extends Model {
   @Column({ type: DataType.VECTOR(1536) })
   declare embedding?: number[];
 
+  @Column({ type: DataType.UUID })
+  declare conversationId?: string;
+
+  @Column({ type: DataType.INTEGER })
+  declare position?: number;
+
   @Column({ type: DataType.TEXT })
   declare metadata?: string; // JSON string
 
