@@ -8,6 +8,6 @@ export default jestUnitConfig({
   // setupFiles: ['<rootDir>/setupTests.ts'],
   setupFilesAfterEnv: ['<rootDir>/setupTestsAfterEnv.ts'],
   transformIgnorePatterns: getTransformIgnorePatterns({
-    esmModules: ['@ttoss/postgresdb', '@ttoss/http-server-mcp'],
+    esmModules: ['@ttoss/postgresdb', '@ttoss/http-server-mcp', 'nanoid'],
   }),
 });

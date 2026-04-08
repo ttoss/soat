@@ -1,6 +1,6 @@
 import { createMcpRouter, McpServer } from '@ttoss/http-server-mcp';
 
-import { registerTools } from './tools';
+import { registerTools } from './tools/index';
 
 const mcpServer = new McpServer({
   name: 'soat',

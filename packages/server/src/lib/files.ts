@@ -1,31 +1,8 @@
 import { db } from '../db';
 
-export const listFiles = async () => {
-  const allFiles = await db.File.findAll();
-  return allFiles.map((file) => {
-    return {
-      id: file.id,
-      filename: file.filename,
-      contentType: file.contentType,
-      size: file.size,
-      storageType: file.storageType,
-      storagePath: file.storagePath,
-      metadata: file.metadata,
-      createdAt: file.createdAt,
-      updatedAt: file.updatedAt,
-    };
-  });
-};
-
-export const getFile = async (args: { id: string }) => {
-  const file = await db.File.findByPk(args.id);
-
-  if (!file) {
-    return null;
-  }
-
+const mapFile = (file: InstanceType<(typeof db)['File']>) => {
   return {
-    id: file.id,
+    id: file.publicId,
     filename: file.filename,
     contentType: file.contentType,
     size: file.size,
@@ -35,6 +12,21 @@ export const getFile = async (args: { id: string }) => {
     createdAt: file.createdAt,
     updatedAt: file.updatedAt,
   };
+};
+
+export const listFiles = async () => {
+  const allFiles = await db.File.findAll();
+  return allFiles.map(mapFile);
+};
+
+export const getFile = async (args: { id: string }) => {
+  const file = await db.File.findOne({ where: { publicId: args.id } });
+
+  if (!file) {
+    return null;
+  }
+
+  return mapFile(file);
 };
 
 export const createFile = async (args: {
@@ -46,22 +38,11 @@ export const createFile = async (args: {
   metadata?: string;
 }) => {
   const file = await db.File.create(args);
-
-  return {
-    id: file.id,
-    filename: file.filename,
-    contentType: file.contentType,
-    size: file.size,
-    storageType: file.storageType,
-    storagePath: file.storagePath,
-    metadata: file.metadata,
-    createdAt: file.createdAt,
-    updatedAt: file.updatedAt,
-  };
+  return mapFile(file);
 };
 
 export const deleteFile = async (args: { id: string }) => {
-  const file = await db.File.findByPk(args.id);
+  const file = await db.File.findOne({ where: { publicId: args.id } });
 
   if (!file) {
     return null;

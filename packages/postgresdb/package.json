@@ -19,7 +19,8 @@
     "db-dev:logs": "docker compose -f docker-compose.dev.yml logs -f"
   },
   "dependencies": {
-    "@ttoss/postgresdb": "^0.8.0"
+    "@ttoss/postgresdb": "^0.8.0",
+    "nanoid": "^5.1.7"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^11.13.0",

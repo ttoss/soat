@@ -25,17 +25,24 @@ Route handlers **must not** contain direct database calls. They are responsible 
 
 Lib functions **must always return plain mapped objects**, never raw model instances. This is required to avoid exposing sensitive or internal data (e.g., internal DB fields, hashed passwords, audit columns) through the API. Every function that queries the database must map the result to a plain object before returning it:
 
+### Public ID as `id`
+
+The internal database `id` (primary key) **must never be returned to the user**. Always expose `publicId` as `id` in API responses:
+
 ```ts
 export const getFile = async (args: { id: string }) => {
-  const file = await db.File.findByPk(args.id);
+  const file = await db.File.findOne({ where: { publicId: args.id } });
   if (!file) return null;
   return {
-    id: file.id,
+    id: file.publicId, // publicId is exposed as `id`
     filename: file.filename,
-    // ... all fields explicitly mapped
+    // ... all fields explicitly mapped, internal `id` is never included
   };
 };
 ```
+
+- Route parameters and query inputs that reference a resource by ID will always be `publicId` values.
+- The database `id` column is for internal joins only and must not appear in any API response, OpenAPI schema, or MCP tool output.
 
 ### REST API Structure
 
@@ -174,4 +181,10 @@ Unit tests are located in the #file:../../packages/server/tests/unit/ folder. To
 
 ```bash
 pnpm --filter @soat/server test
+```
+
+To run tests for a specific file, use the `--testPathPatterns` flag:
+
+```bash
+pnpm --filter @soat/server test --testPathPatterns=users.test.ts
 ```

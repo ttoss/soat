@@ -1,13 +1,24 @@
 import { Column, DataType, Model, Table } from '@ttoss/postgresdb';
 
-@Table({ tableName: 'files' })
+import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
+
+@Table({
+  tableName: 'files',
+  hooks: {
+    beforeValidate: (instance: File) => {
+      if (!instance.publicId) {
+        instance.publicId = generatePublicId(PUBLIC_ID_PREFIXES.file);
+      }
+    },
+  },
+})
 export class File extends Model {
   @Column({
-    type: DataType.UUID,
-    primaryKey: true,
-    defaultValue: DataType.UUIDV4,
+    type: DataType.STRING(32),
+    unique: true,
+    allowNull: false,
   })
-  declare id: string;
+  declare publicId: string;
 
   @Column({ type: DataType.STRING })
   declare filename?: string;
