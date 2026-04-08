@@ -40,12 +40,6 @@ export class ProjectPolicy extends Model {
   declare project: Project;
 
   @Column({
-    type: DataType.STRING,
-    allowNull: false,
-  })
-  declare name: string;
-
-  @Column({
     type: DataType.ARRAY(DataType.TEXT),
     allowNull: false,
     defaultValue: [],

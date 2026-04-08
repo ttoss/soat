@@ -31,14 +31,19 @@ export const policyAllows = (policy: Policy, action: string): boolean => {
 
 export const createApiKeyIsAllowed = (args: {
   projectPublicId: string;
-  policy: Policy;
+  userPolicy: Policy;
+  apiKeyPolicy: Policy;
 }) => {
   return async (
     reqProjectPublicId: string,
     action: string
   ): Promise<boolean> => {
     if (reqProjectPublicId !== args.projectPublicId) return false;
-    return policyAllows(args.policy, action);
+    // Intersection: action must be allowed by both user policy and API key policy
+    return (
+      policyAllows(args.userPolicy, action) &&
+      policyAllows(args.apiKeyPolicy, action)
+    );
   };
 };
 

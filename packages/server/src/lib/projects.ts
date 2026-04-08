@@ -63,3 +63,95 @@ export const deleteProject = async (args: { id: string }) => {
   await project.destroy();
   return true;
 };
+
+const mapPolicy = (policy: InstanceType<(typeof db)['ProjectPolicy']>) => {
+  return {
+    id: policy.publicId,
+    permissions: policy.permissions,
+    notPermissions: policy.notPermissions,
+    projectId: policy.projectId,
+    createdAt: policy.createdAt,
+    updatedAt: policy.updatedAt,
+  };
+};
+
+export const listProjectPolicies = async (args: { projectId: string }) => {
+  const project = await db.Project.findOne({
+    where: { publicId: args.projectId },
+  });
+  if (!project) {
+    return [];
+  }
+
+  const policies = await db.ProjectPolicy.findAll({
+    where: { projectId: project.id },
+  });
+
+  return policies.map(mapPolicy);
+};
+
+export const createProjectPolicy = async (args: {
+  projectId: string;
+  permissions: string[];
+  notPermissions?: string[];
+}) => {
+  const project = await db.Project.findOne({
+    where: { publicId: args.projectId },
+  });
+  if (!project) {
+    return null;
+  }
+
+  const policy = await db.ProjectPolicy.create({
+    projectId: project.id,
+    permissions: args.permissions,
+    notPermissions: args.notPermissions || [],
+  });
+
+  return mapPolicy(policy);
+};
+
+export const addUserToProject = async (args: {
+  projectId: string;
+  userId: string;
+  policyId: string;
+}) => {
+  const project = await db.Project.findOne({
+    where: { publicId: args.projectId },
+  });
+  if (!project) {
+    return null;
+  }
+
+  const user = await db.User.findOne({ where: { publicId: args.userId } });
+  if (!user) {
+    return null;
+  }
+
+  const policy = await db.ProjectPolicy.findOne({
+    where: { publicId: args.policyId },
+  });
+  if (!policy) {
+    return null;
+  }
+
+  // Check if membership already exists
+  const existing = await db.UserProject.findOne({
+    where: { userId: user.id, projectId: project.id },
+  });
+
+  if (existing) {
+    // Update existing membership
+    await existing.update({ policyId: policy.id });
+    return true;
+  }
+
+  // Create new membership
+  await db.UserProject.create({
+    userId: user.id,
+    projectId: project.id,
+    policyId: policy.id,
+  });
+
+  return true;
+};

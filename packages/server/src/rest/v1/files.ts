@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { db } from 'src/db';
 import { createFile, deleteFile, getFile, listFiles } from 'src/lib/files';
 
 const filesRouter = new Router<Context>();
@@ -71,11 +72,28 @@ filesRouter.get('/files', async (ctx: Context) => {
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 filesRouter.get('/files/:id', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
   const file = await getFile({ id: ctx.params.id });
 
   if (!file) {
     ctx.status = 404;
     ctx.body = { error: 'File not found' };
+    return;
+  }
+
+  // Check if user is allowed to read files in this project
+  const allowed = await ctx.authUser.isAllowed(
+    file.projectId!,
+    'files:GetFile'
+  );
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
     return;
   }
 
@@ -98,9 +116,13 @@ filesRouter.get('/files/:id', async (ctx: Context) => {
  *           schema:
  *             type: object
  *             required:
+ *               - projectId
  *               - storageType
  *               - storagePath
  *             properties:
+ *               projectId:
+ *                 type: string
+ *                 example: 'proj_V1StGXR8Z5jdHi6B'
  *               filename:
  *                 type: string
  *                 example: 'document.pdf'
@@ -135,7 +157,14 @@ filesRouter.get('/files/:id', async (ctx: Context) => {
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 filesRouter.post('/files', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
   const body = ctx.request.body as {
+    projectId: string;
     filename?: string;
     contentType?: string;
     size?: number;
@@ -144,7 +173,31 @@ filesRouter.post('/files', async (ctx: Context) => {
     metadata?: string;
   };
 
-  const file = await createFile(body);
+  // Check if user is allowed to create files in this project
+  const allowed = await ctx.authUser.isAllowed(
+    body.projectId,
+    'files:CreateFile'
+  );
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  // Convert projectId to internal ID
+  const project = await db.Project.findOne({
+    where: { publicId: body.projectId },
+  });
+  if (!project) {
+    ctx.status = 400;
+    ctx.body = { error: 'Invalid project ID' };
+    return;
+  }
+
+  const file = await createFile({
+    ...body,
+    projectId: project.id,
+  });
   ctx.status = 201;
   ctx.body = file;
 });
@@ -183,6 +236,35 @@ filesRouter.post('/files', async (ctx: Context) => {
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 filesRouter.delete('/files/:id', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  // Get file to check project permission
+  const file = await db.File.findOne({
+    where: { publicId: ctx.params.id },
+    include: [{ model: db.Project, as: 'project' }],
+  });
+
+  if (!file) {
+    ctx.status = 404;
+    ctx.body = { error: 'File not found' };
+    return;
+  }
+
+  // Check if user is allowed to delete files in this project
+  const allowed = await ctx.authUser.isAllowed(
+    file.project!.publicId,
+    'files:DeleteFile'
+  );
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
   const result = await deleteFile({ id: ctx.params.id });
 
   if (result === null) {

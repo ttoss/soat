@@ -15,6 +15,15 @@ When defining functions, use an object for arguments instead of individual param
 
 Prefer using functions instead of classes for better simplicity and composability.
 
+## Naming Conventions
+
+- User kebab-case for folder names (e.g., `my-folder`).
+- Use camelCase for file names (e.g., `myFile.ts`).
+- Use camelCase for variable and function names (e.g., `myVariable`, `myFunction`).
+- Use PascalCase for type and interface names (e.g., `MyType`, `MyInterface`).
+- Use uppercase with underscores for constants (e.g., `MY_CONSTANT`).
+- For test files, use the same name as the file being tested with `.test` appended before the extension (e.g., `myFile.test.ts`).
+
 ## Linting
 
 To fix ESLint issues in a specific file, run `pnpm eslint --fix path/to/file`.

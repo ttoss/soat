@@ -1,6 +1,14 @@
-import { Column, DataType, Model, Table } from '@ttoss/postgresdb';
+import {
+  BelongsTo,
+  Column,
+  DataType,
+  ForeignKey,
+  Model,
+  Table,
+} from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
+import { Project } from './Project';
 
 @Table({
   tableName: 'files',
@@ -19,6 +27,17 @@ export class File extends Model {
     allowNull: false,
   })
   declare publicId: string;
+
+  @ForeignKey(() => {
+    return Project;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: false })
+  declare projectId: number;
+
+  @BelongsTo(() => {
+    return Project;
+  })
+  declare project: Project;
 
   @Column({ type: DataType.STRING })
   declare filename?: string;

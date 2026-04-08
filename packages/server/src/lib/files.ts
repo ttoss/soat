@@ -20,16 +20,23 @@ export const listFiles = async () => {
 };
 
 export const getFile = async (args: { id: string }) => {
-  const file = await db.File.findOne({ where: { publicId: args.id } });
+  const file = await db.File.findOne({
+    where: { publicId: args.id },
+    include: [{ model: db.Project, as: 'project' }],
+  });
 
   if (!file) {
     return null;
   }
 
-  return mapFile(file);
+  return {
+    ...mapFile(file),
+    projectId: file.project?.publicId,
+  };
 };
 
 export const createFile = async (args: {
+  projectId: number;
   filename?: string;
   contentType?: string;
   size?: number;

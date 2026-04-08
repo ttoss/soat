@@ -49,6 +49,23 @@ const resolveApiKey = async (ctx: Context, rawKey: string) => {
       };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const keyUser = (row as any).user;
+      // Get user's project policy
+      const project = await ctx.db.Project.findOne({
+        where: { publicId: projectPublicId },
+      });
+      const membership = await ctx.db.UserProject.findOne({
+        where: { userId: keyUser.id, projectId: project?.id },
+        include: [{ model: ctx.db.ProjectPolicy }],
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const userPolicyData = (membership as any)?.policy;
+      const userPolicy = userPolicyData
+        ? {
+            permissions: userPolicyData.permissions as string[],
+            notPermissions: userPolicyData.notPermissions as string[],
+          }
+        : { permissions: [], notPermissions: [] };
+
       ctx.authUser = {
         id: keyUser.id as number,
         publicId: keyUser.publicId as string,
@@ -56,7 +73,8 @@ const resolveApiKey = async (ctx: Context, rawKey: string) => {
         role: keyUser.role as 'admin' | 'user',
         isAllowed: createApiKeyIsAllowed({
           projectPublicId,
-          policy: keyPolicy,
+          userPolicy,
+          apiKeyPolicy: keyPolicy,
         }),
       };
       break;
