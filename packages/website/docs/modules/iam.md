@@ -1,127 +1,115 @@
 # IAM Module
 
-The IAM (Identity and Access Management) module provides authentication and authorization primitives for SOAT-powered applications. It manages identities through **Users** and **API Keys**, and controls access to resources using **Projects**, **Policies**, and **Project Members**.
+The IAM (Identity and Access Management) module controls who can access SOAT and what they are allowed to do. It provides user authentication, project-based organization, fine-grained permission policies, and API keys for programmatic access.
 
 ## Overview
 
-The IAM module controls who can access your resources and what actions they can perform. It supports:
+Every resource in SOAT (files, projects, and more) is protected by IAM. Before any action is performed, IAM verifies:
 
-- **Human users** with username/password authentication and JWT session tokens
-- **Machine-to-machine access** via API keys scoped to a project and policy
-- **Fine-grained authorization** through policy-based permission checks per project
+1. **Who are you?** — Authentication via a login session (JWT) or an API key.
+2. **Are you allowed to do that?** — Authorization via policies attached to your project membership.
 
 ## Authentication
 
-### Users (JWT)
+### Login (JWT)
 
-Users authenticate via `POST /api/v1/users/login` with their username and password. On success, a signed JWT is returned. Include it as a Bearer token on subsequent requests:
+Human users authenticate by logging in with their credentials. SOAT returns a session token that you include in every subsequent request.
 
 ```
-Authorization: Bearer <jwt>
+POST /api/v1/users/login
 ```
 
-Tokens are valid for 7 days.
+```json
+{
+  "email": "you@example.com",
+  "password": "your-password"
+}
+```
+
+Include the token in the `Authorization` header:
+
+```
+Authorization: Bearer <token>
+```
+
+Session tokens expire after 7 days.
 
 ### API Keys
 
-API keys provide long-lived credentials for machine-to-machine access. A raw key is returned only once at creation — it is immediately hashed (bcrypt) and cannot be retrieved again.
+For scripts, integrations, or any machine-to-machine access, use an API key instead of a login token. API keys are long-lived and can be scoped to a specific set of permissions.
 
-Key format: `sk_<random>` (e.g., `sk_abc12345xyz`)
-
-Include it as a Bearer token:
+Create a key via `POST /api/v1/api-keys`. The full key value is returned **only once** at creation — store it securely. Use it exactly like a session token:
 
 ```
-Authorization: Bearer sk_abc12345xyz
+Authorization: Bearer sk_<your-api-key>
 ```
 
-An API key is scoped to a specific **Project** and **Policy**. When authenticated via an API key, the system resolves the project context and the key's effective permissions automatically.
-
-**Permission boundary**: An API key's effective permissions are bounded by the membership policy of the user who created it. Even if the key's policy grants broader access, permissions are intersected with the creator's membership policy at authorization time.
+An API key's permissions are always limited to what its creator is allowed to do. A key can never grant more access than the user who created it.
 
 ## Roles
 
-The IAM module uses a simple role model:
+| Role    | Description                                             |
+| ------- | ------------------------------------------------------- |
+| `admin` | Full access to all resources and management operations. |
+| `user`  | Access governed by project membership and policies.     |
 
-| Role    | Description                                                             |
-| ------- | ----------------------------------------------------------------------- |
-| `admin` | Full access to all resources and projects. Policy checks are bypassed.  |
-| `user`  | Access is scoped to projects they are members of, governed by a policy. |
-
-The first user in the system is bootstrapped as `admin` via `POST /api/v1/users/bootstrap`. Subsequent users are created as `user` by default.
+The first user registered via `POST /api/v1/users/bootstrap` becomes the admin. All subsequent users have the `user` role.
 
 ## Projects
 
-A project is the top-level resource boundary. All access control (policies, members, API keys) is scoped to a project.
+A project is the top-level organizational unit in SOAT. All resources — files, policies, and API keys — belong to a project.
 
-- Admins can create, list, view, and delete any project.
-- Users can only list and view projects they are members of.
+- **Admins** can create, manage, and delete any project.
+- **Users** can access only the projects they are members of.
+- Each project membership carries a **policy** that defines what that member is allowed to do.
 
 ## Policies
 
-A policy defines what actions are allowed or denied within a project. Policies are attached to project members and API keys.
+A policy defines what actions a member (or API key) is allowed or denied within a project.
 
-| Field            | Type       | Description                                            |
-| ---------------- | ---------- | ------------------------------------------------------ |
-| `id`             | `string`   | ID (prefix: `pol_`)                                    |
-| `name`           | `string`   | Human-readable policy name                             |
-| `permissions`    | `string[]` | List of allowed action patterns                        |
-| `notPermissions` | `string[]` | List of denied action patterns (deny takes precedence) |
-| `projectId`      | `string`   | The project this policy belongs to                     |
+```json
+{
+  "name": "read-only",
+  "projectId": "proj_...",
+  "permissions": ["files:*"],
+  "notPermissions": ["files:DeleteFile"]
+}
+```
 
-### Permission Patterns
+| Field            | Description                                                                |
+| ---------------- | -------------------------------------------------------------------------- |
+| `permissions`    | Actions the policy allows. Supports wildcards (`files:*`, `*`).            |
+| `notPermissions` | Actions the policy explicitly denies. Denials take precedence over allows. |
 
-Permission strings follow the format `resource:action`. Wildcards are supported:
+### Permission Actions
 
-| Pattern         | Matches                            |
-| --------------- | ---------------------------------- |
-| `files:*`       | Any action on the `files` resource |
-| `*`             | Any action on any resource         |
-| `files:GetFile` | Exactly the `files:GetFile` action |
+Permission strings follow the format `resource:Action`. The table below lists all available actions and the REST endpoint each one protects.
 
-### Authorization Logic
+| Permission Action     | REST Endpoint              | What it controls          |
+| --------------------- | -------------------------- | ------------------------- |
+| `files:GetFile`       | `GET /api/v1/files/:id`    | Retrieve a specific file  |
+| `files:CreateFile`    | `POST /api/v1/files`       | Upload a new file         |
+| `files:DeleteFile`    | `DELETE /api/v1/files/:id` | Delete a file             |
+| `projects:GetProject` | `GET /api/v1/projects/:id` | View a project's policies |
 
-For a `user` role, a request is allowed if **all** of the following hold:
+Use wildcards to grant broader access:
 
-1. The user is a member of the project being accessed.
-2. The user's membership policy **allows** the action (`permissions` match).
-3. The user's membership policy does **not deny** the action (`notPermissions` do not match).
-4. If the request uses an API key, the key's policy also allows the action (intersection).
-
-`admin` users bypass all policy checks.
-
-## Project Members
-
-A project member is a user who has been granted access to a project under a specific policy.
-
-- Only admins can add, update, or remove members.
-- Removing a member revokes their access to the project immediately.
+| Pattern         | Effect                      |
+| --------------- | --------------------------- |
+| `*`             | Allow everything            |
+| `files:*`       | Allow all file operations   |
+| `files:GetFile` | Allow only retrieving files |
 
 ## API Keys
 
-| Field       | Type     | Description                                                |
-| ----------- | -------- | ---------------------------------------------------------- |
-| `id`        | `string` | Public ID (prefix: `key_`)                                 |
-| `name`      | `string` | Human-readable key name                                    |
-| `policyId`  | `string` | Public ID of the policy governing this key                 |
-| `projectId` | `string` | Public ID of the scoped project                            |
-| `key`       | `string` | Raw key value — **returned only at creation, never again** |
+Each API key is attached to a policy, which limits the key to a specific set of actions. When a request uses an API key, both the key's policy and the owner's membership policy must allow the action.
 
-- Any project member can create an API key scoped to their own project.
-- The key's policy must be valid within the same project.
-- The key's effective permissions are bounded by the creator's membership policy.
-- Members can list and delete their own keys. Admins can manage all keys.
-
-## Data Model
-
-All IAM entities are backed by the `@soat/postgresdb` package and use a `publicId` (prefixed string) as the external identifier. Internal integer primary keys are never exposed through the API.
-
-| Entity  | `publicId` Prefix |
-| ------- | ----------------- |
-| User    | `usr_`            |
-| Project | `proj_`           |
-| Policy  | `pol_`            |
-| API Key | `key_`            |
+| Field      | Description                                                                  |
+| ---------- | ---------------------------------------------------------------------------- |
+| `name`     | A human-readable label for the key                                           |
+| `policyId` | The policy that governs this key's permissions                               |
+| `key`      | The raw key value — **shown only once at creation, never retrievable again** |
 
 ## OAuth
 
-> **Coming soon.** OAuth 2.0 integration is planned for an upcoming release. Supported flows will include Authorization Code (interactive sign-in) and Client Credentials (server-to-server).
+> **Coming soon.** OAuth 2.0 support (Authorization Code and Client Credentials flows) is planned for a future release.

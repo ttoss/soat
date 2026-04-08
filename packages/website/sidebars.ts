@@ -1,7 +1,7 @@
 import type { SidebarsConfig } from '@docusaurus/plugin-content-docs';
 
-import documentsSidebar from './docs/api/documents/sidebar';
 import filesSidebar from './docs/api/files/sidebar';
+import usersSidebar from './docs/api/users/sidebar';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
@@ -18,7 +18,7 @@ import filesSidebar from './docs/api/files/sidebar';
 const sidebars: SidebarsConfig = {
   // By default, Docusaurus generates a sidebar from the docs folder structure
   tutorialSidebar: [
-    'intro',
+    'Introduction',
     'getting-started',
     {
       type: 'category',
@@ -36,13 +36,13 @@ const sidebars: SidebarsConfig = {
   apiSidebar: [
     {
       type: 'category',
-      label: 'Documents API',
-      items: documentsSidebar,
+      label: 'Files API',
+      items: filesSidebar,
     },
     {
       type: 'category',
-      label: 'Files API',
-      items: filesSidebar,
+      label: 'Users API',
+      items: usersSidebar,
     },
   ],
 

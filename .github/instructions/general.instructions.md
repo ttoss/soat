@@ -34,4 +34,4 @@ If you need to change the database schema, read the instructions in `packages/po
 
 ## Documentation
 
-All documentation must be written in English.
+All documentation must be written in English. The target audience is developers with technical skills — write concisely and precisely, assume familiarity with REST APIs, JWT, and common backend concepts, and prefer code examples over prose descriptions.

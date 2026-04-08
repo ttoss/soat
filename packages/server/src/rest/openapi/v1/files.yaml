@@ -86,6 +86,52 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /files/upload:
+    post:
+      tags:
+        - Files
+      summary: Upload a file
+      description: Uploads a file to the server and stores it in the configured storage directory
+      operationId: uploadFile
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - projectId
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: File content
+                projectId:
+                  type: string
+                  description: Project ID to associate the file with
+                  example: 'proj_V1StGXR8Z5jdHi6B'
+                metadata:
+                  type: string
+                  description: Additional metadata as a JSON string
+                  example: '{"author":"John"}'
+      responses:
+        '201':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileRecord'
+        '400':
+          description: Missing file or invalid project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /files/{id}:
     get:
       tags:
@@ -149,6 +195,84 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /files/{id}/download:
+    get:
+      tags:
+        - Files
+      summary: Download a file
+      description: Streams the file content to the client
+      operationId: downloadFile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: File ID
+          schema:
+            type: string
+            example: 'fil_abc123'
+      responses:
+        '200':
+          description: File content
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /files/{id}/metadata:
+    patch:
+      tags:
+        - Files
+      summary: Update file metadata
+      description: Updates the metadata field of a file
+      operationId: updateFileMetadata
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: File ID
+          schema:
+            type: string
+            example: 'fil_abc123'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - metadata
+              properties:
+                metadata:
+                  type: string
+                  description: New metadata as a JSON string
+                  example: '{"author":"Jane","tags":["report"]}'
+      responses:
+        '200':
+          description: Metadata updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileRecord'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   schemas:
     FileRecord:
@@ -198,4 +322,17 @@ components:
         error:
           type: string
           description: Error message
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
           example: 'File not found'

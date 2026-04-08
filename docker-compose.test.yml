@@ -1,0 +1,49 @@
+services:
+  database:
+    image: pgvector/pgvector:0.8.1-pg18-trixie
+    environment:
+      POSTGRES_DB: soat_test
+      POSTGRES_USER: soat_user
+      POSTGRES_PASSWORD: soat_password
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U soat_user -d soat_test']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build: .
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DATABASE_HOST: database
+      DATABASE_PORT: '5432'
+      DATABASE_NAME: soat_test
+      DATABASE_USER: soat_user
+      DATABASE_PASSWORD: soat_password
+      FILES_STORAGE_DIR: /data/files
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - '-e'
+        - >-
+          require('http').get('http://localhost:5047/api/v1/users',
+          (r) => { process.exit(r.statusCode >= 200 ? 0 : 1); }
+          ).on('error', () => process.exit(1))
+      interval: 5s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
+
+  smoke-test:
+    image: alpine:latest
+    depends_on:
+      server:
+        condition: service_healthy
+    volumes:
+      - ./tests/smoke-test.sh:/smoke-test.sh:ro
+    environment:
+      SERVER_URL: 'http://server:5047'
+    command: sh -c "apk add --no-cache curl jq && sh /smoke-test.sh"

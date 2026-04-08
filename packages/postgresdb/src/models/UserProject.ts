@@ -33,9 +33,12 @@ export class UserProject extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare projectId: number;
 
-  @BelongsTo(() => {
-    return Project;
-  })
+  @BelongsTo(
+    () => {
+      return Project;
+    },
+    { onDelete: 'CASCADE' }
+  )
   declare project: Project;
 
   @ForeignKey(() => {
@@ -44,9 +47,12 @@ export class UserProject extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare policyId: number;
 
-  @BelongsTo(() => {
-    return ProjectPolicy;
-  })
+  @BelongsTo(
+    () => {
+      return ProjectPolicy;
+    },
+    { onDelete: 'CASCADE' }
+  )
   declare policy: ProjectPolicy;
 
   @Column({ type: DataType.DATE })

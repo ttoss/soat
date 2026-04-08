@@ -64,12 +64,15 @@ export const deleteProject = async (args: { id: string }) => {
   return true;
 };
 
-const mapPolicy = (policy: InstanceType<(typeof db)['ProjectPolicy']>) => {
+const mapPolicy = (
+  policy: InstanceType<(typeof db)['ProjectPolicy']>,
+  projectPublicId: string
+) => {
   return {
     id: policy.publicId,
     permissions: policy.permissions,
     notPermissions: policy.notPermissions,
-    projectId: policy.projectId,
+    projectId: projectPublicId,
     createdAt: policy.createdAt,
     updatedAt: policy.updatedAt,
   };
@@ -87,7 +90,7 @@ export const listProjectPolicies = async (args: { projectId: string }) => {
     where: { projectId: project.id },
   });
 
-  return policies.map(mapPolicy);
+  return policies.map((policy) => mapPolicy(policy, project.publicId));
 };
 
 export const createProjectPolicy = async (args: {
@@ -108,7 +111,7 @@ export const createProjectPolicy = async (args: {
     notPermissions: args.notPermissions || [],
   });
 
-  return mapPolicy(policy);
+  return mapPolicy(policy, project.publicId);
 };
 
 export const addUserToProject = async (args: {

@@ -34,9 +34,12 @@ export class ProjectPolicy extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare projectId: number;
 
-  @BelongsTo(() => {
-    return Project;
-  })
+  @BelongsTo(
+    () => {
+      return Project;
+    },
+    { onDelete: 'CASCADE' }
+  )
   declare project: Project;
 
   @Column({

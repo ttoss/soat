@@ -4,7 +4,10 @@ import {
   addUserToProject,
   createProject,
   createProjectPolicy,
+  deleteProject,
+  getProject,
   listProjectPolicies,
+  listProjects,
 } from 'src/lib/projects';
 
 const projectsRouter = new Router<Context>();
@@ -323,6 +326,175 @@ projectsRouter.post('/projects/:projectId/members', async (ctx: Context) => {
   }
 
   ctx.status = 201;
+});
+
+/**
+ * @openapi
+ * /projects:
+ *   get:
+ *     tags:
+ *       - Projects
+ *     summary: List projects
+ *     description: Admins see all projects. Members see only their own projects.
+ *     operationId: listProjects
+ *     responses:
+ *       '200':
+ *         description: List of projects returned successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/ProjectRecord'
+ *       '401':
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+projectsRouter.get('/projects', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const projects = await listProjects({ authUser: ctx.authUser });
+  ctx.body = projects;
+});
+
+/**
+ * @openapi
+ * /projects/{id}:
+ *   get:
+ *     tags:
+ *       - Projects
+ *     summary: Get a project
+ *     description: Admins can get any project. Members can only get projects they belong to.
+ *     operationId: getProject
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         description: Project ID
+ *         schema:
+ *           type: string
+ *           example: 'proj_V1StGXR8Z5jdHi6B'
+ *     responses:
+ *       '200':
+ *         description: Project returned successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ProjectRecord'
+ *       '401':
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '403':
+ *         description: Forbidden
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '404':
+ *         description: Project not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+projectsRouter.get('/projects/:id', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const result = await getProject({
+    id: ctx.params.id,
+    authUser: ctx.authUser,
+  });
+
+  if (result === 'not_found') {
+    ctx.status = 404;
+    ctx.body = { error: 'Project not found' };
+    return;
+  }
+
+  if (result === 'forbidden') {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  ctx.body = result;
+});
+
+/**
+ * @openapi
+ * /projects/{id}:
+ *   delete:
+ *     tags:
+ *       - Projects
+ *     summary: Delete a project
+ *     description: Only admins can delete projects.
+ *     operationId: deleteProject
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         description: Project ID
+ *         schema:
+ *           type: string
+ *           example: 'proj_V1StGXR8Z5jdHi6B'
+ *     responses:
+ *       '204':
+ *         description: Project deleted successfully
+ *       '401':
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '403':
+ *         description: Forbidden
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '404':
+ *         description: Project not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+projectsRouter.delete('/projects/:id', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  if (ctx.authUser.role !== 'admin') {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const result = await deleteProject({ id: ctx.params.id });
+
+  if (!result) {
+    ctx.status = 404;
+    ctx.body = { error: 'Project not found' };
+    return;
+  }
+
+  ctx.status = 204;
 });
 
 export { projectsRouter };

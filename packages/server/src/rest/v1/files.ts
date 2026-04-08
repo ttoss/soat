@@ -1,7 +1,18 @@
+import multer from '@koa/multer';
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
-import { createFile, deleteFile, getFile, listFiles } from 'src/lib/files';
+import {
+  createFile,
+  deleteFile,
+  downloadFile,
+  getFile,
+  listFiles,
+  updateFileMetadata,
+  uploadFile,
+} from 'src/lib/files';
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 const filesRouter = new Router<Context>();
 
@@ -274,6 +285,269 @@ filesRouter.delete('/files/:id', async (ctx: Context) => {
   }
 
   ctx.status = 204;
+});
+
+/**
+ * @openapi
+ * /files/upload:
+ *   post:
+ *     tags:
+ *       - Files
+ *     summary: Upload a file
+ *     description: Uploads a file to the server and stores it in the configured storage directory
+ *     operationId: uploadFile
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - file
+ *               - projectId
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *               projectId:
+ *                 type: string
+ *                 example: 'proj_V1StGXR8Z5jdHi6B'
+ *               metadata:
+ *                 type: string
+ *                 example: '{"author":"John"}'
+ *     responses:
+ *       '201':
+ *         description: File uploaded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/FileRecord'
+ *       '400':
+ *         description: Missing file or invalid project
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '401':
+ *         $ref: '#/components/responses/Unauthorized'
+ *       '403':
+ *         $ref: '#/components/responses/Forbidden'
+ */
+filesRouter.post(
+  '/files/upload',
+  upload.single('file'),
+  async (ctx: Context) => {
+    if (!ctx.authUser) {
+      ctx.status = 401;
+      ctx.body = { error: 'Unauthorized' };
+      return;
+    }
+
+    const body = ctx.request.body as { projectId?: string; metadata?: string };
+    const file = (ctx as any).file as Express.Multer.File | undefined;
+
+    if (!file) {
+      ctx.status = 400;
+      ctx.body = { error: 'No file provided' };
+      return;
+    }
+
+    if (!body.projectId) {
+      ctx.status = 400;
+      ctx.body = { error: 'projectId is required' };
+      return;
+    }
+
+    const allowed = await ctx.authUser.isAllowed(
+      body.projectId,
+      'files:UploadFile'
+    );
+    if (!allowed) {
+      ctx.status = 403;
+      ctx.body = { error: 'Forbidden' };
+      return;
+    }
+
+    const project = await db.Project.findOne({
+      where: { publicId: body.projectId },
+    });
+    if (!project) {
+      ctx.status = 400;
+      ctx.body = { error: 'Invalid project ID' };
+      return;
+    }
+
+    const record = await uploadFile({
+      projectId: project.id,
+      fileBuffer: file.buffer,
+      filename: file.originalname,
+      contentType: file.mimetype,
+      metadata: body.metadata,
+    });
+
+    ctx.status = 201;
+    ctx.body = record;
+  }
+);
+
+/**
+ * @openapi
+ * /files/{id}/download:
+ *   get:
+ *     tags:
+ *       - Files
+ *     summary: Download a file
+ *     description: Streams the file content to the client
+ *     operationId: downloadFile
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         description: File ID
+ *         schema:
+ *           type: string
+ *           example: 'fil_abc123'
+ *     responses:
+ *       '200':
+ *         description: File content
+ *         content:
+ *           application/octet-stream:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       '401':
+ *         $ref: '#/components/responses/Unauthorized'
+ *       '403':
+ *         $ref: '#/components/responses/Forbidden'
+ *       '404':
+ *         description: File not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+filesRouter.get('/files/:id/download', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const fileRecord = await getFile({ id: ctx.params.id });
+
+  if (!fileRecord) {
+    ctx.status = 404;
+    ctx.body = { error: 'File not found' };
+    return;
+  }
+
+  const allowed = await ctx.authUser.isAllowed(
+    fileRecord.projectId!,
+    'files:DownloadFile'
+  );
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const result = await downloadFile({ id: ctx.params.id });
+
+  if (!result) {
+    ctx.status = 404;
+    ctx.body = { error: 'File not found on disk' };
+    return;
+  }
+
+  ctx.set('Content-Type', result.contentType ?? 'application/octet-stream');
+  if (result.filename) {
+    ctx.set('Content-Disposition', `attachment; filename="${result.filename}"`);
+  }
+  if (result.size != null) {
+    ctx.set('Content-Length', String(result.size));
+  }
+  ctx.body = result.stream;
+});
+
+/**
+ * @openapi
+ * /files/{id}/metadata:
+ *   patch:
+ *     tags:
+ *       - Files
+ *     summary: Update file metadata
+ *     description: Updates the metadata field of a file
+ *     operationId: updateFileMetadata
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         description: File ID
+ *         schema:
+ *           type: string
+ *           example: 'fil_abc123'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - metadata
+ *             properties:
+ *               metadata:
+ *                 type: string
+ *                 example: '{"author":"Jane","tags":["report"]}'
+ *     responses:
+ *       '200':
+ *         description: Metadata updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/FileRecord'
+ *       '401':
+ *         $ref: '#/components/responses/Unauthorized'
+ *       '403':
+ *         $ref: '#/components/responses/Forbidden'
+ *       '404':
+ *         description: File not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+filesRouter.patch('/files/:id/metadata', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const fileRecord = await getFile({ id: ctx.params.id });
+
+  if (!fileRecord) {
+    ctx.status = 404;
+    ctx.body = { error: 'File not found' };
+    return;
+  }
+
+  const allowed = await ctx.authUser.isAllowed(
+    fileRecord.projectId!,
+    'files:UpdateFileMetadata'
+  );
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const body = ctx.request.body as { metadata: string };
+  const updated = await updateFileMetadata({
+    id: ctx.params.id,
+    metadata: body.metadata,
+  });
+
+  ctx.body = updated;
 });
 
 export { filesRouter };
