@@ -11,10 +11,27 @@ services:
       timeout: 5s
       retries: 10
 
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_cache:/root/.ollama
+    entrypoint:
+      - /bin/sh
+      - -c
+      - 'ollama serve & sleep 5 && ollama pull qwen3-embedding:0.6b && wait'
+    healthcheck:
+      test: ['CMD-SHELL', 'ollama list | grep qwen3-embedding']
+      interval: 10s
+      timeout: 30s
+      retries: 30
+      start_period: 30s
+
   server:
     build: .
     depends_on:
       database:
+        condition: service_healthy
+      ollama:
         condition: service_healthy
     environment:
       DATABASE_HOST: database
@@ -23,14 +40,18 @@ services:
       DATABASE_USER: soat_user
       DATABASE_PASSWORD: soat_password
       FILES_STORAGE_DIR: /data/files
+      OLLAMA_BASE_URL: http://ollama:11434
+      EMBEDDING_PROVIDER: ollama
+      EMBEDDING_MODEL: qwen3-embedding:0.6b
+      EMBEDDING_DIMENSIONS: '1024'
     healthcheck:
       test:
         - CMD
         - node
         - '-e'
         - >-
-          require('http').get('http://localhost:5047/api/v1/users',
-          (r) => { process.exit(r.statusCode >= 200 ? 0 : 1); }
+          require('http').get('http://localhost:5047/health',
+          (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }
           ).on('error', () => process.exit(1))
       interval: 5s
       timeout: 10s
@@ -47,3 +68,6 @@ services:
     environment:
       SERVER_URL: 'http://server:5047'
     command: sh -c "apk add --no-cache curl jq && sh /smoke-test.sh"
+
+volumes:
+  ollama_cache:

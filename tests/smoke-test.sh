@@ -96,5 +96,52 @@ if [ "$AFTER_DELETE_STATUS" != "404" ]; then
 fi
 echo "File correctly returns 404 after deletion."
 
+# 10. Create first document
+echo "--- Creating first document ---"
+DOC1_RESP=$(curl -sf -X POST "$BASE_URL/documents" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"content\":\"The quick brown fox jumps over the lazy dog\",\"filename\":\"fox.txt\"}")
+DOC1_ID=$(echo "$DOC1_RESP" | jq -r '.id')
+echo "Document 1 id: $DOC1_ID"
+
+# 11. Create second document
+echo "--- Creating second document ---"
+DOC2_RESP=$(curl -sf -X POST "$BASE_URL/documents" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"content\":\"Machine learning models require large amounts of training data\",\"filename\":\"ml.txt\"}")
+DOC2_ID=$(echo "$DOC2_RESP" | jq -r '.id')
+echo "Document 2 id: $DOC2_ID"
+
+# 12. Search documents
+echo "--- Searching documents ---"
+SEARCH_RESP=$(curl -sf -X POST "$BASE_URL/documents/search" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"query\":\"fox animal jumping\",\"limit\":5}")
+SEARCH_COUNT=$(echo "$SEARCH_RESP" | jq 'length')
+if [ "$SEARCH_COUNT" -lt 1 ]; then
+  echo "ERROR: Document search returned $SEARCH_COUNT results, expected at least 1" >&2
+  exit 1
+fi
+echo "Search returned $SEARCH_COUNT result(s)."
+
+# 13. Delete documents
+echo "--- Deleting documents ---"
+DELETE_DOC1=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/documents/$DOC1_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$DELETE_DOC1" != "204" ]; then
+  echo "ERROR: DELETE document 1 returned $DELETE_DOC1, expected 204" >&2
+  exit 1
+fi
+DELETE_DOC2=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/documents/$DOC2_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$DELETE_DOC2" != "204" ]; then
+  echo "ERROR: DELETE document 2 returned $DELETE_DOC2, expected 204" >&2
+  exit 1
+fi
+echo "Documents deleted."
+
 echo ""
 echo "=== All smoke tests passed! ==="

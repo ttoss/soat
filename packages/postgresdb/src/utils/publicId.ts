@@ -10,6 +10,7 @@ export const PUBLIC_ID_PREFIXES = {
   project: 'proj_',
   policy: 'pol_',
   apiKey: 'key_',
+  document: 'doc_',
 } as const;
 
 /**

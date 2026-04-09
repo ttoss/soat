@@ -1,10 +1,12 @@
-import { App, bodyParser, cors } from '@ttoss/http-server';
+import { App, addHealthCheck, bodyParser, cors } from '@ttoss/http-server';
 
 import { mcpRouter } from './mcp/server';
 import { authMiddleware } from './middleware/auth';
 import { restRouter } from './rest/router';
 
 const app = new App();
+
+addHealthCheck({ app });
 
 app.use(cors());
 app.use(bodyParser());

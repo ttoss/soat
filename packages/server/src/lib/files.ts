@@ -4,7 +4,6 @@ import path from 'node:path';
 import { db } from '../db';
 
 const getStorageDir = () => {
-  // eslint-disable-next-line turbo/no-undeclared-env-vars
   const dir = process.env.FILES_STORAGE_DIR;
   if (!dir) {
     throw new Error('FILES_STORAGE_DIR environment variable is not set');
