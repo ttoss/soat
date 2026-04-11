@@ -44,7 +44,7 @@ Create a key via `POST /api/v1/api-keys`. The full key value is returned **only 
 Authorization: Bearer sk_<your-api-key>
 ```
 
-An API key's permissions are always limited to what its creator is allowed to do. A key can never grant more access than the user who created it.
+An API key's effective permissions are the **intersection** of the key's own policy and the key owner's project membership policy. Both must allow an action for it to be permitted. A key can never grant more access than the owner's membership policy allows, and can be scoped to even less via the key's own policy.
 
 ## Roles
 
@@ -85,12 +85,25 @@ A policy defines what actions a member (or API key) is allowed or denied within 
 
 Permission strings follow the format `resource:Action`. The table below lists all available actions and the REST endpoint each one protects.
 
-| Permission Action     | REST Endpoint              | What it controls          |
-| --------------------- | -------------------------- | ------------------------- |
-| `files:GetFile`       | `GET /api/v1/files/:id`    | Retrieve a specific file  |
-| `files:CreateFile`    | `POST /api/v1/files`       | Upload a new file         |
-| `files:DeleteFile`    | `DELETE /api/v1/files/:id` | Delete a file             |
-| `projects:GetProject` | `GET /api/v1/projects/:id` | View a project's policies |
+| Permission Action                  | REST Endpoint                      | What it controls                                    |
+| ---------------------------------- | ---------------------------------- | --------------------------------------------------- |
+| `files:GetFile`                    | `GET /api/v1/files/:id`            | Retrieve file metadata                              |
+| `files:CreateFile`                 | `POST /api/v1/files`               | Create a new file record                            |
+| `files:UploadFile`                 | `POST /api/v1/files/upload`        | Upload file content                                 |
+| `files:DownloadFile`               | `GET /api/v1/files/:id/download`   | Download file content                               |
+| `files:UpdateFileMetadata`         | `PATCH /api/v1/files/:id/metadata` | Update file metadata                                |
+| `files:DeleteFile`                 | `DELETE /api/v1/files/:id`         | Delete a file                                       |
+| `projects:GetProject`              | `GET /api/v1/projects/:id`         | View a project's details                            |
+| `documents:GetDocument`            | `GET /api/v1/documents/:id`        | Retrieve a document                                 |
+| `documents:CreateDocument`         | `POST /api/v1/documents`           | Create a document                                   |
+| `documents:DeleteDocument`         | `DELETE /api/v1/documents/:id`     | Delete a document                                   |
+| `actors:GetActor`                  | `GET /api/v1/actors/:id`           | Retrieve an actor                                   |
+| `actors:CreateActor`               | `POST /api/v1/actors`              | Create an actor                                     |
+| `actors:DeleteActor`               | `DELETE /api/v1/actors/:id`        | Delete an actor                                     |
+| `conversations:GetConversation`    | `GET /api/v1/conversations/:id`    | Retrieve a conversation and its messages and actors |
+| `conversations:CreateConversation` | `POST /api/v1/conversations`       | Create a conversation                               |
+| `conversations:UpdateConversation` | `PATCH /api/v1/conversations/:id`  | Update a conversation, add or remove messages       |
+| `conversations:DeleteConversation` | `DELETE /api/v1/conversations/:id` | Delete a conversation                               |
 
 Use wildcards to grant broader access:
 

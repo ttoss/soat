@@ -1,0 +1,508 @@
+openapi: 3.0.3
+info:
+  title: SOAT Conversations API
+  version: 1.0.0
+  description: API for managing conversations and their messages
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: http://0.0.0.0:5047/api/v1
+    description: Development server
+paths:
+  /conversations:
+    get:
+      tags:
+        - Conversations
+      summary: List conversations
+      description: Returns all conversations the caller has access to. If projectId is provided, returns only conversations in that project. API keys are scoped to a single project automatically.
+      operationId: listConversations
+      parameters:
+        - name: projectId
+          in: query
+          required: false
+          description: Project public ID (optional)
+          schema:
+            type: string
+            example: 'proj_V1StGXR8Z5jdHi6B'
+        - name: actorId
+          in: query
+          required: false
+          description: Filter by actor public ID
+          schema:
+            type: string
+            example: 'act_V1StGXR8Z5jdHi6B'
+      responses:
+        '200':
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConversationRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - Conversations
+      summary: Create a conversation
+      description: Creates a new conversation. API keys automatically infer the project from the key's scope; JWT callers must supply projectId.
+      operationId: createConversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                projectId:
+                  type: string
+                  description: Project public ID. Required for JWT auth; omit when using an API key.
+                  example: 'proj_V1StGXR8Z5jdHi6B'
+                status:
+                  type: string
+                  enum: [open, closed]
+                  default: open
+                  description: Initial conversation status
+      responses:
+        '201':
+          description: Conversation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationRecord'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /conversations/{id}:
+    get:
+      tags:
+        - Conversations
+      summary: Get a conversation by ID
+      description: Returns a conversation by its public ID
+      operationId: getConversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            example: 'conv_V1StGXR8Z5jdHi6B'
+      responses:
+        '200':
+          description: Conversation found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - Conversations
+      summary: Update a conversation
+      description: Updates the status of a conversation
+      operationId: updateConversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            example: 'conv_V1StGXR8Z5jdHi6B'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [open, closed]
+                  description: New conversation status
+      responses:
+        '200':
+          description: Conversation updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationRecord'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Conversations
+      summary: Delete a conversation
+      description: Deletes a conversation by its public ID
+      operationId: deleteConversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            example: 'conv_V1StGXR8Z5jdHi6B'
+      responses:
+        '204':
+          description: Conversation deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /conversations/{id}/messages:
+    get:
+      tags:
+        - Conversations
+      summary: List conversation messages
+      description: Returns all messages (documents) attached to a conversation, ordered by position
+      operationId: listConversationMessages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            example: 'conv_V1StGXR8Z5jdHi6B'
+      responses:
+        '200':
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConversationMessageRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - Conversations
+      summary: Add a message to a conversation
+      description: Creates a document from the message text and attaches it to the conversation at the given position. If position is omitted, it is appended at the end.
+      operationId: addConversationMessage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            example: 'conv_V1StGXR8Z5jdHi6B'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - message
+                - actorId
+              properties:
+                message:
+                  type: string
+                  description: Message text content to add to the conversation
+                  example: 'Hello, how can I help you?'
+                actorId:
+                  type: string
+                  description: Actor public ID who is sending this message
+                  example: 'act_V1StGXR8Z5jdHi6B'
+                position:
+                  type: integer
+                  description: Zero-based position. Defaults to MAX+1 (append).
+                  example: 0
+      responses:
+        '201':
+          description: Message added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationMessageRecord'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation or actor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /conversations/{id}/actors:
+    get:
+      tags:
+        - Conversations
+      summary: List actors in a conversation
+      description: Returns all distinct actors who have sent at least one message in the conversation
+      operationId: listConversationActors
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            example: 'conv_V1StGXR8Z5jdHi6B'
+      responses:
+        '200':
+          description: List of actors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConversationActorRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /conversations/{id}/messages/{documentId}:
+    delete:
+      tags:
+        - Conversations
+      summary: Remove a message from a conversation
+      description: Removes a document from a conversation
+      operationId: removeConversationMessage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            example: 'conv_V1StGXR8Z5jdHi6B'
+        - name: documentId
+          in: path
+          required: true
+          description: Document public ID
+          schema:
+            type: string
+            example: 'doc_V1StGXR8Z5jdHi6B'
+      responses:
+        '204':
+          description: Message removed
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation or message not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    ConversationRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Conversation public ID
+          example: 'conv_V1StGXR8Z5jdHi6B'
+        projectId:
+          type: string
+          description: Project public ID
+          example: 'proj_V1StGXR8Z5jdHi6B'
+        status:
+          type: string
+          enum: [open, closed]
+          description: Conversation status
+          example: 'open'
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    ConversationMessageRecord:
+      type: object
+      properties:
+        documentId:
+          type: string
+          description: Document public ID
+          example: 'doc_V1StGXR8Z5jdHi6B'
+        actorId:
+          type: string
+          description: Actor public ID who sent this message
+          example: 'act_V1StGXR8Z5jdHi6B'
+        position:
+          type: integer
+          description: Zero-based position in the conversation
+          example: 0
+    ConversationActorRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Actor public ID
+          example: 'act_V1StGXR8Z5jdHi6B'
+        projectId:
+          type: string
+          description: Project public ID
+          example: 'proj_V1StGXR8Z5jdHi6B'
+        name:
+          type: string
+          description: Actor name
+          example: 'Alice'
+        type:
+          type: string
+          description: Actor type
+          example: 'human'
+        externalId:
+          type: string
+          description: External identifier
+          example: 'ext_123'
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: 'Conversation not found'

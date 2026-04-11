@@ -9,6 +9,7 @@
     "pretest": "pnpm run --filter @soat/postgresdb build",
     "test": "jest --projects tests/unit"
   },
+  "type": "module",
   "dependencies": {
     "@soat/postgresdb": "workspace:*",
     "@ttoss/http-server": "^0.5.9",
