@@ -30,13 +30,20 @@ const mapDocument = (
   };
 };
 
-export const listDocuments = async (args: { projectId: number }) => {
+export const listDocuments = async (args: { projectIds?: number[] }) => {
+  if (args.projectIds !== undefined && args.projectIds.length === 0) {
+    return [];
+  }
+
+  const fileWhere =
+    args.projectIds !== undefined ? { projectId: args.projectIds } : undefined;
+
   const documents = await db.Document.findAll({
     include: [
       {
         model: db.File,
         as: 'file',
-        where: { projectId: args.projectId },
+        where: fileWhere,
         include: [{ model: db.Project, as: 'project' }],
       },
     ],
@@ -142,20 +149,27 @@ export const deleteDocument = async (args: { id: string }) => {
 };
 
 export const searchDocuments = async (args: {
-  projectId: number;
+  projectIds?: number[];
   query: string;
   limit?: number;
 }) => {
+  if (args.projectIds !== undefined && args.projectIds.length === 0) {
+    return [];
+  }
+
   const embedding = await getEmbedding({ text: args.query });
   const limit = args.limit ?? 10;
   const embeddingLiteral = `[${embedding.join(',')}]`;
+
+  const fileWhere =
+    args.projectIds !== undefined ? { projectId: args.projectIds } : undefined;
 
   const documents = await db.Document.findAll({
     include: [
       {
         model: db.File,
         as: 'file',
-        where: { projectId: args.projectId },
+        where: fileWhere,
         include: [{ model: db.Project, as: 'project' }],
       },
     ],

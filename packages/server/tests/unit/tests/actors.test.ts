@@ -1,0 +1,245 @@
+import { authenticatedTestClient, loginAs, testClient } from '../testClient';
+
+describe('Actors', () => {
+  let adminToken: string;
+  let userToken: string;
+  let userId: string;
+  let projectId: string;
+  let policyId: string;
+
+  beforeAll(async () => {
+    await testClient
+      .post('/api/v1/users/bootstrap')
+      .send({ username: 'admin', password: 'supersecret' });
+
+    adminToken = await loginAs('admin', 'supersecret');
+
+    const createUserRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'actorsuser', password: 'actorspass' });
+
+    userId = createUserRes.body.id;
+    userToken = await loginAs('actorsuser', 'actorspass');
+
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'Actors Test Project' });
+    projectId = projectRes.body.id;
+
+    const policyRes = await authenticatedTestClient(adminToken)
+      .post(`/api/v1/projects/${projectId}/policies`)
+      .send({
+        permissions: [
+          'actors:ListActors',
+          'actors:GetActor',
+          'actors:CreateActor',
+          'actors:DeleteActor',
+        ],
+      });
+    policyId = policyRes.body.id;
+
+    await authenticatedTestClient(adminToken)
+      .post(`/api/v1/projects/${projectId}/members`)
+      .send({ userId, policyId });
+  });
+
+  describe('POST /api/v1/actors', () => {
+    test('authenticated user with permission can create an actor', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ projectId, name: 'Alice' });
+
+      expect(response.status).toBe(201);
+      expect(response.body.id).toMatch(/^act_/);
+      expect(response.body.name).toBe('Alice');
+      expect(response.body.projectId).toBe(projectId);
+      expect(response.body.type).toBeUndefined();
+      expect(response.body.externalId).toBeUndefined();
+    });
+
+    test('can create an actor with type and externalId', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({
+          projectId,
+          name: 'Bob',
+          type: 'customer',
+          externalId: '+15550001111',
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.name).toBe('Bob');
+      expect(response.body.type).toBe('customer');
+      expect(response.body.externalId).toBe('+15550001111');
+    });
+
+    test('duplicate externalId within same project returns 409', async () => {
+      await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ projectId, name: 'Charlie', externalId: '+15559999999' });
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ projectId, name: 'Charlie2', externalId: '+15559999999' });
+
+      expect(response.status).toBe(409);
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient
+        .post('/api/v1/actors')
+        .send({ projectId, name: 'Anon' });
+
+      expect(response.status).toBe(401);
+    });
+
+    test('missing name returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ projectId });
+
+      expect(response.status).toBe(400);
+    });
+
+    test('missing projectId returns 400 for JWT users', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ name: 'NoProject' });
+
+      expect(response.status).toBe(400);
+    });
+  });
+
+  describe('GET /api/v1/actors', () => {
+    beforeAll(async () => {
+      await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ projectId, name: 'ListActor1' });
+      await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ projectId, name: 'ListActor2' });
+    });
+
+    test('authenticated user with permission can list actors', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/actors?projectId=${projectId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('listing without projectId returns all accessible actors', async () => {
+      const response =
+        await authenticatedTestClient(userToken).get('/api/v1/actors');
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+    });
+
+    test('can filter by externalId', async () => {
+      await authenticatedTestClient(userToken).post('/api/v1/actors').send({
+        projectId,
+        name: 'ExternalFiltered',
+        externalId: '+15558887777',
+      });
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/actors?externalId=%2B15558887777`
+      );
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(
+        response.body.some((a: { externalId: string }) => {
+          return a.externalId === '+15558887777';
+        })
+      ).toBe(true);
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient.get(
+        `/api/v1/actors?projectId=${projectId}`
+      );
+
+      expect(response.status).toBe(401);
+    });
+  });
+
+  describe('GET /api/v1/actors/:id', () => {
+    let actorId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ projectId, name: 'FetchActor', type: 'agent' });
+      actorId = res.body.id;
+    });
+
+    test('user with permission can get an actor by ID', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/actors/${actorId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe(actorId);
+      expect(response.body.name).toBe('FetchActor');
+      expect(response.body.type).toBe('agent');
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient.get(`/api/v1/actors/${actorId}`);
+
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 404 for non-existent actor', async () => {
+      const response = await authenticatedTestClient(adminToken).get(
+        '/api/v1/actors/act_nonexistent'
+      );
+
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe('DELETE /api/v1/actors/:id', () => {
+    test('user with permission can delete an actor', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ projectId, name: 'ToDelete' });
+      const actorId = createRes.body.id;
+
+      const deleteRes = await authenticatedTestClient(userToken).delete(
+        `/api/v1/actors/${actorId}`
+      );
+
+      expect(deleteRes.status).toBe(204);
+
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/actors/${actorId}`
+      );
+      expect(getRes.status).toBe(404);
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ projectId, name: 'ToDeleteAnon' });
+
+      const response = await testClient.delete(
+        `/api/v1/actors/${createRes.body.id}`
+      );
+
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 404 for non-existent actor', async () => {
+      const response = await authenticatedTestClient(adminToken).delete(
+        '/api/v1/actors/act_nonexistent'
+      );
+
+      expect(response.status).toBe(404);
+    });
+  });
+});

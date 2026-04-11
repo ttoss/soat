@@ -1,5 +1,5 @@
-import multer from '@koa/multer';
-import { Router } from '@ttoss/http-server';
+import type { MulterFile } from '@ttoss/http-server';
+import { multer, Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import {
@@ -343,8 +343,8 @@ filesRouter.post(
       return;
     }
 
-    const body = ctx.request.body as { projectId?: string; metadata?: string };
-    const file = (ctx as any).file as Express.Multer.File | undefined;
+    const body = ctx.request.body as { projectId: string; metadata?: string };
+    const file = ctx.file as MulterFile | undefined;
 
     if (!file) {
       ctx.status = 400;

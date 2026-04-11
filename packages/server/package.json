@@ -10,7 +10,6 @@
     "test": "jest --projects tests/unit"
   },
   "dependencies": {
-    "@koa/multer": "^4.0.0",
     "@soat/postgresdb": "workspace:*",
     "@ttoss/http-server": "^0.5.9",
     "@ttoss/http-server-mcp": "^0.11.1",

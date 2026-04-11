@@ -5,16 +5,15 @@ const registerTools = (server: McpServer) => {
   server.registerTool(
     'list-documents',
     {
-      description: 'List all documents in a project',
+      description:
+        'List documents. If projectId is omitted, returns all documents accessible to the caller.',
       inputSchema: {
-        projectId: z.string().describe('Project ID'),
+        projectId: z.string().optional().describe('Project ID (optional)'),
       },
     },
     async ({ projectId }) => {
-      const data = await apiCall(
-        'GET',
-        `/documents?projectId=${encodeURIComponent(projectId)}`
-      );
+      const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+      const data = await apiCall('GET', `/documents${qs}`);
       return { content: [{ type: 'text', text: JSON.stringify(data) }] };
     }
   );
@@ -37,9 +36,14 @@ const registerTools = (server: McpServer) => {
     'create-document',
     {
       description:
-        'Create a new text document with an embedding vector for semantic search',
+        'Create a new text document with an embedding vector for semantic search. API keys infer the project automatically; JWT callers must supply projectId.',
       inputSchema: {
-        projectId: z.string().describe('Project ID'),
+        projectId: z
+          .string()
+          .optional()
+          .describe(
+            'Project ID (required for JWT auth, optional for API keys)'
+          ),
         content: z.string().describe('Text content of the document'),
         filename: z.string().optional().describe('Optional filename'),
       },
@@ -70,9 +74,9 @@ const registerTools = (server: McpServer) => {
     'search-documents',
     {
       description:
-        'Perform semantic search over documents in a project using cosine similarity',
+        'Perform semantic search over documents using cosine similarity. If projectId is omitted, searches across all accessible projects.',
       inputSchema: {
-        projectId: z.string().describe('Project ID'),
+        projectId: z.string().optional().describe('Project ID (optional)'),
         query: z.string().describe('Natural language search query'),
         limit: z
           .number()

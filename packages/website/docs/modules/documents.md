@@ -68,7 +68,7 @@ Document operations are governed by per-project policies. Grant the following pe
 
 ### List documents
 
-Returns all documents in a project (no content field):
+Returns documents visible to the caller (no content field). `projectId` is optional — omit it to retrieve documents across all accessible projects:
 
 ```http
 GET /api/v1/documents?projectId=proj_xxx
@@ -111,7 +111,7 @@ Authorization: Bearer <token>
 
 ### Semantic search
 
-Embeds the query and returns the closest documents by cosine distance:
+Embeds the query and returns the closest documents by cosine distance. `projectId` is optional — omit it to search across all accessible projects:
 
 ```http
 POST /api/v1/documents/search
@@ -127,14 +127,26 @@ Content-Type: application/json
 
 The `limit` field defaults to `10` when omitted.
 
+## Project ID Resolution
+
+For endpoints that accept `projectId`, the field is optional. When omitted, the server resolves accessible projects based on the caller's identity:
+
+| Caller type | Behavior when `projectId` is omitted                                         |
+| ----------- | ---------------------------------------------------------------------------- |
+| API key     | Infers the project from the key's own scope (single project)                 |
+| JWT admin   | No project filter — returns results across all projects                      |
+| JWT user    | Enumerates all projects the user is a member of with the required permission |
+
+If `projectId` is supplied but the caller lacks permission for that project, the request returns `403 Forbidden`.
+
 ## MCP Tools
 
 The following MCP tools are available for AI assistants:
 
-| Tool name          | Description                                         |
-| ------------------ | --------------------------------------------------- |
-| `list-documents`   | List all documents in a project                     |
-| `get-document`     | Retrieve a document including its text content      |
-| `create-document`  | Create a new text document with automatic embedding |
-| `delete-document`  | Delete a document and its underlying file           |
-| `search-documents` | Semantic search over project documents              |
+| Tool name          | Description                                                                |
+| ------------------ | -------------------------------------------------------------------------- |
+| `list-documents`   | List documents; omit `projectId` to retrieve all accessible documents      |
+| `get-document`     | Retrieve a document including its text content                             |
+| `create-document`  | Create a new text document with automatic embedding                        |
+| `delete-document`  | Delete a document and its underlying file                                  |
+| `search-documents` | Semantic search; omit `projectId` to search across all accessible projects |

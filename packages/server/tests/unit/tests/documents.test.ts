@@ -131,11 +131,12 @@ describe('Documents', () => {
       expect(response.status).toBe(401);
     });
 
-    test('missing projectId returns 400', async () => {
+    test('listing without projectId returns all accessible documents', async () => {
       const response =
         await authenticatedTestClient(userToken).get('/api/v1/documents');
 
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
     });
   });
 
@@ -213,12 +214,13 @@ describe('Documents', () => {
       expect(response.status).toBe(401);
     });
 
-    test('missing projectId returns 400', async () => {
+    test('search without projectId returns results across accessible projects', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/search')
         .send({ query: 'no project' });
 
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
     });
 
     test('missing query returns 400', async () => {
@@ -275,6 +277,54 @@ describe('Documents', () => {
       );
 
       expect(response.status).toBe(404);
+    });
+  });
+
+  describe('API key access', () => {
+    let apiKey: string;
+
+    beforeAll(async () => {
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/projects/${projectId}/policies`)
+        .send({
+          permissions: ['documents:ListDocuments', 'documents:SearchDocuments'],
+        });
+      const apiKeyPolicyId = policyRes.body.id;
+
+      const apiKeyRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({
+          projectId,
+          policyId: apiKeyPolicyId,
+          name: 'Docs Test API Key',
+        });
+      apiKey = apiKeyRes.body.key;
+
+      await authenticatedTestClient(userToken).post('/api/v1/documents').send({
+        projectId,
+        content: 'API key test document.',
+        filename: 'apikey-doc.txt',
+      });
+    });
+
+    test('API key can list documents without providing projectId', async () => {
+      const response = await testClient
+        .get('/api/v1/documents')
+        .set('Authorization', `Bearer ${apiKey}`);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBeGreaterThan(0);
+    });
+
+    test('API key can search documents without providing projectId', async () => {
+      const response = await testClient
+        .post('/api/v1/documents/search')
+        .set('Authorization', `Bearer ${apiKey}`)
+        .send({ query: 'API key test' });
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
     });
   });
 });

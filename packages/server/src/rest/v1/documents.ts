@@ -17,14 +17,14 @@ const documentsRouter = new Router<Context>();
  *   get:
  *     tags:
  *       - Documents
- *     summary: List documents in a project
- *     description: Returns all documents belonging to a project
+ *     summary: List documents
+ *     description: Returns all documents the caller has access to. If projectId is provided, returns only documents in that project. API keys are scoped to a single project automatically. JWT users without projectId receive documents across all their accessible projects.
  *     operationId: listDocuments
  *     parameters:
  *       - name: projectId
  *         in: query
- *         required: true
- *         description: Project public ID
+ *         required: false
+ *         description: Project public ID (optional)
  *         schema:
  *           type: string
  *           example: 'proj_V1StGXR8Z5jdHi6B'
@@ -37,12 +37,6 @@ const documentsRouter = new Router<Context>();
  *               type: array
  *               items:
  *                 $ref: '#/components/schemas/DocumentRecord'
- *       '400':
- *         description: Missing projectId
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       '401':
  *         description: Unauthorized
  *         content:
@@ -63,32 +57,20 @@ documentsRouter.get('/documents', async (ctx: Context) => {
     return;
   }
 
-  const projectId = ctx.query.projectId as string;
+  const projectPublicId = ctx.query.projectId as string | undefined;
 
-  if (!projectId) {
-    ctx.status = 400;
-    ctx.body = { error: 'projectId query parameter is required' };
-    return;
-  }
+  const projectIds = await ctx.authUser!.resolveProjectIds({
+    projectPublicId,
+    action: 'documents:ListDocuments',
+  });
 
-  const allowed = await ctx.authUser.isAllowed(
-    projectId,
-    'documents:ListDocuments'
-  );
-  if (!allowed) {
+  if (projectIds === null) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
     return;
   }
 
-  const project = await db.Project.findOne({ where: { publicId: projectId } });
-  if (!project) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid project ID' };
-    return;
-  }
-
-  ctx.body = await listDocuments({ projectId: project.id });
+  ctx.body = await listDocuments({ projectIds });
 });
 
 /**
@@ -169,7 +151,7 @@ documentsRouter.get('/documents/:id', async (ctx: Context) => {
  *     tags:
  *       - Documents
  *     summary: Create a document
- *     description: Creates a new text document with an embedding vector
+ *     description: Creates a new text document with an embedding vector. API keys automatically infer the project from the key's scope; JWT callers must supply projectId.
  *     operationId: createDocument
  *     requestBody:
  *       required: true
@@ -178,11 +160,11 @@ documentsRouter.get('/documents/:id', async (ctx: Context) => {
  *           schema:
  *             type: object
  *             required:
- *               - projectId
  *               - content
  *             properties:
  *               projectId:
  *                 type: string
+ *                 description: Project public ID. Required for JWT auth; omit when using an API key.
  *                 example: 'proj_V1StGXR8Z5jdHi6B'
  *               content:
  *                 type: string
@@ -224,19 +206,31 @@ documentsRouter.post('/documents', async (ctx: Context) => {
   }
 
   const body = ctx.request.body as {
-    projectId: string;
+    projectId?: string;
     content: string;
     filename?: string;
   };
 
-  if (!body.projectId || !body.content) {
+  if (!body.content) {
     ctx.status = 400;
-    ctx.body = { error: 'projectId and content are required' };
+    ctx.body = { error: 'content is required' };
     return;
   }
 
+  // Resolve projectId: use explicit value, infer from API key, or error for JWT
+  let resolvedProjectPublicId = body.projectId;
+  if (!resolvedProjectPublicId) {
+    if (ctx.authUser.apiKeyProjectId) {
+      resolvedProjectPublicId = ctx.authUser.apiKeyProjectId;
+    } else {
+      ctx.status = 400;
+      ctx.body = { error: 'projectId is required' };
+      return;
+    }
+  }
+
   const allowed = await ctx.authUser.isAllowed(
-    body.projectId,
+    resolvedProjectPublicId,
     'documents:CreateDocument'
   );
   if (!allowed) {
@@ -246,7 +240,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
   }
 
   const project = await db.Project.findOne({
-    where: { publicId: body.projectId },
+    where: { publicId: resolvedProjectPublicId },
   });
   if (!project) {
     ctx.status = 400;
@@ -346,7 +340,7 @@ documentsRouter.delete('/documents/:id', async (ctx: Context) => {
  *     tags:
  *       - Documents
  *     summary: Semantic search over documents
- *     description: Embeds the query text and returns the most similar documents using cosine distance
+ *     description: Embeds the query text and returns the most similar documents using cosine distance. If projectId is omitted, searches across all projects the caller has access to.
  *     operationId: searchDocuments
  *     requestBody:
  *       required: true
@@ -355,11 +349,11 @@ documentsRouter.delete('/documents/:id', async (ctx: Context) => {
  *           schema:
  *             type: object
  *             required:
- *               - projectId
  *               - query
  *             properties:
  *               projectId:
  *                 type: string
+ *                 description: Project public ID (optional). Omit to search across all accessible projects.
  *                 example: 'proj_V1StGXR8Z5jdHi6B'
  *               query:
  *                 type: string
@@ -403,38 +397,30 @@ documentsRouter.post('/documents/search', async (ctx: Context) => {
   }
 
   const body = ctx.request.body as {
-    projectId: string;
+    projectId?: string;
     query: string;
     limit?: number;
   };
 
-  if (!body.projectId || !body.query) {
+  if (!body.query) {
     ctx.status = 400;
-    ctx.body = { error: 'projectId and query are required' };
+    ctx.body = { error: 'query is required' };
     return;
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    body.projectId,
-    'documents:SearchDocuments'
-  );
-  if (!allowed) {
+  const projectIds = await ctx.authUser!.resolveProjectIds({
+    projectPublicId: body.projectId,
+    action: 'documents:SearchDocuments',
+  });
+
+  if (projectIds === null) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
     return;
   }
 
-  const project = await db.Project.findOne({
-    where: { publicId: body.projectId },
-  });
-  if (!project) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid project ID' };
-    return;
-  }
-
   const results = await searchDocuments({
-    projectId: project.id,
+    projectIds,
     query: body.query,
     limit: body.limit,
   });

@@ -1,3 +1,4 @@
+export { Actor } from './Actor';
 export { ApiKey } from './ApiKey';
 export { Document } from './Document';
 export { File } from './File';

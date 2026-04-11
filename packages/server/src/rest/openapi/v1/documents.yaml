@@ -14,14 +14,14 @@ paths:
     get:
       tags:
         - Documents
-      summary: List documents in a project
-      description: Returns all documents belonging to a project
+      summary: List documents
+      description: Returns all documents the caller has access to. If projectId is provided, returns only documents in that project. API keys are scoped to a single project automatically. JWT users without projectId receive documents across all their accessible projects.
       operationId: listDocuments
       parameters:
         - name: projectId
           in: query
-          required: true
-          description: Project public ID
+          required: false
+          description: Project public ID (optional)
           schema:
             type: string
             example: 'proj_V1StGXR8Z5jdHi6B'
@@ -34,12 +34,6 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/DocumentRecord'
-        '400':
-          description: Missing projectId
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
           content:
@@ -56,7 +50,7 @@ paths:
       tags:
         - Documents
       summary: Create a document
-      description: Creates a new text document and generates an embedding vector for semantic search
+      description: Creates a new text document and generates an embedding vector for semantic search. API keys automatically infer the project from the key's scope; JWT callers must supply projectId.
       operationId: createDocument
       requestBody:
         required: true
@@ -65,11 +59,11 @@ paths:
             schema:
               type: object
               required:
-                - projectId
                 - content
               properties:
                 projectId:
                   type: string
+                  description: Project public ID. Required for JWT auth; omit when using an API key.
                   example: 'proj_V1StGXR8Z5jdHi6B'
                 content:
                   type: string
@@ -182,7 +176,7 @@ paths:
       tags:
         - Documents
       summary: Semantic search over documents
-      description: Embeds the query text and returns the most similar documents using cosine distance
+      description: Embeds the query text and returns the most similar documents using cosine distance. If projectId is omitted, searches across all projects the caller has access to.
       operationId: searchDocuments
       requestBody:
         required: true
@@ -191,11 +185,11 @@ paths:
             schema:
               type: object
               required:
-                - projectId
                 - query
               properties:
                 projectId:
                   type: string
+                  description: Project public ID (optional). Omit to search across all accessible projects.
                   example: 'proj_V1StGXR8Z5jdHi6B'
                 query:
                   type: string

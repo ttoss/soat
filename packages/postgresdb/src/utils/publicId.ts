@@ -11,6 +11,7 @@ export const PUBLIC_ID_PREFIXES = {
   policy: 'pol_',
   apiKey: 'key_',
   document: 'doc_',
+  actor: 'act_',
 } as const;
 
 /**

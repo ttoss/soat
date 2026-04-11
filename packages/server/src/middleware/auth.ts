@@ -5,7 +5,6 @@ import jwt from 'jsonwebtoken';
 import type { Context } from '../Context';
 import { createApiKeyIsAllowed, createJwtIsAllowed } from '../lib/permissions';
 
-// eslint-disable-next-line turbo/no-undeclared-env-vars
 export const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-secret';
 
 export const BCRYPT_SALT_ROUNDS = 12;
@@ -66,16 +65,29 @@ const resolveApiKey = async (ctx: Context, rawKey: string) => {
           }
         : { permissions: [], notPermissions: [] };
 
+      const apiKeyIsAllowed = createApiKeyIsAllowed({
+        projectPublicId,
+        userPolicy,
+        apiKeyPolicy: keyPolicy,
+      });
+
       ctx.authUser = {
         id: keyUser.id as number,
         publicId: keyUser.publicId as string,
         username: keyUser.username as string,
         role: keyUser.role as 'admin' | 'user',
-        isAllowed: createApiKeyIsAllowed({
-          projectPublicId,
-          userPolicy,
-          apiKeyPolicy: keyPolicy,
-        }),
+        apiKeyProjectId: projectPublicId,
+        isAllowed: apiKeyIsAllowed,
+        resolveProjectIds: async ({ projectPublicId: reqId, action }) => {
+          const targetId = reqId ?? projectPublicId;
+          const allowed = await apiKeyIsAllowed(targetId, action);
+          if (!allowed) return null;
+          const proj = await ctx.db.Project.findOne({
+            where: { publicId: targetId },
+          });
+          if (!proj) return null;
+          return [proj.id as number];
+        },
       };
       break;
     }
@@ -102,12 +114,42 @@ const resolveJwt = async (ctx: Context, token: string) => {
   const userId = user.id as number;
   const role = user.role as 'admin' | 'user';
 
+  const jwtIsAllowed = createJwtIsAllowed({ role, userId, db: ctx.db });
+
   ctx.authUser = {
     id: userId,
     publicId: user.publicId as string,
     username: user.username as string,
     role,
-    isAllowed: createJwtIsAllowed({ role, userId, db: ctx.db }),
+    isAllowed: jwtIsAllowed,
+    resolveProjectIds: async ({ projectPublicId, action }) => {
+      if (projectPublicId) {
+        const allowed = await jwtIsAllowed(projectPublicId, action);
+        if (!allowed) return null;
+        const proj = await ctx.db.Project.findOne({
+          where: { publicId: projectPublicId },
+        });
+        if (!proj) return null;
+        return [proj.id as number];
+      }
+      if (role === 'admin') return undefined;
+      const memberships = await ctx.db.UserProject.findAll({
+        where: { userId },
+        include: [{ model: ctx.db.Project }],
+      });
+      const accessible: number[] = [];
+      for (const membership of memberships) {
+        const proj = (
+          membership as unknown as {
+            project: InstanceType<(typeof ctx.db)['Project']>;
+          }
+        ).project;
+        if (!proj) continue;
+        const allowed = await jwtIsAllowed(proj.publicId as string, action);
+        if (allowed) accessible.push(proj.id as number);
+      }
+      return accessible;
+    },
   };
 };
 
