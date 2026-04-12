@@ -22,6 +22,7 @@ const buildOpenApiConfig = () => {
           outputDir: `docs/api/${name}`,
           sidebarOptions: { groupPathsBy: 'tag' },
           hideSendButton: false,
+          showInfoPage: false,
         },
       ];
     })

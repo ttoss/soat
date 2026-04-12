@@ -34,8 +34,22 @@ const registerTools = (server: McpServer) => {
       },
     },
     async ({ id }) => {
-      const data = await apiCall('GET', `/conversations/${id}`);
-      return { content: [{ type: 'text', text: JSON.stringify(data) }] };
+      try {
+        const data = await apiCall('GET', `/conversations/${id}`);
+        return { content: [{ type: 'text', text: JSON.stringify(data) }] };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                error: 'not_found',
+                message: String(error),
+              }),
+            },
+          ],
+        };
+      }
     }
   );
 

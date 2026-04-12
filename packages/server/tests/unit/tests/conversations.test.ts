@@ -314,6 +314,7 @@ describe('Conversations', () => {
       expect(response.body.documentId).toMatch(/^doc_/);
       expect(response.body.actorId).toBe(actorId);
       expect(typeof response.body.position).toBe('number');
+      expect(response.body.content).toBe('Hello world');
       addedDocumentId = response.body.documentId;
     });
 

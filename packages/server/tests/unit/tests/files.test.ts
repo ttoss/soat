@@ -444,5 +444,18 @@ describe('Files', () => {
       // Should include files from both projects
       expect(response.body.length).toBeGreaterThanOrEqual(2);
     });
+
+    test('returns 403 when requesting files for a project the user cannot access', async () => {
+      const forbiddenProjectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Forbidden Files Project' });
+      const forbiddenProjectId = forbiddenProjectRes.body.id;
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/files?projectId=${forbiddenProjectId}`
+      );
+
+      expect(response.status).toBe(403);
+    });
   });
 });

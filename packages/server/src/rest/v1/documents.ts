@@ -24,7 +24,7 @@ const documentsRouter = new Router<Context>();
  *       - name: projectId
  *         in: query
  *         required: false
- *         description: Project public ID (optional)
+ *         description: Project ID (optional)
  *         schema:
  *           type: string
  *           example: 'proj_V1StGXR8Z5jdHi6B'
@@ -164,7 +164,7 @@ documentsRouter.get('/documents/:id', async (ctx: Context) => {
  *             properties:
  *               projectId:
  *                 type: string
- *                 description: Project public ID. Required for JWT auth; omit when using an API key.
+ *                 description: Project ID. Required for JWT auth; omit when using an API key.
  *                 example: 'proj_V1StGXR8Z5jdHi6B'
  *               content:
  *                 type: string
@@ -353,7 +353,7 @@ documentsRouter.delete('/documents/:id', async (ctx: Context) => {
  *             properties:
  *               projectId:
  *                 type: string
- *                 description: Project public ID (optional). Omit to search across all accessible projects.
+ *                 description: Project ID (optional). Omit to search across all accessible projects.
  *                 example: 'proj_V1StGXR8Z5jdHi6B'
  *               query:
  *                 type: string

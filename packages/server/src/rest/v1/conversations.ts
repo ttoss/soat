@@ -28,14 +28,14 @@ const conversationsRouter = new Router<Context>();
  *       - name: projectId
  *         in: query
  *         required: false
- *         description: Project public ID (optional)
+ *         description: Project ID (optional)
  *         schema:
  *           type: string
  *           example: 'proj_V1StGXR8Z5jdHi6B'
  *       - name: actorId
  *         in: query
  *         required: false
- *         description: Filter by actor public ID
+ *         description: Filter by actor ID
  *         schema:
  *           type: string
  *           example: 'act_V1StGXR8Z5jdHi6B'
@@ -92,7 +92,7 @@ conversationsRouter.get('/conversations', async (ctx: Context) => {
  *     tags:
  *       - Conversations
  *     summary: Get a conversation by ID
- *     description: Returns a conversation by its public ID
+ *     description: Returns a conversation by its ID
  *     operationId: getConversation
  *     parameters:
  *       - name: id
@@ -174,7 +174,7 @@ conversationsRouter.get('/conversations/:id', async (ctx: Context) => {
  *             properties:
  *               projectId:
  *                 type: string
- *                 description: Project public ID. Required for JWT auth; omit when using an API key.
+ *                 description: Project ID. Required for JWT auth; omit when using an API key.
  *                 example: 'proj_V1StGXR8Z5jdHi6B'
  *               status:
  *                 type: string
@@ -368,7 +368,7 @@ conversationsRouter.patch('/conversations/:id', async (ctx: Context) => {
  *     tags:
  *       - Conversations
  *     summary: Delete a conversation
- *     description: Deletes a conversation by its public ID
+ *     description: Deletes a conversation by its ID
  *     operationId: deleteConversation
  *     parameters:
  *       - name: id
@@ -539,7 +539,7 @@ conversationsRouter.get('/conversations/:id/messages', async (ctx: Context) => {
  *                 example: 'Hello, how can I help you?'
  *               actorId:
  *                 type: string
- *                 description: Actor public ID who is sending this message
+ *                 description: Actor ID who is sending this message
  *                 example: 'act_V1StGXR8Z5jdHi6B'
  *               position:
  *                 type: integer
@@ -660,7 +660,7 @@ conversationsRouter.post(
  *       - name: documentId
  *         in: path
  *         required: true
- *         description: Document public ID
+ *         description: Document ID
  *         schema:
  *           type: string
  *           example: 'doc_V1StGXR8Z5jdHi6B'

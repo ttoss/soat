@@ -24,7 +24,7 @@ const actorsRouter = new Router<Context>();
  *       - name: projectId
  *         in: query
  *         required: false
- *         description: Project public ID (optional)
+ *         description: Project ID (optional)
  *         schema:
  *           type: string
  *           example: 'proj_V1StGXR8Z5jdHi6B'
@@ -88,7 +88,7 @@ actorsRouter.get('/actors', async (ctx: Context) => {
  *     tags:
  *       - Actors
  *     summary: Get an actor by ID
- *     description: Returns an actor by its public ID
+ *     description: Returns an actor by its ID
  *     operationId: getActor
  *     parameters:
  *       - name: id
@@ -172,7 +172,7 @@ actorsRouter.get('/actors/:id', async (ctx: Context) => {
  *             properties:
  *               projectId:
  *                 type: string
- *                 description: Project public ID. Required for JWT auth; omit when using an API key.
+ *                 description: Project ID. Required for JWT auth; omit when using an API key.
  *                 example: 'proj_V1StGXR8Z5jdHi6B'
  *               name:
  *                 type: string
@@ -292,7 +292,7 @@ actorsRouter.post('/actors', async (ctx: Context) => {
  *     tags:
  *       - Actors
  *     summary: Delete an actor
- *     description: Deletes an actor by its public ID
+ *     description: Deletes an actor by its ID
  *     operationId: deleteActor
  *     parameters:
  *       - name: id

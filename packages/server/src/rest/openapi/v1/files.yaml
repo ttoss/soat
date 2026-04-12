@@ -249,13 +249,15 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - metadata
               properties:
                 metadata:
                   type: string
                   description: New metadata as a JSON string
                   example: '{"author":"Jane","tags":["report"]}'
+                filename:
+                  type: string
+                  description: New filename for the file
+                  example: 'renamed-file.txt'
       responses:
         '200':
           description: Metadata updated successfully

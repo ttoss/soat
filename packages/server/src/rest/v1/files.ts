@@ -61,6 +61,12 @@ filesRouter.get('/files', async (ctx: Context) => {
     action: 'files:GetFile',
   });
 
+  if (projectIds === null) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
   ctx.body = await listFiles({ projectIds: projectIds ?? undefined });
 });
 

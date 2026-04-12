@@ -6,7 +6,7 @@ The Actors module represents entities (people, bots, or other participants) that
 
 An Actor belongs to a project and has a display name, an optional type, and an optional `externalId`. The `externalId` is unique within a project and is designed for correlating actors with external systems — for example, mapping a WhatsApp phone number to a known contact.
 
-Actors are identified by `publicId` prefixed with `act_`. The internal database primary key is never returned.
+Actors are identified by an `id` prefixed with `act_`. The internal database primary key is never returned.
 
 ## Data Model
 

@@ -6,7 +6,7 @@ The Conversations module represents a series of messages exchanged with an Actor
 
 A Conversation belongs to a project and is associated with an Actor. It has a status (`open` or `closed`) and contains an ordered list of messages, where each message is a reference to a Document along with its position in the conversation.
 
-Conversations are identified by `publicId` prefixed with `conv_`. The internal database primary key is never returned.
+Conversations are identified by an `id` prefixed with `conv_`. The internal database primary key is never returned.
 
 ## Data Model
 

@@ -27,10 +27,10 @@ const apiKeysRouter = new Router<Context>();
  *             properties:
  *               projectId:
  *                 type: string
- *                 description: Project public ID
+ *                 description: Project ID
  *               policyId:
  *                 type: string
- *                 description: Policy public ID
+ *                 description: Policy ID
  *               name:
  *                 type: string
  *                 description: API key name
@@ -230,7 +230,7 @@ apiKeysRouter.get('/api-keys/:id', async (ctx: Context) => {
  *             properties:
  *               policyId:
  *                 type: string
- *                 description: New policy public ID
+ *                 description: New policy ID
  *     responses:
  *       '200':
  *         description: API key updated successfully

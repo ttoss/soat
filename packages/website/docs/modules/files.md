@@ -4,7 +4,7 @@ The Files module provides file upload, download, metadata management, and deleti
 
 ## Overview
 
-Files are associated with a project and stored at `{FILES_STORAGE_DIR}/{publicId}{ext}` on the server's local filesystem. Every file record exposes a `publicId` as its `id` — the internal database primary key is never returned.
+Files are associated with a project and stored at `{FILES_STORAGE_DIR}/{id}{ext}` on the server's local filesystem. Every file record exposes an `id` — the internal database primary key is never returned.
 
 ## Configuration
 
@@ -29,18 +29,18 @@ volumes:
 
 ## Data Model
 
-| Field         | Type                     | Description                                                        |
-| ------------- | ------------------------ | ------------------------------------------------------------------ |
-| `id`          | string                   | Public identifier (exposed as `id`, maps to `publicId` internally) |
-| `filename`    | string                   | Original filename                                                  |
-| `contentType` | string                   | MIME type                                                          |
-| `size`        | number                   | File size in bytes                                                 |
-| `storageType` | `local` \| `s3` \| `gcs` | Storage backend (currently `local`)                                |
-| `storagePath` | string                   | Absolute path on disk                                              |
-| `metadata`    | string                   | Arbitrary JSON string for custom metadata                          |
-| `projectId`   | string                   | ID of the owning project                                           |
-| `createdAt`   | string                   | ISO 8601 creation timestamp                                        |
-| `updatedAt`   | string                   | ISO 8601 last-updated timestamp                                    |
+| Field         | Type                     | Description                               |
+| ------------- | ------------------------ | ----------------------------------------- |
+| `id`          | string                   | Public identifier                         |
+| `filename`    | string                   | Original filename                         |
+| `contentType` | string                   | MIME type                                 |
+| `size`        | number                   | File size in bytes                        |
+| `storageType` | `local` \| `s3` \| `gcs` | Storage backend (currently `local`)       |
+| `storagePath` | string                   | Absolute path on disk                     |
+| `metadata`    | string                   | Arbitrary JSON string for custom metadata |
+| `projectId`   | string                   | ID of the owning project                  |
+| `createdAt`   | string                   | ISO 8601 creation timestamp               |
+| `updatedAt`   | string                   | ISO 8601 last-updated timestamp           |
 
 ## Permissions
 

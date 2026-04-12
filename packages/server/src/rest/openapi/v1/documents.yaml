@@ -21,7 +21,7 @@ paths:
         - name: projectId
           in: query
           required: false
-          description: Project public ID (optional)
+          description: Project ID (optional)
           schema:
             type: string
             example: 'proj_V1StGXR8Z5jdHi6B'
@@ -63,7 +63,7 @@ paths:
               properties:
                 projectId:
                   type: string
-                  description: Project public ID. Required for JWT auth; omit when using an API key.
+                  description: Project ID. Required for JWT auth; omit when using an API key.
                   example: 'proj_V1StGXR8Z5jdHi6B'
                 content:
                   type: string
@@ -189,7 +189,7 @@ paths:
               properties:
                 projectId:
                   type: string
-                  description: Project public ID (optional). Omit to search across all accessible projects.
+                  description: Project ID (optional). Omit to search across all accessible projects.
                   example: 'proj_V1StGXR8Z5jdHi6B'
                 query:
                   type: string
@@ -231,15 +231,15 @@ components:
       properties:
         id:
           type: string
-          description: Document public ID
+          description: Document ID
           example: 'doc_V1StGXR8Z5jdHi6B'
         fileId:
           type: string
-          description: Underlying file public ID
+          description: Underlying file ID
           example: 'file_V1StGXR8Z5jdHi6B'
         projectId:
           type: string
-          description: Project public ID
+          description: Project ID
           example: 'proj_V1StGXR8Z5jdHi6B'
         filename:
           type: string

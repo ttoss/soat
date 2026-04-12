@@ -228,7 +228,11 @@ export const addConversationMessage = async (args: {
   const messageWithAssociations = await db.ConversationMessage.findOne({
     where: { id: message.id },
     include: [
-      { model: db.Document, as: 'document' },
+      {
+        model: db.Document,
+        as: 'document',
+        include: [{ model: db.File, as: 'file' }],
+      },
       { model: db.Actor, as: 'actor' },
     ],
   });
