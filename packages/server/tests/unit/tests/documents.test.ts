@@ -56,6 +56,7 @@ describe('Documents', () => {
           'documents:CreateDocument',
           'documents:DeleteDocument',
           'documents:SearchDocuments',
+          'documents:UpdateDocument',
         ],
       });
     policyId = policyRes.body.id;
@@ -120,7 +121,7 @@ describe('Documents', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
     });
 
     test('unauthenticated request cannot list documents', async () => {
@@ -136,7 +137,7 @@ describe('Documents', () => {
         await authenticatedTestClient(userToken).get('/api/v1/documents');
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
     });
   });
 
@@ -305,6 +306,165 @@ describe('Documents', () => {
     });
   });
 
+  describe('POST /api/v1/documents with title, metadata, tags (FEAT-13)', () => {
+    test('creates a document with title, metadata, and tags', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          projectId,
+          content: 'Tagged document content.',
+          filename: 'tagged.txt',
+          title: 'My Title',
+          metadata: { source: 'test' },
+          tags: ['alpha', 'beta'],
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.title).toBe('My Title');
+      expect(response.body.metadata).toEqual({ source: 'test' });
+      expect(response.body.tags).toEqual(
+        expect.arrayContaining(['alpha', 'beta'])
+      );
+    });
+  });
+
+  describe('PATCH /api/v1/documents/:id (FEAT-2)', () => {
+    let documentId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          projectId,
+          content: 'Original content.',
+          filename: 'patchme.txt',
+          title: 'Original Title',
+          tags: ['initial'],
+        });
+      documentId = res.body.id;
+    });
+
+    test('updates title only', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/documents/${documentId}`)
+        .send({ title: 'Updated Title' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.title).toBe('Updated Title');
+    });
+
+    test('updates content and re-embeds', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/documents/${documentId}`)
+        .send({ content: 'Updated content for re-embedding.' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe(documentId);
+    });
+
+    test('updates tags', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/documents/${documentId}`)
+        .send({ tags: ['new-tag', 'another'] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.tags).toEqual(
+        expect.arrayContaining(['new-tag', 'another'])
+      );
+    });
+
+    test('updates metadata', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/documents/${documentId}`)
+        .send({ metadata: { updated: true } });
+
+      expect(response.status).toBe(200);
+      expect(response.body.metadata).toEqual({ updated: true });
+    });
+
+    test('returns 404 for non-existent document', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch('/api/v1/documents/doc_nonexistent')
+        .send({ title: 'Ghost' });
+
+      expect(response.status).toBe(404);
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient
+        .patch(`/api/v1/documents/${documentId}`)
+        .send({ title: 'No Auth' });
+
+      expect(response.status).toBe(401);
+    });
+
+    test('user without UpdateDocument permission returns 403', async () => {
+      // Create a second user with no UpdateDocument permission
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'noupdate', password: 'nopass' });
+      const noUpdateUserId = createRes.body.id;
+      const noUpdateToken = await loginAs('noupdate', 'nopass');
+
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/projects/${projectId}/policies`)
+        .send({
+          permissions: ['documents:GetDocument'],
+        });
+
+      await authenticatedTestClient(adminToken)
+        .post(`/api/v1/projects/${projectId}/members`)
+        .send({ userId: noUpdateUserId, policyId: policyRes.body.id });
+
+      const response = await authenticatedTestClient(noUpdateToken)
+        .patch(`/api/v1/documents/${documentId}`)
+        .send({ title: 'Forbidden' });
+
+      expect(response.status).toBe(403);
+    });
+  });
+
+  describe('POST /api/v1/documents/search with tags (FEAT-13)', () => {
+    let taggedDocId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          projectId,
+          content: 'Tag-filtered search document.',
+          filename: 'tag-search.txt',
+          tags: ['unique-search-tag'],
+        });
+      taggedDocId = res.body.id;
+    });
+
+    test('search by matching tag returns tagged document', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/search')
+        .send({
+          projectId,
+          query: 'tag-filtered',
+          tags: ['unique-search-tag'],
+        });
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      const ids = response.body.map((d: { id: string }) => d.id);
+      expect(ids).toContain(taggedDocId);
+    });
+
+    test('search by non-matching tag returns empty results', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/search')
+        .send({ projectId, query: 'tag-filtered', tags: ['no-such-tag-xyz'] });
+
+      expect(response.status).toBe(200);
+      const ids = response.body.map((d: { id: string }) => d.id);
+      expect(ids).not.toContain(taggedDocId);
+    });
+  });
+
   describe('API key access', () => {
     let apiKey: string;
 
@@ -338,8 +498,8 @@ describe('Documents', () => {
         .set('Authorization', `Bearer ${apiKey}`);
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBeGreaterThan(0);
     });
 
     test('API key can search documents without providing projectId', async () => {

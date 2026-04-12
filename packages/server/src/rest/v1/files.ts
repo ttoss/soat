@@ -33,15 +33,38 @@ const filesRouter = new Router<Context>();
  *         schema:
  *           type: string
  *           example: 'proj_V1StGXR8Z5jdHi6B'
+ *       - name: limit
+ *         in: query
+ *         required: false
+ *         description: Maximum number of results to return (default 50)
+ *         schema:
+ *           type: integer
+ *           example: 50
+ *       - name: offset
+ *         in: query
+ *         required: false
+ *         description: Number of results to skip (default 0)
+ *         schema:
+ *           type: integer
+ *           example: 0
  *     responses:
  *       '200':
  *         description: List of files returned successfully
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/FileRecord'
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/FileRecord'
+ *                 total:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *                 offset:
+ *                   type: integer
  *       '401':
  *         $ref: '#/components/responses/Unauthorized'
  *       '403':
@@ -55,6 +78,12 @@ filesRouter.get('/files', async (ctx: Context) => {
   }
 
   const projectPublicId = (ctx.query as Record<string, string>).projectId;
+  const limit = ctx.query.limit
+    ? parseInt(ctx.query.limit as string, 10)
+    : undefined;
+  const offset = ctx.query.offset
+    ? parseInt(ctx.query.offset as string, 10)
+    : undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -67,7 +96,11 @@ filesRouter.get('/files', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listFiles({ projectIds: projectIds ?? undefined });
+  ctx.body = await listFiles({
+    projectIds: projectIds ?? undefined,
+    limit,
+    offset,
+  });
 });
 
 /**

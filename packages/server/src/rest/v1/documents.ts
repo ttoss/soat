@@ -7,6 +7,7 @@ import {
   getDocument,
   listDocuments,
   searchDocuments,
+  updateDocument,
 } from 'src/lib/documents';
 
 const documentsRouter = new Router<Context>();
@@ -28,15 +29,38 @@ const documentsRouter = new Router<Context>();
  *         schema:
  *           type: string
  *           example: 'proj_V1StGXR8Z5jdHi6B'
+ *       - name: limit
+ *         in: query
+ *         required: false
+ *         description: Maximum number of results to return (default 50)
+ *         schema:
+ *           type: integer
+ *           example: 50
+ *       - name: offset
+ *         in: query
+ *         required: false
+ *         description: Number of results to skip (default 0)
+ *         schema:
+ *           type: integer
+ *           example: 0
  *     responses:
  *       '200':
  *         description: List of documents
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/DocumentRecord'
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/DocumentRecord'
+ *                 total:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *                 offset:
+ *                   type: integer
  *       '401':
  *         description: Unauthorized
  *         content:
@@ -58,6 +82,12 @@ documentsRouter.get('/documents', async (ctx: Context) => {
   }
 
   const projectPublicId = ctx.query.projectId as string | undefined;
+  const limit = ctx.query.limit
+    ? parseInt(ctx.query.limit as string, 10)
+    : undefined;
+  const offset = ctx.query.offset
+    ? parseInt(ctx.query.offset as string, 10)
+    : undefined;
 
   const projectIds = await ctx.authUser!.resolveProjectIds({
     projectPublicId,
@@ -70,7 +100,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listDocuments({ projectIds });
+  ctx.body = await listDocuments({ projectIds, limit, offset });
 });
 
 /**
@@ -172,6 +202,17 @@ documentsRouter.get('/documents/:id', async (ctx: Context) => {
  *               filename:
  *                 type: string
  *                 example: 'my-doc.txt'
+ *               title:
+ *                 type: string
+ *                 example: 'My Document'
+ *               metadata:
+ *                 type: object
+ *                 description: Arbitrary key-value metadata
+ *               tags:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 example: ['tag1', 'tag2']
  *     responses:
  *       '201':
  *         description: Document created
@@ -209,6 +250,9 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     projectId?: string;
     content: string;
     filename?: string;
+    title?: string;
+    metadata?: Record<string, unknown>;
+    tags?: string[];
   };
 
   if (!body.content) {
@@ -252,6 +296,9 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     projectId: project.id,
     content: body.content,
     filename: body.filename,
+    title: body.title,
+    metadata: body.metadata,
+    tags: body.tags,
   });
 
   ctx.status = 201;
@@ -335,6 +382,110 @@ documentsRouter.delete('/documents/:id', async (ctx: Context) => {
 
 /**
  * @openapi
+ * /documents/{id}:
+ *   patch:
+ *     tags:
+ *       - Documents
+ *     summary: Update a document
+ *     description: Update a document's content, title, metadata, or tags. Updating content re-computes the embedding vector.
+ *     operationId: updateDocument
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         description: Document ID
+ *         schema:
+ *           type: string
+ *           example: 'doc_V1StGXR8Z5jdHi6B'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               content:
+ *                 type: string
+ *                 description: New text content (re-embeds the document)
+ *               title:
+ *                 type: string
+ *               metadata:
+ *                 type: object
+ *               tags:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       '200':
+ *         description: Document updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/DocumentRecord'
+ *       '401':
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '403':
+ *         description: Forbidden
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '404':
+ *         description: Document not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+documentsRouter.patch('/documents/:id', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const doc = await getDocument({ id: ctx.params.id });
+
+  if (!doc) {
+    ctx.status = 404;
+    ctx.body = { error: 'Document not found' };
+    return;
+  }
+
+  const allowed = await ctx.authUser.isAllowed(
+    doc.projectId!,
+    'documents:UpdateDocument'
+  );
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const body = ctx.request.body as {
+    content?: string;
+    title?: string;
+    metadata?: Record<string, unknown>;
+    tags?: string[];
+  };
+
+  const updated = await updateDocument({
+    id: ctx.params.id,
+    content: body.content,
+    title: body.title,
+    metadata: body.metadata,
+    tags: body.tags,
+  });
+
+  ctx.body = updated;
+});
+
+/**
+ * @openapi
  * /documents/search:
  *   post:
  *     tags:
@@ -365,6 +516,12 @@ documentsRouter.delete('/documents/:id', async (ctx: Context) => {
  *                 type: number
  *                 description: Minimum similarity score (0-1). Only results with score >= threshold are returned.
  *                 example: 0.7
+ *               tags:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Filter to documents with any of these tags.
+ *                 example: ['tag1', 'tag2']
  *     responses:
  *       '200':
  *         description: Search results
@@ -405,6 +562,7 @@ documentsRouter.post('/documents/search', async (ctx: Context) => {
     query: string;
     limit?: number;
     threshold?: number;
+    tags?: string[];
   };
 
   if (!body.query) {
@@ -429,6 +587,7 @@ documentsRouter.post('/documents/search', async (ctx: Context) => {
     query: body.query,
     limit: body.limit,
     threshold: body.threshold,
+    tags: body.tags,
   });
 
   ctx.body = results;

@@ -39,37 +39,62 @@ const conversationsRouter = new Router<Context>();
  *         schema:
  *           type: string
  *           example: 'act_V1StGXR8Z5jdHi6B'
+     *       - name: limit
+ *         in: query
+ *         required: false
+ *         description: Maximum number of results to return (default 50)
+ *         schema:
+ *           type: integer
+ *           example: 50
+ *       - name: offset
+ *         in: query
+ *         required: false
+ *         description: Number of results to skip (default 0)
+ *         schema:
+ *           type: integer
+ *           example: 0
  *     responses:
  *       '200':
  *         description: List of conversations
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/ConversationRecord'
- *       '401':
- *         description: Unauthorized
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/ConversationRecord'
+ *                 total:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *                 offset:
+ *                   type: integer
+ *         required: false
+ *         description: Number of results to skip (default 0)
+ *         schema:
+ *           type: integer
+ *           example: 0
+ *     responses:
+ *       '200':
+ *         description: List of conversations
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '403':
- *         description: Forbidden
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-conversationsRouter.get('/conversations', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  const projectPublicId = ctx.query.projectId as string | undefined;
-  const actorId = ctx.query.actorId as string | undefined;
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/ConversationRecord'
+ *                 total:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *                 offset:
+  const limit = ctx.query.limit ? parseInt(ctx.query.limit as string, 10) : undefined;
+  const offset = ctx.query.offset ? parseInt(ctx.query.offset as string, 10) : undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -82,7 +107,36 @@ conversationsRouter.get('/conversations', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listConversations({ projectIds, actorId });
+  ctx.body = await listConversations({ projectIds, actorId, limit, offset'
+ */
+conversationsRouter.get('/conversations', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const projectPublicId = ctx.query.projectId as string | undefined;
+  const actorId = ctx.query.actorId as string | undefined;
+  const limit = ctx.query.limit
+    ? parseInt(ctx.query.limit as string, 10)
+    : undefined;
+  const offset = ctx.query.offset
+    ? parseInt(ctx.query.offset as string, 10)
+    : undefined;
+
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    projectPublicId,
+    action: 'conversations:ListConversations',
+  });
+
+  if (projectIds === null) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  ctx.body = await listConversations({ projectIds, actorId, limit, offset });
 });
 
 /**
@@ -426,6 +480,7 @@ conversationsRouter.delete('/conversations/:id', async (ctx: Context) => {
   }
 
   await deleteConversation({ id: ctx.params.id });
+
   ctx.status = 204;
 });
 
@@ -446,15 +501,38 @@ conversationsRouter.delete('/conversations/:id', async (ctx: Context) => {
  *         schema:
  *           type: string
  *           example: 'conv_V1StGXR8Z5jdHi6B'
+ *       - name: limit
+ *         in: query
+ *         required: false
+ *         description: Maximum number of results to return (default 50)
+ *         schema:
+ *           type: integer
+ *           example: 50
+ *       - name: offset
+ *         in: query
+ *         required: false
+ *         description: Number of results to skip (default 0)
+ *         schema:
+ *           type: integer
+ *           example: 0
  *     responses:
  *       '200':
  *         description: List of messages
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/ConversationMessageRecord'
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/ConversationMessageRecord'
+ *                 total:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *                 offset:
+ *                   type: integer
  *       '401':
  *         description: Unauthorized
  *         content:
@@ -499,8 +577,17 @@ conversationsRouter.get('/conversations/:id/messages', async (ctx: Context) => {
     return;
   }
 
+  const limit = ctx.query.limit
+    ? parseInt(ctx.query.limit as string, 10)
+    : undefined;
+  const offset = ctx.query.offset
+    ? parseInt(ctx.query.offset as string, 10)
+    : undefined;
+
   const messages = await listConversationMessages({
     conversationId: ctx.params.id,
+    limit,
+    offset,
   });
 
   ctx.body = messages;

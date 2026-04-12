@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-BASE_URL="${SERVER_URL:-http://localhost:5047}/api/v1"
+BASE_URL="${SERVER_URL:-http://localhost:50477}/api/v1"
 
 echo "=== Smoke test started ==="
 
@@ -22,7 +22,7 @@ LOGIN_RESP=$(curl -sf -X POST "$BASE_URL/users/login" \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"Admin1234!"}')
 TOKEN=$(echo "$LOGIN_RESP" | jq -r '.token')
-echo "Token: ${TOKEN:0:20}..."
+echo "Token: $(echo "$TOKEN" | cut -c1-20)..."
 
 # 3. Create a project
 echo "--- Creating project ---"
@@ -142,6 +142,48 @@ if [ "$DELETE_DOC2" != "204" ]; then
   exit 1
 fi
 echo "Documents deleted."
+
+# 14. Agent SSE stream — 401 without auth
+echo "--- Agent SSE stream: 401 without auth ---"
+AGENT_UNAUTH=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/agents/run/stream" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"hello"}')
+if [ "$AGENT_UNAUTH" != "401" ]; then
+  echo "ERROR: Expected 401, got $AGENT_UNAUTH" >&2
+  exit 1
+fi
+echo "401 without auth: OK"
+
+# 15. Agent SSE stream — 400 without prompt
+echo "--- Agent SSE stream: 400 without prompt ---"
+AGENT_NOPROMPT=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/agents/run/stream" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{}')
+if [ "$AGENT_NOPROMPT" != "400" ]; then
+  echo "ERROR: Expected 400, got $AGENT_NOPROMPT" >&2
+  exit 1
+fi
+echo "400 without prompt: OK"
+
+# 16. Agent SSE stream — valid request
+echo "--- Agent SSE stream: valid request ---"
+AGENT_STATUS=$(curl -s -o /tmp/agent_sse.txt -w "%{http_code}" -X POST "$BASE_URL/agents/run/stream" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"prompt":"tell me a joke"}')
+if [ "$AGENT_STATUS" != "200" ]; then
+  echo "ERROR: Agent stream returned $AGENT_STATUS, expected 200" >&2
+  exit 1
+fi
+if ! grep -q "event: done" /tmp/agent_sse.txt; then
+  echo "ERROR: Agent stream missing 'event: done'" >&2
+  cat /tmp/agent_sse.txt >&2
+  exit 1
+fi
+echo "Agent SSE stream OK."
+echo "--- Agent SSE stream output ---"
+cat /tmp/agent_sse.txt
 
 echo ""
 echo "=== All smoke tests passed! ==="

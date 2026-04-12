@@ -5,6 +5,8 @@ services:
       POSTGRES_DB: soat_test
       POSTGRES_USER: soat_user
       POSTGRES_PASSWORD: soat_password
+    tmpfs:
+      - /var/lib/postgresql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U soat_user -d soat_test']
       interval: 5s
@@ -14,13 +16,17 @@ services:
   ollama:
     image: ollama/ollama:latest
     volumes:
-      - ollama_cache:/root/.ollama
+      - ${HOME}/.ollama:/root/.ollama
     entrypoint:
       - /bin/sh
       - -c
-      - 'ollama serve & sleep 5 && ollama pull qwen3-embedding:0.6b && wait'
+      - 'ollama serve & sleep 5 && (ollama list | grep -q qwen3-embedding:0.6b || ollama pull qwen3-embedding:0.6b) && (ollama list | grep -q qwen2.5:0.5b || ollama pull qwen2.5:0.5b) && wait'
     healthcheck:
-      test: ['CMD-SHELL', 'ollama list | grep qwen3-embedding']
+      test:
+        [
+          'CMD-SHELL',
+          'ollama list | grep qwen3-embedding && ollama list | grep qwen2.5',
+        ]
       interval: 10s
       timeout: 30s
       retries: 30
@@ -34,6 +40,7 @@ services:
       ollama:
         condition: service_healthy
     environment:
+      PORT: 50477
       DATABASE_HOST: database
       DATABASE_PORT: '5432'
       DATABASE_NAME: soat_test
@@ -44,13 +51,14 @@ services:
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_MODEL: qwen3-embedding:0.6b
       EMBEDDING_DIMENSIONS: '1024'
+      AGENT_MODEL: qwen2.5:0.5b
     healthcheck:
       test:
         - CMD
         - node
         - '-e'
         - >-
-          require('http').get('http://localhost:5047/health',
+          require('http').get('http://localhost:50477/health',
           (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }
           ).on('error', () => process.exit(1))
       interval: 5s
@@ -66,8 +74,5 @@ services:
     volumes:
       - ./tests/smoke-test.sh:/smoke-test.sh:ro
     environment:
-      SERVER_URL: 'http://server:5047'
+      SERVER_URL: 'http://server:50477'
     command: sh -c "apk add --no-cache curl jq && sh /smoke-test.sh"
-
-volumes:
-  ollama_cache:

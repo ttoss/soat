@@ -1,7 +1,7 @@
 services:
   database:
     image: pgvector/pgvector:0.8.1-pg18-trixie
-    container_name: soat-database-dev
+    container_name: soat-database-dev-docker
     environment:
       POSTGRES_DB: ${DATABASE_NAME:-soat_dev}
       POSTGRES_USER: ${DATABASE_USER:-soat_user}
@@ -20,13 +20,13 @@ services:
 
   ollama:
     image: ollama/ollama:latest
-    container_name: soat-ollama-dev
+    container_name: soat-ollama-dev-docker
     volumes:
       - ollama_cache:/root/.ollama
     entrypoint:
       - /bin/sh
       - -c
-      - 'ollama serve & sleep 5 && ollama pull qwen3-embedding:0.6b && wait'
+      - 'ollama serve & sleep 5 && ollama pull qwen3-embedding:0.6b && ollama pull qwen2.5:0.5b && wait'
     healthcheck:
       test: ['CMD-SHELL', 'ollama list | grep qwen3-embedding']
       interval: 10s
@@ -36,7 +36,7 @@ services:
 
   server:
     build: .
-    container_name: soat-server-dev
+    container_name: soat-server-dev-docker
     depends_on:
       database:
         condition: service_healthy
@@ -55,6 +55,7 @@ services:
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_MODEL: qwen3-embedding:0.6b
       EMBEDDING_DIMENSIONS: '1024'
+      AGENT_MODEL: qwen2.5:0.5b
     volumes:
       - files_data:/data/files
 

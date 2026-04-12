@@ -8,10 +8,22 @@ const registerTools = (server: McpServer) => {
       description: 'List files. Optionally filter by projectId.',
       inputSchema: {
         projectId: z.string().optional().describe('Project ID to filter by'),
+        limit: z
+          .number()
+          .optional()
+          .describe('Maximum number of results to return (default 50)'),
+        offset: z
+          .number()
+          .optional()
+          .describe('Number of results to skip (default 0)'),
       },
     },
-    async ({ projectId }) => {
-      const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+    async ({ projectId, limit, offset }) => {
+      const params = new URLSearchParams();
+      if (projectId) params.set('projectId', projectId);
+      if (limit !== undefined) params.set('limit', String(limit));
+      if (offset !== undefined) params.set('offset', String(offset));
+      const qs = params.toString() ? `?${params.toString()}` : '';
       const data = await apiCall('GET', `/files${qs}`);
       return { content: [{ type: 'text', text: JSON.stringify(data) }] };
     }

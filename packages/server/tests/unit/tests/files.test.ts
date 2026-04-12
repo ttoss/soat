@@ -430,9 +430,9 @@ describe('Files', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBe(1);
-      expect(response.body[0].filename).toBe('proj2.txt');
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBe(1);
+      expect(response.body.data[0].filename).toBe('proj2.txt');
     });
 
     test('listing without projectId returns files across projects', async () => {
@@ -440,9 +440,9 @@ describe('Files', () => {
         await authenticatedTestClient(userToken).get('/api/v1/files');
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
       // Should include files from both projects
-      expect(response.body.length).toBeGreaterThanOrEqual(2);
+      expect(response.body.data.length).toBeGreaterThanOrEqual(2);
     });
 
     test('returns 403 when requesting files for a project the user cannot access', async () => {

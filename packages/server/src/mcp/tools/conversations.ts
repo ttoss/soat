@@ -13,12 +13,22 @@ const registerTools = (server: McpServer) => {
           .string()
           .optional()
           .describe('Actor ID to filter conversations by'),
+        limit: z
+          .number()
+          .optional()
+          .describe('Maximum number of results to return (default 50)'),
+        offset: z
+          .number()
+          .optional()
+          .describe('Number of results to skip (default 0)'),
       },
     },
-    async ({ projectId, actorId }) => {
+    async ({ projectId, actorId, limit, offset }) => {
       const params = new URLSearchParams();
       if (projectId) params.set('projectId', projectId);
       if (actorId) params.set('actorId', actorId);
+      if (limit !== undefined) params.set('limit', String(limit));
+      if (offset !== undefined) params.set('offset', String(offset));
       const qs = params.toString() ? `?${params.toString()}` : '';
       const data = await apiCall('GET', `/conversations${qs}`);
       return { content: [{ type: 'text', text: JSON.stringify(data) }] };
@@ -141,10 +151,22 @@ const registerTools = (server: McpServer) => {
         'List all messages (documents) in a conversation, ordered by position',
       inputSchema: {
         id: z.string().describe('Conversation ID'),
+        limit: z
+          .number()
+          .optional()
+          .describe('Maximum number of results to return (default 50)'),
+        offset: z
+          .number()
+          .optional()
+          .describe('Number of results to skip (default 0)'),
       },
     },
-    async ({ id }) => {
-      const data = await apiCall('GET', `/conversations/${id}/messages`);
+    async ({ id, limit, offset }) => {
+      const params = new URLSearchParams();
+      if (limit !== undefined) params.set('limit', String(limit));
+      if (offset !== undefined) params.set('offset', String(offset));
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      const data = await apiCall('GET', `/conversations/${id}/messages${qs}`);
       return { content: [{ type: 'text', text: JSON.stringify(data) }] };
     }
   );

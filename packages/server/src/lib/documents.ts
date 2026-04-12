@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { Op } from '@ttoss/postgresdb';
+
 import { db } from '../db';
 import { getEmbedding } from './embedding';
 
@@ -25,20 +27,39 @@ const mapDocument = (
     projectId: doc.file?.project?.publicId,
     filename: doc.file?.filename,
     size: doc.file?.size,
+    title: doc.title ?? undefined,
+    metadata: doc.metadata
+      ? (() => {
+          try {
+            return JSON.parse(doc.metadata!);
+          } catch {
+            return doc.metadata;
+          }
+        })()
+      : undefined,
+    tags: doc.tags ?? undefined,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
 };
 
-export const listDocuments = async (args: { projectIds?: number[] }) => {
+export const listDocuments = async (args: {
+  projectIds?: number[];
+  limit?: number;
+  offset?: number;
+}) => {
+  const limit = args.limit ?? 50;
+  const offset = args.offset ?? 0;
+
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
-    return [];
+    return { data: [], total: 0, limit, offset };
   }
 
   const fileWhere =
     args.projectIds !== undefined ? { projectId: args.projectIds } : undefined;
 
-  const documents = await db.Document.findAll({
+  const { count, rows } = await db.Document.findAndCountAll({
+    distinct: true,
     include: [
       {
         model: db.File,
@@ -47,8 +68,10 @@ export const listDocuments = async (args: { projectIds?: number[] }) => {
         include: [{ model: db.Project, as: 'project' }],
       },
     ],
+    limit,
+    offset,
   });
-  return documents.map(mapDocument);
+  return { data: rows.map(mapDocument), total: count, limit, offset };
 };
 
 export const getDocument = async (args: { id: string }) => {
@@ -81,6 +104,9 @@ export const createDocument = async (args: {
   projectId: number;
   content: string;
   filename?: string;
+  title?: string;
+  metadata?: Record<string, unknown>;
+  tags?: string[];
 }) => {
   const storageDir = getStorageDir();
   fs.mkdirSync(storageDir, { recursive: true });
@@ -106,6 +132,9 @@ export const createDocument = async (args: {
   const doc = await db.Document.create({
     fileId: file.id,
     embedding,
+    title: args.title ?? null,
+    metadata: args.metadata ? JSON.stringify(args.metadata) : null,
+    tags: args.tags ?? null,
   });
 
   const created = await db.Document.findOne({
@@ -148,11 +177,66 @@ export const deleteDocument = async (args: { id: string }) => {
   return true;
 };
 
+export const updateDocument = async (args: {
+  id: string;
+  content?: string;
+  title?: string;
+  metadata?: Record<string, unknown>;
+  tags?: string[];
+}) => {
+  const doc = await db.Document.findOne({
+    where: { publicId: args.id },
+    include: [
+      {
+        model: db.File,
+        as: 'file',
+        include: [{ model: db.Project, as: 'project' }],
+      },
+    ],
+  });
+
+  if (!doc) {
+    return null;
+  }
+
+  if (args.content !== undefined && doc.file?.storagePath) {
+    fs.writeFileSync(doc.file.storagePath, args.content, 'utf-8');
+    await doc.file.update({
+      size: Buffer.byteLength(args.content, 'utf-8'),
+    });
+    const embedding = await getEmbedding({ text: args.content });
+    await doc.update({ embedding });
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (args.title !== undefined) updates.title = args.title;
+  if (args.metadata !== undefined)
+    updates.metadata = JSON.stringify(args.metadata);
+  if (args.tags !== undefined) updates.tags = args.tags;
+  if (Object.keys(updates).length > 0) {
+    await doc.update(updates);
+  }
+
+  const refreshed = await db.Document.findOne({
+    where: { id: doc.id },
+    include: [
+      {
+        model: db.File,
+        as: 'file',
+        include: [{ model: db.Project, as: 'project' }],
+      },
+    ],
+  });
+
+  return mapDocument(refreshed!);
+};
+
 export const searchDocuments = async (args: {
   projectIds?: number[];
   query: string;
   limit?: number;
   threshold?: number;
+  tags?: string[];
 }) => {
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
     return [];
@@ -165,7 +249,13 @@ export const searchDocuments = async (args: {
   const fileWhere =
     args.projectIds !== undefined ? { projectId: args.projectIds } : undefined;
 
+  const docWhere: Record<string, unknown> =
+    args.tags && args.tags.length > 0
+      ? { tags: { [Op.overlap]: args.tags } }
+      : {};
+
   const documents = await db.Document.findAll({
+    where: docWhere,
     attributes: {
       include: [
         [

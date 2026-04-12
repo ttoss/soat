@@ -6,19 +6,39 @@ const registerTools = (server: McpServer) => {
     'list-actors',
     {
       description:
-        'List actors. If projectId is omitted, returns all actors accessible to the caller. Optionally filter by externalId (e.g. WhatsApp phone number).',
+        'List actors. If projectId is omitted, returns all actors accessible to the caller. Optionally filter by externalId, name (partial match), or type (exact match).',
       inputSchema: {
         projectId: z.string().optional().describe('Project ID (optional)'),
         externalId: z
           .string()
           .optional()
           .describe('External ID to filter by (e.g. WhatsApp phone number)'),
+        name: z
+          .string()
+          .optional()
+          .describe('Partial, case-insensitive name filter'),
+        type: z
+          .string()
+          .optional()
+          .describe('Exact type filter (e.g. customer, agent)'),
+        limit: z
+          .number()
+          .optional()
+          .describe('Maximum number of results to return (default 50)'),
+        offset: z
+          .number()
+          .optional()
+          .describe('Number of results to skip (default 0)'),
       },
     },
-    async ({ projectId, externalId }) => {
+    async ({ projectId, externalId, name, type, limit, offset }) => {
       const params = new URLSearchParams();
       if (projectId) params.set('projectId', projectId);
       if (externalId) params.set('externalId', externalId);
+      if (name) params.set('name', name);
+      if (type) params.set('type', type);
+      if (limit !== undefined) params.set('limit', String(limit));
+      if (offset !== undefined) params.set('offset', String(offset));
       const qs = params.toString() ? `?${params.toString()}` : '';
       const data = await apiCall('GET', `/actors${qs}`);
       return { content: [{ type: 'text', text: JSON.stringify(data) }] };

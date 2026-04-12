@@ -127,8 +127,8 @@ describe('Conversations', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThanOrEqual(2);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBeGreaterThanOrEqual(2);
     });
 
     test('listing without projectId returns all accessible conversations', async () => {
@@ -137,7 +137,7 @@ describe('Conversations', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
     });
 
     test('can filter by actorId', async () => {
@@ -160,9 +160,9 @@ describe('Conversations', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
       expect(
-        response.body.some((c: { id: string }) => c.id === filteredConvId)
+        response.body.data.some((c: { id: string }) => c.id === filteredConvId)
       ).toBe(true);
     });
 
@@ -273,8 +273,8 @@ describe('Conversations', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBe(0);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBe(0);
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -325,7 +325,7 @@ describe('Conversations', () => {
 
       expect(listRes.status).toBe(200);
       expect(
-        listRes.body.some(
+        listRes.body.data.some(
           (m: { documentId: string }) => m.documentId === addedDocumentId
         )
       ).toBe(true);
@@ -383,7 +383,7 @@ describe('Conversations', () => {
         `/api/v1/conversations/${conversationId}/messages`
       );
       expect(
-        listRes.body.some(
+        listRes.body.data.some(
           (m: { documentId: string }) => m.documentId === secondDocumentId
         )
       ).toBe(false);
@@ -525,8 +525,8 @@ describe('Conversations', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.length).toBeGreaterThanOrEqual(1);
-      expect(response.body[0].content).toBe('Content check message');
+      expect(response.body.data.length).toBeGreaterThanOrEqual(1);
+      expect(response.body.data[0].content).toBe('Content check message');
     });
   });
 

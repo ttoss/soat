@@ -127,8 +127,9 @@ describe('Actors', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThanOrEqual(2);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBeGreaterThanOrEqual(2);
+      expect(response.body.total).toBeGreaterThanOrEqual(2);
     });
 
     test('listing without projectId returns all accessible actors', async () => {
@@ -136,7 +137,7 @@ describe('Actors', () => {
         await authenticatedTestClient(userToken).get('/api/v1/actors');
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
     });
 
     test('can filter by externalId', async () => {
@@ -151,9 +152,9 @@ describe('Actors', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
       expect(
-        response.body.some((a: { externalId: string }) => {
+        response.body.data.some((a: { externalId: string }) => {
           return a.externalId === '+15558887777';
         })
       ).toBe(true);
@@ -288,6 +289,119 @@ describe('Actors', () => {
         .send({ name: 'Ghost' });
 
       expect(response.status).toBe(404);
+    });
+  });
+
+  describe('PATCH /api/v1/actors/:id', () => {
+    let actorId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ projectId, name: 'UpdateMe', type: 'customer' });
+      actorId = res.body.id;
+    });
+
+    test('user with permission can update an actor name', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/actors/${actorId}`)
+        .send({ name: 'UpdatedName' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe(actorId);
+      expect(response.body.name).toBe('UpdatedName');
+    });
+
+    test('user can update type and externalId', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/actors/${actorId}`)
+        .send({ type: 'assistant', externalId: '+15559998888' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.type).toBe('assistant');
+      expect(response.body.externalId).toBe('+15559998888');
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient
+        .patch(`/api/v1/actors/${actorId}`)
+        .send({ name: 'Hacked' });
+
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 404 for non-existent actor', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch('/api/v1/actors/act_nonexistent')
+        .send({ name: 'Ghost' });
+
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe('GET /api/v1/actors with name and type filters (FEAT-9)', () => {
+    beforeAll(async () => {
+      await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ projectId, name: 'NameFilterAgent', type: 'agent' });
+      await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ projectId, name: 'NameFilterCustomer', type: 'customer' });
+      await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ projectId, name: 'Unrelated', type: 'agent' });
+    });
+
+    test('filtering by name (partial, case-insensitive) returns matching actors', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/actors?projectId=${projectId}&name=namefilter`
+      );
+
+      expect(response.status).toBe(200);
+      const names = response.body.data.map((a: { name: string }) => {
+        return a.name;
+      });
+      expect(names).toContain('NameFilterAgent');
+      expect(names).toContain('NameFilterCustomer');
+      expect(names).not.toContain('Unrelated');
+    });
+
+    test('filtering by type returns only matching actors', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/actors?projectId=${projectId}&type=customer`
+      );
+
+      expect(response.status).toBe(200);
+      const types = response.body.data.map((a: { type: string }) => {
+        return a.type;
+      });
+      expect(
+        types.every((t: string) => {
+          return t === 'customer';
+        })
+      ).toBe(true);
+    });
+
+    test('filtering by name and type combined', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/actors?projectId=${projectId}&name=namefilter&type=agent`
+      );
+
+      expect(response.status).toBe(200);
+      const names = response.body.data.map((a: { name: string }) => {
+        return a.name;
+      });
+      expect(names).toContain('NameFilterAgent');
+      expect(names).not.toContain('NameFilterCustomer');
+    });
+
+    test('non-matching name filter returns empty array', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/actors?projectId=${projectId}&name=xyznonexistentxyz`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual([]);
     });
   });
 });

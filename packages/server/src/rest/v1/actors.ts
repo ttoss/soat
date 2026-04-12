@@ -35,15 +35,52 @@ const actorsRouter = new Router<Context>();
  *         schema:
  *           type: string
  *           example: '+15551234567'
+ *       - name: name
+ *         in: query
+ *         required: false
+ *         description: Partial, case-insensitive name filter
+ *         schema:
+ *           type: string
+ *           example: 'alice'
+ *       - name: type
+ *         in: query
+ *         required: false
+ *         description: Exact type filter (e.g. customer, agent)
+ *         schema:
+ *           type: string
+ *           example: 'customer'
+ *       - name: limit
+ *         in: query
+ *         required: false
+ *         description: Maximum number of results to return (default 50)
+ *         schema:
+ *           type: integer
+ *           example: 50
+ *       - name: offset
+ *         in: query
+ *         required: false
+ *         description: Number of results to skip (default 0)
+ *         schema:
+ *           type: integer
+ *           example: 0
  *     responses:
  *       '200':
  *         description: List of actors
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/ActorRecord'
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/ActorRecord'
+ *                 total:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *                 offset:
+ *                   type: integer
  *       '401':
  *         description: Unauthorized
  *         content:
@@ -66,6 +103,14 @@ actorsRouter.get('/actors', async (ctx: Context) => {
 
   const projectPublicId = ctx.query.projectId as string | undefined;
   const externalId = ctx.query.externalId as string | undefined;
+  const name = ctx.query.name as string | undefined;
+  const type = ctx.query.type as string | undefined;
+  const limit = ctx.query.limit
+    ? parseInt(ctx.query.limit as string, 10)
+    : undefined;
+  const offset = ctx.query.offset
+    ? parseInt(ctx.query.offset as string, 10)
+    : undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -78,7 +123,14 @@ actorsRouter.get('/actors', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listActors({ projectIds, externalId });
+  ctx.body = await listActors({
+    projectIds,
+    externalId,
+    name,
+    type,
+    limit,
+    offset,
+  });
 });
 
 /**

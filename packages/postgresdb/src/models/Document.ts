@@ -40,6 +40,24 @@ export class Document extends Model {
   declare file: File;
 
   @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare title: string | null;
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+  })
+  declare metadata: string | null;
+
+  @Column({
+    type: DataType.ARRAY(DataType.TEXT),
+    allowNull: true,
+  })
+  declare tags: string[] | null;
+
+  @Column({
     type: DataType.VECTOR(1024),
     allowNull: true,
   })

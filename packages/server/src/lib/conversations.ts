@@ -47,9 +47,14 @@ const mapMessage = (
 export const listConversations = async (args: {
   projectIds?: number[];
   actorId?: string;
+  limit?: number;
+  offset?: number;
 }) => {
+  const limit = args.limit ?? 50;
+  const offset = args.offset ?? 0;
+
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
-    return [];
+    return { data: [], total: 0, limit, offset };
   }
 
   const where: Record<string, unknown> = {};
@@ -61,7 +66,7 @@ export const listConversations = async (args: {
   if (args.actorId !== undefined) {
     const actor = await db.Actor.findOne({ where: { publicId: args.actorId } });
     if (!actor) {
-      return [];
+      return { data: [], total: 0, limit, offset };
     }
     const messages = await db.ConversationMessage.findAll({
       where: { actorId: actor.id },
@@ -74,12 +79,14 @@ export const listConversations = async (args: {
     where.id = conversationIds;
   }
 
-  const conversations = await db.Conversation.findAll({
+  const { count, rows } = await db.Conversation.findAndCountAll({
     where: Object.keys(where).length > 0 ? where : undefined,
     include: [{ model: db.Project, as: 'project' }],
+    limit,
+    offset,
   });
 
-  return conversations.map(mapConversation);
+  return { data: rows.map(mapConversation), total: count, limit, offset };
 };
 
 export const getConversation = async (args: { id: string }) => {
@@ -150,7 +157,12 @@ export const deleteConversation = async (args: { id: string }) => {
 
 export const listConversationMessages = async (args: {
   conversationId: string;
+  limit?: number;
+  offset?: number;
 }) => {
+  const limit = args.limit ?? 50;
+  const offset = args.offset ?? 0;
+
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.conversationId },
   });
@@ -159,7 +171,7 @@ export const listConversationMessages = async (args: {
     return null;
   }
 
-  const messages = await db.ConversationMessage.findAll({
+  const { count, rows } = await db.ConversationMessage.findAndCountAll({
     where: { conversationId: conversation.id },
     include: [
       {
@@ -170,9 +182,11 @@ export const listConversationMessages = async (args: {
       { model: db.Actor, as: 'actor' },
     ],
     order: [['position', 'ASC']],
+    limit,
+    offset,
   });
 
-  return messages.map(mapMessage);
+  return { data: rows.map(mapMessage), total: count, limit, offset };
 };
 
 export const addConversationMessage = async (args: {

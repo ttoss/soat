@@ -25,9 +25,16 @@ const mapFile = (file: InstanceType<(typeof db)['File']>) => {
   };
 };
 
-export const listFiles = async (args: { projectIds?: number[] }) => {
+export const listFiles = async (args: {
+  projectIds?: number[];
+  limit?: number;
+  offset?: number;
+}) => {
+  const limit = args.limit ?? 50;
+  const offset = args.offset ?? 0;
+
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
-    return [];
+    return { data: [], total: 0, limit, offset };
   }
 
   const where: Record<string, unknown> = {};
@@ -36,10 +43,12 @@ export const listFiles = async (args: { projectIds?: number[] }) => {
     where.projectId = args.projectIds;
   }
 
-  const allFiles = await db.File.findAll({
+  const { count, rows } = await db.File.findAndCountAll({
     where: Object.keys(where).length > 0 ? where : undefined,
+    limit,
+    offset,
   });
-  return allFiles.map(mapFile);
+  return { data: rows.map(mapFile), total: count, limit, offset };
 };
 
 export const getFile = async (args: { id: string }) => {

@@ -1,3 +1,5 @@
+import { Op } from '@ttoss/postgresdb';
+
 import { db } from '../db';
 
 const mapActor = (
@@ -19,9 +21,16 @@ const mapActor = (
 export const listActors = async (args: {
   projectIds?: number[];
   externalId?: string;
+  name?: string;
+  type?: string;
+  limit?: number;
+  offset?: number;
 }) => {
+  const limit = args.limit ?? 50;
+  const offset = args.offset ?? 0;
+
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
-    return [];
+    return { data: [], total: 0, limit, offset };
   }
 
   const where: Record<string, unknown> = {};
@@ -34,12 +43,22 @@ export const listActors = async (args: {
     where.externalId = args.externalId;
   }
 
-  const actors = await db.Actor.findAll({
+  if (args.name !== undefined) {
+    where.name = { [Op.iLike]: `%${args.name}%` };
+  }
+
+  if (args.type !== undefined) {
+    where.type = args.type;
+  }
+
+  const { count, rows } = await db.Actor.findAndCountAll({
     where: Object.keys(where).length > 0 ? where : undefined,
     include: [{ model: db.Project, as: 'project' }],
+    limit,
+    offset,
   });
 
-  return actors.map(mapActor);
+  return { data: rows.map(mapActor), total: count, limit, offset };
 };
 
 export const getActor = async (args: { id: string }) => {
