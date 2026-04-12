@@ -83,27 +83,12 @@ A policy defines what actions a member (or API key) is allowed or denied within 
 
 ### Permission Actions
 
-Permission strings follow the format `resource:Action`. The table below lists all available actions and the REST endpoint each one protects.
+Permission strings follow the format `resource:Action`. Each module documents its own permission actions — see the individual module pages for the full tables:
 
-| Permission Action                  | REST Endpoint                      | What it controls                                    |
-| ---------------------------------- | ---------------------------------- | --------------------------------------------------- |
-| `files:GetFile`                    | `GET /api/v1/files/:id`            | Retrieve file metadata                              |
-| `files:CreateFile`                 | `POST /api/v1/files`               | Create a new file record                            |
-| `files:UploadFile`                 | `POST /api/v1/files/upload`        | Upload file content                                 |
-| `files:DownloadFile`               | `GET /api/v1/files/:id/download`   | Download file content                               |
-| `files:UpdateFileMetadata`         | `PATCH /api/v1/files/:id/metadata` | Update file metadata                                |
-| `files:DeleteFile`                 | `DELETE /api/v1/files/:id`         | Delete a file                                       |
-| `projects:GetProject`              | `GET /api/v1/projects/:id`         | View a project's details                            |
-| `documents:GetDocument`            | `GET /api/v1/documents/:id`        | Retrieve a document                                 |
-| `documents:CreateDocument`         | `POST /api/v1/documents`           | Create a document                                   |
-| `documents:DeleteDocument`         | `DELETE /api/v1/documents/:id`     | Delete a document                                   |
-| `actors:GetActor`                  | `GET /api/v1/actors/:id`           | Retrieve an actor                                   |
-| `actors:CreateActor`               | `POST /api/v1/actors`              | Create an actor                                     |
-| `actors:DeleteActor`               | `DELETE /api/v1/actors/:id`        | Delete an actor                                     |
-| `conversations:GetConversation`    | `GET /api/v1/conversations/:id`    | Retrieve a conversation and its messages and actors |
-| `conversations:CreateConversation` | `POST /api/v1/conversations`       | Create a conversation                               |
-| `conversations:UpdateConversation` | `PATCH /api/v1/conversations/:id`  | Update a conversation, add or remove messages       |
-| `conversations:DeleteConversation` | `DELETE /api/v1/conversations/:id` | Delete a conversation                               |
+- [Files](../modules/files.md#permissions)
+- [Actors](../modules/actors.md#permissions)
+- [Documents](../modules/documents.md#permissions)
+- [Conversations](../modules/conversations.md#permissions)
 
 Use wildcards to grant broader access:
 

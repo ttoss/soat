@@ -36,9 +36,10 @@ A `null` / absent `externalId` is never considered a duplicate — PostgreSQL's 
 
 Actor operations are governed by per-project policies. Grant the following permissions:
 
-| Action          | Permission string    |
-| --------------- | -------------------- |
-| List actors     | `actors:ListActors`  |
-| Get actor by ID | `actors:GetActor`    |
-| Create actor    | `actors:CreateActor` |
-| Delete actor    | `actors:DeleteActor` |
+| Action          | Permission           | REST Endpoint               | MCP Tool       |
+| --------------- | -------------------- | --------------------------- | -------------- |
+| List actors     | `actors:ListActors`  | `GET /api/v1/actors`        | `list-actors`  |
+| Get actor by ID | `actors:GetActor`    | `GET /api/v1/actors/:id`    | `get-actor`    |
+| Create actor    | `actors:CreateActor` | `POST /api/v1/actors`       | `create-actor` |
+| Update actor    | `actors:UpdateActor` | `PATCH /api/v1/actors/:id`  | `update-actor` |
+| Delete actor    | `actors:DeleteActor` | `DELETE /api/v1/actors/:id` | `delete-actor` |

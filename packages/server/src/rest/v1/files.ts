@@ -22,9 +22,17 @@ const filesRouter = new Router<Context>();
  *   get:
  *     tags:
  *       - Files
- *     summary: List all files
- *     description: Returns a list of all stored files
+ *     summary: List files
+ *     description: Returns a list of files. Requires authentication. Optionally filter by projectId.
  *     operationId: listFiles
+ *     parameters:
+ *       - name: projectId
+ *         in: query
+ *         required: false
+ *         description: Filter files by project ID
+ *         schema:
+ *           type: string
+ *           example: 'proj_V1StGXR8Z5jdHi6B'
  *     responses:
  *       '200':
  *         description: List of files returned successfully
@@ -34,15 +42,26 @@ const filesRouter = new Router<Context>();
  *               type: array
  *               items:
  *                 $ref: '#/components/schemas/FileRecord'
- *       '500':
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
+ *       '401':
+ *         $ref: '#/components/responses/Unauthorized'
+ *       '403':
+ *         $ref: '#/components/responses/Forbidden'
  */
 filesRouter.get('/files', async (ctx: Context) => {
-  ctx.body = await listFiles();
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const projectPublicId = (ctx.query as Record<string, string>).projectId;
+
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    projectPublicId,
+    action: 'files:GetFile',
+  });
+
+  ctx.body = await listFiles({ projectIds: projectIds ?? undefined });
 });
 
 /**
@@ -392,6 +411,118 @@ filesRouter.post(
 
 /**
  * @openapi
+ * /files/upload/base64:
+ *   post:
+ *     tags:
+ *       - Files
+ *     summary: Upload a file via JSON (base64-encoded)
+ *     description: Uploads a file using a JSON body with base64-encoded content. Designed for programmatic/MCP usage.
+ *     operationId: uploadFileBase64
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - projectId
+ *               - content
+ *             properties:
+ *               projectId:
+ *                 type: string
+ *                 example: 'proj_V1StGXR8Z5jdHi6B'
+ *               content:
+ *                 type: string
+ *                 description: Base64-encoded file content
+ *               filename:
+ *                 type: string
+ *                 example: 'document.txt'
+ *               contentType:
+ *                 type: string
+ *                 example: 'text/plain'
+ *               metadata:
+ *                 type: string
+ *                 example: '{"author":"John"}'
+ *     responses:
+ *       '201':
+ *         description: File uploaded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/FileRecord'
+ *       '400':
+ *         description: Missing content or invalid project
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '401':
+ *         $ref: '#/components/responses/Unauthorized'
+ *       '403':
+ *         $ref: '#/components/responses/Forbidden'
+ */
+filesRouter.post('/files/upload/base64', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const body = ctx.request.body as {
+    projectId: string;
+    content: string;
+    filename?: string;
+    contentType?: string;
+    metadata?: string;
+  };
+
+  if (!body.content) {
+    ctx.status = 400;
+    ctx.body = { error: 'content is required (base64-encoded)' };
+    return;
+  }
+
+  if (!body.projectId) {
+    ctx.status = 400;
+    ctx.body = { error: 'projectId is required' };
+    return;
+  }
+
+  const allowed = await ctx.authUser.isAllowed(
+    body.projectId,
+    'files:UploadFile'
+  );
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const project = await db.Project.findOne({
+    where: { publicId: body.projectId },
+  });
+  if (!project) {
+    ctx.status = 400;
+    ctx.body = { error: 'Invalid project ID' };
+    return;
+  }
+
+  const fileBuffer = Buffer.from(body.content, 'base64');
+
+  const record = await uploadFile({
+    projectId: project.id,
+    fileBuffer,
+    filename: body.filename,
+    contentType: body.contentType,
+    metadata: body.metadata,
+  });
+
+  ctx.status = 201;
+  ctx.body = record;
+});
+
+/**
+ * @openapi
  * /files/{id}/download:
  *   get:
  *     tags:
@@ -471,12 +602,104 @@ filesRouter.get('/files/:id/download', async (ctx: Context) => {
 
 /**
  * @openapi
+ * /files/{id}/download/base64:
+ *   get:
+ *     tags:
+ *       - Files
+ *     summary: Download a file as base64
+ *     description: Returns JSON with base64-encoded file content. Designed for programmatic/MCP usage.
+ *     operationId: downloadFileBase64
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         description: File ID
+ *         schema:
+ *           type: string
+ *           example: 'fil_abc123'
+ *     responses:
+ *       '200':
+ *         description: Base64-encoded file content
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 content:
+ *                   type: string
+ *                   description: Base64-encoded file content
+ *                 filename:
+ *                   type: string
+ *                 contentType:
+ *                   type: string
+ *                 size:
+ *                   type: number
+ *       '401':
+ *         $ref: '#/components/responses/Unauthorized'
+ *       '403':
+ *         $ref: '#/components/responses/Forbidden'
+ *       '404':
+ *         description: File not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+filesRouter.get('/files/:id/download/base64', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const fileRecord = await getFile({ id: ctx.params.id });
+
+  if (!fileRecord) {
+    ctx.status = 404;
+    ctx.body = { error: 'File not found' };
+    return;
+  }
+
+  const allowed = await ctx.authUser.isAllowed(
+    fileRecord.projectId!,
+    'files:DownloadFile'
+  );
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const result = await downloadFile({ id: ctx.params.id });
+
+  if (!result) {
+    ctx.status = 404;
+    ctx.body = { error: 'File not found on disk' };
+    return;
+  }
+
+  const chunks: Buffer[] = [];
+  for await (const chunk of result.stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  const buffer = Buffer.concat(chunks);
+
+  ctx.body = {
+    content: buffer.toString('base64'),
+    filename: result.filename,
+    contentType: result.contentType,
+    size: result.size,
+  };
+});
+
+/**
+ * @openapi
  * /files/{id}/metadata:
  *   patch:
  *     tags:
  *       - Files
  *     summary: Update file metadata
- *     description: Updates the metadata field of a file
+ *     description: Updates the metadata and/or filename of a file
  *     operationId: updateFileMetadata
  *     parameters:
  *       - name: id
@@ -492,15 +715,16 @@ filesRouter.get('/files/:id/download', async (ctx: Context) => {
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - metadata
  *             properties:
  *               metadata:
  *                 type: string
  *                 example: '{"author":"Jane","tags":["report"]}'
+ *               filename:
+ *                 type: string
+ *                 example: 'renamed-file.txt'
  *     responses:
  *       '200':
- *         description: Metadata updated successfully
+ *         description: File updated successfully
  *         content:
  *           application/json:
  *             schema:
@@ -541,10 +765,11 @@ filesRouter.patch('/files/:id/metadata', async (ctx: Context) => {
     return;
   }
 
-  const body = ctx.request.body as { metadata: string };
+  const body = ctx.request.body as { metadata?: string; filename?: string };
   const updated = await updateFileMetadata({
     id: ctx.params.id,
     metadata: body.metadata,
+    filename: body.filename,
   });
 
   ctx.body = updated;

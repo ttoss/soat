@@ -87,3 +87,36 @@ export const deleteActor = async (args: { id: string }) => {
 
   return { id: args.id };
 };
+
+export const updateActor = async (args: {
+  id: string;
+  name?: string;
+  type?: string;
+  externalId?: string;
+}) => {
+  const actor = await db.Actor.findOne({ where: { publicId: args.id } });
+
+  if (!actor) {
+    return null;
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (args.name !== undefined) {
+    updates.name = args.name;
+  }
+  if (args.type !== undefined) {
+    updates.type = args.type;
+  }
+  if (args.externalId !== undefined) {
+    updates.externalId = args.externalId;
+  }
+
+  await actor.update(updates);
+
+  const actorWithProject = await db.Actor.findOne({
+    where: { id: actor.id },
+    include: [{ model: db.Project, as: 'project' }],
+  });
+
+  return mapActor(actorWithProject!);
+};

@@ -81,8 +81,49 @@ const registerTools = (server: McpServer) => {
       },
     },
     async ({ id }) => {
-      await apiCall('DELETE', `/actors/${id}`);
-      return { content: [{ type: 'text', text: 'Actor deleted' }] };
+      try {
+        await apiCall('DELETE', `/actors/${id}`);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ id, deleted: true }),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                id,
+                deleted: false,
+                error: String(error),
+              }),
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    'update-actor',
+    {
+      description: 'Update an actor by ID',
+      inputSchema: {
+        id: z.string().describe('Actor ID'),
+        name: z.string().optional().describe('New name'),
+        type: z.string().optional().describe('New type'),
+        externalId: z.string().optional().describe('New external ID'),
+      },
+    },
+    async ({ id, name, type, externalId }) => {
+      const data = await apiCall('PATCH', `/actors/${id}`, {
+        body: { name, type, externalId },
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(data) }] };
     }
   );
 };

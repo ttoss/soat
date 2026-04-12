@@ -5,11 +5,14 @@ const registerTools = (server: McpServer) => {
   server.registerTool(
     'list-files',
     {
-      description: 'List all files',
-      inputSchema: {},
+      description: 'List files. Optionally filter by projectId.',
+      inputSchema: {
+        projectId: z.string().optional().describe('Project ID to filter by'),
+      },
     },
-    async () => {
-      const data = await apiCall('GET', '/files');
+    async ({ projectId }) => {
+      const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+      const data = await apiCall('GET', `/files${qs}`);
       return { content: [{ type: 'text', text: JSON.stringify(data) }] };
     }
   );
@@ -41,20 +44,30 @@ const registerTools = (server: McpServer) => {
           .string()
           .optional()
           .describe('MIME content type, e.g. text/plain'),
+        mimeType: z
+          .string()
+          .optional()
+          .describe('Alias for contentType (MIME type, e.g. text/plain)'),
         metadata: z
           .string()
           .optional()
           .describe('Additional metadata as a JSON string'),
       },
     },
-    async ({ projectId, content, filename, contentType, metadata }) => {
-      const buffer = Buffer.from(content, 'base64');
-      const data = await apiCall('POST', '/files/upload', {
+    async ({
+      projectId,
+      content,
+      filename,
+      contentType,
+      mimeType,
+      metadata,
+    }) => {
+      const data = await apiCall('POST', '/files/upload/base64', {
         body: {
           projectId,
-          fileBuffer: buffer.toString('base64'),
+          content,
           filename,
-          contentType,
+          contentType: contentType || mimeType,
           metadata,
         },
       });
@@ -71,7 +84,7 @@ const registerTools = (server: McpServer) => {
       },
     },
     async ({ id }) => {
-      const data = await apiCall('GET', `/files/${id}/download`);
+      const data = await apiCall('GET', `/files/${id}/download/base64`);
       return { content: [{ type: 'text', text: JSON.stringify(data) }] };
     }
   );
@@ -79,15 +92,19 @@ const registerTools = (server: McpServer) => {
   server.registerTool(
     'update-file-metadata',
     {
-      description: 'Update the metadata of a file',
+      description: 'Update the metadata and/or filename of a file',
       inputSchema: {
         id: z.string().describe('File ID'),
-        metadata: z.string().describe('New metadata as a JSON string'),
+        metadata: z
+          .string()
+          .optional()
+          .describe('New metadata as a JSON string'),
+        filename: z.string().optional().describe('New filename'),
       },
     },
-    async ({ id, metadata }) => {
+    async ({ id, metadata, filename }) => {
       const data = await apiCall('PATCH', `/files/${id}/metadata`, {
-        body: { metadata },
+        body: { metadata, filename },
       });
       return { content: [{ type: 'text', text: JSON.stringify(data) }] };
     }
@@ -123,10 +140,30 @@ const registerTools = (server: McpServer) => {
       },
     },
     async ({ id }) => {
-      await apiCall('DELETE', `/files/${id}`);
-      return {
-        content: [{ type: 'text', text: `File ${id} deleted successfully` }],
-      };
+      try {
+        await apiCall('DELETE', `/files/${id}`);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ id, deleted: true }),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                id,
+                deleted: false,
+                error: String(error),
+              }),
+            },
+          ],
+        };
+      }
     }
   );
 };

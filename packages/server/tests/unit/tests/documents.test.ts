@@ -230,6 +230,31 @@ describe('Documents', () => {
 
       expect(response.status).toBe(400);
     });
+
+    test('search results include score and content fields', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/search')
+        .send({ projectId, query: 'capital of France' });
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      if (response.body.length > 0) {
+        expect(typeof response.body[0].score).toBe('number');
+        expect(typeof response.body[0].content).toBe('string');
+      }
+    });
+
+    test('search with threshold filters low-score results', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/search')
+        .send({ projectId, query: 'capital of France', threshold: 0.99 });
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      for (const doc of response.body) {
+        expect(doc.score).toBeGreaterThanOrEqual(0.99);
+      }
+    });
   });
 
   describe('DELETE /api/v1/documents/:id', () => {

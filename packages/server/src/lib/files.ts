@@ -25,8 +25,20 @@ const mapFile = (file: InstanceType<(typeof db)['File']>) => {
   };
 };
 
-export const listFiles = async () => {
-  const allFiles = await db.File.findAll();
+export const listFiles = async (args: { projectIds?: number[] }) => {
+  if (args.projectIds !== undefined && args.projectIds.length === 0) {
+    return [];
+  }
+
+  const where: Record<string, unknown> = {};
+
+  if (args.projectIds !== undefined) {
+    where.projectId = args.projectIds;
+  }
+
+  const allFiles = await db.File.findAll({
+    where: Object.keys(where).length > 0 ? where : undefined,
+  });
   return allFiles.map(mapFile);
 };
 
@@ -103,7 +115,8 @@ export const downloadFile = async (args: { id: string }) => {
 
 export const updateFileMetadata = async (args: {
   id: string;
-  metadata: string;
+  metadata?: string;
+  filename?: string;
 }) => {
   const file = await db.File.findOne({ where: { publicId: args.id } });
 
@@ -111,7 +124,15 @@ export const updateFileMetadata = async (args: {
     return null;
   }
 
-  await file.update({ metadata: args.metadata });
+  const updates: Record<string, unknown> = {};
+  if (args.metadata !== undefined) {
+    updates.metadata = args.metadata;
+  }
+  if (args.filename !== undefined) {
+    updates.filename = args.filename;
+  }
+
+  await file.update(updates);
   return mapFile(file);
 };
 

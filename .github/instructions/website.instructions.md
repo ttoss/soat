@@ -24,8 +24,8 @@ Agents working on the website package must adhere to the following guidelines to
 
 ## Module Documentation
 
-- **Permission Actions**: `iam.md` is the single source of truth for all permission action strings. Do not duplicate permission tables in module docs. Instead, reference the relevant action inline when describing each endpoint — e.g., "Requires the `files:GetFile` permission action (see [IAM](../modules/iam.md#permission-actions))."
-- **Keep in sync**: When a new permission action is added to the server, update the Permission Actions table in `iam.md` and add inline references in the corresponding module doc.
+- **Permission Actions**: Each module doc owns its permission table in a `## Permissions` section. The table must have four columns: **Action**, **Permission**, **REST Endpoint**, and **MCP Tool**. `iam.md` explains the `resource:Action` format and wildcards but does **not** list individual actions — it links to each module's `## Permissions` section instead.
+- **Keep in sync**: When a new permission action is added to the server, add a row to the relevant module doc's permissions table and, if it introduces a new module, add a link in `iam.md`.
 
 ## Technical Requirements
 

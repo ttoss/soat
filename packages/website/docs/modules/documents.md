@@ -56,13 +56,13 @@ The `embedding` column (pgvector `vector(N)`) is stored in the database but neve
 
 Document operations are governed by per-project policies. Grant the following permissions:
 
-| Action            | Permission string           |
-| ----------------- | --------------------------- |
-| List documents    | `documents:ListDocuments`   |
-| Get a document    | `documents:GetDocument`     |
-| Create a document | `documents:CreateDocument`  |
-| Delete a document | `documents:DeleteDocument`  |
-| Semantic search   | `documents:SearchDocuments` |
+| Action            | Permission                  | REST Endpoint                   | MCP Tool           |
+| ----------------- | --------------------------- | ------------------------------- | ------------------ |
+| List documents    | `documents:ListDocuments`   | `GET /api/v1/documents`         | `list-documents`   |
+| Get a document    | `documents:GetDocument`     | `GET /api/v1/documents/:id`     | `get-document`     |
+| Create a document | `documents:CreateDocument`  | `POST /api/v1/documents`        | `create-document`  |
+| Delete a document | `documents:DeleteDocument`  | `DELETE /api/v1/documents/:id`  | `delete-document`  |
+| Semantic search   | `documents:SearchDocuments` | `POST /api/v1/documents/search` | `search-documents` |
 
 ## Operations
 
@@ -121,11 +121,14 @@ Content-Type: application/json
 {
   "projectId": "proj_xxx",
   "query": "What is the capital of France?",
-  "limit": 5
+  "limit": 5,
+  "threshold": 0.7
 }
 ```
 
-The `limit` field defaults to `10` when omitted.
+The `limit` field defaults to `10` when omitted. The optional `threshold` field (between 0 and 1) filters out results whose similarity score falls below the given value.
+
+Each result in the response includes a `score` field (1 − cosine distance) and a `content` field with the full document text.
 
 ## Project ID Resolution
 

@@ -152,6 +152,7 @@ export const searchDocuments = async (args: {
   projectIds?: number[];
   query: string;
   limit?: number;
+  threshold?: number;
 }) => {
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
     return [];
@@ -165,6 +166,14 @@ export const searchDocuments = async (args: {
     args.projectIds !== undefined ? { projectId: args.projectIds } : undefined;
 
   const documents = await db.Document.findAll({
+    attributes: {
+      include: [
+        [
+          db.Document.sequelize!.literal(`embedding <=> '${embeddingLiteral}'`),
+          'distance',
+        ],
+      ],
+    },
     include: [
       {
         model: db.File,
@@ -179,5 +188,25 @@ export const searchDocuments = async (args: {
     limit,
   });
 
-  return documents.map(mapDocument);
+  return documents
+    .map((doc) => {
+      const distance = parseFloat(
+        (doc.getDataValue('distance') as string) ?? '1'
+      );
+      const score = 1 - distance;
+      const mapped = mapDocument(doc);
+
+      let content: string | null = null;
+      if (doc.file?.storagePath && fs.existsSync(doc.file.storagePath)) {
+        content = fs.readFileSync(doc.file.storagePath, 'utf-8');
+      }
+
+      return { ...mapped, content, score };
+    })
+    .filter((doc) => {
+      if (args.threshold !== undefined) {
+        return doc.score >= args.threshold;
+      }
+      return true;
+    });
 };

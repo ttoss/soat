@@ -1,7 +1,13 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
-import { createActor, deleteActor, getActor, listActors } from 'src/lib/actors';
+import {
+  createActor,
+  deleteActor,
+  getActor,
+  listActors,
+  updateActor,
+} from 'src/lib/actors';
 
 const actorsRouter = new Router<Context>();
 
@@ -345,6 +351,98 @@ actorsRouter.delete('/actors/:id', async (ctx: Context) => {
 
   await deleteActor({ id: ctx.params.id });
   ctx.status = 204;
+});
+
+/**
+ * @openapi
+ * /actors/{id}:
+ *   patch:
+ *     tags:
+ *       - Actors
+ *     summary: Update an actor
+ *     description: Updates an actor's name, type, or externalId
+ *     operationId: updateActor
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         description: Actor ID
+ *         schema:
+ *           type: string
+ *           example: 'act_V1StGXR8Z5jdHi6B'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: 'Updated Actor'
+ *               type:
+ *                 type: string
+ *                 example: 'assistant'
+ *               externalId:
+ *                 type: string
+ *                 example: '+15551234567'
+ *     responses:
+ *       '200':
+ *         description: Actor updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ActorRecord'
+ *       '401':
+ *         $ref: '#/components/responses/Unauthorized'
+ *       '403':
+ *         $ref: '#/components/responses/Forbidden'
+ *       '404':
+ *         description: Actor not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+actorsRouter.patch('/actors/:id', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const actor = await getActor({ id: ctx.params.id });
+
+  if (!actor) {
+    ctx.status = 404;
+    ctx.body = { error: 'Actor not found' };
+    return;
+  }
+
+  const allowed = await ctx.authUser.isAllowed(
+    actor.projectId!,
+    'actors:UpdateActor'
+  );
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const body = ctx.request.body as {
+    name?: string;
+    type?: string;
+    externalId?: string;
+  };
+
+  const updated = await updateActor({
+    id: ctx.params.id,
+    name: body.name,
+    type: body.type,
+    externalId: body.externalId,
+  });
+
+  ctx.body = updated;
 });
 
 export { actorsRouter };

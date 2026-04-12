@@ -503,4 +503,66 @@ describe('Conversations', () => {
       expect(response.status).toBe(404);
     });
   });
+
+  describe('Message content field', () => {
+    let conversationId: string;
+
+    beforeAll(async () => {
+      const convRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ projectId });
+      conversationId = convRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${conversationId}/messages`)
+        .send({ message: 'Content check message', actorId });
+    });
+
+    test('listed messages include content field', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/conversations/${conversationId}/messages`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.length).toBeGreaterThanOrEqual(1);
+      expect(response.body[0].content).toBe('Content check message');
+    });
+  });
+
+  describe('Message removal cleans up document', () => {
+    let conversationId: string;
+    let documentId: string;
+
+    beforeAll(async () => {
+      const convRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ projectId });
+      conversationId = convRes.body.id;
+
+      const msgRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${conversationId}/messages`)
+        .send({ message: 'Orphan test message', actorId });
+      documentId = msgRes.body.documentId;
+    });
+
+    test('removing a message also deletes the underlying document', async () => {
+      // Verify document exists before removal
+      const docBefore = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${documentId}`
+      );
+      expect(docBefore.status).toBe(200);
+
+      // Remove the message
+      const deleteRes = await authenticatedTestClient(userToken).delete(
+        `/api/v1/conversations/${conversationId}/messages/${documentId}`
+      );
+      expect(deleteRes.status).toBe(204);
+
+      // Verify document is also gone
+      const docAfter = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${documentId}`
+      );
+      expect(docAfter.status).toBe(404);
+    });
+  });
 });

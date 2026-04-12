@@ -283,4 +283,166 @@ describe('Files', () => {
       expect(response.status).toBe(404);
     });
   });
+
+  describe('GET /api/v1/files/:id/download/base64', () => {
+    let fileId: string;
+    const originalContent = 'Base64 download test content!';
+
+    beforeAll(async () => {
+      const fileContent = Buffer.from(originalContent);
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', fileContent, {
+          filename: 'base64dl.txt',
+          contentType: 'text/plain',
+        })
+        .field('projectId', projectId);
+      fileId = res.body.id;
+    });
+
+    test('user with permission can download a file as base64', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/files/${fileId}/download/base64`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.content).toBe(
+        Buffer.from(originalContent).toString('base64')
+      );
+      expect(response.body.filename).toBe('base64dl.txt');
+      expect(response.body.contentType).toBe('text/plain');
+      expect(response.body.size).toBe(Buffer.from(originalContent).length);
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient.get(
+        `/api/v1/files/${fileId}/download/base64`
+      );
+
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 404 for non-existent file', async () => {
+      const response = await authenticatedTestClient(adminToken).get(
+        '/api/v1/files/nonexistent-file-id/download/base64'
+      );
+
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe('POST /api/v1/files/upload/base64', () => {
+    test('user with permission can upload a file via base64', async () => {
+      const content = Buffer.from('Hello base64 upload!').toString('base64');
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload/base64')
+        .send({
+          projectId,
+          content,
+          filename: 'base64upload.txt',
+          contentType: 'text/plain',
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.id).toBeDefined();
+      expect(response.body.filename).toBe('base64upload.txt');
+      expect(response.body.contentType).toBe('text/plain');
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const content = Buffer.from('data').toString('base64');
+
+      const response = await testClient
+        .post('/api/v1/files/upload/base64')
+        .send({ projectId, content, filename: 'test.txt' });
+
+      expect(response.status).toBe(401);
+    });
+  });
+
+  describe('PATCH /api/v1/files/:id/metadata - filename update', () => {
+    let fileId: string;
+
+    beforeAll(async () => {
+      const fileContent = Buffer.from('Filename update target');
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', fileContent, {
+          filename: 'original-name.txt',
+          contentType: 'text/plain',
+        })
+        .field('projectId', projectId);
+      fileId = res.body.id;
+    });
+
+    test('user can update filename only', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/files/${fileId}/metadata`)
+        .send({ filename: 'renamed-file.txt' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.filename).toBe('renamed-file.txt');
+    });
+
+    test('user can update both filename and metadata', async () => {
+      const newMetadata = JSON.stringify({ version: 3 });
+
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/files/${fileId}/metadata`)
+        .send({ filename: 'both-updated.txt', metadata: newMetadata });
+
+      expect(response.status).toBe(200);
+      expect(response.body.filename).toBe('both-updated.txt');
+      expect(response.body.metadata).toBe(newMetadata);
+    });
+  });
+
+  describe('GET /api/v1/files - projectId filter', () => {
+    let secondProjectId: string;
+
+    beforeAll(async () => {
+      const projectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Files Filter Project' });
+      secondProjectId = projectRes.body.id;
+
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/projects/${secondProjectId}/policies`)
+        .send({ permissions: ['files:UploadFile', 'files:GetFile'] });
+
+      await authenticatedTestClient(adminToken)
+        .post(`/api/v1/projects/${secondProjectId}/members`)
+        .send({ userId, policyId: policyRes.body.id });
+
+      await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', Buffer.from('proj2 file'), {
+          filename: 'proj2.txt',
+          contentType: 'text/plain',
+        })
+        .field('projectId', secondProjectId);
+    });
+
+    test('listing with projectId returns only files in that project', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/files?projectId=${secondProjectId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBe(1);
+      expect(response.body[0].filename).toBe('proj2.txt');
+    });
+
+    test('listing without projectId returns files across projects', async () => {
+      const response =
+        await authenticatedTestClient(userToken).get('/api/v1/files');
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      // Should include files from both projects
+      expect(response.body.length).toBeGreaterThanOrEqual(2);
+    });
+  });
 });

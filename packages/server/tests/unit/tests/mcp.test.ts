@@ -17,5 +17,9 @@ describe('MCP tools/list', () => {
     expect(names).toContain('get-file');
     expect(names).toContain('create-file');
     expect(names).toContain('delete-file');
+    expect(names).toContain('update-actor');
+    expect(names).toContain('upload-file');
+    expect(names).toContain('download-file');
+    expect(names).toContain('update-file-metadata');
   });
 });

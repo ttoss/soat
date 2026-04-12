@@ -46,14 +46,15 @@ volumes:
 
 File operations are governed by per-project policies. Grant the following permissions to allow a user to perform each action:
 
-| Action                        | Permission string          |
-| ----------------------------- | -------------------------- |
-| Upload a file                 | `files:UploadFile`         |
-| Get file metadata             | `files:GetFile`            |
-| Download file content         | `files:DownloadFile`       |
-| Update metadata               | `files:UpdateFileMetadata` |
-| Create a metadata-only record | `files:CreateFile`         |
-| Delete a file                 | `files:DeleteFile`         |
+| Action                        | Permission                 | REST Endpoint                      | MCP Tool               |
+| ----------------------------- | -------------------------- | ---------------------------------- | ---------------------- |
+| List files                    | `files:ListFiles`          | `GET /api/v1/files`                | `list-files`           |
+| Get file metadata             | `files:GetFile`            | `GET /api/v1/files/:id`            | `get-file`             |
+| Create a metadata-only record | `files:CreateFile`         | `POST /api/v1/files`               | `create-file`          |
+| Upload a file                 | `files:UploadFile`         | `POST /api/v1/files/upload`        | `upload-file`          |
+| Download file content         | `files:DownloadFile`       | `GET /api/v1/files/:id/download`   | `download-file`        |
+| Update metadata               | `files:UpdateFileMetadata` | `PATCH /api/v1/files/:id/metadata` | `update-file-metadata` |
+| Delete a file                 | `files:DeleteFile`         | `DELETE /api/v1/files/:id`         | `delete-file`          |
 
 ## Operations
 
@@ -74,14 +75,51 @@ Optional fields: `metadata` (JSON string).
 
 ### Update metadata
 
-`PATCH /api/v1/files/{id}/metadata` — Replaces the `metadata` field on an existing file record.
+`PATCH /api/v1/files/{id}/metadata` — Updates the `metadata` and/or `filename` fields on an existing file record. Both fields are optional; supply at least one.
 
 Request body:
 
 ```json
-{ "metadata": "{\"author\":\"Alice\",\"tags\":[\"report\"]}" }
+{
+  "metadata": "{\"author\":\"Alice\",\"tags\":[\"report\"]}",
+  "filename": "new-name.pdf"
+}
 ```
 
 ### Delete a file
 
 `DELETE /api/v1/files/{id}` — Removes the file from disk and deletes the database record. Returns `204 No Content`.
+
+### Upload a file (Base64)
+
+`POST /api/v1/files/upload/base64` — JSON-based upload that accepts the file content as a Base64-encoded string. Useful when multipart form-data is not practical (e.g., from MCP tools).
+
+Request body:
+
+```json
+{
+  "projectId": "proj_xxx",
+  "content": "<base64-encoded-bytes>",
+  "filename": "report.pdf",
+  "contentType": "application/pdf"
+}
+```
+
+### Download a file (Base64)
+
+`GET /api/v1/files/{id}/download/base64` — Returns the file content as a Base64-encoded JSON response instead of raw bytes. Useful for MCP tool integrations.
+
+Response body:
+
+```json
+{
+  "content": "<base64-encoded-bytes>",
+  "filename": "report.pdf",
+  "contentType": "application/pdf",
+  "size": 12345
+}
+```
+
+### List files with project filter
+
+`GET /api/v1/files` accepts an optional `projectId` query parameter to filter files by project. When omitted, the server resolves accessible projects based on the caller's identity (same resolution rules as the Documents module).

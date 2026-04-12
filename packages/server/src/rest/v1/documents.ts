@@ -361,6 +361,10 @@ documentsRouter.delete('/documents/:id', async (ctx: Context) => {
  *               limit:
  *                 type: integer
  *                 example: 5
+ *               threshold:
+ *                 type: number
+ *                 description: Minimum similarity score (0-1). Only results with score >= threshold are returned.
+ *                 example: 0.7
  *     responses:
  *       '200':
  *         description: Search results
@@ -400,6 +404,7 @@ documentsRouter.post('/documents/search', async (ctx: Context) => {
     projectId?: string;
     query: string;
     limit?: number;
+    threshold?: number;
   };
 
   if (!body.query) {
@@ -423,6 +428,7 @@ documentsRouter.post('/documents/search', async (ctx: Context) => {
     projectIds,
     query: body.query,
     limit: body.limit,
+    threshold: body.threshold,
   });
 
   ctx.body = results;

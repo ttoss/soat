@@ -65,8 +65,30 @@ const registerTools = (server: McpServer) => {
       },
     },
     async ({ id }) => {
-      await apiCall('DELETE', `/documents/${id}`);
-      return { content: [{ type: 'text', text: 'Document deleted' }] };
+      try {
+        await apiCall('DELETE', `/documents/${id}`);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ id, deleted: true }),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                id,
+                deleted: false,
+                error: String(error),
+              }),
+            },
+          ],
+        };
+      }
     }
   );
 
@@ -82,11 +104,17 @@ const registerTools = (server: McpServer) => {
           .number()
           .optional()
           .describe('Maximum number of results (default: 10)'),
+        threshold: z
+          .number()
+          .optional()
+          .describe(
+            'Minimum similarity score (0-1). Only results with score >= threshold are returned.'
+          ),
       },
     },
-    async ({ projectId, query, limit }) => {
+    async ({ projectId, query, limit, threshold }) => {
       const data = await apiCall('POST', '/documents/search', {
-        body: { projectId, query, limit },
+        body: { projectId, query, limit, threshold },
       });
       return { content: [{ type: 'text', text: JSON.stringify(data) }] };
     }

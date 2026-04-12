@@ -1,5 +1,7 @@
+import fs from 'node:fs';
+
 import { db } from '../db';
-import { createDocument } from './documents';
+import { createDocument, deleteDocument } from './documents';
 
 const mapConversation = (
   conversation: InstanceType<(typeof db)['Conversation']> & {
@@ -17,14 +19,28 @@ const mapConversation = (
 
 const mapMessage = (
   message: InstanceType<(typeof db)['ConversationMessage']> & {
-    document?: InstanceType<(typeof db)['Document']>;
+    document?: InstanceType<(typeof db)['Document']> & {
+      file?: InstanceType<(typeof db)['File']>;
+    };
     actor?: InstanceType<(typeof db)['Actor']>;
   }
 ) => {
+  let content: string | null = null;
+  if (message.document?.file?.storagePath) {
+    try {
+      if (fs.existsSync(message.document.file.storagePath)) {
+        content = fs.readFileSync(message.document.file.storagePath, 'utf-8');
+      }
+    } catch {
+      // Ignore read errors
+    }
+  }
+
   return {
     documentId: message.document?.publicId,
     actorId: message.actor?.publicId,
     position: message.position,
+    content,
   };
 };
 
@@ -52,7 +68,9 @@ export const listConversations = async (args: {
       attributes: ['conversationId'],
       group: ['conversationId'],
     });
-    const conversationIds = messages.map((m) => m.conversationId);
+    const conversationIds = messages.map((m) => {
+      return m.conversationId;
+    });
     where.id = conversationIds;
   }
 
@@ -144,7 +162,11 @@ export const listConversationMessages = async (args: {
   const messages = await db.ConversationMessage.findAll({
     where: { conversationId: conversation.id },
     include: [
-      { model: db.Document, as: 'document' },
+      {
+        model: db.Document,
+        as: 'document',
+        include: [{ model: db.File, as: 'file' }],
+      },
       { model: db.Actor, as: 'actor' },
     ],
     order: [['position', 'ASC']],
@@ -247,6 +269,11 @@ export const removeConversationMessage = async (args: {
 
   await message.destroy();
 
+  // Also delete the associated document to avoid orphans (Bug #3)
+  if (document.publicId) {
+    await deleteDocument({ id: document.publicId });
+  }
+
   return { conversationId: args.conversationId, documentId: args.documentId };
 };
 
@@ -281,13 +308,15 @@ export const listConversationActors = async (args: {
     }
   }
 
-  return actors.map((actor) => ({
-    id: actor.publicId,
-    projectId: actor.project?.publicId,
-    name: actor.name,
-    type: actor.type ?? undefined,
-    externalId: actor.externalId ?? undefined,
-    createdAt: actor.createdAt,
-    updatedAt: actor.updatedAt,
-  }));
+  return actors.map((actor) => {
+    return {
+      id: actor.publicId,
+      projectId: actor.project?.publicId,
+      name: actor.name,
+      type: actor.type ?? undefined,
+      externalId: actor.externalId ?? undefined,
+      createdAt: actor.createdAt,
+      updatedAt: actor.updatedAt,
+    };
+  });
 };

@@ -93,8 +93,30 @@ const registerTools = (server: McpServer) => {
       },
     },
     async ({ id }) => {
-      await apiCall('DELETE', `/conversations/${id}`);
-      return { content: [{ type: 'text', text: 'Conversation deleted' }] };
+      try {
+        await apiCall('DELETE', `/conversations/${id}`);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ id, deleted: true }),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                id,
+                deleted: false,
+                error: String(error),
+              }),
+            },
+          ],
+        };
+      }
     }
   );
 
@@ -163,10 +185,35 @@ const registerTools = (server: McpServer) => {
       },
     },
     async ({ id, documentId }) => {
-      await apiCall('DELETE', `/conversations/${id}/messages/${documentId}`);
-      return {
-        content: [{ type: 'text', text: 'Message removed from conversation' }],
-      };
+      try {
+        await apiCall('DELETE', `/conversations/${id}/messages/${documentId}`);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                conversationId: id,
+                documentId,
+                deleted: true,
+              }),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                conversationId: id,
+                documentId,
+                deleted: false,
+                error: String(error),
+              }),
+            },
+          ],
+        };
+      }
     }
   );
 };

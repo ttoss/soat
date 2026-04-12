@@ -34,6 +34,7 @@ describe('Actors', () => {
           'actors:GetActor',
           'actors:CreateActor',
           'actors:DeleteActor',
+          'actors:UpdateActor',
         ],
       });
     policyId = policyRes.body.id;
@@ -238,6 +239,53 @@ describe('Actors', () => {
       const response = await authenticatedTestClient(adminToken).delete(
         '/api/v1/actors/act_nonexistent'
       );
+
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe('PATCH /api/v1/actors/:id', () => {
+    let actorId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ projectId, name: 'UpdateMe', type: 'customer' });
+      actorId = res.body.id;
+    });
+
+    test('user with permission can update an actor name', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/actors/${actorId}`)
+        .send({ name: 'UpdatedName' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe(actorId);
+      expect(response.body.name).toBe('UpdatedName');
+    });
+
+    test('user can update type and externalId', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/actors/${actorId}`)
+        .send({ type: 'assistant', externalId: '+15551112222' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.type).toBe('assistant');
+      expect(response.body.externalId).toBe('+15551112222');
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient
+        .patch(`/api/v1/actors/${actorId}`)
+        .send({ name: 'Hacked' });
+
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 404 for non-existent actor', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch('/api/v1/actors/act_nonexistent')
+        .send({ name: 'Ghost' });
 
       expect(response.status).toBe(404);
     });
