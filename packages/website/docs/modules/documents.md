@@ -42,8 +42,8 @@ OLLAMA_BASE_URL=http://localhost:11434
 | Field       | Type   | Description                                                   |
 | ----------- | ------ | ------------------------------------------------------------- |
 | `id`        | string | Public identifier prefixed with `doc_`                        |
-| `fileId`    | string | Public ID of the underlying File record                       |
-| `projectId` | string | Public ID of the owning project                               |
+| `fileId`    | string | ID of the underlying File record                       |
+| `projectId` | string | ID of the owning project                               |
 | `filename`  | string | Original filename (`.txt` extension)                          |
 | `size`      | number | File size in bytes                                            |
 | `content`   | string | Text content — only present in `GET /documents/:id` responses |

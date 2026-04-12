@@ -13,7 +13,7 @@ Actors are identified by an `id` prefixed with `act_`. The internal database pri
 | Field        | Type   | Description                                                                          |
 | ------------ | ------ | ------------------------------------------------------------------------------------ |
 | `id`         | string | Public identifier prefixed with `act_`                                               |
-| `projectId`  | string | Public ID of the owning project                                                      |
+| `projectId`  | string | ID of the owning project                                                      |
 | `name`       | string | Display name of the actor                                                            |
 | `type`       | string | Optional actor type (e.g. `customer`, `agent`)                                       |
 | `externalId` | string | Optional external identifier (e.g. WhatsApp phone number). Unique within the project |

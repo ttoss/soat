@@ -15,8 +15,8 @@ Conversations are identified by an `id` prefixed with `conv_`. The internal data
 | Field       | Type   | Description                                         |
 | ----------- | ------ | --------------------------------------------------- |
 | `id`        | string | Public identifier prefixed with `conv_`             |
-| `projectId` | string | Public ID of the owning project                     |
-| `actorId`   | string | Public ID of the Actor this conversation belongs to |
+| `projectId` | string | ID of the owning project                     |
+| `actorId`   | string | ID of the Actor this conversation belongs to |
 | `status`    | string | Conversation status: `open` or `closed`             |
 | `createdAt` | string | ISO 8601 creation timestamp                         |
 | `updatedAt` | string | ISO 8601 last-updated timestamp                     |
@@ -25,7 +25,7 @@ Conversations are identified by an `id` prefixed with `conv_`. The internal data
 
 | Field        | Type    | Description                                                          |
 | ------------ | ------- | -------------------------------------------------------------------- |
-| `documentId` | string  | Public ID of the Document attached as a message                      |
+| `documentId` | string  | ID of the Document attached as a message                      |
 | `position`   | integer | Zero-based position of the message in the conversation               |
 | `content`    | string  | Full text content of the message (read from the underlying document) |
 
