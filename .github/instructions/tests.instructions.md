@@ -1,0 +1,114 @@
+---
+applyTo: '**'
+description: Instructions for writing, running, and maintaining unit tests across the codebase.
+---
+
+# Test Instructions
+
+## Running Tests
+
+Run all tests for a package from the repo root:
+
+```bash
+pnpm --filter @soat/server test
+```
+
+Run tests for a specific file using `--testPathPatterns` (plural):
+
+```bash
+pnpm --filter @soat/server test --testPathPatterns=users.test.ts
+```
+
+Do **not** use `npx jest` directly or `--testPathPattern` (singular).
+
+## Test File Location and Naming
+
+- Server unit tests live in `packages/server/tests/unit/tests/`
+- Test file name must match the module: `<module>.test.ts` (e.g., `projects.test.ts`)
+- Every public lib function and every REST route must have at least one test
+
+## Test Infrastructure
+
+Tests are integration tests that run against `app.callback()` via supertest. A real PostgreSQL instance is spun up via testcontainers, configured in `setupTestsAfterEnv.ts`. No mocking of the database layer is needed.
+
+### Helpers (from `tests/unit/testClient.ts`)
+
+- `testClient` — unauthenticated supertest client
+- `authenticatedTestClient(token)` — returns a client that sets `Authorization: Bearer <token>` on every request
+- `loginAs(username, password)` — bootstrap helper that logs in and returns the token string
+
+For API key authentication, pass the raw `SDK_`-prefixed key directly to `authenticatedTestClient`.
+
+## Writing Unit Tests
+
+### Structure
+
+Group tests by HTTP method and route path using nested `describe` blocks:
+
+```ts
+describe('MyModule', () => {
+  let adminToken: string;
+  let userToken: string;
+
+  beforeAll(async () => {
+    await testClient
+      .post('/api/v1/users/bootstrap')
+      .send({ username: 'admin', password: 'supersecret' });
+
+    adminToken = await loginAs('admin', 'supersecret');
+
+    await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'alice', password: 'alicepass' });
+
+    userToken = await loginAs('alice', 'alicepass');
+  });
+
+  describe('GET /api/v1/resource', () => {
+    test('authenticated user can list resources', async () => {
+      const response =
+        await authenticatedTestClient(userToken).get('/api/v1/resource');
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient.get('/api/v1/resource');
+      expect(response.status).toBe(401);
+    });
+  });
+});
+```
+
+### Coverage Requirements
+
+Every module must cover:
+
+- Happy path for each route (correct status code and response shape)
+- `401` for unauthenticated requests
+- `403` for requests by users without required permission
+- Edge cases specific to the business logic (e.g., API key scoping, missing resources returning `404`)
+
+### Response Shape Assertions
+
+Always assert the shape of the response body, not just the status code:
+
+```ts
+expect(response.body.id).toBeDefined();
+expect(response.body.name).toBe('expected name');
+expect(response.body.password).toBeUndefined(); // sensitive fields must be absent
+```
+
+Internal database IDs must never appear in responses — assert `id` maps to `publicId`.
+
+## Smoke Test
+
+The smoke test (`tests/smoke-test.sh`) is an end-to-end shell script that runs against a live server. It requires `curl` and `jq`.
+
+### Running
+
+```bash
+pnpm run -w smoke-test
+```
+
+The script uses `set -e` and exits with a non-zero code on the first failure, printing which step failed.

@@ -21,12 +21,14 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: soat-ollama-dev-docker
+    logging:
+      driver: 'none'
     volumes:
       - ollama_cache:/root/.ollama
     entrypoint:
       - /bin/sh
       - -c
-      - 'ollama serve & sleep 5 && ollama pull qwen3-embedding:0.6b && ollama pull qwen2.5:0.5b && wait'
+      - 'ollama serve > /dev/null 2>&1 & sleep 5 && ollama pull qwen3-embedding:0.6b > /dev/null 2>&1 && ollama pull qwen2.5:0.5b > /dev/null 2>&1 && wait'
     healthcheck:
       test: ['CMD-SHELL', 'ollama list | grep qwen3-embedding']
       interval: 10s

@@ -140,51 +140,110 @@ pnpm build
 
 This uses `tsup` to compile the TypeScript code.
 
-## Manual Testing
+## Testing
 
-### REST API Endpoints
+### Running Tests
 
-To test REST API endpoints during development:
-
-1. **Start the development server:**
-
-   ```bash
-   cd packages/server
-   pnpm dev
-   ```
-
-2. **Make requests using curl to `0.0.0.0:5047`:**
-
-   **Important:** Always use `0.0.0.0` instead of `localhost` when making curl requests to avoid connection issues.
-
-   Example endpoints:
-
-   ```bash
-   # List files
-   curl -X GET http://0.0.0.0:5047/api/v1/files
-
-   # Upload a file
-   curl -X POST http://0.0.0.0:5047/api/v1/files/upload \
-     -H "Content-Type: application/json" \
-     -d '{"content":"Hello World!","options":{"contentType":"text/plain","metadata":{"filename":"test.txt"}}}'
-
-   # Get file by ID
-   curl -X GET http://0.0.0.0:5047/api/v1/files/{file-id}
-
-   # Delete file
-   curl -X DELETE http://0.0.0.0:5047/api/v1/files/{file-id}
-   ```
-
-## Unit Testing
-
-Unit tests are located in the #file:../../packages/server/tests/unit/ folder. To run the unit tests for the server package, use the following command from the root directory:
+Run all server tests from the repo root:
 
 ```bash
 pnpm --filter @soat/server test
 ```
 
-To run tests for a specific file, use the `--testPathPatterns` flag:
+Run tests for a specific file using `--testPathPatterns` (plural):
 
 ```bash
 pnpm --filter @soat/server test --testPathPatterns=users.test.ts
+```
+
+Do **not** use `npx jest` directly or `--testPathPattern` (singular).
+
+### Test File Location and Naming
+
+- Server unit tests live in `packages/server/tests/unit/tests/`
+- Test file name must match the module: `<module>.test.ts` (e.g., `projects.test.ts`)
+- Every public lib function and every REST route must have at least one test
+
+### Test Infrastructure
+
+Tests are integration tests that run against `app.callback()` via supertest. A real PostgreSQL instance is spun up via testcontainers, configured in `setupTestsAfterEnv.ts`. No mocking of the database layer is needed.
+
+#### Helpers (from `tests/unit/testClient.ts`)
+
+- `testClient` — unauthenticated supertest client
+- `authenticatedTestClient(token)` — returns a client that sets `Authorization: Bearer <token>` on every request
+- `loginAs(username, password)` — bootstrap helper that logs in and returns the token string
+
+For API key authentication, pass the raw `SDK_`-prefixed key directly to `authenticatedTestClient`.
+
+### Writing Unit Tests
+
+Group tests by HTTP method and route path using nested `describe` blocks:
+
+```ts
+describe('MyModule', () => {
+  let adminToken: string;
+  let userToken: string;
+
+  beforeAll(async () => {
+    await testClient
+      .post('/api/v1/users/bootstrap')
+      .send({ username: 'admin', password: 'supersecret' });
+
+    adminToken = await loginAs('admin', 'supersecret');
+
+    await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'alice', password: 'alicepass' });
+
+    userToken = await loginAs('alice', 'alicepass');
+  });
+
+  describe('GET /api/v1/resource', () => {
+    test('authenticated user can list resources', async () => {
+      const response =
+        await authenticatedTestClient(userToken).get('/api/v1/resource');
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient.get('/api/v1/resource');
+      expect(response.status).toBe(401);
+    });
+  });
+});
+```
+
+Every module must cover:
+
+- Happy path for each route (correct status code and response shape)
+- `401` for unauthenticated requests
+- `403` for requests by users without required permission
+- Edge cases specific to the business logic (e.g., API key scoping, missing resources returning `404`)
+
+Always assert the shape of the response body, not just the status code:
+
+```ts
+expect(response.body.id).toBeDefined();
+expect(response.body.name).toBe('expected name');
+expect(response.body.password).toBeUndefined(); // sensitive fields must be absent
+```
+
+Internal database IDs must never appear in responses — assert `id` maps to `publicId`.
+
+### Manual Testing (curl)
+
+You can run the server in dev mode and test endpoints manually with curl:
+
+```bash
+pnpm run -w dev
+```
+
+When the dev server is running, use `0.0.0.0` (not `localhost`) for curl requests:
+
+```bash
+curl -X GET http://0.0.0.0:5047/api/v1/files
+curl -X GET http://0.0.0.0:5047/api/v1/files/{file-id}
+curl -X DELETE http://0.0.0.0:5047/api/v1/files/{file-id}
 ```

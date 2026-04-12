@@ -16,6 +16,13 @@ export const listProjects = async (args: { authUser: AuthUser }) => {
     return projects.map(mapProject);
   }
 
+  if (args.authUser.apiKeyProjectId) {
+    const project = await db.Project.findOne({
+      where: { publicId: args.authUser.apiKeyProjectId },
+    });
+    return project ? [mapProject(project)] : [];
+  }
+
   const userProjects = await db.UserProject.findAll({
     where: { userId: args.authUser.id },
     include: [{ model: db.Project }],
@@ -90,7 +97,9 @@ export const listProjectPolicies = async (args: { projectId: string }) => {
     where: { projectId: project.id },
   });
 
-  return policies.map((policy) => mapPolicy(policy, project.publicId));
+  return policies.map((policy) => {
+    return mapPolicy(policy, project.publicId);
+  });
 };
 
 export const createProjectPolicy = async (args: {

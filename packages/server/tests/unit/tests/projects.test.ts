@@ -96,6 +96,59 @@ describe('Projects', () => {
       ).toBe(true);
       expect(response.body.length).toBe(1);
     });
+    describe('api key only sees its scoped project', () => {
+      let projectAId: string;
+      let rawApiKey: string;
+
+      beforeAll(async () => {
+        const projARes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/projects')
+          .send({ name: 'API Key Project A' });
+        projectAId = projARes.body.id;
+
+        const projBRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/projects')
+          .send({ name: 'API Key Project B' });
+        const projectBId = projBRes.body.id;
+
+        const policyARes = await authenticatedTestClient(adminToken)
+          .post(`/api/v1/projects/${projectAId}/policies`)
+          .send({ permissions: ['projects:GetProject'] });
+        const policyAId = policyARes.body.id;
+
+        await authenticatedTestClient(adminToken)
+          .post(`/api/v1/projects/${projectAId}/members`)
+          .send({ userId, policyId: policyAId });
+
+        const policyBRes = await authenticatedTestClient(adminToken)
+          .post(`/api/v1/projects/${projectBId}/policies`)
+          .send({ permissions: ['projects:GetProject'] });
+        const policyBId = policyBRes.body.id;
+
+        await authenticatedTestClient(adminToken)
+          .post(`/api/v1/projects/${projectBId}/members`)
+          .send({ userId, policyId: policyBId });
+
+        const apiKeyRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/api-keys')
+          .send({
+            projectId: projectAId,
+            policyId: policyAId,
+            name: 'Scoped Key',
+          });
+        rawApiKey = apiKeyRes.body.key;
+      });
+
+      test('api key user only sees the scoped project', async () => {
+        const response =
+          await authenticatedTestClient(rawApiKey).get('/api/v1/projects');
+
+        expect(response.status).toBe(200);
+        expect(Array.isArray(response.body)).toBe(true);
+        expect(response.body.length).toBe(1);
+        expect(response.body[0].id).toBe(projectAId);
+      });
+    });
   });
 
   describe('GET /api/v1/projects/:id', () => {
