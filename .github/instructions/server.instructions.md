@@ -12,30 +12,85 @@ Follow the packages documentation:
 
 ## Architecture
 
-The server src will have two folders: rest and mcp.
+The server src will have three folders: rest, mcp, and lib.
+
+### Business Logic Layer
+
+All business logic (database queries, data transformations) must live in `src/lib/`, organized by resource:
+
+- `src/lib/files.ts` - All file-related business logic (listFiles, getFile, createFile, deleteFile)
+- Additional resources follow the same pattern: `src/lib/<resource>.ts`
+
+Route handlers **must not** contain direct database calls. They are responsible only for HTTP concerns: parsing request bodies/params, calling lib functions, and setting response status/body.
+
+Lib functions **must always return plain mapped objects**, never raw model instances. This is required to avoid exposing sensitive or internal data (e.g., internal DB fields, hashed passwords, audit columns) through the API. Every function that queries the database must map the result to a plain object before returning it:
+
+### Public ID as `id`
+
+The internal database `id` (primary key) **must never be returned to the user**. Always expose `publicId` as `id` in API responses:
+
+```ts
+export const getFile = async (args: { id: string }) => {
+  const file = await db.File.findOne({ where: { publicId: args.id } });
+  if (!file) return null;
+  return {
+    id: file.publicId, // publicId is exposed as `id`
+    filename: file.filename,
+    // ... all fields explicitly mapped, internal `id` is never included
+  };
+};
+```
+
+- Route parameters and query inputs that reference a resource by ID will always be `publicId` values.
+- The database `id` column is for internal joins only and must not appear in any API response, OpenAPI schema, or MCP tool output.
 
 ### REST API Structure
 
 The REST API is organized by version and resource for better maintainability and versioning:
 
-- `src/rest/v1/documents.ts` - Contains all document-related endpoints and handlers for API version 1
-- Future versions will follow the same pattern: `src/rest/v2/documents.ts`, etc.
+- `src/rest/v1/files.ts` - Contains all file-related endpoints and handlers for API version 1
+- Future versions will follow the same pattern: `src/rest/v2/files.ts`, etc.
 
-Each version folder contains resource-specific files. Currently, only the documents resource is implemented, but additional resources can be added as separate files (e.g., `users.ts`, `analytics.ts`) within each version folder.
+Each version folder contains resource-specific files. Additional resources can be added as separate files (e.g., `users.ts`, `analytics.ts`) within each version folder.
 
 #### Router Organization
 
 API routes are not defined directly in `src/index.ts` to maintain clean separation of concerns:
 
 - `src/rest/router.ts` - Central REST API router that imports and mounts versioned routers
-- Version-specific routers (e.g., `src/rest/v1/documents.ts`) define the actual route handlers
+- Version-specific routers (e.g., `src/rest/v1/files.ts`) define the actual route handlers
 - `src/index.ts` remains focused on application setup, middleware, and mounting the main routers
 
 This structure ensures scalability and keeps the main entry point uncluttered as the API grows.
 
+#### Swagger JSDoc
+
+Every route handler **must** have an `@openapi` JSDoc block immediately before it. The JSDoc must match the handler's actual behavior (paths, status codes, request/response shapes).
+
+```ts
+/**
+ * @openapi
+ * /files:
+ *   get:
+ *     tags:
+ *       - Files
+ *     summary: List all files
+ *     operationId: listFiles
+ *     responses:
+ *       '200':
+ *         description: ...
+ */
+filesRouter.get('/files', async (ctx: Context) => { ... });
+```
+
 #### OpenAPI Documentation
 
-When modifying or adding REST API endpoints, **always update the corresponding OpenAPI specification** in `src/rest/openapi/` and follow the guidelines outlined in `src/rest/openapi/README.md`. This includes:
+When modifying or adding REST API endpoints, **always update both**:
+
+1. The `@openapi` JSDoc block on the route handler
+2. The corresponding OpenAPI specification in `src/rest/openapi/v1/<resource>.yaml`
+
+Follow the guidelines in `src/rest/openapi/README.md`. This includes:
 
 - Updating paths, schemas, request/response bodies, and error responses
 - Adding descriptive examples and operation IDs
@@ -56,23 +111,6 @@ The MCP (Model Context Protocol) folder is organized to separate concerns and ma
 - `src/mcp/prompts/` - Directory for prompt templates (if any)
 
 This structure allows for easy addition of new tools and resources while keeping the code organized and maintainable.
-
-### Core Functionality Guidelines
-
-**Important**: Core business logic and functionalities must be implemented in dedicated core packages (e.g., `@soat/documents-core`, `@soat/text-atomizer`) and never directly in the server folder.
-
-The server package should only contain:
-
-- HTTP routing and request handling
-- Middleware configuration
-- Integration with core packages
-- API versioning and structure
-
-This separation ensures:
-
-- Reusability of core logic across different interfaces (CLI, web, etc.)
-- Better testability of business logic
-- Cleaner architecture with clear boundaries
 
 ## Development
 
@@ -102,91 +140,110 @@ pnpm build
 
 This uses `tsup` to compile the TypeScript code.
 
-## Manual Testing
+## Testing
 
-### REST API Endpoints
+### Running Tests
 
-To test REST API endpoints during development:
-
-1. **Start the development server:**
-
-   ```bash
-   cd packages/server
-   pnpm dev
-   ```
-
-2. **Make requests using curl to `0.0.0.0:5047`:**
-
-   **Important:** Always use `0.0.0.0` instead of `localhost` when making curl requests to avoid connection issues.
-
-   Example endpoints:
-
-   ```bash
-   # List files
-   curl -X GET http://0.0.0.0:5047/api/v1/files
-
-   # Upload a file
-   curl -X POST http://0.0.0.0:5047/api/v1/files/upload \
-     -H "Content-Type: application/json" \
-     -d '{"content":"Hello World!","options":{"contentType":"text/plain","metadata":{"filename":"test.txt"}}}'
-
-   # Get file by ID
-   curl -X GET http://0.0.0.0:5047/api/v1/files/{file-id}
-
-   # Delete file
-   curl -X DELETE http://0.0.0.0:5047/api/v1/files/{file-id}
-   ```
-
-## Unit Testing
-
-Unit tests are located in the #file:../../packages/server/tests/unit/ folder. To run the unit tests for the server package, use the following command from the root directory:
+Run all server tests from the repo root:
 
 ```bash
 pnpm --filter @soat/server test
 ```
 
-### REST API Tests
+Run tests for a specific file using `--testPathPatterns` (plural):
 
-REST API tests are located in the #file:../../packages/server/tests/unit/tests/rest/ folder. These tests cover the various endpoints and functionalities of the REST API.
+```bash
+pnpm --filter @soat/server test --testPathPatterns=users.test.ts
+```
 
-- Each endpoint has corresponding test files that validate the expected behavior.
-- Use mocks on #file:../../packages/server/tests/unit/setupTests.ts to mock external dependencies only and isolate the tests.
-- Test the whole app, #file:../../packages/server/src/app.ts , to ensure all middleware and routes are properly integrated. Use supertest to simulate HTTP requests and validate responses.
-  In the example below, `saveFile` from `@soat/files-core` is mocked to test the file upload endpoint without actually saving a file.
+Do **not** use `npx jest` directly or `--testPathPattern` (singular).
 
-  ```ts
-  import { saveFile } from '@soat/files-core';
-  import { app } from 'src/app';
-  import request from 'supertest';
+### Test File Location and Naming
 
-  test('should create a file via REST API', async () => {
-    const savedFile = {
-      id: 'test-id',
-      filename: 'test.txt',
-      content: 'Hello, World!',
-      metadata: {},
-    };
+- Server unit tests live in `packages/server/tests/unit/tests/`
+- Test file name must match the module: `<module>.test.ts` (e.g., `projects.test.ts`)
+- Every public lib function and every REST route must have at least one test
 
-    jest.mocked(saveFile).mockResolvedValue(savedFile);
+### Test Infrastructure
 
-    const response = await request(app.callback())
-      .post('/api/v1/files/upload')
-      .send({
-        content: 'Hello, World!',
-        options: { metadata: { filename: 'test.txt' } },
-      })
-      .set('Accept', 'application/json');
+Tests are integration tests that run against `app.callback()` via supertest. A real PostgreSQL instance is spun up via testcontainers, configured in `setupTestsAfterEnv.ts`. No mocking of the database layer is needed.
 
-    expect(response.status).toBe(201);
-    expect(response.body).toEqual({
-      id: 'test-id',
-      filename: 'test.txt',
-      success: true,
+#### Helpers (from `tests/unit/testClient.ts`)
+
+- `testClient` — unauthenticated supertest client
+- `authenticatedTestClient(token)` — returns a client that sets `Authorization: Bearer <token>` on every request
+- `loginAs(username, password)` — bootstrap helper that logs in and returns the token string
+
+For API key authentication, pass the raw `SDK_`-prefixed key directly to `authenticatedTestClient`.
+
+### Writing Unit Tests
+
+Group tests by HTTP method and route path using nested `describe` blocks:
+
+```ts
+describe('MyModule', () => {
+  let adminToken: string;
+  let userToken: string;
+
+  beforeAll(async () => {
+    await testClient
+      .post('/api/v1/users/bootstrap')
+      .send({ username: 'admin', password: 'supersecret' });
+
+    adminToken = await loginAs('admin', 'supersecret');
+
+    await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'alice', password: 'alicepass' });
+
+    userToken = await loginAs('alice', 'alicepass');
+  });
+
+  describe('GET /api/v1/resource', () => {
+    test('authenticated user can list resources', async () => {
+      const response =
+        await authenticatedTestClient(userToken).get('/api/v1/resource');
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
     });
-    expect(saveFile).toHaveBeenCalledWith({
-      config: { local: { path: '/tmp/files' }, type: 'local' },
-      content: 'Hello, World!',
-      options: { metadata: { filename: 'test.txt' } },
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient.get('/api/v1/resource');
+      expect(response.status).toBe(401);
     });
   });
-  ```
+});
+```
+
+Every module must cover:
+
+- Happy path for each route (correct status code and response shape)
+- `401` for unauthenticated requests
+- `403` for requests by users without required permission
+- Edge cases specific to the business logic (e.g., API key scoping, missing resources returning `404`)
+
+Always assert the shape of the response body, not just the status code:
+
+```ts
+expect(response.body.id).toBeDefined();
+expect(response.body.name).toBe('expected name');
+expect(response.body.password).toBeUndefined(); // sensitive fields must be absent
+```
+
+Internal database IDs must never appear in responses — assert `id` maps to `publicId`.
+
+### Manual Testing (curl)
+
+You can run the server in dev mode and test endpoints manually with curl:
+
+```bash
+pnpm run -w dev
+```
+
+When the dev server is running, use `0.0.0.0` (not `localhost`) for curl requests:
+
+```bash
+curl -X GET http://0.0.0.0:5047/api/v1/files
+curl -X GET http://0.0.0.0:5047/api/v1/files/{file-id}
+curl -X DELETE http://0.0.0.0:5047/api/v1/files/{file-id}
+```

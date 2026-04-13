@@ -1,74 +1,22 @@
-import { createMcpRouter, Server as McpServer } from '@ttoss/http-server-mcp';
+import { createMcpRouter, McpServer } from '@ttoss/http-server-mcp';
 
-import pkg from '../../package.json' with { type: 'json' };
-import {
-  createDocumentTool,
-  deleteDocumentTool,
-  getDocumentTool,
-  listDocumentsTool,
-  searchDocumentsTool,
-  updateDocumentTool,
-} from './tools';
+import { registerTools } from './tools/index';
 
 const mcpServer = new McpServer({
-  name: 'soat-server',
-  version: pkg.version,
+  name: 'soat',
+  version: '1.0.0',
 });
 
-mcpServer.registerTool(
-  listDocumentsTool.name,
-  {
-    description: listDocumentsTool.description,
-    inputSchema: listDocumentsTool.inputSchema,
-  },
-  listDocumentsTool.handler
-);
+registerTools(mcpServer);
 
-mcpServer.registerTool(
-  createDocumentTool.name,
-  {
-    description: createDocumentTool.description,
-    inputSchema: createDocumentTool.inputSchema,
+const mcpRouter = createMcpRouter(mcpServer, {
+  // eslint-disable-next-line turbo/no-undeclared-env-vars
+  apiBaseUrl: `http://localhost:${process.env.PORT || 5047}/api/v1`,
+  getApiHeaders: (ctx) => {
+    return {
+      authorization: (ctx.headers.authorization as string) ?? '',
+    };
   },
-  createDocumentTool.handler
-);
-
-mcpServer.registerTool(
-  getDocumentTool.name,
-  {
-    description: getDocumentTool.description,
-    inputSchema: getDocumentTool.inputSchema,
-  },
-  getDocumentTool.handler
-);
-
-mcpServer.registerTool(
-  updateDocumentTool.name,
-  {
-    description: updateDocumentTool.description,
-    inputSchema: updateDocumentTool.inputSchema,
-  },
-  updateDocumentTool.handler
-);
-
-mcpServer.registerTool(
-  deleteDocumentTool.name,
-  {
-    description: deleteDocumentTool.description,
-    inputSchema: deleteDocumentTool.inputSchema,
-  },
-  deleteDocumentTool.handler
-);
-
-mcpServer.registerTool(
-  searchDocumentsTool.name,
-  {
-    description: searchDocumentsTool.description,
-    inputSchema: searchDocumentsTool.inputSchema,
-  },
-  searchDocumentsTool.handler
-);
-
-export const mcpRouter = createMcpRouter(mcpServer, {
-  path: '/mcp',
 });
+
+export { mcpRouter };

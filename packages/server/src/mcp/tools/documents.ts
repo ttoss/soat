@@ -1,428 +1,201 @@
-import {
-  createDocument,
-  deleteDocument,
-  type EmbeddingConfig,
-  getDocument,
-  listDocuments,
-  searchDocumentsBySimilarity,
-  type StorageConfig,
-  updateDocument,
-} from '@soat/documents-core';
-import { getConfigFromEnv } from '@soat/embeddings-core';
-import { z } from '@ttoss/http-server-mcp';
+import type { McpServer } from '@ttoss/http-server-mcp';
+import { apiCall, z } from '@ttoss/http-server-mcp';
 
-const defaultStorageConfig: StorageConfig = {
-  type: 'local',
-  local: {
-    path: '/tmp/documents',
-  },
-};
+const registerTools = (server: McpServer) => {
+  server.registerTool(
+    'list-documents',
+    {
+      description:
+        'List documents. If projectId is omitted, returns all documents accessible to the caller.',
+      inputSchema: {
+        projectId: z.string().optional().describe('Project ID (optional)'),
+        limit: z
+          .number()
+          .optional()
+          .describe('Maximum number of results to return (default 50)'),
+        offset: z
+          .number()
+          .optional()
+          .describe('Number of results to skip (default 0)'),
+      },
+    },
+    async ({ projectId, limit, offset }) => {
+      const params = new URLSearchParams();
+      if (projectId) params.set('projectId', projectId);
+      if (limit !== undefined) params.set('limit', String(limit));
+      if (offset !== undefined) params.set('offset', String(offset));
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      const data = await apiCall('GET', `/documents${qs}`);
+      return { content: [{ type: 'text', text: JSON.stringify(data) }] };
+    }
+  );
 
-const getEmbeddingConfig = (): EmbeddingConfig | undefined => {
-  try {
-    return getConfigFromEnv();
-  } catch {
-    return undefined;
-  }
-};
-
-export const listDocumentsTool = {
-  name: 'list-documents',
-  description: 'List all documents',
-  inputSchema: z.object({}),
-  handler: async () => {
-    try {
-      const documents = await listDocuments();
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              documents.map((doc) => {
-                return {
-                  id: doc.id,
-                  title: doc.title,
-                  fileId: doc.fileId,
-                  embeddingModel: doc.embeddingModel,
-                  embeddingProvider: doc.embeddingProvider,
-                  metadata: doc.metadata,
-                  createdAt: doc.createdAt,
-                  updatedAt: doc.updatedAt,
-                };
+  server.registerTool(
+    'get-document',
+    {
+      description: 'Get a document by ID including its text content',
+      inputSchema: {
+        id: z.string().describe('Document ID'),
+      },
+    },
+    async ({ id }) => {
+      try {
+        const data = await apiCall('GET', `/documents/${id}`);
+        return { content: [{ type: 'text', text: JSON.stringify(data) }] };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                error: 'not_found',
+                message: String(error),
               }),
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Error listing documents: ${
-              error instanceof Error ? error.message : 'Unknown error'
-            }`,
-          },
-        ],
-      };
-    }
-  },
-};
-
-export const createDocumentTool = {
-  name: 'create-document',
-  description: 'Create a new document',
-  inputSchema: z.object({
-    content: z.string().describe('The content of the document'),
-    title: z
-      .string()
-      .optional()
-      .describe('The title of the document (optional)'),
-    metadata: z
-      .record(z.any())
-      .optional()
-      .describe('Additional metadata for the document (optional)'),
-    generateEmbedding: z
-      .boolean()
-      .optional()
-      .describe('Whether to generate embeddings for the document (optional)'),
-  }),
-  handler: async (args: {
-    content: string;
-    title?: string;
-    metadata?: Record<string, unknown>;
-    generateEmbedding?: boolean;
-  }) => {
-    try {
-      const embeddingConfig = getEmbeddingConfig();
-
-      const document = await createDocument({
-        storageConfig: defaultStorageConfig,
-        embeddingConfig,
-        content: args.content,
-        options: {
-          title: args.title,
-          metadata: args.metadata,
-          generateEmbedding: args.generateEmbedding,
-        },
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                id: document.id,
-                title: document.title,
-                fileId: document.fileId,
-                embeddingModel: document.embeddingModel,
-                embeddingProvider: document.embeddingProvider,
-                hasEmbedding: !!document.embedding,
-                metadata: document.metadata,
-                createdAt: document.createdAt,
-                updatedAt: document.updatedAt,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Error creating document: ${
-              error instanceof Error ? error.message : 'Unknown error'
-            }`,
-          },
-        ],
-      };
-    }
-  },
-};
-
-export const getDocumentTool = {
-  name: 'get-document',
-  description: 'Get a document by ID',
-  inputSchema: z.object({
-    id: z.string().describe('The ID of the document to retrieve'),
-  }),
-  handler: async (args: { id: string }) => {
-    try {
-      const document = await getDocument({
-        storageConfig: defaultStorageConfig,
-        id: args.id,
-      });
-
-      if (!document) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: 'Document not found',
             },
           ],
         };
       }
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                id: document.id,
-                title: document.title,
-                fileId: document.fileId,
-                content: document.content?.toString(),
-                embeddingModel: document.embeddingModel,
-                embeddingProvider: document.embeddingProvider,
-                hasEmbedding: !!document.embedding,
-                metadata: document.metadata,
-                createdAt: document.createdAt,
-                updatedAt: document.updatedAt,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Error getting document: ${
-              error instanceof Error ? error.message : 'Unknown error'
-            }`,
-          },
-        ],
-      };
     }
-  },
-};
+  );
 
-export const updateDocumentTool = {
-  name: 'update-document',
-  description: 'Update an existing document',
-  inputSchema: z.object({
-    id: z.string().describe('The ID of the document to update'),
-    content: z
-      .string()
-      .optional()
-      .describe('The new content of the document (optional)'),
-    title: z
-      .string()
-      .optional()
-      .describe('The new title of the document (optional)'),
-    metadata: z
-      .record(z.any())
-      .optional()
-      .describe('The new metadata for the document (optional)'),
-    regenerateEmbedding: z
-      .boolean()
-      .optional()
-      .describe('Whether to regenerate embeddings for the document (optional)'),
-  }),
-  handler: async (args: {
-    id: string;
-    content?: string;
-    title?: string;
-    metadata?: Record<string, unknown>;
-    regenerateEmbedding?: boolean;
-  }) => {
-    try {
-      const embeddingConfig = getEmbeddingConfig();
-
-      const document = await updateDocument({
-        storageConfig: defaultStorageConfig,
-        embeddingConfig,
-        id: args.id,
-        content: args.content,
-        title: args.title,
-        metadata: args.metadata,
-        regenerateEmbedding: args.regenerateEmbedding,
+  server.registerTool(
+    'create-document',
+    {
+      description:
+        'Create a new text document with an embedding vector for semantic search. project keys infer the project automatically; JWT callers must supply projectId.',
+      inputSchema: {
+        projectId: z
+          .string()
+          .optional()
+          .describe(
+            'Project ID (required for JWT auth, optional for project keys)'
+          ),
+        content: z.string().describe('Text content of the document'),
+        filename: z.string().optional().describe('Optional filename'),
+        title: z.string().optional().describe('Optional document title'),
+        metadata: z
+          .record(z.unknown())
+          .optional()
+          .describe('Arbitrary key-value metadata'),
+        tags: z.array(z.string()).optional().describe('Optional list of tags'),
+      },
+    },
+    async ({ projectId, content, filename, title, metadata, tags }) => {
+      const data = await apiCall('POST', '/documents', {
+        body: { projectId, content, filename, title, metadata, tags },
       });
+      return { content: [{ type: 'text', text: JSON.stringify(data) }] };
+    }
+  );
 
-      if (!document) {
+  server.registerTool(
+    'delete-document',
+    {
+      description: 'Delete a document and its underlying file',
+      inputSchema: {
+        id: z.string().describe('Document ID'),
+      },
+    },
+    async ({ id }) => {
+      try {
+        await apiCall('DELETE', `/documents/${id}`);
         return {
           content: [
             {
               type: 'text',
-              text: 'Document not found',
+              text: JSON.stringify({ id, deleted: true }),
             },
           ],
         };
-      }
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                id: document.id,
-                title: document.title,
-                fileId: document.fileId,
-                content: document.content?.toString(),
-                embeddingModel: document.embeddingModel,
-                embeddingProvider: document.embeddingProvider,
-                hasEmbedding: !!document.embedding,
-                metadata: document.metadata,
-                createdAt: document.createdAt,
-                updatedAt: document.updatedAt,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Error updating document: ${
-              error instanceof Error ? error.message : 'Unknown error'
-            }`,
-          },
-        ],
-      };
-    }
-  },
-};
-
-export const deleteDocumentTool = {
-  name: 'delete-document',
-  description: 'Delete a document by ID',
-  inputSchema: z.object({
-    id: z.string().describe('The ID of the document to delete'),
-  }),
-  handler: async (args: { id: string }) => {
-    try {
-      const deleted = await deleteDocument({
-        storageConfig: defaultStorageConfig,
-        id: args.id,
-      });
-
-      if (!deleted) {
+      } catch (error) {
         return {
           content: [
             {
               type: 'text',
-              text: 'Document not found',
-            },
-          ],
-        };
-      }
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: 'Document deleted successfully',
-          },
-        ],
-      };
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Error deleting document: ${
-              error instanceof Error ? error.message : 'Unknown error'
-            }`,
-          },
-        ],
-      };
-    }
-  },
-};
-
-export const searchDocumentsTool = {
-  name: 'search-documents',
-  description: 'Search documents by similarity using embeddings',
-  inputSchema: z.object({
-    query: z.string().describe('The search query'),
-    limit: z
-      .number()
-      .optional()
-      .describe('Maximum number of documents to return (optional)'),
-    threshold: z
-      .number()
-      .optional()
-      .describe('Similarity threshold (optional)'),
-  }),
-  handler: async (args: {
-    query: string;
-    limit?: number;
-    threshold?: number;
-  }) => {
-    try {
-      const embeddingConfig = getEmbeddingConfig();
-      if (!embeddingConfig) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: 'Embedding configuration is required for search. Set EMBEDDINGS_OLLAMA_MODEL or EMBEDDINGS_OPENAI_KEY',
-            },
-          ],
-        };
-      }
-
-      const documents = await searchDocumentsBySimilarity({
-        storageConfig: defaultStorageConfig,
-        embeddingConfig,
-        query: args.query,
-        options: {
-          limit: args.limit,
-          threshold: args.threshold,
-        },
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              documents.map((doc) => {
-                return {
-                  id: doc.id,
-                  title: doc.title,
-                  fileId: doc.fileId,
-                  content: doc.content?.toString(),
-                  embeddingModel: doc.embeddingModel,
-                  embeddingProvider: doc.embeddingProvider,
-                  metadata: doc.metadata,
-                  createdAt: doc.createdAt,
-                  updatedAt: doc.updatedAt,
-                };
+              text: JSON.stringify({
+                id,
+                deleted: false,
+                error: String(error),
               }),
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Error searching documents: ${
-              error instanceof Error ? error.message : 'Unknown error'
-            }`,
-          },
-        ],
-      };
+            },
+          ],
+        };
+      }
     }
-  },
+  );
+
+  server.registerTool(
+    'search-documents',
+    {
+      description:
+        'Perform semantic search over documents using cosine similarity. If projectId is omitted, searches across all accessible projects.',
+      inputSchema: {
+        projectId: z.string().optional().describe('Project ID (optional)'),
+        query: z.string().describe('Natural language search query'),
+        limit: z
+          .number()
+          .optional()
+          .describe('Maximum number of results (default: 10)'),
+        threshold: z
+          .number()
+          .optional()
+          .describe(
+            'Minimum similarity score (0-1). Only results with score >= threshold are returned.'
+          ),
+        tags: z
+          .array(z.string())
+          .optional()
+          .describe('Filter to documents with any of these tags'),
+      },
+    },
+    async ({ projectId, query, limit, threshold, tags }) => {
+      const data = await apiCall('POST', '/documents/search', {
+        body: { projectId, query, limit, threshold, tags },
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(data) }] };
+    }
+  );
+
+  server.registerTool(
+    'update-document',
+    {
+      description:
+        'Update a document by ID. Can update content (re-embeds), title, metadata, or tags.',
+      inputSchema: {
+        id: z.string().describe('Document ID'),
+        content: z
+          .string()
+          .optional()
+          .describe('New text content (re-computes the embedding)'),
+        title: z.string().optional().describe('New title'),
+        metadata: z
+          .record(z.unknown())
+          .optional()
+          .describe('New metadata object'),
+        tags: z.array(z.string()).optional().describe('New list of tags'),
+      },
+    },
+    async ({ id, content, title, metadata, tags }) => {
+      try {
+        const data = await apiCall('PATCH', `/documents/${id}`, {
+          body: { content, title, metadata, tags },
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(data) }] };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                error: 'not_found',
+                message: String(error),
+              }),
+            },
+          ],
+        };
+      }
+    }
+  );
 };
+
+export { registerTools };

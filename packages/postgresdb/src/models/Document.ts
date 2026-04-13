@@ -1,31 +1,67 @@
-import { Column, DataType, Model, Table } from '@ttoss/postgresdb';
+import {
+  BelongsTo,
+  Column,
+  DataType,
+  ForeignKey,
+  Model,
+  Table,
+} from '@ttoss/postgresdb';
 
-@Table({ tableName: 'documents' })
+import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
+import { File } from './File';
+
+@Table({
+  tableName: 'documents',
+  hooks: {
+    beforeValidate: (instance: Document) => {
+      if (!instance.publicId) {
+        instance.publicId = generatePublicId(PUBLIC_ID_PREFIXES.document);
+      }
+    },
+  },
+})
 export class Document extends Model {
   @Column({
-    type: DataType.UUID,
-    primaryKey: true,
-    defaultValue: DataType.UUIDV4,
+    type: DataType.STRING(32),
+    unique: true,
+    allowNull: false,
   })
-  declare id: string;
+  declare publicId: string;
 
-  @Column({ type: DataType.STRING })
-  declare title?: string;
+  @ForeignKey(() => {
+    return File;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: false, unique: true })
+  declare fileId: number;
 
-  @Column({ type: DataType.UUID })
-  declare fileId: string;
+  @BelongsTo(() => {
+    return File;
+  })
+  declare file: File;
 
-  @Column({ type: DataType.STRING })
-  declare embeddingModel?: string;
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare title: string | null;
 
-  @Column({ type: DataType.STRING })
-  declare embeddingProvider?: string;
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+  })
+  declare metadata: string | null;
 
-  @Column({ type: DataType.VECTOR(1536) })
-  declare embedding?: number[];
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  declare tags: Record<string, string> | null;
 
-  @Column({ type: DataType.TEXT })
-  declare metadata?: string; // JSON string
+  @Column({
+    type: DataType.VECTOR(1024),
+    allowNull: true,
+  })
+  declare embedding: number[] | null;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

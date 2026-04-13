@@ -22,6 +22,11 @@ Agents working on the website package must adhere to the following guidelines to
 - **Tone and Voice**: Write in a technical, confident, and concise manner as specified in the BRANDBOOK.md. Avoid unnecessary jargon while maintaining technical accuracy.
 - **Navigation**: Ensure all new pages and sections are properly integrated into the navigation system and sidebars.
 
+## Module Documentation
+
+- **Permission Actions**: Each module doc owns its permission table in a `## Permissions` section. The table must have four columns: **Action**, **Permission**, **REST Endpoint**, and **MCP Tool**. `iam.md` explains the `resource:Action` format and wildcards but does **not** list individual actions — it links to each module's `## Permissions` section instead.
+- **Keep in sync**: When a new permission action is added to the server, add a row to the relevant module doc's permissions table and, if it introduces a new module, add a link in `iam.md`.
+
 ## Technical Requirements
 
 - **API Documentation**: When generating or updating API documentation, ensure it is comprehensive and follows the standards outlined in the website package.

@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: SOAT Files API
   version: 1.0.0
-  description: API para gerenciar arquivos (Files resource)
+  description: API for managing files (Files resource)
   contact:
     name: SOAT Team
     url: https://github.com/ttoss/soat
@@ -14,26 +14,74 @@ paths:
     get:
       tags:
         - Files
-      summary: Lista todos os arquivos
-      description: Retorna uma lista com todos os arquivos armazenados
+      summary: List all files
+      description: Returns a list of all stored files
       operationId: listFiles
       responses:
         '200':
-          description: Lista de arquivos retornada com sucesso
+          description: List of files returned successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  files:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/FileRecord'
+                type: array
+                items:
+                  $ref: '#/components/schemas/FileRecord'
         '500':
-          description: Erro interno do servidor
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - Files
+      summary: Create a file
+      description: Creates a new file record in the system
+      operationId: createFile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - storageType
+                - storagePath
+              properties:
+                filename:
+                  type: string
+                  description: Name of the file
+                  example: 'document.pdf'
+                contentType:
+                  type: string
+                  description: MIME type of the file
+                  example: 'application/pdf'
+                size:
+                  type: integer
+                  description: File size in bytes
+                  example: 1024
+                storageType:
+                  type: string
+                  enum: [local, s3, gcs]
+                  description: Storage backend type
+                  example: 'local'
+                storagePath:
+                  type: string
+                  description: Path where the file is stored
+                  example: '/uploads/document.pdf'
+                metadata:
+                  type: string
+                  description: JSON string with additional metadata
+                  example: '{"author":"John"}'
+      responses:
+        '201':
+          description: File created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileRecord'
+        '500':
+          description: Internal server error
           content:
             application/json:
               schema:
@@ -42,107 +90,78 @@ paths:
     post:
       tags:
         - Files
-      summary: Faz upload de um arquivo
-      description: Cria um novo arquivo no sistema
+      summary: Upload a file
+      description: Uploads a file to the server and stores it in the configured storage directory
       operationId: uploadFile
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
               type: object
               required:
-                - content
+                - file
+                - projectId
               properties:
-                content:
+                file:
                   type: string
-                  description: Conteúdo do arquivo
-                  example: 'Hello World!'
-                options:
-                  type: object
-                  properties:
-                    contentType:
-                      type: string
-                      example: text/plain
-                    metadata:
-                      type: object
-                      additionalProperties: true
-                      example:
-                        filename: test.txt
+                  format: binary
+                  description: File content
+                projectId:
+                  type: string
+                  description: Project ID to associate the file with
+                  example: 'proj_V1StGXR8Z5jdHi6B'
+                metadata:
+                  type: string
+                  description: Additional metadata as a JSON string
+                  example: '{"author":"John"}'
       responses:
-        '200':
-          description: Arquivo criado com sucesso
+        '201':
+          description: File uploaded successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  file:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        example: 'abc123'
+                $ref: '#/components/schemas/FileRecord'
         '400':
-          description: Requisição inválida
+          description: Missing file or invalid project
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Erro interno do servidor
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /files/{id}:
     get:
       tags:
         - Files
-      summary: Obtém um arquivo por ID
-      description: Retorna os dados e metadados de um arquivo específico
-      operationId: getFileById
+      summary: Get a file by ID
+      description: Returns the data and metadata of a specific file
+      operationId: getFile
       parameters:
         - name: id
           in: path
           required: true
-          description: ID do arquivo
+          description: File ID
           schema:
             type: string
             example: 'abc123'
       responses:
         '200':
-          description: Arquivo encontrado
+          description: File found
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  file:
-                    type: object
-                    description: Conteúdo do arquivo
-                  record:
-                    $ref: '#/components/schemas/FileRecord'
-        '400':
-          description: Requisição inválida
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/FileRecord'
         '404':
-          description: Arquivo não encontrado
+          description: File not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
-          description: Erro interno do servidor
+          description: Internal server error
           content:
             application/json:
               schema:
@@ -150,42 +169,108 @@ paths:
     delete:
       tags:
         - Files
-      summary: Deleta um arquivo
-      description: Remove um arquivo do sistema pelo ID
+      summary: Delete a file
+      description: Removes a file from the system by ID
       operationId: deleteFile
       parameters:
         - name: id
           in: path
           required: true
-          description: ID do arquivo a ser deletado
+          description: ID of the file to delete
           schema:
             type: string
             example: 'abc123'
       responses:
-        '200':
-          description: Arquivo deletado com sucesso
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-        '400':
-          description: Requisição inválida
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+        '204':
+          description: File deleted successfully
         '404':
-          description: Arquivo não encontrado
+          description: File not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
-          description: Erro interno do servidor
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /files/{id}/download:
+    get:
+      tags:
+        - Files
+      summary: Download a file
+      description: Streams the file content to the client
+      operationId: downloadFile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: File ID
+          schema:
+            type: string
+            example: 'fil_abc123'
+      responses:
+        '200':
+          description: File content
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /files/{id}/metadata:
+    patch:
+      tags:
+        - Files
+      summary: Update file metadata
+      description: Updates the metadata field of a file
+      operationId: updateFileMetadata
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: File ID
+          schema:
+            type: string
+            example: 'fil_abc123'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                metadata:
+                  type: string
+                  description: New metadata as a JSON string
+                  example: '{"author":"Jane","tags":["report"]}'
+                filename:
+                  type: string
+                  description: New filename for the file
+                  example: 'renamed-file.txt'
+      responses:
+        '200':
+          description: Metadata updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileRecord'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: File not found
           content:
             application/json:
               schema:
@@ -194,34 +279,62 @@ components:
   schemas:
     FileRecord:
       type: object
-      description: Metadados de um arquivo armazenado
+      description: Stored file metadata
       properties:
         id:
           type: string
-          description: Identificador único do arquivo
-        name:
+          description: Unique file identifier
+          example: 'abc123'
+        filename:
           type: string
-          description: Nome do arquivo
-        size:
-          type: integer
-          description: Tamanho em bytes
+          description: Name of the file
+          example: 'document.pdf'
         contentType:
           type: string
-          description: Tipo MIME do arquivo
+          description: MIME type of the file
+          example: 'application/pdf'
+        size:
+          type: integer
+          description: File size in bytes
+          example: 1024
+        storageType:
+          type: string
+          enum: [local, s3, gcs]
+          description: Storage backend type
+          example: 'local'
+        storagePath:
+          type: string
+          description: Path where the file is stored
+          example: '/uploads/document.pdf'
+        metadata:
+          type: string
+          description: JSON string with additional metadata
+          example: '{"author":"John"}'
         createdAt:
           type: string
           format: date-time
-          description: Data de criação
-        metadata:
-          type: object
-          additionalProperties: true
-          description: Metadados adicionais
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
     ErrorResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: false
         error:
           type: string
-          description: Mensagem de erro
+          description: Error message
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example: 'File not found'

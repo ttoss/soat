@@ -1,8 +1,33 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
 import type * as Preset from '@docusaurus/preset-classic';
 import type { Config } from '@docusaurus/types';
 import { themes as prismThemes } from 'prism-react-renderer';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
+
+const buildOpenApiConfig = () => {
+  const specsDir = path.resolve(__dirname, '../server/src/rest/openapi/v1');
+  const files = fs.readdirSync(specsDir).filter((f) => {
+    return f.endsWith('.yaml');
+  });
+  return Object.fromEntries(
+    files.map((file) => {
+      const name = path.basename(file, '.yaml');
+      return [
+        name,
+        {
+          specPath: `../server/src/rest/openapi/v1/${file}`,
+          outputDir: `docs/api/${name}`,
+          sidebarOptions: { groupPathsBy: 'tag' },
+          hideSendButton: false,
+          showInfoPage: false,
+        },
+      ];
+    })
+  );
+};
 
 const config: Config = {
   title: 'SOAT',
@@ -73,24 +98,7 @@ const config: Config = {
       {
         id: 'api',
         docsPluginId: 'classic',
-        config: {
-          files: {
-            specPath: '../server/src/rest/openapi/v1/files.yaml',
-            outputDir: 'docs/api/files',
-            sidebarOptions: {
-              groupPathsBy: 'tag',
-            },
-            hideSendButton: false,
-          },
-          documents: {
-            specPath: '../server/src/rest/openapi/v1/documents.yaml',
-            outputDir: 'docs/api/documents',
-            sidebarOptions: {
-              groupPathsBy: 'tag',
-            },
-            hideSendButton: false,
-          },
-        },
+        config: buildOpenApiConfig(),
       },
     ],
   ],
@@ -113,16 +121,16 @@ const config: Config = {
         {
           type: 'docSidebar',
           sidebarId: 'tutorialSidebar',
-          position: 'right',
+          position: 'left',
           label: 'Docs',
         },
         {
           type: 'docSidebar',
           sidebarId: 'apiSidebar',
-          position: 'right',
+          position: 'left',
           label: 'API',
         },
-        { to: '/blog', label: 'Blog', position: 'right' },
+        { to: '/blog', label: 'Blog', position: 'left' },
         {
           href: 'https://github.com/ttoss/soat',
           label: 'GitHub',
@@ -138,7 +146,7 @@ const config: Config = {
           items: [
             {
               label: 'Documentation',
-              to: '/docs/intro',
+              to: '/docs/Introduction',
             },
           ],
         },

@@ -1,0 +1,223 @@
+openapi: 3.0.3
+info:
+  title: SOAT Actors API
+  version: 1.0.0
+  description: API for managing actors (e.g. WhatsApp contacts) associated with projects
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: http://0.0.0.0:5047/api/v1
+    description: Development server
+paths:
+  /actors:
+    get:
+      tags:
+        - Actors
+      summary: List actors
+      description: Returns all actors the caller has access to. If projectId is provided, returns only actors in that project. project keys are scoped to a single project automatically. JWT users without projectId receive actors across all their accessible projects.
+      operationId: listActors
+      parameters:
+        - name: projectId
+          in: query
+          required: false
+          description: Project ID (optional)
+          schema:
+            type: string
+            example: 'proj_V1StGXR8Z5jdHi6B'
+        - name: externalId
+          in: query
+          required: false
+          description: External ID to filter by (e.g. WhatsApp phone number)
+          schema:
+            type: string
+            example: '+15551234567'
+      responses:
+        '200':
+          description: List of actors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActorRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - Actors
+      summary: Create an actor
+      description: Creates a new actor. project keys automatically infer the project from the key's scope; JWT callers must supply projectId.
+      operationId: createActor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                projectId:
+                  type: string
+                  description: Project ID. Required for JWT auth; omit when using an project key.
+                  example: 'proj_V1StGXR8Z5jdHi6B'
+                name:
+                  type: string
+                  example: 'Alice'
+                type:
+                  type: string
+                  description: Optional actor type (e.g. 'customer', 'agent')
+                  example: 'customer'
+                externalId:
+                  type: string
+                  description: Optional external identifier (e.g. WhatsApp phone number). Must be unique within a project.
+                  example: '+15551234567'
+      responses:
+        '201':
+          description: Actor created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorRecord'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /actors/{id}:
+    get:
+      tags:
+        - Actors
+      summary: Get an actor by ID
+      description: Returns an actor by its ID
+      operationId: getActor
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Actor ID
+          schema:
+            type: string
+            example: 'act_V1StGXR8Z5jdHi6B'
+      responses:
+        '200':
+          description: Actor found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Actor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Actors
+      summary: Delete an actor
+      description: Deletes an actor by its ID
+      operationId: deleteActor
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Actor ID
+          schema:
+            type: string
+            example: 'act_V1StGXR8Z5jdHi6B'
+      responses:
+        '204':
+          description: Actor deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Actor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    ActorRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Actor ID
+          example: 'act_V1StGXR8Z5jdHi6B'
+        projectId:
+          type: string
+          description: Project ID
+          example: 'proj_V1StGXR8Z5jdHi6B'
+        name:
+          type: string
+          example: 'Alice'
+        type:
+          type: string
+          nullable: true
+          description: Actor type (e.g. 'customer', 'agent')
+          example: 'customer'
+        externalId:
+          type: string
+          nullable: true
+          description: External identifier (e.g. WhatsApp phone number)
+          example: '+15551234567'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: 'Actor not found'
