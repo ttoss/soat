@@ -44,5 +44,3 @@ By default, deleting a secret that is still referenced by one or more AI provide
 | Create secret | `secrets:CreateSecret` | `POST /api/v1/secrets`             | `create-secret` |
 | Update secret | `secrets:UpdateSecret` | `PATCH /api/v1/secrets/:secretId`  | `update-secret` |
 | Delete secret | `secrets:DeleteSecret` | `DELETE /api/v1/secrets/:secretId` | `delete-secret` |
-
-See the [API Reference](../api/secrets/list-secrets) for full endpoint details, request/response schemas, and status codes.

@@ -49,5 +49,3 @@ Valid values for the `provider` field:
 | Create provider | `aiProviders:CreateAiProvider` | `POST /api/v1/ai-providers`                 | `create-ai-provider` |
 | Update provider | `aiProviders:UpdateAiProvider` | `PATCH /api/v1/ai-providers/:aiProviderId`  | `update-ai-provider` |
 | Delete provider | `aiProviders:DeleteAiProvider` | `DELETE /api/v1/ai-providers/:aiProviderId` | `delete-ai-provider` |
-
-See the [API Reference](../api/ai-providers/list-ai-providers) for full endpoint details, request/response schemas, and status codes.

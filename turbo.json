@@ -1,6 +1,5 @@
 {
   "$schema": "./node_modules/turbo/schema.json",
-  "globalEnv": ["DATABASE_*"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
