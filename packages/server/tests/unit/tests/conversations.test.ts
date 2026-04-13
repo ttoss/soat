@@ -4,12 +4,6 @@ import path from 'node:path';
 
 import { authenticatedTestClient, loginAs, testClient } from '../testClient';
 
-jest.mock('src/lib/embedding', () => {
-  return {
-    getEmbedding: jest.fn().mockResolvedValue(Array(1024).fill(0.1)),
-  };
-});
-
 describe('Conversations', () => {
   let adminToken: string;
   let userToken: string;
@@ -162,7 +156,9 @@ describe('Conversations', () => {
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.data)).toBe(true);
       expect(
-        response.body.data.some((c: { id: string }) => c.id === filteredConvId)
+        response.body.data.some((c: { id: string }) => {
+          return c.id === filteredConvId;
+        })
       ).toBe(true);
     });
 
@@ -325,9 +321,9 @@ describe('Conversations', () => {
 
       expect(listRes.status).toBe(200);
       expect(
-        listRes.body.data.some(
-          (m: { documentId: string }) => m.documentId === addedDocumentId
-        )
+        listRes.body.data.some((m: { documentId: string }) => {
+          return m.documentId === addedDocumentId;
+        })
       ).toBe(true);
     });
 
@@ -383,9 +379,9 @@ describe('Conversations', () => {
         `/api/v1/conversations/${conversationId}/messages`
       );
       expect(
-        listRes.body.data.some(
-          (m: { documentId: string }) => m.documentId === secondDocumentId
-        )
+        listRes.body.data.some((m: { documentId: string }) => {
+          return m.documentId === secondDocumentId;
+        })
       ).toBe(false);
     });
 
@@ -483,7 +479,9 @@ describe('Conversations', () => {
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBe(2);
-      const ids = response.body.map((a: { id: string }) => a.id);
+      const ids = response.body.map((a: { id: string }) => {
+        return a.id;
+      });
       expect(ids).toContain(actorId);
       expect(ids).toContain(secondActorIdForActorsTest);
     });

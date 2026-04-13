@@ -4,12 +4,6 @@ import path from 'node:path';
 
 import { authenticatedTestClient, loginAs, testClient } from '../testClient';
 
-jest.mock('src/lib/embedding', () => {
-  return {
-    getEmbedding: jest.fn().mockResolvedValue(Array(1024).fill(0.1)),
-  };
-});
-
 describe('Documents', () => {
   let adminToken: string;
   let userToken: string;
@@ -450,7 +444,9 @@ describe('Documents', () => {
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
-      const ids = response.body.map((d: { id: string }) => d.id);
+      const ids = response.body.map((d: { id: string }) => {
+        return d.id;
+      });
       expect(ids).toContain(taggedDocId);
     });
 
@@ -460,7 +456,9 @@ describe('Documents', () => {
         .send({ projectId, query: 'tag-filtered', tags: ['no-such-tag-xyz'] });
 
       expect(response.status).toBe(200);
-      const ids = response.body.map((d: { id: string }) => d.id);
+      const ids = response.body.map((d: { id: string }) => {
+        return d.id;
+      });
       expect(ids).not.toContain(taggedDocId);
     });
   });

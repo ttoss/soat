@@ -1,3 +1,20 @@
+jest.mock('ollama', () => {
+  return {
+    Ollama: jest.fn().mockImplementation(() => {
+      return {
+        embed: jest.fn().mockResolvedValue({
+          embeddings: [Array(1024).fill(0.1)],
+        }),
+        chat: jest.fn().mockResolvedValue(
+          (async function* () {
+            yield { message: { content: 'mock', role: 'assistant' } };
+          })()
+        ),
+      };
+    }),
+  };
+});
+
 import { models } from '@soat/postgresdb';
 import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
