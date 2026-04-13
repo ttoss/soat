@@ -33,7 +33,12 @@ services:
       start_period: 30s
 
   server:
-    build: .
+    build:
+      context: .
+      cache_from:
+        - type=gha
+      cache_to:
+        - type=gha,mode=max
     depends_on:
       database:
         condition: service_healthy
