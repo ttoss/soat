@@ -44,6 +44,8 @@ jobs:
 
       - name: Build, test and deploy
         run: pnpm turbo run deploy
+        env:
+          CARLIN_BRANCH: ${{ github.event.pull_request.head.ref }}
 
       - name: Deploy report
         run: pnpm turbo run deploy-report
