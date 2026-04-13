@@ -1,5 +1,5 @@
 {
-  "name": "website",
+  "name": "@soat/website",
   "version": "0.0.0-alpha.2",
   "private": true,
   "scripts": {

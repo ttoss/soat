@@ -1,0 +1,34 @@
+name: closed-branch
+
+on:
+  delete:
+
+jobs:
+  closed-branch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Delete branch stacks
+        run: pnpm turbo run deploy
+        env:
+          CARLIN_BRANCH: ${{ github.event.pull_request.head.ref || github.event.ref }}
+          CARLIN_DESTROY: true
