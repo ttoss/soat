@@ -15,9 +15,5 @@
       "env": ["AWS_*", "CARLIN_*", "ENVIRONMENT"],
       "outputs": [".carlin/**"]
     },
-    "deploy-report": {
-      "dependsOn": ["deploy"],
-      "outputs": []
-    }
   }
 }
