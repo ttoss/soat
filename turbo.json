@@ -8,6 +8,14 @@
     "test": {
       "dependsOn": ["^build"],
       "outputs": []
+    },
+    "deploy": {
+      "dependsOn": ["build", "test"],
+      "outputs": []
+    },
+    "deploy-report": {
+      "dependsOn": ["deploy"],
+      "outputs": []
     }
   }
 }

@@ -8,9 +8,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-test:
-    name: Build and Test
+  build-test-and-deploy:
+    name: Build, Test and Deploy
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
 
     steps:
       - uses: actions/checkout@v6
@@ -33,8 +35,22 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build and test
-        run: pnpm turbo run build test
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Build, test and deploy
+        run: pnpm turbo run deploy
+
+      - name: Deploy report
+        run: pnpm turbo run deploy-report
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CARLIN_BRANCH: ${{ github.event.pull_request.head.ref }}
 
   smoke-test:
     name: Smoke Tests
@@ -71,14 +87,14 @@ jobs:
     name: All Checks Passed
     runs-on: ubuntu-latest
     needs:
-      - build-and-test
+      - build-test-and-deploy
       - smoke-test
     if: always()
 
     steps:
       - name: Check all jobs passed
         run: |
-          if [[ "${{ needs.build-and-test.result }}" != "success" || \
+          if [[ "${{ needs.build-test-and-deploy.result }}" != "success" || \
                 "${{ needs.smoke-test.result }}" != "success" ]]; then
             echo "One or more jobs failed."
             exit 1
