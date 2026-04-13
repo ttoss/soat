@@ -1,5 +1,6 @@
 {
   "$schema": "./node_modules/turbo/schema.json",
+  "concurrency": "4",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -11,7 +12,8 @@
     },
     "deploy": {
       "dependsOn": ["build", "test"],
-      "outputs": []
+      "env": ["AWS_*", "CARLIN_*", "ENVIRONMENT"],
+      "outputs": [".carlin/**"]
     },
     "deploy-report": {
       "dependsOn": ["deploy"],
