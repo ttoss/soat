@@ -13,8 +13,6 @@ SOAT uses a policy-based access control model. Every API request is authenticate
 The IAM module covers:
 
 - **Users** — identity management, roles, and JWT authentication (see [Users](#users) below)
-- **Projects** — multi-tenant namespaces with membership and policy attachment (see [Projects](projects.md))
-- **Project Keys** — scoped project keys for programmatic access (see [Project Keys](projects.md#project-keys))
 - **Policy Documents** — structured permission rules attached to memberships and project keys
 - **Policy Engine** — evaluation logic that resolves allow/deny decisions at request time
 
@@ -36,7 +34,6 @@ A policy document is a JSON object containing one or more statements. Each state
 
 ```json
 {
-  "version": "2025-01-01",
   "statement": [
     {
       "effect": "Allow",
@@ -187,128 +184,6 @@ PATCH  /api/v1/<resource>/:id/tags    Merge tags
 GET    /api/v1/<resource>/:id/tags    Get tags
 ```
 
-## Roles
-
-| Role    | Description                                                                 |
-| ------- | --------------------------------------------------------------------------- |
-| `admin` | Full access to all resources and operations. Bypasses policy evaluation.    |
-| `user`  | Access determined by project membership policies. Must be a project member. |
-
----
-
-## Users
-
-The Users section covers identity management and authentication. Users authenticate via username and password and receive a JWT for subsequent requests.
-
-A User has a username, a hashed password, and a role (`admin` or `user`). Users are identified by an `id` prefixed with `user_`. Passwords are hashed with bcrypt and never returned in API responses.
-
-The first user is created via the **bootstrap** endpoint, which is only available when no users exist. Subsequent users are created by admins.
-
-### User Data Model
-
-| Field       | Type   | Description                             |
-| ----------- | ------ | --------------------------------------- |
-| `id`        | string | Public identifier prefixed with `user_` |
-| `username`  | string | Unique username                         |
-| `role`      | string | `"admin"` or `"user"`                   |
-| `createdAt` | string | ISO 8601 creation timestamp             |
-| `updatedAt` | string | ISO 8601 last-updated timestamp         |
-
-Sensitive fields (`passwordHash`, internal numeric ID) are never exposed in responses.
-
-### Bootstrap
-
-The `POST /api/v1/users/bootstrap` endpoint creates the first admin user. It is only available when the user table is empty and returns `409 Conflict` if any user already exists. This endpoint does not require authentication.
-
-### User Authentication
-
-Users authenticate with `POST /api/v1/users/login`, providing `username` and `password`. On success, the server returns a signed JWT containing the user's public ID and role. The token is passed as `Authorization: Bearer <token>` on subsequent requests.
-
-### User Permissions
-
-User management is restricted to admin users. These operations are not governed by the policy engine — they require the `admin` role directly.
-
-| Action         | Permission      | REST Endpoint                  | MCP Tool |
-| -------------- | --------------- | ------------------------------ | -------- |
-| List users     | Admin only      | `GET /api/v1/users`            | —        |
-| Get user by ID | Admin only      | `GET /api/v1/users/:id`        | —        |
-| Create user    | Admin only      | `POST /api/v1/users`           | —        |
-| Delete user    | Admin only      | `DELETE /api/v1/users/:id`     | —        |
-| Bootstrap      | Unauthenticated | `POST /api/v1/users/bootstrap` | —        |
-| Login          | Unauthenticated | `POST /api/v1/users/login`     | —        |
-
-### User Operations
-
-#### Bootstrap the First Admin
-
-```http
-POST /api/v1/users/bootstrap
-Content-Type: application/json
-
-{
-  "username": "admin",
-  "password": "supersecret"
-}
-```
-
-**Response** `201 Created`
-
-```json
-{
-  "id": "user_abc123",
-  "username": "admin",
-  "role": "admin",
-  "createdAt": "2025-01-01T00:00:00.000Z",
-  "updatedAt": "2025-01-01T00:00:00.000Z"
-}
-```
-
-#### Login
-
-```http
-POST /api/v1/users/login
-Content-Type: application/json
-
-{
-  "username": "admin",
-  "password": "supersecret"
-}
-```
-
-**Response** `200 OK`
-
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIs..."
-}
-```
-
-#### Create a User
-
-```http
-POST /api/v1/users
-Authorization: Bearer <admin-token>
-Content-Type: application/json
-
-{
-  "username": "alice",
-  "password": "alicepass",
-  "role": "user"
-}
-```
-
-**Response** `201 Created`
-
-```json
-{
-  "id": "user_def456",
-  "username": "alice",
-  "role": "user",
-  "createdAt": "2025-01-01T00:00:00.000Z",
-  "updatedAt": "2025-01-01T00:00:00.000Z"
-}
-```
-
 ## Examples
 
 ### Full Admin Policy
@@ -394,3 +269,55 @@ Allow only actors tagged `"internal"`:
   ]
 }
 ```
+
+---
+
+## Users
+
+The Users section covers identity management and authentication. Users authenticate via username and password and receive a JWT for subsequent requests.
+
+A User has a username, a hashed password, and a role (`admin` or `user`). Users are identified by an `id` prefixed with `user_`. Passwords are hashed with bcrypt and never returned in API responses.
+
+The first user is created via the **bootstrap** endpoint, which is only available when no users exist. Subsequent users are created by admins.
+
+## Roles
+
+| Role    | Description                                                                 |
+| ------- | --------------------------------------------------------------------------- |
+| `admin` | Full access to all resources and operations. Bypasses policy evaluation.    |
+| `user`  | Access determined by project membership policies. Must be a project member. |
+
+### User Data Model
+
+| Field       | Type   | Description                             |
+| ----------- | ------ | --------------------------------------- |
+| `id`        | string | Public identifier prefixed with `user_` |
+| `username`  | string | Unique username                         |
+| `role`      | string | `"admin"` or `"user"`                   |
+| `createdAt` | string | ISO 8601 creation timestamp             |
+| `updatedAt` | string | ISO 8601 last-updated timestamp         |
+
+Sensitive fields (`passwordHash`, internal numeric ID) are never exposed in responses.
+
+### Bootstrap
+
+The `POST /api/v1/users/bootstrap` endpoint creates the first admin user. It is only available when the user table is empty and returns `409 Conflict` if any user already exists. This endpoint does not require authentication.
+
+### User Authentication
+
+Users authenticate with `POST /api/v1/users/login`, providing `username` and `password`. On success, the server returns a signed JWT containing the user's public ID and role. The token is passed as `Authorization: Bearer <token>` on subsequent requests.
+
+### User Permissions
+
+User management is restricted to admin users. These operations are not governed by the policy engine — they require the `admin` role directly.
+
+| Action         | Permission      | REST Endpoint                  | MCP Tool |
+| -------------- | --------------- | ------------------------------ | -------- |
+| List users     | Admin only      | `GET /api/v1/users`            | —        |
+| Get user by ID | Admin only      | `GET /api/v1/users/:id`        | —        |
+| Create user    | Admin only      | `POST /api/v1/users`           | —        |
+| Delete user    | Admin only      | `DELETE /api/v1/users/:id`     | —        |
+| Bootstrap      | Unauthenticated | `POST /api/v1/users/bootstrap` | —        |
+| Login          | Unauthenticated | `POST /api/v1/users/login`     | —        |
+
+See the [API Reference](../api/users/list-users) for full endpoint details, request/response schemas, and status codes.
