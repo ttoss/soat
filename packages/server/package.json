@@ -15,7 +15,6 @@
     "@ttoss/http-server": "^0.5.9",
     "@ttoss/http-server-mcp": "^0.11.1",
     "@ttoss/postgresdb": "^0.8.0",
-    "@types/koa__multer": "^2.0.8",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.1",
     "jsonwebtoken": "^9.0.3",
