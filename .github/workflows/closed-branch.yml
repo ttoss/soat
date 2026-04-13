@@ -28,6 +28,6 @@ jobs:
           aws-region: us-east-1
 
       - name: Delete branch stacks
-        run: pnpm turbo run deploy --only --destroy
+        run: pnpm turbo run deploy --only -- --destroy
         env:
           CARLIN_BRANCH: ${{ github.event.ref }}
