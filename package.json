@@ -31,6 +31,7 @@
     "@ttoss/eslint-config": "^1.26.14",
     "@ttoss/monorepo": "^1.29.8",
     "@types/node": "^25.5.2",
+    "carlin": "^1.48.3",
     "eslint": "^9.39.1",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
