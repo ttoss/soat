@@ -13,6 +13,8 @@ export const PUBLIC_ID_PREFIXES = {
   document: 'doc_',
   actor: 'act_',
   conversation: 'conv_',
+  secret: 'sec_',
+  aiProvider: 'aip_',
 } as const;
 
 /**

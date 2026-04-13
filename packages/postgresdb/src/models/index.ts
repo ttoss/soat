@@ -1,4 +1,5 @@
 export { Actor } from './Actor';
+export { AiProvider } from './AiProvider';
 export { ProjectKey } from './ProjectKey';
 export { Conversation } from './Conversation';
 export { ConversationMessage } from './ConversationMessage';
@@ -6,5 +7,6 @@ export { Document } from './Document';
 export { File } from './File';
 export { Project } from './Project';
 export { ProjectPolicy } from './ProjectPolicy';
+export { Secret } from './Secret';
 export { User } from './User';
 export { UserProject } from './UserProject';
