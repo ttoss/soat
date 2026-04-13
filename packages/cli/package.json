@@ -2,8 +2,7 @@
   "name": "@soat/cli",
   "version": "0.0.0-alpha.2",
   "scripts": {
-    "build": "tsup",
-    "test": "jest --projects tests/unit"
+    "build": "tsup"
   },
   "dependencies": {
     "@ttoss/logger": "^0.7.1",
