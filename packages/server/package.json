@@ -6,7 +6,6 @@
     "build": "tsup",
     "dev": "tsx watch src/server.ts",
     "lint-openapi": "spectral lint packages/server/src/rest/openapi/**/*.yaml",
-    "pretest": "pnpm run --filter @soat/postgresdb build",
     "test": "jest --projects tests/unit"
   },
   "type": "module",
