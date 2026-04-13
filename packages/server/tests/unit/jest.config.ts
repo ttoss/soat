@@ -5,6 +5,7 @@ export default jestUnitConfig({
   coverageThreshold: {
     global: {},
   },
+  maxWorkers: 2,
   // setupFiles: ['<rootDir>/setupTests.ts'],
   setupFilesAfterEnv: ['<rootDir>/setupTestsAfterEnv.ts'],
   transformIgnorePatterns: getTransformIgnorePatterns({
