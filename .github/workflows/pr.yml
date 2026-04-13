@@ -80,6 +80,23 @@ jobs:
           path: ~/.ollama/models
           key: ollama-models-qwen3-embedding-0.6b-qwen2.5-0.5b
 
+      - name: Cache Ollama Docker image
+        id: cache-ollama-image
+        uses: actions/cache@v5
+        with:
+          path: /tmp/ollama-image.tar
+          key: ollama-docker-image-${{ hashFiles('docker-compose.test.yml') }}
+
+      - name: Load Ollama Docker image from cache
+        if: steps.cache-ollama-image.outputs.cache-hit == 'true'
+        run: docker load -i /tmp/ollama-image.tar
+
+      - name: Pull and save Ollama Docker image
+        if: steps.cache-ollama-image.outputs.cache-hit != 'true'
+        run: |
+          docker pull ollama/ollama:latest
+          docker save ollama/ollama:latest -o /tmp/ollama-image.tar
+
       - name: Run smoke tests
         run: pnpm run smoke-test
         env:
