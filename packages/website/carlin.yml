@@ -1,1 +1,8 @@
 appendIndexHtml: true
+hostedZoneName: ttoss.dev
+
+environments:
+  Production:
+    aliases:
+      - soat.ttoss.dev
+    cloudfront: true

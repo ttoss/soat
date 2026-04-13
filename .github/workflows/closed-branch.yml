@@ -1,11 +1,6 @@
 name: closed-branch
 
 on:
-  pull_request:
-    branches:
-      - main
-    types:
-      - closed
   delete:
 
 jobs:
