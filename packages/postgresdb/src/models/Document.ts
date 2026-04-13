@@ -52,10 +52,10 @@ export class Document extends Model {
   declare metadata: string | null;
 
   @Column({
-    type: DataType.ARRAY(DataType.TEXT),
+    type: DataType.JSONB,
     allowNull: true,
   })
-  declare tags: string[] | null;
+  declare tags: Record<string, string> | null;
 
   @Column({
     type: DataType.VECTOR(1024),

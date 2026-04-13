@@ -1,6 +1,6 @@
 import { authenticatedTestClient, loginAs, testClient } from '../testClient';
 
-describe('API Keys', () => {
+describe('Project Keys', () => {
   let adminToken: string;
   let aliceToken: string;
   let aliceId: string;
@@ -41,10 +41,10 @@ describe('API Keys', () => {
       .send({ userId: aliceId, policyId });
   });
 
-  describe('POST /api/v1/api-keys', () => {
+  describe('POST /api/v1/project-keys', () => {
     test('returns 401 if not authenticated', async () => {
       const response = await testClient
-        .post('/api/v1/api-keys')
+        .post('/api/v1/project-keys')
         .send({ projectId, policyId, name: 'My Key' });
 
       expect(response.status).toBe(401);
@@ -52,7 +52,7 @@ describe('API Keys', () => {
 
     test('returns 400 if required fields are missing', async () => {
       const response = await authenticatedTestClient(aliceToken)
-        .post('/api/v1/api-keys')
+        .post('/api/v1/project-keys')
         .send({ name: 'My Key' });
 
       expect(response.status).toBe(400);
@@ -60,7 +60,7 @@ describe('API Keys', () => {
 
     test('returns 400 if project does not exist', async () => {
       const response = await authenticatedTestClient(aliceToken)
-        .post('/api/v1/api-keys')
+        .post('/api/v1/project-keys')
         .send({ projectId: 'proj_nonexistent', policyId, name: 'My Key' });
 
       expect(response.status).toBe(400);
@@ -68,7 +68,7 @@ describe('API Keys', () => {
 
     test('returns 403 if user is not a member of the project', async () => {
       const response = await authenticatedTestClient(bobToken)
-        .post('/api/v1/api-keys')
+        .post('/api/v1/project-keys')
         .send({ projectId, policyId, name: 'Bob Key' });
 
       expect(response.status).toBe(403);
@@ -86,7 +86,7 @@ describe('API Keys', () => {
       const otherPolicyId = otherPolicyRes.body.id;
 
       const response = await authenticatedTestClient(aliceToken)
-        .post('/api/v1/api-keys')
+        .post('/api/v1/project-keys')
         .send({ projectId, policyId: otherPolicyId, name: 'My Key' });
 
       expect(response.status).toBe(400);
@@ -94,7 +94,7 @@ describe('API Keys', () => {
 
     test('returns 201 and the full key on success', async () => {
       const response = await authenticatedTestClient(aliceToken)
-        .post('/api/v1/api-keys')
+        .post('/api/v1/project-keys')
         .send({ projectId, policyId, name: 'Alice Key' });
 
       expect(response.status).toBe(201);
@@ -107,45 +107,47 @@ describe('API Keys', () => {
     });
   });
 
-  describe('GET /api/v1/api-keys/:id', () => {
-    let apiKeyId: string;
+  describe('GET /api/v1/project-keys/:id', () => {
+    let projectKeyId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(aliceToken)
-        .post('/api/v1/api-keys')
+        .post('/api/v1/project-keys')
         .send({ projectId, policyId, name: 'Get Test Key' });
-      apiKeyId = res.body.id;
+      projectKeyId = res.body.id;
     });
 
     test('returns 401 if not authenticated', async () => {
-      const response = await testClient.get(`/api/v1/api-keys/${apiKeyId}`);
+      const response = await testClient.get(
+        `/api/v1/project-keys/${projectKeyId}`
+      );
 
       expect(response.status).toBe(401);
     });
 
-    test('returns 404 if api key does not exist', async () => {
+    test('returns 404 if project key does not exist', async () => {
       const response = await authenticatedTestClient(aliceToken).get(
-        '/api/v1/api-keys/key_nonexistent'
+        '/api/v1/project-keys/key_nonexistent'
       );
 
       expect(response.status).toBe(404);
     });
 
-    test('returns 403 if user does not own the api key', async () => {
+    test('returns 403 if user does not own the project key', async () => {
       const response = await authenticatedTestClient(bobToken).get(
-        `/api/v1/api-keys/${apiKeyId}`
+        `/api/v1/project-keys/${projectKeyId}`
       );
 
       expect(response.status).toBe(403);
     });
 
-    test('returns 200 and api key data without the full key', async () => {
+    test('returns 200 and project key data without the full key', async () => {
       const response = await authenticatedTestClient(aliceToken).get(
-        `/api/v1/api-keys/${apiKeyId}`
+        `/api/v1/project-keys/${projectKeyId}`
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.id).toBe(apiKeyId);
+      expect(response.body.id).toBe(projectKeyId);
       expect(response.body.name).toBe('Get Test Key');
       expect(response.body.keyPrefix).toBeDefined();
       expect(response.body.key).toBeUndefined();
@@ -154,15 +156,15 @@ describe('API Keys', () => {
     });
   });
 
-  describe('PUT /api/v1/api-keys/:id', () => {
-    let apiKeyId: string;
+  describe('PUT /api/v1/project-keys/:id', () => {
+    let projectKeyId: string;
     let newPolicyId: string;
 
     beforeAll(async () => {
       const keyRes = await authenticatedTestClient(aliceToken)
-        .post('/api/v1/api-keys')
+        .post('/api/v1/project-keys')
         .send({ projectId, policyId, name: 'Update Test Key' });
-      apiKeyId = keyRes.body.id;
+      projectKeyId = keyRes.body.id;
 
       const newPolicyRes = await authenticatedTestClient(adminToken)
         .post(`/api/v1/projects/${projectId}/policies`)
@@ -172,7 +174,7 @@ describe('API Keys', () => {
 
     test('returns 401 if not authenticated', async () => {
       const response = await testClient
-        .put(`/api/v1/api-keys/${apiKeyId}`)
+        .put(`/api/v1/project-keys/${projectKeyId}`)
         .send({ policyId: newPolicyId });
 
       expect(response.status).toBe(401);
@@ -180,7 +182,7 @@ describe('API Keys', () => {
 
     test('returns 400 if policyId is missing', async () => {
       const response = await authenticatedTestClient(aliceToken)
-        .put(`/api/v1/api-keys/${apiKeyId}`)
+        .put(`/api/v1/project-keys/${projectKeyId}`)
         .send({});
 
       expect(response.status).toBe(400);
@@ -188,23 +190,23 @@ describe('API Keys', () => {
 
     test('returns 400 if policy does not exist', async () => {
       const response = await authenticatedTestClient(aliceToken)
-        .put(`/api/v1/api-keys/${apiKeyId}`)
+        .put(`/api/v1/project-keys/${projectKeyId}`)
         .send({ policyId: 'policy_nonexistent' });
 
       expect(response.status).toBe(400);
     });
 
-    test('returns 404 if api key does not exist', async () => {
+    test('returns 404 if project key does not exist', async () => {
       const response = await authenticatedTestClient(aliceToken)
-        .put('/api/v1/api-keys/key_nonexistent')
+        .put('/api/v1/project-keys/key_nonexistent')
         .send({ policyId: newPolicyId });
 
       expect(response.status).toBe(404);
     });
 
-    test('returns 403 if user does not own the api key', async () => {
+    test('returns 403 if user does not own the project key', async () => {
       const response = await authenticatedTestClient(bobToken)
-        .put(`/api/v1/api-keys/${apiKeyId}`)
+        .put(`/api/v1/project-keys/${projectKeyId}`)
         .send({ policyId: newPolicyId });
 
       expect(response.status).toBe(403);
@@ -222,19 +224,19 @@ describe('API Keys', () => {
       const otherPolicyId = otherPolicyRes.body.id;
 
       const response = await authenticatedTestClient(aliceToken)
-        .put(`/api/v1/api-keys/${apiKeyId}`)
+        .put(`/api/v1/project-keys/${projectKeyId}`)
         .send({ policyId: otherPolicyId });
 
       expect(response.status).toBe(400);
     });
 
-    test('returns 200 and the updated api key', async () => {
+    test('returns 200 and the updated project key', async () => {
       const response = await authenticatedTestClient(aliceToken)
-        .put(`/api/v1/api-keys/${apiKeyId}`)
+        .put(`/api/v1/project-keys/${projectKeyId}`)
         .send({ policyId: newPolicyId });
 
       expect(response.status).toBe(200);
-      expect(response.body.id).toBe(apiKeyId);
+      expect(response.body.id).toBe(projectKeyId);
       expect(response.body.policyId).toBe(newPolicyId);
     });
   });

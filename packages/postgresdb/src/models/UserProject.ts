@@ -8,7 +8,6 @@ import {
 } from '@ttoss/postgresdb';
 
 import { Project } from './Project';
-import { ProjectPolicy } from './ProjectPolicy';
 import { User } from './User';
 
 @Table({
@@ -41,19 +40,12 @@ export class UserProject extends Model {
   )
   declare project: Project;
 
-  @ForeignKey(() => {
-    return ProjectPolicy;
+  @Column({
+    type: DataType.ARRAY(DataType.INTEGER),
+    allowNull: false,
+    defaultValue: [],
   })
-  @Column({ type: DataType.INTEGER, allowNull: false })
-  declare policyId: number;
-
-  @BelongsTo(
-    () => {
-      return ProjectPolicy;
-    },
-    { onDelete: 'CASCADE' }
-  )
-  declare policy: ProjectPolicy;
+  declare policyIds: number[];
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

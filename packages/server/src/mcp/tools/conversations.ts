@@ -67,13 +67,13 @@ const registerTools = (server: McpServer) => {
     'create-conversation',
     {
       description:
-        'Create a new conversation. API keys infer the project automatically; JWT callers must supply projectId.',
+        'Create a new conversation. project keys infer the project automatically; JWT callers must supply projectId.',
       inputSchema: {
         projectId: z
           .string()
           .optional()
           .describe(
-            'Project ID (required for JWT auth, optional for API keys)'
+            'Project ID (required for JWT auth, optional for project keys)'
           ),
         status: z
           .string()

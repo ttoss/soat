@@ -13,16 +13,16 @@ import { ProjectPolicy } from './ProjectPolicy';
 import { User } from './User';
 
 @Table({
-  tableName: 'api_keys',
+  tableName: 'project_keys',
   hooks: {
-    beforeValidate: (instance: ApiKey) => {
+    beforeValidate: (instance: ProjectKey) => {
       if (!instance.publicId) {
-        instance.publicId = generatePublicId(PUBLIC_ID_PREFIXES.apiKey);
+        instance.publicId = generatePublicId(PUBLIC_ID_PREFIXES.projectKey);
       }
     },
   },
 })
-export class ApiKey extends Model {
+export class ProjectKey extends Model {
   @Column({
     type: DataType.STRING(32),
     unique: true,
@@ -76,7 +76,7 @@ export class ApiKey extends Model {
   declare name: string;
 
   /**
-   * First 8 characters of the raw API key. Stored in plaintext to allow
+   * First 8 characters of the raw project key. Stored in plaintext to allow
    * fast DB lookup before running bcrypt.compare against keyHash.
    */
   @Column({
@@ -86,7 +86,7 @@ export class ApiKey extends Model {
   declare keyPrefix: string;
 
   /**
-   * Bcrypt hash of the raw API key value (soat_sk_<random>).
+   * Bcrypt hash of the raw project key value (pk_<random>).
    * The raw key is shown once at creation and never stored in plaintext.
    */
   @Column({

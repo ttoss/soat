@@ -1,5 +1,7 @@
 import type { AuthUser } from '../Context';
 import { db } from '../db';
+import type { PolicyDocument } from './iam';
+import { validatePolicyDocument } from './iam';
 
 const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
   return {
@@ -16,9 +18,9 @@ export const listProjects = async (args: { authUser: AuthUser }) => {
     return projects.map(mapProject);
   }
 
-  if (args.authUser.apiKeyProjectId) {
+  if (args.authUser.projectKeyProjectId) {
     const project = await db.Project.findOne({
-      where: { publicId: args.authUser.apiKeyProjectId },
+      where: { publicId: args.authUser.projectKeyProjectId },
     });
     return project ? [mapProject(project)] : [];
   }
@@ -28,7 +30,7 @@ export const listProjects = async (args: { authUser: AuthUser }) => {
     include: [{ model: db.Project }],
   });
 
-  return userProjects.map((up) => {
+  return userProjects.map((up: InstanceType<(typeof db)['UserProject']>) => {
     return mapProject(up.project as InstanceType<(typeof db)['Project']>);
   });
 };
@@ -75,10 +77,29 @@ const mapPolicy = (
   policy: InstanceType<(typeof db)['ProjectPolicy']>,
   projectPublicId: string
 ) => {
+  const doc = policy.document as PolicyDocument | undefined;
+  const permissions =
+    doc?.statement
+      ?.filter((s) => {
+        return s.effect === 'Allow';
+      })
+      .flatMap((s) => {
+        return s.action;
+      }) ?? [];
+  const notPermissions =
+    doc?.statement
+      ?.filter((s) => {
+        return s.effect === 'Deny';
+      })
+      .flatMap((s) => {
+        return s.action;
+      }) ?? [];
   return {
     id: policy.publicId,
-    permissions: policy.permissions,
-    notPermissions: policy.notPermissions,
+    name: policy.name,
+    description: policy.description,
+    permissions,
+    notPermissions,
     projectId: projectPublicId,
     createdAt: policy.createdAt,
     updatedAt: policy.updatedAt,
@@ -97,15 +118,107 @@ export const listProjectPolicies = async (args: { projectId: string }) => {
     where: { projectId: project.id },
   });
 
-  return policies.map((policy) => {
+  return policies.map((policy: InstanceType<(typeof db)['ProjectPolicy']>) => {
     return mapPolicy(policy, project.publicId);
   });
 };
 
 export const createProjectPolicy = async (args: {
   projectId: string;
-  permissions: string[];
-  notPermissions?: string[];
+  name?: string;
+  description?: string;
+  document: PolicyDocument;
+}): Promise<
+  | ReturnType<typeof mapPolicy>
+  | 'not_found'
+  | { invalid: true; errors: string[] }
+> => {
+  const validation = validatePolicyDocument(args.document);
+  if (!validation.valid) {
+    return { invalid: true, errors: validation.errors };
+  }
+
+  const project = await db.Project.findOne({
+    where: { publicId: args.projectId },
+  });
+  if (!project) {
+    return 'not_found';
+  }
+
+  const policy = await db.ProjectPolicy.create({
+    projectId: project.id,
+    name: args.name ?? null,
+    description: args.description ?? null,
+    document: args.document as object,
+  });
+
+  return mapPolicy(policy, project.publicId);
+};
+
+export const updateProjectPolicy = async (args: {
+  projectId: string;
+  policyId: string;
+  name?: string;
+  description?: string;
+  document: PolicyDocument;
+}): Promise<
+  | ReturnType<typeof mapPolicy>
+  | 'not_found'
+  | { invalid: true; errors: string[] }
+> => {
+  const validation = validatePolicyDocument(args.document);
+  if (!validation.valid) {
+    return { invalid: true, errors: validation.errors };
+  }
+
+  const project = await db.Project.findOne({
+    where: { publicId: args.projectId },
+  });
+  if (!project) {
+    return 'not_found';
+  }
+
+  const policy = await db.ProjectPolicy.findOne({
+    where: { publicId: args.policyId, projectId: project.id },
+  });
+  if (!policy) {
+    return 'not_found';
+  }
+
+  await policy.update({
+    name: args.name ?? policy.name,
+    description: args.description ?? policy.description,
+    document: args.document as object,
+  });
+
+  return mapPolicy(policy, project.publicId);
+};
+
+export const deleteProjectPolicy = async (args: {
+  projectId: string;
+  policyId: string;
+}): Promise<'not_found' | true> => {
+  const project = await db.Project.findOne({
+    where: { publicId: args.projectId },
+  });
+  if (!project) {
+    return 'not_found';
+  }
+
+  const policy = await db.ProjectPolicy.findOne({
+    where: { publicId: args.policyId, projectId: project.id },
+  });
+  if (!policy) {
+    return 'not_found';
+  }
+
+  await policy.destroy();
+  return true;
+};
+
+export const getProjectPolicy = async (args: {
+  projectId: string;
+  policyId: string;
 }) => {
   const project = await db.Project.findOne({
     where: { publicId: args.projectId },
@@ -114,11 +227,12 @@ export const createProjectPolicy = async (args: {
     return null;
   }
 
-  const policy = await db.ProjectPolicy.create({
-    projectId: project.id,
-    permissions: args.permissions,
-    notPermissions: args.notPermissions || [],
+  const policy = await db.ProjectPolicy.findOne({
+    where: { publicId: args.policyId, projectId: project.id },
   });
+  if (!policy) {
+    return null;
+  }
 
   return mapPolicy(policy, project.publicId);
 };
@@ -126,7 +240,7 @@ export const createProjectPolicy = async (args: {
 export const addUserToProject = async (args: {
   projectId: string;
   userId: string;
-  policyId: string;
+  policyIds?: string[];
 }) => {
   const project = await db.Project.findOne({
     where: { publicId: args.projectId },
@@ -140,11 +254,19 @@ export const addUserToProject = async (args: {
     return null;
   }
 
-  const policy = await db.ProjectPolicy.findOne({
-    where: { publicId: args.policyId },
-  });
-  if (!policy) {
-    return null;
+  let resolvedPolicyIds: number[] = [];
+  if (args.policyIds && args.policyIds.length > 0) {
+    const policies = await db.ProjectPolicy.findAll({
+      where: { publicId: args.policyIds, projectId: project.id },
+    });
+    if (policies.length !== args.policyIds.length) {
+      return null;
+    }
+    resolvedPolicyIds = policies.map(
+      (p: InstanceType<(typeof db)['ProjectPolicy']>) => {
+        return p.id as number;
+      }
+    );
   }
 
   // Check if membership already exists
@@ -153,17 +275,90 @@ export const addUserToProject = async (args: {
   });
 
   if (existing) {
-    // Update existing membership
-    await existing.update({ policyId: policy.id });
+    await existing.update({ policyIds: resolvedPolicyIds });
     return true;
   }
 
-  // Create new membership
   await db.UserProject.create({
     userId: user.id,
     projectId: project.id,
-    policyId: policy.id,
+    policyIds: resolvedPolicyIds,
   });
 
   return true;
+};
+
+export const updateUserProjectPolicies = async (args: {
+  projectId: string;
+  userId: string;
+  policyIds: string[];
+}) => {
+  const project = await db.Project.findOne({
+    where: { publicId: args.projectId },
+  });
+  if (!project) {
+    return 'not_found' as const;
+  }
+
+  const user = await db.User.findOne({ where: { publicId: args.userId } });
+  if (!user) {
+    return 'not_found' as const;
+  }
+
+  const membership = await db.UserProject.findOne({
+    where: { userId: user.id, projectId: project.id },
+  });
+  if (!membership) {
+    return 'not_found' as const;
+  }
+
+  const policies = await db.ProjectPolicy.findAll({
+    where: { publicId: args.policyIds, projectId: project.id },
+  });
+  if (policies.length !== args.policyIds.length) {
+    return 'not_found' as const;
+  }
+
+  await membership.update({
+    policyIds: policies.map((p: InstanceType<(typeof db)['ProjectPolicy']>) => {
+      return p.id as number;
+    }),
+  });
+  return true;
+};
+
+export const getUserProjectPolicies = async (args: {
+  projectId: string;
+  userId: string;
+}) => {
+  const project = await db.Project.findOne({
+    where: { publicId: args.projectId },
+  });
+  if (!project) {
+    return null;
+  }
+
+  const user = await db.User.findOne({ where: { publicId: args.userId } });
+  if (!user) {
+    return null;
+  }
+
+  const membership = await db.UserProject.findOne({
+    where: { userId: user.id, projectId: project.id },
+  });
+  if (!membership) {
+    return null;
+  }
+
+  if (!membership.policyIds || membership.policyIds.length === 0) {
+    return [];
+  }
+
+  const policies = await db.ProjectPolicy.findAll({
+    where: { id: membership.policyIds, projectId: project.id },
+  });
+
+  return policies.map((p: InstanceType<(typeof db)['ProjectPolicy']>) => {
+    return mapPolicy(p, project.publicId);
+  });
 };

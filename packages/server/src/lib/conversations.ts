@@ -12,6 +12,7 @@ const mapConversation = (
     id: conversation.publicId,
     projectId: conversation.project?.publicId,
     status: conversation.status,
+    tags: conversation.tags ?? undefined,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
   };
@@ -73,9 +74,11 @@ export const listConversations = async (args: {
       attributes: ['conversationId'],
       group: ['conversationId'],
     });
-    const conversationIds = messages.map((m) => {
-      return m.conversationId;
-    });
+    const conversationIds = messages.map(
+      (m: InstanceType<(typeof db)['ConversationMessage']>) => {
+        return m.conversationId;
+      }
+    );
     where.id = conversationIds;
   }
 
@@ -153,6 +156,44 @@ export const deleteConversation = async (args: { id: string }) => {
   await conversation.destroy();
 
   return { id: args.id };
+};
+
+export const getConversationTags = async (args: { id: string }) => {
+  const conversation = await db.Conversation.findOne({
+    where: { publicId: args.id },
+  });
+
+  if (!conversation) {
+    return null;
+  }
+
+  return conversation.tags ?? {};
+};
+
+export const updateConversationTags = async (args: {
+  id: string;
+  tags: Record<string, string>;
+  merge?: boolean;
+}) => {
+  const conversation = await db.Conversation.findOne({
+    where: { publicId: args.id },
+  });
+
+  if (!conversation) {
+    return null;
+  }
+
+  const newTags = args.merge
+    ? { ...(conversation.tags ?? {}), ...args.tags }
+    : args.tags;
+  await conversation.update({ tags: newTags });
+
+  const updated = await db.Conversation.findOne({
+    where: { publicId: args.id },
+    include: [{ model: db.Project, as: 'project' }],
+  });
+
+  return mapConversation(updated!);
 };
 
 export const listConversationMessages = async (args: {

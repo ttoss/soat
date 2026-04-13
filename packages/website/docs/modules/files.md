@@ -48,7 +48,7 @@ File operations are governed by per-project policies. Grant the following permis
 
 | Action                        | Permission                 | REST Endpoint                      | MCP Tool               |
 | ----------------------------- | -------------------------- | ---------------------------------- | ---------------------- |
-| List files                    | `files:ListFiles`          | `GET /api/v1/files`                | `list-files`           |
+| List files                    | `files:GetFile`            | `GET /api/v1/files`                | `list-files`           |
 | Get file metadata             | `files:GetFile`            | `GET /api/v1/files/:id`            | `get-file`             |
 | Create a metadata-only record | `files:CreateFile`         | `POST /api/v1/files`               | `create-file`          |
 | Upload a file                 | `files:UploadFile`         | `POST /api/v1/files/upload`        | `upload-file`          |

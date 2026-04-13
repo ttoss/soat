@@ -5,9 +5,12 @@ import {
   createActor,
   deleteActor,
   getActor,
+  getActorTags,
   listActors,
   updateActor,
+  updateActorTags,
 } from 'src/lib/actors';
+import { buildSrn } from 'src/lib/iam';
 
 const actorsRouter = new Router<Context>();
 
@@ -191,10 +194,23 @@ actorsRouter.get('/actors/:id', async (ctx: Context) => {
     return;
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    actor.projectId!,
-    'actors:GetActor'
-  );
+  const srnGet = buildSrn({
+    projectPublicId: actor.projectId!,
+    resourceType: 'actor',
+    resourceId: actor.id,
+  });
+  const contextGet: Record<string, string> = { 'soat:ResourceType': 'actor' };
+  if (actor.tags) {
+    for (const [k, v] of Object.entries(actor.tags)) {
+      contextGet[`soat:ResourceTag/${k}`] = v as string;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: actor.projectId!,
+    action: 'actors:GetActor',
+    resource: srnGet,
+    context: contextGet,
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -285,8 +301,8 @@ actorsRouter.post('/actors', async (ctx: Context) => {
 
   let resolvedProjectPublicId = body.projectId;
   if (!resolvedProjectPublicId) {
-    if (ctx.authUser.apiKeyProjectId) {
-      resolvedProjectPublicId = ctx.authUser.apiKeyProjectId;
+    if (ctx.authUser.projectKeyProjectId) {
+      resolvedProjectPublicId = ctx.authUser.projectKeyProjectId;
     } else {
       ctx.status = 400;
       ctx.body = { error: 'projectId is required' };
@@ -294,10 +310,10 @@ actorsRouter.post('/actors', async (ctx: Context) => {
     }
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    resolvedProjectPublicId,
-    'actors:CreateActor'
-  );
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: resolvedProjectPublicId,
+    action: 'actors:CreateActor',
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -391,10 +407,23 @@ actorsRouter.delete('/actors/:id', async (ctx: Context) => {
     return;
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    actor.projectId!,
-    'actors:DeleteActor'
-  );
+  const srnDel = buildSrn({
+    projectPublicId: actor.projectId!,
+    resourceType: 'actor',
+    resourceId: actor.id,
+  });
+  const contextDel: Record<string, string> = { 'soat:ResourceType': 'actor' };
+  if (actor.tags) {
+    for (const [k, v] of Object.entries(actor.tags)) {
+      contextDel[`soat:ResourceTag/${k}`] = v as string;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: actor.projectId!,
+    action: 'actors:DeleteActor',
+    resource: srnDel,
+    context: contextDel,
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -471,10 +500,23 @@ actorsRouter.patch('/actors/:id', async (ctx: Context) => {
     return;
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    actor.projectId!,
-    'actors:UpdateActor'
-  );
+  const srnUpd = buildSrn({
+    projectPublicId: actor.projectId!,
+    resourceType: 'actor',
+    resourceId: actor.id,
+  });
+  const contextUpd: Record<string, string> = { 'soat:ResourceType': 'actor' };
+  if (actor.tags) {
+    for (const [k, v] of Object.entries(actor.tags)) {
+      contextUpd[`soat:ResourceTag/${k}`] = v as string;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: actor.projectId!,
+    action: 'actors:UpdateActor',
+    resource: srnUpd,
+    context: contextUpd,
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -495,6 +537,245 @@ actorsRouter.patch('/actors/:id', async (ctx: Context) => {
   });
 
   ctx.body = updated;
+});
+
+/**
+ * @openapi
+ * /actors/{id}/tags:
+ *   get:
+ *     tags:
+ *       - Actors
+ *     summary: Get actor tags
+ *     operationId: getActorTagsRoute
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       '200':
+ *         description: Actor tags
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               additionalProperties:
+ *                 type: string
+ *       '401':
+ *         $ref: '#/components/responses/Unauthorized'
+ *       '403':
+ *         $ref: '#/components/responses/Forbidden'
+ *       '404':
+ *         description: Actor not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+actorsRouter.get('/actors/:id/tags', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const actor = await getActor({ id: ctx.params.id });
+
+  if (!actor) {
+    ctx.status = 404;
+    ctx.body = { error: 'Actor not found' };
+    return;
+  }
+
+  const srn = buildSrn({
+    projectPublicId: actor.projectId!,
+    resourceType: 'actor',
+    resourceId: actor.id,
+  });
+  const context: Record<string, string> = { 'soat:ResourceType': 'actor' };
+  if (actor.tags) {
+    for (const [k, v] of Object.entries(actor.tags)) {
+      context[`soat:ResourceTag/${k}`] = v as string;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: actor.projectId!,
+    action: 'actors:GetActor',
+    resource: srn,
+    context,
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  ctx.body = await getActorTags({ id: ctx.params.id });
+});
+
+/**
+ * @openapi
+ * /actors/{id}/tags:
+ *   put:
+ *     tags:
+ *       - Actors
+ *     summary: Replace actor tags
+ *     operationId: putActorTags
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             additionalProperties:
+ *               type: string
+ *     responses:
+ *       '200':
+ *         description: Tags replaced
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ActorRecord'
+ *       '401':
+ *         $ref: '#/components/responses/Unauthorized'
+ *       '403':
+ *         $ref: '#/components/responses/Forbidden'
+ *       '404':
+ *         description: Actor not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+actorsRouter.put('/actors/:id/tags', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const actor = await getActor({ id: ctx.params.id });
+
+  if (!actor) {
+    ctx.status = 404;
+    ctx.body = { error: 'Actor not found' };
+    return;
+  }
+
+  const srn = buildSrn({
+    projectPublicId: actor.projectId!,
+    resourceType: 'actor',
+    resourceId: actor.id,
+  });
+  const context: Record<string, string> = { 'soat:ResourceType': 'actor' };
+  if (actor.tags) {
+    for (const [k, v] of Object.entries(actor.tags)) {
+      context[`soat:ResourceTag/${k}`] = v as string;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: actor.projectId!,
+    action: 'actors:UpdateActor',
+    resource: srn,
+    context,
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const tags = ctx.request.body as Record<string, string>;
+  ctx.body = await updateActorTags({ id: ctx.params.id, tags, merge: false });
+});
+
+/**
+ * @openapi
+ * /actors/{id}/tags:
+ *   patch:
+ *     tags:
+ *       - Actors
+ *     summary: Merge actor tags
+ *     operationId: patchActorTags
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             additionalProperties:
+ *               type: string
+ *     responses:
+ *       '200':
+ *         description: Tags merged
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ActorRecord'
+ *       '401':
+ *         $ref: '#/components/responses/Unauthorized'
+ *       '403':
+ *         $ref: '#/components/responses/Forbidden'
+ *       '404':
+ *         description: Actor not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+actorsRouter.patch('/actors/:id/tags', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const actor = await getActor({ id: ctx.params.id });
+
+  if (!actor) {
+    ctx.status = 404;
+    ctx.body = { error: 'Actor not found' };
+    return;
+  }
+
+  const srn = buildSrn({
+    projectPublicId: actor.projectId!,
+    resourceType: 'actor',
+    resourceId: actor.id,
+  });
+  const context: Record<string, string> = { 'soat:ResourceType': 'actor' };
+  if (actor.tags) {
+    for (const [k, v] of Object.entries(actor.tags)) {
+      context[`soat:ResourceTag/${k}`] = v as string;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: actor.projectId!,
+    action: 'actors:UpdateActor',
+    resource: srn,
+    context,
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const tags = ctx.request.body as Record<string, string>;
+  ctx.body = await updateActorTags({ id: ctx.params.id, tags, merge: true });
 });
 
 export { actorsRouter };

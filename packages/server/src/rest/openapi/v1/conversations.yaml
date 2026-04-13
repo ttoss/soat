@@ -15,7 +15,7 @@ paths:
       tags:
         - Conversations
       summary: List conversations
-      description: Returns all conversations the caller has access to. If projectId is provided, returns only conversations in that project. API keys are scoped to a single project automatically.
+      description: Returns all conversations the caller has access to. If projectId is provided, returns only conversations in that project. project keys are scoped to a single project automatically.
       operationId: listConversations
       parameters:
         - name: projectId
@@ -57,7 +57,7 @@ paths:
       tags:
         - Conversations
       summary: Create a conversation
-      description: Creates a new conversation. API keys automatically infer the project from the key's scope; JWT callers must supply projectId.
+      description: Creates a new conversation. project keys automatically infer the project from the key's scope; JWT callers must supply projectId.
       operationId: createConversation
       requestBody:
         required: true
@@ -68,7 +68,7 @@ paths:
               properties:
                 projectId:
                   type: string
-                  description: Project ID. Required for JWT auth; omit when using an API key.
+                  description: Project ID. Required for JWT auth; omit when using an project key.
                   example: 'proj_V1StGXR8Z5jdHi6B'
                 status:
                   type: string

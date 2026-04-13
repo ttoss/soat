@@ -465,8 +465,8 @@ describe('Documents', () => {
     });
   });
 
-  describe('API key access', () => {
-    let apiKey: string;
+  describe('project key access', () => {
+    let projectKey: string;
 
     beforeAll(async () => {
       const policyRes = await authenticatedTestClient(adminToken)
@@ -474,39 +474,39 @@ describe('Documents', () => {
         .send({
           permissions: ['documents:ListDocuments', 'documents:SearchDocuments'],
         });
-      const apiKeyPolicyId = policyRes.body.id;
+      const projectKeyPolicyId = policyRes.body.id;
 
-      const apiKeyRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/api-keys')
+      const projectKeyRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/project-keys')
         .send({
           projectId,
-          policyId: apiKeyPolicyId,
-          name: 'Docs Test API Key',
+          policyId: projectKeyPolicyId,
+          name: 'Docs Test project key',
         });
-      apiKey = apiKeyRes.body.key;
+      projectKey = projectKeyRes.body.key;
 
       await authenticatedTestClient(userToken).post('/api/v1/documents').send({
         projectId,
-        content: 'API key test document.',
-        filename: 'apikey-doc.txt',
+        content: 'project key test document.',
+        filename: 'projectkey-doc.txt',
       });
     });
 
-    test('API key can list documents without providing projectId', async () => {
+    test('project key can list documents without providing projectId', async () => {
       const response = await testClient
         .get('/api/v1/documents')
-        .set('Authorization', `Bearer ${apiKey}`);
+        .set('Authorization', `Bearer ${projectKey}`);
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.data)).toBe(true);
       expect(response.body.data.length).toBeGreaterThan(0);
     });
 
-    test('API key can search documents without providing projectId', async () => {
+    test('project key can search documents without providing projectId', async () => {
       const response = await testClient
         .post('/api/v1/documents/search')
-        .set('Authorization', `Bearer ${apiKey}`)
-        .send({ query: 'API key test' });
+        .set('Authorization', `Bearer ${projectKey}`)
+        .send({ query: 'project key test' });
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);

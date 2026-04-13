@@ -54,6 +54,13 @@ export class Actor extends Model {
   @Column({ type: DataType.STRING })
   declare externalId?: string;
 
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+    defaultValue: {},
+  })
+  declare tags: Record<string, string> | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

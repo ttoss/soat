@@ -6,12 +6,15 @@ import {
   createConversation,
   deleteConversation,
   getConversation,
+  getConversationTags,
   listConversationActors,
   listConversationMessages,
   listConversations,
   removeConversationMessage,
   updateConversationStatus,
+  updateConversationTags,
 } from 'src/lib/conversations';
+import { buildSrn } from 'src/lib/iam';
 
 const conversationsRouter = new Router<Context>();
 
@@ -22,7 +25,7 @@ const conversationsRouter = new Router<Context>();
  *     tags:
  *       - Conversations
  *     summary: List conversations
- *     description: Returns all conversations the caller has access to. If projectId is provided, returns only conversations in that project. API keys are scoped to a single project automatically.
+ *     description: Returns all conversations the caller has access to. If projectId is provided, returns only conversations in that project. project keys are scoped to a single project automatically.
  *     operationId: listConversations
  *     parameters:
  *       - name: projectId
@@ -197,10 +200,25 @@ conversationsRouter.get('/conversations/:id', async (ctx: Context) => {
     return;
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    conversation.projectId!,
-    'conversations:GetConversation'
-  );
+  const srnGet = buildSrn({
+    projectPublicId: conversation.projectId!,
+    resourceType: 'conversation',
+    resourceId: conversation.id,
+  });
+  const contextGet: Record<string, string> = {
+    'soat:ResourceType': 'conversation',
+  };
+  if (conversation.tags) {
+    for (const [k, v] of Object.entries(conversation.tags)) {
+      contextGet[`soat:ResourceTag/${k}`] = v as string;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: conversation.projectId!,
+    action: 'conversations:GetConversation',
+    resource: srnGet,
+    context: contextGet,
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -217,7 +235,7 @@ conversationsRouter.get('/conversations/:id', async (ctx: Context) => {
  *     tags:
  *       - Conversations
  *     summary: Create a conversation
- *     description: Creates a new conversation. API keys automatically infer the project from the key's scope; JWT callers must supply projectId.
+ *     description: Creates a new conversation. project keys automatically infer the project from the key's scope; JWT callers must supply projectId.
  *     operationId: createConversation
  *     requestBody:
  *       required: true
@@ -228,7 +246,7 @@ conversationsRouter.get('/conversations/:id', async (ctx: Context) => {
  *             properties:
  *               projectId:
  *                 type: string
- *                 description: Project ID. Required for JWT auth; omit when using an API key.
+ *                 description: Project ID. Required for JWT auth; omit when using an project key.
  *                 example: 'proj_V1StGXR8Z5jdHi6B'
  *               status:
  *                 type: string
@@ -275,8 +293,8 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
 
   let resolvedProjectPublicId = body.projectId;
   if (!resolvedProjectPublicId) {
-    if (ctx.authUser.apiKeyProjectId) {
-      resolvedProjectPublicId = ctx.authUser.apiKeyProjectId;
+    if (ctx.authUser.projectKeyProjectId) {
+      resolvedProjectPublicId = ctx.authUser.projectKeyProjectId;
     } else {
       ctx.status = 400;
       ctx.body = { error: 'projectId is required' };
@@ -284,10 +302,10 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
     }
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    resolvedProjectPublicId,
-    'conversations:CreateConversation'
-  );
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: resolvedProjectPublicId,
+    action: 'conversations:CreateConversation',
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -397,10 +415,25 @@ conversationsRouter.patch('/conversations/:id', async (ctx: Context) => {
     return;
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    conversation.projectId!,
-    'conversations:UpdateConversation'
-  );
+  const srnUpd = buildSrn({
+    projectPublicId: conversation.projectId!,
+    resourceType: 'conversation',
+    resourceId: conversation.id,
+  });
+  const contextUpd: Record<string, string> = {
+    'soat:ResourceType': 'conversation',
+  };
+  if (conversation.tags) {
+    for (const [k, v] of Object.entries(conversation.tags)) {
+      contextUpd[`soat:ResourceTag/${k}`] = v as string;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: conversation.projectId!,
+    action: 'conversations:UpdateConversation',
+    resource: srnUpd,
+    context: contextUpd,
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -469,10 +502,25 @@ conversationsRouter.delete('/conversations/:id', async (ctx: Context) => {
     return;
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    conversation.projectId!,
-    'conversations:DeleteConversation'
-  );
+  const srnDel = buildSrn({
+    projectPublicId: conversation.projectId!,
+    resourceType: 'conversation',
+    resourceId: conversation.id,
+  });
+  const contextDel: Record<string, string> = {
+    'soat:ResourceType': 'conversation',
+  };
+  if (conversation.tags) {
+    for (const [k, v] of Object.entries(conversation.tags)) {
+      contextDel[`soat:ResourceTag/${k}`] = v as string;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: conversation.projectId!,
+    action: 'conversations:DeleteConversation',
+    resource: srnDel,
+    context: contextDel,
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -567,10 +615,25 @@ conversationsRouter.get('/conversations/:id/messages', async (ctx: Context) => {
     return;
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    conversation.projectId!,
-    'conversations:GetConversation'
-  );
+  const srnMsgs = buildSrn({
+    projectPublicId: conversation.projectId!,
+    resourceType: 'conversation',
+    resourceId: conversation.id,
+  });
+  const contextMsgs: Record<string, string> = {
+    'soat:ResourceType': 'conversation',
+  };
+  if (conversation.tags) {
+    for (const [k, v] of Object.entries(conversation.tags)) {
+      contextMsgs[`soat:ResourceTag/${k}`] = v as string;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: conversation.projectId!,
+    action: 'conversations:GetConversation',
+    resource: srnMsgs,
+    context: contextMsgs,
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -699,10 +762,25 @@ conversationsRouter.post(
       return;
     }
 
-    const allowed = await ctx.authUser.isAllowed(
-      conversation.projectId!,
-      'conversations:UpdateConversation'
-    );
+    const srnAddMsg = buildSrn({
+      projectPublicId: conversation.projectId!,
+      resourceType: 'conversation',
+      resourceId: conversation.id,
+    });
+    const contextAddMsg: Record<string, string> = {
+      'soat:ResourceType': 'conversation',
+    };
+    if (conversation.tags) {
+      for (const [k, v] of Object.entries(conversation.tags)) {
+        contextAddMsg[`soat:ResourceTag/${k}`] = v as string;
+      }
+    }
+    const allowed = await ctx.authUser.isAllowed({
+      projectPublicId: conversation.projectId!,
+      action: 'conversations:UpdateConversation',
+      resource: srnAddMsg,
+      context: contextAddMsg,
+    });
     if (!allowed) {
       ctx.status = 403;
       ctx.body = { error: 'Forbidden' };
@@ -790,10 +868,25 @@ conversationsRouter.delete(
       return;
     }
 
-    const allowed = await ctx.authUser.isAllowed(
-      conversation.projectId!,
-      'conversations:UpdateConversation'
-    );
+    const srnRmMsg = buildSrn({
+      projectPublicId: conversation.projectId!,
+      resourceType: 'conversation',
+      resourceId: conversation.id,
+    });
+    const contextRmMsg: Record<string, string> = {
+      'soat:ResourceType': 'conversation',
+    };
+    if (conversation.tags) {
+      for (const [k, v] of Object.entries(conversation.tags)) {
+        contextRmMsg[`soat:ResourceTag/${k}`] = v as string;
+      }
+    }
+    const allowed = await ctx.authUser.isAllowed({
+      projectPublicId: conversation.projectId!,
+      action: 'conversations:UpdateConversation',
+      resource: srnRmMsg,
+      context: contextRmMsg,
+    });
     if (!allowed) {
       ctx.status = 403;
       ctx.body = { error: 'Forbidden' };
@@ -875,10 +968,25 @@ conversationsRouter.get('/conversations/:id/actors', async (ctx: Context) => {
     return;
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    conversation.projectId!,
-    'conversations:GetConversation'
-  );
+  const srnActors = buildSrn({
+    projectPublicId: conversation.projectId!,
+    resourceType: 'conversation',
+    resourceId: conversation.id,
+  });
+  const contextActors: Record<string, string> = {
+    'soat:ResourceType': 'conversation',
+  };
+  if (conversation.tags) {
+    for (const [k, v] of Object.entries(conversation.tags)) {
+      contextActors[`soat:ResourceTag/${k}`] = v as string;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: conversation.projectId!,
+    action: 'conversations:GetConversation',
+    resource: srnActors,
+    context: contextActors,
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -889,6 +997,259 @@ conversationsRouter.get('/conversations/:id/actors', async (ctx: Context) => {
     conversationId: ctx.params.id,
   });
   ctx.body = actors;
+});
+
+/**
+ * @openapi
+ * /conversations/{id}/tags:
+ *   get:
+ *     tags:
+ *       - Conversations
+ *     summary: Get conversation tags
+ *     operationId: getConversationTagsRoute
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       '200':
+ *         description: Conversation tags
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               additionalProperties:
+ *                 type: string
+ *       '401':
+ *         $ref: '#/components/responses/Unauthorized'
+ *       '403':
+ *         $ref: '#/components/responses/Forbidden'
+ *       '404':
+ *         description: Conversation not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+conversationsRouter.get('/conversations/:id/tags', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const conversation = await getConversation({ id: ctx.params.id });
+
+  if (!conversation) {
+    ctx.status = 404;
+    ctx.body = { error: 'Conversation not found' };
+    return;
+  }
+
+  const srn = buildSrn({
+    projectPublicId: conversation.projectId!,
+    resourceType: 'conversation',
+    resourceId: conversation.id,
+  });
+  const context: Record<string, string> = {
+    'soat:ResourceType': 'conversation',
+  };
+  if (conversation.tags) {
+    for (const [k, v] of Object.entries(conversation.tags)) {
+      context[`soat:ResourceTag/${k}`] = v as string;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: conversation.projectId!,
+    action: 'conversations:GetConversation',
+    resource: srn,
+    context,
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  ctx.body = await getConversationTags({ id: ctx.params.id });
+});
+
+/**
+ * @openapi
+ * /conversations/{id}/tags:
+ *   put:
+ *     tags:
+ *       - Conversations
+ *     summary: Replace conversation tags
+ *     operationId: putConversationTags
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             additionalProperties:
+ *               type: string
+ *     responses:
+ *       '200':
+ *         description: Tags replaced
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ConversationRecord'
+ *       '401':
+ *         $ref: '#/components/responses/Unauthorized'
+ *       '403':
+ *         $ref: '#/components/responses/Forbidden'
+ *       '404':
+ *         description: Conversation not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+conversationsRouter.put('/conversations/:id/tags', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const conversation = await getConversation({ id: ctx.params.id });
+
+  if (!conversation) {
+    ctx.status = 404;
+    ctx.body = { error: 'Conversation not found' };
+    return;
+  }
+
+  const srn = buildSrn({
+    projectPublicId: conversation.projectId!,
+    resourceType: 'conversation',
+    resourceId: conversation.id,
+  });
+  const context: Record<string, string> = {
+    'soat:ResourceType': 'conversation',
+  };
+  if (conversation.tags) {
+    for (const [k, v] of Object.entries(conversation.tags)) {
+      context[`soat:ResourceTag/${k}`] = v as string;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: conversation.projectId!,
+    action: 'conversations:UpdateConversation',
+    resource: srn,
+    context,
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const tags = ctx.request.body as Record<string, string>;
+  ctx.body = await updateConversationTags({
+    id: ctx.params.id,
+    tags,
+    merge: false,
+  });
+});
+
+/**
+ * @openapi
+ * /conversations/{id}/tags:
+ *   patch:
+ *     tags:
+ *       - Conversations
+ *     summary: Merge conversation tags
+ *     operationId: patchConversationTags
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             additionalProperties:
+ *               type: string
+ *     responses:
+ *       '200':
+ *         description: Tags merged
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ConversationRecord'
+ *       '401':
+ *         $ref: '#/components/responses/Unauthorized'
+ *       '403':
+ *         $ref: '#/components/responses/Forbidden'
+ *       '404':
+ *         description: Conversation not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+conversationsRouter.patch('/conversations/:id/tags', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const conversation = await getConversation({ id: ctx.params.id });
+
+  if (!conversation) {
+    ctx.status = 404;
+    ctx.body = { error: 'Conversation not found' };
+    return;
+  }
+
+  const srn = buildSrn({
+    projectPublicId: conversation.projectId!,
+    resourceType: 'conversation',
+    resourceId: conversation.id,
+  });
+  const context: Record<string, string> = {
+    'soat:ResourceType': 'conversation',
+  };
+  if (conversation.tags) {
+    for (const [k, v] of Object.entries(conversation.tags)) {
+      context[`soat:ResourceTag/${k}`] = v as string;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: conversation.projectId!,
+    action: 'conversations:UpdateConversation',
+    resource: srn,
+    context,
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const tags = ctx.request.body as Record<string, string>;
+  ctx.body = await updateConversationTags({
+    id: ctx.params.id,
+    tags,
+    merge: true,
+  });
 });
 
 export { conversationsRouter };

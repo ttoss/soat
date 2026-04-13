@@ -62,13 +62,13 @@ const registerTools = (server: McpServer) => {
     'create-document',
     {
       description:
-        'Create a new text document with an embedding vector for semantic search. API keys infer the project automatically; JWT callers must supply projectId.',
+        'Create a new text document with an embedding vector for semantic search. project keys infer the project automatically; JWT callers must supply projectId.',
       inputSchema: {
         projectId: z
           .string()
           .optional()
           .describe(
-            'Project ID (required for JWT auth, optional for API keys)'
+            'Project ID (required for JWT auth, optional for project keys)'
           ),
         content: z.string().describe('Text content of the document'),
         filename: z.string().optional().describe('Optional filename'),

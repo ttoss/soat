@@ -77,13 +77,13 @@ const registerTools = (server: McpServer) => {
     'create-actor',
     {
       description:
-        'Create a new actor. API keys infer the project automatically; JWT callers must supply projectId.',
+        'Create a new actor. project keys infer the project automatically; JWT callers must supply projectId.',
       inputSchema: {
         projectId: z
           .string()
           .optional()
           .describe(
-            'Project ID (required for JWT auth, optional for API keys)'
+            'Project ID (required for JWT auth, optional for project keys)'
           ),
         name: z.string().describe('Actor name'),
         type: z

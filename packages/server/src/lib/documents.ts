@@ -106,7 +106,7 @@ export const createDocument = async (args: {
   filename?: string;
   title?: string;
   metadata?: Record<string, unknown>;
-  tags?: string[];
+  tags?: Record<string, string>;
 }) => {
   const storageDir = getStorageDir();
   fs.mkdirSync(storageDir, { recursive: true });
@@ -182,7 +182,7 @@ export const updateDocument = async (args: {
   content?: string;
   title?: string;
   metadata?: Record<string, unknown>;
-  tags?: string[];
+  tags?: Record<string, string>;
 }) => {
   const doc = await db.Document.findOne({
     where: { publicId: args.id },
@@ -236,7 +236,7 @@ export const searchDocuments = async (args: {
   query: string;
   limit?: number;
   threshold?: number;
-  tags?: string[];
+  tags?: Record<string, string>;
 }) => {
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
     return [];
@@ -250,8 +250,8 @@ export const searchDocuments = async (args: {
     args.projectIds !== undefined ? { projectId: args.projectIds } : undefined;
 
   const docWhere: Record<string, unknown> =
-    args.tags && args.tags.length > 0
-      ? { tags: { [Op.overlap]: args.tags } }
+    args.tags && Object.keys(args.tags).length > 0
+      ? { tags: { [Op.contains]: args.tags } }
       : {};
 
   const documents = await db.Document.findAll({
@@ -279,7 +279,7 @@ export const searchDocuments = async (args: {
   });
 
   return documents
-    .map((doc) => {
+    .map((doc: InstanceType<(typeof db)['Document']>) => {
       const distance = parseFloat(
         (doc.getDataValue('distance') as string) ?? '1'
       );
@@ -293,10 +293,59 @@ export const searchDocuments = async (args: {
 
       return { ...mapped, content, score };
     })
-    .filter((doc) => {
+    .filter((doc: { score: number }) => {
       if (args.threshold !== undefined) {
         return doc.score >= args.threshold;
       }
       return true;
     });
+};
+
+export const getDocumentTags = async (args: { id: string }) => {
+  const doc = await db.Document.findOne({ where: { publicId: args.id } });
+
+  if (!doc) {
+    return null;
+  }
+
+  return doc.tags ?? {};
+};
+
+export const updateDocumentTags = async (args: {
+  id: string;
+  tags: Record<string, string>;
+  merge?: boolean;
+}) => {
+  const doc = await db.Document.findOne({
+    where: { publicId: args.id },
+    include: [
+      {
+        model: db.File,
+        as: 'file',
+        include: [{ model: db.Project, as: 'project' }],
+      },
+    ],
+  });
+
+  if (!doc) {
+    return null;
+  }
+
+  const newTags = args.merge
+    ? { ...(doc.tags ?? {}), ...args.tags }
+    : args.tags;
+  await doc.update({ tags: newTags });
+
+  const refreshed = await db.Document.findOne({
+    where: { id: doc.id },
+    include: [
+      {
+        model: db.File,
+        as: 'file',
+        include: [{ model: db.Project, as: 'project' }],
+      },
+    ],
+  });
+
+  return mapDocument(refreshed!);
 };

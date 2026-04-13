@@ -5,10 +5,13 @@ import {
   createDocument,
   deleteDocument,
   getDocument,
+  getDocumentTags,
   listDocuments,
   searchDocuments,
   updateDocument,
+  updateDocumentTags,
 } from 'src/lib/documents';
+import { buildSrn } from 'src/lib/iam';
 
 const documentsRouter = new Router<Context>();
 
@@ -19,7 +22,7 @@ const documentsRouter = new Router<Context>();
  *     tags:
  *       - Documents
  *     summary: List documents
- *     description: Returns all documents the caller has access to. If projectId is provided, returns only documents in that project. API keys are scoped to a single project automatically. JWT users without projectId receive documents across all their accessible projects.
+ *     description: Returns all documents the caller has access to. If projectId is provided, returns only documents in that project. project keys are scoped to a single project automatically. JWT users without projectId receive documents across all their accessible projects.
  *     operationId: listDocuments
  *     parameters:
  *       - name: projectId
@@ -161,10 +164,23 @@ documentsRouter.get('/documents/:id', async (ctx: Context) => {
     return;
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    doc.projectId!,
-    'documents:GetDocument'
-  );
+  const srn = buildSrn({
+    projectPublicId: doc.projectId!,
+    resourceType: 'document',
+    resourceId: doc.id,
+  });
+  const context: Record<string, string> = { 'soat:ResourceType': 'document' };
+  if (doc.tags) {
+    for (const [k, v] of Object.entries(doc.tags)) {
+      context[`soat:ResourceTag/${k}`] = v;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: doc.projectId!,
+    action: 'documents:GetDocument',
+    resource: srn,
+    context,
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -181,7 +197,7 @@ documentsRouter.get('/documents/:id', async (ctx: Context) => {
  *     tags:
  *       - Documents
  *     summary: Create a document
- *     description: Creates a new text document with an embedding vector. API keys automatically infer the project from the key's scope; JWT callers must supply projectId.
+ *     description: Creates a new text document with an embedding vector. project keys automatically infer the project from the key's scope; JWT callers must supply projectId.
  *     operationId: createDocument
  *     requestBody:
  *       required: true
@@ -194,7 +210,7 @@ documentsRouter.get('/documents/:id', async (ctx: Context) => {
  *             properties:
  *               projectId:
  *                 type: string
- *                 description: Project ID. Required for JWT auth; omit when using an API key.
+ *                 description: Project ID. Required for JWT auth; omit when using an project key.
  *                 example: 'proj_V1StGXR8Z5jdHi6B'
  *               content:
  *                 type: string
@@ -209,10 +225,11 @@ documentsRouter.get('/documents/:id', async (ctx: Context) => {
  *                 type: object
  *                 description: Arbitrary key-value metadata
  *               tags:
- *                 type: array
- *                 items:
+ *                 type: object
+ *                 additionalProperties:
  *                   type: string
- *                 example: ['tag1', 'tag2']
+ *                 description: Key-value tags
+ *                 example: { env: 'production' }
  *     responses:
  *       '201':
  *         description: Document created
@@ -252,7 +269,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     filename?: string;
     title?: string;
     metadata?: Record<string, unknown>;
-    tags?: string[];
+    tags?: Record<string, string>;
   };
 
   if (!body.content) {
@@ -261,11 +278,11 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     return;
   }
 
-  // Resolve projectId: use explicit value, infer from API key, or error for JWT
+  // Resolve projectId: use explicit value, infer from project key, or error for JWT
   let resolvedProjectPublicId = body.projectId;
   if (!resolvedProjectPublicId) {
-    if (ctx.authUser.apiKeyProjectId) {
-      resolvedProjectPublicId = ctx.authUser.apiKeyProjectId;
+    if (ctx.authUser.projectKeyProjectId) {
+      resolvedProjectPublicId = ctx.authUser.projectKeyProjectId;
     } else {
       ctx.status = 400;
       ctx.body = { error: 'projectId is required' };
@@ -273,10 +290,10 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     }
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    resolvedProjectPublicId,
-    'documents:CreateDocument'
-  );
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: resolvedProjectPublicId,
+    action: 'documents:CreateDocument',
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -359,10 +376,25 @@ documentsRouter.delete('/documents/:id', async (ctx: Context) => {
     return;
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    doc.projectId!,
-    'documents:DeleteDocument'
-  );
+  const srnDel = buildSrn({
+    projectPublicId: doc.projectId!,
+    resourceType: 'document',
+    resourceId: doc.id,
+  });
+  const contextDel: Record<string, string> = {
+    'soat:ResourceType': 'document',
+  };
+  if (doc.tags) {
+    for (const [k, v] of Object.entries(doc.tags)) {
+      contextDel[`soat:ResourceTag/${k}`] = v;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: doc.projectId!,
+    action: 'documents:DeleteDocument',
+    resource: srnDel,
+    context: contextDel,
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -412,9 +444,10 @@ documentsRouter.delete('/documents/:id', async (ctx: Context) => {
  *               metadata:
  *                 type: object
  *               tags:
- *                 type: array
- *                 items:
+ *                 type: object
+ *                 additionalProperties:
  *                   type: string
+ *                 description: Key-value tags
  *     responses:
  *       '200':
  *         description: Document updated
@@ -456,10 +489,25 @@ documentsRouter.patch('/documents/:id', async (ctx: Context) => {
     return;
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    doc.projectId!,
-    'documents:UpdateDocument'
-  );
+  const srnUpd = buildSrn({
+    projectPublicId: doc.projectId!,
+    resourceType: 'document',
+    resourceId: doc.id,
+  });
+  const contextUpd: Record<string, string> = {
+    'soat:ResourceType': 'document',
+  };
+  if (doc.tags) {
+    for (const [k, v] of Object.entries(doc.tags)) {
+      contextUpd[`soat:ResourceTag/${k}`] = v;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: doc.projectId!,
+    action: 'documents:UpdateDocument',
+    resource: srnUpd,
+    context: contextUpd,
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -470,7 +518,7 @@ documentsRouter.patch('/documents/:id', async (ctx: Context) => {
     content?: string;
     title?: string;
     metadata?: Record<string, unknown>;
-    tags?: string[];
+    tags?: Record<string, string>;
   };
 
   const updated = await updateDocument({
@@ -517,11 +565,11 @@ documentsRouter.patch('/documents/:id', async (ctx: Context) => {
  *                 description: Minimum similarity score (0-1). Only results with score >= threshold are returned.
  *                 example: 0.7
  *               tags:
- *                 type: array
- *                 items:
+ *                 type: object
+ *                 additionalProperties:
  *                   type: string
- *                 description: Filter to documents with any of these tags.
- *                 example: ['tag1', 'tag2']
+ *                 description: Filter to documents matching all these key-value tags.
+ *                 example: { env: 'production' }
  *     responses:
  *       '200':
  *         description: Search results
@@ -562,7 +610,7 @@ documentsRouter.post('/documents/search', async (ctx: Context) => {
     query: string;
     limit?: number;
     threshold?: number;
-    tags?: string[];
+    tags?: Record<string, string>;
   };
 
   if (!body.query) {
@@ -591,6 +639,273 @@ documentsRouter.post('/documents/search', async (ctx: Context) => {
   });
 
   ctx.body = results;
+});
+
+/**
+ * @openapi
+ * /documents/{id}/tags:
+ *   get:
+ *     tags:
+ *       - Documents
+ *     summary: Get document tags
+ *     operationId: getDocumentTagsRoute
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       '200':
+ *         description: Document tags
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               additionalProperties:
+ *                 type: string
+ *       '401':
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '403':
+ *         description: Forbidden
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '404':
+ *         description: Document not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+documentsRouter.get('/documents/:id/tags', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const doc = await getDocument({ id: ctx.params.id });
+
+  if (!doc) {
+    ctx.status = 404;
+    ctx.body = { error: 'Document not found' };
+    return;
+  }
+
+  const srn = buildSrn({
+    projectPublicId: doc.projectId!,
+    resourceType: 'document',
+    resourceId: doc.id,
+  });
+  const context: Record<string, string> = { 'soat:ResourceType': 'document' };
+  if (doc.tags) {
+    for (const [k, v] of Object.entries(doc.tags)) {
+      context[`soat:ResourceTag/${k}`] = v;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: doc.projectId!,
+    action: 'documents:GetDocument',
+    resource: srn,
+    context,
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  ctx.body = await getDocumentTags({ id: ctx.params.id });
+});
+
+/**
+ * @openapi
+ * /documents/{id}/tags:
+ *   put:
+ *     tags:
+ *       - Documents
+ *     summary: Replace document tags
+ *     operationId: putDocumentTags
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             additionalProperties:
+ *               type: string
+ *     responses:
+ *       '200':
+ *         description: Tags replaced
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/DocumentRecord'
+ *       '401':
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '403':
+ *         description: Forbidden
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '404':
+ *         description: Document not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+documentsRouter.put('/documents/:id/tags', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const doc = await getDocument({ id: ctx.params.id });
+
+  if (!doc) {
+    ctx.status = 404;
+    ctx.body = { error: 'Document not found' };
+    return;
+  }
+
+  const srn = buildSrn({
+    projectPublicId: doc.projectId!,
+    resourceType: 'document',
+    resourceId: doc.id,
+  });
+  const context: Record<string, string> = { 'soat:ResourceType': 'document' };
+  if (doc.tags) {
+    for (const [k, v] of Object.entries(doc.tags)) {
+      context[`soat:ResourceTag/${k}`] = v;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: doc.projectId!,
+    action: 'documents:UpdateDocument',
+    resource: srn,
+    context,
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const tags = ctx.request.body as Record<string, string>;
+  ctx.body = await updateDocumentTags({
+    id: ctx.params.id,
+    tags,
+    merge: false,
+  });
+});
+
+/**
+ * @openapi
+ * /documents/{id}/tags:
+ *   patch:
+ *     tags:
+ *       - Documents
+ *     summary: Merge document tags
+ *     operationId: patchDocumentTags
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             additionalProperties:
+ *               type: string
+ *     responses:
+ *       '200':
+ *         description: Tags merged
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/DocumentRecord'
+ *       '401':
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '403':
+ *         description: Forbidden
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '404':
+ *         description: Document not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+documentsRouter.patch('/documents/:id/tags', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const doc = await getDocument({ id: ctx.params.id });
+
+  if (!doc) {
+    ctx.status = 404;
+    ctx.body = { error: 'Document not found' };
+    return;
+  }
+
+  const srn = buildSrn({
+    projectPublicId: doc.projectId!,
+    resourceType: 'document',
+    resourceId: doc.id,
+  });
+  const context: Record<string, string> = { 'soat:ResourceType': 'document' };
+  if (doc.tags) {
+    for (const [k, v] of Object.entries(doc.tags)) {
+      context[`soat:ResourceTag/${k}`] = v;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: doc.projectId!,
+    action: 'documents:UpdateDocument',
+    resource: srn,
+    context,
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const tags = ctx.request.body as Record<string, string>;
+  ctx.body = await updateDocumentTags({ id: ctx.params.id, tags, merge: true });
 });
 
 export { documentsRouter };

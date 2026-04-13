@@ -15,7 +15,7 @@ paths:
       tags:
         - Documents
       summary: List documents
-      description: Returns all documents the caller has access to. If projectId is provided, returns only documents in that project. API keys are scoped to a single project automatically. JWT users without projectId receive documents across all their accessible projects.
+      description: Returns all documents the caller has access to. If projectId is provided, returns only documents in that project. project keys are scoped to a single project automatically. JWT users without projectId receive documents across all their accessible projects.
       operationId: listDocuments
       parameters:
         - name: projectId
@@ -50,7 +50,7 @@ paths:
       tags:
         - Documents
       summary: Create a document
-      description: Creates a new text document and generates an embedding vector for semantic search. API keys automatically infer the project from the key's scope; JWT callers must supply projectId.
+      description: Creates a new text document and generates an embedding vector for semantic search. project keys automatically infer the project from the key's scope; JWT callers must supply projectId.
       operationId: createDocument
       requestBody:
         required: true
@@ -63,7 +63,7 @@ paths:
               properties:
                 projectId:
                   type: string
-                  description: Project ID. Required for JWT auth; omit when using an API key.
+                  description: Project ID. Required for JWT auth; omit when using an project key.
                   example: 'proj_V1StGXR8Z5jdHi6B'
                 content:
                   type: string

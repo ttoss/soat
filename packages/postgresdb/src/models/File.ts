@@ -57,6 +57,13 @@ export class File extends Model {
   @Column({ type: DataType.TEXT })
   declare metadata?: string; // JSON string
 
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+    defaultValue: {},
+  })
+  declare tags: Record<string, string> | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

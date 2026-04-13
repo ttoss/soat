@@ -5,11 +5,16 @@ export type AuthUser = {
   publicId: string;
   username: string;
   role: 'admin' | 'user';
-  isAllowed: (projectPublicId: string, action: string) => Promise<boolean>;
+  isAllowed: (args: {
+    projectPublicId: string;
+    action: string;
+    resource?: string;
+    context?: Record<string, string>;
+  }) => Promise<boolean>;
   /**
    * Resolves the internal project IDs the caller may access for the given action.
    * - Explicit projectPublicId: verifies permission and returns [id], or null if forbidden/not found.
-   * - API key (no explicit id): infers from the key's scoped project.
+   * - project key (no explicit id): infers from the key's scoped project.
    * - JWT admin (no explicit id): returns undefined (no filter — all projects).
    * - JWT user (no explicit id): enumerates all projects the user has access to.
    */
@@ -17,7 +22,7 @@ export type AuthUser = {
     projectPublicId?: string;
     action: string;
   }) => Promise<number[] | undefined | null>;
-  apiKeyProjectId?: string;
+  projectKeyProjectId?: string;
 };
 
 export type Context = {

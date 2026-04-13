@@ -1,9 +1,12 @@
-import { API_KEY_RAW_PREFIX } from '@soat/postgresdb';
+import { PROJECT_KEY_RAW_PREFIX } from '@soat/postgresdb';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 import type { Context } from '../Context';
-import { createApiKeyIsAllowed, createJwtIsAllowed } from '../lib/permissions';
+import {
+  createProjectKeyIsAllowed,
+  createJwtIsAllowed,
+} from '../lib/permissions';
 
 export const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-secret';
 
@@ -23,16 +26,12 @@ export const signUserToken = (payload: { publicId: string; role: string }) => {
 
 type Next = () => Promise<void>;
 
-const resolveApiKey = async (ctx: Context, rawKey: string) => {
+const resolveProjectKey = async (ctx: Context, rawKey: string) => {
   const keyPrefix = rawKey.substring(0, 8);
 
-  const candidates = await ctx.db.ApiKey.findAll({
+  const candidates = await ctx.db.ProjectKey.findAll({
     where: { keyPrefix },
-    include: [
-      { model: ctx.db.Project },
-      { model: ctx.db.ProjectPolicy },
-      { model: ctx.db.User },
-    ],
+    include: [{ model: ctx.db.Project }, { model: ctx.db.User }],
   });
 
   for (const row of candidates) {
@@ -40,35 +39,24 @@ const resolveApiKey = async (ctx: Context, rawKey: string) => {
     if (match) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const projectPublicId = (row as any).project?.publicId as string;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const policyData = (row as any).policy;
-      const keyPolicy = {
-        permissions: policyData.permissions as string[],
-        notPermissions: policyData.notPermissions as string[],
-      };
+      const projectKeyPolicyId = row.policyId as number;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const keyUser = (row as any).user;
-      // Get user's project policy
+      // Get user's project memberships
       const project = await ctx.db.Project.findOne({
         where: { publicId: projectPublicId },
       });
       const membership = await ctx.db.UserProject.findOne({
         where: { userId: keyUser.id, projectId: project?.id },
-        include: [{ model: ctx.db.ProjectPolicy }],
       });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const userPolicyData = (membership as any)?.policy;
-      const userPolicy = userPolicyData
-        ? {
-            permissions: userPolicyData.permissions as string[],
-            notPermissions: userPolicyData.notPermissions as string[],
-          }
-        : { permissions: [], notPermissions: [] };
+      const userPolicyIds = ((membership as any)?.policyIds as number[]) ?? [];
 
-      const apiKeyIsAllowed = createApiKeyIsAllowed({
+      const projectKeyIsAllowed = createProjectKeyIsAllowed({
         projectPublicId,
-        userPolicy,
-        apiKeyPolicy: keyPolicy,
+        userPolicyIds,
+        projectKeyPolicyId,
+        db: ctx.db,
       });
 
       ctx.authUser = {
@@ -76,11 +64,14 @@ const resolveApiKey = async (ctx: Context, rawKey: string) => {
         publicId: keyUser.publicId as string,
         username: keyUser.username as string,
         role: keyUser.role as 'admin' | 'user',
-        apiKeyProjectId: projectPublicId,
-        isAllowed: apiKeyIsAllowed,
+        projectKeyProjectId: projectPublicId,
+        isAllowed: projectKeyIsAllowed,
         resolveProjectIds: async ({ projectPublicId: reqId, action }) => {
           const targetId = reqId ?? projectPublicId;
-          const allowed = await apiKeyIsAllowed(targetId, action);
+          const allowed = await projectKeyIsAllowed({
+            projectPublicId: targetId,
+            action,
+          });
           if (!allowed) return null;
           const proj = await ctx.db.Project.findOne({
             where: { publicId: targetId },
@@ -124,7 +115,7 @@ const resolveJwt = async (ctx: Context, token: string) => {
     isAllowed: jwtIsAllowed,
     resolveProjectIds: async ({ projectPublicId, action }) => {
       if (projectPublicId) {
-        const allowed = await jwtIsAllowed(projectPublicId, action);
+        const allowed = await jwtIsAllowed({ projectPublicId, action });
         if (!allowed) return null;
         const proj = await ctx.db.Project.findOne({
           where: { publicId: projectPublicId },
@@ -145,7 +136,10 @@ const resolveJwt = async (ctx: Context, token: string) => {
           }
         ).project;
         if (!proj) continue;
-        const allowed = await jwtIsAllowed(proj.publicId as string, action);
+        const allowed = await jwtIsAllowed({
+          projectPublicId: proj.publicId as string,
+          action,
+        });
         if (allowed) accessible.push(proj.id as number);
       }
       return accessible;
@@ -159,8 +153,8 @@ export const authMiddleware = async (ctx: Context, next: Next) => {
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7);
 
-    if (token.startsWith(API_KEY_RAW_PREFIX)) {
-      await resolveApiKey(ctx, token);
+    if (token.startsWith(PROJECT_KEY_RAW_PREFIX)) {
+      await resolveProjectKey(ctx, token);
     } else {
       await resolveJwt(ctx, token);
     }

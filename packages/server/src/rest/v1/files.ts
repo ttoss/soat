@@ -7,10 +7,13 @@ import {
   deleteFile,
   downloadFile,
   getFile,
+  getFileTags,
   listFiles,
   updateFileMetadata,
+  updateFileTags,
   uploadFile,
 } from 'src/lib/files';
+import { buildSrn } from 'src/lib/iam';
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -156,10 +159,23 @@ filesRouter.get('/files/:id', async (ctx: Context) => {
   }
 
   // Check if user is allowed to read files in this project
-  const allowed = await ctx.authUser.isAllowed(
-    file.projectId!,
-    'files:GetFile'
-  );
+  const srn = buildSrn({
+    projectPublicId: file.projectId!,
+    resourceType: 'file',
+    resourceId: file.id,
+  });
+  const context: Record<string, string> = { 'soat:ResourceType': 'file' };
+  if (file.tags) {
+    for (const [k, v] of Object.entries(file.tags)) {
+      context[`soat:ResourceTag/${k}`] = v;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: file.projectId!,
+    action: 'files:GetFile',
+    resource: srn,
+    context,
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -243,10 +259,10 @@ filesRouter.post('/files', async (ctx: Context) => {
   };
 
   // Check if user is allowed to create files in this project
-  const allowed = await ctx.authUser.isAllowed(
-    body.projectId,
-    'files:CreateFile'
-  );
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: body.projectId,
+    action: 'files:CreateFile',
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -324,10 +340,23 @@ filesRouter.delete('/files/:id', async (ctx: Context) => {
   }
 
   // Check if user is allowed to delete files in this project
-  const allowed = await ctx.authUser.isAllowed(
-    file.project!.publicId,
-    'files:DeleteFile'
-  );
+  const srnDel = buildSrn({
+    projectPublicId: file.project!.publicId,
+    resourceType: 'file',
+    resourceId: file.publicId,
+  });
+  const contextDel: Record<string, string> = { 'soat:ResourceType': 'file' };
+  if (file.tags) {
+    for (const [k, v] of Object.entries(file.tags as Record<string, string>)) {
+      contextDel[`soat:ResourceTag/${k}`] = v;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: file.project!.publicId,
+    action: 'files:DeleteFile',
+    resource: srnDel,
+    context: contextDel,
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -416,10 +445,10 @@ filesRouter.post(
       return;
     }
 
-    const allowed = await ctx.authUser.isAllowed(
-      body.projectId,
-      'files:UploadFile'
-    );
+    const allowed = await ctx.authUser.isAllowed({
+      projectPublicId: body.projectId,
+      action: 'files:UploadFile',
+    });
     if (!allowed) {
       ctx.status = 403;
       ctx.body = { error: 'Forbidden' };
@@ -527,10 +556,10 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
     return;
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    body.projectId,
-    'files:UploadFile'
-  );
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: body.projectId,
+    action: 'files:UploadFile',
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -611,10 +640,23 @@ filesRouter.get('/files/:id/download', async (ctx: Context) => {
     return;
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    fileRecord.projectId!,
-    'files:DownloadFile'
-  );
+  const srnDl = buildSrn({
+    projectPublicId: fileRecord.projectId!,
+    resourceType: 'file',
+    resourceId: fileRecord.id,
+  });
+  const contextDl: Record<string, string> = { 'soat:ResourceType': 'file' };
+  if (fileRecord.tags) {
+    for (const [k, v] of Object.entries(fileRecord.tags)) {
+      contextDl[`soat:ResourceTag/${k}`] = v;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: fileRecord.projectId!,
+    action: 'files:DownloadFile',
+    resource: srnDl,
+    context: contextDl,
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -699,10 +741,23 @@ filesRouter.get('/files/:id/download/base64', async (ctx: Context) => {
     return;
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    fileRecord.projectId!,
-    'files:DownloadFile'
-  );
+  const srnDlB64 = buildSrn({
+    projectPublicId: fileRecord.projectId!,
+    resourceType: 'file',
+    resourceId: fileRecord.id,
+  });
+  const contextDlB64: Record<string, string> = { 'soat:ResourceType': 'file' };
+  if (fileRecord.tags) {
+    for (const [k, v] of Object.entries(fileRecord.tags)) {
+      contextDlB64[`soat:ResourceTag/${k}`] = v;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: fileRecord.projectId!,
+    action: 'files:DownloadFile',
+    resource: srnDlB64,
+    context: contextDlB64,
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -794,10 +849,23 @@ filesRouter.patch('/files/:id/metadata', async (ctx: Context) => {
     return;
   }
 
-  const allowed = await ctx.authUser.isAllowed(
-    fileRecord.projectId!,
-    'files:UpdateFileMetadata'
-  );
+  const srnMeta = buildSrn({
+    projectPublicId: fileRecord.projectId!,
+    resourceType: 'file',
+    resourceId: fileRecord.id,
+  });
+  const contextMeta: Record<string, string> = { 'soat:ResourceType': 'file' };
+  if (fileRecord.tags) {
+    for (const [k, v] of Object.entries(fileRecord.tags)) {
+      contextMeta[`soat:ResourceTag/${k}`] = v;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: fileRecord.projectId!,
+    action: 'files:UpdateFileMetadata',
+    resource: srnMeta,
+    context: contextMeta,
+  });
   if (!allowed) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -812,6 +880,245 @@ filesRouter.patch('/files/:id/metadata', async (ctx: Context) => {
   });
 
   ctx.body = updated;
+});
+
+/**
+ * @openapi
+ * /files/{id}/tags:
+ *   get:
+ *     tags:
+ *       - Files
+ *     summary: Get file tags
+ *     operationId: getFileTagsRoute
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       '200':
+ *         description: File tags
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               additionalProperties:
+ *                 type: string
+ *       '401':
+ *         $ref: '#/components/responses/Unauthorized'
+ *       '403':
+ *         $ref: '#/components/responses/Forbidden'
+ *       '404':
+ *         description: File not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+filesRouter.get('/files/:id/tags', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const file = await getFile({ id: ctx.params.id });
+
+  if (!file) {
+    ctx.status = 404;
+    ctx.body = { error: 'File not found' };
+    return;
+  }
+
+  const srn = buildSrn({
+    projectPublicId: file.projectId!,
+    resourceType: 'file',
+    resourceId: file.id,
+  });
+  const context: Record<string, string> = { 'soat:ResourceType': 'file' };
+  if (file.tags) {
+    for (const [k, v] of Object.entries(file.tags)) {
+      context[`soat:ResourceTag/${k}`] = v;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: file.projectId!,
+    action: 'files:GetFile',
+    resource: srn,
+    context,
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  ctx.body = await getFileTags({ id: ctx.params.id });
+});
+
+/**
+ * @openapi
+ * /files/{id}/tags:
+ *   put:
+ *     tags:
+ *       - Files
+ *     summary: Replace file tags
+ *     operationId: putFileTags
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             additionalProperties:
+ *               type: string
+ *     responses:
+ *       '200':
+ *         description: Tags replaced
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/FileRecord'
+ *       '401':
+ *         $ref: '#/components/responses/Unauthorized'
+ *       '403':
+ *         $ref: '#/components/responses/Forbidden'
+ *       '404':
+ *         description: File not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+filesRouter.put('/files/:id/tags', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const file = await getFile({ id: ctx.params.id });
+
+  if (!file) {
+    ctx.status = 404;
+    ctx.body = { error: 'File not found' };
+    return;
+  }
+
+  const srn = buildSrn({
+    projectPublicId: file.projectId!,
+    resourceType: 'file',
+    resourceId: file.id,
+  });
+  const context: Record<string, string> = { 'soat:ResourceType': 'file' };
+  if (file.tags) {
+    for (const [k, v] of Object.entries(file.tags)) {
+      context[`soat:ResourceTag/${k}`] = v;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: file.projectId!,
+    action: 'files:UpdateFileMetadata',
+    resource: srn,
+    context,
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const tags = ctx.request.body as Record<string, string>;
+  ctx.body = await updateFileTags({ id: ctx.params.id, tags, merge: false });
+});
+
+/**
+ * @openapi
+ * /files/{id}/tags:
+ *   patch:
+ *     tags:
+ *       - Files
+ *     summary: Merge file tags
+ *     operationId: patchFileTags
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             additionalProperties:
+ *               type: string
+ *     responses:
+ *       '200':
+ *         description: Tags merged
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/FileRecord'
+ *       '401':
+ *         $ref: '#/components/responses/Unauthorized'
+ *       '403':
+ *         $ref: '#/components/responses/Forbidden'
+ *       '404':
+ *         description: File not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+filesRouter.patch('/files/:id/tags', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const file = await getFile({ id: ctx.params.id });
+
+  if (!file) {
+    ctx.status = 404;
+    ctx.body = { error: 'File not found' };
+    return;
+  }
+
+  const srn = buildSrn({
+    projectPublicId: file.projectId!,
+    resourceType: 'file',
+    resourceId: file.id,
+  });
+  const context: Record<string, string> = { 'soat:ResourceType': 'file' };
+  if (file.tags) {
+    for (const [k, v] of Object.entries(file.tags)) {
+      context[`soat:ResourceTag/${k}`] = v;
+    }
+  }
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: file.projectId!,
+    action: 'files:UpdateFileMetadata',
+    resource: srn,
+    context,
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const tags = ctx.request.body as Record<string, string>;
+  ctx.body = await updateFileTags({ id: ctx.params.id, tags, merge: true });
 });
 
 export { filesRouter };

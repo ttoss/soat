@@ -1,5 +1,5 @@
 export { Actor } from './Actor';
-export { ApiKey } from './ApiKey';
+export { ProjectKey } from './ProjectKey';
 export { Conversation } from './Conversation';
 export { ConversationMessage } from './ConversationMessage';
 export { Document } from './Document';

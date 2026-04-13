@@ -1,19 +1,23 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
-import { createApiKey, getApiKey, updateApiKey } from 'src/lib/apiKeys';
+import {
+  createProjectKey,
+  getProjectKey,
+  updateProjectKey,
+} from 'src/lib/projectKeys';
 
-const apiKeysRouter = new Router<Context>();
+const projectKeysRouter = new Router<Context>();
 
 /**
  * @openapi
- * /api-keys:
+ * /project-keys:
  *   post:
  *     tags:
- *       - API Keys
- *     summary: Create a new API key
- *     description: Creates a new API key for a user in a project with specified policy
- *     operationId: createApiKey
+ *       - Project Keys
+ *     summary: Create a new project key
+ *     description: Creates a new project key for a user in a project with specified policy
+ *     operationId: createProjectKey
  *     requestBody:
  *       required: true
  *       content:
@@ -33,10 +37,10 @@ const apiKeysRouter = new Router<Context>();
  *                 description: Policy ID
  *               name:
  *                 type: string
- *                 description: API key name
+ *                 description: project key name
  *     responses:
  *       '201':
- *         description: API key created successfully
+ *         description: Project key created successfully
  *         content:
  *           application/json:
  *             schema:
@@ -48,7 +52,7 @@ const apiKeysRouter = new Router<Context>();
  *                   type: string
  *                 key:
  *                   type: string
- *                   description: The full API key (shown only once)
+ *                   description: The full project key (shown only once)
  *                 keyPrefix:
  *                   type: string
  *                 createdAt:
@@ -62,7 +66,7 @@ const apiKeysRouter = new Router<Context>();
  *       '500':
  *         description: Internal server error
  */
-apiKeysRouter.post('/api-keys', async (ctx: Context) => {
+projectKeysRouter.post('/project-keys', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -120,7 +124,7 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
     return;
   }
 
-  const apiKey = await createApiKey({
+  const projectKey = await createProjectKey({
     userId: ctx.authUser.id,
     projectId: project.id,
     policyId: policy.id,
@@ -128,28 +132,28 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
   });
 
   ctx.status = 201;
-  ctx.body = apiKey;
+  ctx.body = projectKey;
 });
 
 /**
  * @openapi
- * /api-keys/{id}:
+ * /project-keys/{id}:
  *   get:
  *     tags:
- *       - API Keys
- *     summary: Get an API key by ID
- *     description: Returns the data and metadata of a specific API key
- *     operationId: getApiKey
+ *       - Project Keys
+ *     summary: Get a project key by ID
+ *     description: Returns the data and metadata of a specific project key
+ *     operationId: getProjectKey
  *     parameters:
  *       - name: id
  *         in: path
  *         required: true
- *         description: API key ID
+ *         description: Project key ID
  *         schema:
  *           type: string
  *     responses:
  *       '200':
- *         description: API key found
+ *         description: Project key found
  *         content:
  *           application/json:
  *             schema:
@@ -172,51 +176,51 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
  *                 updatedAt:
  *                   type: string
  *       '404':
- *         description: API key not found
+ *         description: Project key not found
  *       '403':
  *         description: Forbidden
  *       '500':
  *         description: Internal server error
  */
-apiKeysRouter.get('/api-keys/:id', async (ctx: Context) => {
+projectKeysRouter.get('/project-keys/:id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const apiKey = await getApiKey({ id: ctx.params.id });
+  const projectKey = await getProjectKey({ id: ctx.params.id });
 
-  if (!apiKey) {
+  if (!projectKey) {
     ctx.status = 404;
-    ctx.body = { error: 'API key not found' };
+    ctx.body = { error: 'Project key not found' };
     return;
   }
 
-  // Check if user owns the API key
-  if (apiKey.userId !== ctx.authUser.publicId) {
+  // Check if user owns the project key
+  if (projectKey.userId !== ctx.authUser.publicId) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
     return;
   }
 
-  ctx.body = apiKey;
+  ctx.body = projectKey;
 });
 
 /**
  * @openapi
- * /api-keys/{id}:
+ * /project-keys/{id}:
  *   put:
  *     tags:
- *       - API Keys
- *     summary: Update an API key
- *     description: Updates the policy of a specific API key
- *     operationId: updateApiKey
+ *       - Project Keys
+ *     summary: Update a project key
+ *     description: Updates the policy of a specific project key
+ *     operationId: updateProjectKey
  *     parameters:
  *       - name: id
  *         in: path
  *         required: true
- *         description: API key ID
+ *         description: Project key ID
  *         schema:
  *           type: string
  *     requestBody:
@@ -233,7 +237,7 @@ apiKeysRouter.get('/api-keys/:id', async (ctx: Context) => {
  *                 description: New policy ID
  *     responses:
  *       '200':
- *         description: API key updated successfully
+ *         description: Project key updated successfully
  *         content:
  *           application/json:
  *             schema:
@@ -256,13 +260,13 @@ apiKeysRouter.get('/api-keys/:id', async (ctx: Context) => {
  *                 updatedAt:
  *                   type: string
  *       '404':
- *         description: API key not found
+ *         description: Project key not found
  *       '403':
  *         description: Forbidden
  *       '500':
  *         description: Internal server error
  */
-apiKeysRouter.put('/api-keys/:id', async (ctx: Context) => {
+projectKeysRouter.put('/project-keys/:id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -290,37 +294,37 @@ apiKeysRouter.put('/api-keys/:id', async (ctx: Context) => {
     return;
   }
 
-  // Check if user owns the API key
-  const apiKeyRecord = await db.ApiKey.findOne({
+  // Check if user owns the project key
+  const projectKeyRecord = await ctx.db.ProjectKey.findOne({
     where: { publicId: ctx.params.id },
     include: [{ model: db.User }, { model: db.Project }],
   });
 
-  if (!apiKeyRecord) {
+  if (!projectKeyRecord) {
     ctx.status = 404;
-    ctx.body = { error: 'API key not found' };
+    ctx.body = { error: 'Project key not found' };
     return;
   }
 
-  if (apiKeyRecord.userId !== ctx.authUser.id) {
+  if (projectKeyRecord.userId !== ctx.authUser.id) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
     return;
   }
 
-  // Check if policy belongs to the same project as the API key
-  if (policy.projectId !== apiKeyRecord.projectId) {
+  // Check if policy belongs to the same project as the project key
+  if (policy.projectId !== projectKeyRecord.projectId) {
     ctx.status = 400;
     ctx.body = { error: 'Policy does not belong to the same project' };
     return;
   }
 
-  const updatedApiKey = await updateApiKey({
+  const updatedProjectKey = await updateProjectKey({
     id: ctx.params.id,
     policyId: policy.id,
   });
 
-  ctx.body = updatedApiKey;
+  ctx.body = updatedProjectKey;
 });
 
-export { apiKeysRouter };
+export { projectKeysRouter };

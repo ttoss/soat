@@ -48,6 +48,13 @@ export class Conversation extends Model {
   })
   declare status: string;
 
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+    defaultValue: {},
+  })
+  declare tags: Record<string, string> | null;
+
   @HasMany(() => {
     return ConversationMessage;
   })

@@ -96,19 +96,19 @@ describe('Projects', () => {
       ).toBe(true);
       expect(response.body.length).toBe(1);
     });
-    describe('api key only sees its scoped project', () => {
+    describe('project key only sees its scoped project', () => {
       let projectAId: string;
-      let rawApiKey: string;
+      let rawProjectKey: string;
 
       beforeAll(async () => {
         const projARes = await authenticatedTestClient(adminToken)
           .post('/api/v1/projects')
-          .send({ name: 'API Key Project A' });
+          .send({ name: 'project key Project A' });
         projectAId = projARes.body.id;
 
         const projBRes = await authenticatedTestClient(adminToken)
           .post('/api/v1/projects')
-          .send({ name: 'API Key Project B' });
+          .send({ name: 'project key Project B' });
         const projectBId = projBRes.body.id;
 
         const policyARes = await authenticatedTestClient(adminToken)
@@ -129,19 +129,19 @@ describe('Projects', () => {
           .post(`/api/v1/projects/${projectBId}/members`)
           .send({ userId, policyId: policyBId });
 
-        const apiKeyRes = await authenticatedTestClient(userToken)
-          .post('/api/v1/api-keys')
+        const projectKeyRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/project-keys')
           .send({
             projectId: projectAId,
             policyId: policyAId,
             name: 'Scoped Key',
           });
-        rawApiKey = apiKeyRes.body.key;
+        rawProjectKey = projectKeyRes.body.key;
       });
 
-      test('api key user only sees the scoped project', async () => {
+      test('project key user only sees the scoped project', async () => {
         const response =
-          await authenticatedTestClient(rawApiKey).get('/api/v1/projects');
+          await authenticatedTestClient(rawProjectKey).get('/api/v1/projects');
 
         expect(response.status).toBe(200);
         expect(Array.isArray(response.body)).toBe(true);
@@ -433,7 +433,7 @@ describe('Projects', () => {
   });
 
   describe('cascade deletion when a project is deleted', () => {
-    test('deleting a project removes its policies, memberships, and api keys', async () => {
+    test('deleting a project removes its policies, memberships, and project keys', async () => {
       const projRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/projects')
         .send({ name: 'Cascade Test Project' });
@@ -451,11 +451,11 @@ describe('Projects', () => {
         .send({ userId, policyId });
       expect(memberRes.status).toBe(201);
 
-      const apiKeyRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/api-keys')
+      const projectKeyRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/project-keys')
         .send({ projectId, policyId, name: 'Cascade Test Key' });
-      expect(apiKeyRes.status).toBe(201);
-      const apiKeyId = apiKeyRes.body.id;
+      expect(projectKeyRes.status).toBe(201);
+      const projectKeyId = projectKeyRes.body.id;
 
       const deleteRes = await authenticatedTestClient(adminToken).delete(
         `/api/v1/projects/${projectId}`
@@ -476,11 +476,11 @@ describe('Projects', () => {
       });
       expect(projectIds).not.toContain(projectId);
 
-      // ApiKey cascade-deleted: key no longer found
-      const apiKeyGetRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/api-keys/${apiKeyId}`
+      // ProjectKey cascade-deleted: key no longer found
+      const projectKeyGetRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/project-keys/${projectKeyId}`
       );
-      expect(apiKeyGetRes.status).toBe(404);
+      expect(projectKeyGetRes.status).toBe(404);
     });
   });
 });

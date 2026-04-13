@@ -8,10 +8,10 @@ import { authenticatedTestClient, loginAs, testClient } from '../testClient';
  * 3. admin assigns the user to the project with a read-only policy
  * 4. user can read a file using JWT
  * 5. user cannot delete that file using JWT
- * 6. user creates an API key scoped to the project
- * 7. user assigns the deleteFile action to the API key
- * 8. user can read the file using the API key
- * 9. user cannot delete the file using the API key (membership policy intersection)
+ * 6. user creates an project key scoped to the project
+ * 7. user assigns the deleteFile action to the project key
+ * 8. user can read the file using the project key
+ * 9. user cannot delete the file using the project key (membership policy intersection)
  */
 
 // ─── Group 1: Setup (Steps 1-3) ──────────────────────────────────────────
@@ -174,14 +174,14 @@ describe('Group 2: JWT Permissions - User can read but not delete file', () => {
   });
 });
 
-// ─── Group 3: API Key Permissions (Steps 6-9) ─────────────────────────────
+// ─── Group 3: project key Permissions (Steps 6-9) ─────────────────────────────
 
-describe('Group 3: API Key Permissions - Create key, assign permissions, test access', () => {
+describe('Group 3: project key Permissions - Create key, assign permissions, test access', () => {
   let adminToken: string;
   let projectId: string;
   let userId: string;
   let userToken: string;
-  let apiKey: string;
+  let projectKey: string;
   let fileId: string;
 
   beforeAll(async () => {
@@ -220,7 +220,7 @@ describe('Group 3: API Key Permissions - Create key, assign permissions, test ac
         policyId,
       });
 
-    // Create API key with delete permission
+    // Create project key with delete permission
     const newPolicyResponse = await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
@@ -228,14 +228,14 @@ describe('Group 3: API Key Permissions - Create key, assign permissions, test ac
       });
     const newPolicyId = newPolicyResponse.body.id;
 
-    const apiKeyResponse = await authenticatedTestClient(userToken)
-      .post('/api/v1/api-keys')
+    const projectKeyResponse = await authenticatedTestClient(userToken)
+      .post('/api/v1/project-keys')
       .send({
         projectId,
         policyId: newPolicyId,
-        name: 'Test API Key',
+        name: 'Test project key',
       });
-    apiKey = apiKeyResponse.body.key;
+    projectKey = projectKeyResponse.body.key;
 
     // Create file
     const fileResponse = await authenticatedTestClient(adminToken)
@@ -249,7 +249,7 @@ describe('Group 3: API Key Permissions - Create key, assign permissions, test ac
     fileId = fileResponse.body.id;
   });
 
-  test('user can create an API key for the project', async () => {
+  test('user can create an project key for the project', async () => {
     // First get the policy ID
     const policiesResponse = await authenticatedTestClient(userToken).get(
       `/api/v1/projects/${projectId}/policies`
@@ -257,34 +257,34 @@ describe('Group 3: API Key Permissions - Create key, assign permissions, test ac
     const policyId = policiesResponse.body[0].id;
 
     const response = await authenticatedTestClient(userToken)
-      .post('/api/v1/api-keys')
+      .post('/api/v1/project-keys')
       .send({
         projectId,
         policyId,
-        name: 'Test API Key',
+        name: 'Test project key',
       });
 
     expect(response.status).toBe(201);
     expect(response.body.id).toBeDefined();
-    expect(response.body.name).toBe('Test API Key');
+    expect(response.body.name).toBe('Test project key');
     expect(response.body.key).toMatch(/^sk_/);
     expect(response.body.keyPrefix).toBe(response.body.key.slice(0, 8));
   });
 
-  test('user can read file using the API key', async () => {
+  test('user can read file using the project key', async () => {
     const response = await testClient
       .get(`/api/v1/files/${fileId}`)
-      .set('Authorization', `Bearer ${apiKey}`);
+      .set('Authorization', `Bearer ${projectKey}`);
 
     expect(response.status).toBe(200);
     expect(response.body.id).toBe(fileId);
     expect(response.body.filename).toBe('test.txt');
   });
 
-  test('user cannot delete file using the API key due to policy intersection', async () => {
+  test('user cannot delete file using the project key due to policy intersection', async () => {
     const response = await testClient
       .delete(`/api/v1/files/${fileId}`)
-      .set('Authorization', `Bearer ${apiKey}`);
+      .set('Authorization', `Bearer ${projectKey}`);
 
     expect(response.status).toBe(403);
     expect(response.body.error).toBe('Forbidden');
@@ -389,14 +389,14 @@ describe('Group 4: Two users in the same project with different policies', () =>
   });
 });
 
-// ─── Group 5: User with Multiple API Keys ─────────────────────────────────
+// ─── Group 5: User with Multiple project keys ─────────────────────────────────
 
-describe('Group 5: User with multiple API keys scoped to different permissions', () => {
+describe('Group 5: User with multiple project keys scoped to different permissions', () => {
   let adminToken: string;
   let projectId: string;
   let userToken: string;
-  let readOnlyApiKey: string;
-  let deleteOnlyApiKey: string;
+  let readOnlyProjectKey: string;
+  let deleteOnlyProjectKey: string;
   let fileId: string;
 
   beforeAll(async () => {
@@ -408,7 +408,7 @@ describe('Group 5: User with multiple API keys scoped to different permissions',
 
     const projectResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/projects')
-      .send({ name: 'Multiple API Keys Project' });
+      .send({ name: 'Multiple project keys Project' });
     projectId = projectResponse.body.id;
 
     const userResponse = await authenticatedTestClient(adminToken)
@@ -429,7 +429,7 @@ describe('Group 5: User with multiple API keys scoped to different permissions',
       .post(`/api/v1/projects/${projectId}/members`)
       .send({ userId: userResponse.body.id, policyId: memberPolicyId });
 
-    // API key policy 1: read-only
+    // project key policy 1: read-only
     const readKeyPolicyResponse = await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
@@ -438,7 +438,7 @@ describe('Group 5: User with multiple API keys scoped to different permissions',
       });
     const readKeyPolicyId = readKeyPolicyResponse.body.id;
 
-    // API key policy 2: delete-only
+    // project key policy 2: delete-only
     const deleteKeyPolicyResponse = await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
@@ -448,14 +448,14 @@ describe('Group 5: User with multiple API keys scoped to different permissions',
     const deleteKeyPolicyId = deleteKeyPolicyResponse.body.id;
 
     const readKeyResponse = await authenticatedTestClient(userToken)
-      .post('/api/v1/api-keys')
+      .post('/api/v1/project-keys')
       .send({ projectId, policyId: readKeyPolicyId, name: 'Read Key' });
-    readOnlyApiKey = readKeyResponse.body.key;
+    readOnlyProjectKey = readKeyResponse.body.key;
 
     const deleteKeyResponse = await authenticatedTestClient(userToken)
-      .post('/api/v1/api-keys')
+      .post('/api/v1/project-keys')
       .send({ projectId, policyId: deleteKeyPolicyId, name: 'Delete Key' });
-    deleteOnlyApiKey = deleteKeyResponse.body.key;
+    deleteOnlyProjectKey = deleteKeyResponse.body.key;
 
     const fileResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/files')
@@ -468,46 +468,46 @@ describe('Group 5: User with multiple API keys scoped to different permissions',
     fileId = fileResponse.body.id;
   });
 
-  test('read-only API key can read the file', async () => {
+  test('read-only project key can read the file', async () => {
     const response = await testClient
       .get(`/api/v1/files/${fileId}`)
-      .set('Authorization', `Bearer ${readOnlyApiKey}`);
+      .set('Authorization', `Bearer ${readOnlyProjectKey}`);
     expect(response.status).toBe(200);
     expect(response.body.id).toBe(fileId);
   });
 
-  test('read-only API key cannot delete the file', async () => {
+  test('read-only project key cannot delete the file', async () => {
     const response = await testClient
       .delete(`/api/v1/files/${fileId}`)
-      .set('Authorization', `Bearer ${readOnlyApiKey}`);
+      .set('Authorization', `Bearer ${readOnlyProjectKey}`);
     expect(response.status).toBe(403);
     expect(response.body.error).toBe('Forbidden');
   });
 
-  test('delete-only API key cannot read the file', async () => {
+  test('delete-only project key cannot read the file', async () => {
     const response = await testClient
       .get(`/api/v1/files/${fileId}`)
-      .set('Authorization', `Bearer ${deleteOnlyApiKey}`);
+      .set('Authorization', `Bearer ${deleteOnlyProjectKey}`);
     expect(response.status).toBe(403);
     expect(response.body.error).toBe('Forbidden');
   });
 
-  test('delete-only API key can delete the file', async () => {
+  test('delete-only project key can delete the file', async () => {
     const response = await testClient
       .delete(`/api/v1/files/${fileId}`)
-      .set('Authorization', `Bearer ${deleteOnlyApiKey}`);
+      .set('Authorization', `Bearer ${deleteOnlyProjectKey}`);
     expect(response.status).toBe(204);
   });
 });
 
-// ─── Group 6: API Key Project Isolation ──────────────────────────────────
+// ─── Group 6: project key Project Isolation ──────────────────────────────────
 
-describe('Group 6: API key cannot access files in a different project', () => {
+describe('Group 6: project key cannot access files in a different project', () => {
   let adminToken: string;
   let projectAId: string;
   let projectBId: string;
   let userToken: string;
-  let apiKey: string;
+  let projectKey: string;
   let fileInProjectA: string;
   let fileInProjectB: string;
 
@@ -545,10 +545,10 @@ describe('Group 6: API key cannot access files in a different project', () => {
       .post(`/api/v1/projects/${projectAId}/members`)
       .send({ userId: userResponse.body.id, policyId });
 
-    const apiKeyResponse = await authenticatedTestClient(userToken)
-      .post('/api/v1/api-keys')
+    const projectKeyResponse = await authenticatedTestClient(userToken)
+      .post('/api/v1/project-keys')
       .send({ projectId: projectAId, policyId, name: 'Project A Key' });
-    apiKey = apiKeyResponse.body.key;
+    projectKey = projectKeyResponse.body.key;
 
     const fileAResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/files')
@@ -571,18 +571,18 @@ describe('Group 6: API key cannot access files in a different project', () => {
     fileInProjectB = fileBResponse.body.id;
   });
 
-  test('API key can read a file from its own project', async () => {
+  test('project key can read a file from its own project', async () => {
     const response = await testClient
       .get(`/api/v1/files/${fileInProjectA}`)
-      .set('Authorization', `Bearer ${apiKey}`);
+      .set('Authorization', `Bearer ${projectKey}`);
     expect(response.status).toBe(200);
     expect(response.body.id).toBe(fileInProjectA);
   });
 
-  test('API key cannot read a file from a different project', async () => {
+  test('project key cannot read a file from a different project', async () => {
     const response = await testClient
       .get(`/api/v1/files/${fileInProjectB}`)
-      .set('Authorization', `Bearer ${apiKey}`);
+      .set('Authorization', `Bearer ${projectKey}`);
     expect(response.status).toBe(403);
     expect(response.body.error).toBe('Forbidden');
   });
@@ -908,9 +908,9 @@ describe('Group 11: Multiple admins can all manage projects and bypass policy ch
   });
 });
 
-// ─── Group 12: Multiple Users with Multiple API Keys ──────────────────────
+// ─── Group 12: Multiple Users with Multiple project keys ──────────────────────
 
-describe('Group 12: Multiple users each with multiple API keys in the same project', () => {
+describe('Group 12: Multiple users each with multiple project keys in the same project', () => {
   let adminToken: string;
   let projectId: string;
   let user1ReadKey: string;
@@ -927,7 +927,7 @@ describe('Group 12: Multiple users each with multiple API keys in the same proje
 
     const projectResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/projects')
-      .send({ name: 'Multi-User API Keys Project' });
+      .send({ name: 'Multi-User project keys Project' });
     projectId = projectResponse.body.id;
 
     // User1 membership: full permissions
@@ -966,7 +966,7 @@ describe('Group 12: Multiple users each with multiple API keys in the same proje
       .post(`/api/v1/projects/${projectId}/members`)
       .send({ userId: user2Response.body.id, policyId: readOnlyPolicyId });
 
-    // API key policies
+    // project key policies
     const readKeyPolicyResponse = await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
@@ -983,14 +983,14 @@ describe('Group 12: Multiple users each with multiple API keys in the same proje
       });
     const deleteKeyPolicyId = deleteKeyPolicyResponse.body.id;
 
-    // User1 creates two API keys: one read-only, one full
+    // User1 creates two project keys: one read-only, one full
     const u1ReadKeyResponse = await authenticatedTestClient(user1Token)
-      .post('/api/v1/api-keys')
+      .post('/api/v1/project-keys')
       .send({ projectId, policyId: readKeyPolicyId, name: 'Oscar Read Key' });
     user1ReadKey = u1ReadKeyResponse.body.key;
 
     const u1DeleteKeyResponse = await authenticatedTestClient(user1Token)
-      .post('/api/v1/api-keys')
+      .post('/api/v1/project-keys')
       .send({
         projectId,
         policyId: deleteKeyPolicyId,
@@ -1001,7 +1001,7 @@ describe('Group 12: Multiple users each with multiple API keys in the same proje
     // User2 creates a key with full key policy — but membership is read-only,
     // so the effective permission (intersection) is still read-only
     const u2KeyResponse = await authenticatedTestClient(user2Token)
-      .post('/api/v1/api-keys')
+      .post('/api/v1/project-keys')
       .send({
         projectId,
         policyId: deleteKeyPolicyId,

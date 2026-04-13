@@ -13,6 +13,7 @@ const mapActor = (
     name: actor.name,
     type: actor.type ?? undefined,
     externalId: actor.externalId ?? undefined,
+    tags: actor.tags ?? undefined,
     createdAt: actor.createdAt,
     updatedAt: actor.updatedAt,
   };
@@ -131,6 +132,40 @@ export const updateActor = async (args: {
   }
 
   await actor.update(updates);
+
+  const actorWithProject = await db.Actor.findOne({
+    where: { id: actor.id },
+    include: [{ model: db.Project, as: 'project' }],
+  });
+
+  return mapActor(actorWithProject!);
+};
+
+export const getActorTags = async (args: { id: string }) => {
+  const actor = await db.Actor.findOne({ where: { publicId: args.id } });
+
+  if (!actor) {
+    return null;
+  }
+
+  return actor.tags ?? {};
+};
+
+export const updateActorTags = async (args: {
+  id: string;
+  tags: Record<string, string>;
+  merge?: boolean;
+}) => {
+  const actor = await db.Actor.findOne({ where: { publicId: args.id } });
+
+  if (!actor) {
+    return null;
+  }
+
+  const newTags = args.merge
+    ? { ...(actor.tags ?? {}), ...args.tags }
+    : args.tags;
+  await actor.update({ tags: newTags });
 
   const actorWithProject = await db.Actor.findOne({
     where: { id: actor.id },

@@ -20,6 +20,7 @@ const mapFile = (file: InstanceType<(typeof db)['File']>) => {
     storageType: file.storageType,
     storagePath: file.storagePath,
     metadata: file.metadata,
+    tags: file.tags ?? undefined,
     createdAt: file.createdAt,
     updatedAt: file.updatedAt,
   };
@@ -175,4 +176,33 @@ export const deleteFile = async (args: { id: string }) => {
 
   await file.destroy();
   return true;
+};
+
+export const getFileTags = async (args: { id: string }) => {
+  const file = await db.File.findOne({ where: { publicId: args.id } });
+
+  if (!file) {
+    return null;
+  }
+
+  return file.tags ?? {};
+};
+
+export const updateFileTags = async (args: {
+  id: string;
+  tags: Record<string, string>;
+  merge?: boolean;
+}) => {
+  const file = await db.File.findOne({ where: { publicId: args.id } });
+
+  if (!file) {
+    return null;
+  }
+
+  const newTags = args.merge
+    ? { ...(file.tags ?? {}), ...args.tags }
+    : args.tags;
+  await file.update({ tags: newTags });
+
+  return { ...mapFile(file), tags: newTags };
 };

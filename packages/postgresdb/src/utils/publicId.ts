@@ -9,17 +9,17 @@ export const PUBLIC_ID_PREFIXES = {
   user: 'usr_',
   project: 'proj_',
   policy: 'pol_',
-  apiKey: 'key_',
+  projectKey: 'key_',
   document: 'doc_',
   actor: 'act_',
   conversation: 'conv_',
 } as const;
 
 /**
- * Prefix for raw API key values (shown once at creation, then hashed).
+ * Prefix for raw project key values (shown once at creation, then hashed).
  * Format: sk_{random} — distinguishable from JWTs (which start with 'eyJ').
  */
-export const API_KEY_RAW_PREFIX = 'sk_';
+export const PROJECT_KEY_RAW_PREFIX = 'sk_';
 
 export type PublicIdPrefix =
   (typeof PUBLIC_ID_PREFIXES)[keyof typeof PUBLIC_ID_PREFIXES];

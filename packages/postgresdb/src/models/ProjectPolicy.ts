@@ -43,18 +43,22 @@ export class ProjectPolicy extends Model {
   declare project: Project;
 
   @Column({
-    type: DataType.ARRAY(DataType.TEXT),
-    allowNull: false,
-    defaultValue: [],
+    type: DataType.STRING,
+    allowNull: true,
   })
-  declare permissions: string[];
+  declare name: string | null;
 
   @Column({
-    type: DataType.ARRAY(DataType.TEXT),
-    allowNull: false,
-    defaultValue: [],
+    type: DataType.TEXT,
+    allowNull: true,
   })
-  declare notPermissions: string[];
+  declare description: string | null;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: false,
+  })
+  declare document: object;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
