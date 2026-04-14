@@ -15,6 +15,7 @@ export const PUBLIC_ID_PREFIXES = {
   conversation: 'conv_',
   secret: 'sec_',
   aiProvider: 'aip_',
+  chat: 'cht_',
 } as const;
 
 /**

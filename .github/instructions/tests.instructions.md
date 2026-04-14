@@ -19,8 +19,6 @@ Run tests for a specific file using `--testPathPatterns` (plural):
 pnpm --filter @soat/server test --testPathPatterns=users.test.ts
 ```
 
-Do **not** use `npx jest` directly or `--testPathPattern` (singular).
-
 ## Test File Location and Naming
 
 - Server unit tests live in `packages/server/tests/unit/tests/`
@@ -100,6 +98,49 @@ expect(response.body.password).toBeUndefined(); // sensitive fields must be abse
 ```
 
 Internal database IDs must never appear in responses — assert `id` maps to `publicId`.
+
+## MCP Tool Tests
+
+All MCP (Model Context Protocol) tools must be tested in `packages/server/tests/unit/tests/mcp.test.ts`. This is a single integration test file that covers all MCP tools across all modules.
+
+### When to Add MCP Tests
+
+**Every new MCP tool must have a corresponding test added to `mcp.test.ts` before the implementation is considered complete.** This includes:
+
+- New tools added to existing modules
+- New modules with MCP tools
+- Modifications to existing tools that change their behavior
+
+### Test Structure
+
+MCP tests are organized by module with comment headers:
+
+```ts
+// ── Module Name ──────────────────────────────────────────────────────────
+
+test('tool-name does something', async () => {
+  const res = await mcpCall('tool-name', { arg: 'value' });
+  expect(res.status).toBe(200);
+  const result = parseResult(res);
+  expect(result.id).toBeDefined();
+});
+```
+
+### Test Patterns
+
+- Use the `mcpCall` helper to invoke tools via the MCP endpoint
+- Use `parseResult` to extract JSON responses
+- Assert both HTTP status codes and response structure
+- Follow the same coverage requirements as REST API tests (happy path, error cases)
+- Mock external service responses (e.g., AI completions) to ensure tests are deterministic and fast
+
+### Running MCP Tests
+
+Run MCP tests specifically:
+
+```bash
+pnpm --filter @soat/server test --testPathPatterns=mcp.test.ts
+```
 
 ## Smoke Test
 

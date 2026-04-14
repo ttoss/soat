@@ -3,11 +3,528 @@ info:
   title: Chats API
   version: 1.0.0
   description: >
-    Stateless chat completions endpoint, compatible with the OpenAI Chat
-    Completions API. Supports text generation and streaming (SSE) via any
-    configured AI provider or an Ollama fallback.
+    Chat resources and completions. Create stateful chat objects bound to an AI
+    provider, then run completions against them. Also exposes a stateless
+    completions endpoint compatible with the OpenAI Chat Completions API.
   contact:
     name: SOAT API Support
+
+servers:
+  - url: http://0.0.0.0:5047/api/v1
+
+paths:
+  /chats:
+    post:
+      tags:
+        - Chats
+      summary: Create a chat
+      description: Creates a new chat resource bound to an AI provider.
+      operationId: createChat
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChatRequest'
+            examples:
+              basic:
+                summary: Minimal chat
+                value:
+                  aiProviderId: aip_V1StGXR8Z5jdHi6B
+              withSystem:
+                summary: Chat with system message
+                value:
+                  aiProviderId: aip_V1StGXR8Z5jdHi6B
+                  name: Support Bot
+                  systemMessage: You are a helpful support assistant.
+                  model: gpt-4o
+      responses:
+        '201':
+          description: Chat created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chat'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: AI provider not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Chats
+      summary: List chats
+      description: Returns all chats in the project.
+      operationId: listChats
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Project public ID to filter by
+      responses:
+        '200':
+          description: List of chats
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Chat'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /chats/{chatId}:
+    get:
+      tags:
+        - Chats
+      summary: Get a chat
+      description: Returns a single chat by ID.
+      operationId: getChat
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Chat record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chat'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Chat not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Chats
+      summary: Delete a chat
+      description: Deletes a chat by ID.
+      operationId: deleteChat
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Chat deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Chat not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /chats/{chatId}/completions:
+    post:
+      tags:
+        - Chats
+      summary: Create a chat completion for a stored chat
+      description: >
+        Runs a completion using the AI provider and settings stored in the chat.
+        Pass `stream: true` for SSE streaming. A system message in `messages`
+        overrides the chat's stored system message for this call only.
+        Messages may use `documentId` instead of `content`.
+      operationId: createChatCompletionForChat
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatCompletionForChatRequest'
+            examples:
+              basic:
+                summary: Simple user message
+                value:
+                  messages:
+                    - role: user
+                      content: What can you help me with?
+              withDocument:
+                summary: Message referencing a document
+                value:
+                  messages:
+                    - role: user
+                      documentId: doc_V1StGXR8Z5jdHi6B
+              withSystemOverride:
+                summary: Override system message
+                value:
+                  messages:
+                    - role: system
+                      content: Answer in French only.
+                    - role: user
+                      content: Hello
+      responses:
+        '200':
+          description: Chat completion result (JSON or SSE stream)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatCompletionResponse'
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE stream of delta chunks ending with `data: [DONE]`.
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Chat or AI provider not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /chats/completions:
+    post:
+      tags:
+        - Chats
+      summary: Create a chat completion (stateless)
+      description: >
+        OpenAI Chat Completions-compatible endpoint. Resolves the AI provider
+        from `aiProviderId`, decrypts its secret, and calls the appropriate
+        Vercel AI SDK provider. Falls back to Ollama when `aiProviderId` is
+        omitted.
+      operationId: createChatCompletion
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatCompletionRequest'
+            examples:
+              basic:
+                summary: Simple user message
+                value:
+                  messages:
+                    - role: user
+                      content: Hello, how are you?
+              withProvider:
+                summary: With explicit AI provider and streaming
+                value:
+                  aiProviderId: aip_V1StGXR8Z5jdHi6B
+                  model: gpt-4o
+                  messages:
+                    - role: system
+                      content: You are a helpful assistant.
+                    - role: user
+                      content: What files do I have?
+                  stream: true
+      responses:
+        '200':
+          description: Chat completion result (JSON or SSE stream)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatCompletionResponse'
+            text/event-stream:
+              schema:
+                type: string
+                description: >
+                  SSE stream of JSON objects, one per line, prefixed with
+                  `data: `. The stream ends with `data: [DONE]`.
+        '400':
+          description: Bad Request — `messages` is missing or empty
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized — missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: AI provider not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Chat:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public ID of the chat
+          example: cht_V1StGXR8Z5jdHi6B
+        projectId:
+          type: string
+          description: Public ID of the owning project
+          example: proj_V1StGXR8Z5jdHi6B
+        aiProviderId:
+          type: string
+          description: Public ID of the AI provider
+          example: aip_V1StGXR8Z5jdHi6B
+        name:
+          type: string
+          nullable: true
+          description: Optional human-readable name
+          example: Support Bot
+        systemMessage:
+          type: string
+          nullable: true
+          description: Optional system message sent with every completion
+          example: You are a helpful support assistant.
+        model:
+          type: string
+          nullable: true
+          description: Optional model override for this chat
+          example: gpt-4o
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateChatRequest:
+      type: object
+      required:
+        - aiProviderId
+      properties:
+        aiProviderId:
+          type: string
+          description: Public ID of the AI provider
+          example: aip_V1StGXR8Z5jdHi6B
+        projectId:
+          type: string
+          description: >
+            Public ID of the project. Required when the user belongs to multiple
+            projects and no project key is used.
+          example: proj_V1StGXR8Z5jdHi6B
+        name:
+          type: string
+          description: Optional human-readable name
+          example: Support Bot
+        systemMessage:
+          type: string
+          description: Optional system message applied to all completions on this chat
+          example: You are a helpful support assistant.
+        model:
+          type: string
+          description: Optional default model override
+          example: gpt-4o
+
+    ChatMessageInput:
+      type: object
+      required:
+        - role
+      properties:
+        role:
+          type: string
+          enum:
+            - system
+            - user
+            - assistant
+          example: user
+        content:
+          type: string
+          description: Text content of the message (mutually exclusive with documentId)
+          example: What can you help me with?
+        documentId:
+          type: string
+          description: >
+            Public ID of a document whose content is used as the message body
+            (mutually exclusive with content). Only valid for user/assistant roles.
+          example: doc_V1StGXR8Z5jdHi6B
+
+    ChatCompletionForChatRequest:
+      type: object
+      required:
+        - messages
+      properties:
+        messages:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ChatMessageInput'
+        model:
+          type: string
+          description: Override the chat's default model for this call
+          example: gpt-4o-mini
+        stream:
+          type: boolean
+          default: false
+          description: When `true` the response is an SSE stream.
+
+    ChatMessage:
+      type: object
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          enum:
+            - system
+            - user
+            - assistant
+          description: Role of the message author
+          example: user
+        content:
+          type: string
+          description: Text content of the message
+          example: Hello, how are you?
+
+    ChatCompletionRequest:
+      type: object
+      required:
+        - messages
+      properties:
+        aiProviderId:
+          type: string
+          description: >
+            Public ID of the AI provider to use. When omitted the server falls
+            back to Ollama.
+          example: aip_V1StGXR8Z5jdHi6B
+        model:
+          type: string
+          description: >
+            Model identifier. Overrides the provider's `defaultModel` when
+            specified.
+          example: gpt-4o
+        messages:
+          type: array
+          minItems: 1
+          description: Ordered list of chat messages
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+        stream:
+          type: boolean
+          default: false
+          description: >
+            When `true` the response is an SSE stream of delta chunks.
+            When `false` (default) a single JSON object is returned.
+
+    ChatCompletionResponseMessage:
+      type: object
+      properties:
+        role:
+          type: string
+          example: assistant
+        content:
+          type: string
+          example: Hello! I am doing well, thank you.
+
+    ChatCompletionChoice:
+      type: object
+      properties:
+        index:
+          type: integer
+          example: 0
+        message:
+          $ref: '#/components/schemas/ChatCompletionResponseMessage'
+        finish_reason:
+          type: string
+          example: stop
+
+    ChatCompletionResponse:
+      type: object
+      properties:
+        object:
+          type: string
+          example: chat.completion
+        model:
+          type: string
+          example: gpt-4o
+        choices:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatCompletionChoice'
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: Unauthorized
 
 servers:
   - url: http://0.0.0.0:5047/api/v1

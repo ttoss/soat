@@ -1,5 +1,6 @@
 export { Actor } from './Actor';
 export { AiProvider } from './AiProvider';
+export { Chat } from './Chat';
 export { ProjectKey } from './ProjectKey';
 export { Conversation } from './Conversation';
 export { ConversationMessage } from './ConversationMessage';
