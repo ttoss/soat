@@ -1,6 +1,6 @@
 services:
   database:
-    image: pgvector/pgvector:0.8.1-pg18-trixie
+    image: pgvector/pgvector:0.8.2-pg18-trixie
     environment:
       POSTGRES_DB: soat_test
       POSTGRES_USER: soat_user
@@ -56,7 +56,6 @@ services:
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_MODEL: qwen3-embedding:0.6b
       EMBEDDING_DIMENSIONS: '1024'
-      AGENT_MODEL: qwen2.5:0.5b
     healthcheck:
       test:
         - CMD

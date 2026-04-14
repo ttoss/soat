@@ -1,7 +1,6 @@
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 
+import { storageDir } from '../setupTests';
 import { authenticatedTestClient, loginAs, testClient } from '../testClient';
 
 describe('Files', () => {
@@ -10,13 +9,8 @@ describe('Files', () => {
   let userId: string;
   let projectId: string;
   let policyId: string;
-  let storageDir: string;
 
   beforeAll(async () => {
-    storageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'soat-files-test-'));
-    // eslint-disable-next-line turbo/no-undeclared-env-vars
-    process.env.FILES_STORAGE_DIR = storageDir;
-
     await testClient
       .post('/api/v1/users/bootstrap')
       .send({ username: 'admin', password: 'supersecret' });

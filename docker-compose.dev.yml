@@ -1,6 +1,6 @@
 services:
   database:
-    image: pgvector/pgvector:0.8.1-pg18-trixie
+    image: pgvector/pgvector:0.8.2-pg18-trixie
     container_name: soat-database-dev-docker
     environment:
       POSTGRES_DB: ${DATABASE_NAME:-soat_dev}

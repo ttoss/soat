@@ -1,6 +1,6 @@
 import { Router } from '@ttoss/http-server';
 
-import { agentsRouter } from './agents';
+import { chatsRouter } from './chats';
 import { actorsRouter } from './actors';
 import { aiProvidersRouter } from './aiProviders';
 import { projectKeysRouter } from './projectKeys';
@@ -13,7 +13,7 @@ import { usersRouter } from './users';
 
 const v1Router = new Router();
 
-v1Router.use(agentsRouter.routes());
+v1Router.use(chatsRouter.routes());
 v1Router.use(actorsRouter.routes());
 v1Router.use(aiProvidersRouter.routes());
 v1Router.use(projectKeysRouter.routes());

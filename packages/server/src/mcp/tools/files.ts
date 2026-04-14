@@ -127,6 +127,7 @@ const registerTools = (server: McpServer) => {
     {
       description: 'Create a file metadata record without uploading content',
       inputSchema: {
+        projectId: z.string().describe('Project ID'),
         storageType: z
           .enum(['local', 's3', 'gcs'])
           .describe('Storage backend type'),

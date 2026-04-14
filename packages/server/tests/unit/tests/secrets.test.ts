@@ -9,9 +9,6 @@ describe('Secrets', () => {
   let policyId: string;
 
   beforeAll(async () => {
-    // eslint-disable-next-line turbo/no-undeclared-env-vars
-    process.env.SECRETS_ENCRYPTION_KEY = '0'.repeat(64);
-
     await testClient
       .post('/api/v1/users/bootstrap')
       .send({ username: 'secretsadmin', password: 'supersecret' });
@@ -251,9 +248,6 @@ describe('Secrets', () => {
     });
 
     test('secret referenced by AI provider returns 409 without force', async () => {
-      // eslint-disable-next-line turbo/no-undeclared-env-vars
-      process.env.SECRETS_ENCRYPTION_KEY = '0'.repeat(64);
-
       const secretRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/secrets')
         .send({ projectId, name: 'Linked Secret' });

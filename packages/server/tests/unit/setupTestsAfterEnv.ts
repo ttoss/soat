@@ -30,7 +30,7 @@ jest.setTimeout(120000);
 
 beforeAll(async () => {
   postgresContainer = await new PostgreSqlContainer(
-    'pgvector/pgvector:0.8.1-pg18-trixie'
+    'pgvector/pgvector:0.8.2-pg18-trixie'
   ).start();
 
   try {

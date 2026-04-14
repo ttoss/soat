@@ -1,7 +1,3 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-
 import { authenticatedTestClient, loginAs, testClient } from '../testClient';
 
 describe('Conversations', () => {
@@ -13,14 +9,6 @@ describe('Conversations', () => {
   let actorId: string;
 
   beforeAll(async () => {
-    const storageDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'soat-convo-test-')
-    );
-    process.env.FILES_STORAGE_DIR = storageDir;
-    process.env.EMBEDDING_PROVIDER = 'ollama';
-    process.env.EMBEDDING_MODEL = 'qwen3-embedding:0.6b';
-    process.env.EMBEDDING_DIMENSIONS = '1024';
-
     await testClient
       .post('/api/v1/users/bootstrap')
       .send({ username: 'admin', password: 'supersecret' });
