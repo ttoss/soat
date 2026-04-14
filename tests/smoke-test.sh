@@ -143,47 +143,61 @@ if [ "$DELETE_DOC2" != "204" ]; then
 fi
 echo "Documents deleted."
 
-# 14. Agent SSE stream — 401 without auth
-echo "--- Agent SSE stream: 401 without auth ---"
-AGENT_UNAUTH=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/agents/run/stream" \
+# 14. Chat completion — 401 without auth
+echo "--- Chat completion: 401 without auth ---"
+CHAT_UNAUTH=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/chats/completions" \
   -H "Content-Type: application/json" \
-  -d '{"prompt":"hello"}')
-if [ "$AGENT_UNAUTH" != "401" ]; then
-  echo "ERROR: Expected 401, got $AGENT_UNAUTH" >&2
+  -d '{"messages":[{"role":"user","content":"hello"}]}')
+if [ "$CHAT_UNAUTH" != "401" ]; then
+  echo "ERROR: Expected 401, got $CHAT_UNAUTH" >&2
   exit 1
 fi
 echo "401 without auth: OK"
 
-# 15. Agent SSE stream — 400 without prompt
-echo "--- Agent SSE stream: 400 without prompt ---"
-AGENT_NOPROMPT=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/agents/run/stream" \
+# 15. Chat completion — 400 without messages
+echo "--- Chat completion: 400 without messages ---"
+CHAT_NOMSG=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/chats/completions" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{}')
-if [ "$AGENT_NOPROMPT" != "400" ]; then
-  echo "ERROR: Expected 400, got $AGENT_NOPROMPT" >&2
+if [ "$CHAT_NOMSG" != "400" ]; then
+  echo "ERROR: Expected 400, got $CHAT_NOMSG" >&2
   exit 1
 fi
-echo "400 without prompt: OK"
+echo "400 without messages: OK"
 
-# 16. Agent SSE stream — valid request
-echo "--- Agent SSE stream: valid request ---"
-AGENT_STATUS=$(curl -s -o /tmp/agent_sse.txt -w "%{http_code}" -X POST "$BASE_URL/agents/run/stream" \
+# 16. Chat completion — valid non-streaming request (Ollama fallback)
+echo "--- Chat completion: valid request ---"
+CHAT_RESP=$(curl -sf -X POST "$BASE_URL/chats/completions" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"prompt":"tell me a joke"}')
-if [ "$AGENT_STATUS" != "200" ]; then
-  echo "ERROR: Agent stream returned $AGENT_STATUS, expected 200" >&2
+  -d '{"messages":[{"role":"user","content":"say hello"}]}')
+CHAT_OBJECT=$(echo "$CHAT_RESP" | jq -r '.object')
+if [ "$CHAT_OBJECT" != "chat.completion" ]; then
+  echo "ERROR: Expected object=chat.completion, got $CHAT_OBJECT" >&2
+  echo "$CHAT_RESP" >&2
   exit 1
 fi
-if ! grep -q "event: done" /tmp/agent_sse.txt; then
-  echo "ERROR: Agent stream missing 'event: done'" >&2
-  cat /tmp/agent_sse.txt >&2
+echo "Chat completion OK. Response: $(echo "$CHAT_RESP" | jq -r '.choices[0].message.content' | cut -c1-60)"
+
+# 17. Chat completion — SSE streaming request
+echo "--- Chat completion: SSE streaming ---"
+CHAT_SSE_STATUS=$(curl -s -o /tmp/chat_sse.txt -w "%{http_code}" -X POST "$BASE_URL/chats/completions" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"messages":[{"role":"user","content":"say hello"}],"stream":true}')
+if [ "$CHAT_SSE_STATUS" != "200" ]; then
+  echo "ERROR: Chat SSE stream returned $CHAT_SSE_STATUS, expected 200" >&2
   exit 1
 fi
-echo "Agent SSE stream OK."
-echo "--- Agent SSE stream output ---"
-cat /tmp/agent_sse.txt
+if ! grep -q "data: \[DONE\]" /tmp/chat_sse.txt; then
+  echo "ERROR: Chat SSE stream missing 'data: [DONE]'" >&2
+  cat /tmp/chat_sse.txt >&2
+  exit 1
+fi
+echo "Chat SSE stream OK."
+echo "--- Chat SSE stream output ---"
+cat /tmp/chat_sse.txt
 
 echo ""
 echo "=== All smoke tests passed! ==="

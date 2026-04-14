@@ -51,14 +51,16 @@ const mapSecret = (
   instance: InstanceType<(typeof db)['Secret']> & {
     project?: InstanceType<(typeof db)['Project']>;
   }
-) => ({
-  id: instance.publicId,
-  projectId: instance.project?.publicId,
-  name: instance.name,
-  hasValue: instance.encryptedValue !== null,
-  createdAt: instance.createdAt,
-  updatedAt: instance.updatedAt,
-});
+) => {
+  return {
+    id: instance.publicId,
+    projectId: instance.project?.publicId,
+    name: instance.name,
+    hasValue: instance.encryptedValue !== null,
+    createdAt: instance.createdAt,
+    updatedAt: instance.updatedAt,
+  };
+};
 
 export const listSecrets = async (args: { projectIds: number[] }) => {
   const secrets = await db.Secret.findAll({
