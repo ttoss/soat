@@ -228,7 +228,7 @@ paths:
             text/event-stream:
               schema:
                 type: string
-                description: SSE stream of delta chunks ending with `data: [DONE]`.
+                description: 'SSE stream of delta chunks ending with `data: [DONE]`.'
         '400':
           description: Bad Request
           content:
@@ -299,7 +299,7 @@ paths:
                   SSE stream of JSON objects, one per line, prefixed with
                   `data: `. The stream ends with `data: [DONE]`.
         '400':
-          description: Bad Request — `messages` is missing or empty
+          description: 'Bad Request — `messages` is missing or empty'
           content:
             application/json:
               schema:
@@ -432,194 +432,6 @@ components:
           default: false
           description: When `true` the response is an SSE stream.
 
-    ChatMessage:
-      type: object
-      required:
-        - role
-        - content
-      properties:
-        role:
-          type: string
-          enum:
-            - system
-            - user
-            - assistant
-          description: Role of the message author
-          example: user
-        content:
-          type: string
-          description: Text content of the message
-          example: Hello, how are you?
-
-    ChatCompletionRequest:
-      type: object
-      required:
-        - messages
-      properties:
-        aiProviderId:
-          type: string
-          description: >
-            Public ID of the AI provider to use. When omitted the server falls
-            back to Ollama.
-          example: aip_V1StGXR8Z5jdHi6B
-        model:
-          type: string
-          description: >
-            Model identifier. Overrides the provider's `defaultModel` when
-            specified.
-          example: gpt-4o
-        messages:
-          type: array
-          minItems: 1
-          description: Ordered list of chat messages
-          items:
-            $ref: '#/components/schemas/ChatMessage'
-        stream:
-          type: boolean
-          default: false
-          description: >
-            When `true` the response is an SSE stream of delta chunks.
-            When `false` (default) a single JSON object is returned.
-
-    ChatCompletionResponseMessage:
-      type: object
-      properties:
-        role:
-          type: string
-          example: assistant
-        content:
-          type: string
-          example: Hello! I am doing well, thank you.
-
-    ChatCompletionChoice:
-      type: object
-      properties:
-        index:
-          type: integer
-          example: 0
-        message:
-          $ref: '#/components/schemas/ChatCompletionResponseMessage'
-        finish_reason:
-          type: string
-          example: stop
-
-    ChatCompletionResponse:
-      type: object
-      properties:
-        object:
-          type: string
-          example: chat.completion
-        model:
-          type: string
-          example: gpt-4o
-        choices:
-          type: array
-          items:
-            $ref: '#/components/schemas/ChatCompletionChoice'
-
-    ErrorResponse:
-      type: object
-      required:
-        - error
-      properties:
-        error:
-          type: string
-          example: Unauthorized
-
-servers:
-  - url: http://0.0.0.0:5047/api/v1
-
-paths:
-  /chats/completions:
-    post:
-      tags:
-        - Chats
-      summary: Create a chat completion
-      description: >
-        Resolves the AI provider identified by `aiProviderId`, decrypts its
-        secret, and calls the appropriate Vercel AI SDK provider. When
-        `aiProviderId` is omitted the server falls back to Ollama using the
-        `CHAT_MODEL` / `OLLAMA_BASE_URL` environment variables. Set `stream`
-        to `true` to receive an SSE stream of delta chunks.
-      operationId: createChatCompletion
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ChatCompletionRequest'
-            examples:
-              basic:
-                summary: Simple user message
-                value:
-                  messages:
-                    - role: user
-                      content: Hello, how are you?
-              withProvider:
-                summary: With explicit AI provider and streaming
-                value:
-                  aiProviderId: aip_V1StGXR8Z5jdHi6B
-                  model: gpt-4o
-                  messages:
-                    - role: system
-                      content: You are a helpful assistant.
-                    - role: user
-                      content: What files do I have?
-                  stream: true
-      responses:
-        '200':
-          description: Chat completion result (JSON or SSE stream)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ChatCompletionResponse'
-              examples:
-                response:
-                  summary: Non-streaming response
-                  value:
-                    object: chat.completion
-                    model: gpt-4o
-                    choices:
-                      - index: 0
-                        message:
-                          role: assistant
-                          content: Hello! I am doing well, thank you.
-                        finish_reason: stop
-            text/event-stream:
-              schema:
-                type: string
-                description: >
-                  SSE stream of JSON objects, one per line, prefixed with
-                  `data: `. The stream ends with `data: [DONE]`.
-        '400':
-          description: Bad Request — `messages` is missing or empty
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          description: Unauthorized — missing or invalid bearer token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: AI provider not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-
-  schemas:
     ChatMessage:
       type: object
       required:

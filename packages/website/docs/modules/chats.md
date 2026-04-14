@@ -85,7 +85,7 @@ When running `POST /chats/{chatId}/completions`, if a message with `role: system
 
 ### AI Provider Resolution
 
-See the [AI Providers](./aiProviders.md) module for the full list of supported providers and how secrets are resolved. For per-chat completions the AI provider is taken from the Chat record. For stateless completions it is passed directly in the request body.
+See the [AI Providers](./ai-providers.md) module for the full list of supported providers and how secrets are resolved. For per-chat completions the AI provider is taken from the Chat record. For stateless completions it is passed directly in the request body.
 
 ### Streaming
 
