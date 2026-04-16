@@ -470,14 +470,17 @@ const buildModel = (args: {
         sessionToken: parsedCredentials?.sessionToken,
       })(model);
     }
-    case 'ollama':
+    case 'ollama': {
+      const ollamaBaseUrl =
+        baseUrl ?? process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
       return createOpenAI({
         apiKey: 'ollama',
-        baseURL: baseUrl ? `${baseUrl}/v1` : undefined,
-      })(model);
+        baseURL: `${ollamaBaseUrl}/v1`,
+      }).chat(model);
+    }
     case 'gateway':
     case 'custom':
-      return createOpenAI({ apiKey, baseURL: baseUrl })(model);
+      return createOpenAI({ apiKey, baseURL: baseUrl }).chat(model);
   }
 };
 
@@ -536,6 +539,7 @@ const resolveAgentTools = async (args: {
       description: string | null;
       parameters: Record<string, unknown> | null;
       execute: { url: string; headers?: Record<string, string> } | null;
+      mcp: { url: string; headers?: Record<string, string> } | null;
     };
 
     switch (typedTool.type) {
@@ -568,6 +572,71 @@ const resolveAgentTools = async (args: {
             typedTool.parameters ?? { type: 'object', properties: {} }
           ),
         });
+        break;
+      }
+
+      case 'mcp': {
+        // Discover tools from the MCP server, then register each as an AI SDK tool
+        if (!typedTool.mcp?.url) break;
+
+        const mcpUrl = typedTool.mcp.url;
+        const mcpHeaders: Record<string, string> = {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          ...typedTool.mcp.headers,
+        };
+
+        const listResponse = await fetch(mcpUrl, {
+          method: 'POST',
+          headers: mcpHeaders,
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+        });
+
+        if (!listResponse.ok) break;
+
+        const listBody = (await listResponse.json()) as {
+          result?: {
+            tools?: Array<{
+              name: string;
+              description?: string;
+              inputSchema?: Record<string, unknown>;
+            }>;
+          };
+        };
+
+        const mcpTools = listBody.result?.tools ?? [];
+
+        for (const mcpTool of mcpTools) {
+          const mcpToolName = mcpTool.name;
+          resolvedTools[mcpToolName] = tool({
+            description: mcpTool.description ?? undefined,
+            inputSchema: jsonSchema(
+              mcpTool.inputSchema ?? { type: 'object', properties: {} }
+            ),
+            execute: async (toolArgs: unknown) => {
+              const callResponse = await fetch(mcpUrl, {
+                method: 'POST',
+                headers: mcpHeaders,
+                body: JSON.stringify({
+                  jsonrpc: '2.0',
+                  id: 2,
+                  method: 'tools/call',
+                  params: { name: mcpToolName, arguments: toolArgs },
+                }),
+              });
+              const callBody = (await callResponse.json()) as {
+                result?: { content?: Array<{ text?: string }> };
+              };
+              const text = callBody.result?.content?.[0]?.text;
+              if (!text) return callBody;
+              try {
+                return JSON.parse(text);
+              } catch {
+                return text;
+              }
+            },
+          });
+        }
         break;
       }
 
@@ -717,7 +786,7 @@ export const createGeneration = async (args: {
           args: tc.input,
         };
       }),
-      messages: allMessages,
+      messages: [...allMessages, ...result.response.messages],
       resolvedModel: model,
       agentConfig: {
         instructions: typedAgent.instructions,
@@ -777,10 +846,25 @@ export const submitToolOutputs = async (args: {
 
   // Build tool result messages
   const toolResultMessages = args.toolOutputs.map((output) => {
+    const pendingTool = pending.pendingToolCalls.find((tc) => {
+      return tc.toolCallId === output.toolCallId;
+    });
     return {
       role: 'tool' as const,
-      content: JSON.stringify(output.output),
-      toolCallId: output.toolCallId,
+      content: [
+        {
+          type: 'tool-result' as const,
+          toolCallId: output.toolCallId,
+          toolName: pendingTool?.toolName ?? '',
+          output: {
+            type: 'text' as const,
+            value:
+              typeof output.output === 'string'
+                ? output.output
+                : JSON.stringify(output.output),
+          },
+        },
+      ],
     };
   });
 

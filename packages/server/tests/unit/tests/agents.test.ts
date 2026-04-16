@@ -129,6 +129,30 @@ describe('Agents', () => {
       expect(response.body.description).toBe('A client-side tool');
       expect(response.body.parameters).toBeDefined();
     });
+
+    test('creates an agent tool of type mcp', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents/tools')
+        .send({
+          name: 'soat-mcp-tool',
+          type: 'mcp',
+          description: 'SOAT MCP server',
+          mcp: {
+            url: 'http://localhost:5047/mcp',
+            headers: { Authorization: 'Bearer test-token' },
+          },
+          projectId,
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.id).toMatch(/^agt_tool_/);
+      expect(response.body.type).toBe('mcp');
+      expect(response.body.description).toBe('SOAT MCP server');
+      expect(response.body.mcp).toBeDefined();
+      expect((response.body.mcp as { url: string }).url).toBe(
+        'http://localhost:5047/mcp'
+      );
+    });
   });
 
   describe('GET /api/v1/agents/tools', () => {
