@@ -1,0 +1,1077 @@
+openapi: 3.0.3
+info:
+  title: Agents API
+  version: 1.0.0
+  description: >
+    AI Agents with tool-use capabilities. Create agents bound to AI providers,
+    attach tools, run multi-step generations, and inspect execution traces.
+  contact:
+    name: SOAT API Support
+
+servers:
+  - url: http://0.0.0.0:5047/api/v1
+
+paths:
+  /agents/tools:
+    post:
+      tags:
+        - Agent Tools
+      summary: Create an agent tool
+      description: Creates a new agent tool in the project.
+      operationId: createAgentTool
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentToolRequest'
+            examples:
+              http:
+                summary: HTTP tool
+                value:
+                  name: get-weather
+                  type: http
+                  description: Fetches current weather for a city
+                  parameters:
+                    type: object
+                    properties:
+                      city:
+                        type: string
+                    required:
+                      - city
+                  execute:
+                    url: https://api.weather.example/v1/current?city={{city}}
+              client:
+                summary: Client tool
+                value:
+                  name: show-dialog
+                  type: client
+                  description: Displays a confirmation dialog to the user
+                  parameters:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+              soat:
+                summary: SOAT platform tool
+                value:
+                  name: soat-files
+                  type: soat
+                  actions:
+                    - files:ListFiles
+                    - files:GetFile
+      responses:
+        '201':
+          description: Agent tool created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTool'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Agent Tools
+      summary: List agent tools
+      description: Returns all agent tools in the project.
+      operationId: listAgentTools
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Project public ID to filter by
+      responses:
+        '200':
+          description: List of agent tools
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentTool'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /agents/tools/{toolId}:
+    get:
+      tags:
+        - Agent Tools
+      summary: Get an agent tool
+      description: Returns a single agent tool by ID.
+      operationId: getAgentTool
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: toolId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Agent tool
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTool'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Agent Tools
+      summary: Update an agent tool
+      description: Updates an existing agent tool.
+      operationId: updateAgentTool
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: toolId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAgentToolRequest'
+      responses:
+        '200':
+          description: Agent tool updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTool'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Agent Tools
+      summary: Delete an agent tool
+      description: Deletes an agent tool by ID.
+      operationId: deleteAgentTool
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: toolId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /agents/traces:
+    get:
+      tags:
+        - Agent Traces
+      summary: List agent traces
+      description: Returns all traces for the project.
+      operationId: listAgentTraces
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Project public ID to filter by
+      responses:
+        '200':
+          description: List of traces
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentTrace'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /agents/traces/{traceId}:
+    get:
+      tags:
+        - Agent Traces
+      summary: Get a trace
+      description: Returns a single trace by ID.
+      operationId: getAgentTrace
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: traceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Trace details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTrace'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /agents:
+    post:
+      tags:
+        - Agents
+      summary: Create an agent
+      description: Creates a new agent bound to an AI provider.
+      operationId: createAgent
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentRequest'
+            examples:
+              minimal:
+                summary: Minimal agent
+                value:
+                  aiProviderId: aip_V1StGXR8Z5jdHi6B
+              full:
+                summary: Agent with tools and instructions
+                value:
+                  aiProviderId: aip_V1StGXR8Z5jdHi6B
+                  name: Research Assistant
+                  instructions: You are a helpful research assistant.
+                  model: gpt-4o
+                  toolIds:
+                    - agt_tool_abc123
+                  maxSteps: 10
+                  temperature: 0.7
+      responses:
+        '201':
+          description: Agent created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: AI provider not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Agents
+      summary: List agents
+      description: Returns all agents in the project.
+      operationId: listAgents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Project public ID to filter by
+      responses:
+        '200':
+          description: List of agents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Agent'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /agents/{agentId}:
+    get:
+      tags:
+        - Agents
+      summary: Get an agent
+      description: Returns a single agent by ID.
+      operationId: getAgent
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Agent details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Agents
+      summary: Update an agent
+      description: Updates an existing agent.
+      operationId: updateAgent
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAgentRequest'
+      responses:
+        '200':
+          description: Agent updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Agents
+      summary: Delete an agent
+      description: Deletes an agent by ID.
+      operationId: deleteAgent
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /agents/{agentId}/generate:
+    post:
+      tags:
+        - Agents
+      summary: Run an agent generation
+      description: >
+        Sends messages to the agent, resolves its tools, and runs the AI model
+        loop. Supports streaming via `stream: true`. Client tools pause the
+        generation and return `requires_action`.
+      operationId: createAgentGeneration
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentGenerationRequest'
+            examples:
+              basic:
+                summary: Simple generation
+                value:
+                  messages:
+                    - role: user
+                      content: What is the weather in Tokyo?
+              streaming:
+                summary: Streaming generation
+                value:
+                  messages:
+                    - role: user
+                      content: Summarize the latest report.
+                  stream: true
+      responses:
+        '200':
+          description: Generation result or SSE stream
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentGenerationResponse'
+            text/event-stream:
+              schema:
+                type: string
+                description: 'SSE stream of delta chunks ending with `data: [DONE]`.'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Agent or AI provider not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /agents/{agentId}/generate/{generationId}/tool-outputs:
+    post:
+      tags:
+        - Agents
+      summary: Submit tool outputs for a paused generation
+      description: >
+        Resumes a generation that was paused due to client tool calls.
+        Provide tool outputs for each pending tool call.
+      operationId: submitAgentToolOutputs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: generationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitToolOutputsRequest'
+      responses:
+        '200':
+          description: Generation result after resuming
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentGenerationResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Agent or generation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AgentTool:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public ID of the agent tool
+          example: agt_tool_V1StGXR8Z5jdHi6B
+        projectId:
+          type: string
+          description: Public ID of the owning project
+          example: proj_V1StGXR8Z5jdHi6B
+        name:
+          type: string
+          description: Tool name
+          example: get-weather
+        type:
+          type: string
+          enum:
+            - http
+            - client
+            - mcp
+            - soat
+          description: Tool type
+          example: http
+        description:
+          type: string
+          nullable: true
+          description: What the tool does (sent to the model)
+        parameters:
+          type: object
+          nullable: true
+          description: JSON Schema for tool input
+        execute:
+          type: object
+          nullable: true
+          description: Execution config (url, headers)
+        mcp:
+          type: object
+          nullable: true
+          description: MCP server config (url, headers)
+        actions:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: SOAT platform actions to expose
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateAgentToolRequest:
+      type: object
+      required:
+        - name
+      properties:
+        projectId:
+          type: string
+          description: Public ID of the project
+        name:
+          type: string
+          description: Tool name
+        type:
+          type: string
+          enum:
+            - http
+            - client
+            - mcp
+            - soat
+          description: Tool type (default http)
+        description:
+          type: string
+          description: What the tool does
+        parameters:
+          type: object
+          description: JSON Schema for tool input
+        execute:
+          type: object
+          description: Execution config (url, headers)
+        mcp:
+          type: object
+          description: MCP server config (url, headers)
+        actions:
+          type: array
+          items:
+            type: string
+          description: SOAT platform actions
+
+    UpdateAgentToolRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum:
+            - http
+            - client
+            - mcp
+            - soat
+        description:
+          type: string
+          nullable: true
+        parameters:
+          type: object
+          nullable: true
+        execute:
+          type: object
+          nullable: true
+        mcp:
+          type: object
+          nullable: true
+        actions:
+          type: array
+          nullable: true
+          items:
+            type: string
+
+    Agent:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public ID of the agent
+          example: agt_V1StGXR8Z5jdHi6B
+        projectId:
+          type: string
+          description: Public ID of the owning project
+        aiProviderId:
+          type: string
+          description: Public ID of the AI provider
+        name:
+          type: string
+          nullable: true
+          description: Display name
+        instructions:
+          type: string
+          nullable: true
+          description: System instructions guiding behavior
+        model:
+          type: string
+          nullable: true
+          description: Model identifier
+        toolIds:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: Public IDs of attached agent tools
+        maxSteps:
+          type: integer
+          nullable: true
+          description: Maximum reasoning steps
+        toolChoice:
+          type: object
+          nullable: true
+          description: Tool choice strategy
+        stopConditions:
+          type: array
+          nullable: true
+          items:
+            type: object
+          description: Stop conditions
+        activeToolIds:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: Subset of toolIds active per step
+        stepRules:
+          type: array
+          nullable: true
+          items:
+            type: object
+          description: Per-step overrides
+        boundaryPolicy:
+          type: object
+          nullable: true
+          description: Allowed/denied SOAT actions
+        temperature:
+          type: number
+          nullable: true
+          description: Sampling temperature
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateAgentRequest:
+      type: object
+      required:
+        - aiProviderId
+      properties:
+        projectId:
+          type: string
+          description: Public ID of the project
+        aiProviderId:
+          type: string
+          description: Public ID of the AI provider
+        name:
+          type: string
+        instructions:
+          type: string
+        model:
+          type: string
+        toolIds:
+          type: array
+          items:
+            type: string
+        maxSteps:
+          type: integer
+        toolChoice:
+          type: object
+        stopConditions:
+          type: array
+          items:
+            type: object
+        activeToolIds:
+          type: array
+          items:
+            type: string
+        stepRules:
+          type: array
+          items:
+            type: object
+        boundaryPolicy:
+          type: object
+        temperature:
+          type: number
+
+    UpdateAgentRequest:
+      type: object
+      properties:
+        aiProviderId:
+          type: string
+        name:
+          type: string
+          nullable: true
+        instructions:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        toolIds:
+          type: array
+          nullable: true
+          items:
+            type: string
+        maxSteps:
+          type: integer
+          nullable: true
+        toolChoice:
+          type: object
+          nullable: true
+        stopConditions:
+          type: array
+          nullable: true
+          items:
+            type: object
+        activeToolIds:
+          type: array
+          nullable: true
+          items:
+            type: string
+        stepRules:
+          type: array
+          nullable: true
+          items:
+            type: object
+        boundaryPolicy:
+          type: object
+          nullable: true
+        temperature:
+          type: number
+          nullable: true
+
+    CreateAgentGenerationRequest:
+      type: object
+      required:
+        - messages
+      properties:
+        messages:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required:
+              - role
+              - content
+            properties:
+              role:
+                type: string
+                enum:
+                  - system
+                  - user
+                  - assistant
+              content:
+                type: string
+        stream:
+          type: boolean
+          default: false
+          description: When true the response is an SSE stream
+        traceId:
+          type: string
+          description: Optional trace ID to group generations
+
+    SubmitToolOutputsRequest:
+      type: object
+      required:
+        - toolOutputs
+      properties:
+        toolOutputs:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required:
+              - toolCallId
+              - output
+            properties:
+              toolCallId:
+                type: string
+                description: ID of the tool call to respond to
+              output:
+                description: Result of the tool execution
+
+    AgentGenerationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public ID of the generation
+          example: agt_gen_V1StGXR8Z5jdHi6B
+        status:
+          type: string
+          enum:
+            - completed
+            - requires_action
+          description: Generation status
+        text:
+          type: string
+          nullable: true
+          description: Final text output (when completed)
+        toolCalls:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              toolCallId:
+                type: string
+              toolName:
+                type: string
+              args:
+                type: object
+          description: Pending tool calls (when requires_action)
+
+    AgentTrace:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public ID of the trace
+          example: agt_trace_V1StGXR8Z5jdHi6B
+        projectId:
+          type: string
+        agentId:
+          type: string
+        generations:
+          type: array
+          items:
+            type: object
+        createdAt:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: Unauthorized

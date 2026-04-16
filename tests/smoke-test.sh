@@ -199,5 +199,102 @@ echo "Chat SSE stream OK."
 echo "--- Chat SSE stream output ---"
 cat /tmp/chat_sse.txt
 
+# 18. Agents — create AI provider for agent tests
+echo "--- Creating AI provider for agents ---"
+AGENT_PROVIDER_RESP=$(curl -sf -X POST "$BASE_URL/ai-providers" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"name\":\"smoke-agent-provider\",\"provider\":\"ollama\",\"defaultModel\":\"llama3\"}")
+AGENT_PROVIDER_ID=$(echo "$AGENT_PROVIDER_RESP" | jq -r '.id')
+echo "AI Provider id: $AGENT_PROVIDER_ID"
+
+# 19. Agents — create agent tool
+echo "--- Creating agent tool ---"
+AGENT_TOOL_RESP=$(curl -sf -X POST "$BASE_URL/agents/tools" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"name\":\"smoke-tool\",\"type\":\"function\",\"description\":\"A smoke test tool\",\"parameters\":{\"type\":\"object\",\"properties\":{\"input\":{\"type\":\"string\"}}}}")
+AGENT_TOOL_ID=$(echo "$AGENT_TOOL_RESP" | jq -r '.id')
+echo "Agent Tool id: $AGENT_TOOL_ID"
+
+# 20. Agents — get agent tool
+echo "--- Getting agent tool ---"
+AGENT_TOOL_GET_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/agents/tools/$AGENT_TOOL_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$AGENT_TOOL_GET_STATUS" != "200" ]; then
+  echo "ERROR: GET agent tool returned $AGENT_TOOL_GET_STATUS, expected 200" >&2
+  exit 1
+fi
+echo "GET agent tool: OK"
+
+# 21. Agents — create agent
+echo "--- Creating agent ---"
+AGENT_RESP=$(curl -sf -X POST "$BASE_URL/agents" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"aiProviderId\":\"$AGENT_PROVIDER_ID\",\"name\":\"smoke-agent\",\"instructions\":\"You are a smoke test agent\",\"toolIds\":[\"$AGENT_TOOL_ID\"]}")
+AGENT_ID=$(echo "$AGENT_RESP" | jq -r '.id')
+echo "Agent id: $AGENT_ID"
+
+# 22. Agents — get agent
+echo "--- Getting agent ---"
+AGENT_GET_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/agents/$AGENT_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$AGENT_GET_STATUS" != "200" ]; then
+  echo "ERROR: GET agent returned $AGENT_GET_STATUS, expected 200" >&2
+  exit 1
+fi
+echo "GET agent: OK"
+
+# 23. Agents — list agents
+echo "--- Listing agents ---"
+AGENTS_LIST=$(curl -sf "$BASE_URL/agents?projectId=$PROJECT_PUBLIC_ID" \
+  -H "Authorization: Bearer $TOKEN")
+AGENTS_COUNT=$(echo "$AGENTS_LIST" | jq 'length')
+if [ "$AGENTS_COUNT" -lt 1 ]; then
+  echo "ERROR: Expected at least 1 agent, got $AGENTS_COUNT" >&2
+  exit 1
+fi
+echo "Listed $AGENTS_COUNT agent(s)."
+
+# 24. Agents — update agent
+echo "--- Updating agent ---"
+AGENT_PATCH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X PATCH "$BASE_URL/agents/$AGENT_ID" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"name":"smoke-agent-updated"}')
+if [ "$AGENT_PATCH_STATUS" != "200" ]; then
+  echo "ERROR: PATCH agent returned $AGENT_PATCH_STATUS, expected 200" >&2
+  exit 1
+fi
+echo "PATCH agent: OK"
+
+# 25. Agents — list agent traces (should be empty)
+echo "--- Listing agent traces ---"
+TRACES_LIST=$(curl -sf "$BASE_URL/agents/$AGENT_ID/traces" \
+  -H "Authorization: Bearer $TOKEN")
+TRACES_COUNT=$(echo "$TRACES_LIST" | jq 'length')
+echo "Listed $TRACES_COUNT trace(s)."
+
+# 26. Agents — delete agent
+echo "--- Deleting agent ---"
+AGENT_DEL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/agents/$AGENT_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$AGENT_DEL_STATUS" != "204" ]; then
+  echo "ERROR: DELETE agent returned $AGENT_DEL_STATUS, expected 204" >&2
+  exit 1
+fi
+echo "Agent deleted."
+
+# 27. Agents — delete agent tool
+echo "--- Deleting agent tool ---"
+AGENT_TOOL_DEL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/agents/tools/$AGENT_TOOL_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$AGENT_TOOL_DEL_STATUS" != "204" ]; then
+  echo "ERROR: DELETE agent tool returned $AGENT_TOOL_DEL_STATUS, expected 204" >&2
+  exit 1
+fi
+echo "Agent tool deleted."
+
 echo ""
 echo "=== All smoke tests passed! ==="

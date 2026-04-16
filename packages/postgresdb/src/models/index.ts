@@ -1,12 +1,14 @@
 export { Actor } from './Actor';
+export { Agent } from './Agent';
+export { AgentTool } from './AgentTool';
 export { AiProvider } from './AiProvider';
 export { Chat } from './Chat';
-export { ProjectKey } from './ProjectKey';
 export { Conversation } from './Conversation';
 export { ConversationMessage } from './ConversationMessage';
 export { Document } from './Document';
 export { File } from './File';
 export { Project } from './Project';
+export { ProjectKey } from './ProjectKey';
 export { ProjectPolicy } from './ProjectPolicy';
 export { Secret } from './Secret';
 export { User } from './User';

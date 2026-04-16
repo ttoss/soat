@@ -61,9 +61,13 @@ A **tool name** is the name the AI model sees at runtime (e.g., `"search"`). For
 
 The `type` field is required at creation time and defaults to `"http"`. Supported types: `http`, `client`, `mcp`, and `soat`.
 
-**`http`** — When the model decides to call a tool, the server POSTs the tool arguments as JSON to the configured `execute.url` and feeds the response back into the loop.
+##### http
 
-**`client`** — The tool is registered with `description` and `parameters` but has **no server-side `execute`**. When the model calls a `client` tool the generation **pauses** and returns the pending tool calls to the API caller. The caller executes the tool locally, then sends the results back to continue the loop.
+When the model decides to call a tool, the server POSTs the tool arguments as JSON to the configured `execute.url` and feeds the response back into the loop.
+
+##### client
+
+The tool is registered with `description` and `parameters` but has **no server-side `execute`**. When the model calls a `client` tool the generation **pauses** and returns the pending tool calls to the API caller. The caller executes the tool locally, then sends the results back to continue the loop.
 
 Client tool flow:
 
@@ -110,11 +114,15 @@ POST /agents/{agentId}/generate/{generationId}/tool-outputs
 
 The response has the same shape as a normal generation — either a final result or another `requires_action` if the model calls more client tools.
 
-**`mcp`** — The tool represents a connection to an [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) server. At generation time, the SOAT server connects to the MCP endpoint, discovers all available tools, and registers them with the AI model. One MCP tool ID provides **many** tool names — you only configure the connection, and each discovered tool's name, description, and parameters come from the MCP server.
+##### mcp
+
+The tool represents a connection to an [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) server. At generation time, the SOAT server connects to the MCP endpoint, discovers all available tools, and registers them with the AI model. One MCP tool ID provides **many** tool names — you only configure the connection, and each discovered tool's name, description, and parameters come from the MCP server.
 
 MCP tools execute on the MCP server side. The SOAT server acts as a proxy: it receives the model's tool call, forwards it to the MCP server, and feeds the result back into the loop.
 
-**`soat`** — The tool exposes actions from the SOAT platform itself (documents, conversations, files, secrets, etc.). Instead of pointing to an external endpoint, you list the platform actions the agent is allowed to use via the `actions` array. Each action name corresponds to an existing MCP tool registered on the platform (e.g., `get-document`, `search-documents`, `create-file`). The server executes these actions in-process, reusing the same permission checks as the REST API.
+##### soat
+
+The tool exposes actions from the SOAT platform itself (documents, conversations, files, secrets, etc.). Instead of pointing to an external endpoint, you list the platform actions the agent is allowed to use via the `actions` array. Each action name corresponds to an existing MCP tool registered on the platform (e.g., `get-document`, `search-documents`, `create-file`). The server executes these actions in-process, reusing the same permission checks as the REST API.
 
 Available actions come from the platform's registered MCP tools: actors, ai-providers, chats, conversations, documents, files, projects, and secrets.
 
