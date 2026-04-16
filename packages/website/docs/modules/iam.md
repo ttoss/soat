@@ -303,6 +303,15 @@ Sensitive fields (`passwordHash`, internal numeric ID) are never exposed in resp
 
 The `POST /api/v1/users/bootstrap` endpoint creates the first admin user. It is only available when the user table is empty and returns `409 Conflict` if any user already exists. This endpoint does not require authentication.
 
+You can also bootstrap an admin automatically on server startup by setting two environment variables:
+
+```env
+SOAT_ADMIN_USERNAME=admin
+SOAT_ADMIN_PASSWORD=supersecret
+```
+
+When both variables are present and no users exist in the database, the server creates the admin user before accepting requests. If users already exist, the variables are ignored and startup continues normally.
+
 ### User Authentication
 
 Users authenticate with `POST /api/v1/users/login`, providing `username` and `password`. On success, the server returns a signed JWT containing the user's public ID and role. The token is passed as `Authorization: Bearer <token>` on subsequent requests.
