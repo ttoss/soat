@@ -16,6 +16,10 @@ export const PUBLIC_ID_PREFIXES = {
   secret: 'sec_',
   aiProvider: 'aip_',
   chat: 'cht_',
+  agent: 'agt_',
+  agentTool: 'agt_tool_',
+  generation: 'agt_gen_',
+  trace: 'agt_trace_',
 } as const;
 
 /**

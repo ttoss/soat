@@ -435,4 +435,95 @@ describe('MCP tools - happy path', () => {
 
   // create-chat-completion and create-chat-completion-for-chat are skipped
   // because they require a live AI service.
+
+  // ── Agents ──────────────────────────────────────────────────────────────
+
+  let agentToolId: string;
+  let agentId: string;
+
+  test('create-agent-tool creates a tool', async () => {
+    const res = await mcpCall('create-agent-tool', {
+      projectId,
+      name: 'mcp-test-tool',
+      type: 'http',
+      description: 'A test tool',
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBeDefined();
+    agentToolId = result.id;
+  });
+
+  test('list-agent-tools returns results', async () => {
+    const res = await mcpCall('list-agent-tools');
+    expect(res.status).toBe(200);
+  });
+
+  test('get-agent-tool returns the tool', async () => {
+    const res = await mcpCall('get-agent-tool', { toolId: agentToolId });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBe(agentToolId);
+  });
+
+  test('update-agent-tool updates the tool', async () => {
+    const res = await mcpCall('update-agent-tool', {
+      toolId: agentToolId,
+      name: 'mcp-test-tool-renamed',
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBe(agentToolId);
+  });
+
+  test('create-agent creates an agent', async () => {
+    const res = await mcpCall('create-agent', {
+      projectId,
+      aiProviderId: chatAiProviderId,
+      name: 'MCP Agent',
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBeDefined();
+    agentId = result.id;
+  });
+
+  test('list-agents returns results', async () => {
+    const res = await mcpCall('list-agents');
+    expect(res.status).toBe(200);
+  });
+
+  test('get-agent returns the agent', async () => {
+    const res = await mcpCall('get-agent', { agentId });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBe(agentId);
+  });
+
+  test('update-agent updates the agent', async () => {
+    const res = await mcpCall('update-agent', {
+      agentId,
+      name: 'MCP Agent Renamed',
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBe(agentId);
+  });
+
+  test('list-agent-traces returns results', async () => {
+    const res = await mcpCall('list-agent-traces');
+    expect(res.status).toBe(200);
+  });
+
+  test('delete-agent deletes the agent', async () => {
+    const res = await mcpCall('delete-agent', { agentId });
+    expect(res.status).toBe(200);
+  });
+
+  test('delete-agent-tool deletes the tool', async () => {
+    const res = await mcpCall('delete-agent-tool', { toolId: agentToolId });
+    expect(res.status).toBe(200);
+  });
+
+  // create-agent-generation is skipped because it requires a live AI service.
 });
