@@ -421,6 +421,12 @@ export const deleteAgent = async (args: {
     return 'not_found';
   }
 
+  // Null out agentId on any actors linked to this agent before destroying.
+  await db.Actor.update(
+    { agentId: null },
+    { where: { agentId: agent.id as number } }
+  );
+
   await agent.destroy();
   return 'ok';
 };

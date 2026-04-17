@@ -41,6 +41,9 @@ export class Conversation extends Model {
   })
   declare project: Project;
 
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare name: string | null;
+
   @Column({
     type: DataType.STRING,
     allowNull: false,

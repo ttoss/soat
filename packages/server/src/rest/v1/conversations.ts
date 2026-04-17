@@ -5,13 +5,14 @@ import {
   addConversationMessage,
   createConversation,
   deleteConversation,
+  generateConversationMessage,
   getConversation,
   getConversationTags,
   listConversationActors,
   listConversationMessages,
   listConversations,
   removeConversationMessage,
-  updateConversationStatus,
+  updateConversation,
   updateConversationTags,
 } from 'src/lib/conversations';
 import { buildSrn } from 'src/lib/iam';
@@ -289,6 +290,7 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
   const body = ctx.request.body as {
     projectId?: string;
     status?: string;
+    name?: string | null;
   };
 
   let resolvedProjectPublicId = body.projectId;
@@ -324,6 +326,7 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
   const conversation = await createConversation({
     projectId: project.id,
     status: body.status,
+    name: body.name ?? null,
   });
 
   ctx.status = 201;
@@ -399,11 +402,11 @@ conversationsRouter.patch('/conversations/:id', async (ctx: Context) => {
     return;
   }
 
-  const body = ctx.request.body as { status: string };
+  const body = ctx.request.body as { status?: string; name?: string | null };
 
-  if (!body.status) {
+  if (body.status === undefined && body.name === undefined) {
     ctx.status = 400;
-    ctx.body = { error: 'status is required' };
+    ctx.body = { error: 'At least one of status or name is required' };
     return;
   }
 
@@ -440,9 +443,10 @@ conversationsRouter.patch('/conversations/:id', async (ctx: Context) => {
     return;
   }
 
-  const updated = await updateConversationStatus({
+  const updated = await updateConversation({
     id: ctx.params.id,
     status: body.status,
+    name: body.name,
   });
 
   ctx.body = updated;
@@ -1251,5 +1255,160 @@ conversationsRouter.patch('/conversations/:id/tags', async (ctx: Context) => {
     merge: true,
   });
 });
+
+/**
+ * @openapi
+ * /conversations/{id}/generate:
+ *   post:
+ *     tags:
+ *       - Conversations
+ *     summary: Generate the next message in a conversation
+ *     description: |
+ *       Generates the next message in the conversation using the specified actor's linked
+ *       agent or chat. The actor must have either `agentId` or `chatId` set. On `completed`,
+ *       the reply is persisted as a new ConversationMessage authored by that actor.
+ *       On `requires_action`, no message is persisted; the caller must submit tool outputs
+ *       via the Agents module and re-invoke generate.
+ *     operationId: generateConversationMessage
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - actorId
+ *             properties:
+ *               actorId:
+ *                 type: string
+ *                 description: ID of the actor that will produce the next message. Must have either agentId or chatId set.
+ *               model:
+ *                 type: string
+ *                 description: Optional model override. Only honored for chat-backed actors.
+ *               stream:
+ *                 type: boolean
+ *                 description: If true, stream tokens via SSE. NOT IMPLEMENTED in v1 — returns 501.
+ *     responses:
+ *       '200':
+ *         description: Generation completed or requires_action
+ *       '400':
+ *         description: Invalid request
+ *       '401':
+ *         description: Unauthorized
+ *       '403':
+ *         description: Forbidden
+ *       '404':
+ *         description: Conversation or actor not found
+ *       '501':
+ *         description: Streaming not implemented
+ */
+conversationsRouter.post(
+  '/conversations/:id/generate',
+  async (ctx: Context) => {
+    if (!ctx.authUser) {
+      ctx.status = 401;
+      ctx.body = { error: 'Unauthorized' };
+      return;
+    }
+
+    const body = ctx.request.body as {
+      actorId: string;
+      model?: string;
+      stream?: boolean;
+    };
+
+    if (!body.actorId) {
+      ctx.status = 400;
+      ctx.body = { error: 'actorId is required' };
+      return;
+    }
+
+    if (body.stream) {
+      ctx.status = 501;
+      ctx.body = {
+        error: 'Streaming is not implemented in v1. Omit stream or set false.',
+      };
+      return;
+    }
+
+    const conversation = await getConversation({ id: ctx.params.id });
+    if (!conversation) {
+      ctx.status = 404;
+      ctx.body = { error: 'Conversation not found' };
+      return;
+    }
+
+    const srn = buildSrn({
+      projectPublicId: conversation.projectId!,
+      resourceType: 'conversation',
+      resourceId: conversation.id,
+    });
+    const contextGen: Record<string, string> = {
+      'soat:ResourceType': 'conversation',
+    };
+    if (conversation.tags) {
+      for (const [k, v] of Object.entries(conversation.tags)) {
+        contextGen[`soat:ResourceTag/${k}`] = v as string;
+      }
+    }
+    const allowed = await ctx.authUser.isAllowed({
+      projectPublicId: conversation.projectId!,
+      action: 'conversations:GenerateConversationMessage',
+      resource: srn,
+      context: contextGen,
+    });
+    if (!allowed) {
+      ctx.status = 403;
+      ctx.body = { error: 'Forbidden' };
+      return;
+    }
+
+    const result = await generateConversationMessage({
+      conversationId: ctx.params.id,
+      actorId: body.actorId,
+      model: body.model,
+    });
+
+    if (result === 'conversation_not_found') {
+      ctx.status = 404;
+      ctx.body = { error: 'Conversation not found' };
+      return;
+    }
+    if (result === 'actor_not_found') {
+      ctx.status = 404;
+      ctx.body = { error: 'Actor not found in this project' };
+      return;
+    }
+    if (result === 'actor_missing_agent_or_chat') {
+      ctx.status = 400;
+      ctx.body = {
+        error:
+          'The generating actor must have either agentId or chatId set to produce messages.',
+      };
+      return;
+    }
+    if (result === 'ai_provider_not_found') {
+      ctx.status = 400;
+      ctx.body = { error: 'AI provider not found or not configured' };
+      return;
+    }
+    if (result === 'agent_or_chat_not_found') {
+      ctx.status = 400;
+      ctx.body = {
+        error: "The actor's linked agent or chat could not be found",
+      };
+      return;
+    }
+
+    ctx.status = 200;
+    ctx.body = result;
+  }
+);
 
 export { conversationsRouter };

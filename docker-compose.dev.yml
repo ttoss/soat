@@ -47,17 +47,19 @@ services:
     ports:
       - '5047:5047'
     environment:
+      SOAT_ADMIN_USERNAME: admin
+      SOAT_ADMIN_PASSWORD: adminpassword
       DATABASE_HOST: database
       DATABASE_PORT: '5432'
       DATABASE_NAME: ${DATABASE_NAME:-soat_dev}
       DATABASE_USER: ${DATABASE_USER:-soat_user}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:-soat_password}
+      SECRETS_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       FILES_STORAGE_DIR: /data/files
       OLLAMA_BASE_URL: http://ollama:11434
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_MODEL: qwen3-embedding:0.6b
       EMBEDDING_DIMENSIONS: '1024'
-      AGENT_MODEL: qwen2.5:0.5b
     volumes:
       - files_data:/data/files
 

@@ -209,6 +209,22 @@ components:
           nullable: true
           description: External identifier (e.g. WhatsApp phone number)
           example: '+15551234567'
+        instructions:
+          type: string
+          nullable: true
+          description: Persona-specific instructions composed into the effective system prompt during conversation generation.
+        agentId:
+          type: string
+          nullable: true
+          description: Agent this actor is linked to (mutually exclusive with chatId).
+        chatId:
+          type: string
+          nullable: true
+          description: Chat this actor is linked to (mutually exclusive with agentId).
+        tags:
+          type: object
+          additionalProperties:
+            type: string
         createdAt:
           type: string
           format: date-time

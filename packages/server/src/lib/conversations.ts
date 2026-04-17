@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 
 import { db } from '../db';
+import { createGeneration, type GenerationResult } from './agents';
+import { createChatCompletionForChat } from './chats';
 import { createDocument, deleteDocument } from './documents';
 
 const mapConversation = (
@@ -11,6 +13,7 @@ const mapConversation = (
   return {
     id: conversation.publicId,
     projectId: conversation.project?.publicId,
+    name: conversation.name ?? null,
     status: conversation.status,
     tags: conversation.tags ?? undefined,
     createdAt: conversation.createdAt,
@@ -108,10 +111,12 @@ export const getConversation = async (args: { id: string }) => {
 export const createConversation = async (args: {
   projectId: number;
   status?: string;
+  name?: string | null;
 }) => {
   const conversation = await db.Conversation.create({
     projectId: args.projectId,
     status: args.status ?? 'open',
+    name: args.name ?? null,
   });
 
   const conversationWithAssociations = await db.Conversation.findOne({
@@ -120,6 +125,37 @@ export const createConversation = async (args: {
   });
 
   return mapConversation(conversationWithAssociations!);
+};
+
+export const updateConversation = async (args: {
+  id: string;
+  name?: string | null;
+  status?: string;
+}) => {
+  const conversation = await db.Conversation.findOne({
+    where: { publicId: args.id },
+  });
+
+  if (!conversation) {
+    return null;
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (args.name !== undefined) {
+    updates.name = args.name;
+  }
+  if (args.status !== undefined) {
+    updates.status = args.status;
+  }
+
+  await conversation.update(updates);
+
+  const updated = await db.Conversation.findOne({
+    where: { publicId: args.id },
+    include: [{ model: db.Project, as: 'project' }],
+  });
+
+  return mapConversation(updated!);
 };
 
 export const updateConversationStatus = async (args: {
@@ -263,25 +299,54 @@ export const addConversationMessage = async (args: {
     return null;
   }
 
-  let position = args.position;
+  const sequelize = db.sequelize;
 
-  if (position === undefined) {
-    const maxMessage = await db.ConversationMessage.findOne({
-      where: { conversationId: conversation.id },
-      order: [['position', 'DESC']],
-    });
-    position = maxMessage ? maxMessage.position + 1 : 0;
-  }
+  const result = await sequelize.transaction(async (t: unknown) => {
+    let position = args.position;
 
-  const message = await db.ConversationMessage.create({
-    conversationId: conversation.id,
-    documentId: document.id,
-    actorId: actor.id,
-    position,
+    if (position === undefined) {
+      const maxMessage = await db.ConversationMessage.findOne({
+        where: { conversationId: conversation.id },
+        order: [['position', 'DESC']],
+        transaction: t,
+      });
+      position = maxMessage ? maxMessage.position + 1 : 0;
+    } else {
+      // Insert-between: if the position collides, shift existing messages up.
+      const collision = await db.ConversationMessage.findOne({
+        where: { conversationId: conversation.id, position },
+        transaction: t,
+      });
+      if (collision) {
+        // Shift in descending order to avoid unique index violations mid-shift.
+        const toShift = await db.ConversationMessage.findAll({
+          where: { conversationId: conversation.id },
+          order: [['position', 'DESC']],
+          transaction: t,
+        });
+        for (const m of toShift) {
+          if (m.position >= position) {
+            await m.update({ position: m.position + 1 }, { transaction: t });
+          }
+        }
+      }
+    }
+
+    const message = await db.ConversationMessage.create(
+      {
+        conversationId: conversation.id,
+        documentId: document.id,
+        actorId: actor.id,
+        position,
+      },
+      { transaction: t }
+    );
+
+    return message;
   });
 
   const messageWithAssociations = await db.ConversationMessage.findOne({
-    where: { id: message.id },
+    where: { id: result.id },
     include: [
       {
         model: db.Document,
@@ -378,4 +443,219 @@ export const listConversationActors = async (args: {
       updatedAt: actor.updatedAt,
     };
   });
+};
+
+export type GenerateConversationMessageResult =
+  | {
+      status: 'completed';
+      message: ReturnType<typeof mapMessage>;
+      generationId: string;
+      traceId: string;
+      model?: string;
+    }
+  | {
+      status: 'requires_action';
+      generationId: string;
+      traceId: string;
+      requiredAction: NonNullable<GenerationResult['requiredAction']>;
+    }
+  | 'conversation_not_found'
+  | 'actor_not_found'
+  | 'actor_missing_agent_or_chat'
+  | 'ai_provider_not_found'
+  | 'agent_or_chat_not_found';
+
+export const generateConversationMessage = async (args: {
+  conversationId: string;
+  actorId: string;
+  model?: string;
+}): Promise<GenerateConversationMessageResult> => {
+  const conversation = await db.Conversation.findOne({
+    where: { publicId: args.conversationId },
+  });
+
+  if (!conversation) {
+    return 'conversation_not_found';
+  }
+
+  const generatingActor = await db.Actor.findOne({
+    where: { publicId: args.actorId, projectId: conversation.projectId },
+    include: [
+      { model: db.Agent, as: 'agent' },
+      { model: db.Chat, as: 'chat' },
+    ],
+  });
+
+  if (!generatingActor) {
+    return 'actor_not_found';
+  }
+
+  if (!generatingActor.agentId && !generatingActor.chatId) {
+    return 'actor_missing_agent_or_chat';
+  }
+
+  // Load history ordered by position
+  const messages = await db.ConversationMessage.findAll({
+    where: { conversationId: conversation.id },
+    include: [
+      {
+        model: db.Document,
+        as: 'document',
+        include: [{ model: db.File, as: 'file' }],
+      },
+      { model: db.Actor, as: 'actor' },
+    ],
+    order: [['position', 'ASC']],
+  });
+
+  // Build chat-style message history
+  const history: Array<{ role: string; content: string }> = [];
+  for (const m of messages) {
+    const msg = m as InstanceType<(typeof db)['ConversationMessage']> & {
+      document?: InstanceType<(typeof db)['Document']> & {
+        file?: InstanceType<(typeof db)['File']>;
+      };
+      actor?: InstanceType<(typeof db)['Actor']>;
+    };
+
+    let content = '';
+    if (msg.document?.file?.storagePath) {
+      try {
+        if (fs.existsSync(msg.document.file.storagePath)) {
+          content = fs.readFileSync(msg.document.file.storagePath, 'utf-8');
+        }
+      } catch {
+        // Ignore read errors
+      }
+    }
+
+    if (msg.actorId === generatingActor.id) {
+      history.push({ role: 'assistant', content });
+    } else {
+      const speakerName = msg.actor?.name ?? 'participant';
+      history.push({
+        role: 'user',
+        content: `[${speakerName}]: ${content}`,
+      });
+    }
+  }
+
+  // Build persona override instructions from the generating actor
+  const personaLines: string[] = [];
+  if (generatingActor.instructions) {
+    personaLines.push(generatingActor.instructions);
+  }
+  personaLines.push(
+    `You are ${generatingActor.name}. Reply as this participant only — do not speak for any other actor.`
+  );
+  const personaSystem = personaLines.join('\n\n');
+
+  // Prepend the persona as a system message. The underlying agent or chat
+  // will combine its own instructions/systemMessage with this one.
+  const messagesForModel: Array<{ role: string; content: string }> = [
+    { role: 'system', content: personaSystem },
+    ...history,
+  ];
+
+  let generationId: string;
+  let traceId: string;
+  let modelName = '';
+  let assistantContent = '';
+  let requiredAction: GenerationResult['requiredAction'] | undefined;
+
+  if (generatingActor.agentId) {
+    const agent = (
+      generatingActor as unknown as {
+        agent?: InstanceType<(typeof db)['Agent']>;
+      }
+    ).agent;
+    if (!agent) {
+      return 'agent_or_chat_not_found';
+    }
+
+    const result = await createGeneration({
+      agentId: agent.publicId,
+      messages: messagesForModel,
+    });
+
+    if (result === 'not_found') {
+      return 'agent_or_chat_not_found';
+    }
+    if (result === 'ai_provider_not_found') {
+      return 'ai_provider_not_found';
+    }
+    if (result instanceof ReadableStream) {
+      // Should not happen because we did not request streaming
+      return 'ai_provider_not_found';
+    }
+
+    generationId = result.id;
+    traceId = result.traceId;
+
+    if (result.status === 'requires_action') {
+      return {
+        status: 'requires_action',
+        generationId,
+        traceId,
+        requiredAction: result.requiredAction!,
+      };
+    }
+
+    assistantContent = result.output?.content ?? '';
+    modelName = result.output?.model ?? '';
+    requiredAction = undefined;
+  } else {
+    const chat = (
+      generatingActor as unknown as {
+        chat?: InstanceType<(typeof db)['Chat']>;
+      }
+    ).chat;
+    if (!chat) {
+      return 'agent_or_chat_not_found';
+    }
+
+    const result = await createChatCompletionForChat({
+      chatId: chat.publicId,
+      messages: messagesForModel as Array<{
+        role: 'system' | 'user' | 'assistant';
+        content: string;
+      }>,
+      model: args.model,
+    });
+
+    if (result === 'chat_not_found') {
+      return 'agent_or_chat_not_found';
+    }
+    if (result === 'ai_provider_not_found') {
+      return 'ai_provider_not_found';
+    }
+
+    // Chats don't expose generation/trace IDs — synthesize local ones.
+    generationId = '';
+    traceId = '';
+    assistantContent = result.content;
+    modelName = result.model;
+  }
+
+  // Persist the assistant reply as a new conversation message
+  const persisted = await addConversationMessage({
+    conversationId: args.conversationId,
+    message: assistantContent,
+    actorId: args.actorId,
+  });
+
+  if (!persisted) {
+    return 'conversation_not_found';
+  }
+
+  // Suppress unused-variable lint warnings for branches that don't use it
+  void requiredAction;
+
+  return {
+    status: 'completed',
+    message: persisted,
+    generationId,
+    traceId,
+    model: modelName,
+  };
 };

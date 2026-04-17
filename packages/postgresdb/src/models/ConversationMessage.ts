@@ -18,6 +18,10 @@ import { Document } from './Document';
       unique: true,
       fields: ['conversation_id', 'document_id'],
     },
+    {
+      unique: true,
+      fields: ['conversation_id', 'position'],
+    },
   ],
 })
 export class ConversationMessage extends Model {

@@ -81,11 +81,16 @@ const registerTools = (server: McpServer) => {
           .describe(
             "Initial status, either 'open' or 'closed'. Defaults to 'open'."
           ),
+        name: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('Optional human-readable name for the conversation.'),
       },
     },
-    async ({ projectId, status }) => {
+    async ({ projectId, status, name }) => {
       const data = await apiCall('POST', '/conversations', {
-        body: { projectId, status },
+        body: { projectId, status, name },
       });
       return { content: [{ type: 'text', text: JSON.stringify(data) }] };
     }
@@ -94,15 +99,23 @@ const registerTools = (server: McpServer) => {
   server.registerTool(
     'update-conversation',
     {
-      description: "Update a conversation's status",
+      description: "Update a conversation's status or name",
       inputSchema: {
         id: z.string().describe('Conversation ID'),
-        status: z.string().describe("New status, either 'open' or 'closed'"),
+        status: z
+          .string()
+          .optional()
+          .describe("New status, either 'open' or 'closed'"),
+        name: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('New name for the conversation. Pass null to clear.'),
       },
     },
-    async ({ id, status }) => {
+    async ({ id, status, name }) => {
       const data = await apiCall('PATCH', `/conversations/${id}`, {
-        body: { status },
+        body: { status, name },
       });
       return { content: [{ type: 'text', text: JSON.stringify(data) }] };
     }
@@ -250,6 +263,36 @@ const registerTools = (server: McpServer) => {
           ],
         };
       }
+    }
+  );
+
+  server.registerTool(
+    'generate-conversation-message',
+    {
+      description:
+        "Generate the next message in a conversation using the specified actor's linked agent or chat. On completion, the reply is persisted as a new ConversationMessage authored by that actor. On requires_action, no message is persisted.",
+      inputSchema: {
+        conversationId: z.string().describe('Conversation ID'),
+        actorId: z
+          .string()
+          .describe(
+            'Actor ID of the participant that will produce the next message. Must have agentId or chatId.'
+          ),
+        model: z
+          .string()
+          .optional()
+          .describe('Optional model override (chat-backed actors only).'),
+      },
+    },
+    async ({ conversationId, actorId, model }) => {
+      const data = await apiCall(
+        'POST',
+        `/conversations/${conversationId}/generate`,
+        {
+          body: { actorId, model },
+        }
+      );
+      return { content: [{ type: 'text', text: JSON.stringify(data) }] };
     }
   );
 };

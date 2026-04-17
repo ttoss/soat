@@ -41,6 +41,9 @@ describe('Conversations', () => {
           'conversations:CreateConversation',
           'conversations:UpdateConversation',
           'conversations:DeleteConversation',
+          'conversations:GenerateConversationMessage',
+          'actors:UpdateActor',
+          'actors:DeleteActor',
         ],
       });
     policyId = policyRes.body.id;
@@ -550,6 +553,133 @@ describe('Conversations', () => {
         `/api/v1/documents/${documentId}`
       );
       expect(docAfter.status).toBe(404);
+    });
+  });
+
+  describe('Conversation name', () => {
+    test('creates conversation with a name and exposes it on GET', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ projectId, name: 'Support Case 42' });
+      expect(createRes.status).toBe(201);
+      expect(createRes.body.name).toBe('Support Case 42');
+
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/conversations/${createRes.body.id}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.name).toBe('Support Case 42');
+    });
+
+    test('updates a conversation name via PATCH', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ projectId, name: 'Before' });
+      const convId = createRes.body.id;
+
+      const patchRes = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/conversations/${convId}`)
+        .send({ name: 'After' });
+      expect(patchRes.status).toBe(200);
+      expect(patchRes.body.name).toBe('After');
+    });
+  });
+
+  describe('POST /api/v1/conversations/:id/generate', () => {
+    let convId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ projectId });
+      convId = res.body.id;
+    });
+
+    test('returns 400 when actorId is missing', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${convId}/generate`)
+        .send({});
+      expect(res.status).toBe(400);
+    });
+
+    test('returns 501 when stream is requested', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${convId}/generate`)
+        .send({ actorId, stream: true });
+      expect(res.status).toBe(501);
+    });
+
+    test('returns 400 when actor has no agentId or chatId', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${convId}/generate`)
+        .send({ actorId });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/agentId or chatId/i);
+    });
+
+    test('returns 404 for unknown conversation', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations/conv_does_not_exist/generate')
+        .send({ actorId });
+      expect(res.status).toBe(404);
+    });
+
+    test('returns 401 when unauthenticated', async () => {
+      const res = await testClient
+        .post(`/api/v1/conversations/${convId}/generate`)
+        .send({ actorId });
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe('Actor agent/chat mutual exclusion', () => {
+    test('rejects creating an actor with both agentId and chatId', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({
+          projectId,
+          name: 'Bad Actor',
+          agentId: 'agt_fake',
+          chatId: 'cht_fake',
+        });
+      expect(res.status).toBe(400);
+    });
+
+    test('rejects creating an actor with invalid agentId', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({
+          projectId,
+          name: 'Bad Actor 2',
+          agentId: 'agt_does_not_exist',
+        });
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('Actor deletion with messages', () => {
+    test('returns 409 when deleting an actor that has conversation messages', async () => {
+      // Create a fresh actor and conversation, add a message, then try delete.
+      const newActorRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ projectId, name: 'ActorWithMessages' });
+      expect(newActorRes.status).toBe(201);
+      const newActorId = newActorRes.body.id;
+
+      const convRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ projectId });
+      const newConvId = convRes.body.id;
+
+      const msgRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${newConvId}/messages`)
+        .send({ actorId: newActorId, message: 'hello' });
+      expect(msgRes.status).toBe(201);
+
+      const delRes = await authenticatedTestClient(userToken).delete(
+        `/api/v1/actors/${newActorId}`
+      );
+      expect(delRes.status).toBe(409);
     });
   });
 });

@@ -342,6 +342,78 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /conversations/{id}/generate:
+    post:
+      tags:
+        - Conversations
+      summary: Generate the next message in a conversation
+      description: |
+        Generates the next message using the specified actor's linked agent or chat.
+        On `completed`, the reply is persisted as a new ConversationMessage authored
+        by that actor. On `requires_action`, nothing is persisted; the caller must
+        submit tool outputs via the Agents module and re-invoke generate.
+      operationId: generateConversationMessage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - actorId
+              properties:
+                actorId:
+                  type: string
+                  description: ID of the actor that will produce the next message. Must have `agentId` or `chatId` set.
+                model:
+                  type: string
+                  description: Optional model override. Only honored for chat-backed actors.
+                stream:
+                  type: boolean
+                  description: If true, stream tokens via SSE. NOT IMPLEMENTED in v1 — returns 501.
+      responses:
+        '200':
+          description: Generation completed or requires action
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation or actor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '501':
+          description: Streaming not implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /conversations/{id}/actors:
     get:
       tags:
@@ -440,6 +512,10 @@ components:
           type: string
           description: Project ID
           example: 'proj_V1StGXR8Z5jdHi6B'
+        name:
+          type: string
+          nullable: true
+          description: Optional human-readable name for the conversation.
         status:
           type: string
           enum: [open, closed]

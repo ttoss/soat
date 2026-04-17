@@ -8,6 +8,8 @@ import {
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
+import { Agent } from './Agent';
+import { Chat } from './Chat';
 import { Project } from './Project';
 
 @Table({
@@ -16,6 +18,11 @@ import { Project } from './Project';
     beforeValidate: (instance: Actor) => {
       if (!instance.publicId) {
         instance.publicId = generatePublicId(PUBLIC_ID_PREFIXES.actor);
+      }
+      if (instance.agentId && instance.chatId) {
+        throw new Error(
+          'Actor cannot reference both an agent and a chat at the same time'
+        );
       }
     },
   },
@@ -53,6 +60,31 @@ export class Actor extends Model {
 
   @Column({ type: DataType.STRING })
   declare externalId?: string;
+
+  @Column({ type: DataType.TEXT, allowNull: true })
+  declare instructions: string | null;
+
+  @ForeignKey(() => {
+    return Agent;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare agentId: number | null;
+
+  @BelongsTo(() => {
+    return Agent;
+  })
+  declare agent: Agent | null;
+
+  @ForeignKey(() => {
+    return Chat;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare chatId: number | null;
+
+  @BelongsTo(() => {
+    return Chat;
+  })
+  declare chat: Chat | null;
 
   @Column({
     type: DataType.JSONB,
