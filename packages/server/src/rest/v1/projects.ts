@@ -71,7 +71,13 @@ projectsRouter.post('/projects', async (ctx: Context) => {
     return;
   }
 
-  const { name } = ctx.request.body as { name: string };
+  const { name } = ctx.request.body as { name?: string };
+
+  if (!name || typeof name !== 'string') {
+    ctx.status = 400;
+    ctx.body = { error: 'name is required' };
+    return;
+  }
 
   const project = await createProject({ name });
 

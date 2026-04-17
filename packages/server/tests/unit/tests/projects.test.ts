@@ -48,6 +48,14 @@ describe('Projects', () => {
 
       expect(response.status).toBe(403);
     });
+
+    test('missing name returns 400', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({});
+
+      expect(response.status).toBe(400);
+    });
   });
 
   describe('GET /api/v1/projects', () => {
