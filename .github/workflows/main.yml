@@ -85,7 +85,7 @@ jobs:
           docker save ollama/ollama:0.20.6 -o /tmp/ollama-image.tar
 
       - name: Run smoke tests
-        run: pnpm run smoke-test
+        run: pnpm run smoke-tests
         env:
           COMPOSE_BAKE: '1'
 
