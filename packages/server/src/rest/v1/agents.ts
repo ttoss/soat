@@ -1,5 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { db } from 'src/db';
+import { createActor } from 'src/lib/actors';
 import {
   createAgent,
   createAgentTool,
@@ -954,14 +956,24 @@ agentsRouter.post('/agents/:agentId/generate', async (ctx: Context) => {
     return;
   }
 
-  const result = await createGeneration({
-    projectIds,
-    agentId: ctx.params.agentId,
-    messages: messages as Array<{ role: string; content: string }>,
-    stream: stream === true,
-    traceId,
-    remainingDepth: typeof maxCallDepth === 'number' ? maxCallDepth : undefined,
-  });
+  let result;
+  try {
+    result = await createGeneration({
+      projectIds,
+      agentId: ctx.params.agentId,
+      messages: messages as Array<{ role: string; content: string }>,
+      stream: stream === true,
+      traceId,
+      remainingDepth:
+        typeof maxCallDepth === 'number' ? maxCallDepth : undefined,
+    });
+  } catch (error) {
+    ctx.status = 500;
+    ctx.body = {
+      error: error instanceof Error ? error.message : 'Generation failed',
+    };
+    return;
+  }
 
   if (result === 'not_found') {
     ctx.status = 404;
@@ -1108,3 +1120,120 @@ agentsRouter.post(
     ctx.body = result;
   }
 );
+
+/**
+ * @openapi
+ * /agents/{agentId}/actors:
+ *   post:
+ *     tags:
+ *       - Agents
+ *     summary: Create an actor linked to an agent
+ *     description: Convenience endpoint that creates an actor in the agent's project with `agentId` pre-filled.
+ *     operationId: createActorForAgent
+ *     parameters:
+ *       - name: agentId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name:
+ *                 type: string
+ *               type:
+ *                 type: string
+ *               externalId:
+ *                 type: string
+ *               instructions:
+ *                 type: string
+ *                 nullable: true
+ *     responses:
+ *       '201':
+ *         description: Actor created
+ *       '400':
+ *         description: Invalid request
+ *       '401':
+ *         description: Unauthorized
+ *       '403':
+ *         description: Forbidden
+ *       '404':
+ *         description: Agent not found
+ */
+agentsRouter.post('/agents/:agentId/actors', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const agent = await db.Agent.findOne({
+    where: { publicId: ctx.params.agentId },
+    include: [{ model: db.Project, as: 'project' }],
+  });
+
+  if (!agent) {
+    ctx.status = 404;
+    ctx.body = { error: 'Agent not found' };
+    return;
+  }
+
+  const project = (
+    agent as unknown as {
+      project?: InstanceType<(typeof db)['Project']>;
+    }
+  ).project;
+
+  if (!project?.publicId) {
+    ctx.status = 404;
+    ctx.body = { error: 'Agent project not found' };
+    return;
+  }
+
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: project.publicId,
+    action: 'actors:CreateActor',
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const body = ctx.request.body as {
+    name: string;
+    type?: string;
+    externalId?: string;
+    instructions?: string | null;
+  };
+
+  if (!body.name) {
+    ctx.status = 400;
+    ctx.body = { error: 'name is required' };
+    return;
+  }
+
+  const actor = await createActor({
+    projectId: agent.projectId,
+    name: body.name,
+    type: body.type,
+    externalId: body.externalId,
+    instructions: body.instructions ?? null,
+    agentId: agent.id as number,
+  });
+
+  if (actor === 'agent_and_chat_exclusive') {
+    ctx.status = 400;
+    ctx.body = { error: 'agentId and chatId are mutually exclusive' };
+    return;
+  }
+
+  ctx.status = 201;
+  ctx.body = actor;
+});

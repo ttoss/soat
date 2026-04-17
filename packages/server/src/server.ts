@@ -35,7 +35,10 @@ const startServer = async () => {
       }
     } catch (error) {
       // eslint-disable-next-line no-console
-      console.error('Failed to create admin user from environment variables:', error);
+      console.error(
+        'Failed to create admin user from environment variables:',
+        error
+      );
     }
   }
 

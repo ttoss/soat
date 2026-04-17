@@ -951,5 +951,240 @@ if [ "$SOAT_TOOL_DEL" != "204" ]; then
 fi
 echo "SOAT agent tool deleted."
 
+# ── Conversations Generate Tests ─────────────────────────────────────────────
+
+# 43. Create a bare agent (no tools) for conversation generation
+echo "--- Creating conversation-generate agent ---"
+CONVO_GEN_AGENT_RESP=$(curl -sf -X POST "$BASE_URL/agents" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{
+    \"projectId\": \"$PROJECT_PUBLIC_ID\",
+    \"aiProviderId\": \"$AI_PROVIDER_ID\",
+    \"name\": \"convo-gen-agent\",
+    \"instructions\": \"You are a helpful conversation participant. Reply concisely.\"
+  }")
+CONVO_GEN_AGENT_ID=$(echo "$CONVO_GEN_AGENT_RESP" | jq -r '.id')
+if [ -z "$CONVO_GEN_AGENT_ID" ] || [ "$CONVO_GEN_AGENT_ID" = "null" ]; then
+  echo "ERROR: Failed to create conversation-generate agent" >&2
+  echo "$CONVO_GEN_AGENT_RESP" >&2
+  exit 1
+fi
+echo "Conversation-generate agent id: $CONVO_GEN_AGENT_ID"
+
+# 44. Create a conversation with a name (new feature)
+echo "--- Creating named conversation ---"
+NAMED_CONVO_RESP=$(curl -sf -X POST "$BASE_URL/conversations" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"name\":\"smoke-named-conversation\"}")
+NAMED_CONVO_ID=$(echo "$NAMED_CONVO_RESP" | jq -r '.id')
+NAMED_CONVO_NAME=$(echo "$NAMED_CONVO_RESP" | jq -r '.name')
+if [ -z "$NAMED_CONVO_ID" ] || [ "$NAMED_CONVO_ID" = "null" ]; then
+  echo "ERROR: Failed to create named conversation" >&2
+  echo "$NAMED_CONVO_RESP" >&2
+  exit 1
+fi
+if [ "$NAMED_CONVO_NAME" != "smoke-named-conversation" ]; then
+  echo "ERROR: Expected conversation name 'smoke-named-conversation', got '$NAMED_CONVO_NAME'" >&2
+  exit 1
+fi
+echo "Named conversation id: $NAMED_CONVO_ID, name: $NAMED_CONVO_NAME"
+
+# 44b. PATCH the conversation name
+echo "--- Patching conversation name ---"
+NAME_PATCH_RESP=$(curl -sf -X PATCH "$BASE_URL/conversations/$NAMED_CONVO_ID" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"name":"smoke-renamed-conversation"}')
+NAME_PATCH_NAME=$(echo "$NAME_PATCH_RESP" | jq -r '.name')
+if [ "$NAME_PATCH_NAME" != "smoke-renamed-conversation" ]; then
+  echo "ERROR: Expected patched name 'smoke-renamed-conversation', got '$NAME_PATCH_NAME'" >&2
+  exit 1
+fi
+echo "Conversation rename: OK"
+
+# 45. Create an agent-backed actor using the convenience endpoint POST /agents/:id/actors
+echo "--- Creating agent-backed actor via convenience endpoint ---"
+AGENT_ACTOR_RESP=$(curl -sf -X POST "$BASE_URL/agents/$CONVO_GEN_AGENT_ID/actors" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"name\":\"convo-agent-actor\",\"instructions\":\"Reply as a friendly assistant.\"}")
+AGENT_ACTOR_ID=$(echo "$AGENT_ACTOR_RESP" | jq -r '.id')
+AGENT_ACTOR_AGENT_ID=$(echo "$AGENT_ACTOR_RESP" | jq -r '.agentId')
+AGENT_ACTOR_INSTRUCTIONS=$(echo "$AGENT_ACTOR_RESP" | jq -r '.instructions')
+if [ -z "$AGENT_ACTOR_ID" ] || [ "$AGENT_ACTOR_ID" = "null" ]; then
+  echo "ERROR: Failed to create agent-backed actor" >&2
+  echo "$AGENT_ACTOR_RESP" >&2
+  exit 1
+fi
+if [ "$AGENT_ACTOR_AGENT_ID" != "$CONVO_GEN_AGENT_ID" ]; then
+  echo "ERROR: Expected actor.agentId='$CONVO_GEN_AGENT_ID', got '$AGENT_ACTOR_AGENT_ID'" >&2
+  exit 1
+fi
+if [ "$AGENT_ACTOR_INSTRUCTIONS" != "Reply as a friendly assistant." ]; then
+  echo "ERROR: Expected actor.instructions='Reply as a friendly assistant.', got '$AGENT_ACTOR_INSTRUCTIONS'" >&2
+  exit 1
+fi
+echo "Agent-backed actor id: $AGENT_ACTOR_ID, agentId: $AGENT_ACTOR_AGENT_ID, instructions: OK"
+
+# 45b. Verify actor fields on GET /actors/:id
+echo "--- Verifying actor shape on GET ---"
+ACTOR_GET_RESP=$(curl -sf "$BASE_URL/actors/$AGENT_ACTOR_ID" \
+  -H "Authorization: Bearer $TOKEN")
+ACTOR_GET_AGENT_ID=$(echo "$ACTOR_GET_RESP" | jq -r '.agentId')
+ACTOR_GET_INSTRUCTIONS=$(echo "$ACTOR_GET_RESP" | jq -r '.instructions')
+if [ "$ACTOR_GET_AGENT_ID" != "$CONVO_GEN_AGENT_ID" ]; then
+  echo "ERROR: GET actor returned agentId='$ACTOR_GET_AGENT_ID', expected '$CONVO_GEN_AGENT_ID'" >&2
+  exit 1
+fi
+if [ "$ACTOR_GET_INSTRUCTIONS" != "Reply as a friendly assistant." ]; then
+  echo "ERROR: GET actor returned instructions='$ACTOR_GET_INSTRUCTIONS'" >&2
+  exit 1
+fi
+echo "GET /actors/:id shape: OK"
+
+# 45c. Verify mutual exclusion: actor with both agentId and chatId must fail (400)
+echo "--- Verifying actor agentId+chatId mutual exclusion ---"
+MUTUAL_EXCL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/actors" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"name\":\"bad-actor\",\"agentId\":\"$CONVO_GEN_AGENT_ID\",\"chatId\":\"fake-id\"}")
+if [ "$MUTUAL_EXCL_STATUS" != "400" ]; then
+  echo "ERROR: Expected 400 for actor with both agentId and chatId, got $MUTUAL_EXCL_STATUS" >&2
+  exit 1
+fi
+echo "Actor mutual exclusion (agentId+chatId): OK (400 as expected)"
+
+# 46. Create a plain user actor for the conversation
+echo "--- Creating user actor for conversation ---"
+USER_ACTOR_RESP=$(curl -sf -X POST "$BASE_URL/actors" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"name\":\"convo-user-actor\"}")
+USER_ACTOR_ID=$(echo "$USER_ACTOR_RESP" | jq -r '.id')
+if [ -z "$USER_ACTOR_ID" ] || [ "$USER_ACTOR_ID" = "null" ]; then
+  echo "ERROR: Failed to create user actor" >&2
+  echo "$USER_ACTOR_RESP" >&2
+  exit 1
+fi
+echo "User actor id: $USER_ACTOR_ID"
+
+# 47. Add a user message to the conversation
+echo "--- Adding user message to conversation ---"
+USER_MSG_RESP=$(curl -sf -X POST "$BASE_URL/conversations/$NAMED_CONVO_ID/messages" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{\"message\":\"Hello, how are you?\",\"actorId\":\"$USER_ACTOR_ID\"}")
+USER_MSG_DOC_ID=$(echo "$USER_MSG_RESP" | jq -r '.documentId')
+if [ -z "$USER_MSG_DOC_ID" ] || [ "$USER_MSG_DOC_ID" = "null" ]; then
+  echo "ERROR: Failed to add user message" >&2
+  echo "$USER_MSG_RESP" >&2
+  exit 1
+fi
+echo "User message added (documentId: $USER_MSG_DOC_ID)"
+
+# 48. Generate a conversation message with the agent-backed actor
+# (poll with a retry loop — generate may be slow with Ollama)
+echo "--- Generating conversation message ---"
+CONVO_GEN_STATUS="in_progress"
+CONVO_GEN_ATTEMPTS=0
+while [ "$CONVO_GEN_STATUS" = "in_progress" ] && [ "$CONVO_GEN_ATTEMPTS" -lt "30" ]; do
+  CONVO_GEN_RESP=$(curl -sf --max-time 120 -X POST "$BASE_URL/conversations/$NAMED_CONVO_ID/generate" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN" \
+    -d "{\"actorId\":\"$AGENT_ACTOR_ID\"}")
+  CONVO_GEN_STATUS=$(echo "$CONVO_GEN_RESP" | jq -r '.status')
+  CONVO_GEN_ATTEMPTS=$((CONVO_GEN_ATTEMPTS + 1))
+  if [ "$CONVO_GEN_STATUS" = "in_progress" ]; then
+    sleep 2
+  fi
+done
+echo "Conversation generate response:"
+echo "$CONVO_GEN_RESP" | jq .
+if [ "$CONVO_GEN_STATUS" != "completed" ]; then
+  echo "ERROR: Expected conversation generate status 'completed', got '$CONVO_GEN_STATUS'" >&2
+  exit 1
+fi
+CONVO_GEN_MSG_ID=$(echo "$CONVO_GEN_RESP" | jq -r '.message.documentId')
+if [ -z "$CONVO_GEN_MSG_ID" ] || [ "$CONVO_GEN_MSG_ID" = "null" ]; then
+  echo "ERROR: Conversation generate response missing message.documentId" >&2
+  exit 1
+fi
+echo "Conversation generate: OK (message documentId: $CONVO_GEN_MSG_ID)"
+
+# 48b. Verify the generated message is listed in conversation messages
+echo "--- Verifying generated message persisted ---"
+CONVO_MSGS_RESP=$(curl -sf "$BASE_URL/conversations/$NAMED_CONVO_ID/messages" \
+  -H "Authorization: Bearer $TOKEN")
+MSG_COUNT=$(echo "$CONVO_MSGS_RESP" | jq 'length')
+if [ "$MSG_COUNT" -lt "2" ]; then
+  echo "ERROR: Expected at least 2 conversation messages (user + generated), got $MSG_COUNT" >&2
+  exit 1
+fi
+echo "Conversation messages count: $MSG_COUNT (OK)"
+
+# 49. Verify GET /conversations/:id/actors lists both actors
+echo "--- Verifying GET /conversations/:id/actors ---"
+CONVO_ACTORS_RESP=$(curl -sf "$BASE_URL/conversations/$NAMED_CONVO_ID/actors" \
+  -H "Authorization: Bearer $TOKEN")
+CONVO_ACTORS_COUNT=$(echo "$CONVO_ACTORS_RESP" | jq 'length')
+if [ "$CONVO_ACTORS_COUNT" -lt "2" ]; then
+  echo "ERROR: Expected at least 2 actors in conversation, got $CONVO_ACTORS_COUNT" >&2
+  exit 1
+fi
+echo "GET /conversations/:id/actors count: $CONVO_ACTORS_COUNT (OK)"
+
+# 50. Verify delete-block: agent-backed actor with messages cannot be deleted (409)
+echo "--- Verifying actor delete-block (409 when actor has messages) ---"
+ACTOR_DEL_BLOCKED_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/actors/$AGENT_ACTOR_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$ACTOR_DEL_BLOCKED_STATUS" != "409" ]; then
+  echo "ERROR: Expected 409 when deleting actor with messages, got $ACTOR_DEL_BLOCKED_STATUS" >&2
+  exit 1
+fi
+echo "Actor delete-block: OK (409 as expected)"
+
+# 51. Cleanup — delete the conversation (cascades messages)
+echo "--- Deleting named conversation ---"
+NAMED_CONVO_DEL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/conversations/$NAMED_CONVO_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$NAMED_CONVO_DEL_STATUS" != "204" ]; then
+  echo "ERROR: DELETE named conversation returned $NAMED_CONVO_DEL_STATUS, expected 204" >&2
+  exit 1
+fi
+echo "Named conversation deleted."
+
+# 52. Cleanup — now that messages are gone, delete agent-backed actor
+echo "--- Deleting agent-backed actor ---"
+AGENT_ACTOR_DEL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/actors/$AGENT_ACTOR_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$AGENT_ACTOR_DEL_STATUS" != "204" ]; then
+  echo "ERROR: DELETE agent-backed actor returned $AGENT_ACTOR_DEL_STATUS, expected 204" >&2
+  exit 1
+fi
+echo "Agent-backed actor deleted."
+
+# 53. Cleanup — delete user actor
+echo "--- Deleting user actor ---"
+USER_ACTOR_DEL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/actors/$USER_ACTOR_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$USER_ACTOR_DEL_STATUS" != "204" ]; then
+  echo "ERROR: DELETE user actor returned $USER_ACTOR_DEL_STATUS, expected 204" >&2
+  exit 1
+fi
+echo "User actor deleted."
+
+# 54. Cleanup — delete conversation-generate agent
+echo "--- Deleting conversation-generate agent ---"
+CONVO_GEN_AGENT_DEL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/agents/$CONVO_GEN_AGENT_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$CONVO_GEN_AGENT_DEL_STATUS" != "204" ]; then
+  echo "ERROR: DELETE conversation-generate agent returned $CONVO_GEN_AGENT_DEL_STATUS, expected 204" >&2
+  exit 1
+fi
+echo "Conversation-generate agent deleted."
+echo "Conversations generate coverage: OK"
+
 echo ""
 echo "=== All smoke tests passed! ==="

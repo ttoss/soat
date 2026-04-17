@@ -8,9 +8,10 @@ import { createXai } from '@ai-sdk/xai';
 import type { AiProviderSlug } from '@soat/postgresdb';
 import type { LanguageModel, ModelMessage } from 'ai';
 import { generateText, streamText } from 'ai';
-import { db } from '../db';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 import { getDocument } from 'src/lib/documents';
+
+import { db } from '../db';
 
 const buildModel = (args: {
   provider: AiProviderSlug;
@@ -143,21 +144,25 @@ const mapChat = (
     aiProvider: InstanceType<typeof db.AiProvider>;
     project: InstanceType<typeof db.Project>;
   }
-): MappedChat => ({
-  id: chat.publicId,
-  projectId: chat.project.publicId,
-  aiProviderId: chat.aiProvider.publicId,
-  name: chat.name,
-  systemMessage: chat.systemMessage,
-  model: chat.model,
-  createdAt: chat.createdAt,
-  updatedAt: chat.updatedAt,
-});
+): MappedChat => {
+  return {
+    id: chat.publicId,
+    projectId: chat.project.publicId,
+    aiProviderId: chat.aiProvider.publicId,
+    name: chat.name,
+    systemMessage: chat.systemMessage,
+    model: chat.model,
+    createdAt: chat.createdAt,
+    updatedAt: chat.updatedAt,
+  };
+};
 
-const getChatIncludes = () => [
-  { model: db.AiProvider, as: 'aiProvider' },
-  { model: db.Project, as: 'project' },
-];
+const getChatIncludes = () => {
+  return [
+    { model: db.AiProvider, as: 'aiProvider' },
+    { model: db.Project, as: 'project' },
+  ];
+};
 
 export const createChat = async (args: {
   projectId: number;
@@ -214,9 +219,9 @@ export const listChats = async (args: {
     order: [['createdAt', 'DESC']],
   });
 
-  return chats.map((chat) =>
-    mapChat(chat as unknown as Parameters<typeof mapChat>[0])
-  );
+  return chats.map((chat) => {
+    return mapChat(chat as unknown as Parameters<typeof mapChat>[0]);
+  });
 };
 
 export const deleteChat = async (args: {
@@ -227,6 +232,12 @@ export const deleteChat = async (args: {
   if (!chat) {
     return 'not_found';
   }
+
+  // Null out chatId on any actors linked to this chat before destroying.
+  await db.Actor.update(
+    { chatId: null },
+    { where: { chatId: chat.id as number } }
+  );
 
   await chat.destroy();
   return 'deleted';
@@ -322,12 +333,14 @@ export const createChatCompletionForChat = async (args: {
 
   const resolvedMessages = await resolveMessages(args.messages);
 
-  const systemFromRequest = resolvedMessages.find((m) => m.role === 'system');
+  const systemFromRequest = resolvedMessages.find((m) => {
+    return m.role === 'system';
+  });
   const systemMessage = systemFromRequest?.content ?? typedChat.systemMessage;
 
-  const userAssistantMessages = resolvedMessages.filter(
-    (m) => m.role !== 'system'
-  );
+  const userAssistantMessages = resolvedMessages.filter((m) => {
+    return m.role !== 'system';
+  });
 
   const finalMessages: ChatMessage[] = systemMessage
     ? [{ role: 'system', content: systemMessage }, ...userAssistantMessages]
@@ -379,12 +392,14 @@ export const streamChatCompletionForChat = async (args: {
 
   const resolvedMessages = await resolveMessages(args.messages);
 
-  const systemFromRequest = resolvedMessages.find((m) => m.role === 'system');
+  const systemFromRequest = resolvedMessages.find((m) => {
+    return m.role === 'system';
+  });
   const systemMessage = systemFromRequest?.content ?? typedChat.systemMessage;
 
-  const userAssistantMessages = resolvedMessages.filter(
-    (m) => m.role !== 'system'
-  );
+  const userAssistantMessages = resolvedMessages.filter((m) => {
+    return m.role !== 'system';
+  });
 
   const finalMessages: ChatMessage[] = systemMessage
     ? [{ role: 'system', content: systemMessage }, ...userAssistantMessages]

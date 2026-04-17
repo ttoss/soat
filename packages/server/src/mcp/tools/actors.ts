@@ -96,11 +96,46 @@ const registerTools = (server: McpServer) => {
           .describe(
             'Optional external identifier (e.g. WhatsApp phone number). Must be unique within the project.'
           ),
+        instructions: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            'Persona-specific instructions composed into the effective system prompt on generate calls.'
+          ),
+        agentId: z
+          .string()
+          .optional()
+          .describe(
+            'Optional Agent ID to link this actor to. Mutually exclusive with chatId.'
+          ),
+        chatId: z
+          .string()
+          .optional()
+          .describe(
+            'Optional Chat ID to link this actor to. Mutually exclusive with agentId.'
+          ),
       },
     },
-    async ({ projectId, name, type, externalId }) => {
+    async ({
+      projectId,
+      name,
+      type,
+      externalId,
+      instructions,
+      agentId,
+      chatId,
+    }) => {
       const data = await apiCall('POST', '/actors', {
-        body: { projectId, name, type, externalId },
+        body: {
+          projectId,
+          name,
+          type,
+          externalId,
+          instructions,
+          agentId,
+          chatId,
+        },
       });
       return { content: [{ type: 'text', text: JSON.stringify(data) }] };
     }
@@ -151,11 +186,26 @@ const registerTools = (server: McpServer) => {
         name: z.string().optional().describe('New name'),
         type: z.string().optional().describe('New type'),
         externalId: z.string().optional().describe('New external ID'),
+        instructions: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('Persona-specific instructions. Pass null to clear.'),
+        agentId: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('Agent to link to this actor. Pass null to unlink.'),
+        chatId: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('Chat to link to this actor. Pass null to unlink.'),
       },
     },
-    async ({ id, name, type, externalId }) => {
+    async ({ id, name, type, externalId, instructions, agentId, chatId }) => {
       const data = await apiCall('PATCH', `/actors/${id}`, {
-        body: { name, type, externalId },
+        body: { name, type, externalId, instructions, agentId, chatId },
       });
       return { content: [{ type: 'text', text: JSON.stringify(data) }] };
     }

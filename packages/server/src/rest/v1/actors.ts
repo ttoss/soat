@@ -253,6 +253,16 @@ actorsRouter.get('/actors/:id', async (ctx: Context) => {
  *                 type: string
  *                 description: Optional external identifier (e.g. WhatsApp phone number). Must be unique within a project.
  *                 example: '+15551234567'
+ *               instructions:
+ *                 type: string
+ *                 nullable: true
+ *                 description: Persona-specific instructions composed into the effective system prompt for generate calls.
+ *               agentId:
+ *                 type: string
+ *                 description: Optional Agent ID to link this actor to. Mutually exclusive with chatId.
+ *               chatId:
+ *                 type: string
+ *                 description: Optional Chat ID to link this actor to. Mutually exclusive with agentId.
  *     responses:
  *       '201':
  *         description: Actor created
@@ -291,11 +301,22 @@ actorsRouter.post('/actors', async (ctx: Context) => {
     name: string;
     type?: string;
     externalId?: string;
+    instructions?: string | null;
+    agentId?: string;
+    chatId?: string;
   };
 
   if (!body.name) {
     ctx.status = 400;
     ctx.body = { error: 'name is required' };
+    return;
+  }
+
+  if (body.agentId && body.chatId) {
+    ctx.status = 400;
+    ctx.body = {
+      error: 'agentId and chatId are mutually exclusive',
+    };
     return;
   }
 
@@ -330,12 +351,47 @@ actorsRouter.post('/actors', async (ctx: Context) => {
   }
 
   try {
+    let agentDbId: number | null | undefined;
+    if (body.agentId !== undefined) {
+      const agent = await db.Agent.findOne({
+        where: { publicId: body.agentId, projectId: project.id as number },
+      });
+      if (!agent) {
+        ctx.status = 400;
+        ctx.body = { error: 'Invalid agentId' };
+        return;
+      }
+      agentDbId = agent.id as number;
+    }
+
+    let chatDbId: number | null | undefined;
+    if (body.chatId !== undefined) {
+      const chat = await db.Chat.findOne({
+        where: { publicId: body.chatId, projectId: project.id as number },
+      });
+      if (!chat) {
+        ctx.status = 400;
+        ctx.body = { error: 'Invalid chatId' };
+        return;
+      }
+      chatDbId = chat.id as number;
+    }
+
     const actor = await createActor({
       projectId: project.id,
       name: body.name,
       type: body.type,
       externalId: body.externalId,
+      instructions: body.instructions ?? null,
+      agentId: agentDbId,
+      chatId: chatDbId,
     });
+
+    if (actor === 'agent_and_chat_exclusive') {
+      ctx.status = 400;
+      ctx.body = { error: 'agentId and chatId are mutually exclusive' };
+      return;
+    }
 
     ctx.status = 201;
     ctx.body = actor;
@@ -430,7 +486,15 @@ actorsRouter.delete('/actors/:id', async (ctx: Context) => {
     return;
   }
 
-  await deleteActor({ id: ctx.params.id });
+  const result = await deleteActor({ id: ctx.params.id });
+  if (result === 'has_messages') {
+    ctx.status = 409;
+    ctx.body = {
+      error:
+        'Actor is referenced by conversation messages. Remove those messages or delete the containing conversations first.',
+    };
+    return;
+  }
   ctx.status = 204;
 });
 
@@ -467,6 +531,18 @@ actorsRouter.delete('/actors/:id', async (ctx: Context) => {
  *               externalId:
  *                 type: string
  *                 example: '+15551234567'
+ *               instructions:
+ *                 type: string
+ *                 nullable: true
+ *                 description: Persona-specific instructions. Pass null to clear.
+ *               agentId:
+ *                 type: string
+ *                 nullable: true
+ *                 description: Agent to link to this actor. Pass null to unlink.
+ *               chatId:
+ *                 type: string
+ *                 nullable: true
+ *                 description: Chat to link to this actor. Pass null to unlink.
  *     responses:
  *       '200':
  *         description: Actor updated
@@ -527,6 +603,9 @@ actorsRouter.patch('/actors/:id', async (ctx: Context) => {
     name?: string;
     type?: string;
     externalId?: string;
+    instructions?: string | null;
+    agentId?: string | null;
+    chatId?: string | null;
   };
 
   const updated = await updateActor({
@@ -534,7 +613,26 @@ actorsRouter.patch('/actors/:id', async (ctx: Context) => {
     name: body.name,
     type: body.type,
     externalId: body.externalId,
+    instructions: body.instructions,
+    agentId: body.agentId,
+    chatId: body.chatId,
   });
+
+  if (updated === 'agent_not_found') {
+    ctx.status = 400;
+    ctx.body = { error: 'Invalid agentId' };
+    return;
+  }
+  if (updated === 'chat_not_found') {
+    ctx.status = 400;
+    ctx.body = { error: 'Invalid chatId' };
+    return;
+  }
+  if (updated === 'agent_and_chat_exclusive') {
+    ctx.status = 400;
+    ctx.body = { error: 'agentId and chatId are mutually exclusive' };
+    return;
+  }
 
   ctx.body = updated;
 });

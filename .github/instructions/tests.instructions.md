@@ -142,21 +142,21 @@ Run MCP tests specifically:
 pnpm --filter @soat/server test --testPathPatterns=mcp.test.ts
 ```
 
-## Smoke Test
+## Smoke Tests
 
-The smoke test (`tests/smoke-test.sh`) is an end-to-end shell script that runs against a live server. It requires `curl` and `jq`.
+The smoke tests (`tests/smoke-tests.sh`) are end-to-end shell scripts that run against a live server. They require `curl` and `jq`.
 
 ### Running
 
 ```bash
-pnpm run -w smoke-test
+pnpm run -w smoke-tests
 ```
 
 The script uses `set -e` and exits with a non-zero code on the first failure, printing which step failed.
 
 ### Scope
 
-The smoke test must cover every module end-to-end: users, projects, project policies, project keys, secrets, files, documents, conversations, chats, AI providers, agents (HTTP tool, MCP tool, client tool, SOAT tool), and traces. Every new module must have corresponding smoke test steps added before the implementation is considered done.
+The smoke tests must cover every module end-to-end: users, projects, project policies, project keys, secrets, files, documents, conversations, chats, AI providers, agents (HTTP tool, MCP tool, client tool, SOAT tool), and traces. Every new module must have corresponding smoke test steps added before the implementation is considered done.
 
 ### Environment Variables
 
@@ -178,4 +178,4 @@ Some endpoints require prior setup that is not performed automatically. Always s
 - **Do not assert LLM output content.** Only check structural/status fields (e.g., `status == "completed"`, `id` is present). LLM responses vary by model and prompt.
 - **Poll for async generation.** Agent generation endpoints may return `in_progress`; retry with a loop and `--max-time` guard before asserting the final status.
 - **Client-tool (`requires_action`) flow.** When testing client-side tool execution: assert `status == "requires_action"`, extract `requiredAction.toolCalls[0]`, submit a synthetic result to `POST /agents/:id/generate/:genId/tool-outputs`, then assert `status == "completed"`.
-- **Non-fatal server errors from LLM tool calls** (e.g., `SequelizeValidationError` when the model hallucinates a bad tool argument) do not fail the smoke test — only the smoke assertions matter.
+- **Non-fatal server errors from LLM tool calls** (e.g., `SequelizeValidationError` when the model hallucinates a bad tool argument) do not fail the smoke tests — only the smoke assertions matter.
