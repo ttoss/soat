@@ -941,10 +941,11 @@ agentsRouter.post('/agents/:agentId/generate', async (ctx: Context) => {
     return;
   }
 
-  const { messages, stream, traceId } = ctx.request.body as {
+  const { messages, stream, traceId, maxCallDepth } = ctx.request.body as {
     messages?: unknown;
     stream?: boolean;
     traceId?: string;
+    maxCallDepth?: unknown;
   };
 
   if (!Array.isArray(messages) || messages.length === 0) {
@@ -959,6 +960,7 @@ agentsRouter.post('/agents/:agentId/generate', async (ctx: Context) => {
     messages: messages as Array<{ role: string; content: string }>,
     stream: stream === true,
     traceId,
+    remainingDepth: typeof maxCallDepth === 'number' ? maxCallDepth : undefined,
   });
 
   if (result === 'not_found') {

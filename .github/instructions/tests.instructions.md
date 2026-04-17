@@ -153,3 +153,29 @@ pnpm run -w smoke-test
 ```
 
 The script uses `set -e` and exits with a non-zero code on the first failure, printing which step failed.
+
+### Scope
+
+The smoke test must cover every module end-to-end: users, projects, project policies, project keys, secrets, files, documents, conversations, chats, AI providers, agents (HTTP tool, MCP tool, client tool, SOAT tool), and traces. Every new module must have corresponding smoke test steps added before the implementation is considered done.
+
+### Environment Variables
+
+`docker-compose.test.yml` must include every environment variable that the server requires at runtime for the features under test. Missing variables cause hard startup failures. Key variables:
+
+- `SECRETS_ENCRYPTION_KEY` — 64-character hex string (32 bytes) required by the secrets module. Use a fixed test value: `0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef`.
+
+Whenever a new env-dependent feature is added to the server, add the corresponding variable to the `server` service environment in `docker-compose.test.yml` at the same time.
+
+### Prerequisites and Ordering
+
+Some endpoints require prior setup that is not performed automatically. Always satisfy prerequisites explicitly in the smoke script before calling the endpoint:
+
+- **Project keys** — `POST /project-keys` requires the calling user to be a member of the project (`UserProject` row). Add the user via `POST /projects/:id/members` (expect `201`) before creating a key.
+- **Secrets** — require `SECRETS_ENCRYPTION_KEY` to be set in the server environment.
+
+### Agent and LLM Smoke Patterns
+
+- **Do not assert LLM output content.** Only check structural/status fields (e.g., `status == "completed"`, `id` is present). LLM responses vary by model and prompt.
+- **Poll for async generation.** Agent generation endpoints may return `in_progress`; retry with a loop and `--max-time` guard before asserting the final status.
+- **Client-tool (`requires_action`) flow.** When testing client-side tool execution: assert `status == "requires_action"`, extract `requiredAction.toolCalls[0]`, submit a synthetic result to `POST /agents/:id/generate/:genId/tool-outputs`, then assert `status == "completed"`.
+- **Non-fatal server errors from LLM tool calls** (e.g., `SequelizeValidationError` when the model hallucinates a bad tool argument) do not fail the smoke test — only the smoke assertions matter.

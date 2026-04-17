@@ -10,6 +10,11 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import type { LanguageModel, ModelMessage, Tool } from 'ai';
 import { generateText, jsonSchema, stepCountIs, streamText, tool } from 'ai';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
+import {
+  evaluatePolicies,
+  type PolicyDocument,
+  validatePolicyDocument,
+} from 'src/lib/iam';
 
 import { db } from '../db';
 
@@ -488,6 +493,7 @@ const buildModel = (args: {
 
 type PendingGeneration = {
   agentId: string;
+  projectId: number;
   traceId: string;
   generationId: string;
   pendingToolCalls: Array<{
@@ -511,11 +517,97 @@ type PendingGeneration = {
 
 const pendingGenerations = new Map<string, PendingGeneration>();
 
+const SOAT_ACTION_TO_IAM_ACTION: Record<string, string> = {
+  'list-projects': 'projects:ListProjects',
+  'get-project': 'projects:GetProject',
+};
+
+const isSoatActionAllowedByBoundary = (args: {
+  boundaryPolicy: unknown;
+  action: string;
+}): boolean => {
+  if (!args.boundaryPolicy) {
+    return true;
+  }
+
+  const validation = validatePolicyDocument(args.boundaryPolicy);
+  if (!validation.valid) {
+    return false;
+  }
+
+  const iamAction = SOAT_ACTION_TO_IAM_ACTION[args.action] ?? args.action;
+
+  return evaluatePolicies({
+    policies: [args.boundaryPolicy as PolicyDocument],
+    action: iamAction,
+    resource: '*',
+  });
+};
+
+const executeSoatAction = async (args: {
+  action: string;
+  toolArgs: unknown;
+  projectIds?: number[];
+}) => {
+  switch (args.action) {
+    case 'list-projects': {
+      const where: Record<string, unknown> = {};
+      if (args.projectIds !== undefined) {
+        where.id = args.projectIds;
+      }
+
+      const projects = await db.Project.findAll({
+        where,
+        order: [['createdAt', 'DESC']],
+      });
+
+      return projects.map((project) => {
+        return {
+          id: project.publicId,
+          name: project.name,
+          createdAt: project.createdAt,
+          updatedAt: project.updatedAt,
+        };
+      });
+    }
+
+    case 'get-project': {
+      const input = (args.toolArgs ?? {}) as { id?: string };
+      if (!input.id) {
+        return { error: 'Missing required argument: id' };
+      }
+
+      const where: Record<string, unknown> = { publicId: input.id };
+      if (args.projectIds !== undefined) {
+        where.id = args.projectIds;
+      }
+
+      const project = await db.Project.findOne({ where });
+      if (!project) {
+        return { error: 'Project not found' };
+      }
+
+      return {
+        id: project.publicId,
+        name: project.name,
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt,
+      };
+    }
+
+    default:
+      return {
+        error: `Unsupported soat action: ${args.action}`,
+      };
+  }
+};
+
 // ── Tool Resolution ──────────────────────────────────────────────────────
 
 const resolveAgentTools = async (args: {
   toolIds: string[];
   projectIds?: number[];
+  boundaryPolicy?: unknown;
 }): Promise<Record<string, Tool>> => {
   const resolvedTools: Record<string, Tool> = {};
 
@@ -540,6 +632,7 @@ const resolveAgentTools = async (args: {
       parameters: Record<string, unknown> | null;
       execute: { url: string; headers?: Record<string, string> } | null;
       mcp: { url: string; headers?: Record<string, string> } | null;
+      actions: string[] | null;
     };
 
     switch (typedTool.type) {
@@ -640,6 +733,52 @@ const resolveAgentTools = async (args: {
         break;
       }
 
+      case 'soat': {
+        const actions = typedTool.actions ?? [];
+
+        for (const action of actions) {
+          const resolvedToolName = `${typedTool.name}_${action}`;
+
+          const inputSchema: Record<string, unknown> =
+            action === 'get-project'
+              ? {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string', description: 'Project public ID' },
+                  },
+                  required: ['id'],
+                }
+              : { type: 'object', properties: {} };
+
+          resolvedTools[resolvedToolName] = tool({
+            description:
+              typedTool.description ??
+              `Execute SOAT action ${action} through the platform`,
+            inputSchema: jsonSchema(inputSchema),
+            execute: async (toolArgs: unknown) => {
+              if (
+                !isSoatActionAllowedByBoundary({
+                  boundaryPolicy: args.boundaryPolicy,
+                  action,
+                })
+              ) {
+                const iamAction = SOAT_ACTION_TO_IAM_ACTION[action] ?? action;
+                return {
+                  error: `Forbidden: boundary policy denies ${iamAction}`,
+                };
+              }
+
+              return executeSoatAction({
+                action,
+                toolArgs,
+                projectIds: args.projectIds,
+              });
+            },
+          });
+        }
+        break;
+      }
+
       default:
         break;
     }
@@ -647,6 +786,19 @@ const resolveAgentTools = async (args: {
 
   return resolvedTools;
 };
+
+// ── Traces (in-memory for now) ───────────────────────────────────────────
+
+type Trace = {
+  id: string;
+  projectId: number;
+  agentId: string;
+  status: string;
+  createdAt: Date;
+  steps: Array<unknown>;
+};
+
+const traces = new Map<string, Trace>();
 
 // ── Generation ───────────────────────────────────────────────────────────
 
@@ -680,10 +832,21 @@ export const createGeneration = async (args: {
   GenerationResult | 'not_found' | 'ai_provider_not_found' | ReadableStream
 > => {
   const maxDepth = args.remainingDepth ?? 10;
+  const traceId = args.traceId ?? generatePublicId(PUBLIC_ID_PREFIXES.trace);
+
   if (maxDepth <= 0) {
+    traces.set(traceId, {
+      id: traceId,
+      projectId: args.projectIds?.[0] ?? 0,
+      agentId: args.agentId,
+      status: 'completed',
+      createdAt: new Date(),
+      steps: [{ type: 'depth_guard', message: 'Maximum call depth reached' }],
+    });
+
     return {
       id: generatePublicId(PUBLIC_ID_PREFIXES.generation),
-      traceId: args.traceId ?? generatePublicId(PUBLIC_ID_PREFIXES.trace),
+      traceId,
       status: 'completed',
       output: {
         model: '',
@@ -726,13 +889,13 @@ export const createGeneration = async (args: {
   });
 
   const generationId = generatePublicId(PUBLIC_ID_PREFIXES.generation);
-  const traceId = args.traceId ?? generatePublicId(PUBLIC_ID_PREFIXES.trace);
 
   // Resolve tools
   const resolvedTools = typedAgent.toolIds
     ? await resolveAgentTools({
         toolIds: typedAgent.toolIds as string[],
         projectIds: args.projectIds,
+        boundaryPolicy: typedAgent.boundaryPolicy,
       })
     : {};
 
@@ -748,8 +911,23 @@ export const createGeneration = async (args: {
       model,
       messages: allMessages as ModelMessage[],
       tools: Object.keys(resolvedTools).length > 0 ? resolvedTools : undefined,
+      toolChoice:
+        (typedAgent.toolChoice as
+          | 'auto'
+          | 'required'
+          | { type: 'tool'; toolName: string }
+          | undefined) ?? undefined,
       stopWhen: stepCountIs((typedAgent.maxSteps as number) ?? 20),
       temperature: (typedAgent.temperature as number) ?? undefined,
+    });
+
+    traces.set(traceId, {
+      id: traceId,
+      projectId: typedAgent.project.id as number,
+      agentId: args.agentId,
+      status: 'completed',
+      createdAt: new Date(),
+      steps: [],
     });
 
     return result.textStream as unknown as ReadableStream;
@@ -759,6 +937,12 @@ export const createGeneration = async (args: {
     model,
     messages: allMessages as ModelMessage[],
     tools: Object.keys(resolvedTools).length > 0 ? resolvedTools : undefined,
+    toolChoice:
+      (typedAgent.toolChoice as
+        | 'auto'
+        | 'required'
+        | { type: 'tool'; toolName: string }
+        | undefined) ?? undefined,
     stopWhen: stepCountIs((typedAgent.maxSteps as number) ?? 20),
     temperature: (typedAgent.temperature as number) ?? undefined,
   });
@@ -775,8 +959,18 @@ export const createGeneration = async (args: {
     });
 
   if (pendingToolCalls.length > 0) {
+    traces.set(traceId, {
+      id: traceId,
+      projectId: typedAgent.project.id as number,
+      agentId: args.agentId,
+      status: 'requires_action',
+      createdAt: new Date(),
+      steps: result.steps as unknown[],
+    });
+
     pendingGenerations.set(generationId, {
       agentId: args.agentId,
+      projectId: typedAgent.project.id as number,
       traceId,
       generationId,
       pendingToolCalls: pendingToolCalls.map((tc) => {
@@ -816,6 +1010,15 @@ export const createGeneration = async (args: {
       },
     };
   }
+
+  traces.set(traceId, {
+    id: traceId,
+    projectId: typedAgent.project.id as number,
+    agentId: args.agentId,
+    status: 'completed',
+    createdAt: new Date(),
+    steps: result.steps as unknown[],
+  });
 
   return {
     id: generationId,
@@ -881,6 +1084,15 @@ export const submitToolOutputs = async (args: {
     temperature: pending.agentConfig.temperature ?? undefined,
   });
 
+  traces.set(pending.traceId, {
+    id: pending.traceId,
+    projectId: pending.projectId,
+    agentId: pending.agentId,
+    status: 'completed',
+    createdAt: new Date(),
+    steps: result.steps as unknown[],
+  });
+
   return {
     id: args.generationId,
     traceId: pending.traceId,
@@ -893,23 +1105,18 @@ export const submitToolOutputs = async (args: {
   };
 };
 
-// ── Traces (in-memory for now) ───────────────────────────────────────────
-
-type Trace = {
-  id: string;
-  agentId: string;
-  status: string;
-  createdAt: Date;
-  steps: Array<unknown>;
-};
-
-const traces = new Map<string, Trace>();
-
 export const listTraces = async (_args: {
   projectIds?: number[];
 }): Promise<Trace[]> => {
-  // Return all traces (in production this would filter by project)
-  return Array.from(traces.values());
+  const all = Array.from(traces.values());
+
+  if (_args.projectIds === undefined) {
+    return all;
+  }
+
+  return all.filter((trace) => {
+    return _args.projectIds!.includes(trace.projectId);
+  });
 };
 
 export const getTrace = async (args: {
@@ -920,5 +1127,13 @@ export const getTrace = async (args: {
   if (!trace) {
     return 'not_found';
   }
+
+  if (
+    args.projectIds !== undefined &&
+    !args.projectIds.includes(trace.projectId)
+  ) {
+    return 'not_found';
+  }
+
   return trace;
 };

@@ -51,6 +51,7 @@ services:
       DATABASE_NAME: soat_test
       DATABASE_USER: soat_user
       DATABASE_PASSWORD: soat_password
+      SECRETS_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       FILES_STORAGE_DIR: /data/files
       OLLAMA_BASE_URL: http://ollama:11434
       EMBEDDING_PROVIDER: ollama

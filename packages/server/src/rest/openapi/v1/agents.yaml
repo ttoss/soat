@@ -996,6 +996,11 @@ components:
         traceId:
           type: string
           description: Optional trace ID to group generations
+        maxCallDepth:
+          type: integer
+          minimum: 0
+          default: 10
+          description: Maximum nested agent-call depth; 0 short-circuits with a depth-guard response
 
     SubmitToolOutputsRequest:
       type: object
