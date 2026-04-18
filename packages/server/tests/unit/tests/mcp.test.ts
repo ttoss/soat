@@ -391,6 +391,21 @@ describe('MCP tools - happy path', () => {
     await mcpCall('delete-ai-provider', { id: result.id });
   });
 
+  test('create-ai-provider rejects when both secretId and apiKey are provided', async () => {
+    const res = await mcpCall('create-ai-provider', {
+      projectId,
+      name: 'Conflict Provider',
+      provider: 'xai',
+      defaultModel: 'grok-3-mini',
+      secretId: 'sec_fake',
+      apiKey: 'xai-test-key-12345',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.result?.isError).toBe(true);
+    const result = parseResult(res);
+    expect(result.error).toBe('Provide either secretId or apiKey, not both.');
+  });
+
   test('list-ai-providers returns results', async () => {
     const res = await mcpCall('list-ai-providers');
     expect(res.status).toBe(200);

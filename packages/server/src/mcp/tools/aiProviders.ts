@@ -92,16 +92,43 @@ const registerTools = (server: McpServer) => {
       baseUrl,
       config,
     }) => {
+      if (secretId && apiKey) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({
+                error: 'Provide either secretId or apiKey, not both.',
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
       let resolvedSecretId = secretId;
       if (apiKey) {
-        const secret = (await apiCall('POST', '/secrets', {
-          body: {
-            projectId,
-            name: `${name} API Key`,
-            value: apiKey,
-          },
-        })) as { id: string };
-        resolvedSecretId = secret.id;
+        try {
+          const secret = (await apiCall('POST', '/secrets', {
+            body: {
+              projectId,
+              name: `${name} API Key`,
+              value: apiKey,
+            },
+          })) as { id: string };
+          resolvedSecretId = secret.id;
+        } catch (err) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify({
+                  error: `Failed to auto-create secret for provider "${name}" (projectId: ${projectId ?? 'inferred'}): ${err instanceof Error ? err.message : String(err)}`,
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
       }
       const data = await apiCall('POST', '/ai-providers', {
         body: {
