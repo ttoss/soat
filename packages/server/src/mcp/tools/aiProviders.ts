@@ -60,7 +60,15 @@ const registerTools = (server: McpServer) => {
         secretId: z
           .string()
           .optional()
-          .describe('Secret ID containing the provider credentials'),
+          .describe(
+            'Secret ID containing the provider credentials. Use this or apiKey, not both.'
+          ),
+        apiKey: z
+          .string()
+          .optional()
+          .describe(
+            'API key for the provider. If provided, a secret is created automatically and linked. Use this or secretId, not both.'
+          ),
         name: z.string().describe('Display name for this AI provider'),
         provider: z.enum(AI_PROVIDER_SLUGS).describe('Provider type'),
         defaultModel: z.string().describe('Default model to use'),
@@ -77,16 +85,55 @@ const registerTools = (server: McpServer) => {
     async ({
       projectId,
       secretId,
+      apiKey,
       name,
       provider,
       defaultModel,
       baseUrl,
       config,
     }) => {
+      if (secretId && apiKey) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({
+                error: 'Provide either secretId or apiKey, not both.',
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+      let resolvedSecretId = secretId;
+      if (apiKey) {
+        try {
+          const secret = (await apiCall('POST', '/secrets', {
+            body: {
+              projectId,
+              name: `${name} API Key`,
+              value: apiKey,
+            },
+          })) as { id: string };
+          resolvedSecretId = secret.id;
+        } catch (err) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify({
+                  error: `Failed to auto-create secret for provider "${name}" (projectId: ${projectId ?? 'inferred'}): ${err instanceof Error ? err.message : String(err)}`,
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
       const data = await apiCall('POST', '/ai-providers', {
         body: {
           projectId,
-          secretId,
+          secretId: resolvedSecretId,
           name,
           provider,
           defaultModel,
