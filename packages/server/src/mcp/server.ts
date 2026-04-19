@@ -10,7 +10,6 @@ const mcpServer = new McpServer({
 registerTools(mcpServer);
 
 const mcpRouter = createMcpRouter(mcpServer, {
-  // eslint-disable-next-line turbo/no-undeclared-env-vars
   apiBaseUrl: `http://localhost:${process.env.PORT || 5047}/api/v1`,
   getApiHeaders: (ctx) => {
     return {

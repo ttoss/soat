@@ -110,7 +110,7 @@ chatsRouter.post('/chats', async (ctx: Context) => {
   }
 
   const result = await createChat({
-    projectId: targetProjectId,
+    projectId: Number(targetProjectId),
     aiProviderId,
     name: typeof name === 'string' ? name : undefined,
     systemMessage:

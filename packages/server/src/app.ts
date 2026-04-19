@@ -1,4 +1,4 @@
-import { App, addHealthCheck, bodyParser, cors } from '@ttoss/http-server';
+import { addHealthCheck, App, bodyParser, cors } from '@ttoss/http-server';
 
 import { mcpRouter } from './mcp/server';
 import { authMiddleware } from './middleware/auth';

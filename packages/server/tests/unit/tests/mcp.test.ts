@@ -6,12 +6,21 @@ import { authenticatedTestClient, loginAs, testClient } from '../testClient';
 
 let httpServer: http.Server;
 
-beforeAll((done) => {
-  httpServer = app.listen(5047, done);
+beforeAll(async () => {
+  const port = parseInt(process.env.PORT || '15047', 10);
+  await new Promise<void>((resolve, reject) => {
+    httpServer = app.listen(port, resolve);
+    httpServer.once('error', reject);
+  });
 });
 
-afterAll((done) => {
-  httpServer?.close(done);
+afterAll(async () => {
+  await new Promise<void>((resolve, reject) => {
+    if (!httpServer) return resolve();
+    httpServer.close((err) => {
+      return err ? reject(err) : resolve();
+    });
+  });
 });
 
 describe('MCP tools - happy path', () => {

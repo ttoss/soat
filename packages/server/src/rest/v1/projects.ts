@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import type { PolicyDocument } from 'src/lib/iam';
 import {
   addUserToProject,
   createProject,
@@ -238,7 +239,7 @@ projectsRouter.post('/projects/:projectId/policies', async (ctx: Context) => {
     notPermissions?: string[];
   };
 
-  const document: import('src/lib/iam').PolicyDocument = {
+  const document: PolicyDocument = {
     statement: [
       ...(permissions?.length
         ? [{ effect: 'Allow' as const, action: permissions }]
@@ -367,7 +368,7 @@ projectsRouter.put(
       policyId: ctx.params.policyId,
       name,
       description,
-      document: document as import('src/lib/iam').PolicyDocument,
+      document: document as PolicyDocument,
     });
 
     if (result === 'not_found') {

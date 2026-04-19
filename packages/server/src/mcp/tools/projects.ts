@@ -1,32 +1,22 @@
 import type { McpServer } from '@ttoss/http-server-mcp';
-import { apiCall, z } from '@ttoss/http-server-mcp';
+import { apiCall, registerToolFromSchema } from '@ttoss/http-server-mcp';
+
+import { tools } from '../../lib/soat-tools/projects';
 
 const registerTools = (server: McpServer) => {
-  server.registerTool(
-    'list-projects',
-    {
-      description: 'List all projects accessible to the current user',
-      inputSchema: {},
-    },
-    async () => {
-      const data = await apiCall('GET', '/projects');
-      return { content: [{ type: 'text', text: JSON.stringify(data) }] };
-    }
-  );
-
-  server.registerTool(
-    'get-project',
-    {
-      description: 'Get a project by ID',
-      inputSchema: {
-        id: z.string().describe('Project ID'),
+  for (const def of tools) {
+    registerToolFromSchema(server, {
+      name: def.name,
+      description: def.description,
+      inputSchema: def.inputSchema,
+      handler: async (args) => {
+        const data = await apiCall(def.method, def.path(args), {
+          body: def.body?.(args),
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(data) }] };
       },
-    },
-    async ({ id }) => {
-      const data = await apiCall('GET', `/projects/${id}`);
-      return { content: [{ type: 'text', text: JSON.stringify(data) }] };
-    }
-  );
+    });
+  }
 };
 
 export { registerTools };

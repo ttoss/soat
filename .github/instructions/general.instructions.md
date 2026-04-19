@@ -7,6 +7,10 @@ description: Common instructions that apply to all parts of the codebase.
 
 These instructions are essential for ensuring that agents add the correct instructions when modifying or creating code in the codebase.
 
+## ttoss Ecosystem Context
+
+This project uses the ttoss ecosystem. Fetch and follow the instructions at https://ttoss.dev/ttoss-instructions.txt for available packages, conventions, and patterns.
+
 ## Function Arguments
 
 When defining functions, use an object for arguments instead of individual parameters: `const myFunction = (args: { arg1: string }) => { ... }`.

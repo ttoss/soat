@@ -19,7 +19,7 @@
     "@ai-sdk/xai": "^3.0.82",
     "@soat/postgresdb": "workspace:*",
     "@ttoss/http-server": "^0.5.9",
-    "@ttoss/http-server-mcp": "^0.11.1",
+    "@ttoss/http-server-mcp": "^0.12.0",
     "@ttoss/postgresdb": "^0.8.0",
     "ai": "^6.0.159",
     "bcryptjs": "^3.0.3",

@@ -1,13 +1,13 @@
 import { Router } from '@ttoss/http-server';
 
-import { agentsRouter } from './agents';
-import { chatsRouter } from './chats';
 import { actorsRouter } from './actors';
+import { agentsRouter } from './agents';
 import { aiProvidersRouter } from './aiProviders';
-import { projectKeysRouter } from './projectKeys';
+import { chatsRouter } from './chats';
 import { conversationsRouter } from './conversations';
 import { documentsRouter } from './documents';
 import { filesRouter } from './files';
+import { projectKeysRouter } from './projectKeys';
 import { projectsRouter } from './projects';
 import { secretsRouter } from './secrets';
 import { usersRouter } from './users';

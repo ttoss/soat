@@ -966,6 +966,7 @@ agentsRouter.post('/agents/:agentId/generate', async (ctx: Context) => {
       traceId,
       remainingDepth:
         typeof maxCallDepth === 'number' ? maxCallDepth : undefined,
+      authHeader: (ctx.headers.authorization as string) ?? '',
     });
   } catch (error) {
     ctx.status = 500;

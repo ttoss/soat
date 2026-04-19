@@ -1,30 +1,33 @@
 import type { AiProviderSlug } from '@soat/postgresdb';
-
 import { db } from 'src/db';
 import { decryptValue } from 'src/lib/secrets';
 
-const getAiProviderIncludes = () => [
-  { model: db.Project, as: 'project' },
-  { model: db.Secret, as: 'secret' },
-];
+const getAiProviderIncludes = () => {
+  return [
+    { model: db.Project, as: 'project' },
+    { model: db.Secret, as: 'secret' },
+  ];
+};
 
 const mapAiProvider = (
   instance: InstanceType<(typeof db)['AiProvider']> & {
     project?: InstanceType<(typeof db)['Project']>;
     secret?: InstanceType<(typeof db)['Secret']> | null;
   }
-) => ({
-  id: instance.publicId,
-  projectId: instance.project?.publicId,
-  secretId: instance.secret?.publicId ?? null,
-  name: instance.name,
-  provider: instance.provider,
-  defaultModel: instance.defaultModel,
-  baseUrl: instance.baseUrl ?? undefined,
-  config: instance.config ?? undefined,
-  createdAt: instance.createdAt,
-  updatedAt: instance.updatedAt,
-});
+) => {
+  return {
+    id: instance.publicId,
+    projectId: instance.project?.publicId,
+    secretId: instance.secret?.publicId ?? null,
+    name: instance.name,
+    provider: instance.provider,
+    defaultModel: instance.defaultModel,
+    baseUrl: instance.baseUrl ?? undefined,
+    config: instance.config ?? undefined,
+    createdAt: instance.createdAt,
+    updatedAt: instance.updatedAt,
+  };
+};
 
 export const listAiProviders = async (args: { projectIds: number[] }) => {
   const providers = await db.AiProvider.findAll({

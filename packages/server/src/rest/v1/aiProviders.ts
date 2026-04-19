@@ -1,6 +1,6 @@
-import { Router } from '@ttoss/http-server';
 import type { AiProviderSlug } from '@soat/postgresdb';
 import { AI_PROVIDER_SLUGS } from '@soat/postgresdb';
+import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import {

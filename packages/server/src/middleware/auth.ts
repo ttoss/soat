@@ -4,8 +4,8 @@ import jwt from 'jsonwebtoken';
 
 import type { Context } from '../Context';
 import {
-  createProjectKeyIsAllowed,
   createJwtIsAllowed,
+  createProjectKeyIsAllowed,
 } from '../lib/permissions';
 
 export const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-secret';

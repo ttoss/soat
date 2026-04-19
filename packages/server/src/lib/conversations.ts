@@ -301,7 +301,7 @@ export const addConversationMessage = async (args: {
 
   const sequelize = db.sequelize;
 
-  const result = await sequelize.transaction(async (t: unknown) => {
+  const result = await sequelize.transaction(async (t) => {
     let position = args.position;
 
     if (position === undefined) {
