@@ -130,6 +130,34 @@ describe('Agents', () => {
       expect(response.body.parameters).toBeDefined();
     });
 
+    test('creates an http tool with execute.method set to GET', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents/tools')
+        .send({
+          name: 'get-http-tool',
+          type: 'http',
+          description: 'A GET-based HTTP tool',
+          parameters: {
+            type: 'object',
+            properties: { query: { type: 'string' } },
+          },
+          execute: {
+            url: 'https://api.example.com/search',
+            method: 'GET',
+          },
+          projectId,
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.type).toBe('http');
+      expect(
+        (response.body.execute as { url: string; method: string }).method
+      ).toBe('GET');
+      expect(
+        (response.body.execute as { url: string; method: string }).url
+      ).toBe('https://api.example.com/search');
+    });
+
     test('creates an agent tool of type mcp', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/agents/tools')
