@@ -150,12 +150,9 @@ describe('Agents', () => {
 
       expect(response.status).toBe(201);
       expect(response.body.type).toBe('http');
-      expect(
-        (response.body.execute as { url: string; method: string }).method
-      ).toBe('GET');
-      expect(
-        (response.body.execute as { url: string; method: string }).url
-      ).toBe('https://api.example.com/search');
+      const execute = response.body.execute as { url: string; method: string };
+      expect(execute.method).toBe('GET');
+      expect(execute.url).toBe('https://api.example.com/search');
     });
 
     test('creates an agent tool of type mcp', async () => {
