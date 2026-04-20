@@ -1,0 +1,35 @@
+{
+  "name": "@soat/sdk",
+  "version": "0.0.0-alpha.1",
+  "description": "TypeScript SDK for the SOAT API",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "pnpm generate && tsup",
+    "generate": "tsx scripts/generate.ts"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.13.0"
+  },
+  "devDependencies": {
+    "@ttoss/config": "^1.37.8",
+    "@types/js-yaml": "^4.0.9",
+    "js-yaml": "^4.1.0",
+    "openapi-typescript": "^7.0.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0"
+  }
+}
