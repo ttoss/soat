@@ -81,9 +81,15 @@ paths:
                   example: 'customer'
                 externalId:
                   type: string
-                  description: Optional external identifier (e.g. WhatsApp phone number). Must be unique within a project.
+                  description: Optional external identifier (e.g. WhatsApp phone number). If provided and an actor with this externalId already exists in the project, the existing actor is returned (idempotent — 200 OK).
                   example: '+15551234567'
       responses:
+        '200':
+          description: Actor already exists — returned when externalId matches an existing actor in this project (idempotent)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorRecord'
         '201':
           description: Actor created
           content:

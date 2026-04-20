@@ -119,6 +119,38 @@ export const createActor = async (args: {
   return mapActor(actorWithProject!);
 };
 
+export const findOrCreateActor = async (args: {
+  projectId: number;
+  externalId: string;
+  name: string;
+  type?: string;
+  instructions?: string | null;
+  agentId?: number | null;
+  chatId?: number | null;
+}) => {
+  if (args.agentId && args.chatId) {
+    return 'agent_and_chat_exclusive' as const;
+  }
+
+  const [actor, created] = await db.Actor.findOrCreate({
+    where: { projectId: args.projectId, externalId: args.externalId },
+    defaults: {
+      name: args.name,
+      type: args.type,
+      instructions: args.instructions ?? null,
+      agentId: args.agentId ?? null,
+      chatId: args.chatId ?? null,
+    },
+  });
+
+  const actorWithProject = await db.Actor.findOne({
+    where: { id: actor.id },
+    include: actorIncludes(),
+  });
+
+  return { actor: mapActor(actorWithProject!), created };
+};
+
 export const deleteActor = async (args: { id: string }) => {
   const actor = await db.Actor.findOne({ where: { publicId: args.id } });
 
