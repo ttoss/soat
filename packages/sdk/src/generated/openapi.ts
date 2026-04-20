@@ -772,7 +772,7 @@ export interface components {
             description?: string | null;
             /** @description JSON Schema for tool input */
             parameters?: Record<string, never> | null;
-            /** @description Execution config (url, headers) */
+            /** @description Execution config for http tools. Supported fields: `url` (required), `method` (default `POST`), and `headers`. The `url` may contain `{paramName}` placeholders (e.g. `/users/{userId}`) that are replaced at call time with the corresponding tool argument value (URL-encoded). Arguments consumed as path parameters are excluded from the query string and request body. */
             execute?: Record<string, never> | null;
             /** @description MCP server config (url, headers) */
             mcp?: Record<string, never> | null;
@@ -797,7 +797,7 @@ export interface components {
             description?: string;
             /** @description JSON Schema for tool input */
             parameters?: Record<string, never>;
-            /** @description Execution config (url, headers) */
+            /** @description Execution config for http tools. Supported fields: `url` (required), `method` (default `POST`), and `headers`. The `url` may contain `{paramName}` placeholders (e.g. `/users/{userId}`) that are replaced at call time with the corresponding tool argument value (URL-encoded). Arguments consumed as path parameters are excluded from the query string and request body. */
             execute?: Record<string, never>;
             /** @description MCP server config (url, headers) */
             mcp?: Record<string, never>;
@@ -810,6 +810,7 @@ export interface components {
             type?: "http" | "client" | "mcp" | "soat";
             description?: string | null;
             parameters?: Record<string, never> | null;
+            /** @description Execution config for http tools. Supported fields: `url` (required), `method` (default `POST`), and `headers`. The `url` may contain `{paramName}` placeholders (e.g. `/users/{userId}`) that are replaced at call time with the corresponding tool argument value (URL-encoded). Arguments consumed as path parameters are excluded from the query string and request body. */
             execute?: Record<string, never> | null;
             mcp?: Record<string, never> | null;
             actions?: string[] | null;
