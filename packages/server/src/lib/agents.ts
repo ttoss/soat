@@ -19,6 +19,43 @@ import {
 import { db } from '../db';
 import { allSoatTools } from './soat-tools';
 
+// ── Path Parameter Interpolation ─────────────────────────────────────────
+
+/**
+ * Resolves `{paramName}` placeholders in a URL template using values from
+ * toolArgs. Returns the resolved URL and the remaining args (those not consumed
+ * as path parameters) to be used for query-string or body serialization.
+ *
+ * Placeholders that have no matching key in toolArgs are left as-is.
+ */
+export const resolveUrlPathParams = (args: {
+  url: string;
+  toolArgs: Record<string, unknown>;
+}): { resolvedUrl: string; remainingArgs: Record<string, unknown> } => {
+  const pathParamPattern = /\{(\w+)\}/g;
+  const pathParams = new Set(
+    [...args.url.matchAll(pathParamPattern)].map((m) => {
+      return m[1];
+    })
+  );
+
+  let resolvedUrl = args.url;
+  const remainingArgs: Record<string, unknown> = {};
+
+  for (const [k, v] of Object.entries(args.toolArgs)) {
+    if (pathParams.has(k)) {
+      resolvedUrl = resolvedUrl.replaceAll(
+        `{${k}}`,
+        encodeURIComponent(String(v))
+      );
+    } else {
+      remainingArgs[k] = v;
+    }
+  }
+
+  return { resolvedUrl, remainingArgs };
+};
+
 // ── Mapped Types ─────────────────────────────────────────────────────────
 
 export type MappedAgentTool = {
@@ -606,12 +643,21 @@ const resolveAgentTools = async (args: {
               ? rawMethod
               : 'POST';
             const hasBody = !['GET', 'HEAD', 'DELETE'].includes(method);
-            let url = typedTool.execute!.url;
+            const { resolvedUrl, remainingArgs } = resolveUrlPathParams({
+              url: typedTool.execute!.url,
+              toolArgs:
+                toolArgs && typeof toolArgs === 'object'
+                  ? (toolArgs as Record<string, unknown>)
+                  : {},
+            });
+            let url = resolvedUrl;
 
-            if (!hasBody && toolArgs && typeof toolArgs === 'object') {
+            if (!hasBody && Object.keys(remainingArgs).length > 0) {
               const params = new URLSearchParams(
-                Object.entries(toolArgs as Record<string, unknown>)
-                  .filter(([, v]) => v !== undefined && v !== null)
+                Object.entries(remainingArgs)
+                  .filter(([, v]) => {
+                    return v !== undefined && v !== null;
+                  })
                   .map(([k, v]) => {
                     const serialized =
                       typeof v === 'object' ? JSON.stringify(v) : String(v);
@@ -630,7 +676,7 @@ const resolveAgentTools = async (args: {
                 ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
                 ...typedTool.execute?.headers,
               },
-              ...(hasBody ? { body: JSON.stringify(toolArgs) } : {}),
+              ...(hasBody ? { body: JSON.stringify(remainingArgs) } : {}),
             });
             return response.json();
           },
