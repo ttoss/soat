@@ -4,6 +4,7 @@ import { db } from 'src/db';
 import {
   createActor,
   deleteActor,
+  findOrCreateActor,
   getActor,
   getActorTags,
   listActors,
@@ -251,7 +252,7 @@ actorsRouter.get('/actors/:id', async (ctx: Context) => {
  *                 example: 'customer'
  *               externalId:
  *                 type: string
- *                 description: Optional external identifier (e.g. WhatsApp phone number). Must be unique within a project.
+ *                 description: Optional external identifier (e.g. WhatsApp phone number). If provided and an actor with this externalId already exists in the project, the existing actor is returned (idempotent — 200 OK).
  *                 example: '+15551234567'
  *               instructions:
  *                 type: string
@@ -264,6 +265,18 @@ actorsRouter.get('/actors/:id', async (ctx: Context) => {
  *                 type: string
  *                 description: Optional Chat ID to link this actor to. Mutually exclusive with agentId.
  *     responses:
+ *       '200':
+ *         description: Actor already exists — returned when externalId matches an existing actor in this project (idempotent)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ActorRecord'
+ *       '200':
+ *         description: Actor already exists — returned when externalId matches an existing actor in this project (idempotent)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ActorRecord'
  *       '201':
  *         description: Actor created
  *         content:
@@ -350,63 +363,72 @@ actorsRouter.post('/actors', async (ctx: Context) => {
     return;
   }
 
-  try {
-    let agentDbId: number | null | undefined;
-    if (body.agentId !== undefined) {
-      const agent = await db.Agent.findOne({
-        where: { publicId: body.agentId, projectId: project.id as number },
-      });
-      if (!agent) {
-        ctx.status = 400;
-        ctx.body = { error: 'Invalid agentId' };
-        return;
-      }
-      agentDbId = agent.id as number;
+  let agentDbId: number | null | undefined;
+  if (body.agentId !== undefined) {
+    const agent = await db.Agent.findOne({
+      where: { publicId: body.agentId, projectId: project.id as number },
+    });
+    if (!agent) {
+      ctx.status = 400;
+      ctx.body = { error: 'Invalid agentId' };
+      return;
     }
+    agentDbId = agent.id as number;
+  }
 
-    let chatDbId: number | null | undefined;
-    if (body.chatId !== undefined) {
-      const chat = await db.Chat.findOne({
-        where: { publicId: body.chatId, projectId: project.id as number },
-      });
-      if (!chat) {
-        ctx.status = 400;
-        ctx.body = { error: 'Invalid chatId' };
-        return;
-      }
-      chatDbId = chat.id as number;
+  let chatDbId: number | null | undefined;
+  if (body.chatId !== undefined) {
+    const chat = await db.Chat.findOne({
+      where: { publicId: body.chatId, projectId: project.id as number },
+    });
+    if (!chat) {
+      ctx.status = 400;
+      ctx.body = { error: 'Invalid chatId' };
+      return;
     }
+    chatDbId = chat.id as number;
+  }
 
-    const actor = await createActor({
+  if (body.externalId !== undefined) {
+    const result = await findOrCreateActor({
       projectId: project.id,
+      externalId: body.externalId,
       name: body.name,
       type: body.type,
-      externalId: body.externalId,
       instructions: body.instructions ?? null,
       agentId: agentDbId,
       chatId: chatDbId,
     });
 
-    if (actor === 'agent_and_chat_exclusive') {
+    if (result === 'agent_and_chat_exclusive') {
       ctx.status = 400;
       ctx.body = { error: 'agentId and chatId are mutually exclusive' };
       return;
     }
 
-    ctx.status = 201;
-    ctx.body = actor;
-  } catch (error) {
-    if (
-      (error as { name?: string }).name === 'SequelizeUniqueConstraintError'
-    ) {
-      ctx.status = 409;
-      ctx.body = {
-        error: 'An actor with this externalId already exists in the project',
-      };
-      return;
-    }
-    throw error;
+    ctx.status = result.created ? 201 : 200;
+    ctx.body = result.actor;
+    return;
   }
+
+  const actor = await createActor({
+    projectId: project.id,
+    name: body.name,
+    type: body.type,
+    externalId: body.externalId,
+    instructions: body.instructions ?? null,
+    agentId: agentDbId,
+    chatId: chatDbId,
+  });
+
+  if (actor === 'agent_and_chat_exclusive') {
+    ctx.status = 400;
+    ctx.body = { error: 'agentId and chatId are mutually exclusive' };
+    return;
+  }
+
+  ctx.status = 201;
+  ctx.body = actor;
 });
 
 /**

@@ -74,16 +74,30 @@ describe('Actors', () => {
       expect(response.body.externalId).toBe('+15550001111');
     });
 
-    test('duplicate externalId within same project returns 409', async () => {
-      await authenticatedTestClient(userToken)
+    test('duplicate externalId within same project returns 200 with existing actor (idempotent)', async () => {
+      const first = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
         .send({ projectId, name: 'Charlie', externalId: '+15559999999' });
 
-      const response = await authenticatedTestClient(userToken)
+      expect(first.status).toBe(201);
+
+      const second = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
         .send({ projectId, name: 'Charlie2', externalId: '+15559999999' });
 
-      expect(response.status).toBe(409);
+      expect(second.status).toBe(200);
+      expect(second.body.id).toBe(first.body.id);
+      expect(second.body.name).toBe('Charlie');
+    });
+
+    test('new externalId returns 201', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ projectId, name: 'Dave', externalId: '+15558887777' });
+
+      expect(response.status).toBe(201);
+      expect(response.body.id).toBeDefined();
+      expect(response.body.externalId).toBe('+15558887777');
     });
 
     test('unauthenticated request returns 401', async () => {
