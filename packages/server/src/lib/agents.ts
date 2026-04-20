@@ -573,7 +573,11 @@ const resolveAgentTools = async (args: {
       name: string;
       description: string | null;
       parameters: Record<string, unknown> | null;
-      execute: { url: string; headers?: Record<string, string> } | null;
+      execute: {
+        url: string;
+        method?: string;
+        headers?: Record<string, string>;
+      } | null;
       mcp: { url: string; headers?: Record<string, string> } | null;
       actions: string[] | null;
     };
@@ -586,13 +590,47 @@ const resolveAgentTools = async (args: {
             typedTool.parameters ?? { type: 'object', properties: {} }
           ),
           execute: async (toolArgs: unknown) => {
-            const response = await fetch(typedTool.execute!.url, {
-              method: 'POST',
+            const ALLOWED_METHODS = [
+              'GET',
+              'POST',
+              'PUT',
+              'PATCH',
+              'DELETE',
+              'HEAD',
+              'OPTIONS',
+            ];
+            const rawMethod = (
+              typedTool.execute!.method ?? 'POST'
+            ).toUpperCase();
+            const method = ALLOWED_METHODS.includes(rawMethod)
+              ? rawMethod
+              : 'POST';
+            const hasBody = !['GET', 'HEAD', 'DELETE'].includes(method);
+            let url = typedTool.execute!.url;
+
+            if (!hasBody && toolArgs && typeof toolArgs === 'object') {
+              const params = new URLSearchParams(
+                Object.entries(toolArgs as Record<string, unknown>)
+                  .filter(([, v]) => v !== undefined && v !== null)
+                  .map(([k, v]) => {
+                    const serialized =
+                      typeof v === 'object' ? JSON.stringify(v) : String(v);
+                    return [k, serialized];
+                  })
+              );
+              const qs = params.toString();
+              if (qs) {
+                url = `${url}${url.includes('?') ? '&' : '?'}${qs}`;
+              }
+            }
+
+            const response = await fetch(url, {
+              method,
               headers: {
-                'Content-Type': 'application/json',
+                ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
                 ...typedTool.execute?.headers,
               },
-              body: JSON.stringify(toolArgs),
+              ...(hasBody ? { body: JSON.stringify(toolArgs) } : {}),
             });
             return response.json();
           },
