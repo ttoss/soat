@@ -44,7 +44,7 @@ export const resolveUrlPathParams = (args: {
 
   for (const [k, v] of Object.entries(args.toolArgs)) {
     if (pathParams.has(k)) {
-      resolvedUrl = resolvedUrl.replace(
+      resolvedUrl = resolvedUrl.replaceAll(
         `{${k}}`,
         encodeURIComponent(String(v))
       );

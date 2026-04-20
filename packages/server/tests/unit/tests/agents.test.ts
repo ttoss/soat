@@ -80,6 +80,15 @@ describe('resolveUrlPathParams', () => {
       email: 'alice@example.com',
     });
   });
+
+  test('replaces all occurrences of the same placeholder', () => {
+    const { resolvedUrl } = resolveUrlPathParams({
+      url: 'https://api.example.com/{id}/mirror/{id}',
+      toolArgs: { id: 'abc' },
+    });
+
+    expect(resolvedUrl).toBe('https://api.example.com/abc/mirror/abc');
+  });
 });
 
 describe('Agents', () => {
