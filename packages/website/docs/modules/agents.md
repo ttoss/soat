@@ -40,7 +40,8 @@ Agent tools are reusable tool definitions that can be shared across multiple age
 | `description`     | string | no       | What the tool does (sent to the model for selection)                              |
 | `parameters`      | object | cond.    | JSON Schema for the tool's input — required for `http` and `client`               |
 | `execute`         | object | cond.    | Execution configuration — required when `type` is `http`                          |
-| `execute.url`     | string | yes      | HTTP endpoint called to execute the tool                                          |
+| `execute.url`     | string | yes      | HTTP endpoint called to execute the tool. May contain `{paramName}` placeholders (e.g. `/users/{userId}`) that are replaced at call time with the corresponding tool argument value (URL-encoded). Arguments consumed as path parameters are excluded from the query string and request body. |
+| `execute.method`  | string | no       | HTTP method to use (default: `POST`). For `GET`, `HEAD`, or `DELETE` the tool arguments are appended as query-string parameters instead of a request body. |
 | `execute.headers` | object | no       | Additional headers sent with the execution request                                |
 | `mcp`             | object | cond.    | MCP server configuration — required when `type` is `mcp`                          |
 | `mcp.url`         | string | yes      | URL of the MCP server (SSE or Streamable HTTP transport)                          |
@@ -63,7 +64,36 @@ The `type` field is required at creation time and defaults to `"http"`. Supporte
 
 ##### http
 
-When the model decides to call a tool, the server POSTs the tool arguments as JSON to the configured `execute.url` and feeds the response back into the loop.
+When the model decides to call a tool, the server sends an HTTP request to the configured `execute.url` using the method specified in `execute.method` (defaults to `POST`). For `POST`, `PUT`, and `PATCH` requests the tool arguments are sent as a JSON body. For `GET`, `HEAD`, and `DELETE` requests the tool arguments are appended as query-string parameters.
+
+`execute.url` may contain `{paramName}` placeholders. At invocation time each placeholder is replaced with the corresponding tool argument (URL-encoded via `encodeURIComponent`). Arguments consumed as path parameters are removed from the remaining args before query-string or body serialization. Placeholders with no matching argument are left as-is.
+
+Example — a `DELETE` tool with path parameters:
+
+```json
+{
+  "name": "delete-post",
+  "type": "http",
+  "execute": {
+    "url": "https://api.example.com/users/{userId}/posts/{postId}",
+    "method": "DELETE"
+  },
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "userId": { "type": "string" },
+      "postId": { "type": "string" }
+    },
+    "required": ["userId", "postId"]
+  }
+}
+```
+
+When the model calls this tool with `{ "userId": "123", "postId": "456" }`, the server issues:
+
+```
+DELETE https://api.example.com/users/123/posts/456
+```
 
 ##### client
 

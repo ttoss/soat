@@ -721,7 +721,13 @@ components:
         execute:
           type: object
           nullable: true
-          description: Execution config (url, headers)
+          description: >
+            Execution config for http tools. Supported fields: `url` (required),
+            `method` (default `POST`), and `headers`. The `url` may contain
+            `{paramName}` placeholders (e.g. `/users/{userId}`) that are
+            replaced at call time with the corresponding tool argument value
+            (URL-encoded). Arguments consumed as path parameters are excluded
+            from the query string and request body.
         mcp:
           type: object
           nullable: true
@@ -766,7 +772,13 @@ components:
           description: JSON Schema for tool input
         execute:
           type: object
-          description: Execution config (url, headers)
+          description: >
+            Execution config for http tools. Supported fields: `url` (required),
+            `method` (default `POST`), and `headers`. The `url` may contain
+            `{paramName}` placeholders (e.g. `/users/{userId}`) that are
+            replaced at call time with the corresponding tool argument value
+            (URL-encoded). Arguments consumed as path parameters are excluded
+            from the query string and request body.
         mcp:
           type: object
           description: MCP server config (url, headers)
@@ -797,6 +809,13 @@ components:
         execute:
           type: object
           nullable: true
+          description: >
+            Execution config for http tools. Supported fields: `url` (required),
+            `method` (default `POST`), and `headers`. The `url` may contain
+            `{paramName}` placeholders (e.g. `/users/{userId}`) that are
+            replaced at call time with the corresponding tool argument value
+            (URL-encoded). Arguments consumed as path parameters are excluded
+            from the query string and request body.
         mcp:
           type: object
           nullable: true
