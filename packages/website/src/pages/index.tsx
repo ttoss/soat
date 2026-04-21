@@ -22,7 +22,7 @@ const HomepageHeader = () => {
             className="button button--secondary button--lg"
             to="/docs/getting-started"
           >
-            Get Started - 5min ⏱️
+            Get Started - 5min
           </Link>
         </div>
       </div>
@@ -34,8 +34,8 @@ export default function Home(): React.ReactNode {
   const { siteConfig } = useDocusaurusContext();
   return (
     <Layout
-      title={`Hello from ${siteConfig.title}`}
-      description="Description will go into a meta tag in <head />"
+      title={`${siteConfig.title} — Infrastructure for AI Apps`}
+      description="Open-source infrastructure for building AI applications — IAM, document storage, vector search, agent orchestration, and MCP server."
     >
       <HomepageHeader />
       <main>

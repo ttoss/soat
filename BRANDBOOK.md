@@ -6,19 +6,19 @@
 
 ## 1. Overview
 
-SOAT is an open-source framework for persistent memory in autonomous AI agents. It stores and retrieves context using semantic search over vector embeddings—so an agent can recall the right memory at the right moment.
+SOAT is open-source infrastructure for building AI applications. It provides the essential backend services — identity and access management, document and file storage with vector search, conversational memory, agent orchestration, and a full MCP server — so developers can focus on their product instead of reinventing the plumbing.
 
-This brand system translates that capability into a clear identity: the **Semantic Cosmos**—a vast, interconnected field of knowledge where relevance becomes visible.
+This brand system translates that capability into a clear identity: **robust, precise infrastructure** that powers intelligent applications.
 
 ---
 
 ## 2. Brand Philosophy
 
-SOAT’s identity is grounded in how high-dimensional embeddings behave: meaning forms structure in the void.
+SOAT's identity is grounded in the idea that AI infrastructure should be invisible yet indispensable — like plumbing for intelligence.
 
-- **Metaphor:** Memory is not a cabinet—it’s a galaxy. Each fact is a star (a node). Similar ideas cluster by gravity (semantic similarity), forming constellations of intelligence.
-- **Promise:** In a chaotic universe of unstructured data, SOAT instantly illuminates the center of relevance.
-- **Keywords:** Cosmic, Hyper-connected, Intelligent, Persistent, Luminous.
+- **Metaphor:** SOAT is the foundation layer. Users build on top; the infrastructure stays out of sight and handles the heavy lifting — storage, retrieval, orchestration, and connectivity.
+- **Promise:** Every essential backend concern for AI apps, solved once and shared as open-source.
+- **Keywords:** Reliable, Composable, Intelligent, Open, Precise.
 
 ---
 
@@ -146,7 +146,7 @@ A contemporary, technical grotesk that conveys **engineered precision** without 
 
 - **Weights:** 700 (Bold) for H1, 600 (Semibold) for H2/H3, 500 (Medium) for H4.
 - **Letter-spacing:** Slightly increased (0.02em–0.03em) for technical clarity.
-- **Example:** **SOAT: Persistent Memory for AI Agents.**
+- **Example:** **SOAT: Infrastructure for AI Apps.**
 
 ### Secondary Typeface (Body): Inter
 
@@ -182,7 +182,7 @@ A highly legible UI typeface purpose-built for **interface density and long-form
 
 ## 6. Visual Language & Imagery
 
-All supporting visuals should reinforce the Semantic Cosmos.
+All supporting visuals should reinforce the infrastructure identity.
 
 - **Use:**
   - **Nodes + connections:** constellations of points connected by fine, glowing lines.
@@ -208,5 +208,5 @@ Write like a systems engineer describing something powerful.
 
 **Examples**
 
-- **Do:** “SOAT provides low-latency semantic recall for Documents and Files using vector embeddings.”
+- **Do:** "SOAT provides IAM, document storage with vector search, agent orchestration, and MCP integration out of the box."
 - **Don’t:** “We use super-cool futuristic tech so your bot remembers stuff.”

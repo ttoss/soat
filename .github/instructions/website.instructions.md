@@ -10,7 +10,7 @@ Agents working on the website package must adhere to the following guidelines to
 ## Branding Compliance
 
 - **Always follow the BRANDBOOK.md**: All content, design, and visual elements must strictly adhere to the SOAT brand system defined in the BRANDBOOK.md file. This includes color palettes, typography, visual language, and tone of voice.
-- **Brand Consistency**: Ensure all new content, pages, and components align with the "Semantic Cosmos" metaphor and the Vector Galaxy logo concept.
+- **Brand Consistency**: Ensure all new content, pages, and components align with the infrastructure-for-AI-apps positioning and the Vector Galaxy logo concept.
 
 ## Documentation Structure
 

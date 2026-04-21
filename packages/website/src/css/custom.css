@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 
 /**
- * SOAT Brand Theme - Semantic Cosmos
+ * SOAT Brand Theme
  * Based on SOAT Brand Identity Guidelines v1.1
  * 
  * Implements Infima variable overrides for Docusaurus.
@@ -11,13 +11,13 @@
   /* ===================================================================
      COLOR PALETTE - Light Theme (Accessibility First)
      =================================================================== */
-  
+
   /* Brand Colors */
   --soat-violet: #8e44ad;
   --soat-violet-dark: #7d3c9d;
   --soat-violet-light: #a855c7;
   --soat-core-cyan: #00e5ff; /* Decorative in light mode */
-  
+
   /* Primary Color - Electric Blue (#1A73E8) */
   --ifm-color-primary: #1a73e8;
   --ifm-color-primary-dark: #1567d3;
@@ -36,7 +36,7 @@
   --ifm-font-color-base: #2a2f3c;
   --ifm-font-color-secondary: #515766;
   --ifm-heading-color: #1a1f2c;
-  
+
   /* Borders */
   --ifm-border-color: rgba(26, 31, 44, 0.05);
   --ifm-toc-border-color: rgba(26, 31, 44, 0.01);
@@ -50,54 +50,55 @@
      =================================================================== */
   --ifm-font-family-base: 'Inter', system-ui, -apple-system, sans-serif;
   --ifm-heading-font-family: 'Space Grotesk', sans-serif;
-  --ifm-font-family-monospace: 'JetBrains Mono', 'Fira Code', 'SFMono-Regular', Consolas, monospace;
-  
+  --ifm-font-family-monospace:
+    'JetBrains Mono', 'Fira Code', 'SFMono-Regular', Consolas, monospace;
+
   --ifm-heading-font-weight: 600;
   --ifm-font-weight-bold: 700;
   --ifm-font-weight-semibold: 600;
   --ifm-font-weight-medium: 500;
-  
+
   --ifm-line-height-base: 1.7;
   --ifm-font-size-base: 16px;
-  
+
   /* Headers */
   --ifm-h1-font-size: 2.5rem;
   --ifm-h2-font-size: 2rem;
   --ifm-h3-font-size: 1.5rem;
   --ifm-h4-font-size: 1.25rem;
-  
+
   /* ===================================================================
      INFIMA COMPONENT OVERRIDES
      =================================================================== */
-  
+
   /* Navbar */
   --ifm-navbar-background-color: rgba(255, 255, 255, 0.9);
   --ifm-navbar-height: 4rem;
   --ifm-navbar-shadow: 0 1px 0 var(--ifm-border-color);
   --ifm-navbar-item-padding-horizontal: 1rem;
-  
+
   /* Footer */
   --ifm-footer-background-color: var(--ifm-background-color);
   --ifm-footer-link-color: var(--ifm-font-color-base);
   --ifm-footer-title-color: var(--ifm-font-color-base);
-  
+
   /* Buttons */
   --ifm-button-font-weight: 600;
   --ifm-button-border-radius: 0.5rem;
-  
+
   /* Cards */
   --ifm-card-background-color: var(--ifm-background-surface-color);
   --ifm-card-border-radius: 0.75rem;
-  
+
   /* Code Blocks */
   --ifm-code-background: #f5f7fa;
   --ifm-code-border-radius: 0.5rem;
   --ifm-code-font-size: 0.92em;
-  
+
   /* Admonitions */
   --ifm-alert-border-radius: 0.75rem;
   --ifm-alert-border-left-width: 4px;
-  
+
   /* Menu/Sidebar */
   --ifm-menu-color-active: var(--ifm-color-primary);
   --ifm-menu-color: var(--ifm-font-color-secondary);
@@ -112,12 +113,12 @@
 }
 
 /* ===================================================================
-   DARK THEME - Core Cyan (#00E5FF) - Semantic Cosmos
+   DARK THEME - Core Cyan (#00E5FF)
    =================================================================== */
 html[data-theme='dark'] {
   /* Brand Colors */
   --soat-violet: #8e44ad;
-  
+
   /* Primary Color - Core Cyan (#00E5FF) */
   --ifm-color-primary: #00e5ff;
   --ifm-color-primary-dark: #00cee6;
@@ -126,36 +127,41 @@ html[data-theme='dark'] {
   --ifm-color-primary-light: #1ae8ff;
   --ifm-color-primary-lighter: #26e9ff;
   --ifm-color-primary-lightest: #4dedff;
-  
+
   /* Surfaces & Backgrounds - Space Black & Nebula Navy */
   --ifm-background-color: #080c14;
   --ifm-background-surface-color: #161b22;
   --ifm-hover-overlay: rgba(0, 229, 255, 0.05);
-  
+
   /* Text Colors - Starlight White */
   --ifm-font-color-base: #f0f8ff;
   --ifm-font-color-secondary: #8f9bb3;
   --ifm-heading-color: #f0f8ff;
-  
+
   /* Borders */
   --ifm-border-color: rgba(0, 229, 255, 0.05);
   --ifm-color-emphasis-100: #161b22;
   --ifm-color-emphasis-200: #1f2631;
   --ifm-color-emphasis-300: #2a3340;
   --ifm-color-emphasis-400: #2a3340;
-  
+
   /* Component Overrides */
-  --ifm-navbar-background-color: rgba(8, 12, 20, 0.85); /* Transparent for glassmorphism */
+  --ifm-navbar-background-color: rgba(
+    8,
+    12,
+    20,
+    0.85
+  ); /* Transparent for glassmorphism */
   --ifm-navbar-shadow: 0 1px 0 var(--ifm-border-color);
-  
+
   --ifm-footer-background-color: #080c14;
-  
+
   --ifm-menu-color-background-active: rgba(0, 229, 255, 0.1);
-  
+
   /* Code Blocks - Cosmic Theme */
   --ifm-code-background: #161b22;
   --docusaurus-highlighted-code-line-bg: rgba(0, 229, 255, 0.15);
-  
+
   /* Scrollbar */
   --ifm-scrollbar-size: 10px;
   --ifm-scrollbar-track-background-color: var(--ifm-background-surface-color);
@@ -191,7 +197,12 @@ html[data-theme='dark'] body {
   );
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   letter-spacing: 0.02em;
 }
 
@@ -199,7 +210,13 @@ h1, h2, h3, h4, h5, h6 {
    HERO SECTION
    =================================================================== */
 .hero.hero--primary {
-  background: linear-gradient(135deg, rgba(142, 68, 173, 0.5) 0%, rgba(26, 115, 232, 0.4) 100%), url('/img/hero.jpg');
+  background:
+    linear-gradient(
+      135deg,
+      rgba(142, 68, 173, 0.5) 0%,
+      rgba(26, 115, 232, 0.4) 100%
+    ),
+    url('/img/hero.jpg');
   background-size: cover;
   background-position: center;
   border-bottom: 1px solid var(--ifm-border-color);
@@ -215,7 +232,13 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 html[data-theme='dark'] .hero.hero--primary {
-  background: linear-gradient(180deg, rgba(8, 12, 20, 0.6) 0%, rgba(22, 27, 34, 0.95) 100%), url('/img/hero.jpg');
+  background:
+    linear-gradient(
+      180deg,
+      rgba(8, 12, 20, 0.6) 0%,
+      rgba(22, 27, 34, 0.95) 100%
+    ),
+    url('/img/hero.jpg');
   background-size: cover;
   background-position: center;
   border-bottom: 1px solid rgba(0, 229, 255, 0.08);
@@ -230,12 +253,21 @@ html[data-theme='dark'] .hero.hero--primary::before {
   left: 0;
   right: 0;
   height: 100%;
-  background: radial-gradient(circle at 70% 30%, rgba(142, 68, 173, 0.25) 0%, transparent 50%);
+  background: radial-gradient(
+    circle at 70% 30%,
+    rgba(142, 68, 173, 0.25) 0%,
+    transparent 50%
+  );
   z-index: 0;
 }
 
 html[data-theme='dark'] .hero.hero--primary .hero__title {
-  background: linear-gradient(135deg, #ffffff 0%, var(--ifm-color-primary) 50%, var(--soat-violet) 100%);
+  background: linear-gradient(
+    135deg,
+    #ffffff 0%,
+    var(--ifm-color-primary) 50%,
+    var(--soat-violet) 100%
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -267,7 +299,8 @@ html[data-theme='dark'] .navbar__link--active {
   padding: 0.75rem 0rem;
 }
 
-html[data-theme='dark'] .theme-doc-sidebar-item-link-level-1.menu__link--active {
+html[data-theme='dark']
+  .theme-doc-sidebar-item-link-level-1.menu__link--active {
   box-shadow: 0 0 20px rgba(0, 229, 255, 0.2);
   border-left-color: var(--ifm-color-primary);
 }
@@ -281,7 +314,7 @@ html[data-theme='dark'] .theme-doc-sidebar-item-link-level-1.menu__link--active 
 }
 
 .navbar__item {
-  font-weight: 400; 
+  font-weight: 400;
 }
 
 /* ===================================================================
@@ -289,7 +322,11 @@ html[data-theme='dark'] .theme-doc-sidebar-item-link-level-1.menu__link--active 
    =================================================================== */
 
 .button--primary {
-  background: linear-gradient(135deg, var(--ifm-color-primary) 0%, var(--soat-violet) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--ifm-color-primary) 0%,
+    var(--soat-violet) 100%
+  );
   border: none;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
@@ -358,19 +395,51 @@ html[data-theme='dark'] {
   display: inline-block;
 }
 
-.get > .menu__link::before { content: 'get'; background-color: var(--ifm-color-primary); }
-.post > .menu__link::before { content: 'post'; background-color: var(--openapi-code-green); }
-.delete > .menu__link::before { content: 'del'; background-color: var(--openapi-code-red); }
-.put > .menu__link::before { content: 'put'; background-color: var(--openapi-code-blue); }
-.patch > .menu__link::before { content: 'patch'; background-color: var(--openapi-code-orange); }
-.head > .menu__link::before { content: 'head'; background-color: var(--openapi-code-neutral); }
-.event > .menu__link::before { content: 'event'; background-color: var(--openapi-code-neutral); }
-.schema > .menu__link::before { content: 'schema'; background-color: var(--openapi-code-neutral); }
+.get > .menu__link::before {
+  content: 'get';
+  background-color: var(--ifm-color-primary);
+}
+.post > .menu__link::before {
+  content: 'post';
+  background-color: var(--openapi-code-green);
+}
+.delete > .menu__link::before {
+  content: 'del';
+  background-color: var(--openapi-code-red);
+}
+.put > .menu__link::before {
+  content: 'put';
+  background-color: var(--openapi-code-blue);
+}
+.patch > .menu__link::before {
+  content: 'patch';
+  background-color: var(--openapi-code-orange);
+}
+.head > .menu__link::before {
+  content: 'head';
+  background-color: var(--openapi-code-neutral);
+}
+.event > .menu__link::before {
+  content: 'event';
+  background-color: var(--openapi-code-neutral);
+}
+.schema > .menu__link::before {
+  content: 'schema';
+  background-color: var(--openapi-code-neutral);
+}
 
-html[data-theme='dark'] .get > .menu__link::before { box-shadow: 0 0 8px rgba(0, 229, 255, 0.3); }
-html[data-theme='dark'] .post > .menu__link::before { box-shadow: 0 0 8px rgba(34, 197, 94, 0.3); }
-html[data-theme='dark'] .delete > .menu__link::before { box-shadow: 0 0 8px rgba(248, 113, 113, 0.3); }
-html[data-theme='dark'] .put > .menu__link::before { box-shadow: 0 0 8px rgba(96, 165, 250, 0.3); }
+html[data-theme='dark'] .get > .menu__link::before {
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.3);
+}
+html[data-theme='dark'] .post > .menu__link::before {
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
+}
+html[data-theme='dark'] .delete > .menu__link::before {
+  box-shadow: 0 0 8px rgba(248, 113, 113, 0.3);
+}
+html[data-theme='dark'] .put > .menu__link::before {
+  box-shadow: 0 0 8px rgba(96, 165, 250, 0.3);
+}
 
 /* ===================================================================
    Doc Layout Adjustments

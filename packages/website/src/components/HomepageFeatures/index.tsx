@@ -12,28 +12,30 @@ type FeatureItem = {
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'Persistent Memory',
-    Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
+    title: 'Complete Backend',
+    Svg: require('@site/static/img/soat-complete-backend.svg').default,
     description: (
       <>
-        Give your AI agents a long-term memory that persists across sessions.
-        Store text, files, and context that stays available forever.
+        IAM, document and file storage with vector search, conversational
+        memory, secrets management, and webhooks — everything your AI app needs
+        in one server.
       </>
     ),
   },
   {
-    title: 'Semantic Search',
-    Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
+    title: 'Agent Orchestration',
+    Svg: require('@site/static/img/soat-agent-orchestration.svg').default,
     description: (
       <>
-        Retrieve relevant information instantly. SOAT uses advanced vector
-        embeddings to understand the meaning of your data, not just keywords.
+        Run agents with tool calling, multi-turn conversations, and pluggable AI
+        providers. SOAT manages the full lifecycle so you can focus on your
+        product.
       </>
     ),
   },
   {
     title: 'MCP Native',
-    Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
+    Svg: require('@site/static/img/soat-mcp-native.svg').default,
     description: (
       <>
         Plug-and-play compatibility with the Model Context Protocol. Connect

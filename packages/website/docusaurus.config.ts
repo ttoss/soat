@@ -31,7 +31,7 @@ const buildOpenApiConfig = () => {
 
 const config: Config = {
   title: 'SOAT',
-  tagline: 'Persistent Memory for AI Agents',
+  tagline: 'Infrastructure for AI Apps',
   favicon: 'img/favicon.ico',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -107,7 +107,7 @@ const config: Config = {
 
   themeConfig: {
     // Replace with your project's social card
-    image: 'img/docusaurus-social-card.jpg',
+    image: 'img/social-card.png',
     colorMode: {
       defaultMode: 'dark',
       respectPrefersColorScheme: true,
@@ -115,7 +115,7 @@ const config: Config = {
     navbar: {
       title: 'SOAT',
       logo: {
-        src: 'img/logo.svg',
+        src: 'img/soat-logo-no-bg.png',
       },
       items: [
         {

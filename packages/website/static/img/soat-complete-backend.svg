@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <linearGradient id="backendGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8e44ad"/>
+      <stop offset="100%" stop-color="#1a73e8"/>
+    </linearGradient>
+  </defs>
+  <!-- Base server rack -->
+  <rect x="40" y="30" width="120" height="140" rx="12" stroke="url(#backendGrad)" stroke-width="3" fill="none"/>
+  <!-- Layer dividers -->
+  <line x1="40" y1="76" x2="160" y2="76" stroke="#8e44ad" stroke-width="1.5" opacity="0.4"/>
+  <line x1="40" y1="122" x2="160" y2="122" stroke="#8e44ad" stroke-width="1.5" opacity="0.4"/>
+  <!-- Top layer: IAM / shield -->
+  <path d="M100 42 L114 50 L114 62 C114 70 108 76 100 78 C92 76 86 70 86 62 L86 50 Z" fill="#8e44ad" opacity="0.85"/>
+  <polyline points="93,58 98,64 108,54" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Middle layer: document + search -->
+  <rect x="62" y="84" width="24" height="30" rx="3" fill="#1a73e8" opacity="0.8"/>
+  <line x1="67" y1="92" x2="81" y2="92" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="67" y1="97" x2="78" y2="97" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="67" y1="102" x2="80" y2="102" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="122" cy="96" r="11" stroke="#00e5ff" stroke-width="2.5" fill="none"/>
+  <line x1="130" y1="104" x2="138" y2="112" stroke="#00e5ff" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Bottom layer: database -->
+  <ellipse cx="100" cy="134" rx="24" ry="7" fill="#8e44ad" opacity="0.7"/>
+  <path d="M76 134 L76 152 C76 156 86 160 100 160 C114 160 124 156 124 152 L124 134" stroke="#8e44ad" stroke-width="2" fill="none" opacity="0.7"/>
+  <ellipse cx="100" cy="152" rx="24" ry="7" fill="none" stroke="#8e44ad" stroke-width="2" opacity="0.5"/>
+  <!-- Decorative dots -->
+  <circle cx="152" cy="40" r="2.5" fill="#00e5ff" opacity="0.6"/>
+  <circle cx="48" cy="160" r="2.5" fill="#00e5ff" opacity="0.6"/>
+</svg>
