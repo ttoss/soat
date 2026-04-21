@@ -63,32 +63,9 @@ API routes are not defined directly in `src/index.ts` to maintain clean separati
 
 This structure ensures scalability and keeps the main entry point uncluttered as the API grows.
 
-#### Swagger JSDoc
-
-Every route handler **must** have an `@openapi` JSDoc block immediately before it. The JSDoc must match the handler's actual behavior (paths, status codes, request/response shapes).
-
-```ts
-/**
- * @openapi
- * /files:
- *   get:
- *     tags:
- *       - Files
- *     summary: List all files
- *     operationId: listFiles
- *     responses:
- *       '200':
- *         description: ...
- */
-filesRouter.get('/files', async (ctx: Context) => { ... });
-```
-
 #### OpenAPI Documentation
 
-When modifying or adding REST API endpoints, **always update both**:
-
-1. The `@openapi` JSDoc block on the route handler
-2. The corresponding OpenAPI specification in `src/rest/openapi/v1/<resource>.yaml`
+When modifying or adding REST API endpoints, **always update** the corresponding OpenAPI specification in `src/rest/openapi/v1/<resource>.yaml`. The YAML files are the sole source of truth for the SDK generator and documentation.
 
 Follow the guidelines in `src/rest/openapi/README.md`. This includes:
 

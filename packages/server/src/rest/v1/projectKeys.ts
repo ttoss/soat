@@ -9,63 +9,6 @@ import {
 
 const projectKeysRouter = new Router<Context>();
 
-/**
- * @openapi
- * /project-keys:
- *   post:
- *     tags:
- *       - Project Keys
- *     summary: Create a new project key
- *     description: Creates a new project key for a user in a project with specified policy
- *     operationId: createProjectKey
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - projectId
- *               - policyId
- *               - name
- *             properties:
- *               projectId:
- *                 type: string
- *                 description: Project ID
- *               policyId:
- *                 type: string
- *                 description: Policy ID
- *               name:
- *                 type: string
- *                 description: project key name
- *     responses:
- *       '201':
- *         description: Project key created successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                 name:
- *                   type: string
- *                 key:
- *                   type: string
- *                   description: The full project key (shown only once)
- *                 keyPrefix:
- *                   type: string
- *                 createdAt:
- *                   type: string
- *                 updatedAt:
- *                   type: string
- *       '400':
- *         description: Bad request
- *       '403':
- *         description: Forbidden
- *       '500':
- *         description: Internal server error
- */
 projectKeysRouter.post('/project-keys', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -135,53 +78,6 @@ projectKeysRouter.post('/project-keys', async (ctx: Context) => {
   ctx.body = projectKey;
 });
 
-/**
- * @openapi
- * /project-keys/{id}:
- *   get:
- *     tags:
- *       - Project Keys
- *     summary: Get a project key by ID
- *     description: Returns the data and metadata of a specific project key
- *     operationId: getProjectKey
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         description: Project key ID
- *         schema:
- *           type: string
- *     responses:
- *       '200':
- *         description: Project key found
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                 name:
- *                   type: string
- *                 keyPrefix:
- *                   type: string
- *                 userId:
- *                   type: string
- *                 projectId:
- *                   type: string
- *                 policyId:
- *                   type: string
- *                 createdAt:
- *                   type: string
- *                 updatedAt:
- *                   type: string
- *       '404':
- *         description: Project key not found
- *       '403':
- *         description: Forbidden
- *       '500':
- *         description: Internal server error
- */
 projectKeysRouter.get('/project-keys/:id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -207,65 +103,6 @@ projectKeysRouter.get('/project-keys/:id', async (ctx: Context) => {
   ctx.body = projectKey;
 });
 
-/**
- * @openapi
- * /project-keys/{id}:
- *   put:
- *     tags:
- *       - Project Keys
- *     summary: Update a project key
- *     description: Updates the policy of a specific project key
- *     operationId: updateProjectKey
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         description: Project key ID
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - policyId
- *             properties:
- *               policyId:
- *                 type: string
- *                 description: New policy ID
- *     responses:
- *       '200':
- *         description: Project key updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                 name:
- *                   type: string
- *                 keyPrefix:
- *                   type: string
- *                 userId:
- *                   type: string
- *                 projectId:
- *                   type: string
- *                 policyId:
- *                   type: string
- *                 createdAt:
- *                   type: string
- *                 updatedAt:
- *                   type: string
- *       '404':
- *         description: Project key not found
- *       '403':
- *         description: Forbidden
- *       '500':
- *         description: Internal server error
- */
 projectKeysRouter.put('/project-keys/:id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;

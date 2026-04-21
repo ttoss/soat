@@ -15,89 +15,6 @@ import { buildSrn } from 'src/lib/iam';
 
 const actorsRouter = new Router<Context>();
 
-/**
- * @openapi
- * /actors:
- *   get:
- *     tags:
- *       - Actors
- *     summary: List actors
- *     description: Returns all actors the caller has access to. If projectId is provided, returns only actors in that project. API keys are scoped to a single project automatically. JWT users without projectId receive actors across all their accessible projects.
- *     operationId: listActors
- *     parameters:
- *       - name: projectId
- *         in: query
- *         required: false
- *         description: Project ID (optional)
- *         schema:
- *           type: string
- *           example: 'proj_V1StGXR8Z5jdHi6B'
- *       - name: externalId
- *         in: query
- *         required: false
- *         description: External ID to filter by (e.g. WhatsApp phone number)
- *         schema:
- *           type: string
- *           example: '+15551234567'
- *       - name: name
- *         in: query
- *         required: false
- *         description: Partial, case-insensitive name filter
- *         schema:
- *           type: string
- *           example: 'alice'
- *       - name: type
- *         in: query
- *         required: false
- *         description: Exact type filter (e.g. customer, agent)
- *         schema:
- *           type: string
- *           example: 'customer'
- *       - name: limit
- *         in: query
- *         required: false
- *         description: Maximum number of results to return (default 50)
- *         schema:
- *           type: integer
- *           example: 50
- *       - name: offset
- *         in: query
- *         required: false
- *         description: Number of results to skip (default 0)
- *         schema:
- *           type: integer
- *           example: 0
- *     responses:
- *       '200':
- *         description: List of actors
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/ActorRecord'
- *                 total:
- *                   type: integer
- *                 limit:
- *                   type: integer
- *                 offset:
- *                   type: integer
- *       '401':
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '403':
- *         description: Forbidden
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 actorsRouter.get('/actors', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -137,49 +54,6 @@ actorsRouter.get('/actors', async (ctx: Context) => {
   });
 });
 
-/**
- * @openapi
- * /actors/{id}:
- *   get:
- *     tags:
- *       - Actors
- *     summary: Get an actor by ID
- *     description: Returns an actor by its ID
- *     operationId: getActor
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         description: Actor ID
- *         schema:
- *           type: string
- *           example: 'act_V1StGXR8Z5jdHi6B'
- *     responses:
- *       '200':
- *         description: Actor found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ActorRecord'
- *       '401':
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '403':
- *         description: Forbidden
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '404':
- *         description: Actor not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 actorsRouter.get('/actors/:id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -221,87 +95,6 @@ actorsRouter.get('/actors/:id', async (ctx: Context) => {
   ctx.body = actor;
 });
 
-/**
- * @openapi
- * /actors:
- *   post:
- *     tags:
- *       - Actors
- *     summary: Create an actor
- *     description: Creates a new actor. API keys automatically infer the project from the key's scope; JWT callers must supply projectId.
- *     operationId: createActor
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - name
- *             properties:
- *               projectId:
- *                 type: string
- *                 description: Project ID. Required for JWT auth; omit when using an API key.
- *                 example: 'proj_V1StGXR8Z5jdHi6B'
- *               name:
- *                 type: string
- *                 example: 'Alice'
- *               type:
- *                 type: string
- *                 description: Optional actor type (e.g. 'customer', 'agent')
- *                 example: 'customer'
- *               externalId:
- *                 type: string
- *                 description: Optional external identifier (e.g. WhatsApp phone number). If provided and an actor with this externalId already exists in the project, the existing actor is returned (idempotent — 200 OK).
- *                 example: '+15551234567'
- *               instructions:
- *                 type: string
- *                 nullable: true
- *                 description: Persona-specific instructions composed into the effective system prompt for generate calls.
- *               agentId:
- *                 type: string
- *                 description: Optional Agent ID to link this actor to. Mutually exclusive with chatId.
- *               chatId:
- *                 type: string
- *                 description: Optional Chat ID to link this actor to. Mutually exclusive with agentId.
- *     responses:
- *       '200':
- *         description: Actor already exists — returned when externalId matches an existing actor in this project (idempotent)
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ActorRecord'
- *       '200':
- *         description: Actor already exists — returned when externalId matches an existing actor in this project (idempotent)
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ActorRecord'
- *       '201':
- *         description: Actor created
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ActorRecord'
- *       '400':
- *         description: Invalid request body
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '401':
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '403':
- *         description: Forbidden
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 actorsRouter.post('/actors', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -431,45 +224,6 @@ actorsRouter.post('/actors', async (ctx: Context) => {
   ctx.body = actor;
 });
 
-/**
- * @openapi
- * /actors/{id}:
- *   delete:
- *     tags:
- *       - Actors
- *     summary: Delete an actor
- *     description: Deletes an actor by its ID
- *     operationId: deleteActor
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         description: Actor ID
- *         schema:
- *           type: string
- *           example: 'act_V1StGXR8Z5jdHi6B'
- *     responses:
- *       '204':
- *         description: Actor deleted
- *       '401':
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '403':
- *         description: Forbidden
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '404':
- *         description: Actor not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 actorsRouter.delete('/actors/:id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -520,69 +274,6 @@ actorsRouter.delete('/actors/:id', async (ctx: Context) => {
   ctx.status = 204;
 });
 
-/**
- * @openapi
- * /actors/{id}:
- *   patch:
- *     tags:
- *       - Actors
- *     summary: Update an actor
- *     description: Updates an actor's name, type, or externalId
- *     operationId: updateActor
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         description: Actor ID
- *         schema:
- *           type: string
- *           example: 'act_V1StGXR8Z5jdHi6B'
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *                 example: 'Updated Actor'
- *               type:
- *                 type: string
- *                 example: 'assistant'
- *               externalId:
- *                 type: string
- *                 example: '+15551234567'
- *               instructions:
- *                 type: string
- *                 nullable: true
- *                 description: Persona-specific instructions. Pass null to clear.
- *               agentId:
- *                 type: string
- *                 nullable: true
- *                 description: Agent to link to this actor. Pass null to unlink.
- *               chatId:
- *                 type: string
- *                 nullable: true
- *                 description: Chat to link to this actor. Pass null to unlink.
- *     responses:
- *       '200':
- *         description: Actor updated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ActorRecord'
- *       '401':
- *         $ref: '#/components/responses/Unauthorized'
- *       '403':
- *         $ref: '#/components/responses/Forbidden'
- *       '404':
- *         description: Actor not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 actorsRouter.patch('/actors/:id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -659,40 +350,6 @@ actorsRouter.patch('/actors/:id', async (ctx: Context) => {
   ctx.body = updated;
 });
 
-/**
- * @openapi
- * /actors/{id}/tags:
- *   get:
- *     tags:
- *       - Actors
- *     summary: Get actor tags
- *     operationId: getActorTagsRoute
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       '200':
- *         description: Actor tags
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               additionalProperties:
- *                 type: string
- *       '401':
- *         $ref: '#/components/responses/Unauthorized'
- *       '403':
- *         $ref: '#/components/responses/Forbidden'
- *       '404':
- *         description: Actor not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 actorsRouter.get('/actors/:id/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -734,46 +391,6 @@ actorsRouter.get('/actors/:id/tags', async (ctx: Context) => {
   ctx.body = await getActorTags({ id: ctx.params.id });
 });
 
-/**
- * @openapi
- * /actors/{id}/tags:
- *   put:
- *     tags:
- *       - Actors
- *     summary: Replace actor tags
- *     operationId: putActorTags
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             additionalProperties:
- *               type: string
- *     responses:
- *       '200':
- *         description: Tags replaced
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ActorRecord'
- *       '401':
- *         $ref: '#/components/responses/Unauthorized'
- *       '403':
- *         $ref: '#/components/responses/Forbidden'
- *       '404':
- *         description: Actor not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 actorsRouter.put('/actors/:id/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -816,46 +433,6 @@ actorsRouter.put('/actors/:id/tags', async (ctx: Context) => {
   ctx.body = await updateActorTags({ id: ctx.params.id, tags, merge: false });
 });
 
-/**
- * @openapi
- * /actors/{id}/tags:
- *   patch:
- *     tags:
- *       - Actors
- *     summary: Merge actor tags
- *     operationId: patchActorTags
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             additionalProperties:
- *               type: string
- *     responses:
- *       '200':
- *         description: Tags merged
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ActorRecord'
- *       '401':
- *         $ref: '#/components/responses/Unauthorized'
- *       '403':
- *         $ref: '#/components/responses/Forbidden'
- *       '404':
- *         description: Actor not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 actorsRouter.patch('/actors/:id/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;

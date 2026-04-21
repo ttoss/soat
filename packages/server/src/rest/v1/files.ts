@@ -19,60 +19,6 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const filesRouter = new Router<Context>();
 
-/**
- * @openapi
- * /files:
- *   get:
- *     tags:
- *       - Files
- *     summary: List files
- *     description: Returns a list of files. Requires authentication. Optionally filter by projectId.
- *     operationId: listFiles
- *     parameters:
- *       - name: projectId
- *         in: query
- *         required: false
- *         description: Filter files by project ID
- *         schema:
- *           type: string
- *           example: 'proj_V1StGXR8Z5jdHi6B'
- *       - name: limit
- *         in: query
- *         required: false
- *         description: Maximum number of results to return (default 50)
- *         schema:
- *           type: integer
- *           example: 50
- *       - name: offset
- *         in: query
- *         required: false
- *         description: Number of results to skip (default 0)
- *         schema:
- *           type: integer
- *           example: 0
- *     responses:
- *       '200':
- *         description: List of files returned successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/FileRecord'
- *                 total:
- *                   type: integer
- *                 limit:
- *                   type: integer
- *                 offset:
- *                   type: integer
- *       '401':
- *         $ref: '#/components/responses/Unauthorized'
- *       '403':
- *         $ref: '#/components/responses/Forbidden'
- */
 filesRouter.get('/files', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -106,43 +52,6 @@ filesRouter.get('/files', async (ctx: Context) => {
   });
 });
 
-/**
- * @openapi
- * /files/{id}:
- *   get:
- *     tags:
- *       - Files
- *     summary: Get a file by ID
- *     description: Returns the data and metadata of a specific file
- *     operationId: getFile
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         description: File ID
- *         schema:
- *           type: string
- *           example: 'abc123'
- *     responses:
- *       '200':
- *         description: File found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/FileRecord'
- *       '404':
- *         description: File not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '500':
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 filesRouter.get('/files/:id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -185,62 +94,6 @@ filesRouter.get('/files/:id', async (ctx: Context) => {
   ctx.body = file;
 });
 
-/**
- * @openapi
- * /files:
- *   post:
- *     tags:
- *       - Files
- *     summary: Create a file
- *     description: Creates a new file record in the system
- *     operationId: createFile
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - projectId
- *               - storageType
- *               - storagePath
- *             properties:
- *               projectId:
- *                 type: string
- *                 example: 'proj_V1StGXR8Z5jdHi6B'
- *               filename:
- *                 type: string
- *                 example: 'document.pdf'
- *               contentType:
- *                 type: string
- *                 example: 'application/pdf'
- *               size:
- *                 type: integer
- *                 example: 1024
- *               storageType:
- *                 type: string
- *                 enum: [local, s3, gcs]
- *                 example: 'local'
- *               storagePath:
- *                 type: string
- *                 example: '/uploads/document.pdf'
- *               metadata:
- *                 type: string
- *                 example: '{"author":"John"}'
- *     responses:
- *       '201':
- *         description: File created successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/FileRecord'
- *       '500':
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 filesRouter.post('/files', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -287,39 +140,6 @@ filesRouter.post('/files', async (ctx: Context) => {
   ctx.body = file;
 });
 
-/**
- * @openapi
- * /files/{id}:
- *   delete:
- *     tags:
- *       - Files
- *     summary: Delete a file
- *     description: Removes a file from the system by ID
- *     operationId: deleteFile
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         description: ID of the file to delete
- *         schema:
- *           type: string
- *           example: 'abc123'
- *     responses:
- *       '204':
- *         description: File deleted successfully
- *       '404':
- *         description: File not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '500':
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 filesRouter.delete('/files/:id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -374,52 +194,6 @@ filesRouter.delete('/files/:id', async (ctx: Context) => {
   ctx.status = 204;
 });
 
-/**
- * @openapi
- * /files/upload:
- *   post:
- *     tags:
- *       - Files
- *     summary: Upload a file
- *     description: Uploads a file to the server and stores it in the configured storage directory
- *     operationId: uploadFile
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             required:
- *               - file
- *               - projectId
- *             properties:
- *               file:
- *                 type: string
- *                 format: binary
- *               projectId:
- *                 type: string
- *                 example: 'proj_V1StGXR8Z5jdHi6B'
- *               metadata:
- *                 type: string
- *                 example: '{"author":"John"}'
- *     responses:
- *       '201':
- *         description: File uploaded successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/FileRecord'
- *       '400':
- *         description: Missing file or invalid project
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '401':
- *         $ref: '#/components/responses/Unauthorized'
- *       '403':
- *         $ref: '#/components/responses/Forbidden'
- */
 filesRouter.post(
   '/files/upload',
   upload.single('file'),
@@ -477,58 +251,6 @@ filesRouter.post(
   }
 );
 
-/**
- * @openapi
- * /files/upload/base64:
- *   post:
- *     tags:
- *       - Files
- *     summary: Upload a file via JSON (base64-encoded)
- *     description: Uploads a file using a JSON body with base64-encoded content. Designed for programmatic/MCP usage.
- *     operationId: uploadFileBase64
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - projectId
- *               - content
- *             properties:
- *               projectId:
- *                 type: string
- *                 example: 'proj_V1StGXR8Z5jdHi6B'
- *               content:
- *                 type: string
- *                 description: Base64-encoded file content
- *               filename:
- *                 type: string
- *                 example: 'document.txt'
- *               contentType:
- *                 type: string
- *                 example: 'text/plain'
- *               metadata:
- *                 type: string
- *                 example: '{"author":"John"}'
- *     responses:
- *       '201':
- *         description: File uploaded successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/FileRecord'
- *       '400':
- *         description: Missing content or invalid project
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '401':
- *         $ref: '#/components/responses/Unauthorized'
- *       '403':
- *         $ref: '#/components/responses/Forbidden'
- */
 filesRouter.post('/files/upload/base64', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -589,42 +311,6 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
   ctx.body = record;
 });
 
-/**
- * @openapi
- * /files/{id}/download:
- *   get:
- *     tags:
- *       - Files
- *     summary: Download a file
- *     description: Streams the file content to the client
- *     operationId: downloadFile
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         description: File ID
- *         schema:
- *           type: string
- *           example: 'fil_abc123'
- *     responses:
- *       '200':
- *         description: File content
- *         content:
- *           application/octet-stream:
- *             schema:
- *               type: string
- *               format: binary
- *       '401':
- *         $ref: '#/components/responses/Unauthorized'
- *       '403':
- *         $ref: '#/components/responses/Forbidden'
- *       '404':
- *         description: File not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 filesRouter.get('/files/:id/download', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -681,51 +367,6 @@ filesRouter.get('/files/:id/download', async (ctx: Context) => {
   ctx.body = result.stream;
 });
 
-/**
- * @openapi
- * /files/{id}/download/base64:
- *   get:
- *     tags:
- *       - Files
- *     summary: Download a file as base64
- *     description: Returns JSON with base64-encoded file content. Designed for programmatic/MCP usage.
- *     operationId: downloadFileBase64
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         description: File ID
- *         schema:
- *           type: string
- *           example: 'fil_abc123'
- *     responses:
- *       '200':
- *         description: Base64-encoded file content
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 content:
- *                   type: string
- *                   description: Base64-encoded file content
- *                 filename:
- *                   type: string
- *                 contentType:
- *                   type: string
- *                 size:
- *                   type: number
- *       '401':
- *         $ref: '#/components/responses/Unauthorized'
- *       '403':
- *         $ref: '#/components/responses/Forbidden'
- *       '404':
- *         description: File not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 filesRouter.get('/files/:id/download/base64', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -786,54 +427,6 @@ filesRouter.get('/files/:id/download/base64', async (ctx: Context) => {
   };
 });
 
-/**
- * @openapi
- * /files/{id}/metadata:
- *   patch:
- *     tags:
- *       - Files
- *     summary: Update file metadata
- *     description: Updates the metadata and/or filename of a file
- *     operationId: updateFileMetadata
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         description: File ID
- *         schema:
- *           type: string
- *           example: 'fil_abc123'
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               metadata:
- *                 type: string
- *                 example: '{"author":"Jane","tags":["report"]}'
- *               filename:
- *                 type: string
- *                 example: 'renamed-file.txt'
- *     responses:
- *       '200':
- *         description: File updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/FileRecord'
- *       '401':
- *         $ref: '#/components/responses/Unauthorized'
- *       '403':
- *         $ref: '#/components/responses/Forbidden'
- *       '404':
- *         description: File not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 filesRouter.patch('/files/:id/metadata', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -882,40 +475,6 @@ filesRouter.patch('/files/:id/metadata', async (ctx: Context) => {
   ctx.body = updated;
 });
 
-/**
- * @openapi
- * /files/{id}/tags:
- *   get:
- *     tags:
- *       - Files
- *     summary: Get file tags
- *     operationId: getFileTagsRoute
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       '200':
- *         description: File tags
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               additionalProperties:
- *                 type: string
- *       '401':
- *         $ref: '#/components/responses/Unauthorized'
- *       '403':
- *         $ref: '#/components/responses/Forbidden'
- *       '404':
- *         description: File not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 filesRouter.get('/files/:id/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -957,46 +516,6 @@ filesRouter.get('/files/:id/tags', async (ctx: Context) => {
   ctx.body = await getFileTags({ id: ctx.params.id });
 });
 
-/**
- * @openapi
- * /files/{id}/tags:
- *   put:
- *     tags:
- *       - Files
- *     summary: Replace file tags
- *     operationId: putFileTags
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             additionalProperties:
- *               type: string
- *     responses:
- *       '200':
- *         description: Tags replaced
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/FileRecord'
- *       '401':
- *         $ref: '#/components/responses/Unauthorized'
- *       '403':
- *         $ref: '#/components/responses/Forbidden'
- *       '404':
- *         description: File not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 filesRouter.put('/files/:id/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -1039,46 +558,6 @@ filesRouter.put('/files/:id/tags', async (ctx: Context) => {
   ctx.body = await updateFileTags({ id: ctx.params.id, tags, merge: false });
 });
 
-/**
- * @openapi
- * /files/{id}/tags:
- *   patch:
- *     tags:
- *       - Files
- *     summary: Merge file tags
- *     operationId: patchFileTags
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             additionalProperties:
- *               type: string
- *     responses:
- *       '200':
- *         description: Tags merged
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/FileRecord'
- *       '401':
- *         $ref: '#/components/responses/Unauthorized'
- *       '403':
- *         $ref: '#/components/responses/Forbidden'
- *       '404':
- *         description: File not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 filesRouter.patch('/files/:id/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;

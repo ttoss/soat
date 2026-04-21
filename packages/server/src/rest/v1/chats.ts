@@ -16,53 +16,6 @@ import {
 
 export const chatsRouter = new Router<Context>();
 
-/**
- * @openapi
- * /chats:
- *   post:
- *     tags:
- *       - Chats
- *     summary: Create a chat
- *     description: Creates a new chat resource bound to an AI provider.
- *     operationId: createChat
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/CreateChatRequest'
- *     responses:
- *       '201':
- *         description: Chat created
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Chat'
- *       '400':
- *         description: Bad Request
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '401':
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '403':
- *         description: Forbidden
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '404':
- *         description: AI provider not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 chatsRouter.post('/chats', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -128,44 +81,6 @@ chatsRouter.post('/chats', async (ctx: Context) => {
   ctx.body = result;
 });
 
-/**
- * @openapi
- * /chats:
- *   get:
- *     tags:
- *       - Chats
- *     summary: List chats
- *     description: Returns all chats in the project.
- *     operationId: listChats
- *     parameters:
- *       - name: projectId
- *         in: query
- *         required: false
- *         description: Project public ID to filter by
- *         schema:
- *           type: string
- *     responses:
- *       '200':
- *         description: List of chats
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Chat'
- *       '401':
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '403':
- *         description: Forbidden
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 chatsRouter.get('/chats', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -189,41 +104,6 @@ chatsRouter.get('/chats', async (ctx: Context) => {
   ctx.body = await listChats({ projectIds: projectIds ?? [] });
 });
 
-/**
- * @openapi
- * /chats/{chatId}:
- *   get:
- *     tags:
- *       - Chats
- *     summary: Get a chat
- *     description: Returns a single chat by ID.
- *     operationId: getChat
- *     parameters:
- *       - name: chatId
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       '200':
- *         description: Chat record
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Chat'
- *       '401':
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '404':
- *         description: Chat not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 chatsRouter.get('/chats/:chatId', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -244,37 +124,6 @@ chatsRouter.get('/chats/:chatId', async (ctx: Context) => {
   ctx.body = chat;
 });
 
-/**
- * @openapi
- * /chats/{chatId}:
- *   delete:
- *     tags:
- *       - Chats
- *     summary: Delete a chat
- *     description: Deletes a chat by ID.
- *     operationId: deleteChat
- *     parameters:
- *       - name: chatId
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       '204':
- *         description: Chat deleted
- *       '401':
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '404':
- *         description: Chat not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 chatsRouter.delete('/chats/:chatId', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -295,63 +144,6 @@ chatsRouter.delete('/chats/:chatId', async (ctx: Context) => {
   ctx.status = 204;
 });
 
-/**
- * @openapi
- * /chats/{chatId}/completions:
- *   post:
- *     tags:
- *       - Chats
- *     summary: Create a chat completion for a stored chat
- *     description: >
- *       Runs a completion using the AI provider and settings stored in the chat.
- *       Pass `stream: true` for SSE streaming. Optionally override the model per
- *       request. If a system message is included in `messages`, it replaces the
- *       chat's stored system message for this call only. Messages may include a
- *       `documentId` instead of `content` — the document content will be resolved
- *       automatically.
- *     operationId: createChatCompletionForChat
- *     parameters:
- *       - name: chatId
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/ChatCompletionForChatRequest'
- *     responses:
- *       '200':
- *         description: Chat completion result (JSON or SSE stream)
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ChatCompletionResponse'
- *           text/event-stream:
- *             schema:
- *               type: string
- *               description: SSE stream of chat completion delta chunks
- *       '400':
- *         description: Bad Request
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '401':
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '404':
- *         description: Chat or AI provider not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 chatsRouter.post('/chats/:chatId/completions', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -445,55 +237,6 @@ chatsRouter.post('/chats/:chatId/completions', async (ctx: Context) => {
   };
 });
 
-/**
- * @openapi
- * /chats/completions:
- *   post:
- *     tags:
- *       - Chats
- *     summary: Create a chat completion
- *     description: >
- *       OpenAI Chat Completions-compatible endpoint. Resolves the AI provider
- *       from `aiProviderId`, decrypts its secret, and calls the appropriate
- *       Vercel AI SDK provider. Falls back to Ollama when `aiProviderId` is
- *       omitted.
- *     operationId: createChatCompletion
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/ChatCompletionRequest'
- *     responses:
- *       '200':
- *         description: Chat completion result (JSON or SSE stream)
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ChatCompletionResponse'
- *           text/event-stream:
- *             schema:
- *               type: string
- *               description: SSE stream of chat completion delta chunks
- *       '400':
- *         description: Bad Request
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '401':
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '404':
- *         description: AI provider not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 chatsRouter.post('/chats/completions', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -578,51 +321,6 @@ chatsRouter.post('/chats/completions', async (ctx: Context) => {
   }
 });
 
-/**
- * @openapi
- * /chats/{chatId}/actors:
- *   post:
- *     tags:
- *       - Chats
- *     summary: Create an actor linked to a chat
- *     description: Convenience endpoint that creates an actor in the chat's project with `chatId` pre-filled.
- *     operationId: createActorForChat
- *     parameters:
- *       - name: chatId
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - name
- *             properties:
- *               name:
- *                 type: string
- *               type:
- *                 type: string
- *               externalId:
- *                 type: string
- *               instructions:
- *                 type: string
- *                 nullable: true
- *     responses:
- *       '201':
- *         description: Actor created
- *       '400':
- *         description: Invalid request
- *       '401':
- *         description: Unauthorized
- *       '403':
- *         description: Forbidden
- *       '404':
- *         description: Chat not found
- */
 chatsRouter.post('/chats/:chatId/actors', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;

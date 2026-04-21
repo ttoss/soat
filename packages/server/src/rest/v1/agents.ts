@@ -23,35 +23,6 @@ export const agentsRouter = new Router<Context>();
 
 // ── Agent Tools (must be mounted before /agents/:agentId) ────────────────
 
-/**
- * @openapi
- * /agents/tools:
- *   post:
- *     tags:
- *       - Agent Tools
- *     summary: Create an agent tool
- *     description: Creates a new agent tool in the project.
- *     operationId: createAgentTool
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/CreateAgentToolRequest'
- *     responses:
- *       '201':
- *         description: Agent tool created
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AgentTool'
- *       '400':
- *         description: Bad Request
- *       '401':
- *         description: Unauthorized
- *       '403':
- *         description: Forbidden
- */
 agentsRouter.post('/agents/tools', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -119,35 +90,6 @@ agentsRouter.post('/agents/tools', async (ctx: Context) => {
   ctx.body = result;
 });
 
-/**
- * @openapi
- * /agents/tools:
- *   get:
- *     tags:
- *       - Agent Tools
- *     summary: List agent tools
- *     description: Returns all agent tools in the project.
- *     operationId: listAgentTools
- *     parameters:
- *       - name: projectId
- *         in: query
- *         required: false
- *         schema:
- *           type: string
- *     responses:
- *       '200':
- *         description: List of agent tools
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/AgentTool'
- *       '401':
- *         description: Unauthorized
- *       '403':
- *         description: Forbidden
- */
 agentsRouter.get('/agents/tools', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -171,35 +113,6 @@ agentsRouter.get('/agents/tools', async (ctx: Context) => {
   ctx.body = await listAgentTools({ projectIds });
 });
 
-/**
- * @openapi
- * /agents/tools/{toolId}:
- *   get:
- *     tags:
- *       - Agent Tools
- *     summary: Get an agent tool
- *     description: Returns a single agent tool by ID.
- *     operationId: getAgentTool
- *     parameters:
- *       - name: toolId
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       '200':
- *         description: Agent tool
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AgentTool'
- *       '401':
- *         description: Unauthorized
- *       '403':
- *         description: Forbidden
- *       '404':
- *         description: Not found
- */
 agentsRouter.get('/agents/tools/:toolId', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -231,41 +144,6 @@ agentsRouter.get('/agents/tools/:toolId', async (ctx: Context) => {
   ctx.body = result;
 });
 
-/**
- * @openapi
- * /agents/tools/{toolId}:
- *   put:
- *     tags:
- *       - Agent Tools
- *     summary: Update an agent tool
- *     description: Updates an existing agent tool.
- *     operationId: updateAgentTool
- *     parameters:
- *       - name: toolId
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/UpdateAgentToolRequest'
- *     responses:
- *       '200':
- *         description: Agent tool updated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AgentTool'
- *       '401':
- *         description: Unauthorized
- *       '403':
- *         description: Forbidden
- *       '404':
- *         description: Not found
- */
 agentsRouter.put('/agents/tools/:toolId', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -313,31 +191,6 @@ agentsRouter.put('/agents/tools/:toolId', async (ctx: Context) => {
   ctx.body = result;
 });
 
-/**
- * @openapi
- * /agents/tools/{toolId}:
- *   delete:
- *     tags:
- *       - Agent Tools
- *     summary: Delete an agent tool
- *     description: Deletes an agent tool by ID.
- *     operationId: deleteAgentTool
- *     parameters:
- *       - name: toolId
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       '204':
- *         description: Deleted
- *       '401':
- *         description: Unauthorized
- *       '403':
- *         description: Forbidden
- *       '404':
- *         description: Not found
- */
 agentsRouter.delete('/agents/tools/:toolId', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -371,29 +224,6 @@ agentsRouter.delete('/agents/tools/:toolId', async (ctx: Context) => {
 
 // ── Traces (must be mounted before /agents/:agentId) ─────────────────────
 
-/**
- * @openapi
- * /agents/traces:
- *   get:
- *     tags:
- *       - Agent Traces
- *     summary: List agent traces
- *     description: Returns all traces for the project.
- *     operationId: listAgentTraces
- *     parameters:
- *       - name: projectId
- *         in: query
- *         required: false
- *         schema:
- *           type: string
- *     responses:
- *       '200':
- *         description: List of traces
- *       '401':
- *         description: Unauthorized
- *       '403':
- *         description: Forbidden
- */
 agentsRouter.get('/agents/traces', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -417,31 +247,6 @@ agentsRouter.get('/agents/traces', async (ctx: Context) => {
   ctx.body = await listTraces({ projectIds });
 });
 
-/**
- * @openapi
- * /agents/traces/{traceId}:
- *   get:
- *     tags:
- *       - Agent Traces
- *     summary: Get a trace
- *     description: Returns a single trace by ID.
- *     operationId: getAgentTrace
- *     parameters:
- *       - name: traceId
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       '200':
- *         description: Trace details
- *       '401':
- *         description: Unauthorized
- *       '403':
- *         description: Forbidden
- *       '404':
- *         description: Not found
- */
 agentsRouter.get('/agents/traces/:traceId', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -475,37 +280,6 @@ agentsRouter.get('/agents/traces/:traceId', async (ctx: Context) => {
 
 // ── Agents CRUD ──────────────────────────────────────────────────────────
 
-/**
- * @openapi
- * /agents:
- *   post:
- *     tags:
- *       - Agents
- *     summary: Create an agent
- *     description: Creates a new agent bound to an AI provider.
- *     operationId: createAgent
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/CreateAgentRequest'
- *     responses:
- *       '201':
- *         description: Agent created
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Agent'
- *       '400':
- *         description: Bad Request
- *       '401':
- *         description: Unauthorized
- *       '403':
- *         description: Forbidden
- *       '404':
- *         description: AI provider not found
- */
 agentsRouter.post('/agents', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -594,35 +368,6 @@ agentsRouter.post('/agents', async (ctx: Context) => {
   ctx.body = result;
 });
 
-/**
- * @openapi
- * /agents:
- *   get:
- *     tags:
- *       - Agents
- *     summary: List agents
- *     description: Returns all agents in the project.
- *     operationId: listAgents
- *     parameters:
- *       - name: projectId
- *         in: query
- *         required: false
- *         schema:
- *           type: string
- *     responses:
- *       '200':
- *         description: List of agents
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Agent'
- *       '401':
- *         description: Unauthorized
- *       '403':
- *         description: Forbidden
- */
 agentsRouter.get('/agents', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -646,35 +391,6 @@ agentsRouter.get('/agents', async (ctx: Context) => {
   ctx.body = await listAgents({ projectIds });
 });
 
-/**
- * @openapi
- * /agents/{agentId}:
- *   get:
- *     tags:
- *       - Agents
- *     summary: Get an agent
- *     description: Returns a single agent by ID.
- *     operationId: getAgent
- *     parameters:
- *       - name: agentId
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       '200':
- *         description: Agent details
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Agent'
- *       '401':
- *         description: Unauthorized
- *       '403':
- *         description: Forbidden
- *       '404':
- *         description: Not found
- */
 agentsRouter.get('/agents/:agentId', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -706,41 +422,6 @@ agentsRouter.get('/agents/:agentId', async (ctx: Context) => {
   ctx.body = result;
 });
 
-/**
- * @openapi
- * /agents/{agentId}:
- *   put:
- *     tags:
- *       - Agents
- *     summary: Update an agent
- *     description: Updates an existing agent.
- *     operationId: updateAgent
- *     parameters:
- *       - name: agentId
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/UpdateAgentRequest'
- *     responses:
- *       '200':
- *         description: Agent updated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Agent'
- *       '401':
- *         description: Unauthorized
- *       '403':
- *         description: Forbidden
- *       '404':
- *         description: Not found
- */
 agentsRouter.put('/agents/:agentId', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -832,31 +513,6 @@ agentsRouter.put('/agents/:agentId', async (ctx: Context) => {
   ctx.body = result;
 });
 
-/**
- * @openapi
- * /agents/{agentId}:
- *   delete:
- *     tags:
- *       - Agents
- *     summary: Delete an agent
- *     description: Deletes an agent by ID.
- *     operationId: deleteAgent
- *     parameters:
- *       - name: agentId
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       '204':
- *         description: Deleted
- *       '401':
- *         description: Unauthorized
- *       '403':
- *         description: Forbidden
- *       '404':
- *         description: Not found
- */
 agentsRouter.delete('/agents/:agentId', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -890,42 +546,6 @@ agentsRouter.delete('/agents/:agentId', async (ctx: Context) => {
 
 // ── Generation ───────────────────────────────────────────────────────────
 
-/**
- * @openapi
- * /agents/{agentId}/generate:
- *   post:
- *     tags:
- *       - Agents
- *     summary: Run an agent generation
- *     description: >
- *       Sends messages to the agent, resolves its tools, and runs the AI model
- *       loop. Supports streaming via `stream: true`. Client tools pause the
- *       generation and return `requires_action`.
- *     operationId: createAgentGeneration
- *     parameters:
- *       - name: agentId
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/CreateAgentGenerationRequest'
- *     responses:
- *       '200':
- *         description: Generation result or SSE stream
- *       '400':
- *         description: Bad Request
- *       '401':
- *         description: Unauthorized
- *       '403':
- *         description: Forbidden
- *       '404':
- *         description: Agent or AI provider not found
- */
 agentsRouter.post('/agents/:agentId/generate', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -1025,46 +645,6 @@ agentsRouter.post('/agents/:agentId/generate', async (ctx: Context) => {
   ctx.body = result;
 });
 
-/**
- * @openapi
- * /agents/{agentId}/generate/{generationId}/tool-outputs:
- *   post:
- *     tags:
- *       - Agents
- *     summary: Submit tool outputs for a paused generation
- *     description: >
- *       Resumes a generation that was paused due to client tool calls.
- *       Provide tool outputs for each pending tool call.
- *     operationId: submitAgentToolOutputs
- *     parameters:
- *       - name: agentId
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *       - name: generationId
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/SubmitToolOutputsRequest'
- *     responses:
- *       '200':
- *         description: Generation result after resuming
- *       '400':
- *         description: Bad Request
- *       '401':
- *         description: Unauthorized
- *       '403':
- *         description: Forbidden
- *       '404':
- *         description: Agent or generation not found
- */
 agentsRouter.post(
   '/agents/:agentId/generate/:generationId/tool-outputs',
   async (ctx: Context) => {
@@ -1122,51 +702,6 @@ agentsRouter.post(
   }
 );
 
-/**
- * @openapi
- * /agents/{agentId}/actors:
- *   post:
- *     tags:
- *       - Agents
- *     summary: Create an actor linked to an agent
- *     description: Convenience endpoint that creates an actor in the agent's project with `agentId` pre-filled.
- *     operationId: createActorForAgent
- *     parameters:
- *       - name: agentId
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - name
- *             properties:
- *               name:
- *                 type: string
- *               type:
- *                 type: string
- *               externalId:
- *                 type: string
- *               instructions:
- *                 type: string
- *                 nullable: true
- *     responses:
- *       '201':
- *         description: Actor created
- *       '400':
- *         description: Invalid request
- *       '401':
- *         description: Unauthorized
- *       '403':
- *         description: Forbidden
- *       '404':
- *         description: Agent not found
- */
 agentsRouter.post('/agents/:agentId/actors', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;

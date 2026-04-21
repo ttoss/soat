@@ -13,45 +13,6 @@ import {
 
 const aiProvidersRouter = new Router<Context>();
 
-/**
- * @openapi
- * /ai-providers:
- *   get:
- *     tags:
- *       - AI Providers
- *     summary: List AI providers
- *     description: Returns all AI providers in the project.
- *     operationId: listAiProviders
- *     parameters:
- *       - name: projectId
- *         in: query
- *         required: false
- *         description: Project ID
- *         schema:
- *           type: string
- *           example: 'proj_V1StGXR8Z5jdHi6B'
- *     responses:
- *       '200':
- *         description: List of AI providers
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/AiProviderRecord'
- *       '401':
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '403':
- *         description: Forbidden
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 aiProvidersRouter.get('/ai-providers', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -75,49 +36,6 @@ aiProvidersRouter.get('/ai-providers', async (ctx: Context) => {
   ctx.body = await listAiProviders({ projectIds: projectIds ?? [] });
 });
 
-/**
- * @openapi
- * /ai-providers/{aiProviderId}:
- *   get:
- *     tags:
- *       - AI Providers
- *     summary: Get an AI provider by ID
- *     description: Returns AI provider details. The secret value is never returned.
- *     operationId: getAiProvider
- *     parameters:
- *       - name: aiProviderId
- *         in: path
- *         required: true
- *         description: AI Provider ID
- *         schema:
- *           type: string
- *           example: 'aip_V1StGXR8Z5jdHi6B'
- *     responses:
- *       '200':
- *         description: AI provider found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AiProviderRecord'
- *       '401':
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '403':
- *         description: Forbidden
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '404':
- *         description: AI provider not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 aiProvidersRouter.get('/ai-providers/:aiProviderId', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -145,76 +63,6 @@ aiProvidersRouter.get('/ai-providers/:aiProviderId', async (ctx: Context) => {
   ctx.body = provider;
 });
 
-/**
- * @openapi
- * /ai-providers:
- *   post:
- *     tags:
- *       - AI Providers
- *     summary: Create an AI provider
- *     description: Creates a new AI provider configuration.
- *     operationId: createAiProvider
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - name
- *               - provider
- *               - defaultModel
- *             properties:
- *               projectId:
- *                 type: string
- *                 description: Project ID. Required for JWT auth; omit when using a project key.
- *                 example: 'proj_V1StGXR8Z5jdHi6B'
- *               secretId:
- *                 type: string
- *                 description: Secret ID containing the provider credentials
- *                 example: 'sec_V1StGXR8Z5jdHi6B'
- *               name:
- *                 type: string
- *                 example: 'OpenAI Production'
- *               provider:
- *                 type: string
- *                 enum: [openai, anthropic, google, xai, groq, ollama, azure, bedrock, gateway, custom]
- *                 example: 'openai'
- *               defaultModel:
- *                 type: string
- *                 example: 'gpt-4o'
- *               baseUrl:
- *                 type: string
- *                 example: 'https://api.openai.com/v1'
- *               config:
- *                 type: object
- *                 description: Provider-specific configuration
- *     responses:
- *       '201':
- *         description: AI provider created
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AiProviderRecord'
- *       '400':
- *         description: Invalid request body
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '401':
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '403':
- *         description: Forbidden
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -310,69 +158,6 @@ aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
   ctx.body = provider;
 });
 
-/**
- * @openapi
- * /ai-providers/{aiProviderId}:
- *   patch:
- *     tags:
- *       - AI Providers
- *     summary: Update an AI provider
- *     description: Updates the configuration of an AI provider.
- *     operationId: updateAiProvider
- *     parameters:
- *       - name: aiProviderId
- *         in: path
- *         required: true
- *         description: AI Provider ID
- *         schema:
- *           type: string
- *           example: 'aip_V1StGXR8Z5jdHi6B'
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               secretId:
- *                 type: string
- *               name:
- *                 type: string
- *               provider:
- *                 type: string
- *                 enum: [openai, anthropic, google, xai, groq, ollama, azure, bedrock, gateway, custom]
- *               defaultModel:
- *                 type: string
- *               baseUrl:
- *                 type: string
- *               config:
- *                 type: object
- *     responses:
- *       '200':
- *         description: AI provider updated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AiProviderRecord'
- *       '401':
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '403':
- *         description: Forbidden
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '404':
- *         description: AI provider not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 aiProvidersRouter.patch('/ai-providers/:aiProviderId', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -435,45 +220,6 @@ aiProvidersRouter.patch('/ai-providers/:aiProviderId', async (ctx: Context) => {
   ctx.body = updated;
 });
 
-/**
- * @openapi
- * /ai-providers/{aiProviderId}:
- *   delete:
- *     tags:
- *       - AI Providers
- *     summary: Delete an AI provider
- *     description: Deletes an AI provider.
- *     operationId: deleteAiProvider
- *     parameters:
- *       - name: aiProviderId
- *         in: path
- *         required: true
- *         description: AI Provider ID
- *         schema:
- *           type: string
- *           example: 'aip_V1StGXR8Z5jdHi6B'
- *     responses:
- *       '204':
- *         description: AI provider deleted
- *       '401':
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '403':
- *         description: Forbidden
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       '404':
- *         description: AI provider not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 aiProvidersRouter.delete(
   '/ai-providers/:aiProviderId',
   async (ctx: Context) => {
