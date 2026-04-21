@@ -400,7 +400,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/GenerateConversationMessageResponse'
         '400':
           description: Invalid request
           content:
@@ -574,6 +574,10 @@ components:
           example:
             phone: '5511999998888'
             channel: 'whatsapp'
+        content:
+          type: string
+          nullable: true
+          description: Full text content of the message
     ConversationActorRecord:
       type: object
       properties:
@@ -605,6 +609,55 @@ components:
           type: string
           format: date-time
           description: Last update timestamp
+    GenerateConversationMessageResponse:
+      oneOf:
+        - type: object
+          required: [status, content, message, generationId, traceId]
+          properties:
+            status:
+              type: string
+              enum: [completed]
+              description: Indicates generation finished successfully.
+            content:
+              type: string
+              description: >
+                The AI-generated text of the reply. This is the canonical field
+                for the assistant's response text.
+              example: 'Hello! How can I help you today?'
+            message:
+              $ref: '#/components/schemas/ConversationMessageRecord'
+            generationId:
+              type: string
+              description: ID of the underlying generation record.
+              example: 'gen_V1StGXR8Z5jdHi6B'
+            traceId:
+              type: string
+              description: Trace ID for observability.
+              example: 'trc_V1StGXR8Z5jdHi6B'
+            model:
+              type: string
+              description: Model used for generation.
+              example: 'gpt-4o'
+        - type: object
+          required: [status, generationId, traceId, requiredAction]
+          properties:
+            status:
+              type: string
+              enum: [requires_action]
+              description: >
+                Indicates the agent requires tool-call outputs before it can
+                produce a reply. No message is persisted yet.
+            generationId:
+              type: string
+              description: ID of the paused generation. Pass to the tool-outputs endpoint.
+              example: 'gen_V1StGXR8Z5jdHi6B'
+            traceId:
+              type: string
+              description: Trace ID for observability.
+              example: 'trc_V1StGXR8Z5jdHi6B'
+            requiredAction:
+              type: object
+              description: Tool-call information the client must resolve.
     ErrorResponse:
       type: object
       properties:
