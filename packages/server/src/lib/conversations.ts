@@ -47,6 +47,7 @@ const mapMessage = (
     actorId: message.actor?.publicId,
     position: message.position,
     content,
+    metadata: message.metadata ?? null,
   };
 };
 
@@ -284,6 +285,7 @@ export const addConversationMessage = async (args: {
   message: string;
   actorId: string;
   position?: number;
+  metadata?: Record<string, unknown>;
 }) => {
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.conversationId },
@@ -351,6 +353,7 @@ export const addConversationMessage = async (args: {
         documentId: document.id,
         actorId: actor.id,
         position,
+        metadata: args.metadata ?? null,
       },
       { transaction: t }
     );
@@ -546,9 +549,19 @@ export const generateConversationMessage = async (args: {
       history.push({ role: 'assistant', content });
     } else {
       const speakerName = msg.actor?.name ?? 'participant';
+      const meta = (msg as { metadata?: Record<string, unknown> | null })
+        .metadata;
+      const metadataStr =
+        meta && Object.keys(meta).length > 0
+          ? ` [${Object.entries(meta)
+              .map(([k, v]) => {
+                return `${k}: ${v}`;
+              })
+              .join(', ')}]`
+          : '';
       history.push({
         role: 'user',
-        content: `[${speakerName}]: ${content}`,
+        content: `[${speakerName}]${metadataStr}: ${content}`,
       });
     }
   }

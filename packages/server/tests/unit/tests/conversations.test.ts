@@ -380,6 +380,45 @@ describe('Conversations', () => {
 
       expect(response.status).toBe(404);
     });
+
+    test('stores metadata and returns it in the response', async () => {
+      const metadata = { phone: '5511999998888', channel: 'whatsapp' };
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${conversationId}/messages`)
+        .send({ message: 'Message with metadata', actorId, metadata });
+
+      expect(response.status).toBe(201);
+      expect(response.body.metadata).toEqual(metadata);
+    });
+
+    test('returns null metadata when metadata is not provided', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${conversationId}/messages`)
+        .send({ message: 'Message without metadata', actorId });
+
+      expect(response.status).toBe(201);
+      expect(response.body.metadata).toBeNull();
+    });
+
+    test('metadata is persisted and returned in message list', async () => {
+      const metadata = { source: 'sms', externalId: 'msg_123' };
+      const addRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${conversationId}/messages`)
+        .send({ message: 'Persisted metadata', actorId, metadata });
+
+      expect(addRes.status).toBe(201);
+      const docId = addRes.body.documentId;
+
+      const listRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/conversations/${conversationId}/messages`
+      );
+      expect(listRes.status).toBe(200);
+      const found = listRes.body.data.find(
+        (m: { documentId: string }) => m.documentId === docId
+      );
+      expect(found).toBeDefined();
+      expect(found.metadata).toEqual(metadata);
+    });
   });
 
   describe('DELETE /api/v1/conversations/:id/messages/:documentId', () => {

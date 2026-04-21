@@ -27,12 +27,13 @@ Conversations are identified by an `id` prefixed with `conv_`. The internal data
 
 ### Conversation Message
 
-| Field        | Type    | Description                                                          |
-| ------------ | ------- | -------------------------------------------------------------------- |
-| `documentId` | string  | ID of the Document attached as a message                             |
-| `actorId`    | string  | ID of the Actor who authored the message                             |
-| `position`   | integer | Zero-based position of the message in the conversation               |
-| `content`    | string  | Full text content of the message (read from the underlying document) |
+| Field        | Type           | Description                                                                                                                |
+| ------------ | -------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `documentId` | string         | ID of the Document attached as a message                                                                                   |
+| `actorId`    | string         | ID of the Actor who authored the message                                                                                   |
+| `position`   | integer        | Zero-based position of the message in the conversation                                                                     |
+| `metadata`   | object \| null | Optional structured key-value data attached to the message (e.g. `phone`, `channel`). Injected into the AI prompt context. |
+| `content`    | string         | Full text content of the message (read from the underlying document)                                                       |
 
 The pair `(conversationId, position)` is uniquely indexed. See [Message ordering](#message-ordering) for insertion semantics.
 
