@@ -6,3 +6,5 @@
 
 # And keep the directory structure
 !*/
+
+!rest-api.md

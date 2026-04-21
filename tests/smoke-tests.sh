@@ -1186,5 +1186,87 @@ fi
 echo "Conversation-generate agent deleted."
 echo "Conversations generate coverage: OK"
 
+# ── Webhooks ──────────────────────────────────────────────────────────────
+
+echo ""
+echo "=== Webhooks ==="
+
+# Create webhook
+echo "--- Creating webhook ---"
+WEBHOOK_CREATE_RESP=$(curl -sf -X POST "$BASE_URL/projects/$PROJECT_PUBLIC_ID/webhooks" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"name":"Smoke Webhook","url":"https://example.com/smoke-hook","events":["file.*"]}')
+WEBHOOK_ID=$(echo "$WEBHOOK_CREATE_RESP" | jq -r '.id')
+if [ -z "$WEBHOOK_ID" ] || [ "$WEBHOOK_ID" = "null" ]; then
+  echo "ERROR: Failed to create webhook" >&2
+  echo "$WEBHOOK_CREATE_RESP" >&2
+  exit 1
+fi
+echo "Webhook created: $WEBHOOK_ID"
+
+# List webhooks
+echo "--- Listing webhooks ---"
+WEBHOOK_LIST_STATUS=$(curl -s -o /tmp/webhook_list.json -w "%{http_code}" "$BASE_URL/projects/$PROJECT_PUBLIC_ID/webhooks" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$WEBHOOK_LIST_STATUS" != "200" ]; then
+  echo "ERROR: LIST webhooks returned $WEBHOOK_LIST_STATUS, expected 200" >&2
+  exit 1
+fi
+echo "Webhooks listed."
+
+# Get webhook
+echo "--- Getting webhook ---"
+WEBHOOK_GET_STATUS=$(curl -s -o /tmp/webhook_get.json -w "%{http_code}" "$BASE_URL/projects/$PROJECT_PUBLIC_ID/webhooks/$WEBHOOK_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$WEBHOOK_GET_STATUS" != "200" ]; then
+  echo "ERROR: GET webhook returned $WEBHOOK_GET_STATUS, expected 200" >&2
+  exit 1
+fi
+echo "Webhook retrieved."
+
+# Update webhook
+echo "--- Updating webhook ---"
+WEBHOOK_UPDATE_STATUS=$(curl -s -o /tmp/webhook_update.json -w "%{http_code}" -X PUT "$BASE_URL/projects/$PROJECT_PUBLIC_ID/webhooks/$WEBHOOK_ID" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"name":"Updated Smoke Webhook","active":false}')
+if [ "$WEBHOOK_UPDATE_STATUS" != "200" ]; then
+  echo "ERROR: UPDATE webhook returned $WEBHOOK_UPDATE_STATUS, expected 200" >&2
+  exit 1
+fi
+echo "Webhook updated."
+
+# Rotate secret
+echo "--- Rotating webhook secret ---"
+WEBHOOK_ROTATE_STATUS=$(curl -s -o /tmp/webhook_rotate.json -w "%{http_code}" -X POST "$BASE_URL/projects/$PROJECT_PUBLIC_ID/webhooks/$WEBHOOK_ID/rotate-secret" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$WEBHOOK_ROTATE_STATUS" != "200" ]; then
+  echo "ERROR: ROTATE webhook secret returned $WEBHOOK_ROTATE_STATUS, expected 200" >&2
+  exit 1
+fi
+echo "Webhook secret rotated."
+
+# List deliveries
+echo "--- Listing webhook deliveries ---"
+WEBHOOK_DELIVERIES_STATUS=$(curl -s -o /tmp/webhook_deliveries.json -w "%{http_code}" "$BASE_URL/projects/$PROJECT_PUBLIC_ID/webhooks/$WEBHOOK_ID/deliveries" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$WEBHOOK_DELIVERIES_STATUS" != "200" ]; then
+  echo "ERROR: LIST webhook deliveries returned $WEBHOOK_DELIVERIES_STATUS, expected 200" >&2
+  exit 1
+fi
+echo "Webhook deliveries listed."
+
+# Delete webhook
+echo "--- Deleting webhook ---"
+WEBHOOK_DELETE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/projects/$PROJECT_PUBLIC_ID/webhooks/$WEBHOOK_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$WEBHOOK_DELETE_STATUS" != "204" ]; then
+  echo "ERROR: DELETE webhook returned $WEBHOOK_DELETE_STATUS, expected 204" >&2
+  exit 1
+fi
+echo "Webhook deleted."
+echo "Webhooks coverage: OK"
+
 echo ""
 echo "=== All smoke tests passed! ==="

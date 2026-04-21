@@ -28,7 +28,7 @@ First-class support for the [Model Context Protocol](https://modelcontextprotoco
 
 SOAT runs as a single Node.js server backed by PostgreSQL (with [pgvector](https://github.com/pgvector/pgvector) for embeddings). It exposes two interfaces:
 
-- **REST API** — Standard HTTP endpoints for all operations. See the [API Reference](/docs/api/rest-api) for details.
+- **REST API** — Standard HTTP endpoints for all operations. See the [API Reference](/docs/api) for details.
 - **MCP Server** — A Streamable HTTP transport that exposes the same operations as MCP tools.
 
 ### Modules

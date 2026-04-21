@@ -20,6 +20,8 @@ export const PUBLIC_ID_PREFIXES = {
   agentTool: 'agt_tool_',
   generation: 'agt_gen_',
   trace: 'agt_trace_',
+  webhook: 'whk_',
+  webhookDelivery: 'whd_',
 } as const;
 
 /**

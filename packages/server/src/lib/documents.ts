@@ -5,6 +5,7 @@ import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
 import { getEmbedding } from './embedding';
+import { emitEvent, resolveProjectPublicId } from './eventBus';
 
 const getStorageDir = () => {
   const dir = process.env.FILES_STORAGE_DIR;
@@ -148,18 +149,42 @@ export const createDocument = async (args: {
     ],
   });
 
-  return mapDocument(created!);
+  const mapped = mapDocument(created!);
+
+  if (created!.file?.project) {
+    emitEvent({
+      type: 'documents.created',
+      projectId: created!.file.project.id,
+      projectPublicId: created!.file.project.publicId,
+      resourceType: 'document',
+      resourceId: created!.publicId,
+      data: mapped as unknown as Record<string, unknown>,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  return mapped;
 };
 
 export const deleteDocument = async (args: { id: string }) => {
   const doc = await db.Document.findOne({
     where: { publicId: args.id },
-    include: [{ model: db.File, as: 'file' }],
+    include: [
+      {
+        model: db.File,
+        as: 'file',
+        include: [{ model: db.Project, as: 'project' }],
+      },
+    ],
   });
 
   if (!doc) {
     return null;
   }
+
+  const docPublicId = doc.publicId;
+  const projectId = doc.file?.project?.id;
+  const projectPublicId = doc.file?.project?.publicId;
 
   if (doc.file?.storagePath) {
     try {
@@ -172,6 +197,18 @@ export const deleteDocument = async (args: { id: string }) => {
   await doc.destroy();
   if (doc.file) {
     await doc.file.destroy();
+  }
+
+  if (projectId && projectPublicId) {
+    emitEvent({
+      type: 'documents.deleted',
+      projectId,
+      projectPublicId,
+      resourceType: 'document',
+      resourceId: docPublicId,
+      data: { id: docPublicId },
+      timestamp: new Date().toISOString(),
+    });
   }
 
   return true;
@@ -228,7 +265,21 @@ export const updateDocument = async (args: {
     ],
   });
 
-  return mapDocument(refreshed!);
+  const mapped = mapDocument(refreshed!);
+
+  if (refreshed!.file?.project) {
+    emitEvent({
+      type: 'documents.updated',
+      projectId: refreshed!.file.project.id,
+      projectPublicId: refreshed!.file.project.publicId,
+      resourceType: 'document',
+      resourceId: refreshed!.publicId,
+      data: mapped as unknown as Record<string, unknown>,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  return mapped;
 };
 
 export const searchDocuments = async (args: {
@@ -347,5 +398,19 @@ export const updateDocumentTags = async (args: {
     ],
   });
 
-  return mapDocument(refreshed!);
+  const tagsMapped = mapDocument(refreshed!);
+
+  if (refreshed!.file?.project) {
+    emitEvent({
+      type: 'documents.updated',
+      projectId: refreshed!.file.project.id,
+      projectPublicId: refreshed!.file.project.publicId,
+      resourceType: 'document',
+      resourceId: refreshed!.publicId,
+      data: tagsMapped as unknown as Record<string, unknown>,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  return tagsMapped;
 };

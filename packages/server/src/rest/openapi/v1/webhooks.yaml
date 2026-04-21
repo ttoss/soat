@@ -1,0 +1,405 @@
+openapi: 3.0.3
+info:
+  title: SOAT Webhooks API
+  version: 1.0.0
+servers:
+  - url: https://{host}/api/v1
+    description: Production (HTTPS)
+    variables:
+      host:
+        description: The hostname of your SOAT deployment
+        example: your-soat.com
+        default: your-soat.com
+  - url: http://{host}/api/v1
+    description: Development (HTTP)
+    variables:
+      host:
+        description: The hostname of your SOAT deployment
+        example: localhost:5047
+        default: localhost:5047
+paths:
+  /projects/{projectId}/webhooks:
+    get:
+      tags:
+        - Webhooks
+      summary: List webhooks for a project
+      operationId: listWebhooks
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A list of webhooks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Webhook'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags:
+        - Webhooks
+      summary: Create a webhook
+      operationId: createWebhook
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWebhookRequest'
+      responses:
+        '201':
+          description: Webhook created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookWithSecret'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /projects/{projectId}/webhooks/{webhookId}:
+    get:
+      tags:
+        - Webhooks
+      summary: Get a webhook
+      operationId: getWebhook
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Webhook details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Webhook not found
+    put:
+      tags:
+        - Webhooks
+      summary: Update a webhook
+      operationId: updateWebhook
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWebhookRequest'
+      responses:
+        '200':
+          description: Webhook updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Webhook not found
+    delete:
+      tags:
+        - Webhooks
+      summary: Delete a webhook
+      operationId: deleteWebhook
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Webhook deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Webhook not found
+
+  /projects/{projectId}/webhooks/{webhookId}/deliveries:
+    get:
+      tags:
+        - Webhooks
+      summary: List deliveries for a webhook
+      operationId: listWebhookDeliveries
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: A list of deliveries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryListResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Webhook not found
+
+  /projects/{projectId}/webhooks/{webhookId}/deliveries/{deliveryId}:
+    get:
+      tags:
+        - Webhooks
+      summary: Get a delivery
+      operationId: getWebhookDelivery
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: deliveryId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Delivery details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Delivery'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Delivery not found
+
+  /projects/{projectId}/webhooks/{webhookId}/rotate-secret:
+    post:
+      tags:
+        - Webhooks
+      summary: Rotate webhook secret
+      operationId: rotateWebhookSecret
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Secret rotated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookWithSecret'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Webhook not found
+
+components:
+  schemas:
+    Webhook:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        policyId:
+          type: string
+          nullable: true
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        url:
+          type: string
+        events:
+          type: array
+          items:
+            type: string
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    WebhookWithSecret:
+      allOf:
+        - $ref: '#/components/schemas/Webhook'
+        - type: object
+          properties:
+            secret:
+              type: string
+
+    CreateWebhookRequest:
+      type: object
+      required:
+        - name
+        - url
+        - events
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+        events:
+          type: array
+          items:
+            type: string
+        policyId:
+          type: string
+
+    UpdateWebhookRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+        events:
+          type: array
+          items:
+            type: string
+        active:
+          type: boolean
+        policyId:
+          type: string
+          nullable: true
+
+    Delivery:
+      type: object
+      properties:
+        id:
+          type: string
+        eventType:
+          type: string
+        payload:
+          type: object
+        status:
+          type: string
+          enum:
+            - pending
+            - success
+            - failed
+        statusCode:
+          type: integer
+          nullable: true
+        attempts:
+          type: integer
+        lastAttemptAt:
+          type: string
+          format: date-time
+          nullable: true
+        responseBody:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DeliveryListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Delivery'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer

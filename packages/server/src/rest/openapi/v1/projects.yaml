@@ -1,0 +1,227 @@
+openapi: 3.0.3
+info:
+  title: SOAT Projects API
+  version: 1.0.0
+  description: API for managing projects (Projects resource)
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: https://{host}/api/v1
+    description: Production (HTTPS)
+    variables:
+      host:
+        description: The hostname of your SOAT deployment
+        example: your-soat.com
+        default: your-soat.com
+  - url: http://{host}/api/v1
+    description: Development (HTTP)
+    variables:
+      host:
+        description: The hostname of your SOAT deployment
+        example: localhost:5047
+        default: localhost:5047
+paths:
+  /projects:
+    post:
+      tags:
+        - Projects
+      summary: Create a project
+      description: Creates a new project. Requires admin role.
+      operationId: createProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  example: My Project
+      responses:
+        '201':
+          description: Project created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: proj_V1StGXR8Z5jdHi6B
+                  name:
+                    type: string
+                  createdAt:
+                    type: string
+                    format: date-time
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (non-admin user)
+        '500':
+          description: Internal server error
+  /projects/{projectId}/policies:
+    get:
+      tags:
+        - Projects
+      summary: List project policies
+      description: Returns a list of policies for a project
+      operationId: listProjectPolicies
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Project ID
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: List of policies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    name:
+                      type: string
+                    description:
+                      type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Project not found
+    post:
+      tags:
+        - Projects
+      summary: Create a project policy
+      description: Creates a new policy for a project. Requires admin role.
+      operationId: createProjectPolicy
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Project ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - permissions
+              properties:
+                name:
+                  type: string
+                  example: Editor
+                description:
+                  type: string
+                permissions:
+                  type: array
+                  items:
+                    type: string
+                  example: ['files:ListFiles', 'files:CreateFile']
+                notPermissions:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Policy created successfully
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Project not found
+  /projects/{projectId}/policies/{policyId}:
+    get:
+      tags:
+        - Projects
+      summary: Get a project policy
+      description: Returns a specific policy
+      operationId: getProjectPolicy
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: policyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Policy details
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Policy not found
+    put:
+      tags:
+        - Projects
+      summary: Update a project policy
+      description: Updates an existing policy. Requires admin role.
+      operationId: updateProjectPolicy
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: policyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                document:
+                  type: object
+      responses:
+        '200':
+          description: Policy updated successfully
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Policy not found
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string

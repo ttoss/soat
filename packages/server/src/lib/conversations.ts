@@ -4,6 +4,7 @@ import { db } from '../db';
 import { createGeneration, type GenerationResult } from './agents';
 import { createChatCompletionForChat } from './chats';
 import { createDocument, deleteDocument } from './documents';
+import { emitEvent, resolveProjectPublicId } from './eventBus';
 
 const mapConversation = (
   conversation: InstanceType<(typeof db)['Conversation']> & {
@@ -138,7 +139,19 @@ export const createConversation = async (args: {
     ],
   });
 
-  return mapConversation(conversationWithAssociations!);
+  const mapped = mapConversation(conversationWithAssociations!);
+
+  emitEvent({
+    type: 'conversations.created',
+    projectId: conversationWithAssociations!.projectId,
+    projectPublicId: mapped.projectId!,
+    resourceType: 'conversation',
+    resourceId: mapped.id,
+    data: mapped as unknown as Record<string, unknown>,
+    timestamp: new Date().toISOString(),
+  });
+
+  return mapped;
 };
 
 export const updateConversation = async (args: {
@@ -169,7 +182,19 @@ export const updateConversation = async (args: {
     include: [{ model: db.Project, as: 'project' }],
   });
 
-  return mapConversation(updated!);
+  const mapped = mapConversation(updated!);
+
+  emitEvent({
+    type: 'conversations.updated',
+    projectId: updated!.projectId,
+    projectPublicId: mapped.projectId!,
+    resourceType: 'conversation',
+    resourceId: mapped.id,
+    data: mapped as unknown as Record<string, unknown>,
+    timestamp: new Date().toISOString(),
+  });
+
+  return mapped;
 };
 
 export const updateConversationStatus = async (args: {
@@ -191,7 +216,19 @@ export const updateConversationStatus = async (args: {
     include: [{ model: db.Project, as: 'project' }],
   });
 
-  return mapConversation(updatedConversation!);
+  const mapped = mapConversation(updatedConversation!);
+
+  emitEvent({
+    type: 'conversations.updated',
+    projectId: updatedConversation!.projectId,
+    projectPublicId: mapped.projectId!,
+    resourceType: 'conversation',
+    resourceId: mapped.id,
+    data: mapped as unknown as Record<string, unknown>,
+    timestamp: new Date().toISOString(),
+  });
+
+  return mapped;
 };
 
 export const deleteConversation = async (args: { id: string }) => {
@@ -203,7 +240,21 @@ export const deleteConversation = async (args: { id: string }) => {
     return null;
   }
 
+  const projectId = conversation.projectId;
+
   await conversation.destroy();
+
+  resolveProjectPublicId({ projectId }).then((projectPublicId) => {
+    emitEvent({
+      type: 'conversations.deleted',
+      projectId,
+      projectPublicId,
+      resourceType: 'conversation',
+      resourceId: args.id,
+      data: { id: args.id },
+      timestamp: new Date().toISOString(),
+    });
+  });
 
   return { id: args.id };
 };
@@ -243,7 +294,19 @@ export const updateConversationTags = async (args: {
     include: [{ model: db.Project, as: 'project' }],
   });
 
-  return mapConversation(updated!);
+  const mapped = mapConversation(updated!);
+
+  emitEvent({
+    type: 'conversations.updated',
+    projectId: updated!.projectId,
+    projectPublicId: mapped.projectId!,
+    resourceType: 'conversation',
+    resourceId: mapped.id,
+    data: mapped as unknown as Record<string, unknown>,
+    timestamp: new Date().toISOString(),
+  });
+
+  return mapped;
 };
 
 export const listConversationMessages = async (args: {
@@ -373,7 +436,26 @@ export const addConversationMessage = async (args: {
     ],
   });
 
-  return mapMessage(messageWithAssociations!);
+  const mapped = mapMessage(messageWithAssociations!);
+
+  resolveProjectPublicId({ projectId: conversation.projectId }).then(
+    (projectPublicId) => {
+      emitEvent({
+        type: 'conversations.message.created',
+        projectId: conversation.projectId,
+        projectPublicId,
+        resourceType: 'conversation_message',
+        resourceId: mapped.documentId,
+        data: {
+          ...mapped,
+          conversationId: args.conversationId,
+        } as unknown as Record<string, unknown>,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  );
+
+  return mapped;
 };
 
 export const removeConversationMessage = async (args: {
@@ -413,6 +495,23 @@ export const removeConversationMessage = async (args: {
   if (document.publicId) {
     await deleteDocument({ id: document.publicId });
   }
+
+  resolveProjectPublicId({ projectId: conversation.projectId }).then(
+    (projectPublicId) => {
+      emitEvent({
+        type: 'conversations.message.deleted',
+        projectId: conversation.projectId,
+        projectPublicId,
+        resourceType: 'conversation_message',
+        resourceId: args.documentId,
+        data: {
+          conversationId: args.conversationId,
+          documentId: args.documentId,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
+  );
 
   return { conversationId: args.conversationId, documentId: args.documentId };
 };
@@ -678,6 +777,25 @@ export const generateConversationMessage = async (args: {
 
   // Suppress unused-variable lint warnings for branches that don't use it
   void requiredAction;
+
+  resolveProjectPublicId({ projectId: conversation.projectId }).then(
+    (projectPublicId) => {
+      emitEvent({
+        type: 'conversations.message.generated',
+        projectId: conversation.projectId,
+        projectPublicId,
+        resourceType: 'conversation_message',
+        resourceId: persisted.documentId,
+        data: {
+          conversationId: args.conversationId,
+          actorId: args.actorId,
+          generationId,
+          traceId,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
+  );
 
   return {
     status: 'completed',

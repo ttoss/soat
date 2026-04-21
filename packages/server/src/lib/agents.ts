@@ -17,6 +17,7 @@ import {
 } from 'src/lib/iam';
 
 import { db } from '../db';
+import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { allSoatTools } from './soat-tools';
 
 // ── Path Parameter Interpolation ─────────────────────────────────────────
@@ -333,7 +334,22 @@ export const createAgent = async (args: {
     include: getAgentIncludes(),
   });
 
-  return mapAgent(created as unknown as Parameters<typeof mapAgent>[0]);
+  const mapped = mapAgent(
+    created as unknown as Parameters<typeof mapAgent>[0]
+  );
+
+  emitEvent({
+    type: 'agents.created',
+    projectId: args.projectId,
+    projectPublicId: (created as unknown as { project: { publicId: string } })
+      .project.publicId,
+    resourceType: 'agent',
+    resourceId: mapped.id,
+    data: mapped as unknown as Record<string, unknown>,
+    timestamp: new Date().toISOString(),
+  });
+
+  return mapped;
 };
 
 export const listAgents = async (args: {
@@ -439,7 +455,22 @@ export const updateAgent = async (args: {
     include: getAgentIncludes(),
   });
 
-  return mapAgent(updated as unknown as Parameters<typeof mapAgent>[0]);
+  const mapped = mapAgent(
+    updated as unknown as Parameters<typeof mapAgent>[0]
+  );
+
+  emitEvent({
+    type: 'agents.updated',
+    projectId: (agent as unknown as { projectId: number }).projectId,
+    projectPublicId: (updated as unknown as { project: { publicId: string } })
+      .project.publicId,
+    resourceType: 'agent',
+    resourceId: mapped.id,
+    data: mapped as unknown as Record<string, unknown>,
+    timestamp: new Date().toISOString(),
+  });
+
+  return mapped;
 };
 
 export const deleteAgent = async (args: {
@@ -466,6 +497,23 @@ export const deleteAgent = async (args: {
   );
 
   await agent.destroy();
+
+  const agentProjectId = (agent as unknown as { projectId: number }).projectId;
+
+  resolveProjectPublicId({ projectId: agentProjectId }).then(
+    (projectPublicId) => {
+      emitEvent({
+        type: 'agents.deleted',
+        projectId: agentProjectId,
+        projectPublicId,
+        resourceType: 'agent',
+        resourceId: args.id,
+        data: { id: args.id },
+        timestamp: new Date().toISOString(),
+      });
+    }
+  );
+
   return 'ok';
 };
 
@@ -1024,7 +1072,7 @@ export const createGeneration = async (args: {
       resolvedTools,
     });
 
-    return {
+    const requiresActionResult: GenerationResult = {
       id: generationId,
       traceId,
       status: 'requires_action',
@@ -1039,6 +1087,18 @@ export const createGeneration = async (args: {
         }),
       },
     };
+
+    emitEvent({
+      type: 'agents.generation.requires_action',
+      projectId: typedAgent.project.id as number,
+      projectPublicId: typedAgent.project.publicId,
+      resourceType: 'generation',
+      resourceId: generationId,
+      data: requiresActionResult as unknown as Record<string, unknown>,
+      timestamp: new Date().toISOString(),
+    });
+
+    return requiresActionResult;
   }
 
   traces.set(traceId, {
@@ -1050,7 +1110,7 @@ export const createGeneration = async (args: {
     steps: result.steps as unknown[],
   });
 
-  return {
+  const completedResult: GenerationResult = {
     id: generationId,
     traceId,
     status: 'completed',
@@ -1060,6 +1120,18 @@ export const createGeneration = async (args: {
       finishReason: result.finishReason,
     },
   };
+
+  emitEvent({
+    type: 'agents.generation.completed',
+    projectId: typedAgent.project.id as number,
+    projectPublicId: typedAgent.project.publicId,
+    resourceType: 'generation',
+    resourceId: generationId,
+    data: completedResult as unknown as Record<string, unknown>,
+    timestamp: new Date().toISOString(),
+  });
+
+  return completedResult;
 };
 
 export const submitToolOutputs = async (args: {
@@ -1123,7 +1195,7 @@ export const submitToolOutputs = async (args: {
     steps: result.steps as unknown[],
   });
 
-  return {
+  const completedResult: GenerationResult = {
     id: args.generationId,
     traceId: pending.traceId,
     status: 'completed',
@@ -1133,6 +1205,38 @@ export const submitToolOutputs = async (args: {
       finishReason: result.finishReason,
     },
   };
+
+  resolveProjectPublicId({ projectId: pending.projectId }).then(
+    (projectPublicId) => {
+      emitEvent({
+        type: 'agents.generation.completed',
+        projectId: pending.projectId,
+        projectPublicId,
+        resourceType: 'generation',
+        resourceId: args.generationId,
+        data: completedResult as unknown as Record<string, unknown>,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  );
+
+  return completedResult;
+
+  resolveProjectPublicId({ projectId: pending.projectId }).then(
+    (projectPublicId) => {
+      emitEvent({
+        type: 'agents.generation.completed',
+        projectId: pending.projectId,
+        projectPublicId,
+        resourceType: 'generation',
+        resourceId: args.generationId,
+        data: completedResult as unknown as Record<string, unknown>,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  );
+
+  return completedResult;
 };
 
 export const listTraces = async (_args: {

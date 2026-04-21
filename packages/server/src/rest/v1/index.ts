@@ -11,6 +11,7 @@ import { projectKeysRouter } from './projectKeys';
 import { projectsRouter } from './projects';
 import { secretsRouter } from './secrets';
 import { usersRouter } from './users';
+import { webhooksRouter } from './webhooks';
 
 const v1Router = new Router();
 
@@ -25,5 +26,6 @@ v1Router.use(filesRouter.routes());
 v1Router.use(projectsRouter.routes());
 v1Router.use(secretsRouter.routes());
 v1Router.use(usersRouter.routes());
+v1Router.use(webhooksRouter.routes());
 
 export { v1Router };

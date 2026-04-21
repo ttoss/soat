@@ -7,8 +7,20 @@ info:
     name: SOAT Team
     url: https://github.com/ttoss/soat
 servers:
-  - url: http://0.0.0.0:5047/api/v1
-    description: Development server
+  - url: https://{host}/api/v1
+    description: Production (HTTPS)
+    variables:
+      host:
+        description: The hostname of your SOAT deployment
+        example: your-soat.com
+        default: your-soat.com
+  - url: http://{host}/api/v1
+    description: Development (HTTP)
+    variables:
+      host:
+        description: The hostname of your SOAT deployment
+        example: localhost:5047
+        default: localhost:5047
 paths:
   /conversations:
     get:

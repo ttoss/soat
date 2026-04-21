@@ -13,3 +13,5 @@ export { ProjectPolicy } from './ProjectPolicy';
 export { Secret } from './Secret';
 export { User } from './User';
 export { UserProject } from './UserProject';
+export { Webhook } from './Webhook';
+export { WebhookDelivery } from './WebhookDelivery';

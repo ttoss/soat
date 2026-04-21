@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { db } from '../db';
+import { emitEvent, resolveProjectPublicId } from './eventBus';
 
 const getStorageDir = () => {
   const dir = process.env.FILES_STORAGE_DIR;
@@ -95,7 +96,23 @@ export const uploadFile = async (args: {
 
   await file.update({ storagePath, size: args.fileBuffer.length });
 
-  return mapFile(file);
+  const mapped = mapFile(file);
+
+  resolveProjectPublicId({ projectId: args.projectId }).then(
+    (projectPublicId) => {
+      emitEvent({
+        type: 'files.created',
+        projectId: args.projectId,
+        projectPublicId,
+        resourceType: 'file',
+        resourceId: file.publicId,
+        data: mapped as unknown as Record<string, unknown>,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  );
+
+  return mapped;
 };
 
 export const downloadFile = async (args: { id: string }) => {
@@ -143,7 +160,23 @@ export const updateFileMetadata = async (args: {
   }
 
   await file.update(updates);
-  return mapFile(file);
+  const mapped = mapFile(file);
+
+  resolveProjectPublicId({ projectId: file.projectId }).then(
+    (projectPublicId) => {
+      emitEvent({
+        type: 'files.updated',
+        projectId: file.projectId,
+        projectPublicId,
+        resourceType: 'file',
+        resourceId: file.publicId,
+        data: mapped as unknown as Record<string, unknown>,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  );
+
+  return mapped;
 };
 
 export const createFile = async (args: {
@@ -156,7 +189,23 @@ export const createFile = async (args: {
   metadata?: string;
 }) => {
   const file = await db.File.create(args);
-  return mapFile(file);
+  const mapped = mapFile(file);
+
+  resolveProjectPublicId({ projectId: args.projectId }).then(
+    (projectPublicId) => {
+      emitEvent({
+        type: 'files.created',
+        projectId: args.projectId,
+        projectPublicId,
+        resourceType: 'file',
+        resourceId: file.publicId,
+        data: mapped as unknown as Record<string, unknown>,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  );
+
+  return mapped;
 };
 
 export const deleteFile = async (args: { id: string }) => {
@@ -174,7 +223,25 @@ export const deleteFile = async (args: { id: string }) => {
     }
   }
 
+  const filePublicId = file.publicId;
+  const fileProjectId = file.projectId;
+
   await file.destroy();
+
+  resolveProjectPublicId({ projectId: fileProjectId }).then(
+    (projectPublicId) => {
+      emitEvent({
+        type: 'files.deleted',
+        projectId: fileProjectId,
+        projectPublicId,
+        resourceType: 'file',
+        resourceId: filePublicId,
+        data: { id: filePublicId },
+        timestamp: new Date().toISOString(),
+      });
+    }
+  );
+
   return true;
 };
 
@@ -204,5 +271,21 @@ export const updateFileTags = async (args: {
     : args.tags;
   await file.update({ tags: newTags });
 
-  return { ...mapFile(file), tags: newTags };
+  const mapped = { ...mapFile(file), tags: newTags };
+
+  resolveProjectPublicId({ projectId: file.projectId }).then(
+    (projectPublicId) => {
+      emitEvent({
+        type: 'files.updated',
+        projectId: file.projectId,
+        projectPublicId,
+        resourceType: 'file',
+        resourceId: file.publicId,
+        data: mapped as unknown as Record<string, unknown>,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  );
+
+  return mapped;
 };

@@ -538,4 +538,77 @@ describe('MCP tools - happy path', () => {
   });
 
   // create-agent-generation is skipped because it requires a live AI service.
+
+  // ── Webhooks ───────────────────────────────────────────────────────────
+
+  let webhookId: string;
+
+  test('create-webhook creates a webhook', async () => {
+    const res = await mcpCall('create-webhook', {
+      projectId,
+      name: 'MCP Webhook',
+      url: 'https://example.com/mcp-hook',
+      events: ['file.*'],
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBeDefined();
+    expect(result.name).toBe('MCP Webhook');
+    expect(result.secret).toBeDefined();
+    webhookId = result.id;
+  });
+
+  test('list-webhooks returns results', async () => {
+    const res = await mcpCall('list-webhooks', { projectId });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(Array.isArray(result)).toBe(true);
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  test('get-webhook returns the webhook', async () => {
+    const res = await mcpCall('get-webhook', { projectId, webhookId });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBe(webhookId);
+  });
+
+  test('update-webhook updates the webhook', async () => {
+    const res = await mcpCall('update-webhook', {
+      projectId,
+      webhookId,
+      name: 'MCP Webhook Updated',
+      active: false,
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.name).toBe('MCP Webhook Updated');
+    expect(result.active).toBe(false);
+  });
+
+  test('rotate-webhook-secret returns new secret', async () => {
+    const res = await mcpCall('rotate-webhook-secret', {
+      projectId,
+      webhookId,
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.secret).toBeDefined();
+  });
+
+  test('list-webhook-deliveries returns results', async () => {
+    const res = await mcpCall('list-webhook-deliveries', {
+      projectId,
+      webhookId,
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.data).toBeDefined();
+    expect(Array.isArray(result.data)).toBe(true);
+  });
+
+  test('delete-webhook deletes the webhook', async () => {
+    const res = await mcpCall('delete-webhook', { projectId, webhookId });
+    expect(res.status).toBe(200);
+  });
 });
