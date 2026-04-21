@@ -448,6 +448,8 @@ export const listConversationActors = async (args: {
 export type GenerateConversationMessageResult =
   | {
       status: 'completed';
+      /** AI-generated text of the reply. Always present when status is `completed`. */
+      content: string;
       message: ReturnType<typeof mapMessage>;
       generationId: string;
       traceId: string;
@@ -653,6 +655,7 @@ export const generateConversationMessage = async (args: {
 
   return {
     status: 'completed',
+    content: assistantContent,
     message: persisted,
     generationId,
     traceId,
