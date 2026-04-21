@@ -1375,7 +1375,7 @@ export interface operations {
                      */
                     type?: string;
                     /**
-                     * @description Optional external identifier (e.g. WhatsApp phone number). Must be unique within a project.
+                     * @description Optional external identifier (e.g. WhatsApp phone number). If provided and an actor with this externalId already exists in the project, the existing actor is returned (idempotent — 200 OK).
                      * @example +15551234567
                      */
                     externalId?: string;
@@ -1383,6 +1383,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Actor already exists — returned when externalId matches an existing actor in this project (idempotent) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActorRecord"];
+                };
+            };
             /** @description Actor created */
             201: {
                 headers: {

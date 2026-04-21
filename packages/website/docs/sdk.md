@@ -65,6 +65,19 @@ if (error) {
 }
 ```
 
+### `unwrap` helper
+
+The SDK also exports an `unwrap` helper that handles the discriminated-union response type for you. It throws if `error` is present and returns `data` with its full type intact — no `any` cast required:
+
+```ts
+import { createSoatClient, unwrap } from '@soat/sdk';
+
+const soat = createSoatClient({ baseUrl: '...', token: '...' });
+
+// `files` is fully typed — no `any` needed
+const files = unwrap(await soat.GET('/api/v1/files'));
+```
+
 For the full list of available paths, parameters, and response schemas for each module, see the **[API Reference](/docs/api/users/list-users)**.
 
 ---
