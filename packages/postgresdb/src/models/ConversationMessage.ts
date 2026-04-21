@@ -60,4 +60,7 @@ export class ConversationMessage extends Model {
 
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare position: number;
+
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare metadata: Record<string, unknown> | null;
 }

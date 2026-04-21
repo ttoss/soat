@@ -150,6 +150,7 @@ export const tools: SoatToolDefinition[] = [
         message: args.message,
         actorId: args.actorId,
         position: args.position,
+        metadata: args.metadata,
       };
     },
     inputSchema: {
@@ -164,6 +165,12 @@ export const tools: SoatToolDefinition[] = [
         position: {
           type: 'number',
           description: 'Position of the message (optional)',
+        },
+        metadata: {
+          type: 'object',
+          description:
+            'Optional structured metadata to attach to the message (e.g. phone number, channel)',
+          additionalProperties: true,
         },
       },
       required: ['id', 'message', 'actorId'],

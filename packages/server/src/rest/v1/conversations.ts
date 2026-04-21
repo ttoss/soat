@@ -714,6 +714,14 @@ conversationsRouter.get('/conversations/:id/messages', async (ctx: Context) => {
  *                 type: integer
  *                 description: Zero-based position. Defaults to MAX+1 (append).
  *                 example: 0
+ *               metadata:
+ *                 type: object
+ *                 description: Optional structured metadata to attach to the message (e.g. phone number, channel). Stored as-is and injected into the AI prompt context.
+ *                 nullable: true
+ *                 additionalProperties: true
+ *                 example:
+ *                   phone: '5511999998888'
+ *                   channel: 'whatsapp'
  *     responses:
  *       '201':
  *         description: Message added
@@ -759,6 +767,7 @@ conversationsRouter.post(
       message: string;
       actorId: string;
       position?: number;
+      metadata?: Record<string, unknown>;
     };
 
     if (!body.message) {
@@ -811,6 +820,7 @@ conversationsRouter.post(
       message: body.message,
       actorId: body.actorId,
       position: body.position,
+      metadata: body.metadata,
     });
 
     if (!message) {
