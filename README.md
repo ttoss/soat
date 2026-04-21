@@ -5,6 +5,7 @@
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![SafeSkill 92/100](https://img.shields.io/badge/SafeSkill-92%2F100_Verified%20Safe-brightgreen)](https://safeskill.dev/scan/ttoss-soat)
 
 **SOAT** is an open-source framework designed to provide persistent memory capabilities for autonomous AI agents. It orchestrates the ingestion, storage, and retrieval of context using semantic search and vector embeddings.
 
