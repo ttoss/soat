@@ -1312,6 +1312,10 @@ conversationsRouter.patch('/conversations/:id/tags', async (ctx: Context) => {
  *     responses:
  *       '200':
  *         description: Generation completed or requires_action
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/GenerateConversationMessageResponse'
  *       '400':
  *         description: Invalid request
  *       '401':

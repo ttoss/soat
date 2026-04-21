@@ -102,7 +102,20 @@ Flow:
 2. Compose the effective system prompt (see [Persona overrides](#persona-overrides)).
 3. Map each message to a model message: the generating actor's own prior messages become `assistant`, all other authors become `user`. `user` content is prefixed with the authoring actor's name (`"[Alice]: ..."`) to preserve multi-party attribution.
 4. Dispatch to the Agents module (if the actor has `agentId`) or the Chats module (if it has `chatId`), reusing their generation plumbing — including agent tools and the `requires_action` client-tool flow.
-5. On `completed`, a new Document is created and attached as the next message, authored by the generating actor. The response includes the new message plus `generationId` and `traceId`.
+5. On `completed`, a new Document is created and attached as the next message, authored by the generating actor. The response includes:
+   - **`content`** — the AI-generated text of the reply (the canonical field; always a `string`).
+   - `message` — the persisted `ConversationMessageRecord` (`documentId`, `actorId`, `position`, `content`).
+   - `generationId` and `traceId` for observability.
+   - `model` — the model name used for this generation.
+
+   ```ts
+   const { data } = await soat.POST('/api/v1/conversations/{id}/generate', {
+     params: { path: { id: conversationId } },
+     body: { actorId },
+   });
+   // data.content is always the AI-generated text when data.status === 'completed'
+   const responseText = data?.content;
+   ```
 6. On `requires_action` (agent client tools only), no message is persisted yet. Submit outputs via `POST /agents/:id/generate/:generationId/tool-outputs`; the resolved message is persisted on completion.
 
 Actors without `agentId` or `chatId` cannot generate and return `400`.

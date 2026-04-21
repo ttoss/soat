@@ -1133,6 +1133,8 @@ export interface components {
              * @example 0
              */
             position?: number;
+            /** @description Full text content of the message */
+            content?: string | null;
         };
         ConversationActorRecord: {
             /**
@@ -1170,6 +1172,52 @@ export interface components {
              * @description Last update timestamp
              */
             updatedAt?: string;
+        };
+        GenerateConversationMessageResponse: {
+            /**
+             * @description Indicates generation finished successfully.
+             * @enum {string}
+             */
+            status: "completed";
+            /**
+             * @description The AI-generated text of the reply. This is the canonical field for the assistant's response text.
+             * @example Hello! How can I help you today?
+             */
+            content: string;
+            message: components["schemas"]["ConversationMessageRecord"];
+            /**
+             * @description ID of the underlying generation record.
+             * @example gen_V1StGXR8Z5jdHi6B
+             */
+            generationId: string;
+            /**
+             * @description Trace ID for observability.
+             * @example trc_V1StGXR8Z5jdHi6B
+             */
+            traceId: string;
+            /**
+             * @description Model used for generation.
+             * @example gpt-4o
+             */
+            model?: string;
+        } | {
+            /**
+             * @description Indicates the agent requires tool-call outputs before it can produce a reply. No message is persisted yet.
+             * @enum {string}
+             */
+            status: "requires_action";
+            /**
+             * @description ID of the paused generation. Pass to the tool-outputs endpoint.
+             * @example gen_V1StGXR8Z5jdHi6B
+             */
+            generationId: string;
+            /**
+             * @description Trace ID for observability.
+             * @example trc_V1StGXR8Z5jdHi6B
+             */
+            traceId: string;
+            /** @description Tool-call information the client must resolve. */
+            requiredAction: Record<string, never>;
         };
         DocumentRecord: {
             /**
@@ -1375,7 +1423,7 @@ export interface operations {
                      */
                     type?: string;
                     /**
-                     * @description Optional external identifier (e.g. WhatsApp phone number). Must be unique within a project.
+                     * @description Optional external identifier (e.g. WhatsApp phone number). If provided and an actor with this externalId already exists in the project, the existing actor is returned (idempotent — 200 OK).
                      * @example +15551234567
                      */
                     externalId?: string;
@@ -1383,6 +1431,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Actor already exists — returned when externalId matches an existing actor in this project (idempotent) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActorRecord"];
+                };
+            };
             /** @description Actor created */
             201: {
                 headers: {
@@ -2941,7 +2998,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["GenerateConversationMessageResponse"];
                 };
             };
             /** @description Invalid request */

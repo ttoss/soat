@@ -131,8 +131,11 @@ await soat.POST('/api/v1/conversations/{id}/messages', {
 
 const { data: reply } = await soat.POST('/api/v1/conversations/{id}/generate', {
   params: { path: { id: conv.id } },
-  body: {},
+  body: { actorId: 'act_...' },
 });
+
+// reply.content is the canonical field for the AI-generated text
+const responseText = reply?.content;
 ```
 
 ### Chats
