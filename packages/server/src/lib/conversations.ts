@@ -8,11 +8,13 @@ import { createDocument, deleteDocument } from './documents';
 const mapConversation = (
   conversation: InstanceType<(typeof db)['Conversation']> & {
     project?: InstanceType<(typeof db)['Project']>;
+    actor?: InstanceType<(typeof db)['Actor']> | null;
   }
 ) => {
   return {
     id: conversation.publicId,
     projectId: conversation.project?.publicId,
+    actorId: conversation.actor?.publicId ?? null,
     name: conversation.name ?? null,
     status: conversation.status,
     tags: conversation.tags ?? undefined,
@@ -87,7 +89,10 @@ export const listConversations = async (args: {
 
   const { count, rows } = await db.Conversation.findAndCountAll({
     where: Object.keys(where).length > 0 ? where : undefined,
-    include: [{ model: db.Project, as: 'project' }],
+    include: [
+      { model: db.Project, as: 'project' },
+      { model: db.Actor, as: 'actor' },
+    ],
     limit,
     offset,
   });
@@ -98,7 +103,10 @@ export const listConversations = async (args: {
 export const getConversation = async (args: { id: string }) => {
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.id },
-    include: [{ model: db.Project, as: 'project' }],
+    include: [
+      { model: db.Project, as: 'project' },
+      { model: db.Actor, as: 'actor' },
+    ],
   });
 
   if (!conversation) {
@@ -112,16 +120,21 @@ export const createConversation = async (args: {
   projectId: number;
   status?: string;
   name?: string | null;
+  actorId?: number | null;
 }) => {
   const conversation = await db.Conversation.create({
     projectId: args.projectId,
     status: args.status ?? 'open',
     name: args.name ?? null,
+    actorId: args.actorId ?? null,
   });
 
   const conversationWithAssociations = await db.Conversation.findOne({
     where: { id: conversation.id },
-    include: [{ model: db.Project, as: 'project' }],
+    include: [
+      { model: db.Project, as: 'project' },
+      { model: db.Actor, as: 'actor' },
+    ],
   });
 
   return mapConversation(conversationWithAssociations!);

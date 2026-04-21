@@ -9,6 +9,7 @@ import {
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
+import { Actor } from './Actor';
 import { ConversationMessage } from './ConversationMessage';
 import { Project } from './Project';
 
@@ -57,6 +58,17 @@ export class Conversation extends Model {
     defaultValue: {},
   })
   declare tags: Record<string, string> | null;
+
+  @ForeignKey(() => {
+    return Actor;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare actorId: number | null;
+
+  @BelongsTo(() => {
+    return Actor;
+  })
+  declare actor: Actor | null;
 
   @HasMany(() => {
     return ConversationMessage;

@@ -291,6 +291,7 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
     projectId?: string;
     status?: string;
     name?: string | null;
+    actorId?: string | null;
   };
 
   let resolvedProjectPublicId = body.projectId;
@@ -323,10 +324,24 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
     return;
   }
 
+  let resolvedActorId: number | null = null;
+  if (body.actorId) {
+    const actor = await db.Actor.findOne({
+      where: { publicId: body.actorId },
+    });
+    if (!actor) {
+      ctx.status = 400;
+      ctx.body = { error: 'Invalid actor ID' };
+      return;
+    }
+    resolvedActorId = actor.id;
+  }
+
   const conversation = await createConversation({
     projectId: project.id,
     status: body.status,
     name: body.name ?? null,
+    actorId: resolvedActorId,
   });
 
   ctx.status = 201;

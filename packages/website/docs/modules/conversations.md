@@ -12,17 +12,18 @@ Conversations are identified by an `id` prefixed with `conv_`. The internal data
 
 ### Conversation
 
-| Field       | Type   | Description                                        |
-| ----------- | ------ | -------------------------------------------------- |
-| `id`        | string | Public identifier prefixed with `conv_`            |
-| `projectId` | string | ID of the owning project                           |
-| `name`      | string | Optional human-readable title for the conversation |
-| `status`    | string | Conversation status: `open` or `closed`            |
-| `tags`      | object | Free-form string tags                              |
-| `createdAt` | string | ISO 8601 creation timestamp                        |
-| `updatedAt` | string | ISO 8601 last-updated timestamp                    |
+| Field       | Type   | Description                                                        |
+| ----------- | ------ | ------------------------------------------------------------------ |
+| `id`        | string | Public identifier prefixed with `conv_`                            |
+| `projectId` | string | ID of the owning project                                           |
+| `name`      | string | Optional human-readable title for the conversation                 |
+| `status`    | string | Conversation status: `open` or `closed`                            |
+| `actorId`   | string | Optional ID of the Actor who **owns** this conversation (nullable) |
+| `tags`      | object | Free-form string tags                                              |
+| `createdAt` | string | ISO 8601 creation timestamp                                        |
+| `updatedAt` | string | ISO 8601 last-updated timestamp                                    |
 
-A conversation does not store a single `actorId`. Actors participate by authoring messages. Use `GET /conversations/:id/actors` to list the distinct participants.
+`actorId` identifies the **owner** of the conversation — typically the external contact who initiated the thread (e.g. a WhatsApp contact). This is a direct ownership reference set at creation time and is distinct from message authorship: multiple actors can still participate by sending messages. Use `GET /conversations/:id/actors` to list all distinct message participants.
 
 ### Conversation Message
 
