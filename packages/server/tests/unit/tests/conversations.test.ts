@@ -94,6 +94,45 @@ describe('Conversations', () => {
 
       expect(response.status).toBe(400);
     });
+
+    test('can create a conversation with a valid actorId', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ projectId, actorId });
+
+      expect(response.status).toBe(201);
+      expect(response.body.actorId).toBe(actorId);
+    });
+
+    test('creates a new conversation even when same actorId used again', async () => {
+      const first = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ projectId, actorId });
+      const second = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ projectId, actorId });
+
+      expect(first.status).toBe(201);
+      expect(second.status).toBe(201);
+      expect(first.body.id).not.toBe(second.body.id);
+    });
+
+    test('actorId is null when not provided', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ projectId });
+
+      expect(response.status).toBe(201);
+      expect(response.body.actorId).toBeNull();
+    });
+
+    test('invalid actorId returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ projectId, actorId: 'act_nonexistent' });
+
+      expect(response.status).toBe(400);
+    });
   });
 
   describe('GET /api/v1/conversations', () => {

@@ -75,6 +75,15 @@ paths:
                   enum: [open, closed]
                   default: open
                   description: Initial conversation status
+                name:
+                  type: string
+                  nullable: true
+                  description: Optional name for the conversation
+                actorId:
+                  type: string
+                  nullable: true
+                  description: Actor ID to associate with this conversation
+                  example: 'act_V1StGXR8Z5jdHi6B'
       responses:
         '201':
           description: Conversation created
@@ -529,6 +538,11 @@ components:
           type: string
           format: date-time
           description: Last update timestamp
+        actorId:
+          type: string
+          nullable: true
+          description: Actor ID associated with this conversation
+          example: 'act_V1StGXR8Z5jdHi6B'
     ConversationMessageRecord:
       type: object
       properties:
