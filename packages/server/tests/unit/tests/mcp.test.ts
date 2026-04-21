@@ -532,6 +532,9 @@ describe('MCP tools - happy path', () => {
   test('delete-agent-tool deletes the tool', async () => {
     const res = await mcpCall('delete-agent-tool', { toolId: agentToolId });
     expect(res.status).toBe(200);
+    const text = res.body.result?.content?.[0]?.text;
+    expect(typeof text).toBe('string');
+    expect(text.length).toBeGreaterThan(0);
   });
 
   // create-agent-generation is skipped because it requires a live AI service.

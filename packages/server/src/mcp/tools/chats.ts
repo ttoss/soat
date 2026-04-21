@@ -13,7 +13,9 @@ const registerTools = (server: McpServer) => {
         const data = await apiCall(def.method, def.path(args), {
           body: def.body?.(args),
         });
-        return { content: [{ type: 'text', text: JSON.stringify(data) }] };
+        const text =
+          data != null ? JSON.stringify(data) : 'Deleted successfully.';
+        return { content: [{ type: 'text', text }] };
       },
     });
   }
