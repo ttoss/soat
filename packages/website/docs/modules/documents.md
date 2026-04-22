@@ -1,10 +1,14 @@
-# Documents Module
+---
+sidebar_position: 5
+---
 
-The Documents module stores plain-text documents along with an embedding vector in PostgreSQL, enabling semantic (vector) search across project content. Under the hood each document is backed by a Files record stored on disk.
+# Documents
+
+The Documents module stores plain-text documents along with an embedding vector in PostgreSQL, enabling semantic (vector) search across project content. Under the hood each document is backed by a [Files](./files.md) record stored on disk.
 
 ## Overview
 
-A Document IS a File — it always uses `.txt` format and is associated with a project. When a document is created, its text content is passed to a configured embedding provider (currently Ollama only), and the resulting vector is stored alongside the text. This allows cosine-similarity search at query time without an external vector database.
+A Document IS a [File](./files.md) — it always uses `.txt` format and is associated with a project. When a document is created, its text content is passed to a configured embedding provider (currently Ollama only), and the resulting vector is stored alongside the text. This allows cosine-similarity search at query time without an external vector database.
 
 Documents are identified by an `id` prefixed with `doc_`. The internal database primary key is never returned.
 

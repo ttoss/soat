@@ -11,6 +11,8 @@ export { Project } from './Project';
 export { ProjectKey } from './ProjectKey';
 export { ProjectPolicy } from './ProjectPolicy';
 export { Secret } from './Secret';
+export { Session } from './Session';
+export { Session } from './Session';
 export { User } from './User';
 export { UserProject } from './UserProject';
 export { Webhook } from './Webhook';

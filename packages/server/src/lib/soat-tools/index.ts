@@ -9,6 +9,7 @@ import { tools as documentTools } from './documents';
 import { tools as fileTools } from './files';
 import { tools as projectTools } from './projects';
 import { tools as secretTools } from './secrets';
+import { tools as sessionTools } from './sessions';
 import { tools as webhookTools } from './webhooks';
 
 export const allSoatTools = [
@@ -21,5 +22,6 @@ export const allSoatTools = [
   ...documentTools,
   ...fileTools,
   ...secretTools,
+  ...sessionTools,
   ...webhookTools,
 ];

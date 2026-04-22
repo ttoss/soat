@@ -1,3 +1,7 @@
+---
+sidebar_position: 8
+---
+
 # Chats
 
 The Chats module provides both a stateless completions endpoint and a stateful Chat resource. A Chat stores the AI provider, an optional default system message, and an optional model override so callers only need to pass the conversation history per request.

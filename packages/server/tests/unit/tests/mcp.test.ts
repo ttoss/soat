@@ -611,4 +611,66 @@ describe('MCP tools - happy path', () => {
     const res = await mcpCall('delete-webhook', { projectId, webhookId });
     expect(res.status).toBe(200);
   });
+
+  // ── Sessions ─────────────────────────────────────────────────────────────
+
+  let agentId: string;
+  let sessionId: string;
+
+  test('create agent for session tests', async () => {
+    const res = await mcpCall('create-agent', {
+      projectId,
+      aiProviderId: chatAiProviderId,
+      name: 'MCP Session Agent',
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBeDefined();
+    agentId = result.id;
+  });
+
+  test('create-agent-session creates a session', async () => {
+    const res = await mcpCall('create-agent-session', {
+      agentId,
+      name: 'MCP Test Session',
+      userExternalId: 'mcp-user-1',
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toMatch(/^sess_/);
+    expect(result.agentId).toBe(agentId);
+    expect(result.conversationId).toBeDefined();
+    sessionId = result.id;
+  });
+
+  test('list-agent-sessions returns sessions', async () => {
+    const res = await mcpCall('list-agent-sessions', { agentId });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(Array.isArray(result)).toBe(true);
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  test('get-agent-session returns session details', async () => {
+    const res = await mcpCall('get-agent-session', { agentId, sessionId });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBe(sessionId);
+    expect(result.name).toBe('MCP Test Session');
+  });
+
+  test('list-agent-session-messages returns messages', async () => {
+    const res = await mcpCall('list-agent-session-messages', {
+      agentId,
+      sessionId,
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  test('delete-agent-session deletes the session', async () => {
+    const res = await mcpCall('delete-agent-session', { agentId, sessionId });
+    expect(res.status).toBe(200);
+  });
 });

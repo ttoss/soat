@@ -1,4 +1,8 @@
-# Secrets Module
+---
+sidebar_position: 3
+---
+
+# Secrets
 
 The Secrets module provides encrypted storage for sensitive values such as API keys and credentials. Values are encrypted at rest using AES-256-GCM and are never returned by any API response.
 
