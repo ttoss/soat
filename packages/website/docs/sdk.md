@@ -53,17 +53,21 @@ await soat.DELETE('/api/v1/files/{id}', {
 });
 ```
 
-Every call returns `{ data, error, response }`. Check `error` before using `data`:
+Every call returns `{ data, error, response }`. **Always destructure `{ data, error }` and check for errors first before using `data`:**
 
 ```ts
 const { data, error } = await soat.GET('/api/v1/files');
 
 if (error) {
-  console.error('Request failed:', error.message);
-} else {
-  console.log(data); // fully typed
+  // Handle the error: throw, return, or log
+  throw new Error(error.message);
 }
+
+// Now you can safely use data
+console.log(data); // fully typed
 ```
+
+**Important:** Never use `data` without checking `error` first. Use early returns or throws to handle errors appropriately.
 
 For the full list of available paths, parameters, and response schemas for each module, see the **[API Reference](/docs/api/users/list-users)**.
 
@@ -76,13 +80,21 @@ For the full list of available paths, parameters, and response schemas for each 
 Bootstrap the first admin user and create additional users. → [Full Users API](/docs/api/users/list-users)
 
 ```ts
-await soat.POST('/api/v1/users/bootstrap', {
+const { error: bootstrapError } = await soat.POST('/api/v1/users/bootstrap', {
   body: { username: 'admin', password: 'supersecret' },
 });
 
-const { data: user } = await soat.POST('/api/v1/users', {
+if (bootstrapError) {
+  throw new Error(bootstrapError.message);
+}
+
+const { data: user, error: userError } = await soat.POST('/api/v1/users', {
   body: { username: 'alice', password: 'alicepass' },
 });
+
+if (userError) {
+  throw new Error(userError.message);
+}
 ```
 
 ### Files
@@ -92,13 +104,27 @@ Upload and download files. → [Full Files API](/docs/api/files/list-files)
 ```ts
 const form = new FormData();
 form.append('file', fileBlob, 'report.pdf');
-const { data: file } = await soat.POST('/api/v1/files/upload', {
-  body: form,
-});
+const { data: file, error: uploadError } = await soat.POST(
+  '/api/v1/files/upload',
+  {
+    body: form,
+  }
+);
 
-const { data: content } = await soat.GET('/api/v1/files/{id}/download', {
-  params: { path: { id: file.id } },
-});
+if (uploadError) {
+  throw new Error(uploadError.message);
+}
+
+const { data: content, error: downloadError } = await soat.GET(
+  '/api/v1/files/{id}/download',
+  {
+    params: { path: { id: file.id } },
+  }
+);
+
+if (downloadError) {
+  throw new Error(downloadError.message);
+}
 ```
 
 ### Documents
@@ -106,13 +132,24 @@ const { data: content } = await soat.GET('/api/v1/files/{id}/download', {
 Create and semantically search text documents. → [Full Documents API](/docs/api/documents/list-documents)
 
 ```ts
-await soat.POST('/api/v1/documents', {
+const { error: createError } = await soat.POST('/api/v1/documents', {
   body: { title: 'Q1 Report', content: 'Revenue grew 20%...' },
 });
 
-const { data: results } = await soat.POST('/api/v1/documents/search', {
-  body: { query: 'revenue growth', limit: 5 },
-});
+if (createError) {
+  throw new Error(createError.message);
+}
+
+const { data: results, error: searchError } = await soat.POST(
+  '/api/v1/documents/search',
+  {
+    body: { query: 'revenue growth', limit: 5 },
+  }
+);
+
+if (searchError) {
+  throw new Error(searchError.message);
+}
 ```
 
 ### Conversations
@@ -120,19 +157,40 @@ const { data: results } = await soat.POST('/api/v1/documents/search', {
 Multi-turn conversations with AI-generated replies. → [Full Conversations API](/docs/api/conversations/list-conversations)
 
 ```ts
-const { data: conv } = await soat.POST('/api/v1/conversations', {
-  body: { title: 'Support thread' },
-});
+const { data: conv, error: convError } = await soat.POST(
+  '/api/v1/conversations',
+  {
+    body: { title: 'Support thread' },
+  }
+);
 
-await soat.POST('/api/v1/conversations/{id}/messages', {
-  params: { path: { id: conv.id } },
-  body: { role: 'user', content: 'How do I reset my password?' },
-});
+if (convError) {
+  throw new Error(convError.message);
+}
 
-const { data: reply } = await soat.POST('/api/v1/conversations/{id}/generate', {
-  params: { path: { id: conv.id } },
-  body: { actorId: 'act_...' },
-});
+const { error: msgError } = await soat.POST(
+  '/api/v1/conversations/{id}/messages',
+  {
+    params: { path: { id: conv.id } },
+    body: { role: 'user', content: 'How do I reset my password?' },
+  }
+);
+
+if (msgError) {
+  throw new Error(msgError.message);
+}
+
+const { data: reply, error: genError } = await soat.POST(
+  '/api/v1/conversations/{id}/generate',
+  {
+    params: { path: { id: conv.id } },
+    body: { actorId: 'act_...' },
+  }
+);
+
+if (genError) {
+  throw new Error(genError.message);
+}
 
 // reply.content is the canonical field for the AI-generated text
 const responseText = reply?.content;
@@ -144,18 +202,37 @@ Stateless one-shot completions or stateful chat sessions. → [Full Chats API](/
 
 ```ts
 // Stateless
-const { data } = await soat.POST('/api/v1/chats/completions', {
-  body: { messages: [{ role: 'user', content: 'Summarize this.' }] },
-});
+const { data, error: completionError } = await soat.POST(
+  '/api/v1/chats/completions',
+  {
+    body: { messages: [{ role: 'user', content: 'Summarize this.' }] },
+  }
+);
+
+if (completionError) {
+  throw new Error(completionError.message);
+}
 
 // Stateful
-const { data: chat } = await soat.POST('/api/v1/chats', {
+const { data: chat, error: chatError } = await soat.POST('/api/v1/chats', {
   body: { systemMessage: 'You are a helpful assistant.' },
 });
-const { data: reply } = await soat.POST('/api/v1/chats/{chatId}/completions', {
-  params: { path: { chatId: chat.id } },
-  body: { content: 'Hello!' },
-});
+
+if (chatError) {
+  throw new Error(chatError.message);
+}
+
+const { data: reply, error: replyError } = await soat.POST(
+  '/api/v1/chats/{chatId}/completions',
+  {
+    params: { path: { chatId: chat.id } },
+    body: { content: 'Hello!' },
+  }
+);
+
+if (replyError) {
+  throw new Error(replyError.message);
+}
 ```
 
 ### Agents
@@ -163,19 +240,32 @@ const { data: reply } = await soat.POST('/api/v1/chats/{chatId}/completions', {
 Autonomous AI workers with tool use and multi-step execution. → [Full Agents API](/docs/modules/agents)
 
 ```ts
-const { data: agent } = await soat.POST('/api/v1/agents', {
+const { data: agent, error: agentError } = await soat.POST('/api/v1/agents', {
   body: { name: 'my-agent', instructions: 'You are a helpful assistant.' },
 });
 
-const { data: gen } = await soat.POST('/api/v1/agents/{agentId}/generate', {
-  params: { path: { agentId: agent.id } },
-  body: { messages: [{ role: 'user', content: 'What files are available?' }] },
-});
+if (agentError) {
+  throw new Error(agentError.message);
+}
+
+const { data: gen, error: genError } = await soat.POST(
+  '/api/v1/agents/{agentId}/generate',
+  {
+    params: { path: { agentId: agent.id } },
+    body: {
+      messages: [{ role: 'user', content: 'What files are available?' }],
+    },
+  }
+);
+
+if (genError) {
+  throw new Error(genError.message);
+}
 
 // Handle client-side tool calls
 if (gen.status === 'requires_action') {
   const toolCall = gen.requiredAction.toolCalls[0];
-  await soat.POST(
+  const { error: toolError } = await soat.POST(
     '/api/v1/agents/{agentId}/generate/{generationId}/tool-outputs',
     {
       params: { path: { agentId: agent.id, generationId: gen.id } },
@@ -184,6 +274,10 @@ if (gen.status === 'requires_action') {
       },
     }
   );
+
+  if (toolError) {
+    throw new Error(toolError.message);
+  }
 }
 ```
 
@@ -192,7 +286,11 @@ if (gen.status === 'requires_action') {
 Participants (human or AI) that can be attached to conversations. → [Full Actors API](/docs/api/actors/list-actors)
 
 ```ts
-const { data: actor } = await soat.POST('/api/v1/actors', {
+const { data: actor, error: actorError } = await soat.POST('/api/v1/actors', {
   body: { name: 'Support Bot', type: 'ai' },
 });
+
+if (actorError) {
+  throw new Error(actorError.message);
+}
 ```
