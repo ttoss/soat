@@ -101,9 +101,9 @@ Internal database IDs must never appear in responses — assert `id` maps to `pu
 
 ## Spying on Modules Loaded at App Startup
 
-Some lib modules (e.g., `agents.ts`, `conversations.ts`) are loaded transitively by `app.ts` during `setupFilesAfterEnv`. This happens **before** any test file executes, which means `jest.mock(...)` — even though it is hoisted by Babel — creates a *new* mock object that is never seen by the already-loaded module. As a result, the original function is still called and the mock is silently ignored.
+Some lib modules (e.g., `agents.ts`, `conversations.ts`) are loaded transitively by `app.ts` during `setupFilesAfterEnv`. This happens **before** any test file executes, which means `jest.mock(...)` — even though it is hoisted by Babel — creates a _new_ mock object that is never seen by the already-loaded module. As a result, the original function is still called and the mock is silently ignored.
 
-**Do not use `jest.mock` for modules that are transitively imported by `app.ts`.** Use `jest.spyOn` instead. `jest.spyOn` mutates a property on the *existing* exports object, which is the same reference held by every module that imported it at startup.
+**Do not use `jest.mock` for modules that are transitively imported by `app.ts`.** Use `jest.spyOn` instead. `jest.spyOn` mutates a property on the _existing_ exports object, which is the same reference held by every module that imported it at startup.
 
 ### Pattern
 
@@ -124,7 +124,11 @@ describe('something that pauses async work', () => {
               id: 'gen_01',
               traceId: 'trc_01',
               status: 'completed',
-              output: { model: 'test-model', content: 'Hello', finishReason: 'stop' },
+              output: {
+                model: 'test-model',
+                content: 'Hello',
+                finishReason: 'stop',
+              },
             });
         })
     );
@@ -141,6 +145,11 @@ describe('something that pauses async work', () => {
 - **Always `jest.restoreAllMocks()` in `afterEach`** (or call `.mockRestore()` on the spy). Without this, the spy persists and corrupts other tests.
 - **Never use `jest.mock(path, factory)` for a path that is transitively required by `app.ts`**. Identify such modules by tracing the import chain: `app.ts` → routers → lib modules. Any module on that chain must be spied on, not mocked.
 - When the target function is used in a fire-and-forget async path (e.g., `.catch(() => {})`), poll for a side-effect (e.g., a flag set inside the mock, or a DB column change) rather than awaiting the call directly.
+
+### Async Coordination Pitfalls
+
+- **Supertest requests are lazy.** A request built with `.post(...).send(...)` does not reliably start server processing until it is consumed (for example with `await`, `.then(...)`, or `.end(...)`). In coordination tests, start the request first, then await your synchronization signal.
+- **Prefer Promise-based signaling over timer polling.** In tests that may run alongside fake timers, avoid `setTimeout`/`setImmediate` polling loops. Use a Promise signal (for example `signalStarted` / `started`) triggered inside the mocked function to coordinate progress deterministically.
 
 ## MCP Tool Tests
 

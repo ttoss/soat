@@ -34,6 +34,8 @@ const mapSession = (
     name: session.name ?? null,
     actorId: session.userActor?.publicId ?? null,
     tags: session.tags ?? undefined,
+    autoGenerate: session.autoGenerate ?? false,
+    generatingAt: session.generatingAt ?? null,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
   };
@@ -44,6 +46,7 @@ export const createSession = async (args: {
   agentId: number;
   name?: string | null;
   actorId?: string | null;
+  autoGenerate?: boolean;
 }) => {
   const sequelize = db.sequelize;
 
@@ -107,6 +110,7 @@ export const createSession = async (args: {
         userActorId: userActor.id,
         status: 'open',
         name: args.name ?? null,
+        autoGenerate: args.autoGenerate ?? false,
       },
       { transaction: t }
     );
@@ -220,6 +224,7 @@ export const updateSession = async (args: {
   sessionId: string;
   name?: string | null;
   status?: string;
+  autoGenerate?: boolean;
 }) => {
   const session = await db.Session.findOne({
     where: { publicId: args.sessionId, agentId: args.agentId },
@@ -235,6 +240,10 @@ export const updateSession = async (args: {
 
   if (args.status !== undefined) {
     session.status = args.status;
+  }
+
+  if (args.autoGenerate !== undefined) {
+    session.autoGenerate = args.autoGenerate;
   }
 
   await session.save();
@@ -410,6 +419,13 @@ export const addSessionMessage = async (args: {
     return 'session_not_found' as const;
   }
 
+  if (session.autoGenerate && !session.generatingAt) {
+    return generateSessionResponse({
+      agentId: args.agentId,
+      sessionId: args.sessionId,
+    });
+  }
+
   return { role: 'user' as const, content: args.message };
 };
 
@@ -451,6 +467,20 @@ export const generateSessionResponse = async (args: {
   }
 
   await session.update({ generatingAt: new Date() });
+
+  resolveProjectPublicId({ projectId: session.projectId }).then(
+    (projectPublicId) => {
+      emitEvent({
+        type: 'sessions.generation.started',
+        projectId: session.projectId,
+        projectPublicId,
+        resourceType: 'session',
+        resourceId: session.publicId,
+        data: { sessionId: session.publicId },
+        timestamp: new Date().toISOString(),
+      });
+    }
+  );
 
   let result: Awaited<ReturnType<typeof generateConversationMessage>>;
 

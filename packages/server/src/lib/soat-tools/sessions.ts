@@ -12,6 +12,7 @@ export const tools: SoatToolDefinition[] = [
       return {
         name: args.name,
         actorId: args.actorId,
+        autoGenerate: args.autoGenerate,
       };
     },
     inputSchema: {
@@ -23,6 +24,11 @@ export const tools: SoatToolDefinition[] = [
           type: 'string',
           description:
             'Optional public ID of an existing actor to use as the user actor',
+        },
+        autoGenerate: {
+          type: 'boolean',
+          description:
+            'When true, automatically triggers generation after each user message if no generation is in progress',
         },
       },
       required: ['agentId'],
@@ -104,8 +110,10 @@ export const tools: SoatToolDefinition[] = [
   {
     name: 'add-agent-session-message',
     description:
-      'Save a user message to a session without triggering generation. ' +
-      'Call generate-agent-session-response afterwards to get the agent reply.',
+      'Save a user message to a session. When autoGenerate is enabled on the ' +
+      'session and no generation is in progress, generation is triggered automatically ' +
+      'and the response mirrors generate-agent-session-response. Otherwise returns the ' +
+      'saved user message. Call generate-agent-session-response manually when autoGenerate is off.',
     method: 'POST',
     path: (args) => {
       return `/agents/${args.agentId}/sessions/${args.sessionId}/messages`;

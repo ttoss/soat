@@ -610,4 +610,150 @@ describe('Sessions', () => {
       });
     });
   });
+
+  describe('autoGenerate', () => {
+    let autoSessionId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ autoGenerate: true });
+      autoSessionId = res.body.id;
+    });
+
+    beforeEach(() => {
+      jest.useRealTimers();
+    });
+
+    test('create session with autoGenerate returns autoGenerate: true', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/${autoSessionId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.autoGenerate).toBe(true);
+    });
+
+    test('PATCH session toggles autoGenerate', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${agentId}/sessions/${autoSessionId}`)
+        .send({ autoGenerate: false });
+      expect(res.status).toBe(200);
+      expect(res.body.autoGenerate).toBe(false);
+
+      // restore
+      await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${agentId}/sessions/${autoSessionId}`)
+        .send({ autoGenerate: true });
+    });
+
+    describe('POST /messages with autoGenerate=true (idle session)', () => {
+      let resolveGeneration: (() => void) | undefined;
+      let generationStarted: Promise<void>;
+      let signalGenerationStarted: () => void;
+
+      beforeEach(() => {
+        generationStarted = new Promise<void>((r) => {
+          signalGenerationStarted = r;
+        });
+        jest.spyOn(agentsModule, 'createGeneration').mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              signalGenerationStarted();
+              resolveGeneration = () =>
+                resolve({
+                  id: 'gen_auto_01',
+                  traceId: 'trc_auto_01',
+                  status: 'completed',
+                  output: {
+                    model: 'test-model',
+                    content: 'Auto reply',
+                    finishReason: 'stop',
+                  },
+                });
+            })
+        );
+      });
+
+      afterEach(() => {
+        jest.restoreAllMocks();
+      });
+
+      test('triggers generation and returns generation result', async () => {
+        // Ensure session is idle (no generatingAt)
+        const sessionRes = await authenticatedTestClient(userToken).get(
+          `/api/v1/agents/${agentId}/sessions/${autoSessionId}`
+        );
+        expect(sessionRes.body.generatingAt).toBeNull();
+
+        // Calling .then() immediately starts the HTTP request without waiting for
+        // the response, so the server begins processing and eventually calls
+        // createGeneration — necessary before we can await generationStarted.
+        const messagePromise = authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${agentId}/sessions/${autoSessionId}/messages`)
+          .send({ message: 'Trigger auto-gen' })
+          .then((r) => r);
+
+        // Wait for mock to be entered using Promise signaling (timer-independent)
+        await generationStarted;
+        resolveGeneration!();
+
+        const res = await messagePromise;
+        expect(res.status).toBe(201);
+        // When autoGenerate fires, response should have generation fields
+        expect(res.body).toHaveProperty('generationId');
+        expect(res.body.status).toBe('completed');
+      });
+    });
+
+    describe('POST /messages with autoGenerate=true but busy session', () => {
+      let busySessionId: string;
+
+      beforeAll(async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${agentId}/sessions`)
+          .send({ autoGenerate: true });
+        busySessionId = res.body.id;
+      });
+
+      afterEach(() => {
+        jest.restoreAllMocks();
+      });
+
+      test('returns saved user message when generation is already in progress', async () => {
+        let signalGenerationStarted!: () => void;
+        const generationStarted = new Promise<void>((r) => {
+          signalGenerationStarted = r;
+        });
+
+        jest.spyOn(agentsModule, 'createGeneration').mockImplementation(
+          () =>
+            new Promise(() => {
+              // Signal that createGeneration was called (generatingAt is already
+              // set in DB before this point), then never resolve to keep session busy
+              signalGenerationStarted();
+            })
+        );
+
+        // Trigger async generation to set generatingAt in the background
+        await authenticatedTestClient(userToken)
+          .post(
+            `/api/v1/agents/${agentId}/sessions/${busySessionId}/generate?async=true`
+          )
+          .expect(202);
+
+        // Wait for createGeneration to be called via Promise signaling (timer-independent).
+        // By the time createGeneration is called, generatingAt is already set in DB.
+        await generationStarted;
+
+        // Now add a message while generation is in progress
+        const res = await authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${agentId}/sessions/${busySessionId}/messages`)
+          .send({ message: 'Message while busy' });
+
+        expect(res.status).toBe(201);
+        expect(res.body.role).toBe('user');
+        expect(res.body.content).toBe('Message while busy');
+      });
+    });
+  });
 });

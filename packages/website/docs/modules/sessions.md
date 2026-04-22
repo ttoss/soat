@@ -8,11 +8,13 @@ sidebar_position: 11
 
 Sessions provide a simplified **1 user ↔ 1 agent** conversational interface. They are a sub-resource of [Agents](./agents.md), nested under `/agents/:agentId/sessions`, and hide the underlying Conversation, Actor, and generation plumbing.
 
-With sessions, interacting with an agent is reduced to three API calls:
+By default, interacting with an agent requires three API calls:
 
 1. **Create a session** — `POST /agents/:agentId/sessions`
 2. **Save a user message** — `POST /agents/:agentId/sessions/:sessionId/messages` (returns 201, does not trigger generation)
 3. **Generate a response** — `POST /agents/:agentId/sessions/:sessionId/generate` (triggers the LLM, returns the assistant reply)
+
+When `autoGenerate` is enabled on the session, step 3 is handled automatically — `POST .../messages` saves the message and returns the assistant reply in one call, reducing the flow to two API calls.
 
 The session automatically creates and manages the underlying conversation, agent actor, and user actor.
 
@@ -42,21 +44,39 @@ Sessions support arbitrary key-value metadata via the `tags` JSONB field. Tags c
 
 Each session exposes its `conversationId`, allowing advanced users to drop into the full [Conversations](./conversations.md) API when multi-party or lower-level control is needed.
 
+### Auto-Generate
+
+When `autoGenerate` is set to `true` on a session, `POST .../messages` saves the user message **and** automatically triggers LLM generation in the same request. The response body contains the assistant reply instead of just the saved user message.
+
+This collapses the three-call flow into two calls: create a session, then send messages.
+
+`autoGenerate` defaults to `false`. It can be set at session creation or toggled at any time:
+
+```http
+PATCH /agents/:agentId/sessions/:sessionId
+Content-Type: application/json
+
+{ "autoGenerate": false }
+```
+
+The explicit `POST .../generate` endpoint continues to work regardless of this setting. Async generation (`?async=true`) is also supported on `POST .../messages` when `autoGenerate` is enabled — the request returns `202 Accepted` immediately and generation proceeds in the background.
+
 ## Data Model
 
 ### Session
 
-| Field            | Type   | Description                                    |
-| ---------------- | ------ | ---------------------------------------------- |
-| `id`             | string | Public identifier prefixed with `sess_`        |
-| `agentId`        | string | Public ID of the agent this session belongs to |
-| `conversationId` | string | Public ID of the underlying conversation       |
-| `status`         | string | `open` (default) or `closed`                   |
-| `name`           | string | Optional display name                          |
-| `actorId`        | string | Public ID of the user actor (`actr_` prefix)   |
-| `tags`           | object | Free-form key-value metadata                   |
-| `createdAt`      | string | ISO 8601 creation timestamp                    |
-| `updatedAt`      | string | ISO 8601 last-updated timestamp                |
+| Field            | Type    | Description                                                                                                    |
+| ---------------- | ------- | -------------------------------------------------------------------------------------------------------------- |
+| `id`             | string  | Public identifier prefixed with `sess_`                                                                        |
+| `agentId`        | string  | Public ID of the agent this session belongs to                                                                 |
+| `conversationId` | string  | Public ID of the underlying conversation                                                                       |
+| `status`         | string  | `open` (default) or `closed`                                                                                   |
+| `name`           | string  | Optional display name                                                                                          |
+| `actorId`        | string  | Public ID of the user actor (`actr_` prefix)                                                                   |
+| `tags`           | object  | Free-form key-value metadata                                                                                   |
+| `autoGenerate`   | boolean | When `true`, saving a message via `POST .../messages` automatically triggers LLM generation (default: `false`) |
+| `createdAt`      | string  | ISO 8601 creation timestamp                                                                                    |
+| `updatedAt`      | string  | ISO 8601 last-updated timestamp                                                                                |
 
 ### Message (within a session)
 
@@ -123,6 +143,7 @@ The following events are dispatched to project webhooks as sessions change state
 | `sessions.deleted`                    | A session is deleted                                   |
 | `sessions.generation.completed`       | LLM generation finished successfully                   |
 | `sessions.generation.requires_action` | LLM returned a client-tool call requiring tool outputs |
+| `sessions.generation.started`         | LLM generation has started for a session               |
 
 All events include `sessionId`. Generation events additionally include `generationId` and `traceId` in the `data` payload.
 

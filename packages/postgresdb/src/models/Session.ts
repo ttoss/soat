@@ -92,7 +92,7 @@ export class Session extends Model {
   )
   declare userActor: Actor;
 
-  @Column({ Value: 'open' })
+  @Column({ defaultValue: 'open' })
   declare status: string;
 
   @Column({ type: DataType.STRING, allowNull: true })
@@ -105,8 +105,16 @@ export class Session extends Model {
   })
   declare tags: Record<string, string> | null;
 
-  @Column({ type: DataType.DATE, allowNull: true })
+  @Column({ type: DataType.DATE, allowNull: true, field: 'generating_at' })
   declare generatingAt: Date | null;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'auto_generate',
+  })
+  declare autoGenerate: boolean;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

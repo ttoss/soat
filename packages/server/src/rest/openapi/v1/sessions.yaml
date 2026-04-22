@@ -247,8 +247,10 @@ paths:
         - Sessions
       summary: Add a user message
       description: >
-        Saves a user message to the session without triggering generation.
-        Use POST .../generate afterwards to trigger the agent response.
+        Saves a user message to the session. When autoGenerate is enabled on the
+        session and no generation is currently in progress, generation is triggered
+        automatically and the response mirrors GenerateSessionResponse. Otherwise
+        returns the saved user message.
       operationId: addSessionMessage
       security:
         - bearerAuth: []
@@ -533,6 +535,15 @@ components:
           type: object
           additionalProperties:
             type: string
+        autoGenerate:
+          type: boolean
+          default: false
+          description: When true, automatically triggers generation after each user message (if no generation is in progress).
+        generatingAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the current generation started, or null if not generating.
         createdAt:
           type: string
           format: date-time
@@ -568,6 +579,10 @@ components:
           type: string
           description: Optional public ID of an existing actor to use as the user actor
           example: actr_V1StGXR8Z5jdHi6B
+        autoGenerate:
+          type: boolean
+          default: false
+          description: When true, automatically triggers generation after each user message.
 
     UpdateSessionRequest:
       type: object
@@ -580,6 +595,9 @@ components:
           type: string
           enum: [open, closed]
           description: Session status
+        autoGenerate:
+          type: boolean
+          description: Enable or disable automatic generation after user messages.
 
     AddSessionMessageRequest:
       type: object
@@ -592,13 +610,16 @@ components:
           example: Hello, how can I deploy my app?
 
     AddSessionMessageResponse:
-      type: object
-      properties:
-        role:
-          type: string
-          enum: [user]
-        content:
-          type: string
+      oneOf:
+        - type: object
+          description: Message saved; auto-generate is off or a generation is already in progress.
+          properties:
+            role:
+              type: string
+              enum: [user]
+            content:
+              type: string
+        - $ref: '#/components/schemas/GenerateSessionResponse'
 
     GenerateSessionRequest:
       type: object

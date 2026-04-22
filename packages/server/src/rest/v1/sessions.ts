@@ -93,6 +93,7 @@ sessionsRouter.post('/', async (ctx: Context) => {
   const body = ctx.request.body as {
     name?: string;
     actorId?: string;
+    autoGenerate?: boolean;
   };
 
   const result = await createSession({
@@ -100,6 +101,7 @@ sessionsRouter.post('/', async (ctx: Context) => {
     agentId: agent.id as number,
     name: body.name,
     actorId: body.actorId,
+    autoGenerate: body.autoGenerate,
   });
 
   if (result === 'agent_not_found') {
@@ -345,6 +347,7 @@ sessionsRouter.patch('/:sessionId', async (ctx: Context) => {
   const body = ctx.request.body as {
     name?: string | null;
     status?: string;
+    autoGenerate?: boolean;
   };
 
   const result = await updateSession({
@@ -352,6 +355,7 @@ sessionsRouter.patch('/:sessionId', async (ctx: Context) => {
     sessionId: ctx.params.sessionId,
     name: body.name,
     status: body.status,
+    autoGenerate: body.autoGenerate,
   });
 
   if (!result) {
