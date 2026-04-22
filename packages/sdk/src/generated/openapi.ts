@@ -234,6 +234,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ai-providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List AI providers
+         * @description Returns a list of AI provider configurations for a project
+         */
+        get: operations["listAiProviders"];
+        put?: never;
+        /**
+         * Create an AI provider
+         * @description Creates a new LLM provider configuration
+         */
+        post: operations["createAiProvider"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ai-providers/{aiProviderId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an AI provider
+         * @description Returns a specific AI provider configuration
+         */
+        get: operations["getAiProvider"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an AI provider
+         * @description Deletes an AI provider configuration
+         */
+        delete: operations["deleteAiProvider"];
+        options?: never;
+        head?: never;
+        /**
+         * Update an AI provider
+         * @description Updates an AI provider configuration
+         */
+        patch: operations["updateAiProvider"];
+        trace?: never;
+    };
     "/chats": {
         parameters: {
             query?: never;
@@ -637,6 +689,318 @@ export interface paths {
         patch: operations["updateFileMetadata"];
         trace?: never;
     };
+    "/project-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a project key
+         * @description Creates a new API key for programmatic access to a project
+         */
+        post: operations["createProjectKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/project-keys/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a project key
+         * @description Returns details of a project key
+         */
+        get: operations["getProjectKey"];
+        /**
+         * Update a project key
+         * @description Updates an existing project key's policy
+         */
+        put: operations["updateProjectKey"];
+        post?: never;
+        /**
+         * Delete a project key
+         * @description Deletes a project key
+         */
+        delete: operations["deleteProjectKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a project
+         * @description Creates a new project. Requires admin role.
+         */
+        post: operations["createProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List project policies
+         * @description Returns a list of policies for a project
+         */
+        get: operations["listProjectPolicies"];
+        put?: never;
+        /**
+         * Create a project policy
+         * @description Creates a new policy for a project. Requires admin role.
+         */
+        post: operations["createProjectPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/policies/{policyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a project policy
+         * @description Returns a specific policy
+         */
+        get: operations["getProjectPolicy"];
+        /**
+         * Update a project policy
+         * @description Updates an existing policy. Requires admin role.
+         */
+        put: operations["updateProjectPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List secrets
+         * @description Returns a list of secrets for a project
+         */
+        get: operations["listSecrets"];
+        put?: never;
+        /**
+         * Create a secret
+         * @description Creates a new encrypted secret in a project
+         */
+        post: operations["createSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/secrets/{secretId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a secret
+         * @description Returns a specific secret
+         */
+        get: operations["getSecret"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a secret
+         * @description Deletes a secret
+         */
+        delete: operations["deleteSecret"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a secret
+         * @description Updates a secret's name and/or value
+         */
+        patch: operations["updateSecret"];
+        trace?: never;
+    };
+    "/agents/{agentId}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List sessions
+         * @description Returns sessions for the specified agent, optionally filtered by actorId and status.
+         */
+        get: operations["listSessions"];
+        put?: never;
+        /**
+         * Create a session
+         * @description Creates a new session for the specified agent. Internally creates a conversation and two actors (agent + user) so the caller only needs this single call to start interacting with the agent.
+         */
+        post: operations["createSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/sessions/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a session
+         * @description Returns details of a single session.
+         */
+        get: operations["getSession"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a session
+         * @description Deletes the session and its underlying conversation and actors.
+         */
+        delete: operations["deleteSession"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a session
+         * @description Updates the session name and/or status.
+         */
+        patch: operations["updateSession"];
+        trace?: never;
+    };
+    "/agents/{agentId}/sessions/{sessionId}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List session messages
+         * @description Returns messages in the session with simplified roles (user/assistant) instead of raw actor IDs.
+         */
+        get: operations["listSessionMessages"];
+        put?: never;
+        /**
+         * Add a user message
+         * @description Saves a user message to the session without triggering generation. Use POST .../generate afterwards to trigger the agent response.
+         */
+        post: operations["addSessionMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/sessions/{sessionId}/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger agent generation
+         * @description Triggers the agent to generate a response based on the current conversation. Returns the assistant reply or a requires_action status if the agent needs client tool outputs. Pass ?async=true for a 202 accepted response when you do not need to wait for the result.
+         */
+        post: operations["generateSessionResponse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/sessions/{sessionId}/tool-outputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit tool outputs
+         * @description Submits client tool outputs for a generation that returned requires_action. The agent continues its loop and returns the final or next requires_action result.
+         */
+        post: operations["submitSessionToolOutputs"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/sessions/{sessionId}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get session tags
+         * @description Returns the session's tags object.
+         */
+        get: operations["getSessionTags"];
+        /**
+         * Replace session tags
+         * @description Replaces all tags on the session.
+         */
+        put: operations["replaceSessionTags"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Merge session tags
+         * @description Merges the provided tags into the session's existing tags.
+         */
+        patch: operations["mergeSessionTags"];
+        trace?: never;
+    };
     "/users": {
         parameters: {
             query?: never;
@@ -695,6 +1059,94 @@ export interface paths {
          * @description Creates the first admin user. Returns 409 if any user already exists.
          */
         post: operations["bootstrapUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List webhooks for a project */
+        get: operations["listWebhooks"];
+        put?: never;
+        /** Create a webhook */
+        post: operations["createWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/webhooks/{webhookId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a webhook */
+        get: operations["getWebhook"];
+        /** Update a webhook */
+        put: operations["updateWebhook"];
+        post?: never;
+        /** Delete a webhook */
+        delete: operations["deleteWebhook"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/webhooks/{webhookId}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List deliveries for a webhook */
+        get: operations["listWebhookDeliveries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/webhooks/{webhookId}/deliveries/{deliveryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a delivery */
+        get: operations["getWebhookDelivery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/webhooks/{webhookId}/rotate-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate webhook secret */
+        post: operations["rotateWebhookSecret"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1116,6 +1568,11 @@ export interface components {
              * @description Last update timestamp
              */
             updatedAt?: string;
+            /**
+             * @description Actor ID associated with this conversation
+             * @example act_V1StGXR8Z5jdHi6B
+             */
+            actorId?: string | null;
         };
         ConversationMessageRecord: {
             /**
@@ -1133,6 +1590,16 @@ export interface components {
              * @example 0
              */
             position?: number;
+            /**
+             * @description Optional structured metadata attached to the message
+             * @example {
+             *       "phone": "5511999998888",
+             *       "channel": "whatsapp"
+             *     }
+             */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
             /** @description Full text content of the message */
             content?: string | null;
         };
@@ -1304,6 +1771,149 @@ export interface components {
              */
             updatedAt?: string;
         };
+        SessionRecord: {
+            /**
+             * @description Session public ID
+             * @example sess_V1StGXR8Z5jdHi6B
+             */
+            id?: string;
+            /**
+             * @description Agent public ID
+             * @example agt_V1StGXR8Z5jdHi6B
+             */
+            agentId?: string;
+            /**
+             * @description Underlying conversation public ID
+             * @example conv_V1StGXR8Z5jdHi6B
+             */
+            conversationId?: string;
+            /**
+             * @example open
+             * @enum {string}
+             */
+            status?: "open" | "closed";
+            /** @example Support chat */
+            name?: string | null;
+            /**
+             * @description Public ID of the user actor
+             * @example actr_V1StGXR8Z5jdHi6B
+             */
+            actorId?: string | null;
+            tags?: {
+                [key: string]: string;
+            };
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        SessionMessage: {
+            /** @enum {string} */
+            role?: "user" | "assistant" | "unknown";
+            content?: string;
+            documentId?: string | null;
+            position?: number;
+            metadata?: Record<string, never> | null;
+        };
+        CreateSessionRequest: {
+            /**
+             * @description Optional session name
+             * @example Support chat
+             */
+            name?: string;
+            /**
+             * @description Optional public ID of an existing actor to use as the user actor
+             * @example actr_V1StGXR8Z5jdHi6B
+             */
+            actorId?: string;
+        };
+        UpdateSessionRequest: {
+            /** @description Session name (set to null to clear) */
+            name?: string | null;
+            /**
+             * @description Session status
+             * @enum {string}
+             */
+            status?: "open" | "closed";
+        };
+        AddSessionMessageRequest: {
+            /**
+             * @description User message text
+             * @example Hello, how can I deploy my app?
+             */
+            message: string;
+        };
+        AddSessionMessageResponse: {
+            /** @enum {string} */
+            role?: "user";
+            content?: string;
+        };
+        GenerateSessionRequest: {
+            /**
+             * @description Optional model override
+             * @example gpt-4o
+             */
+            model?: string;
+        };
+        GenerateSessionResponse: {
+            /** @enum {string} */
+            status?: "completed" | "requires_action";
+            message?: {
+                role?: string;
+                content?: string;
+                model?: string;
+            };
+            generationId?: string;
+            traceId?: string;
+            /** @description Present when status is requires_action */
+            requiredAction?: {
+                toolCalls?: {
+                    id?: string;
+                    name?: string;
+                    arguments?: Record<string, never>;
+                }[];
+            };
+        };
+        SendSessionMessageRequest: {
+            /**
+             * @description User message text
+             * @example Hello, how can I deploy my app?
+             */
+            message: string;
+            /**
+             * @description Optional model override
+             * @example gpt-4o
+             */
+            model?: string;
+        };
+        SendSessionMessageResponse: {
+            /** @enum {string} */
+            status?: "completed" | "requires_action";
+            message?: {
+                role?: string;
+                content?: string;
+                model?: string;
+            };
+            generationId?: string;
+            traceId?: string;
+            /** @description Present when status is requires_action */
+            requiredAction?: {
+                toolCalls?: {
+                    id?: string;
+                    name?: string;
+                    arguments?: Record<string, never>;
+                }[];
+            };
+        };
+        SubmitSessionToolOutputsRequest: {
+            /** @description The generation ID from the requires_action response */
+            generationId: string;
+            toolOutputs: {
+                toolCallId: string;
+                /** @description The tool output value */
+                output: unknown;
+            }[];
+        };
         UserRecord: {
             /**
              * @description Public user ID (usr_ prefix)
@@ -1328,6 +1938,60 @@ export interface components {
              */
             updatedAt?: string;
         };
+        Webhook: {
+            id?: string;
+            projectId?: string;
+            policyId?: string | null;
+            name?: string;
+            description?: string | null;
+            url?: string;
+            events?: string[];
+            active?: boolean;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        WebhookWithSecret: components["schemas"]["Webhook"] & {
+            secret?: string;
+        };
+        CreateWebhookRequest: {
+            name: string;
+            description?: string;
+            url: string;
+            events: string[];
+            policyId?: string;
+        };
+        UpdateWebhookRequest: {
+            name?: string;
+            description?: string;
+            url?: string;
+            events?: string[];
+            active?: boolean;
+            policyId?: string | null;
+        };
+        Delivery: {
+            id?: string;
+            eventType?: string;
+            payload?: Record<string, never>;
+            /** @enum {string} */
+            status?: "pending" | "success" | "failed";
+            statusCode?: number | null;
+            attempts?: number;
+            /** Format: date-time */
+            lastAttemptAt?: string | null;
+            responseBody?: string | null;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        DeliveryListResponse: {
+            data?: components["schemas"]["Delivery"][];
+            total?: number;
+            limit?: number;
+            offset?: number;
+        };
     };
     responses: {
         /** @description Authentication required */
@@ -1349,8 +2013,22 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
+        /** @description Not found */
+        NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
     };
-    parameters: never;
+    parameters: {
+        /** @description Agent public ID */
+        AgentId: string;
+        /** @description Session public ID */
+        SessionId: string;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -2283,6 +2961,310 @@ export interface operations {
             };
         };
     };
+    listAiProviders: {
+        parameters: {
+            query?: {
+                /** @description Project ID (required if not using project key auth) */
+                projectId?: string;
+                /** @description Number of results per page */
+                limit?: number;
+                /** @description Number of results to skip */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of AI providers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id?: string;
+                        name?: string;
+                        /** @enum {string} */
+                        provider?: "openai" | "anthropic" | "google" | "cohere" | "mistral";
+                        defaultModel?: string;
+                        projectId?: string;
+                        /** Format: date-time */
+                        createdAt?: string;
+                    }[];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createAiProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description Project ID (required if not using project key auth)
+                     * @example proj_V1StGXR8Z5jdHi6B
+                     */
+                    projectId?: string;
+                    /**
+                     * @description Provider configuration name
+                     * @example OpenAI Production
+                     */
+                    name: string;
+                    /**
+                     * @description LLM provider
+                     * @example openai
+                     * @enum {string}
+                     */
+                    provider: "openai" | "anthropic" | "google" | "cohere" | "mistral";
+                    /**
+                     * @description Default model to use
+                     * @example gpt-4
+                     */
+                    defaultModel: string;
+                    /**
+                     * @description Secret ID containing API credentials
+                     * @example secret_V1StGXR8Z5jdHi6B
+                     */
+                    secretId?: string;
+                    /** @description Custom base URL for the provider */
+                    baseUrl?: string;
+                    /** @description Additional provider-specific configuration */
+                    config?: Record<string, never>;
+                };
+            };
+        };
+        responses: {
+            /** @description AI provider created successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id?: string;
+                        name?: string;
+                        provider?: string;
+                        defaultModel?: string;
+                        projectId?: string;
+                        /** Format: date-time */
+                        createdAt?: string;
+                    };
+                };
+            };
+            /** @description Bad request (invalid provider or missing fields) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getAiProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description AI Provider ID */
+                aiProviderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description AI provider details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id?: string;
+                        name?: string;
+                        provider?: string;
+                        defaultModel?: string;
+                        projectId?: string;
+                        secretId?: string;
+                        baseUrl?: string;
+                        config?: Record<string, never>;
+                        /** Format: date-time */
+                        createdAt?: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description AI provider not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteAiProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description AI Provider ID */
+                aiProviderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description AI provider deleted successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description AI provider not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateAiProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description AI Provider ID */
+                aiProviderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name?: string;
+                    defaultModel?: string;
+                    secretId?: string;
+                    baseUrl?: string;
+                    config?: Record<string, never>;
+                };
+            };
+        };
+        responses: {
+            /** @description AI provider updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description AI provider not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     listChats: {
         parameters: {
             query?: {
@@ -2632,6 +3614,13 @@ export interface operations {
                      * @enum {string}
                      */
                     status?: "open" | "closed";
+                    /** @description Optional name for the conversation */
+                    name?: string | null;
+                    /**
+                     * @description Actor ID to associate with this conversation
+                     * @example act_V1StGXR8Z5jdHi6B
+                     */
+                    actorId?: string | null;
                 };
             };
         };
@@ -2919,6 +3908,16 @@ export interface operations {
                      * @example 0
                      */
                     position?: number;
+                    /**
+                     * @description Optional structured metadata to attach to the message (e.g. phone number, channel). Stored as-is and injected into the AI prompt context.
+                     * @example {
+                     *       "phone": "5511999998888",
+                     *       "channel": "whatsapp"
+                     *     }
+                     */
+                    metadata?: {
+                        [key: string]: unknown;
+                    } | null;
                 };
             };
         };
@@ -3717,6 +4716,1191 @@ export interface operations {
             };
         };
     };
+    createProjectKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description Project ID
+                     * @example proj_V1StGXR8Z5jdHi6B
+                     */
+                    projectId: string;
+                    /**
+                     * @description Policy ID that determines the key's permissions
+                     * @example policy_abc123
+                     */
+                    policyId: string;
+                    /**
+                     * @description Key name for identification
+                     * @example CI/CD Pipeline
+                     */
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Project key created successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /**
+                         * @description The API key ID (to use as bearer token)
+                         * @example SDK_V1StGXR8Z5jdHi6B
+                         */
+                        id?: string;
+                        name?: string;
+                        projectId?: string;
+                        /** Format: date-time */
+                        createdAt?: string;
+                    };
+                };
+            };
+            /** @description Bad request (missing fields, invalid project/policy) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden (not a project member) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getProjectKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Project key details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id?: string;
+                        name?: string;
+                        projectId?: string;
+                        /** Format: date-time */
+                        createdAt?: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden (not the key owner) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Project key not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateProjectKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description New policy ID */
+                    policyId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Project key updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad request (invalid policy) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden (not the key owner) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Project key not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteProjectKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Project key deleted successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden (not the key owner) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Project key not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @example My Project */
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Project created successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example proj_V1StGXR8Z5jdHi6B */
+                        id?: string;
+                        name?: string;
+                        /** Format: date-time */
+                        createdAt?: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden (non-admin user) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listProjectPolicies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project ID */
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of policies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id?: string;
+                        name?: string;
+                        description?: string;
+                    }[];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Project not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createProjectPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project ID */
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @example Editor */
+                    name: string;
+                    description?: string;
+                    /**
+                     * @example [
+                     *       "files:ListFiles",
+                     *       "files:CreateFile"
+                     *     ]
+                     */
+                    permissions: string[];
+                    notPermissions?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Policy created successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Project not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getProjectPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+                policyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Policy details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Policy not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateProjectPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+                policyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name?: string;
+                    description?: string;
+                    document?: Record<string, never>;
+                };
+            };
+        };
+        responses: {
+            /** @description Policy updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Policy not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listSecrets: {
+        parameters: {
+            query?: {
+                /** @description Project ID (required if not using project key auth) */
+                projectId?: string;
+                /** @description Number of results per page */
+                limit?: number;
+                /** @description Number of results to skip */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of secrets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id?: string;
+                        name?: string;
+                        projectId?: string;
+                        /** Format: date-time */
+                        createdAt?: string;
+                    }[];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description Project ID (required if not using project key auth)
+                     * @example proj_V1StGXR8Z5jdHi6B
+                     */
+                    projectId?: string;
+                    /**
+                     * @description Secret name
+                     * @example DATABASE_PASSWORD
+                     */
+                    name: string;
+                    /**
+                     * @description Secret value (will be encrypted)
+                     * @example supersecretpassword
+                     */
+                    value: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Secret created successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id?: string;
+                        name?: string;
+                        projectId?: string;
+                        /** Format: date-time */
+                        createdAt?: string;
+                    };
+                };
+            };
+            /** @description Bad request (missing required fields) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Secret ID */
+                secretId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Secret details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id?: string;
+                        name?: string;
+                        /** @description Decrypted secret value */
+                        value?: string;
+                        projectId?: string;
+                        /** Format: date-time */
+                        createdAt?: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Secret not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Secret ID */
+                secretId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Secret deleted successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Secret not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Secret ID */
+                secretId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description New secret name */
+                    name?: string;
+                    /** @description New secret value */
+                    value?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Secret updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Secret not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listSessions: {
+        parameters: {
+            query?: {
+                /** @description Filter by actor public ID */
+                actorId?: string;
+                /** @description Filter by session status (open or closed) */
+                status?: "open" | "closed";
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Agent public ID */
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated list of sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["SessionRecord"][];
+                        total?: number;
+                        limit?: number;
+                        offset?: number;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent public ID */
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Session created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionRecord"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent public ID */
+                agentId: components["parameters"]["AgentId"];
+                /** @description Session public ID */
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionRecord"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent public ID */
+                agentId: components["parameters"]["AgentId"];
+                /** @description Session public ID */
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent public ID */
+                agentId: components["parameters"]["AgentId"];
+                /** @description Session public ID */
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UpdateSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionRecord"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listSessionMessages: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Agent public ID */
+                agentId: components["parameters"]["AgentId"];
+                /** @description Session public ID */
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated list of messages */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["SessionMessage"][];
+                        total?: number;
+                        limit?: number;
+                        offset?: number;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    addSessionMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent public ID */
+                agentId: components["parameters"]["AgentId"];
+                /** @description Session public ID */
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddSessionMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description User message saved */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddSessionMessageResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    generateSessionResponse: {
+        parameters: {
+            query?: {
+                /** @description When true, generation runs in the background and 202 is returned immediately */
+                async?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description Agent public ID */
+                agentId: components["parameters"]["AgentId"];
+                /** @description Session public ID */
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["GenerateSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Agent reply or requires_action */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerateSessionResponse"];
+                };
+            };
+            /** @description Generation accepted (async mode) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status?: "accepted";
+                        sessionId?: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description Generation already in progress */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    submitSessionToolOutputs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent public ID */
+                agentId: components["parameters"]["AgentId"];
+                /** @description Session public ID */
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitSessionToolOutputsRequest"];
+            };
+        };
+        responses: {
+            /** @description Generation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendSessionMessageResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getSessionTags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent public ID */
+                agentId: components["parameters"]["AgentId"];
+                /** @description Session public ID */
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session tags */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    replaceSessionTags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent public ID */
+                agentId: components["parameters"]["AgentId"];
+                /** @description Session public ID */
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated tags */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    mergeSessionTags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent public ID */
+                agentId: components["parameters"]["AgentId"];
+                /** @description Session public ID */
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated tags */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     listUsers: {
         parameters: {
             query?: never;
@@ -3880,6 +6064,366 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
+            };
+        };
+    };
+    listWebhooks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A list of webhooks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Webhook"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWebhookRequest"];
+            };
+        };
+        responses: {
+            /** @description Webhook created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookWithSecret"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+                webhookId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Webhook details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Webhook"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Webhook not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+                webhookId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWebhookRequest"];
+            };
+        };
+        responses: {
+            /** @description Webhook updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Webhook"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Webhook not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+                webhookId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Webhook deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Webhook not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listWebhookDeliveries: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                projectId: string;
+                webhookId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A list of deliveries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Webhook not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getWebhookDelivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+                webhookId: string;
+                deliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Delivery details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Delivery"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Delivery not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    rotateWebhookSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+                webhookId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Secret rotated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookWithSecret"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Webhook not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

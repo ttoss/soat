@@ -1,3 +1,5 @@
+import type { GenerationResult } from '../../../src/lib/agents';
+import * as agentsModule from '../../../src/lib/agents';
 import { authenticatedTestClient, loginAs, testClient } from '../testClient';
 
 describe('Sessions', () => {
@@ -476,6 +478,136 @@ describe('Sessions', () => {
       );
 
       expect(response.status).toBe(403);
+    });
+  });
+
+  // ── Message ordering with concurrent writes ─────────────────────────────
+
+  describe('Message ordering with concurrent writes', () => {
+    let resolveGeneration: (() => void) | undefined;
+    let orderingSessionId: string;
+
+    beforeEach(async () => {
+      jest.useRealTimers();
+      resolveGeneration = undefined;
+
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'ordering-test' });
+      orderingSessionId = res.body.id;
+
+      jest
+        .spyOn(agentsModule, 'createGeneration')
+        .mockImplementationOnce(() => {
+          return new Promise<GenerationResult>((resolve) => {
+            resolveGeneration = () => {
+              return resolve({
+                id: 'gen_test_01',
+                traceId: 'trc_test_01',
+                status: 'completed',
+                output: {
+                  model: 'test-model',
+                  content: 'Hi there',
+                  finishReason: 'stop',
+                },
+              });
+            };
+          });
+        });
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+      jest.useFakeTimers({ advanceTimers: true });
+    });
+
+    test('assistant reply is inserted at snapshotPosition+1, not after concurrent user message', async () => {
+      // 1. Add initial user message → position 0
+      await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/sessions/${orderingSessionId}/messages`
+        )
+        .send({ message: 'Hello' })
+        .expect(201);
+
+      // 2. Trigger async generation (returns 202, background task starts)
+      await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/sessions/${orderingSessionId}/generate?async=true`
+        )
+        .expect(202);
+
+      // 3. Poll until the mock has been entered (resolveGeneration is assigned)
+      const mockDeadline = Date.now() + 5000;
+      await new Promise<void>((resolve, reject) => {
+        const check = () => {
+          if (resolveGeneration) return resolve();
+          if (Date.now() >= mockDeadline)
+            return reject(
+              new Error('Timeout: createGeneration mock was never invoked')
+            );
+          setImmediate(check);
+        };
+        setImmediate(check);
+      });
+
+      // 4. Insert concurrent user message while LLM is paused
+      await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/sessions/${orderingSessionId}/messages`
+        )
+        .send({ message: 'Follow-up?' })
+        .expect(201);
+
+      // 5. Unblock the LLM mock → generation completes
+      resolveGeneration!();
+
+      // 6. Poll until generation is done (generatingAt becomes falsy)
+      const doneDeadline = Date.now() + 5000;
+      await new Promise<void>((resolve, reject) => {
+        const poll = async () => {
+          if (Date.now() >= doneDeadline)
+            return reject(
+              new Error('Timeout waiting for generation to complete')
+            );
+          const s = await authenticatedTestClient(userToken).get(
+            `/api/v1/agents/${agentId}/sessions/${orderingSessionId}`
+          );
+          if (!s.body.generatingAt) return resolve();
+          setTimeout(poll, 50);
+        };
+        setTimeout(poll, 50);
+      });
+
+      // 7. Fetch messages ordered by position ASC
+      const msgsRes = await authenticatedTestClient(userToken)
+        .get(`/api/v1/agents/${agentId}/sessions/${orderingSessionId}/messages`)
+        .expect(200);
+
+      const messages: Array<{
+        role: string;
+        content: string;
+        position: number;
+      }> = msgsRes.body.data;
+
+      // The fix guarantees: assistant is at position 1 (snapshotPosition+1),
+      // not pushed to position 2 by the concurrent user message
+      expect(messages).toHaveLength(3);
+      expect(messages[0]).toMatchObject({
+        role: 'user',
+        content: 'Hello',
+        position: 0,
+      });
+      expect(messages[1]).toMatchObject({
+        role: 'assistant',
+        content: 'Hi there',
+        position: 1,
+      });
+      expect(messages[2]).toMatchObject({
+        role: 'user',
+        content: 'Follow-up?',
+        position: 2,
+      });
     });
   });
 });
