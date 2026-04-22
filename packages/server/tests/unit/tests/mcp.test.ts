@@ -614,7 +614,7 @@ describe('MCP tools - happy path', () => {
 
   // ── Sessions ─────────────────────────────────────────────────────────────
 
-  let agentId: string;
+  let sessionAgentId: string;
   let sessionId: string;
 
   test('create agent for session tests', async () => {
@@ -626,33 +626,38 @@ describe('MCP tools - happy path', () => {
     expect(res.status).toBe(200);
     const result = parseResult(res);
     expect(result.id).toBeDefined();
-    agentId = result.id;
+    sessionAgentId = result.id;
   });
 
   test('create-agent-session creates a session', async () => {
     const res = await mcpCall('create-agent-session', {
-      agentId,
+      agentId: sessionAgentId,
       name: 'MCP Test Session',
       userExternalId: 'mcp-user-1',
     });
     expect(res.status).toBe(200);
     const result = parseResult(res);
     expect(result.id).toMatch(/^sess_/);
-    expect(result.agentId).toBe(agentId);
+    expect(result.agentId).toBe(sessionAgentId);
     expect(result.conversationId).toBeDefined();
     sessionId = result.id;
   });
 
   test('list-agent-sessions returns sessions', async () => {
-    const res = await mcpCall('list-agent-sessions', { agentId });
+    const res = await mcpCall('list-agent-sessions', {
+      agentId: sessionAgentId,
+    });
     expect(res.status).toBe(200);
     const result = parseResult(res);
-    expect(Array.isArray(result)).toBe(true);
-    expect(result.length).toBeGreaterThan(0);
+    expect(Array.isArray(result.data)).toBe(true);
+    expect(result.data.length).toBeGreaterThan(0);
   });
 
   test('get-agent-session returns session details', async () => {
-    const res = await mcpCall('get-agent-session', { agentId, sessionId });
+    const res = await mcpCall('get-agent-session', {
+      agentId: sessionAgentId,
+      sessionId,
+    });
     expect(res.status).toBe(200);
     const result = parseResult(res);
     expect(result.id).toBe(sessionId);
@@ -661,16 +666,19 @@ describe('MCP tools - happy path', () => {
 
   test('list-agent-session-messages returns messages', async () => {
     const res = await mcpCall('list-agent-session-messages', {
-      agentId,
+      agentId: sessionAgentId,
       sessionId,
     });
     expect(res.status).toBe(200);
     const result = parseResult(res);
-    expect(Array.isArray(result)).toBe(true);
+    expect(Array.isArray(result.data)).toBe(true);
   });
 
   test('delete-agent-session deletes the session', async () => {
-    const res = await mcpCall('delete-agent-session', { agentId, sessionId });
+    const res = await mcpCall('delete-agent-session', {
+      agentId: sessionAgentId,
+      sessionId,
+    });
     expect(res.status).toBe(200);
   });
 });
