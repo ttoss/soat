@@ -20,6 +20,7 @@ interface OpenApiSpec {
     schemas?: Record<string, unknown>;
     responses?: Record<string, unknown>;
     securitySchemes?: Record<string, unknown>;
+    parameters?: Record<string, unknown>;
   };
   security?: unknown[];
 }
@@ -48,6 +49,7 @@ const main = async () => {
       schemas: {},
       responses: {},
       securitySchemes: {},
+      parameters: {},
     },
   };
 
@@ -83,9 +85,17 @@ const main = async () => {
         spec.components.securitySchemes
       );
     }
-  }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (spec.components?.parameters) {
+      for (const [name, parameter] of Object.entries(
+        spec.components.parameters
+      )) {
+        if (!(name in merged.components!.parameters!)) {
+          merged.components!.parameters![name] = parameter;
+        }
+      }
+    }
+  }
   const ast = await openapiTS(merged as any);
   const output = astToString(ast);
 

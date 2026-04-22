@@ -1,10 +1,14 @@
+---
+sidebar_position: 6
+---
+
 # Actors
 
 The Actors module represents entities — people, bots, or other participants — that interact within a project. A common use case is storing external contacts such as WhatsApp numbers, where `externalId` holds the phone number and correlates the actor with a record in the external system.
 
 ## Overview
 
-An Actor belongs to a project and has a display name, an optional type, an optional `externalId`, and optional links to an Agent or Chat. Actors are identified by a public `id` prefixed with `act_`. The internal database primary key is never returned.
+An Actor belongs to a project and has a display name, an optional type, an optional `externalId`, and optional links to an [Agent](./agents.md) or [Chat](./chats.md). Actors are identified by a public `id` prefixed with `act_`. The internal database primary key is never returned.
 
 The module covers:
 
@@ -16,19 +20,19 @@ The module covers:
 
 ## Data Model
 
-| Field          | Type           | Required | Description                                                                                  |
-| -------------- | -------------- | -------- | -------------------------------------------------------------------------------------------- |
-| `id`           | string         | —        | Public identifier prefixed with `act_`                                                       |
-| `projectId`    | string         | —        | Public ID of the owning project (`proj_` prefix)                                             |
-| `name`         | string         | Yes      | Display name of the actor                                                                    |
-| `type`         | string         | No       | Free-form actor type (e.g. `customer`, `agent`)                                              |
-| `externalId`   | string         | No       | External identifier (e.g. WhatsApp phone number). Unique per project; `null` is never unique |
-| `instructions` | string \| null | No       | Persona-specific instructions composed into the effective system prompt for generate calls   |
-| `agentId`      | string \| null | No       | Public ID of the linked Agent (`agt_` prefix). Mutually exclusive with `chatId`              |
-| `chatId`       | string \| null | No       | Public ID of the linked Chat (`chat_` prefix). Mutually exclusive with `agentId`             |
-| `tags`         | object         | No       | Key-value string pairs used for ABAC conditions (see [Tags](#tags))                          |
-| `createdAt`    | string         | —        | ISO 8601 creation timestamp                                                                  |
-| `updatedAt`    | string         | —        | ISO 8601 last-updated timestamp                                                              |
+| Field          | Type           | Required | Description                                                                                    |
+| -------------- | -------------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `id`           | string         | —        | Public identifier prefixed with `act_`                                                         |
+| `projectId`    | string         | —        | Public ID of the owning project (`proj_` prefix)                                               |
+| `name`         | string         | Yes      | Display name of the actor                                                                      |
+| `type`         | string         | No       | Free-form actor type (e.g. `customer`, `agent`)                                                |
+| `externalId`   | string         | No       | External identifier (e.g. WhatsApp phone number). Unique per project; `null` is never unique   |
+| `instructions` | string \| null | No       | Persona-specific instructions composed into the effective system prompt for generate calls     |
+| `agentId`      | string \| null | No       | Public ID of the linked [Agent](./agents.md) (`agt_` prefix). Mutually exclusive with `chatId` |
+| `chatId`       | string \| null | No       | Public ID of the linked [Chat](./chats.md) (`chat_` prefix). Mutually exclusive with `agentId` |
+| `tags`         | object         | No       | Key-value string pairs used for ABAC conditions (see [Tags](#tags))                            |
+| `createdAt`    | string         | —        | ISO 8601 creation timestamp                                                                    |
+| `updatedAt`    | string         | —        | ISO 8601 last-updated timestamp                                                                |
 
 ## Key Concepts
 

@@ -1,0 +1,756 @@
+openapi: 3.0.3
+info:
+  title: SOAT Agent Sessions API
+  version: 1.0.0
+  description: >
+    Agent Sessions provide a simplified 1-user ↔ 1-agent conversational
+    abstraction. Sessions are nested under agents and manage the underlying
+    conversation, actors, and generation plumbing automatically.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: https://{host}/api/v1
+    description: Production (HTTPS)
+    variables:
+      host:
+        description: The hostname of your SOAT deployment
+        example: your-soat.com
+        default: your-soat.com
+  - url: http://{host}/api/v1
+    description: Development (HTTP)
+    variables:
+      host:
+        description: The hostname of your SOAT deployment
+        example: localhost:5047
+        default: localhost:5047
+paths:
+  /agents/{agentId}/sessions:
+    post:
+      tags:
+        - Sessions
+      summary: Create a session
+      description: >
+        Creates a new session for the specified agent. Internally creates a
+        conversation and two actors (agent + user) so the caller only needs
+        this single call to start interacting with the agent.
+      operationId: createSession
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionRecord'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    get:
+      tags:
+        - Sessions
+      summary: List sessions
+      description: Returns sessions for the specified agent, optionally filtered by actorId and status.
+      operationId: listSessions
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - name: actorId
+          in: query
+          required: false
+          description: Filter by actor public ID
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          description: Filter by session status (open or closed)
+          schema:
+            type: string
+            enum: [open, closed]
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Paginated list of sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SessionRecord'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /agents/{agentId}/sessions/{sessionId}:
+    get:
+      tags:
+        - Sessions
+      summary: Get a session
+      description: Returns details of a single session.
+      operationId: getSession
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Session details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionRecord'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Sessions
+      summary: Update a session
+      description: Updates the session name and/or status.
+      operationId: updateSession
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSessionRequest'
+      responses:
+        '200':
+          description: Updated session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionRecord'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Sessions
+      summary: Delete a session
+      description: Deletes the session and its underlying conversation and actors.
+      operationId: deleteSession
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '204':
+          description: Session deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /agents/{agentId}/sessions/{sessionId}/messages:
+    get:
+      tags:
+        - Sessions
+      summary: List session messages
+      description: >
+        Returns messages in the session with simplified roles (user/assistant)
+        instead of raw actor IDs.
+      operationId: listSessionMessages
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/SessionId'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Paginated list of messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SessionMessage'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+        - Sessions
+      summary: Add a user message
+      description: >
+        Saves a user message to the session. When autoGenerate is enabled on the
+        session and no generation is currently in progress, generation is triggered
+        automatically and the response mirrors GenerateSessionResponse. Otherwise
+        returns the saved user message.
+      operationId: addSessionMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddSessionMessageRequest'
+      responses:
+        '201':
+          description: User message saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddSessionMessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /agents/{agentId}/sessions/{sessionId}/generate:
+    post:
+      tags:
+        - Sessions
+      summary: Trigger agent generation
+      description: >
+        Triggers the agent to generate a response based on the current
+        conversation. Returns the assistant reply or a requires_action status
+        if the agent needs client tool outputs. Pass ?async=true for a
+        202 accepted response when you do not need to wait for the result.
+      operationId: generateSessionResponse
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/SessionId'
+        - name: async
+          in: query
+          required: false
+          description: When true, generation runs in the background and 202 is returned immediately
+          schema:
+            type: boolean
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateSessionRequest'
+      responses:
+        '200':
+          description: Agent reply or requires_action
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateSessionResponse'
+        '202':
+          description: Generation accepted (async mode)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [accepted]
+                  sessionId:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Generation already in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /agents/{agentId}/sessions/{sessionId}/tool-outputs:
+    post:
+      tags:
+        - Sessions
+      summary: Submit tool outputs
+      description: >
+        Submits client tool outputs for a generation that returned
+        requires_action. The agent continues its loop and returns the
+        final or next requires_action result.
+      operationId: submitSessionToolOutputs
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitSessionToolOutputsRequest'
+      responses:
+        '200':
+          description: Generation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendSessionMessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /agents/{agentId}/sessions/{sessionId}/tags:
+    get:
+      tags:
+        - Sessions
+      summary: Get session tags
+      description: Returns the session's tags object.
+      operationId: getSessionTags
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Session tags
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - Sessions
+      summary: Replace session tags
+      description: Replaces all tags on the session.
+      operationId: replaceSessionTags
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+      responses:
+        '200':
+          description: Updated tags
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Sessions
+      summary: Merge session tags
+      description: Merges the provided tags into the session's existing tags.
+      operationId: mergeSessionTags
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+      responses:
+        '200':
+          description: Updated tags
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token or SDK_ project key
+
+  parameters:
+    AgentId:
+      name: agentId
+      in: path
+      required: true
+      description: Agent public ID
+      schema:
+        type: string
+        example: agt_V1StGXR8Z5jdHi6B
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      description: Session public ID
+      schema:
+        type: string
+        example: sess_V1StGXR8Z5jdHi6B
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    SessionRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Session public ID
+          example: sess_V1StGXR8Z5jdHi6B
+        agentId:
+          type: string
+          description: Agent public ID
+          example: agt_V1StGXR8Z5jdHi6B
+        conversationId:
+          type: string
+          description: Underlying conversation public ID
+          example: conv_V1StGXR8Z5jdHi6B
+        status:
+          type: string
+          enum: [open, closed]
+          example: open
+        name:
+          type: string
+          nullable: true
+          example: Support chat
+        actorId:
+          type: string
+          nullable: true
+          description: Public ID of the user actor
+          example: actr_V1StGXR8Z5jdHi6B
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+        autoGenerate:
+          type: boolean
+          default: false
+          description: When true, automatically triggers generation after each user message (if no generation is in progress).
+        generatingAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the current generation started, or null if not generating.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SessionMessage:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [user, assistant, unknown]
+        content:
+          type: string
+        documentId:
+          type: string
+          nullable: true
+        position:
+          type: integer
+        metadata:
+          type: object
+          nullable: true
+
+    CreateSessionRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Optional session name
+          example: Support chat
+        actorId:
+          type: string
+          description: Optional public ID of an existing actor to use as the user actor
+          example: actr_V1StGXR8Z5jdHi6B
+        autoGenerate:
+          type: boolean
+          default: false
+          description: When true, automatically triggers generation after each user message.
+
+    UpdateSessionRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+          description: Session name (set to null to clear)
+        status:
+          type: string
+          enum: [open, closed]
+          description: Session status
+        autoGenerate:
+          type: boolean
+          description: Enable or disable automatic generation after user messages.
+
+    AddSessionMessageRequest:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: User message text
+          example: Hello, how can I deploy my app?
+
+    AddSessionMessageResponse:
+      oneOf:
+        - type: object
+          description: Message saved; auto-generate is off or a generation is already in progress.
+          properties:
+            role:
+              type: string
+              enum: [user]
+            content:
+              type: string
+        - $ref: '#/components/schemas/GenerateSessionResponse'
+
+    GenerateSessionRequest:
+      type: object
+      properties:
+        model:
+          type: string
+          description: Optional model override
+          example: gpt-4o
+
+    GenerateSessionResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [completed, requires_action]
+        message:
+          type: object
+          properties:
+            role:
+              type: string
+            content:
+              type: string
+            model:
+              type: string
+        generationId:
+          type: string
+        traceId:
+          type: string
+        requiredAction:
+          type: object
+          description: Present when status is requires_action
+          properties:
+            toolCalls:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  arguments:
+                    type: object
+
+    SendSessionMessageRequest:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: User message text
+          example: Hello, how can I deploy my app?
+        model:
+          type: string
+          description: Optional model override
+          example: gpt-4o
+
+    SendSessionMessageResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [completed, requires_action]
+        message:
+          type: object
+          properties:
+            role:
+              type: string
+            content:
+              type: string
+            model:
+              type: string
+        generationId:
+          type: string
+        traceId:
+          type: string
+        requiredAction:
+          type: object
+          description: Present when status is requires_action
+          properties:
+            toolCalls:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  arguments:
+                    type: object
+
+    SubmitSessionToolOutputsRequest:
+      type: object
+      required:
+        - generationId
+        - toolOutputs
+      properties:
+        generationId:
+          type: string
+          description: The generation ID from the requires_action response
+        toolOutputs:
+          type: array
+          items:
+            type: object
+            required:
+              - toolCallId
+              - output
+            properties:
+              toolCallId:
+                type: string
+              output:
+                description: The tool output value
+
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

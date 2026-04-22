@@ -22,6 +22,7 @@ export const PUBLIC_ID_PREFIXES = {
   trace: 'agt_trace_',
   webhook: 'whk_',
   webhookDelivery: 'whd_',
+  session: 'sess_',
 } as const;
 
 /**

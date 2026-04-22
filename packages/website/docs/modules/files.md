@@ -1,4 +1,8 @@
-# Files Module
+---
+sidebar_position: 4
+---
+
+# Files
 
 The Files module provides file upload, download, metadata management, and deletion through a local filesystem storage backend. Files are stored in a configurable directory and tracked in PostgreSQL.
 

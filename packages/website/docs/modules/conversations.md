@@ -1,10 +1,14 @@
-# Conversations Module
+---
+sidebar_position: 10
+---
 
-The Conversations module represents a multi-party dialogue within a project. A Conversation groups ordered messages, where each message is authored by an Actor — either a human contact (e.g. a WhatsApp user) or an AI-backed actor linked to an Agent or Chat.
+# Conversations
+
+The Conversations module represents a multi-party dialogue within a project. A Conversation groups ordered messages, where each message is authored by an [Actor](./actors.md) — either a human contact (e.g. a WhatsApp user) or an AI-backed actor linked to an [Agent](./agents.md) or [Chat](./chats.md).
 
 ## Overview
 
-A Conversation belongs to a project and contains an ordered list of messages. Each message references a Document and is authored by an Actor. Actors are not tied 1:1 to agents: an Actor may optionally reference an `Agent` or a `Chat`, which allows it to generate the next message from the conversation history.
+A Conversation belongs to a project and contains an ordered list of messages. Each message references a [Document](./documents.md) and is authored by an [Actor](./actors.md). Actors are not tied 1:1 to agents: an Actor may optionally reference an `Agent` or a `Chat`, which allows it to generate the next message from the conversation history.
 
 Conversations are identified by an `id` prefixed with `conv_`. The internal database primary key is never returned.
 
@@ -117,6 +121,7 @@ Flow:
    // data.content is always the AI-generated text when data.status === 'completed'
    const responseText = data?.content;
    ```
+
 6. On `requires_action` (agent client tools only), no message is persisted yet. Submit outputs via `POST /agents/:id/generate/:generationId/tool-outputs`; the resolved message is persisted on completion.
 
 Actors without `agentId` or `chatId` cannot generate and return `400`.

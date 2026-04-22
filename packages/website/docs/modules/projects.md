@@ -1,6 +1,10 @@
-# Projects Module
+---
+sidebar_position: 2
+---
 
-The Projects module provides multi-tenant namespaces in SOAT. Every resource (document, file, actor, conversation) belongs to a project. Projects also own policy documents, manage user membership, and issue project keys for programmatic access.
+# Projects
+
+The Projects module provides multi-tenant namespaces in SOAT. Every resource ([document](./documents.md), [file](./files.md), [actor](./actors.md), [conversation](./conversations.md)) belongs to a project. Projects also own policy documents, manage user membership, and issue project keys for programmatic access.
 
 ## Overview
 

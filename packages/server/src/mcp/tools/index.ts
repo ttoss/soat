@@ -9,6 +9,7 @@ import { registerTools as registerDocumentTools } from './documents';
 import { registerTools as registerFileTools } from './files';
 import { registerTools as registerProjectTools } from './projects';
 import { registerTools as registerSecretTools } from './secrets';
+import { registerTools as registerSessionTools } from './sessions';
 import { registerTools as registerWebhookTools } from './webhooks';
 
 const registerTools = (server: McpServer) => {
@@ -21,6 +22,7 @@ const registerTools = (server: McpServer) => {
   registerFileTools(server);
   registerProjectTools(server);
   registerSecretTools(server);
+  registerSessionTools(server);
   registerWebhookTools(server);
 };
 

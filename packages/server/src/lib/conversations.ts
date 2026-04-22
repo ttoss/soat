@@ -625,6 +625,12 @@ export const generateConversationMessage = async (args: {
     order: [['position', 'ASC']],
   });
 
+  // Snapshot the highest position BEFORE the LLM call so the assistant reply
+  // is inserted immediately after the messages the model actually saw, even
+  // if new user messages arrive while generation is in-flight.
+  const snapshotPosition =
+    messages.length > 0 ? messages[messages.length - 1].position : -1;
+
   // Build chat-style message history
   const history: Array<{ role: string; content: string }> = [];
   for (const m of messages) {
@@ -764,11 +770,15 @@ export const generateConversationMessage = async (args: {
     modelName = result.model;
   }
 
-  // Persist the assistant reply as a new conversation message
+  // Persist the assistant reply as a new conversation message, inserting it
+  // at snapshotPosition + 1.  If new user messages were added during the LLM
+  // call they will have claimed later positions; the collision-shift logic in
+  // addConversationMessage will push them up by one to preserve causal order.
   const persisted = await addConversationMessage({
     conversationId: args.conversationId,
     message: assistantContent,
     actorId: args.actorId,
+    position: snapshotPosition + 1,
   });
 
   if (!persisted) {

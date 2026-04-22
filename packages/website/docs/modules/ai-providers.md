@@ -1,4 +1,8 @@
-# AI Providers Module
+---
+sidebar_position: 7
+---
+
+# AI Providers
 
 The AI Providers module lets you register and manage LLM provider configurations for a project. Each provider record stores the model slug, optional base URL, optional configuration, and an optional link to a [Secret](./secrets.md) that supplies the API key.
 

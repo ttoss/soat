@@ -18,8 +18,17 @@ import {
   updateAgent,
   updateAgentTool,
 } from 'src/lib/agents';
+import { sessionsRouter } from './sessions';
 
 export const agentsRouter = new Router<Context>();
+
+// ── Sessions (sub-resource) ──────────────────────────────────────────────
+
+agentsRouter.use(
+  '/agents/:agentId/sessions',
+  sessionsRouter.routes(),
+  sessionsRouter.allowedMethods()
+);
 
 // ── Agent Tools (must be mounted before /agents/:agentId) ────────────────
 
