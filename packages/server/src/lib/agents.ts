@@ -334,9 +334,7 @@ export const createAgent = async (args: {
     include: getAgentIncludes(),
   });
 
-  const mapped = mapAgent(
-    created as unknown as Parameters<typeof mapAgent>[0]
-  );
+  const mapped = mapAgent(created as unknown as Parameters<typeof mapAgent>[0]);
 
   emitEvent({
     type: 'agents.created',
@@ -455,9 +453,7 @@ export const updateAgent = async (args: {
     include: getAgentIncludes(),
   });
 
-  const mapped = mapAgent(
-    updated as unknown as Parameters<typeof mapAgent>[0]
-  );
+  const mapped = mapAgent(updated as unknown as Parameters<typeof mapAgent>[0]);
 
   emitEvent({
     type: 'agents.updated',
@@ -605,6 +601,7 @@ type PendingGeneration = {
     temperature: number | null;
   };
   resolvedTools: Record<string, Tool>;
+  toolContext?: Record<string, string>;
 };
 
 const pendingGenerations = new Map<string, PendingGeneration>();
@@ -631,11 +628,24 @@ const isSoatActionAllowedByBoundary = (args: {
 
 // ── Tool Resolution ──────────────────────────────────────────────────────
 
+const buildContextHeaders = (
+  toolContext?: Record<string, string>
+): Record<string, string> => {
+  if (!toolContext) return {};
+  return Object.fromEntries(
+    Object.entries(toolContext).map(([key, value]) => {
+      const titleCased = key.charAt(0).toUpperCase() + key.slice(1);
+      return [`X-Soat-Context-${titleCased}`, value];
+    })
+  );
+};
+
 const resolveAgentTools = async (args: {
   toolIds: string[];
   projectIds?: number[];
   boundaryPolicy?: unknown;
   authHeader?: string;
+  toolContext?: Record<string, string>;
 }): Promise<Record<string, Tool>> => {
   const resolvedTools: Record<string, Tool> = {};
 
@@ -723,6 +733,7 @@ const resolveAgentTools = async (args: {
               headers: {
                 ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
                 ...typedTool.execute?.headers,
+                ...buildContextHeaders(args.toolContext),
               },
               ...(hasBody ? { body: JSON.stringify(remainingArgs) } : {}),
             });
@@ -752,6 +763,7 @@ const resolveAgentTools = async (args: {
           'Content-Type': 'application/json',
           Accept: 'application/json, text/event-stream',
           ...typedTool.mcp.headers,
+          ...buildContextHeaders(args.toolContext),
         };
 
         const listResponse = await fetch(mcpUrl, {
@@ -838,6 +850,11 @@ const resolveAgentTools = async (args: {
 
               const rawArgs = toolArgs as Record<string, unknown>;
               const path = def.path(rawArgs);
+              const soatBody = def.body ? def.body(rawArgs) : undefined;
+              const soatBodyWithContext =
+                soatBody && args.toolContext
+                  ? { ...soatBody, toolContext: args.toolContext }
+                  : soatBody;
               const response = await fetch(`${base}${path}`, {
                 method: def.method,
                 headers: {
@@ -845,8 +862,11 @@ const resolveAgentTools = async (args: {
                   ...(args.authHeader
                     ? { Authorization: args.authHeader }
                     : {}),
+                  ...buildContextHeaders(args.toolContext),
                 },
-                body: def.body ? JSON.stringify(def.body(rawArgs)) : undefined,
+                body: soatBodyWithContext
+                  ? JSON.stringify(soatBodyWithContext)
+                  : undefined,
               });
               return response.json();
             },
@@ -905,6 +925,7 @@ export const createGeneration = async (args: {
   traceId?: string;
   remainingDepth?: number;
   authHeader?: string;
+  toolContext?: Record<string, string>;
 }): Promise<
   GenerationResult | 'not_found' | 'ai_provider_not_found' | ReadableStream
 > => {
@@ -974,6 +995,7 @@ export const createGeneration = async (args: {
         projectIds: args.projectIds,
         boundaryPolicy: typedAgent.boundaryPolicy,
         authHeader: args.authHeader,
+        toolContext: args.toolContext,
       })
     : {};
 

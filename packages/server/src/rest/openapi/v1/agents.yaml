@@ -1033,6 +1033,12 @@ components:
           minimum: 0
           default: 10
           description: Maximum nested agent-call depth; 0 short-circuits with a depth-guard response
+        toolContext:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+          description: Key-value pairs injected as context headers into all tool call requests made during this generation.
 
     SubmitToolOutputsRequest:
       type: object

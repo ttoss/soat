@@ -406,6 +406,12 @@ paths:
                 stream:
                   type: boolean
                   description: If true, stream tokens via SSE. NOT IMPLEMENTED in v1 — returns 501.
+                toolContext:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  nullable: true
+                  description: Key-value pairs injected as context headers into all tool call requests made during this generation.
       responses:
         '200':
           description: Generation completed or requires action

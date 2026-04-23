@@ -13,6 +13,7 @@ export const tools: SoatToolDefinition[] = [
         name: args.name,
         actorId: args.actorId,
         autoGenerate: args.autoGenerate,
+        toolContext: args.toolContext,
       };
     },
     inputSchema: {
@@ -29,6 +30,12 @@ export const tools: SoatToolDefinition[] = [
           type: 'boolean',
           description:
             'When true, automatically triggers generation after each user message if no generation is in progress',
+        },
+        toolContext: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          description:
+            'Key-value pairs injected as context headers into all tool call requests made during this session',
         },
       },
       required: ['agentId'],
@@ -121,6 +128,7 @@ export const tools: SoatToolDefinition[] = [
     body: (args) => {
       return {
         message: args.message,
+        toolContext: args.toolContext,
       };
     },
     inputSchema: {
@@ -132,6 +140,12 @@ export const tools: SoatToolDefinition[] = [
           description: 'Public ID of the session',
         },
         message: { type: 'string', description: 'The user message to save' },
+        toolContext: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          description:
+            'Key-value pairs injected as context headers into all tool call requests made during this generation',
+        },
       },
       required: ['agentId', 'sessionId', 'message'],
     },
@@ -149,6 +163,7 @@ export const tools: SoatToolDefinition[] = [
     body: (args) => {
       return {
         model: args.model,
+        toolContext: args.toolContext,
       };
     },
     inputSchema: {
@@ -162,6 +177,12 @@ export const tools: SoatToolDefinition[] = [
         model: {
           type: 'string',
           description: 'Optional model override for this generation',
+        },
+        toolContext: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          description:
+            'Key-value pairs injected as context headers into all tool call requests made during this generation',
         },
       },
       required: ['agentId', 'sessionId'],

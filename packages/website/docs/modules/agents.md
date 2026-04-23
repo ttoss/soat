@@ -301,10 +301,56 @@ Use `POST /agents/{agentId}/generate` to run a generation. It accepts `prompt` (
 | `stopConditions` | array         | no       | Override the agent's `stopConditions` for this generation                                                      |
 | `maxCallDepth`   | number        | no       | Maximum nesting depth for agent-to-agent calls (default: `10`) — see [Nested Agent Calls](#nested-agent-calls) |
 | `stream`         | boolean       | no       | Stream results as Server-Sent Events                                                                           |
+| `toolContext`    | object        | no       | Key-value pairs forwarded as `X-Soat-Context-*` headers on tool calls — see [Tool Context](#tool-context)      |
 
 ### Streaming
 
 Pass `stream: true` to receive results as Server-Sent Events (SSE). Each step's output is streamed as it is generated.
+
+### Tool Context
+
+`toolContext` lets callers inject key-value pairs that are forwarded as HTTP headers to every tool call made during a generation. This enables server-side tools to perform authorization decisions based on the caller's identity without trusting data embedded in the prompt.
+
+#### Shape
+
+`toolContext` is a flat `Record<string, string>` — every key-value pair is forwarded to **all** tool calls in the generation.
+
+```json
+{
+  "toolContext": {
+    "userId": "usr_abc123",
+    "tenantId": "tenant_xyz"
+  }
+}
+```
+
+#### Header Naming
+
+Each key is title-cased and prefixed with `X-Soat-Context-`:
+
+| `toolContext` key | Forwarded header          |
+| ----------------- | ------------------------- |
+| `userId`          | `X-Soat-Context-UserId`   |
+| `tenantId`        | `X-Soat-Context-TenantId` |
+
+#### Supported Tool Types
+
+| Tool type | Context headers forwarded | Notes                                                     |
+| --------- | ------------------------- | --------------------------------------------------------- |
+| `http`    | Yes                       | Injected as request headers                               |
+| `mcp`     | Yes                       | Injected as request headers on the MCP `tools/call` fetch |
+| `soat`    | Yes                       | Propagated into nested agent generations (see below)      |
+| `client`  | No                        | Executes on the caller's side                             |
+
+Context headers are injected **after** any headers configured on the tool definition, so tool-level authentication headers cannot be overridden by the caller.
+
+#### Propagation Through Nested Agent Calls
+
+When an agent invokes another agent via a `soat` tool (`create-agent-generation`), the parent's `toolContext` is automatically forwarded to the child generation. This means the original caller's identity flows through the entire agent chain without any extra configuration.
+
+#### Persistence Across `requires_action` Pauses
+
+When a generation pauses with `status: "requires_action"` (client tool), the `toolContext` provided in the original request is preserved and automatically reapplied when the generation resumes via `POST /agents/{agentId}/generate/{generationId}/tool-outputs`.
 
 ## Example Flows
 

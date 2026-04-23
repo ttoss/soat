@@ -94,6 +94,7 @@ sessionsRouter.post('/', async (ctx: Context) => {
     name?: string;
     actorId?: string;
     autoGenerate?: boolean;
+    toolContext?: Record<string, string> | null;
   };
 
   const result = await createSession({
@@ -102,6 +103,7 @@ sessionsRouter.post('/', async (ctx: Context) => {
     name: body.name,
     actorId: body.actorId,
     autoGenerate: body.autoGenerate,
+    toolContext: body.toolContext,
   });
 
   if (result === 'agent_not_found') {
@@ -348,6 +350,7 @@ sessionsRouter.patch('/:sessionId', async (ctx: Context) => {
     name?: string | null;
     status?: string;
     autoGenerate?: boolean;
+    toolContext?: Record<string, string> | null;
   };
 
   const result = await updateSession({
@@ -356,6 +359,7 @@ sessionsRouter.patch('/:sessionId', async (ctx: Context) => {
     name: body.name,
     status: body.status,
     autoGenerate: body.autoGenerate,
+    toolContext: body.toolContext,
   });
 
   if (!result) {
@@ -594,7 +598,10 @@ sessionsRouter.post('/:sessionId/messages', async (ctx: Context) => {
     return;
   }
 
-  const body = ctx.request.body as { message?: string };
+  const body = ctx.request.body as {
+    message?: string;
+    toolContext?: Record<string, string>;
+  };
 
   if (!body.message || typeof body.message !== 'string') {
     ctx.status = 400;
@@ -606,6 +613,7 @@ sessionsRouter.post('/:sessionId/messages', async (ctx: Context) => {
     agentId: agent.id as number,
     sessionId: ctx.params.sessionId,
     message: body.message,
+    toolContext: body.toolContext,
   });
 
   if (result === 'session_not_found') {
@@ -697,7 +705,11 @@ sessionsRouter.post('/:sessionId/generate', async (ctx: Context) => {
     return;
   }
 
-  const body = (ctx.request.body as { model?: string }) ?? {};
+  const body =
+    (ctx.request.body as {
+      model?: string;
+      toolContext?: Record<string, string>;
+    }) ?? {};
   const isAsync = ctx.query['async'] === 'true';
 
   if (isAsync) {
@@ -705,6 +717,7 @@ sessionsRouter.post('/:sessionId/generate', async (ctx: Context) => {
       agentId: agent.id as number,
       sessionId: ctx.params.sessionId,
       model: body.model,
+      toolContext: body.toolContext,
     }).catch(() => {
       // Fire-and-forget: errors are emitted via event bus
     });
@@ -717,6 +730,7 @@ sessionsRouter.post('/:sessionId/generate', async (ctx: Context) => {
     agentId: agent.id as number,
     sessionId: ctx.params.sessionId,
     model: body.model,
+    toolContext: body.toolContext,
   });
 
   if (result === 'session_not_found') {

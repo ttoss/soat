@@ -116,6 +116,14 @@ export class Session extends Model {
   })
   declare autoGenerate: boolean;
 
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+    defaultValue: null,
+    field: 'tool_context',
+  })
+  declare toolContext: Record<string, string> | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

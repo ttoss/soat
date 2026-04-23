@@ -572,11 +572,13 @@ agentsRouter.post('/agents/:agentId/generate', async (ctx: Context) => {
     return;
   }
 
-  const { messages, stream, traceId, maxCallDepth } = ctx.request.body as {
+  const { messages, stream, traceId, maxCallDepth, toolContext } = ctx.request
+    .body as {
     messages?: unknown;
     stream?: boolean;
     traceId?: string;
     maxCallDepth?: unknown;
+    toolContext?: Record<string, string>;
   };
 
   if (!Array.isArray(messages) || messages.length === 0) {
@@ -596,6 +598,7 @@ agentsRouter.post('/agents/:agentId/generate', async (ctx: Context) => {
       remainingDepth:
         typeof maxCallDepth === 'number' ? maxCallDepth : undefined,
       authHeader: (ctx.headers.authorization as string) ?? '',
+      toolContext,
     });
   } catch (error) {
     ctx.status = 500;

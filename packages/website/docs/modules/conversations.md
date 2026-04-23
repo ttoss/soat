@@ -134,6 +134,20 @@ Generate calls acquire a per-conversation advisory lock for the duration of the 
 
 With `"stream": true`, the response is a `text/event-stream` emitting incremental tokens. The new message is persisted **only after** the stream completes successfully; partial streams produce no message. The final SSE event carries the `documentId`, `generationId`, and `traceId`.
 
+### Tool Context
+
+`POST /api/v1/conversations/:id/generate` accepts an optional `toolContext` field in the request body. The context is forwarded to the underlying agent generation exactly as described in [Tool Context](./agents.md#tool-context) in the Agents module.
+
+```json
+{
+  "actorId": "act_...",
+  "toolContext": {
+    "userId": "usr_abc123",
+    "tenantId": "tenant_xyz"
+  }
+}
+```
+
 ### Filtering by Actor
 
 Use `GET /conversations?actorId=...` to list conversations in which the given actor has authored at least one message. This is evaluated via an `EXISTS` join on `conversation_messages` and is more expensive than the default listing.
