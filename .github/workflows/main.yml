@@ -9,9 +9,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
-env:
-  ENVIRONMENT: Production
-
 jobs:
   build-and-test:
     name: Build and Test
@@ -88,44 +85,3 @@ jobs:
         run: pnpm run smoke-tests
         env:
           COMPOSE_BAKE: '1'
-
-  deploy:
-    name: Deploy
-    runs-on: ubuntu-latest
-    needs:
-      - build-and-test
-      - smoke-test
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: pnpm/action-setup@v5
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-          cache: 'pnpm'
-
-      - name: Cache Turbo
-        uses: actions/cache@v5
-        with:
-          path: .turbo
-          key: ${{ runner.os }}-turbo-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Deploy
-        run: pnpm turbo run deploy
-        env:
-          CARLIN_BRANCH: main
-          CARLIN_ACM: ${{ vars.AWS_ACM }}
