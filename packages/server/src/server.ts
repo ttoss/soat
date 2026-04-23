@@ -12,11 +12,11 @@ const SOAT_PORT = process.env.PORT || 5047;
 const startServer = async () => {
   try {
     const database = await initializeDatabase(app);
-    await database.sequelize.sync({ alter: true }); // Sync models with the database
+    await database.sequelize.sync({ alter: true });
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Failed to connect to database:', error);
-    process.exit(1); // Exit if DB connection fails
+    process.exit(1);
   }
 
   const adminUsername = process.env.SOAT_ADMIN_USERNAME;
