@@ -102,7 +102,6 @@ jobs:
         with:
           images: ttoss/soat
           tags: |
-            type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
 
