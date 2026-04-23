@@ -643,6 +643,17 @@ describe('MCP tools - happy path', () => {
     sessionId = result.id;
   });
 
+  test('create-agent-session accepts toolContext', async () => {
+    const res = await mcpCall('create-agent-session', {
+      agentId: sessionAgentId,
+      toolContext: { userId: 'u1' },
+      userExternalId: 'mcp-user-toolctx',
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.toolContext).toEqual({ userId: 'u1' });
+  });
+
   test('list-agent-sessions returns sessions', async () => {
     const res = await mcpCall('list-agent-sessions', {
       agentId: sessionAgentId,

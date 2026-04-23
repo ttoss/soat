@@ -550,6 +550,12 @@ components:
         updatedAt:
           type: string
           format: date-time
+        toolContext:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+          description: Key-value pairs injected as context headers into all tool call requests made during this session.
 
     SessionMessage:
       type: object
@@ -583,6 +589,12 @@ components:
           type: boolean
           default: false
           description: When true, automatically triggers generation after each user message.
+        toolContext:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+          description: Key-value pairs injected as context headers into all tool call requests made during this session.
 
     UpdateSessionRequest:
       type: object
@@ -598,6 +610,12 @@ components:
         autoGenerate:
           type: boolean
           description: Enable or disable automatic generation after user messages.
+        toolContext:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+          description: Key-value pairs injected as context headers into all tool call requests made during this session.
 
     AddSessionMessageRequest:
       type: object
@@ -608,6 +626,12 @@ components:
           type: string
           description: User message text
           example: Hello, how can I deploy my app?
+        toolContext:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+          description: Key-value pairs injected as context headers into all tool call requests made during this generation.
 
     AddSessionMessageResponse:
       oneOf:
@@ -628,6 +652,12 @@ components:
           type: string
           description: Optional model override
           example: gpt-4o
+        toolContext:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+          description: Key-value pairs injected as context headers into all tool call requests made during this generation.
 
     GenerateSessionResponse:
       type: object

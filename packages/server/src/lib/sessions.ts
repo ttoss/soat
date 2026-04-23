@@ -35,6 +35,7 @@ const mapSession = (
     actorId: session.userActor?.publicId ?? null,
     tags: session.tags ?? undefined,
     autoGenerate: session.autoGenerate ?? false,
+    toolContext: session.toolContext ?? null,
     generatingAt: session.generatingAt ?? null,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
@@ -47,6 +48,7 @@ export const createSession = async (args: {
   name?: string | null;
   actorId?: string | null;
   autoGenerate?: boolean;
+  toolContext?: Record<string, string> | null;
 }) => {
   const sequelize = db.sequelize;
 
@@ -111,6 +113,7 @@ export const createSession = async (args: {
         status: 'open',
         name: args.name ?? null,
         autoGenerate: args.autoGenerate ?? false,
+        toolContext: args.toolContext ?? null,
       },
       { transaction: t }
     );
@@ -225,6 +228,7 @@ export const updateSession = async (args: {
   name?: string | null;
   status?: string;
   autoGenerate?: boolean;
+  toolContext?: Record<string, string> | null;
 }) => {
   const session = await db.Session.findOne({
     where: { publicId: args.sessionId, agentId: args.agentId },
@@ -244,6 +248,10 @@ export const updateSession = async (args: {
 
   if (args.autoGenerate !== undefined) {
     session.autoGenerate = args.autoGenerate;
+  }
+
+  if (args.toolContext !== undefined) {
+    session.toolContext = args.toolContext;
   }
 
   await session.save();
@@ -386,6 +394,7 @@ export const addSessionMessage = async (args: {
   agentId: number;
   sessionId: string;
   message: string;
+  toolContext?: Record<string, string>;
 }) => {
   const session = await findSessionRecord({
     agentId: args.agentId,
@@ -423,6 +432,7 @@ export const addSessionMessage = async (args: {
     return generateSessionResponse({
       agentId: args.agentId,
       sessionId: args.sessionId,
+      toolContext: args.toolContext,
     });
   }
 
@@ -435,6 +445,7 @@ export const generateSessionResponse = async (args: {
   agentId: number;
   sessionId: string;
   model?: string;
+  toolContext?: Record<string, string>;
 }) => {
   const session = await findSessionRecord({
     agentId: args.agentId,
@@ -466,6 +477,23 @@ export const generateSessionResponse = async (args: {
     return 'session_not_found' as const;
   }
 
+  const userActor = (
+    session as unknown as {
+      userActor?: InstanceType<(typeof db)['Actor']>;
+    }
+  ).userActor;
+
+  const autoPopulated: Record<string, string> = {
+    actorId: userActor?.publicId ?? '',
+    actorExternalId: userActor?.externalId ?? '',
+    sessionId: session.publicId,
+  };
+  const mergedToolContext = {
+    ...autoPopulated,
+    ...(session.toolContext ?? {}),
+    ...(args.toolContext ?? {}),
+  };
+
   await session.update({ generatingAt: new Date() });
 
   resolveProjectPublicId({ projectId: session.projectId }).then(
@@ -489,6 +517,7 @@ export const generateSessionResponse = async (args: {
       conversationId: conversation.publicId,
       actorId: agentActor.publicId,
       model: args.model,
+      toolContext: mergedToolContext,
     });
   } finally {
     await session.update({ generatingAt: null });
@@ -560,11 +589,13 @@ export const sendSessionMessage = async (args: {
   sessionId: string;
   message: string;
   model?: string;
+  toolContext?: Record<string, string>;
 }) => {
   const saveResult = await addSessionMessage({
     agentId: args.agentId,
     sessionId: args.sessionId,
     message: args.message,
+    toolContext: args.toolContext,
   });
 
   if (typeof saveResult === 'string') {
@@ -575,6 +606,7 @@ export const sendSessionMessage = async (args: {
     agentId: args.agentId,
     sessionId: args.sessionId,
     model: args.model,
+    toolContext: args.toolContext,
   });
 };
 

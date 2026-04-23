@@ -111,6 +111,15 @@ describe('Sessions', () => {
 
       expect(response.status).toBe(404);
     });
+
+    test('can create a session with toolContext', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ toolContext: { userId: 'u1', env: 'test' } });
+
+      expect(response.status).toBe(201);
+      expect(response.body.toolContext).toEqual({ userId: 'u1', env: 'test' });
+    });
   });
 
   // ── List Sessions ──────────────────────────────────────────────────────
@@ -240,6 +249,15 @@ describe('Sessions', () => {
       expect(response.body.status).toBe('closed');
     });
 
+    test('can update session toolContext', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${agentId}/sessions/${sessionId}`)
+        .send({ toolContext: { env: 'prod' } });
+
+      expect(response.status).toBe(200);
+      expect(response.body.toolContext).toEqual({ env: 'prod' });
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .patch(`/api/v1/agents/${agentId}/sessions/${sessionId}`)
@@ -354,6 +372,14 @@ describe('Sessions', () => {
 
       expect(response.status).toBe(404);
     });
+
+    test('accepts per-request toolContext', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .send({ message: 'Hi', toolContext: { reqKey: 'val' } });
+
+      expect(response.status).toBe(201);
+    });
   });
 
   // ── Generate Session Response ──────────────────────────────────────────
@@ -397,6 +423,20 @@ describe('Sessions', () => {
       expect(response.status).toBe(202);
       expect(response.body.status).toBe('accepted');
       expect(response.body.sessionId).toBe(sessionId);
+    });
+
+    test('accepts per-request toolContext in async mode', async () => {
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .send({ message: 'Another message' });
+
+      const response = await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/sessions/${sessionId}/generate?async=true`
+        )
+        .send({ toolContext: { reqKey: 'val' } });
+
+      expect(response.status).toBe(202);
     });
   });
 

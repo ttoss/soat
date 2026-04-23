@@ -653,6 +653,7 @@ conversationsRouter.post(
       actorId: string;
       model?: string;
       stream?: boolean;
+      toolContext?: Record<string, string>;
     };
 
     if (!body.actorId) {
@@ -705,6 +706,7 @@ conversationsRouter.post(
       conversationId: ctx.params.id,
       actorId: body.actorId,
       model: body.model,
+      toolContext: body.toolContext,
     });
 
     if (result === 'conversation_not_found') {

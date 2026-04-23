@@ -677,6 +677,17 @@ describe('Agents', () => {
       expect(response.status).toBe(404);
       expect(response.body.error).toBeDefined();
     });
+
+    test('accepts toolContext in request body', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: 'Hello' }],
+          toolContext: { userId: 'u1', env: 'test' },
+        });
+
+      expect(response.status).not.toBe(400);
+    });
   });
 
   // ── Submit Tool Outputs ──────────────────────────────────────────────────

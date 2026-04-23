@@ -344,6 +344,7 @@ export const tools: SoatToolDefinition[] = [
       return {
         messages: args.messages,
         traceId: args.traceId,
+        toolContext: args.toolContext,
       };
     },
     inputSchema: {
@@ -368,6 +369,12 @@ export const tools: SoatToolDefinition[] = [
         traceId: {
           type: 'string',
           description: 'Optional trace ID to group generations',
+        },
+        toolContext: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          description:
+            'Key-value pairs injected as context headers into all tool call requests made during this generation',
         },
       },
       required: ['agentId', 'messages'],

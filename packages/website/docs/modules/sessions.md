@@ -61,6 +61,36 @@ Content-Type: application/json
 
 The explicit `POST .../generate` endpoint continues to work regardless of this setting. Async generation (`?async=true`) is also supported on `POST .../messages` when `autoGenerate` is enabled — the request returns `202 Accepted` immediately and generation proceeds in the background.
 
+### Tool Context
+
+Sessions support the same `toolContext` mechanism as direct agent generations — see [Tool Context](./agents.md#tool-context) in the Agents module for the full specification.
+
+#### Auto-Populated Headers
+
+When a generation is triggered through a session (either via `POST .../generate` or auto-generate), the server automatically injects the following keys into `toolContext` before forwarding to tool calls:
+
+| Header                           | Value                                              |
+| -------------------------------- | -------------------------------------------------- |
+| `X-Soat-Context-ActorId`         | Public ID of the session's user actor (`actr_...`) |
+| `X-Soat-Context-ActorExternalId` | External ID of the session's user actor            |
+| `X-Soat-Context-SessionId`       | Public ID of the session (`sess_...`)              |
+
+Any values provided by the caller in `toolContext` are merged on top and take precedence over the auto-populated values.
+
+#### Example
+
+Adding a caller-supplied `tenantId` alongside the automatically injected session fields:
+
+```json
+{
+  "toolContext": {
+    "tenantId": "tenant_xyz"
+  }
+}
+```
+
+The tool will receive all four headers: `X-Soat-Context-ActorId`, `X-Soat-Context-ActorExternalId`, `X-Soat-Context-SessionId`, and `X-Soat-Context-TenantId`.
+
 ## Data Model
 
 ### Session

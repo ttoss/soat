@@ -924,7 +924,7 @@ export interface paths {
         put?: never;
         /**
          * Add a user message
-         * @description Saves a user message to the session without triggering generation. Use POST .../generate afterwards to trigger the agent response.
+         * @description Saves a user message to the session. When autoGenerate is enabled on the session and no generation is currently in progress, generation is triggered automatically and the response mirrors GenerateSessionResponse. Otherwise returns the saved user message.
          */
         post: operations["addSessionMessage"];
         delete?: never;
@@ -1802,6 +1802,16 @@ export interface components {
             tags?: {
                 [key: string]: string;
             };
+            /**
+             * @description When true, automatically triggers generation after each user message (if no generation is in progress).
+             * @default false
+             */
+            autoGenerate: boolean;
+            /**
+             * Format: date-time
+             * @description Timestamp when the current generation started, or null if not generating.
+             */
+            generatingAt?: string | null;
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
@@ -1826,6 +1836,11 @@ export interface components {
              * @example actr_V1StGXR8Z5jdHi6B
              */
             actorId?: string;
+            /**
+             * @description When true, automatically triggers generation after each user message.
+             * @default false
+             */
+            autoGenerate: boolean;
         };
         UpdateSessionRequest: {
             /** @description Session name (set to null to clear) */
@@ -1835,6 +1850,8 @@ export interface components {
              * @enum {string}
              */
             status?: "open" | "closed";
+            /** @description Enable or disable automatic generation after user messages. */
+            autoGenerate?: boolean;
         };
         AddSessionMessageRequest: {
             /**
@@ -1847,7 +1864,7 @@ export interface components {
             /** @enum {string} */
             role?: "user";
             content?: string;
-        };
+        } | components["schemas"]["GenerateSessionResponse"];
         GenerateSessionRequest: {
             /**
              * @description Optional model override

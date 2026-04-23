@@ -708,6 +708,17 @@ describe('Conversations', () => {
         .send({ actorId });
       expect(res.status).toBe(401);
     });
+
+    test('accepts toolContext in request body', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${convId}/generate`)
+        .send({ actorId, toolContext: { userId: 'u1' } });
+
+      // toolContext is accepted by the schema (not rejected as an unknown property).
+      // The 400 is from app logic (actor has no agentId/chatId), not from toolContext validation.
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/agentId or chatId/i);
+    });
   });
 
   describe('Actor agent/chat mutual exclusion', () => {
