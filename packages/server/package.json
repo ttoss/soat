@@ -31,9 +31,8 @@
   "devDependencies": {
     "@stoplight/spectral-cli": "^6.15.1",
     "@testcontainers/postgresql": "^11.14.0",
-    "@ttoss/config": "^1.37.9",
+    "@ttoss/config": "^1.37.10",
     "@ttoss/test-utils": "^4.2.9",
-    "@types/bcryptjs": "^3.0.0",
     "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/pg": "^8.20.0",

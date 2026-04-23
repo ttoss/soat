@@ -24,6 +24,10 @@
   "files": [
     "dist"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ttoss/soat"
+  },
   "publishConfig": {
     "access": "public"
   },
@@ -31,7 +35,7 @@
     "openapi-fetch": "^0.17.0"
   },
   "devDependencies": {
-    "@ttoss/config": "^1.37.9",
+    "@ttoss/config": "^1.37.10",
     "@types/js-yaml": "^4.0.9",
     "js-yaml": "^4.1.1",
     "openapi-typescript": "^7.13.0",
