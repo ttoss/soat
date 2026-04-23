@@ -5,6 +5,10 @@ on:
     tags:
       - '**'
 
+concurrency:
+  group: tag
+  cancel-in-progress: false
+
 env:
   ENVIRONMENT: Production
 
@@ -85,17 +89,25 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ttoss/soat
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: |
-            ttoss/soat:${{ github.ref_name }}
-            ttoss/soat:latest
+          tags: ${{ steps.meta.outputs.tags }}
