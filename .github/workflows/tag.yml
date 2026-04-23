@@ -37,7 +37,8 @@ jobs:
         run: pnpm --filter @soat/sdk build
 
       - name: Publish SDK
-        run: pnpm --filter @soat/sdk publish --no-git-checks --provenance
+        working-directory: packages/sdk
+        run: pnpm publish --no-git-checks --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -74,7 +75,7 @@ jobs:
           aws-region: us-east-1
 
       - name: Deploy Website
-        run: pnpm --filter @soat/website deploy
+        run: pnpm turbo run deploy --filter=@soat/website
         env:
           CARLIN_BRANCH: main
           CARLIN_ACM: ${{ vars.AWS_ACM }}

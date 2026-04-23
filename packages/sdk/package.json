@@ -28,13 +28,13 @@
     "access": "public"
   },
   "dependencies": {
-    "openapi-fetch": "^0.13.0"
+    "openapi-fetch": "^0.17.0"
   },
   "devDependencies": {
-    "@ttoss/config": "^1.37.8",
+    "@ttoss/config": "^1.37.9",
     "@types/js-yaml": "^4.0.9",
-    "js-yaml": "^4.1.0",
-    "openapi-typescript": "^7.0.0",
+    "js-yaml": "^4.1.1",
+    "openapi-typescript": "^7.13.0",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0"
   }

@@ -1,4 +1,4 @@
-FROM node:24-alpine AS builder
+FROM node:24-slim AS builder
 
 WORKDIR /app
 
@@ -26,7 +26,7 @@ RUN pnpm --filter @soat/postgresdb build
 RUN pnpm --filter @soat/server build
 
 # ---- Production image ----
-FROM node:24-alpine
+FROM node:24-slim
 
 WORKDIR /app
 

@@ -19,16 +19,16 @@
     "db-dev:logs": "docker compose -f docker-compose.dev.yml logs -f"
   },
   "dependencies": {
-    "@ttoss/postgresdb": "^0.8.0",
-    "nanoid": "^5.1.7"
+    "@ttoss/postgresdb": "^0.8.1",
+    "nanoid": "^5.1.9"
   },
   "devDependencies": {
-    "@testcontainers/postgresql": "^11.13.0",
-    "@ttoss/config": "^1.37.8",
-    "@ttoss/postgresdb-cli": "^0.2.8",
-    "@ttoss/test-utils": "^4.2.8",
-    "@types/node": "^25.5.2",
+    "@testcontainers/postgresql": "^11.14.0",
+    "@ttoss/config": "^1.37.9",
+    "@ttoss/postgresdb-cli": "^0.2.9",
+    "@ttoss/test-utils": "^4.2.9",
+    "@types/node": "^25.6.0",
     "tsup": "^8.5.1",
-    "typescript": "~6.0.2"
+    "typescript": "~6.0.3"
   }
 }
