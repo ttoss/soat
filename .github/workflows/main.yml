@@ -45,6 +45,16 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /usr/lib/jvm
+          sudo rm -rf /usr/share/swift
+          docker system prune -af
+
       - uses: pnpm/action-setup@v5
 
       - uses: actions/setup-node@v6
@@ -74,6 +84,14 @@ jobs:
       - name: Load Ollama Docker image from cache
         if: steps.cache-ollama-image.outputs.cache-hit == 'true'
         run: docker load -i /tmp/ollama-image.tar
+
+      - name: Delete stale Ollama Docker image caches
+        if: steps.cache-ollama-image.outputs.cache-hit != 'true'
+        run: |
+          gh cache list --key ollama-docker-image- --json id --jq '.[].id' \
+            | xargs -r -I{} gh cache delete {}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull and save Ollama Docker image
         if: steps.cache-ollama-image.outputs.cache-hit != 'true'
