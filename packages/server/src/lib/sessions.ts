@@ -497,19 +497,23 @@ export const generateSessionResponse = async (args: {
     sessionId: args.sessionId,
   });
 
-  // Cancel any in-flight generation for this session so the new one always
-  // sees the full, up-to-date message history (cancel-previous strategy).
-  // Only applies when the session has cancelPrevious enabled (default: true).
-  const hadInFlightGeneration =
-    session.cancelPrevious && abortSessionGeneration(sessionKey);
-
-  // Concurrency guard: if no in-memory controller was found but generatingAt is
-  // still set (e.g. after a process restart or an edge-case race), use the
-  // timeout-based fallback to prevent duplicate LLM calls.
-  if (!hadInFlightGeneration && session.generatingAt) {
-    const elapsed = Date.now() - new Date(session.generatingAt).getTime();
-    if (elapsed < GENERATING_TIMEOUT_MS) {
+  if (session.cancelPrevious) {
+    // Cancel any in-flight generation so the new one always sees the full,
+    // up-to-date message history (cancel-previous strategy).
+    abortSessionGeneration(sessionKey);
+  } else {
+    // When cancel-previous is disabled, reject the new request if any
+    // generation is already in progress — either tracked in-memory (covers
+    // the race between controller registration and generatingAt being written)
+    // or persisted to the DB (covers the restart / cross-process case).
+    if (sessionAbortControllers.has(sessionKey)) {
       return 'already_generating' as const;
+    }
+    if (session.generatingAt) {
+      const elapsed = Date.now() - new Date(session.generatingAt).getTime();
+      if (elapsed < GENERATING_TIMEOUT_MS) {
+        return 'already_generating' as const;
+      }
     }
   }
 
