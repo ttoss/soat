@@ -51,16 +51,16 @@ describe('MCP tools - happy path', () => {
 
     const actorRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/actors')
-      .send({ projectId, name: 'Setup Actor' });
+      .send({ project_id: projectId, name: 'Setup Actor' });
     setupActorId = actorRes.body.id;
 
     const aiRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/ai-providers')
       .send({
-        projectId,
+        project_id: projectId,
         name: 'Chat Provider',
         provider: 'ollama',
-        defaultModel: 'llama3',
+        default_model: 'llama3',
       });
     chatAiProviderId = aiRes.body.id;
   });

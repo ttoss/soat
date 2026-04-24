@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import type { MulterFile } from '@ttoss/http-server';
 import { multer, Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
@@ -204,8 +205,13 @@ filesRouter.post(
       return;
     }
 
-    const body = ctx.request.body as { projectId: string; metadata?: string };
+    const body = ctx.request.body as {
+      projectId?: string;
+      project_id?: string;
+      metadata?: string;
+    };
     const file = ctx.file as MulterFile | undefined;
+    const projectId = body.projectId ?? body.project_id;
 
     if (!file) {
       ctx.status = 400;
@@ -213,14 +219,14 @@ filesRouter.post(
       return;
     }
 
-    if (!body.projectId) {
+    if (!projectId) {
       ctx.status = 400;
       ctx.body = { error: 'projectId is required' };
       return;
     }
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: body.projectId,
+      projectPublicId: projectId,
       action: 'files:UploadFile',
     });
     if (!allowed) {
@@ -230,7 +236,7 @@ filesRouter.post(
     }
 
     const project = await db.Project.findOne({
-      where: { publicId: body.projectId },
+      where: { publicId: projectId },
     });
     if (!project) {
       ctx.status = 400;

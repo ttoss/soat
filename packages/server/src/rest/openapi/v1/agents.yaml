@@ -109,7 +109,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: projectId
+        - name: project_id
           in: query
           required: false
           schema:
@@ -268,7 +268,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: projectId
+        - name: project_id
           in: query
           required: false
           schema:
@@ -356,17 +356,17 @@ paths:
               minimal:
                 summary: Minimal agent
                 value:
-                  aiProviderId: aip_V1StGXR8Z5jdHi6B
+                  ai_provider_id: aip_V1StGXR8Z5jdHi6B
               full:
                 summary: Agent with tools and instructions
                 value:
-                  aiProviderId: aip_V1StGXR8Z5jdHi6B
+                  ai_provider_id: aip_V1StGXR8Z5jdHi6B
                   name: Research Assistant
                   instructions: You are a helpful research assistant.
                   model: gpt-4o
-                  toolIds:
+                  tool_ids:
                     - agt_tool_abc123
-                  maxSteps: 10
+                  max_steps: 10
                   temperature: 0.7
       responses:
         '201':
@@ -408,7 +408,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: projectId
+        - name: project_id
           in: query
           required: false
           schema:
@@ -706,7 +706,7 @@ components:
           type: string
           description: Public ID of the agent tool
           example: agt_tool_V1StGXR8Z5jdHi6B
-        projectId:
+        project_id:
           type: string
           description: Public ID of the owning project
           example: proj_V1StGXR8Z5jdHi6B
@@ -751,10 +751,10 @@ components:
           items:
             type: string
           description: SOAT platform actions to expose
-        createdAt:
+        created_at:
           type: string
           format: date-time
-        updatedAt:
+        updated_at:
           type: string
           format: date-time
 
@@ -763,7 +763,7 @@ components:
       required:
         - name
       properties:
-        projectId:
+        project_id:
           type: string
           description: Public ID of the project
         name:
@@ -845,10 +845,10 @@ components:
           type: string
           description: Public ID of the agent
           example: agt_V1StGXR8Z5jdHi6B
-        projectId:
+        project_id:
           type: string
           description: Public ID of the owning project
-        aiProviderId:
+        ai_provider_id:
           type: string
           description: Public ID of the AI provider
         name:
@@ -863,39 +863,39 @@ components:
           type: string
           nullable: true
           description: Model identifier
-        toolIds:
+        tool_ids:
           type: array
           nullable: true
           items:
             type: string
           description: Public IDs of attached agent tools
-        maxSteps:
+        max_steps:
           type: integer
           nullable: true
           description: Maximum reasoning steps
-        toolChoice:
+        tool_choice:
           type: object
           nullable: true
           description: Tool choice strategy
-        stopConditions:
+        stop_conditions:
           type: array
           nullable: true
           items:
             type: object
           description: Stop conditions
-        activeToolIds:
+        active_tool_ids:
           type: array
           nullable: true
           items:
             type: string
           description: Subset of toolIds active per step
-        stepRules:
+        step_rules:
           type: array
           nullable: true
           items:
             type: object
           description: Per-step overrides
-        boundaryPolicy:
+        boundary_policy:
           type: object
           nullable: true
           description: Allowed/denied SOAT actions
@@ -903,22 +903,22 @@ components:
           type: number
           nullable: true
           description: Sampling temperature
-        createdAt:
+        created_at:
           type: string
           format: date-time
-        updatedAt:
+        updated_at:
           type: string
           format: date-time
 
     CreateAgentRequest:
       type: object
       required:
-        - aiProviderId
+        - ai_provider_id
       properties:
-        projectId:
+        project_id:
           type: string
           description: Public ID of the project
-        aiProviderId:
+        ai_provider_id:
           type: string
           description: Public ID of the AI provider
         name:
@@ -927,27 +927,27 @@ components:
           type: string
         model:
           type: string
-        toolIds:
+        tool_ids:
           type: array
           items:
             type: string
-        maxSteps:
+        max_steps:
           type: integer
-        toolChoice:
+        tool_choice:
           type: object
-        stopConditions:
+        stop_conditions:
           type: array
           items:
             type: object
-        activeToolIds:
+        active_tool_ids:
           type: array
           items:
             type: string
-        stepRules:
+        step_rules:
           type: array
           items:
             type: object
-        boundaryPolicy:
+        boundary_policy:
           type: object
         temperature:
           type: number
@@ -955,7 +955,7 @@ components:
     UpdateAgentRequest:
       type: object
       properties:
-        aiProviderId:
+        ai_provider_id:
           type: string
         name:
           type: string
@@ -966,33 +966,33 @@ components:
         model:
           type: string
           nullable: true
-        toolIds:
+        tool_ids:
           type: array
           nullable: true
           items:
             type: string
-        maxSteps:
+        max_steps:
           type: integer
           nullable: true
-        toolChoice:
+        tool_choice:
           type: object
           nullable: true
-        stopConditions:
+        stop_conditions:
           type: array
           nullable: true
           items:
             type: object
-        activeToolIds:
+        active_tool_ids:
           type: array
           nullable: true
           items:
             type: string
-        stepRules:
+        step_rules:
           type: array
           nullable: true
           items:
             type: object
-        boundaryPolicy:
+        boundary_policy:
           type: object
           nullable: true
         temperature:
@@ -1025,15 +1025,15 @@ components:
           type: boolean
           default: false
           description: When true the response is an SSE stream
-        traceId:
+        trace_id:
           type: string
           description: Optional trace ID to group generations
-        maxCallDepth:
+        max_call_depth:
           type: integer
           minimum: 0
           default: 10
           description: Maximum nested agent-call depth; 0 short-circuits with a depth-guard response
-        toolContext:
+        tool_context:
           type: object
           additionalProperties:
             type: string
@@ -1043,18 +1043,18 @@ components:
     SubmitToolOutputsRequest:
       type: object
       required:
-        - toolOutputs
+        - tool_outputs
       properties:
-        toolOutputs:
+        tool_outputs:
           type: array
           minItems: 1
           items:
             type: object
             required:
-              - toolCallId
+              - tool_call_id
               - output
             properties:
-              toolCallId:
+              tool_call_id:
                 type: string
                 description: ID of the tool call to respond to
               output:
@@ -1077,15 +1077,15 @@ components:
           type: string
           nullable: true
           description: Final text output (when completed)
-        toolCalls:
+        tool_calls:
           type: array
           nullable: true
           items:
             type: object
             properties:
-              toolCallId:
+              tool_call_id:
                 type: string
-              toolName:
+              tool_name:
                 type: string
               args:
                 type: object
@@ -1098,15 +1098,15 @@ components:
           type: string
           description: Public ID of the trace
           example: agt_trace_V1StGXR8Z5jdHi6B
-        projectId:
+        project_id:
           type: string
-        agentId:
+        agent_id:
           type: string
         generations:
           type: array
           items:
             type: object
-        createdAt:
+        created_at:
           type: string
           format: date-time
 

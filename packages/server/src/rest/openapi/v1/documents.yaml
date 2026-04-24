@@ -30,7 +30,7 @@ paths:
       description: Returns all documents the caller has access to. If projectId is provided, returns only documents in that project. project keys are scoped to a single project automatically. JWT users without projectId receive documents across all their accessible projects.
       operationId: listDocuments
       parameters:
-        - name: projectId
+        - name: project_id
           in: query
           required: false
           description: Project ID (optional)
@@ -73,7 +73,7 @@ paths:
               required:
                 - content
               properties:
-                projectId:
+                project_id:
                   type: string
                   description: Project ID. Required for JWT auth; omit when using an project key.
                   example: 'proj_V1StGXR8Z5jdHi6B'
@@ -199,7 +199,7 @@ paths:
               required:
                 - query
               properties:
-                projectId:
+                project_id:
                   type: string
                   description: Project ID (optional). Omit to search across all accessible projects.
                   example: 'proj_V1StGXR8Z5jdHi6B'
@@ -245,11 +245,11 @@ components:
           type: string
           description: Document ID
           example: 'doc_V1StGXR8Z5jdHi6B'
-        fileId:
+        file_id:
           type: string
           description: Underlying file ID
           example: 'file_V1StGXR8Z5jdHi6B'
-        projectId:
+        project_id:
           type: string
           description: Project ID
           example: 'proj_V1StGXR8Z5jdHi6B'
@@ -266,10 +266,10 @@ components:
           nullable: true
           description: Text content (only present on getDocument)
           example: 'The quick brown fox jumps over the lazy dog.'
-        createdAt:
+        created_at:
           type: string
           format: date-time
-        updatedAt:
+        updated_at:
           type: string
           format: date-time
     ErrorResponse:

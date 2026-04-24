@@ -17,15 +17,15 @@ When a provider is linked to a secret the secret's encrypted value is retrieved 
 | Field          | Type             | Description                                               |
 | -------------- | ---------------- | --------------------------------------------------------- |
 | `id`           | string           | Public identifier (e.g. `aip_…`)                          |
-| `projectId`    | string           | ID of the owning project                                  |
-| `secretId`     | string \| null   | Public ID of the linked secret, or `null`                 |
+| `project_id`    | string           | ID of the owning project                                  |
+| `secret_id`     | string \| null   | Public ID of the linked secret, or `null`                 |
 | `name`         | string           | Human-readable label                                      |
 | `provider`     | `AiProviderSlug` | Provider slug (see below)                                 |
-| `defaultModel` | string           | Default model name sent to the provider API               |
-| `baseUrl`      | string \| null   | Override base URL (optional, useful for self-hosted LLMs) |
+| `default_model` | string           | Default model name sent to the provider API               |
+| `base_url`      | string \| null   | Override base URL (optional, useful for self-hosted LLMs) |
 | `config`       | object \| null   | Arbitrary provider-specific configuration object          |
-| `createdAt`    | string           | ISO 8601 creation timestamp                               |
-| `updatedAt`    | string           | ISO 8601 last-updated timestamp                           |
+| `created_at`    | string           | ISO 8601 creation timestamp                               |
+| `updated_at`    | string           | ISO 8601 last-updated timestamp                           |
 
 ### Provider Slugs
 
@@ -49,7 +49,7 @@ Valid values for the `provider` field:
 | Action          | Permission                     | REST Endpoint                               | MCP Tool             |
 | --------------- | ------------------------------ | ------------------------------------------- | -------------------- |
 | List providers  | `aiProviders:ListAiProviders`  | `GET /api/v1/ai-providers`                  | `list-ai-providers`  |
-| Get a provider  | `aiProviders:GetAiProvider`    | `GET /api/v1/ai-providers/:aiProviderId`    | `get-ai-provider`    |
+| Get a provider  | `aiProviders:GetAiProvider`    | `GET /api/v1/ai-providers/:ai_provider_id`    | `get-ai-provider`    |
 | Create provider | `aiProviders:CreateAiProvider` | `POST /api/v1/ai-providers`                 | `create-ai-provider` |
-| Update provider | `aiProviders:UpdateAiProvider` | `PATCH /api/v1/ai-providers/:aiProviderId`  | `update-ai-provider` |
-| Delete provider | `aiProviders:DeleteAiProvider` | `DELETE /api/v1/ai-providers/:aiProviderId` | `delete-ai-provider` |
+| Update provider | `aiProviders:UpdateAiProvider` | `PATCH /api/v1/ai-providers/:ai_provider_id`  | `update-ai-provider` |
+| Delete provider | `aiProviders:DeleteAiProvider` | `DELETE /api/v1/ai-providers/:ai_provider_id` | `delete-ai-provider` |

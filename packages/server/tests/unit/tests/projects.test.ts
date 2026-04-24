@@ -29,8 +29,8 @@ describe('Projects', () => {
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
       expect(response.body.name).toBe('My Project');
-      expect(response.body.createdAt).toBeDefined();
-      expect(response.body.updatedAt).toBeDefined();
+      expect(response.body.created_at).toBeDefined();
+      expect(response.body.updated_at).toBeDefined();
     });
 
     test('unauthenticated request cannot create a project', async () => {
@@ -90,7 +90,7 @@ describe('Projects', () => {
 
       await authenticatedTestClient(adminToken)
         .post(`/api/v1/projects/${memberProjectId}/members`)
-        .send({ userId, policyId });
+        .send({ user_id: userId, policy_id: policyId });
 
       const response =
         await authenticatedTestClient(userToken).get('/api/v1/projects');
@@ -126,7 +126,7 @@ describe('Projects', () => {
 
         await authenticatedTestClient(adminToken)
           .post(`/api/v1/projects/${projectAId}/members`)
-          .send({ userId, policyId: policyAId });
+          .send({ user_id: userId, policy_id: policyAId });
 
         const policyBRes = await authenticatedTestClient(adminToken)
           .post(`/api/v1/projects/${projectBId}/policies`)
@@ -135,13 +135,13 @@ describe('Projects', () => {
 
         await authenticatedTestClient(adminToken)
           .post(`/api/v1/projects/${projectBId}/members`)
-          .send({ userId, policyId: policyBId });
+          .send({ user_id: userId, policy_id: policyBId });
 
         const projectKeyRes = await authenticatedTestClient(userToken)
           .post('/api/v1/project-keys')
           .send({
-            projectId: projectAId,
-            policyId: policyAId,
+            project_id: projectAId,
+            policy_id: policyAId,
             name: 'Scoped Key',
           });
         rawProjectKey = projectKeyRes.body.key;
@@ -201,7 +201,7 @@ describe('Projects', () => {
 
       await authenticatedTestClient(adminToken)
         .post(`/api/v1/projects/${projectId}/members`)
-        .send({ userId, policyId });
+        .send({ user_id: userId, policy_id: policyId });
 
       const response = await authenticatedTestClient(userToken).get(
         `/api/v1/projects/${projectId}`
@@ -289,7 +289,7 @@ describe('Projects', () => {
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
       expect(response.body.permissions).toEqual(['files:read', 'files:write']);
-      expect(response.body.projectId).toBe(projectId);
+      expect(response.body.project_id).toBe(projectId);
     });
 
     test('admin can create a policy with notPermissions', async () => {
@@ -297,11 +297,11 @@ describe('Projects', () => {
         .post(`/api/v1/projects/${projectId}/policies`)
         .send({
           permissions: ['files:read'],
-          notPermissions: ['files:delete'],
+          not_permissions: ['files:delete'],
         });
 
       expect(response.status).toBe(201);
-      expect(response.body.notPermissions).toEqual(['files:delete']);
+      expect(response.body.not_permissions).toEqual(['files:delete']);
     });
 
     test('unauthenticated request cannot create a policy', async () => {
@@ -352,7 +352,7 @@ describe('Projects', () => {
 
       await authenticatedTestClient(adminToken)
         .post(`/api/v1/projects/${projectId}/members`)
-        .send({ userId: memberUserId, policyId: policyRes.body.id });
+        .send({ user_id: memberUserId, policy_id: policyRes.body.id });
     });
 
     test('admin can list project policies', async () => {
@@ -410,7 +410,7 @@ describe('Projects', () => {
     test('admin can add a user to a project', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post(`/api/v1/projects/${projectId}/members`)
-        .send({ userId, policyId });
+        .send({ user_id: userId, policy_id: policyId });
 
       expect(response.status).toBe(201);
     });
@@ -418,7 +418,7 @@ describe('Projects', () => {
     test('unauthenticated request cannot add a member', async () => {
       const response = await testClient
         .post(`/api/v1/projects/${projectId}/members`)
-        .send({ userId, policyId });
+        .send({ user_id: userId, policy_id: policyId });
 
       expect(response.status).toBe(401);
     });
@@ -426,7 +426,7 @@ describe('Projects', () => {
     test('non-admin user cannot add a member', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/projects/${projectId}/members`)
-        .send({ userId, policyId });
+        .send({ user_id: userId, policy_id: policyId });
 
       expect(response.status).toBe(403);
     });
@@ -434,7 +434,7 @@ describe('Projects', () => {
     test('returns 404 for non-existent project', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/projects/proj_nonexistent12345/members')
-        .send({ userId, policyId });
+        .send({ user_id: userId, policy_id: policyId });
 
       expect(response.status).toBe(404);
     });
@@ -456,12 +456,12 @@ describe('Projects', () => {
 
       const memberRes = await authenticatedTestClient(adminToken)
         .post(`/api/v1/projects/${projectId}/members`)
-        .send({ userId, policyId });
+        .send({ user_id: userId, policy_id: policyId });
       expect(memberRes.status).toBe(201);
 
       const projectKeyRes = await authenticatedTestClient(userToken)
         .post('/api/v1/project-keys')
-        .send({ projectId, policyId, name: 'Cascade Test Key' });
+        .send({ project_id: projectId, policy_id: policyId, name: 'Cascade Test Key' });
       expect(projectKeyRes.status).toBe(201);
       const projectKeyId = projectKeyRes.body.id;
 

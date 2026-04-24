@@ -41,49 +41,57 @@ describe('Actors', () => {
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
-      .send({ userId, policyId });
+      .send({ user_id: userId, policy_id: policyId });
   });
 
   describe('POST /api/v1/actors', () => {
     test('authenticated user with permission can create an actor', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ projectId, name: 'Alice' });
+        .send({ project_id: projectId, name: 'Alice' });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toMatch(/^act_/);
       expect(response.body.name).toBe('Alice');
-      expect(response.body.projectId).toBe(projectId);
+      expect(response.body.project_id).toBe(projectId);
       expect(response.body.type).toBeUndefined();
-      expect(response.body.externalId).toBeUndefined();
+      expect(response.body.external_id).toBeUndefined();
     });
 
     test('can create an actor with type and externalId', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
         .send({
-          projectId,
+          project_id: projectId,
           name: 'Bob',
           type: 'customer',
-          externalId: '+15550001111',
+          external_id: '+15550001111',
         });
 
       expect(response.status).toBe(201);
       expect(response.body.name).toBe('Bob');
       expect(response.body.type).toBe('customer');
-      expect(response.body.externalId).toBe('+15550001111');
+      expect(response.body.external_id).toBe('+15550001111');
     });
 
     test('duplicate externalId within same project returns 200 with existing actor (idempotent)', async () => {
       const first = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ projectId, name: 'Charlie', externalId: '+15559999999' });
+        .send({
+          project_id: projectId,
+          name: 'Charlie',
+          external_id: '+15559999999',
+        });
 
       expect(first.status).toBe(201);
 
       const second = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ projectId, name: 'Charlie2', externalId: '+15559999999' });
+        .send({
+          project_id: projectId,
+          name: 'Charlie2',
+          external_id: '+15559999999',
+        });
 
       expect(second.status).toBe(200);
       expect(second.body.id).toBe(first.body.id);
@@ -93,17 +101,21 @@ describe('Actors', () => {
     test('new externalId returns 201', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ projectId, name: 'Dave', externalId: '+15558887777' });
+        .send({
+          project_id: projectId,
+          name: 'Dave',
+          external_id: '+15558887777',
+        });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
-      expect(response.body.externalId).toBe('+15558887777');
+      expect(response.body.external_id).toBe('+15558887777');
     });
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .post('/api/v1/actors')
-        .send({ projectId, name: 'Anon' });
+        .send({ project_id: projectId, name: 'Anon' });
 
       expect(response.status).toBe(401);
     });
@@ -111,7 +123,7 @@ describe('Actors', () => {
     test('missing name returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ projectId });
+        .send({ project_id: projectId });
 
       expect(response.status).toBe(400);
     });
@@ -129,15 +141,15 @@ describe('Actors', () => {
     beforeAll(async () => {
       await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ projectId, name: 'ListActor1' });
+        .send({ project_id: projectId, name: 'ListActor1' });
       await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ projectId, name: 'ListActor2' });
+        .send({ project_id: projectId, name: 'ListActor2' });
     });
 
     test('authenticated user with permission can list actors', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/actors?projectId=${projectId}`
+        `/api/v1/actors?project_id=${projectId}`
       );
 
       expect(response.status).toBe(200);
@@ -156,27 +168,27 @@ describe('Actors', () => {
 
     test('can filter by externalId', async () => {
       await authenticatedTestClient(userToken).post('/api/v1/actors').send({
-        projectId,
+        project_id: projectId,
         name: 'ExternalFiltered',
-        externalId: '+15558887777',
+        external_id: '+15558887777',
       });
 
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/actors?externalId=%2B15558887777`
+        `/api/v1/actors?external_id=%2B15558887777`
       );
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.data)).toBe(true);
       expect(
-        response.body.data.some((a: { externalId: string }) => {
-          return a.externalId === '+15558887777';
+        response.body.data.some((a: { external_id: string }) => {
+          return a.external_id === '+15558887777';
         })
       ).toBe(true);
     });
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.get(
-        `/api/v1/actors?projectId=${projectId}`
+        `/api/v1/actors?project_id=${projectId}`
       );
 
       expect(response.status).toBe(401);
@@ -189,7 +201,7 @@ describe('Actors', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ projectId, name: 'FetchActor', type: 'agent' });
+        .send({ project_id: projectId, name: 'FetchActor', type: 'agent' });
       actorId = res.body.id;
     });
 
@@ -223,7 +235,7 @@ describe('Actors', () => {
     test('user with permission can delete an actor', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ projectId, name: 'ToDelete' });
+        .send({ project_id: projectId, name: 'ToDelete' });
       const actorId = createRes.body.id;
 
       const deleteRes = await authenticatedTestClient(userToken).delete(
@@ -241,7 +253,7 @@ describe('Actors', () => {
     test('unauthenticated request returns 401', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ projectId, name: 'ToDeleteAnon' });
+        .send({ project_id: projectId, name: 'ToDeleteAnon' });
 
       const response = await testClient.delete(
         `/api/v1/actors/${createRes.body.id}`
@@ -265,7 +277,7 @@ describe('Actors', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ projectId, name: 'UpdateMe', type: 'customer' });
+        .send({ project_id: projectId, name: 'UpdateMe', type: 'customer' });
       actorId = res.body.id;
     });
 
@@ -282,11 +294,11 @@ describe('Actors', () => {
     test('user can update type and externalId', async () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/actors/${actorId}`)
-        .send({ type: 'assistant', externalId: '+15551112222' });
+        .send({ type: 'assistant', external_id: '+15551112222' });
 
       expect(response.status).toBe(200);
       expect(response.body.type).toBe('assistant');
-      expect(response.body.externalId).toBe('+15551112222');
+      expect(response.body.external_id).toBe('+15551112222');
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -312,7 +324,7 @@ describe('Actors', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ projectId, name: 'UpdateMe', type: 'customer' });
+        .send({ project_id: projectId, name: 'UpdateMe', type: 'customer' });
       actorId = res.body.id;
     });
 
@@ -329,11 +341,11 @@ describe('Actors', () => {
     test('user can update type and externalId', async () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/actors/${actorId}`)
-        .send({ type: 'assistant', externalId: '+15559998888' });
+        .send({ type: 'assistant', external_id: '+15559998888' });
 
       expect(response.status).toBe(200);
       expect(response.body.type).toBe('assistant');
-      expect(response.body.externalId).toBe('+15559998888');
+      expect(response.body.external_id).toBe('+15559998888');
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -357,18 +369,26 @@ describe('Actors', () => {
     beforeAll(async () => {
       await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ projectId, name: 'NameFilterAgent', type: 'agent' });
+        .send({
+          project_id: projectId,
+          name: 'NameFilterAgent',
+          type: 'agent',
+        });
       await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ projectId, name: 'NameFilterCustomer', type: 'customer' });
+        .send({
+          project_id: projectId,
+          name: 'NameFilterCustomer',
+          type: 'customer',
+        });
       await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ projectId, name: 'Unrelated', type: 'agent' });
+        .send({ project_id: projectId, name: 'Unrelated', type: 'agent' });
     });
 
     test('filtering by name (partial, case-insensitive) returns matching actors', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/actors?projectId=${projectId}&name=namefilter`
+        `/api/v1/actors?project_id=${projectId}&name=namefilter`
       );
 
       expect(response.status).toBe(200);
@@ -382,7 +402,7 @@ describe('Actors', () => {
 
     test('filtering by type returns only matching actors', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/actors?projectId=${projectId}&type=customer`
+        `/api/v1/actors?project_id=${projectId}&type=customer`
       );
 
       expect(response.status).toBe(200);
@@ -398,7 +418,7 @@ describe('Actors', () => {
 
     test('filtering by name and type combined', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/actors?projectId=${projectId}&name=namefilter&type=agent`
+        `/api/v1/actors?project_id=${projectId}&name=namefilter&type=agent`
       );
 
       expect(response.status).toBe(200);
@@ -411,7 +431,7 @@ describe('Actors', () => {
 
     test('non-matching name filter returns empty array', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/actors?projectId=${projectId}&name=xyznonexistentxyz`
+        `/api/v1/actors?project_id=${projectId}&name=xyznonexistentxyz`
       );
 
       expect(response.status).toBe(200);

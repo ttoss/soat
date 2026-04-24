@@ -284,9 +284,9 @@ components:
       properties:
         id:
           type: string
-        projectId:
+        project_id:
           type: string
-        policyId:
+        policy_id:
           type: string
           nullable: true
         name:
@@ -302,10 +302,10 @@ components:
             type: string
         active:
           type: boolean
-        createdAt:
+        created_at:
           type: string
           format: date-time
-        updatedAt:
+        updated_at:
           type: string
           format: date-time
 
@@ -334,7 +334,7 @@ components:
           type: array
           items:
             type: string
-        policyId:
+        policy_id:
           type: string
 
     UpdateWebhookRequest:
@@ -352,7 +352,7 @@ components:
             type: string
         active:
           type: boolean
-        policyId:
+        policy_id:
           type: string
           nullable: true
 
@@ -361,7 +361,7 @@ components:
       properties:
         id:
           type: string
-        eventType:
+        event_type:
           type: string
         payload:
           type: object
@@ -371,22 +371,22 @@ components:
             - pending
             - success
             - failed
-        statusCode:
+        status_code:
           type: integer
           nullable: true
         attempts:
           type: integer
-        lastAttemptAt:
+        last_attempt_at:
           type: string
           format: date-time
           nullable: true
-        responseBody:
+        response_body:
           type: string
           nullable: true
-        createdAt:
+        created_at:
           type: string
           format: date-time
-        updatedAt:
+        updated_at:
           type: string
           format: date-time
 

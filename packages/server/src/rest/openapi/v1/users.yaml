@@ -177,11 +177,11 @@ components:
           type: string
           enum: [admin, user]
           example: user
-        createdAt:
+        created_at:
           type: string
           format: date-time
           example: '2024-01-01T00:00:00.000Z'
-        updatedAt:
+        updated_at:
           type: string
           format: date-time
           example: '2024-01-01T00:00:00.000Z'

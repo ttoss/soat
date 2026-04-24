@@ -37,14 +37,14 @@ volumes:
 | ------------- | ------------------------ | ----------------------------------------- |
 | `id`          | string                   | Public identifier                         |
 | `filename`    | string                   | Original filename                         |
-| `contentType` | string                   | MIME type                                 |
+| `content_type` | string                   | MIME type                                 |
 | `size`        | number                   | File size in bytes                        |
-| `storageType` | `local` \| `s3` \| `gcs` | Storage backend (currently `local`)       |
-| `storagePath` | string                   | Absolute path on disk                     |
+| `storage_type` | `local` \| `s3` \| `gcs` | Storage backend (currently `local`)       |
+| `storage_path` | string                   | Absolute path on disk                     |
 | `metadata`    | string                   | Arbitrary JSON string for custom metadata |
-| `projectId`   | string                   | ID of the owning project                  |
-| `createdAt`   | string                   | ISO 8601 creation timestamp               |
-| `updatedAt`   | string                   | ISO 8601 last-updated timestamp           |
+| `project_id`   | string                   | ID of the owning project                  |
+| `created_at`   | string                   | ISO 8601 creation timestamp               |
+| `updated_at`   | string                   | ISO 8601 last-updated timestamp           |
 
 ## Permissions
 

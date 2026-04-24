@@ -38,14 +38,14 @@ describe('Project Keys', () => {
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
-      .send({ userId: aliceId, policyId });
+      .send({ user_id: aliceId, policy_id: policyId });
   });
 
   describe('POST /api/v1/project-keys', () => {
     test('returns 401 if not authenticated', async () => {
       const response = await testClient
         .post('/api/v1/project-keys')
-        .send({ projectId, policyId, name: 'My Key' });
+        .send({ project_id: projectId, policy_id: policyId, name: 'My Key' });
 
       expect(response.status).toBe(401);
     });
@@ -61,7 +61,7 @@ describe('Project Keys', () => {
     test('returns 400 if project does not exist', async () => {
       const response = await authenticatedTestClient(aliceToken)
         .post('/api/v1/project-keys')
-        .send({ projectId: 'proj_nonexistent', policyId, name: 'My Key' });
+        .send({ project_id: 'proj_nonexistent', policy_id: policyId, name: 'My Key' });
 
       expect(response.status).toBe(400);
     });
@@ -69,7 +69,7 @@ describe('Project Keys', () => {
     test('returns 403 if user is not a member of the project', async () => {
       const response = await authenticatedTestClient(bobToken)
         .post('/api/v1/project-keys')
-        .send({ projectId, policyId, name: 'Bob Key' });
+        .send({ project_id: projectId, policy_id: policyId, name: 'Bob Key' });
 
       expect(response.status).toBe(403);
     });
@@ -87,7 +87,7 @@ describe('Project Keys', () => {
 
       const response = await authenticatedTestClient(aliceToken)
         .post('/api/v1/project-keys')
-        .send({ projectId, policyId: otherPolicyId, name: 'My Key' });
+        .send({ project_id: projectId, policy_id: otherPolicyId, name: 'My Key' });
 
       expect(response.status).toBe(400);
     });
@@ -95,15 +95,15 @@ describe('Project Keys', () => {
     test('returns 201 and the full key on success', async () => {
       const response = await authenticatedTestClient(aliceToken)
         .post('/api/v1/project-keys')
-        .send({ projectId, policyId, name: 'Alice Key' });
+        .send({ project_id: projectId, policy_id: policyId, name: 'Alice Key' });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
       expect(response.body.name).toBe('Alice Key');
       expect(response.body.key).toBeDefined();
-      expect(response.body.keyPrefix).toBeDefined();
-      expect(response.body.createdAt).toBeDefined();
-      expect(response.body.updatedAt).toBeDefined();
+      expect(response.body.key_prefix).toBeDefined();
+      expect(response.body.created_at).toBeDefined();
+      expect(response.body.updated_at).toBeDefined();
     });
   });
 
@@ -113,7 +113,7 @@ describe('Project Keys', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(aliceToken)
         .post('/api/v1/project-keys')
-        .send({ projectId, policyId, name: 'Get Test Key' });
+        .send({ project_id: projectId, policy_id: policyId, name: 'Get Test Key' });
       projectKeyId = res.body.id;
     });
 
@@ -149,10 +149,10 @@ describe('Project Keys', () => {
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(projectKeyId);
       expect(response.body.name).toBe('Get Test Key');
-      expect(response.body.keyPrefix).toBeDefined();
+      expect(response.body.key_prefix).toBeDefined();
       expect(response.body.key).toBeUndefined();
-      expect(response.body.createdAt).toBeDefined();
-      expect(response.body.updatedAt).toBeDefined();
+      expect(response.body.created_at).toBeDefined();
+      expect(response.body.updated_at).toBeDefined();
     });
   });
 
@@ -163,7 +163,7 @@ describe('Project Keys', () => {
     beforeAll(async () => {
       const keyRes = await authenticatedTestClient(aliceToken)
         .post('/api/v1/project-keys')
-        .send({ projectId, policyId, name: 'Update Test Key' });
+        .send({ project_id: projectId, policy_id: policyId, name: 'Update Test Key' });
       projectKeyId = keyRes.body.id;
 
       const newPolicyRes = await authenticatedTestClient(adminToken)
@@ -175,7 +175,7 @@ describe('Project Keys', () => {
     test('returns 401 if not authenticated', async () => {
       const response = await testClient
         .put(`/api/v1/project-keys/${projectKeyId}`)
-        .send({ policyId: newPolicyId });
+        .send({ policy_id: newPolicyId });
 
       expect(response.status).toBe(401);
     });
@@ -191,7 +191,7 @@ describe('Project Keys', () => {
     test('returns 400 if policy does not exist', async () => {
       const response = await authenticatedTestClient(aliceToken)
         .put(`/api/v1/project-keys/${projectKeyId}`)
-        .send({ policyId: 'policy_nonexistent' });
+        .send({ policy_id: 'policy_nonexistent' });
 
       expect(response.status).toBe(400);
     });
@@ -199,7 +199,7 @@ describe('Project Keys', () => {
     test('returns 404 if project key does not exist', async () => {
       const response = await authenticatedTestClient(aliceToken)
         .put('/api/v1/project-keys/key_nonexistent')
-        .send({ policyId: newPolicyId });
+        .send({ policy_id: newPolicyId });
 
       expect(response.status).toBe(404);
     });
@@ -207,7 +207,7 @@ describe('Project Keys', () => {
     test('returns 403 if user does not own the project key', async () => {
       const response = await authenticatedTestClient(bobToken)
         .put(`/api/v1/project-keys/${projectKeyId}`)
-        .send({ policyId: newPolicyId });
+        .send({ policy_id: newPolicyId });
 
       expect(response.status).toBe(403);
     });
@@ -225,7 +225,7 @@ describe('Project Keys', () => {
 
       const response = await authenticatedTestClient(aliceToken)
         .put(`/api/v1/project-keys/${projectKeyId}`)
-        .send({ policyId: otherPolicyId });
+        .send({ policy_id: otherPolicyId });
 
       expect(response.status).toBe(400);
     });
@@ -233,11 +233,11 @@ describe('Project Keys', () => {
     test('returns 200 and the updated project key', async () => {
       const response = await authenticatedTestClient(aliceToken)
         .put(`/api/v1/project-keys/${projectKeyId}`)
-        .send({ policyId: newPolicyId });
+        .send({ policy_id: newPolicyId });
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(projectKeyId);
-      expect(response.body.policyId).toBe(newPolicyId);
+      expect(response.body.policy_id).toBe(newPolicyId);
     });
   });
 });

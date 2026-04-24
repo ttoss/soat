@@ -45,13 +45,13 @@ paths:
               basic:
                 summary: Minimal chat
                 value:
-                  aiProviderId: aip_V1StGXR8Z5jdHi6B
-              withSystem:
+                  ai_provider_id: aip_V1StGXR8Z5jdHi6B
+              with_system:
                 summary: Chat with system message
                 value:
-                  aiProviderId: aip_V1StGXR8Z5jdHi6B
+                  ai_provider_id: aip_V1StGXR8Z5jdHi6B
                   name: Support Bot
-                  systemMessage: You are a helpful support assistant.
+                  system_message: You are a helpful support assistant.
                   model: gpt-4o
       responses:
         '201':
@@ -93,7 +93,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: projectId
+        - name: project_id
           in: query
           required: false
           schema:
@@ -217,13 +217,13 @@ paths:
                   messages:
                     - role: user
                       content: What can you help me with?
-              withDocument:
+              with_document:
                 summary: Message referencing a document
                 value:
                   messages:
                     - role: user
-                      documentId: doc_V1StGXR8Z5jdHi6B
-              withSystemOverride:
+                      document_id: doc_V1StGXR8Z5jdHi6B
+              with_system_override:
                 summary: Override system message
                 value:
                   messages:
@@ -287,10 +287,10 @@ paths:
                   messages:
                     - role: user
                       content: Hello, how are you?
-              withProvider:
+              with_provider:
                 summary: With explicit AI provider and streaming
                 value:
-                  aiProviderId: aip_V1StGXR8Z5jdHi6B
+                  ai_provider_id: aip_V1StGXR8Z5jdHi6B
                   model: gpt-4o
                   messages:
                     - role: system
@@ -345,11 +345,11 @@ components:
           type: string
           description: Public ID of the chat
           example: cht_V1StGXR8Z5jdHi6B
-        projectId:
+        project_id:
           type: string
           description: Public ID of the owning project
           example: proj_V1StGXR8Z5jdHi6B
-        aiProviderId:
+        ai_provider_id:
           type: string
           description: Public ID of the AI provider
           example: aip_V1StGXR8Z5jdHi6B
@@ -358,7 +358,7 @@ components:
           nullable: true
           description: Optional human-readable name
           example: Support Bot
-        systemMessage:
+        system_message:
           type: string
           nullable: true
           description: Optional system message sent with every completion
@@ -368,23 +368,23 @@ components:
           nullable: true
           description: Optional model override for this chat
           example: gpt-4o
-        createdAt:
+        created_at:
           type: string
           format: date-time
-        updatedAt:
+        updated_at:
           type: string
           format: date-time
 
     CreateChatRequest:
       type: object
       required:
-        - aiProviderId
+        - ai_provider_id
       properties:
-        aiProviderId:
+        ai_provider_id:
           type: string
           description: Public ID of the AI provider
           example: aip_V1StGXR8Z5jdHi6B
-        projectId:
+        project_id:
           type: string
           description: >
             Public ID of the project. Required when the user belongs to multiple
@@ -394,7 +394,7 @@ components:
           type: string
           description: Optional human-readable name
           example: Support Bot
-        systemMessage:
+        system_message:
           type: string
           description: Optional system message applied to all completions on this chat
           example: You are a helpful support assistant.
@@ -419,7 +419,7 @@ components:
           type: string
           description: Text content of the message (mutually exclusive with documentId)
           example: What can you help me with?
-        documentId:
+        document_id:
           type: string
           description: >
             Public ID of a document whose content is used as the message body
@@ -469,7 +469,7 @@ components:
       required:
         - messages
       properties:
-        aiProviderId:
+        ai_provider_id:
           type: string
           description: >
             Public ID of the AI provider to use. When omitted the server falls

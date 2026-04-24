@@ -44,7 +44,7 @@ describe('Webhooks', () => {
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
-      .send({ userId, policyId });
+      .send({ user_id: userId, policy_id: policyId });
   });
 
   describe('POST /api/v1/projects/:projectId/webhooks', () => {
@@ -64,7 +64,7 @@ describe('Webhooks', () => {
       expect(response.body.events).toEqual(['file.created', 'file.*']);
       expect(response.body.active).toBe(true);
       expect(response.body.secret).toBeDefined();
-      expect(response.body.projectId).toBe(projectId);
+      expect(response.body.project_id).toBe(projectId);
     });
 
     test('returns 400 when required fields are missing', async () => {
@@ -99,8 +99,8 @@ describe('Webhooks', () => {
       await authenticatedTestClient(adminToken)
         .post(`/api/v1/projects/${projectId}/members`)
         .send({
-          userId: noPermUserRes.body.id,
-          policyId: noPermPolicyRes.body.id,
+          user_id: noPermUserRes.body.id,
+          policy_id: noPermPolicyRes.body.id,
         });
 
       const noPermToken = await loginAs('webhooksnoperm', 'pass123');

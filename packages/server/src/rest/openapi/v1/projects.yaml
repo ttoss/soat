@@ -54,7 +54,7 @@ paths:
                     example: proj_V1StGXR8Z5jdHi6B
                   name:
                     type: string
-                  createdAt:
+                  created_at:
                     type: string
                     format: date-time
         '401':
@@ -133,7 +133,7 @@ paths:
                   items:
                     type: string
                   example: ['files:ListFiles', 'files:CreateFile']
-                notPermissions:
+                not_permissions:
                   type: array
                   items:
                     type: string

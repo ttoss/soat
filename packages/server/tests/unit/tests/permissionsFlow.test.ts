@@ -67,13 +67,13 @@ describe('Group 1: Setup - Admin creates project, user, and assigns permissions'
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
         permissions: ['files:GetFile'],
-        notPermissions: ['files:DeleteFile'],
+        not_permissions: ['files:DeleteFile'],
       });
 
     expect(response.status).toBe(201);
     expect(response.body.id).toBeDefined();
     expect(response.body.permissions).toEqual(['files:GetFile']);
-    expect(response.body.notPermissions).toEqual(['files:DeleteFile']);
+    expect(response.body.not_permissions).toEqual(['files:DeleteFile']);
   });
 
   test('admin adds user to project with the read-only policy', async () => {
@@ -82,15 +82,15 @@ describe('Group 1: Setup - Admin creates project, user, and assigns permissions'
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
         permissions: ['files:GetFile'],
-        notPermissions: ['files:DeleteFile'],
+        not_permissions: ['files:DeleteFile'],
       });
     const policyId = policyResponse.body.id;
 
     const response = await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
       .send({
-        userId,
-        policyId,
+        user_id: userId,
+        policy_id: policyId,
       });
 
     expect(response.status).toBe(201);
@@ -131,25 +131,25 @@ describe('Group 2: JWT Permissions - User can read but not delete file', () => {
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
         permissions: ['files:GetFile'],
-        notPermissions: ['files:DeleteFile'],
+        not_permissions: ['files:DeleteFile'],
       });
     const policyId = policyResponse.body.id;
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
       .send({
-        userId,
-        policyId,
+        user_id: userId,
+        policy_id: policyId,
       });
 
     // Create file in project
     const fileResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/files')
       .send({
-        projectId,
+        project_id: projectId,
         filename: 'test.txt',
-        storageType: 'local',
-        storagePath: '/tmp/test.txt',
+        storage_type: 'local',
+        storage_path: '/tmp/test.txt',
       });
     fileId = fileResponse.body.id;
   });
@@ -209,15 +209,15 @@ describe('Group 3: project key Permissions - Create key, assign permissions, tes
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
         permissions: ['files:GetFile', 'projects:GetProject'],
-        notPermissions: ['files:DeleteFile'],
+        not_permissions: ['files:DeleteFile'],
       });
     const policyId = policyResponse.body.id;
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
       .send({
-        userId,
-        policyId,
+        user_id: userId,
+        policy_id: policyId,
       });
 
     // Create project key with delete permission
@@ -231,8 +231,8 @@ describe('Group 3: project key Permissions - Create key, assign permissions, tes
     const projectKeyResponse = await authenticatedTestClient(userToken)
       .post('/api/v1/project-keys')
       .send({
-        projectId,
-        policyId: newPolicyId,
+        project_id: projectId,
+        policy_id: newPolicyId,
         name: 'Test project key',
       });
     projectKey = projectKeyResponse.body.key;
@@ -241,10 +241,10 @@ describe('Group 3: project key Permissions - Create key, assign permissions, tes
     const fileResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/files')
       .send({
-        projectId,
+        project_id: projectId,
         filename: 'test.txt',
-        storageType: 'local',
-        storagePath: '/tmp/test.txt',
+        storage_type: 'local',
+        storage_path: '/tmp/test.txt',
       });
     fileId = fileResponse.body.id;
   });
@@ -259,8 +259,8 @@ describe('Group 3: project key Permissions - Create key, assign permissions, tes
     const response = await authenticatedTestClient(userToken)
       .post('/api/v1/project-keys')
       .send({
-        projectId,
-        policyId,
+        project_id: projectId,
+        policy_id: policyId,
         name: 'Test project key',
       });
 
@@ -268,7 +268,7 @@ describe('Group 3: project key Permissions - Create key, assign permissions, tes
     expect(response.body.id).toBeDefined();
     expect(response.body.name).toBe('Test project key');
     expect(response.body.key).toMatch(/^sk_/);
-    expect(response.body.keyPrefix).toBe(response.body.key.slice(0, 8));
+    expect(response.body.key_prefix).toBe(response.body.key.slice(0, 8));
   });
 
   test('user can read file using the project key', async () => {
@@ -326,7 +326,7 @@ describe('Group 4: Two users in the same project with different policies', () =>
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
         permissions: ['files:GetFile'],
-        notPermissions: [],
+        not_permissions: [],
       });
     const readPolicyId = readPolicyResponse.body.id;
 
@@ -334,25 +334,25 @@ describe('Group 4: Two users in the same project with different policies', () =>
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
         permissions: ['files:GetFile', 'files:DeleteFile'],
-        notPermissions: [],
+        not_permissions: [],
       });
     const editPolicyId = editPolicyResponse.body.id;
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
-      .send({ userId: readerUserResponse.body.id, policyId: readPolicyId });
+      .send({ user_id: readerUserResponse.body.id, policy_id: readPolicyId });
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
-      .send({ userId: editorUserResponse.body.id, policyId: editPolicyId });
+      .send({ user_id: editorUserResponse.body.id, policy_id: editPolicyId });
 
     const fileResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/files')
       .send({
-        projectId,
+        project_id: projectId,
         filename: 'shared.txt',
-        storageType: 'local',
-        storagePath: '/tmp/shared.txt',
+        storage_type: 'local',
+        storage_path: '/tmp/shared.txt',
       });
     fileId = fileResponse.body.id;
   });
@@ -421,20 +421,20 @@ describe('Group 5: User with multiple project keys scoped to different permissio
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
         permissions: ['files:GetFile', 'files:DeleteFile'],
-        notPermissions: [],
+        not_permissions: [],
       });
     const memberPolicyId = memberPolicyResponse.body.id;
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
-      .send({ userId: userResponse.body.id, policyId: memberPolicyId });
+      .send({ user_id: userResponse.body.id, policy_id: memberPolicyId });
 
     // project key policy 1: read-only
     const readKeyPolicyResponse = await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
         permissions: ['files:GetFile'],
-        notPermissions: [],
+        not_permissions: [],
       });
     const readKeyPolicyId = readKeyPolicyResponse.body.id;
 
@@ -443,27 +443,27 @@ describe('Group 5: User with multiple project keys scoped to different permissio
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
         permissions: ['files:DeleteFile'],
-        notPermissions: [],
+        not_permissions: [],
       });
     const deleteKeyPolicyId = deleteKeyPolicyResponse.body.id;
 
     const readKeyResponse = await authenticatedTestClient(userToken)
       .post('/api/v1/project-keys')
-      .send({ projectId, policyId: readKeyPolicyId, name: 'Read Key' });
+      .send({ project_id: projectId, policy_id: readKeyPolicyId, name: 'Read Key' });
     readOnlyProjectKey = readKeyResponse.body.key;
 
     const deleteKeyResponse = await authenticatedTestClient(userToken)
       .post('/api/v1/project-keys')
-      .send({ projectId, policyId: deleteKeyPolicyId, name: 'Delete Key' });
+      .send({ project_id: projectId, policy_id: deleteKeyPolicyId, name: 'Delete Key' });
     deleteOnlyProjectKey = deleteKeyResponse.body.key;
 
     const fileResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/files')
       .send({
-        projectId,
+        project_id: projectId,
         filename: 'target.txt',
-        storageType: 'local',
-        storagePath: '/tmp/target.txt',
+        storage_type: 'local',
+        storage_path: '/tmp/target.txt',
       });
     fileId = fileResponse.body.id;
   });
@@ -537,36 +537,36 @@ describe('Group 6: project key cannot access files in a different project', () =
       .post(`/api/v1/projects/${projectAId}/policies`)
       .send({
         permissions: ['files:GetFile'],
-        notPermissions: [],
+        not_permissions: [],
       });
     const policyId = policyResponse.body.id;
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectAId}/members`)
-      .send({ userId: userResponse.body.id, policyId });
+      .send({ user_id: userResponse.body.id, policy_id: policyId });
 
     const projectKeyResponse = await authenticatedTestClient(userToken)
       .post('/api/v1/project-keys')
-      .send({ projectId: projectAId, policyId, name: 'Project A Key' });
+      .send({ project_id: projectAId, policy_id: policyId, name: 'Project A Key' });
     projectKey = projectKeyResponse.body.key;
 
     const fileAResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/files')
       .send({
-        projectId: projectAId,
+        project_id: projectAId,
         filename: 'alpha.txt',
-        storageType: 'local',
-        storagePath: '/tmp/alpha.txt',
+        storage_type: 'local',
+        storage_path: '/tmp/alpha.txt',
       });
     fileInProjectA = fileAResponse.body.id;
 
     const fileBResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/files')
       .send({
-        projectId: projectBId,
+        project_id: projectBId,
         filename: 'beta.txt',
-        storageType: 'local',
-        storagePath: '/tmp/beta.txt',
+        storage_type: 'local',
+        storage_path: '/tmp/beta.txt',
       });
     fileInProjectB = fileBResponse.body.id;
   });
@@ -617,21 +617,21 @@ describe('Group 7: Policy with wildcard * grants all permissions', () => {
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
         permissions: ['*'],
-        notPermissions: [],
+        not_permissions: [],
       });
     const policyId = policyResponse.body.id;
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
-      .send({ userId: userResponse.body.id, policyId });
+      .send({ user_id: userResponse.body.id, policy_id: policyId });
 
     const fileResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/files')
       .send({
-        projectId,
+        project_id: projectId,
         filename: 'wildcard.txt',
-        storageType: 'local',
-        storagePath: '/tmp/wildcard.txt',
+        storage_type: 'local',
+        storage_path: '/tmp/wildcard.txt',
       });
     fileId = fileResponse.body.id;
   });
@@ -681,21 +681,21 @@ describe('Group 8: Policy with files:* grants all file-namespace permissions', (
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
         permissions: ['files:*'],
-        notPermissions: [],
+        not_permissions: [],
       });
     const policyId = policyResponse.body.id;
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
-      .send({ userId: userResponse.body.id, policyId });
+      .send({ user_id: userResponse.body.id, policy_id: policyId });
 
     const fileResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/files')
       .send({
-        projectId,
+        project_id: projectId,
         filename: 'namespace.txt',
-        storageType: 'local',
-        storagePath: '/tmp/namespace.txt',
+        storage_type: 'local',
+        storage_path: '/tmp/namespace.txt',
       });
     fileId = fileResponse.body.id;
   });
@@ -746,21 +746,21 @@ describe('Group 9: notPermissions overrides permissions when action appears in b
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
         permissions: ['files:GetFile', 'files:DeleteFile'],
-        notPermissions: ['files:DeleteFile'],
+        not_permissions: ['files:DeleteFile'],
       });
     const policyId = policyResponse.body.id;
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
-      .send({ userId: userResponse.body.id, policyId });
+      .send({ user_id: userResponse.body.id, policy_id: policyId });
 
     const fileResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/files')
       .send({
-        projectId,
+        project_id: projectId,
         filename: 'conflict.txt',
-        storageType: 'local',
-        storagePath: '/tmp/conflict.txt',
+        storage_type: 'local',
+        storage_path: '/tmp/conflict.txt',
       });
     fileId = fileResponse.body.id;
   });
@@ -811,10 +811,10 @@ describe('Group 10: User without project membership is denied access to all file
     const fileResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/files')
       .send({
-        projectId,
+        project_id: projectId,
         filename: 'private.txt',
-        storageType: 'local',
-        storagePath: '/tmp/private.txt',
+        storage_type: 'local',
+        storage_path: '/tmp/private.txt',
       });
     fileId = fileResponse.body.id;
   });
@@ -865,10 +865,10 @@ describe('Group 11: Multiple admins can all manage projects and bypass policy ch
     const fileResponse = await authenticatedTestClient(admin1Token)
       .post('/api/v1/files')
       .send({
-        projectId,
+        project_id: projectId,
         filename: 'admin-file.txt',
-        storageType: 'local',
-        storagePath: '/tmp/admin-file.txt',
+        storage_type: 'local',
+        storage_path: '/tmp/admin-file.txt',
       });
     fileId = fileResponse.body.id;
   });
@@ -894,7 +894,7 @@ describe('Group 11: Multiple admins can all manage projects and bypass policy ch
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
         permissions: ['files:GetFile'],
-        notPermissions: [],
+        not_permissions: [],
       });
     expect(response.status).toBe(201);
     expect(response.body.id).toBeDefined();
@@ -940,13 +940,13 @@ describe('Group 12: Multiple users each with multiple project keys in the same p
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
         permissions: ['files:GetFile', 'files:DeleteFile'],
-        notPermissions: [],
+        not_permissions: [],
       });
     const fullPolicyId = fullPolicyResponse.body.id;
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
-      .send({ userId: user1Response.body.id, policyId: fullPolicyId });
+      .send({ user_id: user1Response.body.id, policy_id: fullPolicyId });
 
     // User2 membership: read-only
     const user2Response = await authenticatedTestClient(adminToken)
@@ -958,20 +958,20 @@ describe('Group 12: Multiple users each with multiple project keys in the same p
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
         permissions: ['files:GetFile'],
-        notPermissions: [],
+        not_permissions: [],
       });
     const readOnlyPolicyId = readOnlyPolicyResponse.body.id;
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
-      .send({ userId: user2Response.body.id, policyId: readOnlyPolicyId });
+      .send({ user_id: user2Response.body.id, policy_id: readOnlyPolicyId });
 
     // project key policies
     const readKeyPolicyResponse = await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
         permissions: ['files:GetFile'],
-        notPermissions: [],
+        not_permissions: [],
       });
     const readKeyPolicyId = readKeyPolicyResponse.body.id;
 
@@ -979,21 +979,21 @@ describe('Group 12: Multiple users each with multiple project keys in the same p
       .post(`/api/v1/projects/${projectId}/policies`)
       .send({
         permissions: ['files:GetFile', 'files:DeleteFile'],
-        notPermissions: [],
+        not_permissions: [],
       });
     const deleteKeyPolicyId = deleteKeyPolicyResponse.body.id;
 
     // User1 creates two project keys: one read-only, one full
     const u1ReadKeyResponse = await authenticatedTestClient(user1Token)
       .post('/api/v1/project-keys')
-      .send({ projectId, policyId: readKeyPolicyId, name: 'Oscar Read Key' });
+      .send({ project_id: projectId, policy_id: readKeyPolicyId, name: 'Oscar Read Key' });
     user1ReadKey = u1ReadKeyResponse.body.key;
 
     const u1DeleteKeyResponse = await authenticatedTestClient(user1Token)
       .post('/api/v1/project-keys')
       .send({
-        projectId,
-        policyId: deleteKeyPolicyId,
+        project_id: projectId,
+        policy_id: deleteKeyPolicyId,
         name: 'Oscar Delete Key',
       });
     user1DeleteKey = u1DeleteKeyResponse.body.key;
@@ -1003,8 +1003,8 @@ describe('Group 12: Multiple users each with multiple project keys in the same p
     const u2KeyResponse = await authenticatedTestClient(user2Token)
       .post('/api/v1/project-keys')
       .send({
-        projectId,
-        policyId: deleteKeyPolicyId,
+        project_id: projectId,
+        policy_id: deleteKeyPolicyId,
         name: 'Patricia Key',
       });
     user2Key = u2KeyResponse.body.key;
@@ -1012,10 +1012,10 @@ describe('Group 12: Multiple users each with multiple project keys in the same p
     const fileResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/files')
       .send({
-        projectId,
+        project_id: projectId,
         filename: 'multi.txt',
-        storageType: 'local',
-        storagePath: '/tmp/multi.txt',
+        storage_type: 'local',
+        storage_path: '/tmp/multi.txt',
       });
     fileId = fileResponse.body.id;
   });

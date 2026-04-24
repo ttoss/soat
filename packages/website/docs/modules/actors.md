@@ -4,16 +4,16 @@ sidebar_position: 6
 
 # Actors
 
-The Actors module represents entities — people, bots, or other participants — that interact within a project. A common use case is storing external contacts such as WhatsApp numbers, where `externalId` holds the phone number and correlates the actor with a record in the external system.
+The Actors module represents entities — people, bots, or other participants — that interact within a project. A common use case is storing external contacts such as WhatsApp numbers, where `external_id` holds the phone number and correlates the actor with a record in the external system.
 
 ## Overview
 
-An Actor belongs to a project and has a display name, an optional type, an optional `externalId`, and optional links to an [Agent](./agents.md) or [Chat](./chats.md). Actors are identified by a public `id` prefixed with `act_`. The internal database primary key is never returned.
+An Actor belongs to a project and has a display name, an optional type, an optional `external_id`, and optional links to an [Agent](./agents.md) or [Chat](./chats.md). Actors are identified by a public `id` prefixed with `act_`. The internal database primary key is never returned.
 
 The module covers:
 
-- **Identity** — display name, type, and external correlation via `externalId`
-- **Idempotent creation** — `POST /actors` with `externalId` uses find-or-create semantics
+- **Identity** — display name, type, and external correlation via `external_id`
+- **Idempotent creation** — `POST /actors` with `external_id` uses find-or-create semantics
 - **Agent/Chat linking** — an Actor can be bound to an Agent or a Chat for AI interactions
 - **Instructions** — per-actor system prompt overrides composed into generate calls
 - **Tags** — key-value metadata enabling attribute-based access control via IAM conditions
@@ -23,29 +23,29 @@ The module covers:
 | Field          | Type           | Required | Description                                                                                    |
 | -------------- | -------------- | -------- | ---------------------------------------------------------------------------------------------- |
 | `id`           | string         | —        | Public identifier prefixed with `act_`                                                         |
-| `projectId`    | string         | —        | Public ID of the owning project (`proj_` prefix)                                               |
+| `project_id`    | string         | —        | Public ID of the owning project (`proj_` prefix)                                               |
 | `name`         | string         | Yes      | Display name of the actor                                                                      |
 | `type`         | string         | No       | Free-form actor type (e.g. `customer`, `agent`)                                                |
-| `externalId`   | string         | No       | External identifier (e.g. WhatsApp phone number). Unique per project; `null` is never unique   |
+| `external_id`   | string         | No       | External identifier (e.g. WhatsApp phone number). Unique per project; `null` is never unique   |
 | `instructions` | string \| null | No       | Persona-specific instructions composed into the effective system prompt for generate calls     |
-| `agentId`      | string \| null | No       | Public ID of the linked [Agent](./agents.md) (`agt_` prefix). Mutually exclusive with `chatId` |
-| `chatId`       | string \| null | No       | Public ID of the linked [Chat](./chats.md) (`chat_` prefix). Mutually exclusive with `agentId` |
+| `agent_id`      | string \| null | No       | Public ID of the linked [Agent](./agents.md) (`agt_` prefix). Mutually exclusive with `chat_id` |
+| `chat_id`       | string \| null | No       | Public ID of the linked [Chat](./chats.md) (`chat_` prefix). Mutually exclusive with `agent_id` |
 | `tags`         | object         | No       | Key-value string pairs used for ABAC conditions (see [Tags](#tags))                            |
-| `createdAt`    | string         | —        | ISO 8601 creation timestamp                                                                    |
-| `updatedAt`    | string         | —        | ISO 8601 last-updated timestamp                                                                |
+| `created_at`    | string         | —        | ISO 8601 creation timestamp                                                                    |
+| `updated_at`    | string         | —        | ISO 8601 last-updated timestamp                                                                |
 
 ## Key Concepts
 
-### externalId and Idempotent Creation
+### external_id and Idempotent Creation
 
-`externalId` is a free-form string for correlating an Actor with a record in an external system (e.g. a WhatsApp phone number, a CRM contact ID). It is enforced unique per project at the database level — two actors in the same project cannot share the same `externalId`. Across different projects the same value is allowed.
+`external_id` is a free-form string for correlating an Actor with a record in an external system (e.g. a WhatsApp phone number, a CRM contact ID). It is enforced unique per project at the database level — two actors in the same project cannot share the same `external_id`. Across different projects the same value is allowed.
 
-`null` / absent `externalId` is never considered a duplicate — PostgreSQL NULL semantics are preserved.
+`null` / absent `external_id` is never considered a duplicate — PostgreSQL NULL semantics are preserved.
 
-When `externalId` is supplied to `POST /actors`, the endpoint uses **find-or-create** semantics:
+When `external_id` is supplied to `POST /actors`, the endpoint uses **find-or-create** semantics:
 
-- If no actor with that `externalId` exists in the project, a new actor is created and `201 Created` is returned.
-- If an actor with that `externalId` already exists, the existing actor is returned as-is with `200 OK`. None of the other request fields (name, type, instructions, etc.) are applied to the existing actor.
+- If no actor with that `external_id` exists in the project, a new actor is created and `201 Created` is returned.
+- If an actor with that `external_id` already exists, the existing actor is returned as-is with `200 OK`. None of the other request fields (name, type, instructions, etc.) are applied to the existing actor.
 
 This makes actor creation safe to call repeatedly from event-driven pipelines (e.g. a new inbound WhatsApp message) without risk of duplicate actors or errors.
 
@@ -54,25 +54,25 @@ POST /api/v1/actors
 Content-Type: application/json
 
 {
-  "projectId": "proj_V1StGXR8Z5jdHi6B",
+  "project_id": "proj_V1StGXR8Z5jdHi6B",
   "name": "Alice",
-  "externalId": "+15551234567"
+  "external_id": "+15551234567"
 }
 ```
 
 - First call → `201 Created` with the new actor.
-- Subsequent calls with the same `externalId` → `200 OK` with the existing actor.
+- Subsequent calls with the same `external_id` → `200 OK` with the existing actor.
 
-When `externalId` is **not** supplied, `POST /actors` always creates a new actor and returns `201 Created`.
+When `external_id` is **not** supplied, `POST /actors` always creates a new actor and returns `201 Created`.
 
 ### Agent and Chat Linking
 
 An Actor can be linked to either an Agent or a Chat — not both simultaneously. These links control which AI backend handles generate calls initiated by or for the actor.
 
-- Set `agentId` to link the actor to a specific Agent.
-- Set `chatId` to link the actor to a specific Chat.
+- Set `agent_id` to link the actor to a specific Agent.
+- Set `chat_id` to link the actor to a specific Chat.
 - Pass `null` in a `PATCH /actors/:id` request to unlink either field.
-- Supplying both `agentId` and `chatId` in the same request returns `400 Bad Request`.
+- Supplying both `agent_id` and `chat_id` in the same request returns `400 Bad Request`.
 
 ### Instructions
 
@@ -86,8 +86,8 @@ Pass `null` to `PATCH /actors/:id` to clear the instructions.
 
 | Parameter    | Description                                                                  |
 | ------------ | ---------------------------------------------------------------------------- |
-| `projectId`  | Limit results to a specific project (required for JWT callers in most cases) |
-| `externalId` | Exact match — use to resolve an external identifier to an `act_` ID          |
+| `project_id`  | Limit results to a specific project (required for JWT callers in most cases) |
+| `external_id` | Exact match — use to resolve an external identifier to an `act_` ID          |
 | `name`       | Partial, case-insensitive match against the actor's display name             |
 | `type`       | Exact match against the actor's type                                         |
 | `limit`      | Maximum number of results to return (default: `50`)                          |
@@ -108,7 +108,7 @@ The response envelope is:
 
 ### Project Scope
 
-API keys are automatically scoped to a single project — `projectId` is inferred from the key and must not be supplied in the request body. JWT callers must supply `projectId` explicitly for write operations.
+API keys are automatically scoped to a single project — `project_id` is inferred from the key and must not be supplied in the request body. JWT callers must supply `project_id` explicitly for write operations.
 
 ## Tags
 
@@ -138,7 +138,7 @@ All tag endpoints require `actors:UpdateActor` permission.
 Actors use the `actor` resource type in SRNs:
 
 ```
-soat:<projectId>:actor:<actorId>
+soat:<project_id>:actor:<actor_id>
 ```
 
 Example: `soat:proj_ABC:actor:act_123`
@@ -178,7 +178,7 @@ Content-Type: application/json
 
 {
   "name": "Bob",
-  "externalId": "+15559876543",
+  "external_id": "+15559876543",
   "type": "customer"
 }
 ```

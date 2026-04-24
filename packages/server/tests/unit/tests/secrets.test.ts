@@ -47,7 +47,7 @@ describe('Secrets', () => {
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
-      .send({ userId, policyId });
+      .send({ user_id: userId, policy_id: policyId });
   });
 
   describe('GET /api/v1/secrets', () => {
@@ -78,13 +78,13 @@ describe('Secrets', () => {
     test('authenticated user with permission can create a secret', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/secrets')
-        .send({ projectId, name: 'Test Secret', value: 'supersecretvalue' });
+        .send({ project_id: projectId, name: 'Test Secret', value: 'supersecretvalue' });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
       expect(response.body.name).toBe('Test Secret');
-      expect(response.body.projectId).toBe(projectId);
-      expect(response.body.hasValue).toBe(true);
+      expect(response.body.project_id).toBe(projectId);
+      expect(response.body.has_value).toBe(true);
       // value must never be returned
       expect(response.body.value).toBeUndefined();
     });
@@ -92,7 +92,7 @@ describe('Secrets', () => {
     test('create without name returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/secrets')
-        .send({ projectId });
+        .send({ project_id: projectId });
 
       expect(response.status).toBe(400);
     });
@@ -100,7 +100,7 @@ describe('Secrets', () => {
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .post('/api/v1/secrets')
-        .send({ projectId, name: 'Test' });
+        .send({ project_id: projectId, name: 'Test' });
 
       expect(response.status).toBe(401);
     });
@@ -108,7 +108,7 @@ describe('Secrets', () => {
     test('user without permission on project returns 403', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/secrets')
-        .send({ projectId: otherProjectId, name: 'Test' });
+        .send({ project_id: otherProjectId, name: 'Test' });
 
       expect(response.status).toBe(403);
     });
@@ -120,7 +120,7 @@ describe('Secrets', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/secrets')
-        .send({ projectId, name: 'Get Test Secret' });
+        .send({ project_id: projectId, name: 'Get Test Secret' });
       secretId = res.body.id;
     });
 
@@ -131,7 +131,7 @@ describe('Secrets', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(secretId);
-      expect(response.body.projectId).toBe(projectId);
+      expect(response.body.project_id).toBe(projectId);
       expect(response.body.value).toBeUndefined();
     });
 
@@ -144,7 +144,7 @@ describe('Secrets', () => {
       // Create a secret in otherProject (as admin) and try to access it as user
       const adminRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/secrets')
-        .send({ projectId: otherProjectId, name: 'Other Secret' });
+        .send({ project_id: otherProjectId, name: 'Other Secret' });
       const otherId = adminRes.body.id;
 
       const response = await authenticatedTestClient(userToken).get(
@@ -167,7 +167,7 @@ describe('Secrets', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/secrets')
-        .send({ projectId, name: 'Patch Test Secret' });
+        .send({ project_id: projectId, name: 'Patch Test Secret' });
       secretId = res.body.id;
     });
 
@@ -179,7 +179,7 @@ describe('Secrets', () => {
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(secretId);
       expect(response.body.name).toBe('Updated Name');
-      expect(response.body.hasValue).toBe(true);
+      expect(response.body.has_value).toBe(true);
       expect(response.body.value).toBeUndefined();
     });
 
@@ -193,7 +193,7 @@ describe('Secrets', () => {
     test('user without permission returns 403', async () => {
       const adminRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/secrets')
-        .send({ projectId: otherProjectId, name: 'Other Patch Secret' });
+        .send({ project_id: otherProjectId, name: 'Other Patch Secret' });
 
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/secrets/${adminRes.body.id}`)
@@ -213,7 +213,7 @@ describe('Secrets', () => {
     test('authenticated user with permission can delete a secret', async () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/secrets')
-        .send({ projectId, name: 'To Delete' });
+        .send({ project_id: projectId, name: 'To Delete' });
       const secretId = createRes.body.id;
 
       const response = await authenticatedTestClient(userToken).delete(
@@ -232,7 +232,7 @@ describe('Secrets', () => {
     test('user without permission returns 403', async () => {
       const adminRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/secrets')
-        .send({ projectId: otherProjectId, name: 'Other Delete Secret' });
+        .send({ project_id: otherProjectId, name: 'Other Delete Secret' });
 
       const response = await authenticatedTestClient(userToken).delete(
         `/api/v1/secrets/${adminRes.body.id}`
@@ -250,17 +250,17 @@ describe('Secrets', () => {
     test('secret referenced by AI provider returns 409 without force', async () => {
       const secretRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/secrets')
-        .send({ projectId, name: 'Linked Secret' });
+        .send({ project_id: projectId, name: 'Linked Secret' });
       const linkedSecretId = secretRes.body.id;
 
       await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
         .send({
-          projectId,
-          secretId: linkedSecretId,
+          project_id: projectId,
+          secret_id: linkedSecretId,
           name: 'Test Provider',
           provider: 'openai',
-          defaultModel: 'gpt-4o',
+          default_model: 'gpt-4o',
         });
 
       const response = await authenticatedTestClient(userToken).delete(
@@ -272,17 +272,17 @@ describe('Secrets', () => {
     test('secret referenced by AI provider deleted with force=true returns 204', async () => {
       const secretRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/secrets')
-        .send({ projectId, name: 'Force Delete Secret' });
+        .send({ project_id: projectId, name: 'Force Delete Secret' });
       const linkedSecretId = secretRes.body.id;
 
       await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
         .send({
-          projectId,
-          secretId: linkedSecretId,
+          project_id: projectId,
+          secret_id: linkedSecretId,
           name: 'Test Provider Force',
           provider: 'openai',
-          defaultModel: 'gpt-4o',
+          default_model: 'gpt-4o',
         });
 
       const response = await authenticatedTestClient(userToken).delete(
