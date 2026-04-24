@@ -446,6 +446,7 @@ html[data-theme='dark'] .put > .menu__link::before {
    =================================================================== */
 .row .col:not(.col--3) {
   max-width: none !important;
+  min-width: 0;
   padding: 0rem 2rem;
 
   @media (max-width: 768px) {
@@ -454,4 +455,11 @@ html[data-theme='dark'] .put > .menu__link::before {
 }
 .col.col--3 {
   max-width: 225px;
+}
+
+/* Prevent wide tables from overflowing the content column and displacing the TOC */
+.theme-doc-markdown table {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
 }
