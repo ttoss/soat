@@ -882,6 +882,105 @@ describe('Sessions', () => {
       expect(sessionRes.body.generatingAt).toBeNull();
     });
 
+    test('aborted generation (A) does not clear generatingAt while replacement generation (B) is still running', async () => {
+      // This test verifies the critical path in the finally block:
+      // when generation A is superseded by B, A's finally block must NOT clear
+      // generatingAt (leaving that responsibility to B's finally block).
+      const twoGenSessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'two-gen-no-premature-clear' });
+      const twoGenSessionId = twoGenSessionRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${twoGenSessionId}/messages`)
+        .send({ message: 'First message' });
+
+      let signalAStarted!: () => void;
+      const aStarted = new Promise<void>((r) => {
+        signalAStarted = r;
+      });
+
+      let signalBStarted!: () => void;
+      const bStarted = new Promise<void>((r) => {
+        signalBStarted = r;
+      });
+      let resolveB!: () => void;
+
+      // Generation A: blocks until its signal fires (aborted by B), then rejects
+      jest
+        .spyOn(agentsModule, 'createGeneration')
+        .mockImplementationOnce((args) => {
+          return new Promise<GenerationResult>((_, reject) => {
+            signalAStarted();
+            args.signal?.addEventListener('abort', () => {
+              const err = new Error('The operation was aborted');
+              err.name = 'AbortError';
+              reject(err);
+            });
+          });
+        })
+        // Generation B: signals when entered, then blocks until released
+        .mockImplementationOnce(() => {
+          return new Promise<GenerationResult>((resolve) => {
+            signalBStarted();
+            resolveB = () =>
+              resolve({
+                id: 'gen_b_01',
+                traceId: 'trc_b_01',
+                status: 'completed',
+                output: {
+                  model: 'test-model',
+                  content: 'B reply',
+                  finishReason: 'stop',
+                },
+              });
+          });
+        });
+
+      // Start A as fire-and-forget
+      await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/sessions/${twoGenSessionId}/generate?async=true`
+        )
+        .expect(202);
+      await aStarted;
+
+      // Start B as fire-and-forget — aborts A, starts fresh
+      await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/sessions/${twoGenSessionId}/generate?async=true`
+        )
+        .expect(202);
+      await bStarted;
+
+      // At this point A has been aborted and its finally block has run.
+      // B is still in-flight. generatingAt must still be set.
+      const duringBRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/${twoGenSessionId}`
+      );
+      expect(duringBRes.body.generatingAt).not.toBeNull();
+
+      // Now let B finish
+      resolveB();
+
+      // Poll until generatingAt is cleared by B's finally block
+      const deadline = Date.now() + 5000;
+      await new Promise<void>((resolve, reject) => {
+        const poll = async () => {
+          if (Date.now() >= deadline)
+            return reject(
+              new Error('Timeout waiting for B generation to complete')
+            );
+          const s = await authenticatedTestClient(userToken).get(
+            `/api/v1/agents/${agentId}/sessions/${twoGenSessionId}`
+          );
+          if (!s.body.generatingAt) return resolve();
+          setTimeout(poll, 50);
+        };
+        setTimeout(poll, 50);
+      });
+    });
+
     test('controller is removed from map after successful generation', async () => {
       const successSessionRes = await authenticatedTestClient(userToken)
         .post(`/api/v1/agents/${agentId}/sessions`)
