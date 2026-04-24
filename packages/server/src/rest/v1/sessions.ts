@@ -745,6 +745,12 @@ sessionsRouter.post('/:sessionId/generate', async (ctx: Context) => {
     return;
   }
 
+  if (result === 'cancelled_by_newer_request') {
+    ctx.status = 409;
+    ctx.body = { error: 'Generation was superseded by a concurrent request' };
+    return;
+  }
+
   if (typeof result === 'string') {
     ctx.status = 500;
     ctx.body = { error: result };

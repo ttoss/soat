@@ -963,7 +963,9 @@ describe('Sessions', () => {
       // Now let B finish
       resolveB();
 
-      // Poll until generatingAt is cleared by B's finally block
+      // Poll until generatingAt is cleared by B's finally block.
+      // The global jest config uses advanceTimers:true so fake timers advance
+      // automatically when the event loop is idle, making setTimeout reliable here.
       const deadline = Date.now() + 5000;
       await new Promise<void>((resolve, reject) => {
         const poll = async () => {

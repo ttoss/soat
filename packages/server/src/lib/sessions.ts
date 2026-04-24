@@ -566,9 +566,10 @@ export const generateSessionResponse = async (args: {
     });
   } catch (err) {
     // If this generation was cancelled by a newer concurrent request, return
-    // gracefully so the caller can discard the result without a 500 error.
+    // a distinct value so callers can distinguish it from the timeout-based
+    // concurrency guard.
     if ((err as { name?: string }).name === 'AbortError') {
-      return 'already_generating' as const;
+      return 'cancelled_by_newer_request' as const;
     }
     throw err;
   } finally {
