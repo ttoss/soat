@@ -7,6 +7,34 @@ import {
 } from './conversations';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 
+/**
+ * Tracks in-flight AbortControllers keyed by `${agentId}#${sessionId}`.
+ * Used to cancel a running generation when a new one starts for the same session,
+ * ensuring the new generation always sees the full, up-to-date message history.
+ */
+const sessionAbortControllers = new Map<string, AbortController>();
+
+const getSessionAbortKey = (args: {
+  agentId: number;
+  sessionId: string;
+}): string => {
+  return `${args.agentId}#${args.sessionId}`;
+};
+
+/**
+ * Aborts and removes the in-flight AbortController for a session, if any.
+ * Safe to call when no controller is registered (no-op).
+ */
+const abortSessionGeneration = (key: string): boolean => {
+  const controller = sessionAbortControllers.get(key);
+  if (controller) {
+    controller.abort();
+    sessionAbortControllers.delete(key);
+    return true;
+  }
+  return false;
+};
+
 const sessionIncludes = () => {
   return [
     { model: db.Project, as: 'project' },
@@ -35,6 +63,7 @@ const mapSession = (
     actorId: session.userActor?.publicId ?? null,
     tags: session.tags ?? undefined,
     autoGenerate: session.autoGenerate ?? false,
+    cancelPrevious: session.cancelPrevious ?? true,
     toolContext: session.toolContext ?? null,
     generatingAt: session.generatingAt ?? null,
     createdAt: session.createdAt,
@@ -48,6 +77,7 @@ export const createSession = async (args: {
   name?: string | null;
   actorId?: string | null;
   autoGenerate?: boolean;
+  cancelPrevious?: boolean;
   toolContext?: Record<string, string> | null;
 }) => {
   const sequelize = db.sequelize;
@@ -113,6 +143,7 @@ export const createSession = async (args: {
         status: 'open',
         name: args.name ?? null,
         autoGenerate: args.autoGenerate ?? false,
+        cancelPrevious: args.cancelPrevious ?? true,
         toolContext: args.toolContext ?? null,
       },
       { transaction: t }
@@ -228,6 +259,7 @@ export const updateSession = async (args: {
   name?: string | null;
   status?: string;
   autoGenerate?: boolean;
+  cancelPrevious?: boolean;
   toolContext?: Record<string, string> | null;
 }) => {
   const session = await db.Session.findOne({
@@ -248,6 +280,10 @@ export const updateSession = async (args: {
 
   if (args.autoGenerate !== undefined) {
     session.autoGenerate = args.autoGenerate;
+  }
+
+  if (args.cancelPrevious !== undefined) {
+    session.cancelPrevious = args.cancelPrevious;
   }
 
   if (args.toolContext !== undefined) {
@@ -456,11 +492,28 @@ export const generateSessionResponse = async (args: {
     return 'session_not_found' as const;
   }
 
-  // Concurrency guard: prevent concurrent LLM calls on the same session
-  if (session.generatingAt) {
-    const elapsed = Date.now() - new Date(session.generatingAt).getTime();
-    if (elapsed < GENERATING_TIMEOUT_MS) {
+  const sessionKey = getSessionAbortKey({
+    agentId: args.agentId,
+    sessionId: args.sessionId,
+  });
+
+  if (session.cancelPrevious) {
+    // Cancel any in-flight generation so the new one always sees the full,
+    // up-to-date message history (cancel-previous strategy).
+    abortSessionGeneration(sessionKey);
+  } else {
+    // When cancel-previous is disabled, reject the new request if any
+    // generation is already in progress — either tracked in-memory (covers
+    // the race between controller registration and generatingAt being written)
+    // or persisted to the DB (covers the restart / cross-process case).
+    if (sessionAbortControllers.has(sessionKey)) {
       return 'already_generating' as const;
+    }
+    if (session.generatingAt) {
+      const elapsed = Date.now() - new Date(session.generatingAt).getTime();
+      if (elapsed < GENERATING_TIMEOUT_MS) {
+        return 'already_generating' as const;
+      }
     }
   }
 
@@ -494,6 +547,11 @@ export const generateSessionResponse = async (args: {
     ...(args.toolContext ?? {}),
   };
 
+  // Create a new AbortController for this generation and register it so a
+  // subsequent call can cancel us if needed.
+  const controller = new AbortController();
+  sessionAbortControllers.set(sessionKey, controller);
+
   await session.update({ generatingAt: new Date() });
 
   resolveProjectPublicId({ projectId: session.projectId }).then(
@@ -518,9 +576,24 @@ export const generateSessionResponse = async (args: {
       actorId: agentActor.publicId,
       model: args.model,
       toolContext: mergedToolContext,
+      signal: controller.signal,
     });
+  } catch (err) {
+    // If this generation was cancelled by a newer concurrent request, return
+    // a distinct value so callers can distinguish it from the timeout-based
+    // concurrency guard.
+    if ((err as { name?: string }).name === 'AbortError') {
+      return 'cancelled_by_newer_request' as const;
+    }
+    throw err;
   } finally {
-    await session.update({ generatingAt: null });
+    // Only clean up generatingAt if we are still the active generation for this
+    // session. If a newer generation replaced us in the map, leave the DB state
+    // intact so the replacement's finally block handles the cleanup.
+    if (sessionAbortControllers.get(sessionKey) === controller) {
+      sessionAbortControllers.delete(sessionKey);
+      await session.update({ generatingAt: null });
+    }
   }
 
   if (typeof result === 'string') {

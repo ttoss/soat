@@ -117,6 +117,14 @@ export class Session extends Model {
   declare autoGenerate: boolean;
 
   @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: true,
+    field: 'cancel_previous',
+  })
+  declare cancelPrevious: boolean;
+
+  @Column({
     type: DataType.JSONB,
     allowNull: true,
     defaultValue: null,

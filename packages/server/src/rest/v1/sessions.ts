@@ -94,6 +94,7 @@ sessionsRouter.post('/', async (ctx: Context) => {
     name?: string;
     actorId?: string;
     autoGenerate?: boolean;
+    cancelPrevious?: boolean;
     toolContext?: Record<string, string> | null;
   };
 
@@ -103,6 +104,7 @@ sessionsRouter.post('/', async (ctx: Context) => {
     name: body.name,
     actorId: body.actorId,
     autoGenerate: body.autoGenerate,
+    cancelPrevious: body.cancelPrevious,
     toolContext: body.toolContext,
   });
 
@@ -350,6 +352,7 @@ sessionsRouter.patch('/:sessionId', async (ctx: Context) => {
     name?: string | null;
     status?: string;
     autoGenerate?: boolean;
+    cancelPrevious?: boolean;
     toolContext?: Record<string, string> | null;
   };
 
@@ -359,6 +362,7 @@ sessionsRouter.patch('/:sessionId', async (ctx: Context) => {
     name: body.name,
     status: body.status,
     autoGenerate: body.autoGenerate,
+    cancelPrevious: body.cancelPrevious,
     toolContext: body.toolContext,
   });
 
@@ -742,6 +746,12 @@ sessionsRouter.post('/:sessionId/generate', async (ctx: Context) => {
   if (result === 'already_generating') {
     ctx.status = 409;
     ctx.body = { error: 'Generation already in progress' };
+    return;
+  }
+
+  if (result === 'cancelled_by_newer_request') {
+    ctx.status = 409;
+    ctx.body = { error: 'Generation was superseded by a concurrent request' };
     return;
   }
 

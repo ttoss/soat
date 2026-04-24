@@ -926,6 +926,7 @@ export const createGeneration = async (args: {
   remainingDepth?: number;
   authHeader?: string;
   toolContext?: Record<string, string>;
+  signal?: AbortSignal;
 }): Promise<
   GenerationResult | 'not_found' | 'ai_provider_not_found' | ReadableStream
 > => {
@@ -1019,6 +1020,7 @@ export const createGeneration = async (args: {
           | undefined) ?? undefined,
       stopWhen: stepCountIs((typedAgent.maxSteps as number) ?? 20),
       temperature: (typedAgent.temperature as number) ?? undefined,
+      abortSignal: args.signal,
     });
 
     traces.set(traceId, {
@@ -1045,6 +1047,7 @@ export const createGeneration = async (args: {
         | undefined) ?? undefined,
     stopWhen: stepCountIs((typedAgent.maxSteps as number) ?? 20),
     temperature: (typedAgent.temperature as number) ?? undefined,
+    abortSignal: args.signal,
   });
 
   // Check if there are pending client tool calls (tools with no execute)
