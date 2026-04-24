@@ -45,7 +45,7 @@ describe('Files', () => {
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
-      .send({ userId, policyId });
+      .send({ user_id: userId, policy_id: policyId });
   });
 
   afterAll(() => {
@@ -62,12 +62,12 @@ describe('Files', () => {
           filename: 'hello.txt',
           contentType: 'text/plain',
         })
-        .field('projectId', projectId);
+        .field('project_id', projectId);
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
       expect(response.body.filename).toBe('hello.txt');
-      expect(response.body.contentType).toBe('text/plain');
+      expect(response.body.content_type).toBe('text/plain');
       expect(response.body.size).toBe(fileContent.length);
     });
 
@@ -77,7 +77,7 @@ describe('Files', () => {
       const response = await testClient
         .post('/api/v1/files/upload')
         .attach('file', fileContent, { filename: 'data.txt' })
-        .field('projectId', projectId);
+        .field('project_id', projectId);
 
       expect(response.status).toBe(401);
     });
@@ -85,12 +85,12 @@ describe('Files', () => {
     test('upload without file returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/files/upload')
-        .send({ projectId });
+        .send({ project_id: projectId });
 
       expect(response.status).toBe(400);
     });
 
-    test('upload without projectId returns 400', async () => {
+    test('upload without project_id returns 400', async () => {
       const fileContent = Buffer.from('data');
 
       const response = await authenticatedTestClient(userToken)
@@ -112,7 +112,7 @@ describe('Files', () => {
           filename: 'getme.txt',
           contentType: 'text/plain',
         })
-        .field('projectId', projectId);
+        .field('project_id', projectId);
       fileId = res.body.id;
     });
 
@@ -153,7 +153,7 @@ describe('Files', () => {
           filename: 'download.txt',
           contentType: 'text/plain',
         })
-        .field('projectId', projectId);
+        .field('project_id', projectId);
       fileId = res.body.id;
     });
 
@@ -188,7 +188,7 @@ describe('Files', () => {
           filename: 'meta.txt',
           contentType: 'text/plain',
         })
-        .field('projectId', projectId);
+        .field('project_id', projectId);
       fileId = res.body.id;
     });
 
@@ -230,7 +230,7 @@ describe('Files', () => {
           filename: 'todelete.txt',
           contentType: 'text/plain',
         })
-        .field('projectId', projectId);
+        .field('project_id', projectId);
       const fileId = uploadRes.body.id;
 
       // Verify file exists on disk
@@ -261,7 +261,7 @@ describe('Files', () => {
       const uploadRes = await authenticatedTestClient(userToken)
         .post('/api/v1/files/upload')
         .attach('file', fileContent, { filename: 'protected.txt' })
-        .field('projectId', projectId);
+        .field('project_id', projectId);
       const fileId = uploadRes.body.id;
 
       const response = await testClient.delete(`/api/v1/files/${fileId}`);
@@ -290,7 +290,7 @@ describe('Files', () => {
           filename: 'base64dl.txt',
           contentType: 'text/plain',
         })
-        .field('projectId', projectId);
+        .field('project_id', projectId);
       fileId = res.body.id;
     });
 
@@ -304,7 +304,7 @@ describe('Files', () => {
         Buffer.from(originalContent).toString('base64')
       );
       expect(response.body.filename).toBe('base64dl.txt');
-      expect(response.body.contentType).toBe('text/plain');
+      expect(response.body.content_type).toBe('text/plain');
       expect(response.body.size).toBe(Buffer.from(originalContent).length);
     });
 
@@ -332,16 +332,16 @@ describe('Files', () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/files/upload/base64')
         .send({
-          projectId,
+          project_id: projectId,
           content,
           filename: 'base64upload.txt',
-          contentType: 'text/plain',
+          content_type: 'text/plain',
         });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
       expect(response.body.filename).toBe('base64upload.txt');
-      expect(response.body.contentType).toBe('text/plain');
+      expect(response.body.content_type).toBe('text/plain');
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -349,7 +349,7 @@ describe('Files', () => {
 
       const response = await testClient
         .post('/api/v1/files/upload/base64')
-        .send({ projectId, content, filename: 'test.txt' });
+        .send({ project_id: projectId, content, filename: 'test.txt' });
 
       expect(response.status).toBe(401);
     });
@@ -366,7 +366,7 @@ describe('Files', () => {
           filename: 'original-name.txt',
           contentType: 'text/plain',
         })
-        .field('projectId', projectId);
+        .field('project_id', projectId);
       fileId = res.body.id;
     });
 
@@ -392,7 +392,7 @@ describe('Files', () => {
     });
   });
 
-  describe('GET /api/v1/files - projectId filter', () => {
+  describe('GET /api/v1/files - project_id filter', () => {
     let secondProjectId: string;
 
     beforeAll(async () => {
@@ -407,7 +407,7 @@ describe('Files', () => {
 
       await authenticatedTestClient(adminToken)
         .post(`/api/v1/projects/${secondProjectId}/members`)
-        .send({ userId, policyId: policyRes.body.id });
+        .send({ user_id: userId, policy_id: policyRes.body.id });
 
       await authenticatedTestClient(userToken)
         .post('/api/v1/files/upload')
@@ -415,12 +415,12 @@ describe('Files', () => {
           filename: 'proj2.txt',
           contentType: 'text/plain',
         })
-        .field('projectId', secondProjectId);
+        .field('project_id', secondProjectId);
     });
 
-    test('listing with projectId returns only files in that project', async () => {
+    test('listing with project_id returns only files in that project', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/files?projectId=${secondProjectId}`
+        `/api/v1/files?project_id=${secondProjectId}`
       );
 
       expect(response.status).toBe(200);
@@ -446,7 +446,7 @@ describe('Files', () => {
       const forbiddenProjectId = forbiddenProjectRes.body.id;
 
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/files?projectId=${forbiddenProjectId}`
+        `/api/v1/files?project_id=${forbiddenProjectId}`
       );
 
       expect(response.status).toBe(403);

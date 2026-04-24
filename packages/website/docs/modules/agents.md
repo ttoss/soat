@@ -17,18 +17,18 @@ Each agent stores its AI provider, instructions, tool references, and execution 
 | Field            | Type          | Required | Description                                                                                                                      |
 | ---------------- | ------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `id`             | string        | auto     | Unique identifier (`agt_` prefix)                                                                                                |
-| `projectId`      | string        | yes      | Project the agent belongs to                                                                                                     |
-| `aiProviderId`   | string        | yes      | AI provider used for the model                                                                                                   |
+| `project_id`      | string        | yes      | Project the agent belongs to                                                                                                     |
+| `ai_provider_id`   | string        | yes      | AI provider used for the model                                                                                                   |
 | `name`           | string        | no       | Display name                                                                                                                     |
 | `instructions`   | string        | no       | System instructions guiding agent behavior                                                                                       |
 | `model`          | string        | no       | Model identifier (falls back to AI provider default)                                                                             |
-| `toolIds`        | array         | no       | IDs of agent tools attached to this agent                                                                                        |
-| `maxSteps`       | number        | no       | Maximum reasoning steps before stopping (default: `20`)                                                                          |
-| `toolChoice`     | string/object | no       | How the model selects tools — see [Tool Choice](#tool-choice)                                                                    |
-| `stopConditions` | array         | no       | Additional stop conditions — see [Stop Conditions](#stop-conditions)                                                             |
-| `activeToolIds`  | array         | no       | Subset of `toolIds` available at each step — see [Active Tools](#active-tools)                                                   |
-| `stepRules`      | array         | no       | Per-step overrides for `toolChoice` and `activeToolIds` — see [Step Rules](#step-rules)                                          |
-| `boundaryPolicy` | object        | no       | Boundary policy that limits which `soat` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions) |
+| `tool_ids`        | array         | no       | IDs of agent tools attached to this agent                                                                                        |
+| `max_steps`       | number        | no       | Maximum reasoning steps before stopping (default: `20`)                                                                          |
+| `tool_choice`     | string/object | no       | How the model selects tools — see [Tool Choice](#tool-choice)                                                                    |
+| `stop_conditions` | array         | no       | Additional stop conditions — see [Stop Conditions](#stop-conditions)                                                             |
+| `active_tool_ids`  | array         | no       | Subset of `tool_ids` available at each step — see [Active Tools](#active-tools)                                                   |
+| `step_rules`      | array         | no       | Per-step overrides for `tool_choice` and `active_tool_ids` — see [Step Rules](#step-rules)                                          |
+| `boundary_policy` | object        | no       | Boundary policy that limits which `soat` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions) |
 | `temperature`    | number        | no       | Sampling temperature                                                                                                             |
 
 ### Agent Tool
@@ -38,13 +38,13 @@ Agent tools are reusable tool definitions that can be shared across multiple age
 | Field             | Type   | Required | Description                                                                                                                                                                                                                                                                                   |
 | ----------------- | ------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`              | string | auto     | Unique identifier (`agt_tool_` prefix)                                                                                                                                                                                                                                                        |
-| `projectId`       | string | yes      | Project the tool belongs to                                                                                                                                                                                                                                                                   |
+| `project_id`       | string | yes      | Project the tool belongs to                                                                                                                                                                                                                                                                   |
 | `type`            | string | yes      | `http`, `client`, `mcp`, or `soat` (default: `"http"`)                                                                                                                                                                                                                                        |
 | `name`            | string | yes      | Tool name (`http`/`client`) or namespace prefix for the connection (`mcp`/`soat`)                                                                                                                                                                                                             |
 | `description`     | string | no       | What the tool does (sent to the model for selection)                                                                                                                                                                                                                                          |
 | `parameters`      | object | cond.    | JSON Schema for the tool's input — required for `http` and `client`                                                                                                                                                                                                                           |
 | `execute`         | object | cond.    | Execution configuration — required when `type` is `http`                                                                                                                                                                                                                                      |
-| `execute.url`     | string | yes      | HTTP endpoint called to execute the tool. May contain `{paramName}` placeholders (e.g. `/users/{userId}`) that are replaced at call time with the corresponding tool argument value (URL-encoded). Arguments consumed as path parameters are excluded from the query string and request body. |
+| `execute.url`     | string | yes      | HTTP endpoint called to execute the tool. May contain `{param_name}` placeholders (e.g. `/users/{user_id}`) that are replaced at call time with the corresponding tool argument value (URL-encoded). Arguments consumed as path parameters are excluded from the query string and request body. |
 | `execute.method`  | string | no       | HTTP method to use (default: `POST`). For `GET`, `HEAD`, or `DELETE` the tool arguments are appended as query-string parameters instead of a request body.                                                                                                                                    |
 | `execute.headers` | object | no       | Additional headers sent with the execution request                                                                                                                                                                                                                                            |
 | `mcp`             | object | cond.    | MCP server configuration — required when `type` is `mcp`                                                                                                                                                                                                                                      |
@@ -52,15 +52,15 @@ Agent tools are reusable tool definitions that can be shared across multiple age
 | `mcp.headers`     | object | no       | Additional headers sent when connecting to the MCP server                                                                                                                                                                                                                                     |
 | `actions`         | array  | cond.    | List of SOAT platform actions to expose — required when `type` is `soat`                                                                                                                                                                                                                      |
 
-Agents reference tools by their IDs via the `toolIds` field. A single tool can be attached to many agents.
+Agents reference tools by their IDs via the `tool_ids` field. A single tool can be attached to many agents.
 
 #### Tool ID vs Tool Name
 
-A **tool ID** is the auto-generated resource identifier (e.g., `agt_tool_k8x2f3np`). It is used in `toolIds`, `activeToolIds`, and `stepRules[].activeToolIds`.
+A **tool ID** is the auto-generated resource identifier (e.g., `agt_tool_k8x2f3np`). It is used in `tool_ids`, `active_tool_ids`, and `step_rules[].active_tool_ids`.
 
 A **tool name** is the name the AI model sees at runtime (e.g., `"search"`). For `http` and `client` tools, one tool ID → one tool name (the `name` field). For `mcp` and `soat` tools, one tool ID → **many** tool names discovered from the MCP server or the platform’s action registry. See [Tool Name Resolution](#tool-name-resolution) for details.
 
-`toolChoice` and `stopConditions` reference tools by **name** (not by ID).
+`tool_choice` and `stop_conditions` reference tools by **name** (not by ID).
 
 #### Tool Types
 
@@ -70,7 +70,7 @@ The `type` field is required at creation time and defaults to `"http"`. Supporte
 
 When the model decides to call a tool, the server sends an HTTP request to the configured `execute.url` using the method specified in `execute.method` (defaults to `POST`). For `POST`, `PUT`, and `PATCH` requests the tool arguments are sent as a JSON body. For `GET`, `HEAD`, and `DELETE` requests the tool arguments are appended as query-string parameters.
 
-`execute.url` may contain `{paramName}` placeholders. At invocation time each placeholder is replaced with the corresponding tool argument (URL-encoded via `encodeURIComponent`). Arguments consumed as path parameters are removed from the remaining args before query-string or body serialization. Placeholders with no matching argument are left as-is.
+`execute.url` may contain `{param_name}` placeholders. At invocation time each placeholder is replaced with the corresponding tool argument (URL-encoded via `encodeURIComponent`). Arguments consumed as path parameters are removed from the remaining args before query-string or body serialization. Placeholders with no matching argument are left as-is.
 
 Example — a `DELETE` tool with path parameters:
 
@@ -79,21 +79,21 @@ Example — a `DELETE` tool with path parameters:
   "name": "delete-post",
   "type": "http",
   "execute": {
-    "url": "https://api.example.com/users/{userId}/posts/{postId}",
+    "url": "https://api.example.com/users/{user_id}/posts/{post_id}",
     "method": "DELETE"
   },
   "parameters": {
     "type": "object",
     "properties": {
-      "userId": { "type": "string" },
-      "postId": { "type": "string" }
+      "user_id": { "type": "string" },
+      "post_id": { "type": "string" }
     },
-    "required": ["userId", "postId"]
+    "required": ["user_id", "post_id"]
   }
 }
 ```
 
-When the model calls this tool with `{ "userId": "123", "postId": "456" }`, the server issues:
+When the model calls this tool with `{ "user_id": "123", "post_id": "456" }`, the server issues:
 
 ```
 DELETE https://api.example.com/users/123/posts/456
@@ -105,25 +105,25 @@ The tool is registered with `description` and `parameters` but has **no server-s
 
 Client tool flow:
 
-1. The caller starts a generation (`POST /agents/{agentId}/generate`).
+1. The caller starts a generation (`POST /agents/{agent_id}/generate`).
 2. The agent loop runs normally — `http` tools execute on the server.
 3. When the model calls a `client` tool, the server **cannot** execute it. The generation suspends and responds with `status: "requires_action"` plus the pending tool calls.
-4. The caller inspects the tool calls, runs them locally, and submits the results via `POST /agents/{agentId}/generate/{generationId}/tool-outputs`.
+4. The caller inspects the tool calls, runs them locally, and submits the results via `POST /agents/{agent_id}/generate/{generation_id}/tool-outputs`.
 5. The server resumes the loop from where it left off, feeding the submitted tool results back to the model.
-6. Steps 2–5 repeat until the loop terminates normally (final text, `maxSteps`, or a stop condition).
+6. Steps 2–5 repeat until the loop terminates normally (final text, `max_steps`, or a stop condition).
 
 Example response when a client tool is called:
 
 ```json
 {
   "status": "requires_action",
-  "generationId": "agt_gen_abc123",
-  "requiredAction": {
+  "generation_id": "agt_gen_abc123",
+  "required_action": {
     "type": "submit_tool_outputs",
-    "toolCalls": [
+    "tool_calls": [
       {
-        "toolCallId": "call_xyz",
-        "toolName": "read_local_file",
+        "tool_call_id": "call_xyz",
+        "tool_name": "read_local_file",
         "arguments": { "path": "/tmp/data.csv" }
       }
     ]
@@ -134,12 +134,12 @@ Example response when a client tool is called:
 Submitting tool outputs:
 
 ```json
-POST /agents/{agentId}/generate/{generationId}/tool-outputs
+POST /agents/{agent_id}/generate/{generation_id}/tool-outputs
 
 {
-  "toolOutputs": [
+  "tool_outputs": [
     {
-      "toolCallId": "call_xyz",
+      "tool_call_id": "call_xyz",
       "output": "col1,col2\n1,2\n3,4"
     }
   ]
@@ -177,7 +177,7 @@ For `mcp` tools, the Agent Tool's `name` is used as a **prefix** joined with an 
 
 For `soat` tools, the same convention applies — the `name` prefix is joined with each action name from the `actions` array.
 
-`toolChoice` and `stopConditions` reference tools by their **resolved** name (e.g., `github_create_issue`, not just `create_issue`).
+`tool_choice` and `stop_conditions` reference tools by their **resolved** name (e.g., `github_create_issue`, not just `create_issue`).
 
 ### Instructions
 
@@ -185,123 +185,123 @@ The `instructions` field sets the agent's system prompt. It defines the agent's 
 
 ### AI Provider Resolution
 
-Same as chats — the agent resolves its AI provider by `aiProviderId`. The provider's secret is decrypted and used to authenticate with the upstream model API. If `model` is not set on the agent, the provider's `defaultModel` is used.
+Same as chats — the agent resolves its AI provider by `ai_provider_id`. The provider's secret is decrypted and used to authenticate with the upstream model API. If `model` is not set on the agent, the provider's `default_model` is used.
 
 ### Tool Choice
 
-The `toolChoice` field sets the **default** tool-selection strategy for every step. To override on specific steps, use [Step Rules](#step-rules).
+The `tool_choice` field sets the **default** tool-selection strategy for every step. To override on specific steps, use [Step Rules](#step-rules).
 
 | Value                                  | Behavior                                                 |
 | -------------------------------------- | -------------------------------------------------------- |
 | `"auto"` (default)                     | The model decides whether to call a tool or produce text |
 | `"required"`                           | The model must call a tool at every step                 |
-| `{ type: "tool", toolName: "<name>" }` | The model must call the specified tool                   |
+| `{ type: "tool", tool_name: "<name>" }` | The model must call the specified tool                   |
 
 Using `"required"` is useful when combined with a tool that has no `execute` configuration (a "done" tool). The agent is forced to use tools at every step and stops when it calls the tool without an executor.
 
 ### Step Rules
 
-The `stepRules` array lets you control `toolChoice` and `activeToolIds` on specific steps. Each rule targets a step number (1-indexed) and overrides the agent defaults for that step only.
+The `step_rules` array lets you control `tool_choice` and `active_tool_ids` on specific steps. Each rule targets a step number (1-indexed) and overrides the agent defaults for that step only.
 
 | Field           | Type          | Required | Description                         |
 | --------------- | ------------- | -------- | ----------------------------------- |
 | `step`          | number        | yes      | Step number (1-indexed)             |
-| `toolChoice`    | string/object | no       | Override tool choice for this step  |
-| `activeToolIds` | array         | no       | Override active tools for this step |
+| `tool_choice`    | string/object | no       | Override tool choice for this step  |
+| `active_tool_ids` | array         | no       | Override active tools for this step |
 
 Example — force `search` on step 1, then `analyze` on step 2, then let the model decide:
 
 ```json
 {
-  "stepRules": [
-    { "step": 1, "toolChoice": { "type": "tool", "toolName": "search" } },
+  "step_rules": [
+    { "step": 1, "tool_choice": { "type": "tool", "tool_name": "search" } },
     {
       "step": 2,
-      "toolChoice": { "type": "tool", "toolName": "analyze" },
-      "activeToolIds": ["agt_tool_j5v1d6yt", "agt_tool_h2t9e3ul"]
+      "tool_choice": { "type": "tool", "tool_name": "analyze" },
+      "active_tool_ids": ["agt_tool_j5v1d6yt", "agt_tool_h2t9e3ul"]
     }
   ]
 }
 ```
 
-Steps without a matching rule use the agent's default `toolChoice` and `activeToolIds`.
+Steps without a matching rule use the agent's default `tool_choice` and `active_tool_ids`.
 
 For **dynamic** per-step control (when you don't know the plan in advance), use `client` tools to create pause points. When submitting tool outputs, you can pass overrides at three levels:
 
 | Field           | Scope                             | Description                                                                 |
 | --------------- | --------------------------------- | --------------------------------------------------------------------------- |
-| `toolChoice`    | Next step only                    | Override tool choice for the immediate next step                            |
-| `activeToolIds` | Next step only                    | Override active tools for the immediate next step                           |
-| `stepRules`     | Specific upcoming steps           | Array of `{ step, toolChoice?, activeToolIds? }` targeting future steps     |
-| `defaults`      | All remaining steps in generation | Object with `toolChoice` and/or `activeToolIds` that replace agent defaults |
+| `tool_choice`    | Next step only                    | Override tool choice for the immediate next step                            |
+| `active_tool_ids` | Next step only                    | Override active tools for the immediate next step                           |
+| `step_rules`     | Specific upcoming steps           | Array of `{ step, tool_choice?, active_tool_ids? }` targeting future steps     |
+| `defaults`      | All remaining steps in generation | Object with `tool_choice` and/or `active_tool_ids` that replace agent defaults |
 
 ```json
-POST /agents/{agentId}/generate/{generationId}/tool-outputs
+POST /agents/{agent_id}/generate/{generation_id}/tool-outputs
 
 {
-  "toolOutputs": [
-    { "toolCallId": "call_xyz", "output": "result" }
+  "tool_outputs": [
+    { "tool_call_id": "call_xyz", "output": "result" }
   ],
-  "toolChoice": { "type": "tool", "toolName": "summarize" },
-  "activeToolIds": ["agt_tool_p4s8a2kd"],
-  "stepRules": [
-    { "step": 5, "toolChoice": "auto" },
-    { "step": 6, "toolChoice": { "type": "tool", "toolName": "transform" } }
+  "tool_choice": { "type": "tool", "tool_name": "summarize" },
+  "active_tool_ids": ["agt_tool_p4s8a2kd"],
+  "step_rules": [
+    { "step": 5, "tool_choice": "auto" },
+    { "step": 6, "tool_choice": { "type": "tool", "tool_name": "transform" } }
   ],
   "defaults": {
-    "toolChoice": "required",
-    "activeToolIds": ["agt_tool_p4s8a2kd", "agt_tool_n9c3y8ms"]
+    "tool_choice": "required",
+    "active_tool_ids": ["agt_tool_p4s8a2kd", "agt_tool_n9c3y8ms"]
   }
 }
 ```
 
-**Priority** (highest → lowest): next-step overrides (`toolChoice`/`activeToolIds`) → `stepRules` for that step → `defaults` → agent config.
+**Priority** (highest → lowest): next-step overrides (`tool_choice`/`active_tool_ids`) → `step_rules` for that step → `defaults` → agent config.
 
 ### Stop Conditions
 
-Besides `maxSteps`, you can define additional stop conditions via the `stopConditions` array. The loop stops when **any** condition is met.
+Besides `max_steps`, you can define additional stop conditions via the `stop_conditions` array. The loop stops when **any** condition is met.
 
 | Condition                                     | Description                                  |
 | --------------------------------------------- | -------------------------------------------- |
-| `{ type: "hasToolCall", toolName: "<name>" }` | Stop when the model calls the specified tool |
+| `{ type: "hasToolCall", tool_name: "<name>" }` | Stop when the model calls the specified tool |
 
 Example — stop after the model calls a `done` tool **or** after 50 steps:
 
 ```json
 {
-  "maxSteps": 50,
-  "stopConditions": [{ "type": "hasToolCall", "toolName": "done" }]
+  "max_steps": 50,
+  "stop_conditions": [{ "type": "hasToolCall", "tool_name": "done" }]
 }
 ```
 
 ### Active Tools
 
-By default, all tools in `toolIds` are available at every step. Use `activeToolIds` to restrict which tools the model can see globally. For phased workflows where different steps need different tools, use [Step Rules](#step-rules) instead.
+By default, all tools in `tool_ids` are available at every step. Use `active_tool_ids` to restrict which tools the model can see globally. For phased workflows where different steps need different tools, use [Step Rules](#step-rules) instead.
 
-`activeToolIds` must be a subset of `toolIds`. If omitted, all tools in `toolIds` are active.
+`active_tool_ids` must be a subset of `tool_ids`. If omitted, all tools in `tool_ids` are active.
 
 ### Generation
 
 Running an agent creates a **generation** — a single execution of the tool loop. The agent calls the model, checks if it wants to invoke a tool, executes the tool (if configured), and feeds the result back. This loop continues until:
 
-- The model produces a final text response with no tool calls (unless `toolChoice` is `"required"`).
-- The step count reaches `maxSteps`.
-- A stop condition in `stopConditions` is met.
+- The model produces a final text response with no tool calls (unless `tool_choice` is `"required"`).
+- The step count reaches `max_steps`.
+- A stop condition in `stop_conditions` is met.
 - A tool without an `execute` configuration is called (including `client` tools — which pause the generation instead of terminating it).
 
-Use `POST /agents/{agentId}/generate` to run a generation. It accepts `prompt` (string) and/or `messages` (array) as input. You can also pass `toolChoice`, `activeToolIds`, `stepRules`, `stopConditions`, and `maxCallDepth` to override the agent defaults for that request.
+Use `POST /agents/{agent_id}/generate` to run a generation. It accepts `prompt` (string) and/or `messages` (array) as input. You can also pass `tool_choice`, `active_tool_ids`, `step_rules`, `stop_conditions`, and `max_call_depth` to override the agent defaults for that request.
 
 | Parameter        | Type          | Required | Description                                                                                                    |
 | ---------------- | ------------- | -------- | -------------------------------------------------------------------------------------------------------------- |
 | `prompt`         | string        | cond.    | Text prompt (must provide `prompt` and/or `messages`)                                                          |
 | `messages`       | array         | cond.    | Message history (must provide `prompt` and/or `messages`)                                                      |
-| `toolChoice`     | string/object | no       | Override the agent's `toolChoice` for this generation                                                          |
-| `activeToolIds`  | array         | no       | Override the agent's `activeToolIds` for this generation                                                       |
-| `stepRules`      | array         | no       | Override the agent's `stepRules` for this generation                                                           |
-| `stopConditions` | array         | no       | Override the agent's `stopConditions` for this generation                                                      |
-| `maxCallDepth`   | number        | no       | Maximum nesting depth for agent-to-agent calls (default: `10`) — see [Nested Agent Calls](#nested-agent-calls) |
+| `tool_choice`     | string/object | no       | Override the agent's `tool_choice` for this generation                                                          |
+| `active_tool_ids`  | array         | no       | Override the agent's `active_tool_ids` for this generation                                                       |
+| `step_rules`      | array         | no       | Override the agent's `step_rules` for this generation                                                           |
+| `stop_conditions` | array         | no       | Override the agent's `stop_conditions` for this generation                                                      |
+| `max_call_depth`   | number        | no       | Maximum nesting depth for agent-to-agent calls (default: `10`) — see [Nested Agent Calls](#nested-agent-calls) |
 | `stream`         | boolean       | no       | Stream results as Server-Sent Events                                                                           |
-| `toolContext`    | object        | no       | Key-value pairs forwarded as `X-Soat-Context-*` headers on tool calls — see [Tool Context](#tool-context)      |
+| `tool_context`    | object        | no       | Key-value pairs forwarded as `X-Soat-Context-*` headers on tool calls — see [Tool Context](#tool-context)      |
 
 ### Streaming
 
@@ -309,17 +309,17 @@ Pass `stream: true` to receive results as Server-Sent Events (SSE). Each step's 
 
 ### Tool Context
 
-`toolContext` lets callers inject key-value pairs that are forwarded as HTTP headers to every tool call made during a generation. This enables server-side tools to perform authorization decisions based on the caller's identity without trusting data embedded in the prompt.
+`tool_context` lets callers inject key-value pairs that are forwarded as HTTP headers to every tool call made during a generation. This enables server-side tools to perform authorization decisions based on the caller's identity without trusting data embedded in the prompt.
 
 #### Shape
 
-`toolContext` is a flat `Record<string, string>` — every key-value pair is forwarded to **all** tool calls in the generation.
+`tool_context` is a flat `Record<string, string>` — every key-value pair is forwarded to **all** tool calls in the generation.
 
 ```json
 {
-  "toolContext": {
-    "userId": "usr_abc123",
-    "tenantId": "tenant_xyz"
+  "tool_context": {
+    "user_id": "usr_abc123",
+    "tenant_id": "tenant_xyz"
   }
 }
 ```
@@ -328,10 +328,10 @@ Pass `stream: true` to receive results as Server-Sent Events (SSE). Each step's 
 
 Each key is title-cased and prefixed with `X-Soat-Context-`:
 
-| `toolContext` key | Forwarded header          |
+| `tool_context` key | Forwarded header          |
 | ----------------- | ------------------------- |
-| `userId`          | `X-Soat-Context-UserId`   |
-| `tenantId`        | `X-Soat-Context-TenantId` |
+| `user_id`          | `X-Soat-Context-UserId`   |
+| `tenant_id`        | `X-Soat-Context-tenant_id` |
 
 #### Supported Tool Types
 
@@ -346,11 +346,11 @@ Context headers are injected **after** any headers configured on the tool defini
 
 #### Propagation Through Nested Agent Calls
 
-When an agent invokes another agent via a `soat` tool (`create-agent-generation`), the parent's `toolContext` is automatically forwarded to the child generation. This means the original caller's identity flows through the entire agent chain without any extra configuration.
+When an agent invokes another agent via a `soat` tool (`create-agent-generation`), the parent's `tool_context` is automatically forwarded to the child generation. This means the original caller's identity flows through the entire agent chain without any extra configuration.
 
 #### Persistence Across `requires_action` Pauses
 
-When a generation pauses with `status: "requires_action"` (client tool), the `toolContext` provided in the original request is preserved and automatically reapplied when the generation resumes via `POST /agents/{agentId}/generate/{generationId}/tool-outputs`.
+When a generation pauses with `status: "requires_action"` (client tool), the `tool_context` provided in the original request is preserved and automatically reapplied when the generation resumes via `POST /agents/{agent_id}/generate/{generation_id}/tool-outputs`.
 
 ## Example Flows
 
@@ -362,20 +362,20 @@ When a generation pauses with `status: "requires_action"` (client tool), the `to
 
 ```json
 {
-  "aiProviderId": "aip_openai",
+  "ai_provider_id": "aip_openai",
   "instructions": "You are a research assistant.",
-  "toolIds": ["agt_tool_k8x2f3np", "agt_tool_m3p9qw7j"],
-  "maxSteps": 10
+  "tool_ids": ["agt_tool_k8x2f3np", "agt_tool_m3p9qw7j"],
+  "max_steps": 10
 }
 ```
 
 Where `agt_tool_k8x2f3np` → `"search"` (http) and `agt_tool_m3p9qw7j` → `"fetch_url"` (http).
 
-No `toolChoice`, `stepRules`, or `stopConditions` — everything defaults to `"auto"`.
+No `tool_choice`, `step_rules`, or `stop_conditions` — everything defaults to `"auto"`.
 
 **What happens:**
 
-1. Caller sends `POST /agents/{agentId}/generate` with `{ "prompt": "Summarize the latest news on AI regulation" }`.
+1. Caller sends `POST /agents/{agent_id}/generate` with `{ "prompt": "Summarize the latest news on AI regulation" }`.
 2. The model decides to call `search` → server POSTs to the tool's `execute.url` → result fed back.
 3. The model decides to call `fetch_url` → server executes → result fed back.
 4. The model produces a final text summary → generation complete.
@@ -391,10 +391,10 @@ No `toolChoice`, `stepRules`, or `stopConditions` — everything defaults to `"a
 
 ```json
 {
-  "aiProviderId": "aip_openai",
+  "ai_provider_id": "aip_openai",
   "instructions": "You help users analyze local data files.",
-  "toolIds": ["agt_tool_r7w4n1hc", "agt_tool_j5v1d6yt"],
-  "maxSteps": 10
+  "tool_ids": ["agt_tool_r7w4n1hc", "agt_tool_j5v1d6yt"],
+  "max_steps": 10
 }
 ```
 
@@ -402,26 +402,26 @@ Where `agt_tool_r7w4n1hc` → `"read_file"` (client) and `agt_tool_j5v1d6yt` →
 
 **What happens:**
 
-1. Caller sends `POST /agents/{agentId}/generate` with `{ "prompt": "Analyze /tmp/sales.csv" }`.
+1. Caller sends `POST /agents/{agent_id}/generate` with `{ "prompt": "Analyze /tmp/sales.csv" }`.
 2. The model calls `read_file` → server has no `execute` for it → generation **pauses**.
 3. Caller receives:
    ```json
    {
      "status": "requires_action",
-     "generationId": "agt_gen_abc",
-     "requiredAction": {
+     "generation_id": "agt_gen_abc",
+     "required_action": {
        "type": "submit_tool_outputs",
-       "toolCalls": [
+       "tool_calls": [
          {
-           "toolCallId": "call_1",
-           "toolName": "read_file",
+           "tool_call_id": "call_1",
+           "tool_name": "read_file",
            "arguments": { "path": "/tmp/sales.csv" }
          }
        ]
      }
    }
    ```
-4. Caller reads the file locally and submits: `POST /agents/{agentId}/generate/agt_gen_abc/tool-outputs` with `{ "toolOutputs": [{ "toolCallId": "call_1", "output": "date,amount\n..." }] }`.
+4. Caller reads the file locally and submits: `POST /agents/{agent_id}/generate/agt_gen_abc/tool-outputs` with `{ "tool_outputs": [{ "tool_call_id": "call_1", "output": "date,amount\n..." }] }`.
 5. The model calls `analyze` (http) → server executes → result fed back.
 6. The model produces final text → `{ "status": "completed", "text": "Sales grew by 15%..." }`.
 
@@ -435,14 +435,14 @@ Where `agt_tool_r7w4n1hc` → `"read_file"` (client) and `agt_tool_j5v1d6yt` →
 
 ```json
 {
-  "aiProviderId": "aip_openai",
+  "ai_provider_id": "aip_openai",
   "instructions": "Extract data, transform it, then summarize.",
-  "toolIds": ["agt_tool_e2h6t0bx", "agt_tool_n9c3y8ms", "agt_tool_p4s8a2kd"],
-  "maxSteps": 5,
-  "stepRules": [
-    { "step": 1, "toolChoice": { "type": "tool", "toolName": "extract" } },
-    { "step": 2, "toolChoice": { "type": "tool", "toolName": "transform" } },
-    { "step": 3, "toolChoice": { "type": "tool", "toolName": "summarize" } }
+  "tool_ids": ["agt_tool_e2h6t0bx", "agt_tool_n9c3y8ms", "agt_tool_p4s8a2kd"],
+  "max_steps": 5,
+  "step_rules": [
+    { "step": 1, "tool_choice": { "type": "tool", "tool_name": "extract" } },
+    { "step": 2, "tool_choice": { "type": "tool", "tool_name": "transform" } },
+    { "step": 3, "tool_choice": { "type": "tool", "tool_name": "summarize" } }
   ]
 }
 ```
@@ -451,7 +451,7 @@ Where `agt_tool_e2h6t0bx` → `"extract"`, `agt_tool_n9c3y8ms` → `"transform"`
 
 **What happens:**
 
-1. Caller sends `POST /agents/{agentId}/generate` with `{ "prompt": "Process order #1234" }`.
+1. Caller sends `POST /agents/{agent_id}/generate` with `{ "prompt": "Process order #1234" }`.
 2. Step 1 — model is **forced** to call `extract` → server executes → result fed back.
 3. Step 2 — model is **forced** to call `transform` → server executes → result fed back.
 4. Step 3 — model is **forced** to call `summarize` → server executes → result fed back.
@@ -467,10 +467,10 @@ Where `agt_tool_e2h6t0bx` → `"extract"`, `agt_tool_n9c3y8ms` → `"transform"`
 
 ```json
 {
-  "aiProviderId": "aip_openai",
+  "ai_provider_id": "aip_openai",
   "instructions": "You are a coding assistant.",
-  "toolIds": ["agt_tool_g1m7k4re", "agt_tool_w3f5r9aj", "agt_tool_d8j4v0zp"],
-  "maxSteps": 20
+  "tool_ids": ["agt_tool_g1m7k4re", "agt_tool_w3f5r9aj", "agt_tool_d8j4v0zp"],
+  "max_steps": 20
 }
 ```
 
@@ -478,29 +478,29 @@ Where `agt_tool_g1m7k4re` → `"search_code"` (http), `agt_tool_w3f5r9aj` → `"
 
 **What happens:**
 
-1. Caller sends `POST /agents/{agentId}/generate` with `{ "prompt": "Find and fix the failing test in auth.ts" }`.
+1. Caller sends `POST /agents/{agent_id}/generate` with `{ "prompt": "Find and fix the failing test in auth.ts" }`.
 2. The model calls `search_code` (http) → result fed back. Then calls `checkpoint` (client) → **pauses**.
 3. Caller inspects the search results in the `requires_action` response and decides the model should run tests next, then search again. Submits tool outputs **with overrides at multiple levels**:
    ```json
    {
-     "toolOutputs": [{ "toolCallId": "call_2", "output": "proceed" }],
-     "toolChoice": { "type": "tool", "toolName": "run_tests" },
-     "activeToolIds": ["agt_tool_w3f5r9aj"],
-     "stepRules": [
+     "tool_outputs": [{ "tool_call_id": "call_2", "output": "proceed" }],
+     "tool_choice": { "type": "tool", "tool_name": "run_tests" },
+     "active_tool_ids": ["agt_tool_w3f5r9aj"],
+     "step_rules": [
        {
          "step": 4,
-         "toolChoice": { "type": "tool", "toolName": "search_code" },
-         "activeToolIds": ["agt_tool_g1m7k4re"]
+         "tool_choice": { "type": "tool", "tool_name": "search_code" },
+         "active_tool_ids": ["agt_tool_g1m7k4re"]
        }
      ],
      "defaults": {
-       "toolChoice": "required"
+       "tool_choice": "required"
      }
    }
    ```
 4. Step 3 — next-step override wins → model is **forced** to call `run_tests` → server executes → result fed back.
-5. Step 4 — `stepRules` override wins → model is **forced** to call `search_code` → server executes → result fed back.
-6. Step 5+ — no rule, no next-step override → `defaults` apply → `toolChoice: "required"` so the model must call a tool, but can choose which one.
+5. Step 4 — `step_rules` override wins → model is **forced** to call `search_code` → server executes → result fed back.
+6. Step 5+ — no rule, no next-step override → `defaults` apply → `tool_choice: "required"` so the model must call a tool, but can choose which one.
 
 ---
 
@@ -512,12 +512,12 @@ Where `agt_tool_g1m7k4re` → `"search_code"` (http), `agt_tool_w3f5r9aj` → `"
 
 ```json
 {
-  "aiProviderId": "aip_openai",
+  "ai_provider_id": "aip_openai",
   "instructions": "Research the topic and call done with your structured answer.",
-  "toolIds": ["agt_tool_k8x2f3np", "agt_tool_q6b2x5wf"],
-  "toolChoice": "required",
-  "stopConditions": [{ "type": "hasToolCall", "toolName": "done" }],
-  "maxSteps": 15
+  "tool_ids": ["agt_tool_k8x2f3np", "agt_tool_q6b2x5wf"],
+  "tool_choice": "required",
+  "stop_conditions": [{ "type": "hasToolCall", "tool_name": "done" }],
+  "max_steps": 15
 }
 ```
 
@@ -525,8 +525,8 @@ Where `agt_tool_k8x2f3np` → `"search"` (http) and `agt_tool_q6b2x5wf` → `"do
 
 **What happens:**
 
-1. Caller sends `POST /agents/{agentId}/generate`.
-2. `toolChoice: "required"` → the model **must** call a tool at every step. It cannot respond with free-form text.
+1. Caller sends `POST /agents/{agent_id}/generate`.
+2. `tool_choice: "required"` → the model **must** call a tool at every step. It cannot respond with free-form text.
 3. The model calls `search` repeatedly gathering data.
 4. When ready, the model calls `done` with structured arguments (e.g., `{ "title": "...", "summary": "..." }`).
 5. The `hasToolCall` stop condition fires → loop terminates immediately.
@@ -542,10 +542,10 @@ Where `agt_tool_k8x2f3np` → `"search"` (http) and `agt_tool_q6b2x5wf` → `"do
 
 ```json
 {
-  "aiProviderId": "aip_anthropic",
+  "ai_provider_id": "aip_anthropic",
   "instructions": "You manage GitHub repositories. Use the available tools to help the user.",
-  "toolIds": ["agt_tool_c5n8f2vb"],
-  "maxSteps": 10
+  "tool_ids": ["agt_tool_c5n8f2vb"],
+  "max_steps": 10
 }
 ```
 
@@ -553,7 +553,7 @@ Where `agt_tool_c5n8f2vb` is an `mcp` tool connected to a GitHub MCP server. At 
 
 **What happens:**
 
-1. Caller sends `POST /agents/{agentId}/generate` with `{ "prompt": "Create an issue in acme/api titled 'Fix auth bug'" }`.
+1. Caller sends `POST /agents/{agent_id}/generate` with `{ "prompt": "Create an issue in acme/api titled 'Fix auth bug'" }`.
 2. The server connects to the MCP endpoint configured on `agt_tool_c5n8f2vb`, discovers all available tool names, and registers them with the model.
 3. The model decides to call `create_issue` → the server proxies the call to the MCP server → result fed back.
 4. The model produces a final text confirmation → generation complete.
@@ -571,10 +571,10 @@ You can combine MCP tools with `http` and `client` tools in the same agent — a
 
 ```json
 {
-  "aiProviderId": "aip_openai",
+  "ai_provider_id": "aip_openai",
   "instructions": "You are a knowledge assistant. Use the project’s documents to answer user questions.",
-  "toolIds": ["agt_tool_s2d7p4qx"],
-  "maxSteps": 10
+  "tool_ids": ["agt_tool_s2d7p4qx"],
+  "max_steps": 10
 }
 ```
 
@@ -590,7 +590,7 @@ Where `agt_tool_s2d7p4qx` is a `soat` tool configured as:
 
 **What happens:**
 
-1. Caller sends `POST /agents/{agentId}/generate` with `{ "prompt": "What does our API rate-limiting policy say?" }`.
+1. Caller sends `POST /agents/{agent_id}/generate` with `{ "prompt": "What does our API rate-limiting policy say?" }`.
 2. The server registers two tools with the model: `docs_search_documents` and `docs_get_document` (names derived from `{name}_{action}`).
 3. The model calls `docs_search_documents` with `{ "query": "rate limiting policy" }` → the server executes the `search-documents` action in-process → result fed back.
 4. The model calls `docs_get_document` with `{ "id": "doc_abc" }` to get the full text → server executes → result fed back.
@@ -604,7 +604,7 @@ You can combine `soat` tools with `http`, `client`, and `mcp` tools in the same 
 When an agent executes a `soat` tool action, the server must decide whether the action is allowed. Two policies are evaluated — both must allow the action for it to proceed:
 
 1. **Caller policy** — the permissions of the user or API key that triggered the generation. This is the same policy evaluation used by every other REST endpoint.
-2. **Agent boundary policy** — an optional `boundaryPolicy` stored on the agent itself that caps what the agent is allowed to do, regardless of who calls it.
+2. **Agent boundary policy** — an optional `boundary_policy` stored on the agent itself that caps what the agent is allowed to do, regardless of who calls it.
 
 The effective permission is the **intersection** of the two:
 
@@ -618,16 +618,16 @@ This follows the same pattern as project API keys, where the key's policy inters
 
 - **Principle of least privilege** — the agent creator scopes what the agent can do at most. A document-search agent shouldn't be able to delete files even if the caller can.
 - **Callers can't escalate** — a user with read-only permissions can't use an agent whose boundary allows writes to bypass their own restrictions.
-- **No boundary = caller-only** — if `boundaryPolicy` is omitted, only the caller's permissions apply (backward compatible).
+- **No boundary = caller-only** — if `boundary_policy` is omitted, only the caller's permissions apply (backward compatible).
 
 ### Example
 
 ```json
 {
-  "aiProviderId": "aip_openai",
+  "ai_provider_id": "aip_openai",
   "instructions": "You answer questions using project documents.",
-  "toolIds": ["agt_tool_s2d7p4qx"],
-  "boundaryPolicy": {
+  "tool_ids": ["agt_tool_s2d7p4qx"],
+  "boundary_policy": {
     "statement": [
       {
         "effect": "Allow",
@@ -649,13 +649,13 @@ The boundary policy only governs `soat` actions, which execute against platform 
 
 An agent can invoke another agent through a `soat` tool action (e.g., `create-agent-generation`). Without safeguards this can lead to unbounded recursion (`A→B→A→…`).
 
-The server enforces a **maximum call depth** controlled by the `maxCallDepth` parameter on the generate request (default: **10**). Internally, the server converts this into a `remainingDepth` counter. Each time a `soat` action triggers a child generation, the child receives `remainingDepth - 1`. When `remainingDepth` reaches `0`, the action returns an error instead of spawning the child generation.
+The server enforces a **maximum call depth** controlled by the `max_call_depth` parameter on the generate request (default: **10**). Internally, the server converts this into a `remaining_depth` counter. Each time a `soat` action triggers a child generation, the child receives `remaining_depth - 1`. When `remaining_depth` reaches `0`, the action returns an error instead of spawning the child generation.
 
-This design is self-contained: each generation only needs its own `remainingDepth` — it does not need to know the original `maxCallDepth` or any shared trace state.
+This design is self-contained: each generation only needs its own `remaining_depth` — it does not need to know the original `max_call_depth` or any shared trace state.
 
-For observability, every top-level generation also creates a **trace** identified by a unique `traceId` (`agt_trace_` prefix). The server attaches the same `traceId` to all generations in the chain automatically. This is internal server plumbing — agents do not receive or propagate `traceId`.
+For observability, every top-level generation also creates a **trace** identified by a unique `trace_id` (`agt_trace_` prefix). The server attaches the same `trace_id` to all generations in the chain automatically. This is internal server plumbing — agents do not receive or propagate `trace_id`.
 
-Example: A caller starts Agent A with `maxCallDepth: 3`. Agent A runs with `remainingDepth: 3` and calls Agent B (`remainingDepth: 2`). Agent B calls Agent C (`remainingDepth: 1`). Agent C can still run but cannot nest further — if it tries to call Agent D, `remainingDepth` would be `0` → the server rejects the call.
+Example: A caller starts Agent A with `max_call_depth: 3`. Agent A runs with `remaining_depth: 3` and calls Agent B (`remaining_depth: 2`). Agent B calls Agent C (`remaining_depth: 1`). Agent C can still run but cannot nest further — if it tries to call Agent D, `remaining_depth` would be `0` → the server rejects the call.
 
 ## Permissions
 
@@ -663,15 +663,15 @@ Example: A caller starts Agent A with `maxCallDepth: 3`. Agent A runs with `rema
 | -------------------- | ------------------------------ | ------------------------------------------------------------- | --------------------------- |
 | Create an agent      | `agents:CreateAgent`           | `POST /agents`                                                | `create-agent`              |
 | List agents          | `agents:ListAgents`            | `GET /agents`                                                 | `list-agents`               |
-| Get an agent         | `agents:GetAgent`              | `GET /agents/{agentId}`                                       | `get-agent`                 |
-| Update an agent      | `agents:UpdateAgent`           | `PUT /agents/{agentId}`                                       | `update-agent`              |
-| Delete an agent      | `agents:DeleteAgent`           | `DELETE /agents/{agentId}`                                    | `delete-agent`              |
-| Run a generation     | `agents:CreateAgentGeneration` | `POST /agents/{agentId}/generate`                             | `create-agent-generation`   |
-| Submit tool outputs  | `agents:CreateAgentGeneration` | `POST /agents/{agentId}/generate/{generationId}/tool-outputs` | `submit-agent-tool-outputs` |
+| Get an agent         | `agents:GetAgent`              | `GET /agents/{agent_id}`                                       | `get-agent`                 |
+| Update an agent      | `agents:UpdateAgent`           | `PUT /agents/{agent_id}`                                       | `update-agent`              |
+| Delete an agent      | `agents:DeleteAgent`           | `DELETE /agents/{agent_id}`                                    | `delete-agent`              |
+| Run a generation     | `agents:CreateAgentGeneration` | `POST /agents/{agent_id}/generate`                             | `create-agent-generation`   |
+| Submit tool outputs  | `agents:CreateAgentGeneration` | `POST /agents/{agent_id}/generate/{generation_id}/tool-outputs` | `submit-agent-tool-outputs` |
 | Create an agent tool | `agents:CreateAgentTool`       | `POST /agents/tools`                                          | `create-agent-tool`         |
 | List agent tools     | `agents:ListAgentTools`        | `GET /agents/tools`                                           | `list-agent-tools`          |
-| Get an agent tool    | `agents:GetAgentTool`          | `GET /agents/tools/{toolId}`                                  | `get-agent-tool`            |
-| Update an agent tool | `agents:UpdateAgentTool`       | `PUT /agents/tools/{toolId}`                                  | `update-agent-tool`         |
-| Delete an agent tool | `agents:DeleteAgentTool`       | `DELETE /agents/tools/{toolId}`                               | `delete-agent-tool`         |
+| Get an agent tool    | `agents:GetAgentTool`          | `GET /agents/tools/{tool_id}`                                  | `get-agent-tool`            |
+| Update an agent tool | `agents:UpdateAgentTool`       | `PUT /agents/tools/{tool_id}`                                  | `update-agent-tool`         |
+| Delete an agent tool | `agents:DeleteAgentTool`       | `DELETE /agents/tools/{tool_id}`                               | `delete-agent-tool`         |
 | List traces          | `agents:ListAgentTraces`       | `GET /agents/traces`                                          | `list-agent-traces`         |
-| Get a trace          | `agents:GetAgentTrace`         | `GET /agents/traces/{traceId}`                                | `get-agent-trace`           |
+| Get a trace          | `agents:GetAgentTrace`         | `GET /agents/traces/{trace_id}`                                | `get-agent-trace`           |

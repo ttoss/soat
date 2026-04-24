@@ -6,15 +6,15 @@ sidebar_position: 11
 
 ## Overview
 
-Sessions provide a simplified **1 user ↔ 1 agent** conversational interface. They are a sub-resource of [Agents](./agents.md), nested under `/agents/:agentId/sessions`, and hide the underlying Conversation, Actor, and generation plumbing.
+Sessions provide a simplified **1 user ↔ 1 agent** conversational interface. They are a sub-resource of [Agents](./agents.md), nested under `/agents/:agent_id/sessions`, and hide the underlying Conversation, Actor, and generation plumbing.
 
 By default, interacting with an agent requires three API calls:
 
-1. **Create a session** — `POST /agents/:agentId/sessions`
-2. **Save a user message** — `POST /agents/:agentId/sessions/:sessionId/messages` (returns 201, does not trigger generation)
-3. **Generate a response** — `POST /agents/:agentId/sessions/:sessionId/generate` (triggers the LLM, returns the assistant reply)
+1. **Create a session** — `POST /agents/:agent_id/sessions`
+2. **Save a user message** — `POST /agents/:agent_id/sessions/:session_id/messages` (returns 201, does not trigger generation)
+3. **Generate a response** — `POST /agents/:agent_id/sessions/:session_id/generate` (triggers the LLM, returns the assistant reply)
 
-When `autoGenerate` is enabled on the session, step 3 is handled automatically — `POST .../messages` saves the message and returns the assistant reply in one call, reducing the flow to two API calls.
+When `auto_generate` is enabled on the session, step 3 is handled automatically — `POST .../messages` saves the message and returns the assistant reply in one call, reducing the flow to two API calls.
 
 The session automatically creates and manages the underlying conversation, agent actor, and user actor.
 
@@ -34,7 +34,7 @@ A session starts in `open` status. It can be updated to `closed` when the intera
 
 ### Actor ID
 
-The optional `actorId` field allows callers to reuse an existing Actor as the user for the session. When omitted, a new user actor is created automatically. Sessions can be filtered by this field.
+The optional `actor_id` field allows callers to reuse an existing Actor as the user for the session. When omitted, a new user actor is created automatically. Sessions can be filtered by this field.
 
 ### Tags
 
@@ -42,54 +42,54 @@ Sessions support arbitrary key-value metadata via the `tags` JSONB field. Tags c
 
 ### Escape Hatch
 
-Each session exposes its `conversationId`, allowing advanced users to drop into the full [Conversations](./conversations.md) API when multi-party or lower-level control is needed.
+Each session exposes its `conversation_id`, allowing advanced users to drop into the full [Conversations](./conversations.md) API when multi-party or lower-level control is needed.
 
 ### Auto-Generate
 
-When `autoGenerate` is set to `true` on a session, `POST .../messages` saves the user message **and** automatically triggers LLM generation in the same request. The response body contains the assistant reply instead of just the saved user message.
+When `auto_generate` is set to `true` on a session, `POST .../messages` saves the user message **and** automatically triggers LLM generation in the same request. The response body contains the assistant reply instead of just the saved user message.
 
 This collapses the three-call flow into two calls: create a session, then send messages.
 
-`autoGenerate` defaults to `false`. It can be set at session creation or toggled at any time:
+`auto_generate` defaults to `false`. It can be set at session creation or toggled at any time:
 
 ```http
-PATCH /agents/:agentId/sessions/:sessionId
+PATCH /agents/:agent_id/sessions/:session_id
 Content-Type: application/json
 
-{ "autoGenerate": false }
+{ "auto_generate": false }
 ```
 
-The explicit `POST .../generate` endpoint continues to work regardless of this setting. Async generation (`?async=true`) is also supported on `POST .../messages` when `autoGenerate` is enabled — the request returns `202 Accepted` immediately and generation proceeds in the background.
+The explicit `POST .../generate` endpoint continues to work regardless of this setting. Async generation (`?async=true`) is also supported on `POST .../messages` when `auto_generate` is enabled — the request returns `202 Accepted` immediately and generation proceeds in the background.
 
 ### Tool Context
 
-Sessions support the same `toolContext` mechanism as direct agent generations — see [Tool Context](./agents.md#tool-context) in the Agents module for the full specification.
+Sessions support the same `tool_context` mechanism as direct agent generations — see [Tool Context](./agents.md#tool-context) in the Agents module for the full specification.
 
 #### Auto-Populated Headers
 
-When a generation is triggered through a session (either via `POST .../generate` or auto-generate), the server automatically injects the following keys into `toolContext` before forwarding to tool calls:
+When a generation is triggered through a session (either via `POST .../generate` or auto-generate), the server automatically injects the following keys into `tool_context` before forwarding to tool calls:
 
 | Header                           | Value                                              |
 | -------------------------------- | -------------------------------------------------- |
-| `X-Soat-Context-ActorId`         | Public ID of the session's user actor (`actr_...`) |
-| `X-Soat-Context-ActorExternalId` | External ID of the session's user actor            |
-| `X-Soat-Context-SessionId`       | Public ID of the session (`sess_...`)              |
+| `X-Soat-Context-actor_id`         | Public ID of the session's user actor (`actr_...`) |
+| `X-Soat-Context-actor_external_id` | External ID of the session's user actor            |
+| `X-Soat-Context-session_id`       | Public ID of the session (`sess_...`)              |
 
-Any values provided by the caller in `toolContext` are merged on top and take precedence over the auto-populated values.
+Any values provided by the caller in `tool_context` are merged on top and take precedence over the auto-populated values.
 
 #### Example
 
-Adding a caller-supplied `tenantId` alongside the automatically injected session fields:
+Adding a caller-supplied `tenant_id` alongside the automatically injected session fields:
 
 ```json
 {
-  "toolContext": {
-    "tenantId": "tenant_xyz"
+  "tool_context": {
+    "tenant_id": "tenant_xyz"
   }
 }
 ```
 
-The tool will receive all four headers: `X-Soat-Context-ActorId`, `X-Soat-Context-ActorExternalId`, `X-Soat-Context-SessionId`, and `X-Soat-Context-TenantId`.
+The tool will receive all four headers: `X-Soat-Context-actor_id`, `X-Soat-Context-actor_external_id`, `X-Soat-Context-session_id`, and `X-Soat-Context-tenant_id`.
 
 ## Data Model
 
@@ -98,15 +98,15 @@ The tool will receive all four headers: `X-Soat-Context-ActorId`, `X-Soat-Contex
 | Field            | Type    | Description                                                                                                    |
 | ---------------- | ------- | -------------------------------------------------------------------------------------------------------------- |
 | `id`             | string  | Public identifier prefixed with `sess_`                                                                        |
-| `agentId`        | string  | Public ID of the agent this session belongs to                                                                 |
-| `conversationId` | string  | Public ID of the underlying conversation                                                                       |
+| `agent_id`        | string  | Public ID of the agent this session belongs to                                                                 |
+| `conversation_id` | string  | Public ID of the underlying conversation                                                                       |
 | `status`         | string  | `open` (default) or `closed`                                                                                   |
 | `name`           | string  | Optional display name                                                                                          |
-| `actorId`        | string  | Public ID of the user actor (`actr_` prefix)                                                                   |
+| `actor_id`        | string  | Public ID of the user actor (`actr_` prefix)                                                                   |
 | `tags`           | object  | Free-form key-value metadata                                                                                   |
-| `autoGenerate`   | boolean | When `true`, saving a message via `POST .../messages` automatically triggers LLM generation (default: `false`) |
-| `createdAt`      | string  | ISO 8601 creation timestamp                                                                                    |
-| `updatedAt`      | string  | ISO 8601 last-updated timestamp                                                                                |
+| `auto_generate`   | boolean | When `true`, saving a message via `POST .../messages` automatically triggers LLM generation (default: `false`) |
+| `created_at`      | string  | ISO 8601 creation timestamp                                                                                    |
+| `updated_at`      | string  | ISO 8601 last-updated timestamp                                                                                |
 
 ### Message (within a session)
 
@@ -117,7 +117,7 @@ Messages are returned with simplified roles:
 | `role`      | string | `user` or `assistant` (mapped from actor ownership) |
 | `content`   | string | Message text                                        |
 | `model`     | string | Model used for assistant messages                   |
-| `createdAt` | string | ISO 8601 timestamp                                  |
+| `created_at` | string | ISO 8601 timestamp                                  |
 
 ## Permissions
 
@@ -137,7 +137,7 @@ Messages are returned with simplified roles:
 By default `POST .../generate` waits for the LLM to finish and returns the result synchronously. Pass `?async=true` to return immediately with a `202 Accepted` response:
 
 ```json
-{ "status": "accepted", "sessionId": "sess_..." }
+{ "status": "accepted", "session_id": "sess_..." }
 ```
 
 ### Concurrency and cancel-previous
@@ -159,12 +159,12 @@ The cancellation is implemented with an in-memory `AbortController` map keyed by
 
 #### Fallback timeout guard
 
-If no in-memory controller is found for a session but `generatingAt` is still set (e.g., after a process restart), the server falls back to a 5-minute timeout guard: if the elapsed time is less than 5 minutes, the new request is rejected with `409 Conflict`. This is a safety net against stale state; it does not affect the normal cancel-previous flow.
+If no in-memory controller is found for a session but `generating_at` is still set (e.g., after a process restart), the server falls back to a 5-minute timeout guard: if the elapsed time is less than 5 minutes, the new request is rejected with `409 Conflict`. This is a safety net against stale state; it does not affect the normal cancel-previous flow.
 
 - **Sync**: a rejected request due to the fallback guard returns `409 Conflict`.
 - **Async**: a rejected generation is silently dropped (the `202` response is still returned).
 
-> **Note:** The guard is best-effort. Two simultaneous async requests arriving within the same milliseconds — before the first one writes `generatingAt` to the database — may both trigger generation. Use synchronous calls if strict single-generation semantics are required.
+> **Note:** The guard is best-effort. Two simultaneous async requests arriving within the same milliseconds — before the first one writes `generating_at` to the database — may both trigger generation. Use synchronous calls if strict single-generation semantics are required.
 
 ### Message ordering with concurrent writes
 
@@ -192,6 +192,6 @@ The following events are dispatched to project webhooks as sessions change state
 | `sessions.generation.requires_action` | LLM returned a client-tool call requiring tool outputs |
 | `sessions.generation.started`         | LLM generation has started for a session               |
 
-All events include `sessionId`. Generation events additionally include `generationId` and `traceId` in the `data` payload.
+All events include `session_id`. Generation events additionally include `generation_id` and `trace_id` in the `data` payload.
 
 Permissions are namespaced under `agents:` since sessions are an agent sub-resource.

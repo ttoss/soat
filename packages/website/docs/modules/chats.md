@@ -12,20 +12,20 @@ There are two ways to call the completions API:
 
 ### Stateless — `POST /chats/completions`
 
-No setup required. Every request must include the full provider configuration — `aiProviderId`, optional `systemMessage`, and optional `model`. Use this for one-off calls or when the provider configuration changes per request.
+No setup required. Every request must include the full provider configuration — `ai_provider_id`, optional `system_message`, and optional `model`. Use this for one-off calls or when the provider configuration changes per request.
 
 ```json
 POST /api/v1/chats/completions
 {
-  "aiProviderId": "aip_abc123",
-  "systemMessage": "You are a helpful assistant.",
+  "ai_provider_id": "aip_abc123",
+  "system_message": "You are a helpful assistant.",
   "messages": [
     { "role": "user", "content": "Hello!" }
   ]
 }
 ```
 
-### Per-chat — `POST /chats/{chatId}/completions`
+### Per-chat — `POST /chats/{chat_id}/completions`
 
 Requires creating a Chat resource first (`POST /chats`). The Chat stores the AI provider, default system message, and model — callers only need to pass the `messages` array per request. Use this when the same configuration is reused across many calls.
 
@@ -34,9 +34,9 @@ Requires creating a Chat resource first (`POST /chats`). The Chat stores the AI 
 ```json
 POST /api/v1/chats
 {
-  "projectId": "prj_xyz",
-  "aiProviderId": "aip_abc123",
-  "systemMessage": "You are a helpful assistant.",
+  "project_id": "prj_xyz",
+  "ai_provider_id": "aip_abc123",
+  "system_message": "You are a helpful assistant.",
   "name": "My Assistant"
 }
 ```
@@ -63,13 +63,13 @@ A Chat is a persistent resource belonging to a project. It stores:
 | Field           | Type     | Description                                                     |
 | --------------- | -------- | --------------------------------------------------------------- |
 | `id`            | `string` | Public ID prefixed with `cht_`                                  |
-| `projectId`     | `string` | Public ID of the owning project                                 |
-| `aiProviderId`  | `string` | Public ID of the AI provider used for completions               |
+| `project_id`     | `string` | Public ID of the owning project                                 |
+| `ai_provider_id`  | `string` | Public ID of the AI provider used for completions               |
 | `name`          | `string` | Optional human-readable name                                    |
-| `systemMessage` | `string` | Optional default system prompt applied to all completions       |
-| `model`         | `string` | Optional model override (falls back to provider's defaultModel) |
-| `createdAt`     | `string` | ISO 8601 creation timestamp                                     |
-| `updatedAt`     | `string` | ISO 8601 last-updated timestamp                                 |
+| `system_message` | `string` | Optional default system prompt applied to all completions       |
+| `model`         | `string` | Optional model override (falls back to provider's default_model) |
+| `created_at`     | `string` | ISO 8601 creation timestamp                                     |
+| `updated_at`     | `string` | ISO 8601 last-updated timestamp                                 |
 
 ### Messages
 
@@ -78,14 +78,14 @@ Each message in the `messages` array can specify content in two ways:
 | Field        | Type                              | Description                                                               |
 | ------------ | --------------------------------- | ------------------------------------------------------------------------- |
 | `role`       | `system` \| `user` \| `assistant` | Identifies the author of the message                                      |
-| `content`    | `string`                          | Text body _(use this or `documentId`, not both)_                          |
-| `documentId` | `string`                          | Public ID of a document — the server resolves its content before the call |
+| `content`    | `string`                          | Text body _(use this or `document_id`, not both)_                          |
+| `document_id` | `string`                          | Public ID of a document — the server resolves its content before the call |
 
-When `documentId` is supplied the server fetches the document and uses its `content` field as the message body.
+When `document_id` is supplied the server fetches the document and uses its `content` field as the message body.
 
 ### System Message Override
 
-When running `POST /chats/{chatId}/completions`, if a message with `role: system` is included in the `messages` array it replaces the Chat's stored `systemMessage` for that call only — the Chat record is not modified.
+When running `POST /chats/{chat_id}/completions`, if a message with `role: system` is included in the `messages` array it replaces the Chat's stored `system_message` for that call only — the Chat record is not modified.
 
 ### AI Provider Resolution
 
@@ -101,7 +101,7 @@ Set `stream: true` in the request body to receive an SSE stream. Each event cont
 | ------------------------ | ------------------------------ | ---------------------------------- | --------------------------------- |
 | Create a chat            | `chats:CreateChat`             | `POST /chats`                      | `create-chat`                     |
 | List chats               | `chats:ListChats`              | `GET /chats`                       | `list-chats`                      |
-| Get a chat               | `chats:GetChat`                | `GET /chats/{chatId}`              | `get-chat`                        |
-| Delete a chat            | `chats:DeleteChat`             | `DELETE /chats/{chatId}`           | `delete-chat`                     |
-| Run per-chat completion  | `chats:CreateChatCompletion`   | `POST /chats/{chatId}/completions` | `create-chat-completion-for-chat` |
+| Get a chat               | `chats:GetChat`                | `GET /chats/{chat_id}`              | `get-chat`                        |
+| Delete a chat            | `chats:DeleteChat`             | `DELETE /chats/{chat_id}`           | `delete-chat`                     |
+| Run per-chat completion  | `chats:CreateChatCompletion`   | `POST /chats/{chat_id}/completions` | `create-chat-completion-for-chat` |
 | Run stateless completion | Authenticated user (no policy) | `POST /chats/completions`          | `create-chat-completion`          |

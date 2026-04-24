@@ -67,7 +67,7 @@ fi
 ADD_MEMBER_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/projects/$PROJECT_PUBLIC_ID/members" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"userId\":\"$ADMIN_USER_ID\",\"policyId\":\"$POLICY_READ_ID\"}")
+  -d "{\"user_id\":\"$ADMIN_USER_ID\",\"policy_id\":\"$POLICY_READ_ID\"}")
 if [ "$ADD_MEMBER_STATUS" != "201" ]; then
   echo "ERROR: Failed to add admin as project member, got $ADD_MEMBER_STATUS" >&2
   exit 1
@@ -79,7 +79,7 @@ echo "--- Project keys coverage ---"
 PROJECT_KEY_CREATE_STATUS=$(curl -s -o /tmp/project_key_create.json -w "%{http_code}" -X POST "$BASE_URL/project-keys" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"policyId\":\"$POLICY_READ_ID\",\"name\":\"smoke-project-key\"}")
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"policy_id\":\"$POLICY_READ_ID\",\"name\":\"smoke-project-key\"}")
 if [ "$PROJECT_KEY_CREATE_STATUS" != "201" ]; then
   echo "ERROR: CREATE project key returned $PROJECT_KEY_CREATE_STATUS, expected 201" >&2
   cat /tmp/project_key_create.json >&2
@@ -116,15 +116,15 @@ fi
 PROJECT_KEY_UPDATE_STATUS=$(curl -s -o /tmp/project_key_put.json -w "%{http_code}" -X PUT "$BASE_URL/project-keys/$PROJECT_KEY_ID" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"policyId\":\"$POLICY_WRITE_ID\"}")
+  -d "{\"policy_id\":\"$POLICY_WRITE_ID\"}")
 if [ "$PROJECT_KEY_UPDATE_STATUS" != "200" ]; then
   echo "ERROR: PUT project key returned $PROJECT_KEY_UPDATE_STATUS, expected 200" >&2
   cat /tmp/project_key_put.json >&2
   exit 1
 fi
-PROJECT_KEY_UPDATED_POLICY=$(jq -r '.policyId' /tmp/project_key_put.json)
+PROJECT_KEY_UPDATED_POLICY=$(jq -r '.policy_id' /tmp/project_key_put.json)
 if [ "$PROJECT_KEY_UPDATED_POLICY" != "$POLICY_WRITE_ID" ]; then
-  echo "ERROR: PUT project key did not update policyId" >&2
+  echo "ERROR: PUT project key did not update policy_id" >&2
   cat /tmp/project_key_put.json >&2
   exit 1
 fi
@@ -135,7 +135,7 @@ echo "--- Secrets coverage ---"
 SECRET_CREATE_RESP=$(curl -sf -X POST "$BASE_URL/secrets" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"name\":\"smoke-secret\",\"value\":\"supersecretvalue\"}")
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"name\":\"smoke-secret\",\"value\":\"supersecretvalue\"}")
 SECRET_ID=$(echo "$SECRET_CREATE_RESP" | jq -r '.id')
 if [ -z "$SECRET_ID" ] || [ "$SECRET_ID" = "null" ]; then
   echo "ERROR: Failed to create secret" >&2
@@ -186,7 +186,7 @@ echo "--- Actors coverage ---"
 ACTOR_CREATE_RESP=$(curl -sf -X POST "$BASE_URL/actors" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"name\":\"smoke-actor\",\"type\":\"customer\",\"externalId\":\"smoke-ext-actor\"}")
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"name\":\"smoke-actor\",\"type\":\"customer\",\"external_id\":\"smoke-ext-actor\"}")
 ACTOR_ID=$(echo "$ACTOR_CREATE_RESP" | jq -r '.id')
 if [ -z "$ACTOR_ID" ] || [ "$ACTOR_ID" = "null" ]; then
   echo "ERROR: Failed to create actor" >&2
@@ -194,7 +194,7 @@ if [ -z "$ACTOR_ID" ] || [ "$ACTOR_ID" = "null" ]; then
   exit 1
 fi
 
-ACTOR_LIST_STATUS=$(curl -s -o /tmp/actors_list.json -w "%{http_code}" "$BASE_URL/actors?projectId=$PROJECT_PUBLIC_ID" \
+ACTOR_LIST_STATUS=$(curl -s -o /tmp/actors_list.json -w "%{http_code}" "$BASE_URL/actors?project_id=$PROJECT_PUBLIC_ID" \
   -H "Authorization: Bearer $TOKEN")
 if [ "$ACTOR_LIST_STATUS" != "200" ]; then
   echo "ERROR: LIST actors returned $ACTOR_LIST_STATUS, expected 200" >&2
@@ -240,7 +240,7 @@ echo "--- Conversations coverage ---"
 CONVO_ACTOR_RESP=$(curl -sf -X POST "$BASE_URL/actors" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"name\":\"smoke-conversation-actor\"}")
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"name\":\"smoke-conversation-actor\"}")
 CONVO_ACTOR_ID=$(echo "$CONVO_ACTOR_RESP" | jq -r '.id')
 if [ -z "$CONVO_ACTOR_ID" ] || [ "$CONVO_ACTOR_ID" = "null" ]; then
   echo "ERROR: Failed to create conversation actor" >&2
@@ -251,7 +251,7 @@ fi
 CONVO_CREATE_RESP=$(curl -sf -X POST "$BASE_URL/conversations" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\"}")
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\"}")
 CONVO_ID=$(echo "$CONVO_CREATE_RESP" | jq -r '.id')
 if [ -z "$CONVO_ID" ] || [ "$CONVO_ID" = "null" ]; then
   echo "ERROR: Failed to create conversation" >&2
@@ -259,7 +259,7 @@ if [ -z "$CONVO_ID" ] || [ "$CONVO_ID" = "null" ]; then
   exit 1
 fi
 
-CONVO_LIST_STATUS=$(curl -s -o /tmp/conversations_list.json -w "%{http_code}" "$BASE_URL/conversations?projectId=$PROJECT_PUBLIC_ID" \
+CONVO_LIST_STATUS=$(curl -s -o /tmp/conversations_list.json -w "%{http_code}" "$BASE_URL/conversations?project_id=$PROJECT_PUBLIC_ID" \
   -H "Authorization: Bearer $TOKEN")
 if [ "$CONVO_LIST_STATUS" != "200" ]; then
   echo "ERROR: LIST conversations returned $CONVO_LIST_STATUS, expected 200" >&2
@@ -278,8 +278,8 @@ fi
 CONVO_ADD_MSG_RESP=$(curl -sf -X POST "$BASE_URL/conversations/$CONVO_ID/messages" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"message\":\"smoke conversation message\",\"actorId\":\"$CONVO_ACTOR_ID\"}")
-CONVO_DOC_ID=$(echo "$CONVO_ADD_MSG_RESP" | jq -r '.documentId')
+  -d "{\"message\":\"smoke conversation message\",\"actor_id\":\"$CONVO_ACTOR_ID\"}")
+CONVO_DOC_ID=$(echo "$CONVO_ADD_MSG_RESP" | jq -r '.document_id')
 if [ -z "$CONVO_DOC_ID" ] || [ "$CONVO_DOC_ID" = "null" ]; then
   echo "ERROR: Failed to add conversation message" >&2
   echo "$CONVO_ADD_MSG_RESP" >&2
@@ -331,7 +331,7 @@ echo "Hello, smoke test!" > /tmp/smoke.txt
 UPLOAD_RESP=$(curl -sf -X POST "$BASE_URL/files/upload" \
   -H "Authorization: Bearer $TOKEN" \
   -F "file=@/tmp/smoke.txt;type=text/plain" \
-  -F "projectId=$PROJECT_PUBLIC_ID")
+  -F "project_id=$PROJECT_PUBLIC_ID")
 FILE_ID=$(echo "$UPLOAD_RESP" | jq -r '.id')
 echo "File id: $FILE_ID"
 
@@ -393,7 +393,7 @@ echo "--- Creating first document ---"
 DOC1_RESP=$(curl -sf -X POST "$BASE_URL/documents" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"content\":\"The quick brown fox jumps over the lazy dog\",\"filename\":\"fox.txt\"}")
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"content\":\"The quick brown fox jumps over the lazy dog\",\"filename\":\"fox.txt\"}")
 DOC1_ID=$(echo "$DOC1_RESP" | jq -r '.id')
 echo "Document 1 id: $DOC1_ID"
 
@@ -402,7 +402,7 @@ echo "--- Creating second document ---"
 DOC2_RESP=$(curl -sf -X POST "$BASE_URL/documents" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"content\":\"Machine learning models require large amounts of training data\",\"filename\":\"ml.txt\"}")
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"content\":\"Machine learning models require large amounts of training data\",\"filename\":\"ml.txt\"}")
 DOC2_ID=$(echo "$DOC2_RESP" | jq -r '.id')
 echo "Document 2 id: $DOC2_ID"
 
@@ -411,7 +411,7 @@ echo "--- Searching documents ---"
 SEARCH_RESP=$(curl -sf -X POST "$BASE_URL/documents/search" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"query\":\"fox animal jumping\",\"limit\":5}")
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"query\":\"fox animal jumping\",\"limit\":5}")
 SEARCH_COUNT=$(echo "$SEARCH_RESP" | jq 'length')
 if [ "$SEARCH_COUNT" -lt 1 ]; then
   echo "ERROR: Document search returned $SEARCH_COUNT results, expected at least 1" >&2
@@ -496,7 +496,7 @@ echo "--- Creating AI provider ---"
 AI_PROVIDER_RESP=$(curl -sf -X POST "$BASE_URL/ai-providers" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"name\":\"smoke-ollama\",\"provider\":\"ollama\",\"defaultModel\":\"qwen2.5:0.5b\",\"baseUrl\":\"http://ollama:11434\"}")
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"name\":\"smoke-ollama\",\"provider\":\"ollama\",\"default_model\":\"qwen2.5:0.5b\",\"base_url\":\"http://ollama:11434\"}")
 AI_PROVIDER_ID=$(echo "$AI_PROVIDER_RESP" | jq -r '.id')
 echo "AI Provider id: $AI_PROVIDER_ID"
 
@@ -506,7 +506,7 @@ TOOL_RESP=$(curl -sf -X POST "$BASE_URL/agents/tools" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"projectId\": \"$PROJECT_PUBLIC_ID\",
+    \"project_id\": \"$PROJECT_PUBLIC_ID\",
     \"name\": \"list-projects\",
     \"type\": \"http\",
     \"description\": \"Lists all projects from the SOAT API. Call this tool whenever the user asks for the list of projects.\",
@@ -531,12 +531,12 @@ AGENT_RESP=$(curl -sf -X POST "$BASE_URL/agents" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"projectId\": \"$PROJECT_PUBLIC_ID\",
-    \"aiProviderId\": \"$AI_PROVIDER_ID\",
+    \"project_id\": \"$PROJECT_PUBLIC_ID\",
+    \"ai_provider_id\": \"$AI_PROVIDER_ID\",
     \"name\": \"project-lister\",
     \"instructions\": \"You are a helpful assistant. When the user asks you to list projects, you MUST call the list-projects tool and return the results. Always use the tool, never make up data.\",
-    \"toolIds\": [\"$TOOL_ID\"],
-    \"maxSteps\": 5
+    \"tool_ids\": [\"$TOOL_ID\"],
+    \"max_steps\": 5
   }")
 AGENT_ID=$(echo "$AGENT_RESP" | jq -r '.id')
 echo "Agent id: $AGENT_ID"
@@ -609,7 +609,7 @@ MCP_TOOL_RESP=$(curl -sf -X POST "$BASE_URL/agents/tools" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"projectId\": \"$PROJECT_PUBLIC_ID\",
+    \"project_id\": \"$PROJECT_PUBLIC_ID\",
     \"name\": \"soat-mcp\",
     \"type\": \"mcp\",
     \"description\": \"SOAT MCP server — exposes all SOAT tools over the MCP protocol.\",
@@ -629,12 +629,12 @@ MCP_AGENT_RESP=$(curl -sf -X POST "$BASE_URL/agents" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"projectId\": \"$PROJECT_PUBLIC_ID\",
-    \"aiProviderId\": \"$AI_PROVIDER_ID\",
+    \"project_id\": \"$PROJECT_PUBLIC_ID\",
+    \"ai_provider_id\": \"$AI_PROVIDER_ID\",
     \"name\": \"mcp-agent-lister\",
     \"instructions\": \"You are a helpful assistant with access to SOAT tools via MCP. When asked to list agents, call the list-agents MCP tool and return the results. Always use the tool.\",
-    \"toolIds\": [\"$MCP_TOOL_ID\"],
-    \"maxSteps\": 5
+    \"tool_ids\": [\"$MCP_TOOL_ID\"],
+    \"max_steps\": 5
   }")
 MCP_AGENT_ID=$(echo "$MCP_AGENT_RESP" | jq -r '.id')
 echo "MCP Agent id: $MCP_AGENT_ID"
@@ -692,7 +692,7 @@ CLIENT_TOOL_RESP=$(curl -sf -X POST "$BASE_URL/agents/tools" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"projectId\": \"$PROJECT_PUBLIC_ID\",
+    \"project_id\": \"$PROJECT_PUBLIC_ID\",
     \"name\": \"get_weather\",
     \"type\": \"client\",
     \"description\": \"Returns the current weather for a given city.\",
@@ -718,13 +718,13 @@ CLIENT_AGENT_RESP=$(curl -sf -X POST "$BASE_URL/agents" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"projectId\": \"$PROJECT_PUBLIC_ID\",
-    \"aiProviderId\": \"$AI_PROVIDER_ID\",
+    \"project_id\": \"$PROJECT_PUBLIC_ID\",
+    \"ai_provider_id\": \"$AI_PROVIDER_ID\",
     \"name\": \"weather-agent\",
     \"instructions\": \"You are a weather assistant. When the user asks about the weather, call the get_weather tool with the city name.\",
-    \"toolIds\": [\"$CLIENT_TOOL_ID\"],
-    \"toolChoice\": { \"type\": \"tool\", \"toolName\": \"get_weather\" },
-    \"maxSteps\": 3
+    \"tool_ids\": [\"$CLIENT_TOOL_ID\"],
+    \"tool_choice\": { \"type\": \"tool\", \"tool_name\": \"get_weather\" },
+    \"max_steps\": 3
   }")
 CLIENT_AGENT_ID=$(echo "$CLIENT_AGENT_RESP" | jq -r '.id')
 if [ -z "$CLIENT_AGENT_ID" ] || [ "$CLIENT_AGENT_ID" = "null" ]; then
@@ -762,10 +762,10 @@ fi
 echo "Generation paused for client tool execution: OK"
 
 CLIENT_GEN_ID=$(echo "$CLIENT_GEN_RESP" | jq -r '.id')
-CLIENT_TOOL_CALL_ID=$(echo "$CLIENT_GEN_RESP" | jq -r '.requiredAction.toolCalls[0].id')
-CLIENT_TRACE_ID=$(echo "$CLIENT_GEN_RESP" | jq -r '.traceId')
-CLIENT_TOOL_CALL_NAME=$(echo "$CLIENT_GEN_RESP" | jq -r '.requiredAction.toolCalls[0].toolName')
-CLIENT_TOOL_CALL_CITY=$(echo "$CLIENT_GEN_RESP" | jq -r '.requiredAction.toolCalls[0].args.city')
+CLIENT_TOOL_CALL_ID=$(echo "$CLIENT_GEN_RESP" | jq -r '.required_action.tool_calls[0].id // .requiredAction.toolCalls[0].id // empty')
+CLIENT_TRACE_ID=$(echo "$CLIENT_GEN_RESP" | jq -r '.trace_id')
+CLIENT_TOOL_CALL_NAME=$(echo "$CLIENT_GEN_RESP" | jq -r '.required_action.tool_calls[0].tool_name // .required_action.tool_calls[0].toolName // .requiredAction.toolCalls[0].tool_name // .requiredAction.toolCalls[0].toolName // empty')
+CLIENT_TOOL_CALL_CITY=$(echo "$CLIENT_GEN_RESP" | jq -r '.required_action.tool_calls[0].args.city // .requiredAction.toolCalls[0].args.city // empty')
 
 if [ -z "$CLIENT_TOOL_CALL_ID" ] || [ "$CLIENT_TOOL_CALL_ID" = "null" ]; then
   echo "ERROR: Expected at least one pending client tool call id" >&2
@@ -789,9 +789,9 @@ SUBMIT_RESP=$(curl -sf --max-time 60 -X POST "$BASE_URL/agents/$CLIENT_AGENT_ID/
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"toolOutputs\": [
+    \"tool_outputs\": [
       {
-        \"toolCallId\": \"$CLIENT_TOOL_CALL_ID\",
+        \"tool_call_id\": \"$CLIENT_TOOL_CALL_ID\",
         \"output\": { \"city\": \"Paris\", \"temperature\": \"18°C\", \"condition\": \"Partly cloudy\" }
       }
     ]
@@ -808,7 +808,7 @@ echo "Client tool generation completed after tool output: OK"
 
 # 34b. Trace checks (list traces + fetch current generation trace)
 echo "--- Verifying trace endpoints ---"
-TRACES_STATUS=$(curl -s -o /tmp/agent_traces.json -w "%{http_code}" "$BASE_URL/agents/traces?projectId=$PROJECT_PUBLIC_ID" \
+TRACES_STATUS=$(curl -s -o /tmp/agent_traces.json -w "%{http_code}" "$BASE_URL/agents/traces?project_id=$PROJECT_PUBLIC_ID" \
   -H "Authorization: Bearer $TOKEN")
 if [ "$TRACES_STATUS" != "200" ]; then
   echo "ERROR: GET /agents/traces returned $TRACES_STATUS, expected 200" >&2
@@ -839,7 +839,7 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
   fi
   echo "Trace retrieval endpoint: OK"
 else
-  echo "ERROR: Generation response did not include traceId" >&2
+  echo "ERROR: Generation response did not include trace_id" >&2
   exit 1
 fi
 
@@ -871,7 +871,7 @@ SOAT_TOOL_RESP=$(curl -sf -X POST "$BASE_URL/agents/tools" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"projectId\": \"$PROJECT_PUBLIC_ID\",
+    \"project_id\": \"$PROJECT_PUBLIC_ID\",
     \"name\": \"soat-platform\",
     \"type\": \"soat\",
     \"description\": \"SOAT platform actions exposed as tools.\",
@@ -891,12 +891,12 @@ SOAT_AGENT_RESP=$(curl -sf -X POST "$BASE_URL/agents" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"projectId\": \"$PROJECT_PUBLIC_ID\",
-    \"aiProviderId\": \"$AI_PROVIDER_ID\",
+    \"project_id\": \"$PROJECT_PUBLIC_ID\",
+    \"ai_provider_id\": \"$AI_PROVIDER_ID\",
     \"name\": \"soat-project-lister\",
     \"instructions\": \"You are a helpful assistant. Use the SOAT list-projects action to list projects for the user.\",
-    \"toolIds\": [\"$SOAT_TOOL_ID\"],
-    \"maxSteps\": 5
+    \"tool_ids\": [\"$SOAT_TOOL_ID\"],
+    \"max_steps\": 5
   }")
 SOAT_AGENT_ID=$(echo "$SOAT_AGENT_RESP" | jq -r '.id')
 if [ -z "$SOAT_AGENT_ID" ] || [ "$SOAT_AGENT_ID" = "null" ]; then
@@ -959,8 +959,8 @@ CONVO_GEN_AGENT_RESP=$(curl -sf -X POST "$BASE_URL/agents" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"projectId\": \"$PROJECT_PUBLIC_ID\",
-    \"aiProviderId\": \"$AI_PROVIDER_ID\",
+    \"project_id\": \"$PROJECT_PUBLIC_ID\",
+    \"ai_provider_id\": \"$AI_PROVIDER_ID\",
     \"name\": \"convo-gen-agent\",
     \"instructions\": \"You are a helpful conversation participant. Reply concisely.\"
   }")
@@ -977,7 +977,7 @@ echo "--- Creating named conversation ---"
 NAMED_CONVO_RESP=$(curl -sf -X POST "$BASE_URL/conversations" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"name\":\"smoke-named-conversation\"}")
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"name\":\"smoke-named-conversation\"}")
 NAMED_CONVO_ID=$(echo "$NAMED_CONVO_RESP" | jq -r '.id')
 NAMED_CONVO_NAME=$(echo "$NAMED_CONVO_RESP" | jq -r '.name')
 if [ -z "$NAMED_CONVO_ID" ] || [ "$NAMED_CONVO_ID" = "null" ]; then
@@ -1009,9 +1009,9 @@ echo "--- Creating agent-backed actor via convenience endpoint ---"
 AGENT_ACTOR_RESP=$(curl -sf -X POST "$BASE_URL/agents/$CONVO_GEN_AGENT_ID/actors" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"name\":\"convo-agent-actor\",\"instructions\":\"Reply as a friendly assistant.\"}")
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"name\":\"convo-agent-actor\",\"instructions\":\"Reply as a friendly assistant.\"}")
 AGENT_ACTOR_ID=$(echo "$AGENT_ACTOR_RESP" | jq -r '.id')
-AGENT_ACTOR_AGENT_ID=$(echo "$AGENT_ACTOR_RESP" | jq -r '.agentId')
+AGENT_ACTOR_AGENT_ID=$(echo "$AGENT_ACTOR_RESP" | jq -r '.agent_id')
 AGENT_ACTOR_INSTRUCTIONS=$(echo "$AGENT_ACTOR_RESP" | jq -r '.instructions')
 if [ -z "$AGENT_ACTOR_ID" ] || [ "$AGENT_ACTOR_ID" = "null" ]; then
   echo "ERROR: Failed to create agent-backed actor" >&2
@@ -1019,23 +1019,23 @@ if [ -z "$AGENT_ACTOR_ID" ] || [ "$AGENT_ACTOR_ID" = "null" ]; then
   exit 1
 fi
 if [ "$AGENT_ACTOR_AGENT_ID" != "$CONVO_GEN_AGENT_ID" ]; then
-  echo "ERROR: Expected actor.agentId='$CONVO_GEN_AGENT_ID', got '$AGENT_ACTOR_AGENT_ID'" >&2
+  echo "ERROR: Expected actor.agent_id='$CONVO_GEN_AGENT_ID', got '$AGENT_ACTOR_AGENT_ID'" >&2
   exit 1
 fi
 if [ "$AGENT_ACTOR_INSTRUCTIONS" != "Reply as a friendly assistant." ]; then
   echo "ERROR: Expected actor.instructions='Reply as a friendly assistant.', got '$AGENT_ACTOR_INSTRUCTIONS'" >&2
   exit 1
 fi
-echo "Agent-backed actor id: $AGENT_ACTOR_ID, agentId: $AGENT_ACTOR_AGENT_ID, instructions: OK"
+echo "Agent-backed actor id: $AGENT_ACTOR_ID, agent_id: $AGENT_ACTOR_AGENT_ID, instructions: OK"
 
 # 45b. Verify actor fields on GET /actors/:id
 echo "--- Verifying actor shape on GET ---"
 ACTOR_GET_RESP=$(curl -sf "$BASE_URL/actors/$AGENT_ACTOR_ID" \
   -H "Authorization: Bearer $TOKEN")
-ACTOR_GET_AGENT_ID=$(echo "$ACTOR_GET_RESP" | jq -r '.agentId')
+ACTOR_GET_AGENT_ID=$(echo "$ACTOR_GET_RESP" | jq -r '.agent_id')
 ACTOR_GET_INSTRUCTIONS=$(echo "$ACTOR_GET_RESP" | jq -r '.instructions')
 if [ "$ACTOR_GET_AGENT_ID" != "$CONVO_GEN_AGENT_ID" ]; then
-  echo "ERROR: GET actor returned agentId='$ACTOR_GET_AGENT_ID', expected '$CONVO_GEN_AGENT_ID'" >&2
+  echo "ERROR: GET actor returned agent_id='$ACTOR_GET_AGENT_ID', expected '$CONVO_GEN_AGENT_ID'" >&2
   exit 1
 fi
 if [ "$ACTOR_GET_INSTRUCTIONS" != "Reply as a friendly assistant." ]; then
@@ -1044,24 +1044,24 @@ if [ "$ACTOR_GET_INSTRUCTIONS" != "Reply as a friendly assistant." ]; then
 fi
 echo "GET /actors/:id shape: OK"
 
-# 45c. Verify mutual exclusion: actor with both agentId and chatId must fail (400)
-echo "--- Verifying actor agentId+chatId mutual exclusion ---"
+# 45c. Verify mutual exclusion: actor with both agent_id and chat_id must fail (400)
+echo "--- Verifying actor agent_id+chat_id mutual exclusion ---"
 MUTUAL_EXCL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/actors" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"name\":\"bad-actor\",\"agentId\":\"$CONVO_GEN_AGENT_ID\",\"chatId\":\"fake-id\"}")
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"name\":\"bad-actor\",\"agent_id\":\"$CONVO_GEN_AGENT_ID\",\"chat_id\":\"fake-id\"}")
 if [ "$MUTUAL_EXCL_STATUS" != "400" ]; then
-  echo "ERROR: Expected 400 for actor with both agentId and chatId, got $MUTUAL_EXCL_STATUS" >&2
+  echo "ERROR: Expected 400 for actor with both agent_id and chat_id, got $MUTUAL_EXCL_STATUS" >&2
   exit 1
 fi
-echo "Actor mutual exclusion (agentId+chatId): OK (400 as expected)"
+echo "Actor mutual exclusion (agent_id+chat_id): OK (400 as expected)"
 
 # 46. Create a plain user actor for the conversation
 echo "--- Creating user actor for conversation ---"
 USER_ACTOR_RESP=$(curl -sf -X POST "$BASE_URL/actors" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"projectId\":\"$PROJECT_PUBLIC_ID\",\"name\":\"convo-user-actor\"}")
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"name\":\"convo-user-actor\"}")
 USER_ACTOR_ID=$(echo "$USER_ACTOR_RESP" | jq -r '.id')
 if [ -z "$USER_ACTOR_ID" ] || [ "$USER_ACTOR_ID" = "null" ]; then
   echo "ERROR: Failed to create user actor" >&2
@@ -1075,14 +1075,14 @@ echo "--- Adding user message to conversation ---"
 USER_MSG_RESP=$(curl -sf -X POST "$BASE_URL/conversations/$NAMED_CONVO_ID/messages" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"message\":\"Hello, how are you?\",\"actorId\":\"$USER_ACTOR_ID\"}")
-USER_MSG_DOC_ID=$(echo "$USER_MSG_RESP" | jq -r '.documentId')
+  -d "{\"message\":\"Hello, how are you?\",\"actor_id\":\"$USER_ACTOR_ID\"}")
+USER_MSG_DOC_ID=$(echo "$USER_MSG_RESP" | jq -r '.document_id')
 if [ -z "$USER_MSG_DOC_ID" ] || [ "$USER_MSG_DOC_ID" = "null" ]; then
   echo "ERROR: Failed to add user message" >&2
   echo "$USER_MSG_RESP" >&2
   exit 1
 fi
-echo "User message added (documentId: $USER_MSG_DOC_ID)"
+echo "User message added (document_id: $USER_MSG_DOC_ID)"
 
 # 48. Generate a conversation message with the agent-backed actor
 # (poll with a retry loop — generate may be slow with Ollama)
@@ -1093,7 +1093,7 @@ while [ "$CONVO_GEN_STATUS" = "in_progress" ] && [ "$CONVO_GEN_ATTEMPTS" -lt "30
   CONVO_GEN_RESP=$(curl -sf --max-time 120 -X POST "$BASE_URL/conversations/$NAMED_CONVO_ID/generate" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d "{\"actorId\":\"$AGENT_ACTOR_ID\"}")
+    -d "{\"actor_id\":\"$AGENT_ACTOR_ID\"}")
   CONVO_GEN_STATUS=$(echo "$CONVO_GEN_RESP" | jq -r '.status')
   CONVO_GEN_ATTEMPTS=$((CONVO_GEN_ATTEMPTS + 1))
   if [ "$CONVO_GEN_STATUS" = "in_progress" ]; then
@@ -1106,12 +1106,12 @@ if [ "$CONVO_GEN_STATUS" != "completed" ]; then
   echo "ERROR: Expected conversation generate status 'completed', got '$CONVO_GEN_STATUS'" >&2
   exit 1
 fi
-CONVO_GEN_MSG_ID=$(echo "$CONVO_GEN_RESP" | jq -r '.message.documentId')
+CONVO_GEN_MSG_ID=$(echo "$CONVO_GEN_RESP" | jq -r '.message.document_id')
 if [ -z "$CONVO_GEN_MSG_ID" ] || [ "$CONVO_GEN_MSG_ID" = "null" ]; then
-  echo "ERROR: Conversation generate response missing message.documentId" >&2
+  echo "ERROR: Conversation generate response missing message.document_id" >&2
   exit 1
 fi
-echo "Conversation generate: OK (message documentId: $CONVO_GEN_MSG_ID)"
+echo "Conversation generate: OK (message document_id: $CONVO_GEN_MSG_ID)"
 
 # 48b. Verify the generated message is listed in conversation messages
 echo "--- Verifying generated message persisted ---"

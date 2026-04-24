@@ -16,8 +16,8 @@ A Project is a top-level container that scopes all resources. Users access proje
 | ----------- | ------ | --------------------------------------- |
 | `id`        | string | Public identifier prefixed with `proj_` |
 | `name`      | string | Human-readable project name             |
-| `createdAt` | string | ISO 8601 creation timestamp             |
-| `updatedAt` | string | ISO 8601 last-updated timestamp         |
+| `created_at` | string | ISO 8601 creation timestamp             |
+| `updated_at` | string | ISO 8601 last-updated timestamp         |
 
 ## Key Concepts
 
@@ -37,9 +37,9 @@ Policy documents are scoped to a project and contain structured IAM statements. 
 | `name`        | string | Human-readable label                   |
 | `description` | string | Optional description                   |
 | `document`    | object | Policy document (see [IAM](iam.md))    |
-| `projectId`   | string | ID of the owning project               |
-| `createdAt`   | string | ISO 8601 creation timestamp            |
-| `updatedAt`   | string | ISO 8601 last-updated timestamp        |
+| `project_id`   | string | ID of the owning project               |
+| `created_at`   | string | ISO 8601 creation timestamp            |
+| `updated_at`   | string | ISO 8601 last-updated timestamp        |
 
 ### Visibility Rules
 
@@ -57,14 +57,14 @@ Project CRUD and management operations are restricted to admin users. The `proje
 | Get project by ID      | Authenticated         | `GET /api/v1/projects/:id`                                 | `get-project`   |
 | Create project         | Admin only            | `POST /api/v1/projects`                                    | —               |
 | Delete project         | Admin only            | `DELETE /api/v1/projects/:id`                              | —               |
-| List policies          | `projects:GetProject` | `GET /api/v1/projects/:projectId/policies`                 | —               |
-| Get policy             | `projects:GetProject` | `GET /api/v1/projects/:projectId/policies/:policyId`       | —               |
-| Create policy          | Admin only            | `POST /api/v1/projects/:projectId/policies`                | —               |
-| Update policy          | Admin only            | `PUT /api/v1/projects/:projectId/policies/:policyId`       | —               |
-| Delete policy          | Admin only            | `DELETE /api/v1/projects/:projectId/policies/:policyId`    | —               |
-| Add member             | Admin only            | `POST /api/v1/projects/:projectId/members`                 | —               |
-| Update member policies | Admin only            | `PUT /api/v1/projects/:projectId/members/:userId/policies` | —               |
-| Get member policies    | Admin only            | `GET /api/v1/projects/:projectId/members/:userId/policies` | —               |
+| List policies          | `projects:GetProject` | `GET /api/v1/projects/:project_id/policies`                 | —               |
+| Get policy             | `projects:GetProject` | `GET /api/v1/projects/:project_id/policies/:policy_id`       | —               |
+| Create policy          | Admin only            | `POST /api/v1/projects/:project_id/policies`                | —               |
+| Update policy          | Admin only            | `PUT /api/v1/projects/:project_id/policies/:policy_id`       | —               |
+| Delete policy          | Admin only            | `DELETE /api/v1/projects/:project_id/policies/:policy_id`    | —               |
+| Add member             | Admin only            | `POST /api/v1/projects/:project_id/members`                 | —               |
+| Update member policies | Admin only            | `PUT /api/v1/projects/:project_id/members/:user_id/policies` | —               |
+| Get member policies    | Admin only            | `GET /api/v1/projects/:project_id/members/:user_id/policies` | —               |
 
 ### Create a Policy
 
@@ -97,9 +97,9 @@ Content-Type: application/json
   "name": "Read-only Documents",
   "description": "Allows reading all documents",
   "document": { "...": "..." },
-  "projectId": "proj_abc123",
-  "createdAt": "2025-01-01T00:00:00.000Z",
-  "updatedAt": "2025-01-01T00:00:00.000Z"
+  "project_id": "proj_abc123",
+  "created_at": "2025-01-01T00:00:00.000Z",
+  "updated_at": "2025-01-01T00:00:00.000Z"
 }
 ```
 
@@ -111,8 +111,8 @@ Authorization: Bearer <admin-token>
 Content-Type: application/json
 
 {
-  "userId": "user_def456",
-  "policyIds": ["pol_def456"]
+  "user_id": "user_def456",
+  "policy_ids": ["pol_def456"]
 }
 ```
 
@@ -126,7 +126,7 @@ Authorization: Bearer <admin-token>
 Content-Type: application/json
 
 {
-  "policyIds": ["pol_def456", "pol_ghi789"]
+  "policy_ids": ["pol_def456", "pol_ghi789"]
 }
 ```
 
@@ -146,19 +146,19 @@ Project Keys are identified by an `id` prefixed with `key_`.
 | ----------- | ------ | ---------------------------------------------- |
 | `id`        | string | Public identifier prefixed with `key_`         |
 | `name`      | string | Human-readable label                           |
-| `keyPrefix` | string | First 8 characters of the raw key (for lookup) |
-| `userId`    | string | Public ID of the user who created the key      |
-| `projectId` | string | Public ID of the project the key is scoped to  |
-| `policyId`  | string | Public ID of the attached policy               |
-| `createdAt` | string | ISO 8601 creation timestamp                    |
-| `updatedAt` | string | ISO 8601 last-updated timestamp                |
+| `key_prefix` | string | First 8 characters of the raw key (for lookup) |
+| `user_id`    | string | Public ID of the user who created the key      |
+| `project_id` | string | Public ID of the project the key is scoped to  |
+| `policy_id`  | string | Public ID of the attached policy               |
+| `created_at` | string | ISO 8601 creation timestamp                    |
+| `updated_at` | string | ISO 8601 last-updated timestamp                |
 
-The raw secret key is only returned in the `POST` response. Only `keyPrefix` and a bcrypt hash are stored.
+The raw secret key is only returned in the `POST` response. Only `key_prefix` and a bcrypt hash are stored.
 
 ### Security Model
 
 - The raw key is a 32-byte random value prefixed with `pk_`.
-- Only the `keyPrefix` (first 8 characters) and a bcrypt hash of the full key are stored.
+- Only the `key_prefix` (first 8 characters) and a bcrypt hash of the full key are stored.
 - Authentication works by matching the prefix to candidate rows, then verifying the full key against each hash.
 
 ### Intersection Authorization

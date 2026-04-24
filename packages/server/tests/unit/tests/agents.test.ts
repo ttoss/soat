@@ -147,15 +147,15 @@ describe('Agents', () => {
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
-      .send({ userId, policyId });
+      .send({ user_id: userId, policy_id: policyId });
 
     const aiProvRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/ai-providers')
       .send({
-        projectId,
+        project_id: projectId,
         name: 'Agents Test Provider',
         provider: 'ollama',
-        defaultModel: 'llama3.2',
+        default_model: 'llama3.2',
       });
     aiProviderId = aiProvRes.body.id;
   });
@@ -174,7 +174,7 @@ describe('Agents', () => {
     test('missing name returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/agents/tools')
-        .send({ projectId });
+        .send({ project_id: projectId });
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
@@ -183,7 +183,7 @@ describe('Agents', () => {
     test('user without project access returns 403', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/agents/tools')
-        .send({ name: 'test-tool', projectId: otherProjectId });
+        .send({ name: 'test-tool', project_id: otherProjectId });
 
       expect(response.status).toBe(403);
     });
@@ -191,14 +191,14 @@ describe('Agents', () => {
     test('creates an agent tool with required fields', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/agents/tools')
-        .send({ name: 'my-http-tool', projectId });
+        .send({ name: 'my-http-tool', project_id: projectId });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
       expect(response.body.id).toMatch(/^agt_tool_/);
       expect(response.body.name).toBe('my-http-tool');
       expect(response.body.type).toBe('http');
-      expect(response.body.projectId).toBe(projectId);
+      expect(response.body.project_id).toBe(projectId);
     });
 
     test('creates an agent tool with optional fields', async () => {
@@ -212,7 +212,7 @@ describe('Agents', () => {
             type: 'object',
             properties: { query: { type: 'string' } },
           },
-          projectId,
+          project_id: projectId,
         });
 
       expect(response.status).toBe(201);
@@ -236,7 +236,7 @@ describe('Agents', () => {
             url: 'https://api.example.com/search',
             method: 'GET',
           },
-          projectId,
+          project_id: projectId,
         });
 
       expect(response.status).toBe(201);
@@ -257,7 +257,7 @@ describe('Agents', () => {
             url: 'http://localhost:5047/mcp',
             headers: { Authorization: 'Bearer test-token' },
           },
-          projectId,
+          project_id: projectId,
         });
 
       expect(response.status).toBe(201);
@@ -303,7 +303,7 @@ describe('Agents', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/agents/tools')
-        .send({ name: 'get-tool-test', projectId });
+        .send({ name: 'get-tool-test', project_id: projectId });
       toolId = res.body.id;
     });
 
@@ -337,7 +337,7 @@ describe('Agents', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/agents/tools')
-        .send({ name: 'update-tool-test', projectId });
+        .send({ name: 'update-tool-test', project_id: projectId });
       toolId = res.body.id;
     });
 
@@ -373,7 +373,7 @@ describe('Agents', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/agents/tools')
-        .send({ name: 'delete-tool-test', projectId });
+        .send({ name: 'delete-tool-test', project_id: projectId });
       toolId = res.body.id;
     });
 
@@ -412,7 +412,7 @@ describe('Agents', () => {
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .post('/api/v1/agents')
-        .send({ aiProviderId });
+        .send({ ai_provider_id: aiProviderId });
 
       expect(response.status).toBe(401);
     });
@@ -420,7 +420,7 @@ describe('Agents', () => {
     test('missing aiProviderId returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
-        .send({ projectId });
+        .send({ project_id: projectId });
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
@@ -429,7 +429,7 @@ describe('Agents', () => {
     test('user without project access returns 403', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
-        .send({ aiProviderId, projectId: otherProjectId });
+        .send({ ai_provider_id: aiProviderId, project_id: otherProjectId });
 
       expect(response.status).toBe(403);
     });
@@ -437,7 +437,7 @@ describe('Agents', () => {
     test('unknown aiProviderId returns 404', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/agents')
-        .send({ aiProviderId: 'aip_doesnotexist000000', projectId });
+        .send({ ai_provider_id: 'aip_doesnotexist000000', project_id: projectId });
 
       expect(response.status).toBe(404);
       expect(response.body.error).toBeDefined();
@@ -446,26 +446,26 @@ describe('Agents', () => {
     test('creates an agent with required fields', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
-        .send({ aiProviderId, projectId });
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
       expect(response.body.id).toMatch(/^agt_/);
-      expect(response.body.aiProviderId).toBe(aiProviderId);
-      expect(response.body.projectId).toBe(projectId);
-      expect(response.body.maxSteps).toBe(20);
+      expect(response.body.ai_provider_id).toBe(aiProviderId);
+      expect(response.body.project_id).toBe(projectId);
+      expect(response.body.max_steps).toBe(20);
     });
 
     test('creates an agent with optional fields', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
         .send({
-          aiProviderId,
-          projectId,
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
           name: 'My Agent',
           instructions: 'Be helpful',
           model: 'llama3.2',
-          maxSteps: 5,
+          max_steps: 5,
           temperature: 0.7,
         });
 
@@ -473,7 +473,7 @@ describe('Agents', () => {
       expect(response.body.name).toBe('My Agent');
       expect(response.body.instructions).toBe('Be helpful');
       expect(response.body.model).toBe('llama3.2');
-      expect(response.body.maxSteps).toBe(5);
+      expect(response.body.max_steps).toBe(5);
       expect(response.body.temperature).toBe(0.7);
     });
   });
@@ -510,7 +510,7 @@ describe('Agents', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
-        .send({ aiProviderId, projectId, name: 'Get Agent Test' });
+        .send({ ai_provider_id: aiProviderId, project_id: projectId, name: 'Get Agent Test' });
       agentId = res.body.id;
     });
 
@@ -535,7 +535,7 @@ describe('Agents', () => {
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(agentId);
       expect(response.body.name).toBe('Get Agent Test');
-      expect(response.body.aiProviderId).toBe(aiProviderId);
+      expect(response.body.ai_provider_id).toBe(aiProviderId);
     });
   });
 
@@ -545,7 +545,7 @@ describe('Agents', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
-        .send({ aiProviderId, projectId, name: 'Update Agent Test' });
+        .send({ ai_provider_id: aiProviderId, project_id: projectId, name: 'Update Agent Test' });
       agentId = res.body.id;
     });
 
@@ -569,28 +569,28 @@ describe('Agents', () => {
         .send({
           name: 'Renamed Agent',
           instructions: 'New instructions',
-          maxSteps: 10,
+          max_steps: 10,
         });
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(agentId);
       expect(response.body.name).toBe('Renamed Agent');
       expect(response.body.instructions).toBe('New instructions');
-      expect(response.body.maxSteps).toBe(10);
+      expect(response.body.max_steps).toBe(10);
     });
 
     test('can update agent with toolIds', async () => {
       const toolRes = await authenticatedTestClient(userToken)
         .post('/api/v1/agents/tools')
-        .send({ name: 'tool-for-agent', projectId });
+        .send({ name: 'tool-for-agent', project_id: projectId });
       const toolId = toolRes.body.id;
 
       const response = await authenticatedTestClient(userToken)
         .put(`/api/v1/agents/${agentId}`)
-        .send({ toolIds: [toolId] });
+        .send({ tool_ids: [toolId] });
 
       expect(response.status).toBe(200);
-      expect(response.body.toolIds).toEqual([toolId]);
+      expect(response.body.tool_ids).toEqual([toolId]);
     });
   });
 
@@ -600,7 +600,7 @@ describe('Agents', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
-        .send({ aiProviderId, projectId });
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
       agentId = res.body.id;
     });
 
@@ -639,7 +639,7 @@ describe('Agents', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
-        .send({ aiProviderId, projectId, name: 'Generation Agent' });
+        .send({ ai_provider_id: aiProviderId, project_id: projectId, name: 'Generation Agent' });
       agentId = res.body.id;
     });
 
@@ -683,7 +683,7 @@ describe('Agents', () => {
         .post(`/api/v1/agents/${agentId}/generate`)
         .send({
           messages: [{ role: 'user', content: 'Hello' }],
-          toolContext: { userId: 'u1', env: 'test' },
+          tool_context: { user_id: 'u1', env: 'test' },
         });
 
       expect(response.status).not.toBe(400);
@@ -697,7 +697,7 @@ describe('Agents', () => {
       const response = await testClient
         .post('/api/v1/agents/agt_someid/generate/agt_gen_someid/tool-outputs')
         .send({
-          toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }],
+          tool_outputs: [{ tool_call_id: 'tc_1', output: 'result' }],
         });
 
       expect(response.status).toBe(401);
@@ -706,7 +706,7 @@ describe('Agents', () => {
     test('missing toolOutputs returns 400', async () => {
       const agentRes = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
-        .send({ aiProviderId, projectId });
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
       const agentId = agentRes.body.id;
 
       const response = await authenticatedTestClient(userToken)
@@ -720,12 +720,12 @@ describe('Agents', () => {
     test('empty toolOutputs array returns 400', async () => {
       const agentRes = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
-        .send({ aiProviderId, projectId });
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
       const agentId = agentRes.body.id;
 
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/agents/${agentId}/generate/agt_gen_fake/tool-outputs`)
-        .send({ toolOutputs: [] });
+        .send({ tool_outputs: [] });
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();

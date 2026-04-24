@@ -8,7 +8,7 @@ The Secrets module provides encrypted storage for sensitive values such as API k
 
 ## Overview
 
-Secrets are associated with a project. Once stored, a secret's value can only be replaced — it is never readable again. All operations return a `hasValue` boolean to indicate whether an encrypted value is on file.
+Secrets are associated with a project. Once stored, a secret's value can only be replaced — it is never readable again. All operations return a `has_value` boolean to indicate whether an encrypted value is on file.
 
 Secrets can be linked to [AI Providers](./ai-providers.md) to supply credentials at inference time.
 
@@ -29,11 +29,11 @@ openssl rand -hex 32
 | Field       | Type    | Description                              |
 | ----------- | ------- | ---------------------------------------- |
 | `id`        | string  | Public identifier (e.g. `sec_…`)         |
-| `projectId` | string  | ID of the owning project                 |
+| `project_id` | string  | ID of the owning project                 |
 | `name`      | string  | Human-readable label                     |
-| `hasValue`  | boolean | `true` when an encrypted value is stored |
-| `createdAt` | string  | ISO 8601 creation timestamp              |
-| `updatedAt` | string  | ISO 8601 last-updated timestamp          |
+| `has_value`  | boolean | `true` when an encrypted value is stored |
+| `created_at` | string  | ISO 8601 creation timestamp              |
+| `updated_at` | string  | ISO 8601 last-updated timestamp          |
 
 ## Deletion behaviour
 
@@ -44,7 +44,7 @@ By default, deleting a secret that is still referenced by one or more AI provide
 | Action        | Permission             | REST Endpoint                      | MCP Tool        |
 | ------------- | ---------------------- | ---------------------------------- | --------------- |
 | List secrets  | `secrets:ListSecrets`  | `GET /api/v1/secrets`              | `list-secrets`  |
-| Get a secret  | `secrets:GetSecret`    | `GET /api/v1/secrets/:secretId`    | `get-secret`    |
+| Get a secret  | `secrets:GetSecret`    | `GET /api/v1/secrets/:secret_id`    | `get-secret`    |
 | Create secret | `secrets:CreateSecret` | `POST /api/v1/secrets`             | `create-secret` |
-| Update secret | `secrets:UpdateSecret` | `PATCH /api/v1/secrets/:secretId`  | `update-secret` |
-| Delete secret | `secrets:DeleteSecret` | `DELETE /api/v1/secrets/:secretId` | `delete-secret` |
+| Update secret | `secrets:UpdateSecret` | `PATCH /api/v1/secrets/:secret_id`  | `update-secret` |
+| Delete secret | `secrets:DeleteSecret` | `DELETE /api/v1/secrets/:secret_id` | `delete-secret` |

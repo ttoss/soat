@@ -30,14 +30,14 @@ paths:
       description: Returns all conversations the caller has access to. If projectId is provided, returns only conversations in that project. project keys are scoped to a single project automatically.
       operationId: listConversations
       parameters:
-        - name: projectId
+        - name: project_id
           in: query
           required: false
           description: Project ID (optional)
           schema:
             type: string
             example: 'proj_V1StGXR8Z5jdHi6B'
-        - name: actorId
+        - name: actor_id
           in: query
           required: false
           description: Filter by actor ID
@@ -78,7 +78,7 @@ paths:
             schema:
               type: object
               properties:
-                projectId:
+                project_id:
                   type: string
                   description: Project ID. Required for JWT auth; omit when using an project key.
                   example: 'proj_V1StGXR8Z5jdHi6B'
@@ -91,7 +91,7 @@ paths:
                   type: string
                   nullable: true
                   description: Optional name for the conversation
-                actorId:
+                actor_id:
                   type: string
                   nullable: true
                   description: Actor ID to associate with this conversation
@@ -318,13 +318,13 @@ paths:
               type: object
               required:
                 - message
-                - actorId
+                - actor_id
               properties:
                 message:
                   type: string
                   description: Message text content to add to the conversation
                   example: 'Hello, how can I help you?'
-                actorId:
+                actor_id:
                   type: string
                   description: Actor ID who is sending this message
                   example: 'act_V1StGXR8Z5jdHi6B'
@@ -395,9 +395,9 @@ paths:
             schema:
               type: object
               required:
-                - actorId
+                - actor_id
               properties:
-                actorId:
+                actor_id:
                   type: string
                   description: ID of the actor that will produce the next message. Must have `agentId` or `chatId` set.
                 model:
@@ -406,7 +406,7 @@ paths:
                 stream:
                   type: boolean
                   description: If true, stream tokens via SSE. NOT IMPLEMENTED in v1 — returns 501.
-                toolContext:
+                tool_context:
                   type: object
                   additionalProperties:
                     type: string
@@ -543,7 +543,7 @@ components:
           type: string
           description: Conversation ID
           example: 'conv_V1StGXR8Z5jdHi6B'
-        projectId:
+        project_id:
           type: string
           description: Project ID
           example: 'proj_V1StGXR8Z5jdHi6B'
@@ -556,15 +556,15 @@ components:
           enum: [open, closed]
           description: Conversation status
           example: 'open'
-        createdAt:
+        created_at:
           type: string
           format: date-time
           description: Creation timestamp
-        updatedAt:
+        updated_at:
           type: string
           format: date-time
           description: Last update timestamp
-        actorId:
+        actor_id:
           type: string
           nullable: true
           description: Actor ID associated with this conversation
@@ -572,11 +572,11 @@ components:
     ConversationMessageRecord:
       type: object
       properties:
-        documentId:
+        document_id:
           type: string
           description: Document ID
           example: 'doc_V1StGXR8Z5jdHi6B'
-        actorId:
+        actor_id:
           type: string
           description: Actor ID who sent this message
           example: 'act_V1StGXR8Z5jdHi6B'
@@ -603,7 +603,7 @@ components:
           type: string
           description: Actor ID
           example: 'act_V1StGXR8Z5jdHi6B'
-        projectId:
+        project_id:
           type: string
           description: Project ID
           example: 'proj_V1StGXR8Z5jdHi6B'
@@ -615,15 +615,15 @@ components:
           type: string
           description: Actor type
           example: 'human'
-        externalId:
+        external_id:
           type: string
           description: External identifier
           example: 'ext_123'
-        createdAt:
+        created_at:
           type: string
           format: date-time
           description: Creation timestamp
-        updatedAt:
+        updated_at:
           type: string
           format: date-time
           description: Last update timestamp
@@ -644,11 +644,11 @@ components:
               example: 'Hello! How can I help you today?'
             message:
               $ref: '#/components/schemas/ConversationMessageRecord'
-            generationId:
+            generation_id:
               type: string
               description: ID of the underlying generation record.
               example: 'gen_V1StGXR8Z5jdHi6B'
-            traceId:
+            trace_id:
               type: string
               description: Trace ID for observability.
               example: 'trc_V1StGXR8Z5jdHi6B'
@@ -665,15 +665,15 @@ components:
               description: >
                 Indicates the agent requires tool-call outputs before it can
                 produce a reply. No message is persisted yet.
-            generationId:
+            generation_id:
               type: string
               description: ID of the paused generation. Pass to the tool-outputs endpoint.
               example: 'gen_V1StGXR8Z5jdHi6B'
-            traceId:
+            trace_id:
               type: string
               description: Trace ID for observability.
               example: 'trc_V1StGXR8Z5jdHi6B'
-            requiredAction:
+            required_action:
               type: object
               description: Tool-call information the client must resolve.
     ErrorResponse:

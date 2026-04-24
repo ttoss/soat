@@ -36,15 +36,15 @@ paths:
             schema:
               type: object
               required:
-                - projectId
-                - policyId
+                - project_id
+                - policy_id
                 - name
               properties:
-                projectId:
+                project_id:
                   type: string
                   description: Project ID
                   example: proj_V1StGXR8Z5jdHi6B
-                policyId:
+                policy_id:
                   type: string
                   description: Policy ID that determines the key's permissions
                   example: policy_abc123
@@ -66,9 +66,9 @@ paths:
                     example: SDK_V1StGXR8Z5jdHi6B
                   name:
                     type: string
-                  projectId:
+                  project_id:
                     type: string
-                  createdAt:
+                  created_at:
                     type: string
                     format: date-time
         '400':
@@ -106,9 +106,9 @@ paths:
                     type: string
                   name:
                     type: string
-                  projectId:
+                  project_id:
                     type: string
-                  createdAt:
+                  created_at:
                     type: string
                     format: date-time
         '401':
@@ -137,9 +137,9 @@ paths:
             schema:
               type: object
               required:
-                - policyId
+                - policy_id
               properties:
-                policyId:
+                policy_id:
                   type: string
                   description: New policy ID
       responses:

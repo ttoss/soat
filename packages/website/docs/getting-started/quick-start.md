@@ -144,11 +144,11 @@ AI_PROVIDER_ID=$(curl -s -X POST http://localhost:5047/api/v1/ai-providers \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"projectId\": \"$PROJECT_ID\",
+    \"project_id\": \"$PROJECT_ID\",
     \"name\": \"Local Ollama\",
     \"provider\": \"ollama\",
-    \"baseUrl\": \"http://ollama:11434\",
-    \"defaultModel\": \"qwen2.5:0.5b\"
+    \"base_url\": \"http://ollama:11434\",
+    \"default_model\": \"qwen2.5:0.5b\"
   }" | jq -r '.id')
 
 echo "AI Provider: $AI_PROVIDER_ID"
@@ -161,7 +161,7 @@ curl -s -X POST http://localhost:5047/api/v1/chats/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"aiProviderId\": \"$AI_PROVIDER_ID\",
+    \"ai_provider_id\": \"$AI_PROVIDER_ID\",
     \"messages\": [
       { \"role\": \"system\", \"content\": \"You are a helpful assistant.\" },
       { \"role\": \"user\", \"content\": \"What is the color of the sky?\" }

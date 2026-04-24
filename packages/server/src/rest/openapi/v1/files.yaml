@@ -57,8 +57,8 @@ paths:
             schema:
               type: object
               required:
-                - storageType
-                - storagePath
+                - storage_type
+                - storage_path
               properties:
                 filename:
                   type: string
@@ -72,12 +72,12 @@ paths:
                   type: integer
                   description: File size in bytes
                   example: 1024
-                storageType:
+                storage_type:
                   type: string
                   enum: [local, s3, gcs]
                   description: Storage backend type
                   example: 'local'
-                storagePath:
+                storage_path:
                   type: string
                   description: Path where the file is stored
                   example: '/uploads/document.pdf'
@@ -113,13 +113,13 @@ paths:
               type: object
               required:
                 - file
-                - projectId
+                - project_id
               properties:
                 file:
                   type: string
                   format: binary
                   description: File content
-                projectId:
+                project_id:
                   type: string
                   description: Project ID to associate the file with
                   example: 'proj_V1StGXR8Z5jdHi6B'
@@ -309,12 +309,12 @@ components:
           type: integer
           description: File size in bytes
           example: 1024
-        storageType:
+        storage_type:
           type: string
           enum: [local, s3, gcs]
           description: Storage backend type
           example: 'local'
-        storagePath:
+        storage_path:
           type: string
           description: Path where the file is stored
           example: '/uploads/document.pdf'
@@ -322,11 +322,11 @@ components:
           type: string
           description: JSON string with additional metadata
           example: '{"author":"John"}'
-        createdAt:
+        created_at:
           type: string
           format: date-time
           description: Creation timestamp
-        updatedAt:
+        updated_at:
           type: string
           format: date-time
           description: Last update timestamp

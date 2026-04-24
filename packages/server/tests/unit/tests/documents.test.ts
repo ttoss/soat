@@ -45,7 +45,7 @@ describe('Documents', () => {
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
-      .send({ userId, policyId });
+      .send({ user_id: userId, policy_id: policyId });
   });
 
   afterAll(() => {
@@ -57,7 +57,7 @@ describe('Documents', () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents')
         .send({
-          projectId,
+          project_id: projectId,
           content: 'Hello, world! This is a test document.',
           filename: 'hello.txt',
         });
@@ -65,14 +65,14 @@ describe('Documents', () => {
       expect(response.status).toBe(201);
       expect(response.body.id).toMatch(/^doc_/);
       expect(response.body.filename).toBe('hello.txt');
-      expect(response.body.projectId).toBe(projectId);
+      expect(response.body.project_id).toBe(projectId);
       expect(response.body.size).toBeGreaterThan(0);
       expect(response.body.content).toBeUndefined();
     });
 
     test('unauthenticated request cannot create a document', async () => {
       const response = await testClient.post('/api/v1/documents').send({
-        projectId,
+        project_id: projectId,
         content: 'Secret',
       });
 
@@ -90,7 +90,7 @@ describe('Documents', () => {
     test('missing content returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents')
-        .send({ projectId });
+        .send({ project_id: projectId });
 
       expect(response.status).toBe(400);
     });
@@ -99,7 +99,7 @@ describe('Documents', () => {
   describe('GET /api/v1/documents', () => {
     test('authenticated user with permission can list documents', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/documents?projectId=${projectId}`
+        `/api/v1/documents?project_id=${projectId}`
       );
 
       expect(response.status).toBe(200);
@@ -108,7 +108,7 @@ describe('Documents', () => {
 
     test('unauthenticated request cannot list documents', async () => {
       const response = await testClient.get(
-        `/api/v1/documents?projectId=${projectId}`
+        `/api/v1/documents?project_id=${projectId}`
       );
 
       expect(response.status).toBe(401);
@@ -130,7 +130,7 @@ describe('Documents', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/documents')
         .send({
-          projectId,
+          project_id: projectId,
           content: 'Fetch this document back.',
           filename: 'fetch-me.txt',
         });
@@ -165,7 +165,7 @@ describe('Documents', () => {
   describe('POST /api/v1/documents/search', () => {
     beforeAll(async () => {
       await authenticatedTestClient(userToken).post('/api/v1/documents').send({
-        projectId,
+        project_id: projectId,
         content: 'The capital of France is Paris.',
         filename: 'france.txt',
       });
@@ -174,7 +174,7 @@ describe('Documents', () => {
     test('user with permission can search documents', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/search')
-        .send({ projectId, query: 'capital of France' });
+        .send({ project_id: projectId, query: 'capital of France' });
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
@@ -183,7 +183,7 @@ describe('Documents', () => {
     test('search with limit returns at most limit results', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/search')
-        .send({ projectId, query: 'test content', limit: 1 });
+        .send({ project_id: projectId, query: 'test content', limit: 1 });
 
       expect(response.status).toBe(200);
       expect(response.body.length).toBeLessThanOrEqual(1);
@@ -192,7 +192,7 @@ describe('Documents', () => {
     test('unauthenticated request cannot search documents', async () => {
       const response = await testClient
         .post('/api/v1/documents/search')
-        .send({ projectId, query: 'test' });
+        .send({ project_id: projectId, query: 'test' });
 
       expect(response.status).toBe(401);
     });
@@ -209,7 +209,7 @@ describe('Documents', () => {
     test('missing query returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/search')
-        .send({ projectId });
+        .send({ project_id: projectId });
 
       expect(response.status).toBe(400);
     });
@@ -217,7 +217,7 @@ describe('Documents', () => {
     test('search results include score and content fields', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/search')
-        .send({ projectId, query: 'capital of France' });
+        .send({ project_id: projectId, query: 'capital of France' });
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
@@ -230,7 +230,7 @@ describe('Documents', () => {
     test('search with threshold filters low-score results', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/search')
-        .send({ projectId, query: 'capital of France', threshold: 0.99 });
+        .send({ project_id: projectId, query: 'capital of France', threshold: 0.99 });
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
@@ -245,7 +245,7 @@ describe('Documents', () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/documents')
         .send({
-          projectId,
+          project_id: projectId,
           content: 'Delete me please.',
           filename: 'todelete.txt',
         });
@@ -269,7 +269,7 @@ describe('Documents', () => {
     test('unauthenticated request cannot delete a document', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/documents')
-        .send({ projectId, content: 'Protected.' });
+        .send({ project_id: projectId, content: 'Protected.' });
       const documentId = createRes.body.id;
 
       const response = await testClient.delete(
@@ -293,7 +293,7 @@ describe('Documents', () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents')
         .send({
-          projectId,
+          project_id: projectId,
           content: 'Tagged document content.',
           filename: 'tagged.txt',
           title: 'My Title',
@@ -317,7 +317,7 @@ describe('Documents', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/documents')
         .send({
-          projectId,
+          project_id: projectId,
           content: 'Original content.',
           filename: 'patchme.txt',
           title: 'Original Title',
@@ -396,7 +396,7 @@ describe('Documents', () => {
 
       await authenticatedTestClient(adminToken)
         .post(`/api/v1/projects/${projectId}/members`)
-        .send({ userId: noUpdateUserId, policyId: policyRes.body.id });
+        .send({ user_id: noUpdateUserId, policy_id: policyRes.body.id });
 
       const response = await authenticatedTestClient(noUpdateToken)
         .patch(`/api/v1/documents/${documentId}`)
@@ -413,7 +413,7 @@ describe('Documents', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/documents')
         .send({
-          projectId,
+          project_id: projectId,
           content: 'Tag-filtered search document.',
           filename: 'tag-search.txt',
           tags: ['unique-search-tag'],
@@ -425,7 +425,7 @@ describe('Documents', () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/search')
         .send({
-          projectId,
+          project_id: projectId,
           query: 'tag-filtered',
           tags: ['unique-search-tag'],
         });
@@ -441,7 +441,7 @@ describe('Documents', () => {
     test('search by non-matching tag returns empty results', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/search')
-        .send({ projectId, query: 'tag-filtered', tags: ['no-such-tag-xyz'] });
+        .send({ project_id: projectId, query: 'tag-filtered', tags: ['no-such-tag-xyz'] });
 
       expect(response.status).toBe(200);
       const ids = response.body.map((d: { id: string }) => {
@@ -465,14 +465,14 @@ describe('Documents', () => {
       const projectKeyRes = await authenticatedTestClient(userToken)
         .post('/api/v1/project-keys')
         .send({
-          projectId,
-          policyId: projectKeyPolicyId,
+          project_id: projectId,
+          policy_id: projectKeyPolicyId,
           name: 'Docs Test project key',
         });
       projectKey = projectKeyRes.body.key;
 
       await authenticatedTestClient(userToken).post('/api/v1/documents').send({
-        projectId,
+        project_id: projectId,
         content: 'project key test document.',
         filename: 'projectkey-doc.txt',
       });

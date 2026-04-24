@@ -30,7 +30,7 @@ paths:
       description: Returns a list of AI provider configurations for a project
       operationId: listAiProviders
       parameters:
-        - name: projectId
+        - name: project_id
           in: query
           description: Project ID (required if not using project key auth)
           schema:
@@ -65,11 +65,11 @@ paths:
                     provider:
                       type: string
                       enum: [openai, anthropic, google, cohere, mistral]
-                    defaultModel:
+                    default_model:
                       type: string
-                    projectId:
+                    project_id:
                       type: string
-                    createdAt:
+                    created_at:
                       type: string
                       format: date-time
         '401':
@@ -93,9 +93,9 @@ paths:
               required:
                 - name
                 - provider
-                - defaultModel
+                - default_model
               properties:
-                projectId:
+                project_id:
                   type: string
                   description: Project ID (required if not using project key auth)
                   example: proj_V1StGXR8Z5jdHi6B
@@ -108,15 +108,15 @@ paths:
                   enum: [openai, anthropic, google, cohere, mistral]
                   description: LLM provider
                   example: openai
-                defaultModel:
+                default_model:
                   type: string
                   description: Default model to use
                   example: gpt-4
-                secretId:
+                secret_id:
                   type: string
                   description: Secret ID containing API credentials
                   example: secret_V1StGXR8Z5jdHi6B
-                baseUrl:
+                base_url:
                   type: string
                   description: Custom base URL for the provider
                 config:
@@ -136,11 +136,11 @@ paths:
                     type: string
                   provider:
                     type: string
-                  defaultModel:
+                  default_model:
                     type: string
-                  projectId:
+                  project_id:
                     type: string
-                  createdAt:
+                  created_at:
                     type: string
                     format: date-time
         '400':
@@ -180,17 +180,17 @@ paths:
                     type: string
                   provider:
                     type: string
-                  defaultModel:
+                  default_model:
                     type: string
-                  projectId:
+                  project_id:
                     type: string
-                  secretId:
+                  secret_id:
                     type: string
-                  baseUrl:
+                  base_url:
                     type: string
                   config:
                     type: object
-                  createdAt:
+                  created_at:
                     type: string
                     format: date-time
         '401':
@@ -221,11 +221,11 @@ paths:
               properties:
                 name:
                   type: string
-                defaultModel:
+                default_model:
                   type: string
-                secretId:
+                secret_id:
                   type: string
-                baseUrl:
+                base_url:
                   type: string
                 config:
                   type: object

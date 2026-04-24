@@ -48,15 +48,15 @@ describe('Chats', () => {
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
-      .send({ userId, policyId });
+      .send({ user_id: userId, policy_id: policyId });
 
     const aiProvRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/ai-providers')
       .send({
-        projectId,
+        project_id: projectId,
         name: 'Chats Test Provider',
         provider: 'ollama',
-        defaultModel: 'llama3.2',
+        default_model: 'llama3.2',
       });
     aiProviderId = aiProvRes.body.id;
   });
@@ -65,7 +65,7 @@ describe('Chats', () => {
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .post('/api/v1/chats')
-        .send({ aiProviderId });
+        .send({ ai_provider_id: aiProviderId });
 
       expect(response.status).toBe(401);
     });
@@ -73,7 +73,7 @@ describe('Chats', () => {
     test('missing aiProviderId returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
-        .send({ projectId });
+        .send({ project_id: projectId });
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
@@ -82,7 +82,7 @@ describe('Chats', () => {
     test('user without project access returns 403', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
-        .send({ aiProviderId, projectId: otherProjectId });
+        .send({ ai_provider_id: aiProviderId, project_id: otherProjectId });
 
       expect(response.status).toBe(403);
     });
@@ -90,7 +90,7 @@ describe('Chats', () => {
     test('unknown aiProviderId returns 404', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/chats')
-        .send({ aiProviderId: 'aip_doesnotexist000000', projectId });
+        .send({ ai_provider_id: 'aip_doesnotexist000000', project_id: projectId });
 
       expect(response.status).toBe(404);
       expect(response.body.error).toBeDefined();
@@ -99,29 +99,29 @@ describe('Chats', () => {
     test('creates a chat with required fields', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
-        .send({ aiProviderId, projectId });
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
       expect(response.body.id).toMatch(/^cht_/);
-      expect(response.body.aiProviderId).toBe(aiProviderId);
-      expect(response.body.projectId).toBe(projectId);
+      expect(response.body.ai_provider_id).toBe(aiProviderId);
+      expect(response.body.project_id).toBe(projectId);
     });
 
     test('creates a chat with optional fields', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
         .send({
-          aiProviderId,
-          projectId,
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
           name: 'My Chat',
-          systemMessage: 'You are a helpful assistant',
+          system_message: 'You are a helpful assistant',
           model: 'llama3.2',
         });
 
       expect(response.status).toBe(201);
       expect(response.body.name).toBe('My Chat');
-      expect(response.body.systemMessage).toBe('You are a helpful assistant');
+      expect(response.body.system_message).toBe('You are a helpful assistant');
       expect(response.body.model).toBe('llama3.2');
     });
   });
@@ -156,7 +156,7 @@ describe('Chats', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
-        .send({ aiProviderId, projectId });
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
       chatId = res.body.id;
     });
 
@@ -180,7 +180,7 @@ describe('Chats', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(chatId);
-      expect(response.body.aiProviderId).toBe(aiProviderId);
+      expect(response.body.ai_provider_id).toBe(aiProviderId);
     });
   });
 
@@ -190,7 +190,7 @@ describe('Chats', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
-        .send({ aiProviderId, projectId });
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
       chatId = res.body.id;
     });
 
@@ -233,7 +233,7 @@ describe('Chats', () => {
     test('missing messages returns 400', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
-        .send({ aiProviderId, projectId });
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
       const chatId = res.body.id;
 
       const response = await authenticatedTestClient(userToken)
@@ -247,7 +247,7 @@ describe('Chats', () => {
     test('empty messages array returns 400', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
-        .send({ aiProviderId, projectId });
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
       const chatId = res.body.id;
 
       const response = await authenticatedTestClient(userToken)
@@ -309,7 +309,7 @@ describe('Chats', () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chats/completions')
         .send({
-          aiProviderId: 'aip_doesnotexist000000',
+          ai_provider_id: 'aip_doesnotexist000000',
           messages: [{ role: 'user', content: 'Hello' }],
         });
 

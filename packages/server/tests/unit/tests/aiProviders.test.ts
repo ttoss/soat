@@ -48,11 +48,15 @@ describe('AI Providers', () => {
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
-      .send({ userId, policyId });
+      .send({ user_id: userId, policy_id: policyId });
 
     const secretRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/secrets')
-      .send({ projectId, name: 'AI Provider Secret', value: 'sk-test' });
+      .send({
+        project_id: projectId,
+        name: 'AI Provider Secret',
+        value: 'sk-test',
+      });
     secretId = secretRes.body.id;
   });
 
@@ -60,7 +64,7 @@ describe('AI Providers', () => {
     test('authenticated user can list AI providers', async () => {
       const response = await authenticatedTestClient(userToken)
         .get('/api/v1/ai-providers')
-        .query({ projectId });
+        .query({ project_id: projectId });
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
@@ -74,7 +78,7 @@ describe('AI Providers', () => {
     test('user without access to project returns 403', async () => {
       const response = await authenticatedTestClient(userToken)
         .get('/api/v1/ai-providers')
-        .query({ projectId: otherProjectId });
+        .query({ project_id: otherProjectId });
 
       expect(response.status).toBe(403);
     });
@@ -85,40 +89,44 @@ describe('AI Providers', () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/ai-providers')
         .send({
-          projectId,
+          project_id: projectId,
           name: 'My OpenAI',
           provider: 'openai',
-          defaultModel: 'gpt-4o',
+          default_model: 'gpt-4o',
         });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
       expect(response.body.name).toBe('My OpenAI');
-      expect(response.body.projectId).toBe(projectId);
+      expect(response.body.project_id).toBe(projectId);
       expect(response.body.provider).toBe('openai');
-      expect(response.body.defaultModel).toBe('gpt-4o');
-      expect(response.body.secretId).toBeNull();
+      expect(response.body.default_model).toBe('gpt-4o');
+      expect(response.body.secret_id).toBeNull();
     });
 
     test('can create AI provider linked to a secret', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/ai-providers')
         .send({
-          projectId,
-          secretId,
+          project_id: projectId,
+          secret_id: secretId,
           name: 'My OpenAI With Key',
           provider: 'openai',
-          defaultModel: 'gpt-4o',
+          default_model: 'gpt-4o',
         });
 
       expect(response.status).toBe(201);
-      expect(response.body.secretId).toBe(secretId);
+      expect(response.body.secret_id).toBe(secretId);
     });
 
     test('create without name returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/ai-providers')
-        .send({ projectId, provider: 'openai', defaultModel: 'gpt-4o' });
+        .send({
+          project_id: projectId,
+          provider: 'openai',
+          default_model: 'gpt-4o',
+        });
 
       expect(response.status).toBe(400);
     });
@@ -127,10 +135,10 @@ describe('AI Providers', () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/ai-providers')
         .send({
-          projectId,
+          project_id: projectId,
           name: 'x',
           provider: 'invalid',
-          defaultModel: 'gpt-4o',
+          default_model: 'gpt-4o',
         });
 
       expect(response.status).toBe(400);
@@ -139,7 +147,7 @@ describe('AI Providers', () => {
     test('create without defaultModel returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/ai-providers')
-        .send({ projectId, name: 'x', provider: 'openai' });
+        .send({ project_id: projectId, name: 'x', provider: 'openai' });
 
       expect(response.status).toBe(400);
     });
@@ -147,17 +155,17 @@ describe('AI Providers', () => {
     test('create with secretId from wrong project returns 400', async () => {
       const otherSecretRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/secrets')
-        .send({ projectId: otherProjectId, name: 'Other Project Secret' });
+        .send({ project_id: otherProjectId, name: 'Other Project Secret' });
       const otherSecretId = otherSecretRes.body.id;
 
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
         .send({
-          projectId,
-          secretId: otherSecretId,
+          project_id: projectId,
+          secret_id: otherSecretId,
           name: 'x',
           provider: 'openai',
-          defaultModel: 'gpt-4o',
+          default_model: 'gpt-4o',
         });
 
       expect(response.status).toBe(400);
@@ -165,10 +173,10 @@ describe('AI Providers', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.post('/api/v1/ai-providers').send({
-        projectId,
+        project_id: projectId,
         name: 'x',
         provider: 'openai',
-        defaultModel: 'gpt-4o',
+        default_model: 'gpt-4o',
       });
 
       expect(response.status).toBe(401);
@@ -178,10 +186,10 @@ describe('AI Providers', () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/ai-providers')
         .send({
-          projectId: otherProjectId,
+          project_id: otherProjectId,
           name: 'x',
           provider: 'openai',
-          defaultModel: 'gpt-4o',
+          default_model: 'gpt-4o',
         });
 
       expect(response.status).toBe(403);
@@ -195,10 +203,10 @@ describe('AI Providers', () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
         .send({
-          projectId,
+          project_id: projectId,
           name: 'Get Test Provider',
           provider: 'anthropic',
-          defaultModel: 'claude-3-5-haiku-latest',
+          default_model: 'claude-3-5-haiku-latest',
         });
       aiProviderId = res.body.id;
     });
@@ -210,7 +218,7 @@ describe('AI Providers', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(aiProviderId);
-      expect(response.body.projectId).toBe(projectId);
+      expect(response.body.project_id).toBe(projectId);
       expect(response.body.provider).toBe('anthropic');
     });
 
@@ -225,10 +233,10 @@ describe('AI Providers', () => {
       const adminRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
         .send({
-          projectId: otherProjectId,
+          project_id: otherProjectId,
           name: 'Other Provider',
           provider: 'openai',
-          defaultModel: 'gpt-4o',
+          default_model: 'gpt-4o',
         });
 
       const response = await authenticatedTestClient(userToken).get(
@@ -252,10 +260,10 @@ describe('AI Providers', () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
         .send({
-          projectId,
+          project_id: projectId,
           name: 'Patch Test Provider',
           provider: 'openai',
-          defaultModel: 'gpt-4o-mini',
+          default_model: 'gpt-4o-mini',
         });
       aiProviderId = res.body.id;
     });
@@ -263,21 +271,21 @@ describe('AI Providers', () => {
     test('authenticated user with permission can update an AI provider', async () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/ai-providers/${aiProviderId}`)
-        .send({ name: 'Updated Provider', defaultModel: 'gpt-4o' });
+        .send({ name: 'Updated Provider', default_model: 'gpt-4o' });
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(aiProviderId);
       expect(response.body.name).toBe('Updated Provider');
-      expect(response.body.defaultModel).toBe('gpt-4o');
+      expect(response.body.default_model).toBe('gpt-4o');
     });
 
     test('can link a secret when updating', async () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/ai-providers/${aiProviderId}`)
-        .send({ secretId });
+        .send({ secret_id: secretId });
 
       expect(response.status).toBe(200);
-      expect(response.body.secretId).toBe(secretId);
+      expect(response.body.secret_id).toBe(secretId);
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -291,10 +299,10 @@ describe('AI Providers', () => {
       const adminRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
         .send({
-          projectId: otherProjectId,
+          project_id: otherProjectId,
           name: 'Other Patch Provider',
           provider: 'openai',
-          defaultModel: 'gpt-4o',
+          default_model: 'gpt-4o',
         });
 
       const response = await authenticatedTestClient(userToken)
@@ -316,10 +324,10 @@ describe('AI Providers', () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
         .send({
-          projectId,
+          project_id: projectId,
           name: 'To Delete',
           provider: 'openai',
-          defaultModel: 'gpt-4o',
+          default_model: 'gpt-4o',
         });
       const aiProviderId = createRes.body.id;
 
@@ -340,10 +348,10 @@ describe('AI Providers', () => {
       const adminRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
         .send({
-          projectId: otherProjectId,
+          project_id: otherProjectId,
           name: 'Other Delete Provider',
           provider: 'openai',
-          defaultModel: 'gpt-4o',
+          default_model: 'gpt-4o',
         });
 
       const response = await authenticatedTestClient(userToken).delete(

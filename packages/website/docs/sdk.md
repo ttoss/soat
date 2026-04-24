@@ -184,7 +184,7 @@ const { data: reply, error: genError } = await soat.POST(
   '/api/v1/conversations/{id}/generate',
   {
     params: { path: { id: conv.id } },
-    body: { actorId: 'act_...' },
+    body: { actor_id: 'act_...' },
   }
 );
 
@@ -215,7 +215,7 @@ if (completionError) {
 
 // Stateful
 const { data: chat, error: chatError } = await soat.POST('/api/v1/chats', {
-  body: { systemMessage: 'You are a helpful assistant.' },
+  body: { system_message: 'You are a helpful assistant.' },
 });
 
 if (chatError) {
@@ -264,13 +264,13 @@ if (genError) {
 
 // Handle client-side tool calls
 if (gen.status === 'requires_action') {
-  const toolCall = gen.requiredAction.toolCalls[0];
+  const toolCall = gen.required_action.tool_calls[0];
   const { error: toolError } = await soat.POST(
     '/api/v1/agents/{agentId}/generate/{generationId}/tool-outputs',
     {
       params: { path: { agentId: agent.id, generationId: gen.id } },
       body: {
-        toolOutputs: [{ toolCallId: toolCall.id, output: '["file-1"]' }],
+        tool_outputs: [{ tool_call_id: toolCall.id, output: '["file-1"]' }],
       },
     }
   );

@@ -50,11 +50,11 @@ describe('Conversations', () => {
 
     await authenticatedTestClient(adminToken)
       .post(`/api/v1/projects/${projectId}/members`)
-      .send({ userId, policyId });
+      .send({ user_id: userId, policy_id: policyId });
 
     const actorRes = await authenticatedTestClient(userToken)
       .post('/api/v1/actors')
-      .send({ projectId, name: 'ConvoActor' });
+      .send({ project_id: projectId, name: 'ConvoActor' });
     actorId = actorRes.body.id;
   });
 
@@ -62,18 +62,18 @@ describe('Conversations', () => {
     test('authenticated user with permission can create a conversation', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId });
+        .send({ project_id: projectId });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toMatch(/^conv_/);
-      expect(response.body.projectId).toBe(projectId);
+      expect(response.body.project_id).toBe(projectId);
       expect(response.body.status).toBe('open');
     });
 
     test('can create a conversation with closed status', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId, status: 'closed' });
+        .send({ project_id: projectId, status: 'closed' });
 
       expect(response.status).toBe(201);
       expect(response.body.status).toBe('closed');
@@ -82,7 +82,7 @@ describe('Conversations', () => {
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .post('/api/v1/conversations')
-        .send({ projectId });
+        .send({ project_id: projectId });
 
       expect(response.status).toBe(401);
     });
@@ -98,19 +98,19 @@ describe('Conversations', () => {
     test('can create a conversation with a valid actorId', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId, actorId });
+        .send({ project_id: projectId, actor_id: actorId });
 
       expect(response.status).toBe(201);
-      expect(response.body.actorId).toBe(actorId);
+      expect(response.body.actor_id).toBe(actorId);
     });
 
     test('creates a new conversation even when same actorId used again', async () => {
       const first = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId, actorId });
+        .send({ project_id: projectId, actor_id: actorId });
       const second = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId, actorId });
+        .send({ project_id: projectId, actor_id: actorId });
 
       expect(first.status).toBe(201);
       expect(second.status).toBe(201);
@@ -120,16 +120,16 @@ describe('Conversations', () => {
     test('actorId is null when not provided', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId });
+        .send({ project_id: projectId });
 
       expect(response.status).toBe(201);
-      expect(response.body.actorId).toBeNull();
+      expect(response.body.actor_id).toBeNull();
     });
 
     test('invalid actorId returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId, actorId: 'act_nonexistent' });
+        .send({ project_id: projectId, actor_id: 'act_nonexistent' });
 
       expect(response.status).toBe(400);
     });
@@ -139,15 +139,15 @@ describe('Conversations', () => {
     beforeAll(async () => {
       await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId });
+        .send({ project_id: projectId });
       await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId });
+        .send({ project_id: projectId });
     });
 
     test('authenticated user with permission can list conversations', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/conversations?projectId=${projectId}`
+        `/api/v1/conversations?project_id=${projectId}`
       );
 
       expect(response.status).toBe(200);
@@ -167,20 +167,20 @@ describe('Conversations', () => {
     test('can filter by actorId', async () => {
       const secondActorRes = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ projectId, name: 'FilterActor' });
+        .send({ project_id: projectId, name: 'FilterActor' });
       const secondActorId = secondActorRes.body.id;
 
       const convRes = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId });
+        .send({ project_id: projectId });
       const filteredConvId = convRes.body.id;
 
       await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${filteredConvId}/messages`)
-        .send({ message: 'Filter test', actorId: secondActorId });
+        .send({ message: 'Filter test', actor_id: secondActorId });
 
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/conversations?actorId=${secondActorId}`
+        `/api/v1/conversations?actor_id=${secondActorId}`
       );
 
       expect(response.status).toBe(200);
@@ -194,7 +194,7 @@ describe('Conversations', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.get(
-        `/api/v1/conversations?projectId=${projectId}`
+        `/api/v1/conversations?project_id=${projectId}`
       );
 
       expect(response.status).toBe(401);
@@ -207,7 +207,7 @@ describe('Conversations', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId });
+        .send({ project_id: projectId });
       conversationId = res.body.id;
     });
 
@@ -244,7 +244,7 @@ describe('Conversations', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId });
+        .send({ project_id: projectId });
       conversationId = res.body.id;
     });
 
@@ -289,7 +289,7 @@ describe('Conversations', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId });
+        .send({ project_id: projectId });
       conversationId = res.body.id;
     });
 
@@ -327,21 +327,21 @@ describe('Conversations', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId });
+        .send({ project_id: projectId });
       conversationId = res.body.id;
     });
 
     test('user with permission can add a message to a conversation', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
-        .send({ message: 'Hello world', actorId });
+        .send({ message: 'Hello world', actor_id: actorId });
 
       expect(response.status).toBe(201);
-      expect(response.body.documentId).toMatch(/^doc_/);
-      expect(response.body.actorId).toBe(actorId);
+      expect(response.body.document_id).toMatch(/^doc_/);
+      expect(response.body.actor_id).toBe(actorId);
       expect(typeof response.body.position).toBe('number');
       expect(response.body.content).toBe('Hello world');
-      addedDocumentId = response.body.documentId;
+      addedDocumentId = response.body.document_id;
     });
 
     test('message appears in list after adding', async () => {
@@ -351,8 +351,8 @@ describe('Conversations', () => {
 
       expect(listRes.status).toBe(200);
       expect(
-        listRes.body.data.some((m: { documentId: string }) => {
-          return m.documentId === addedDocumentId;
+        listRes.body.data.some((m: { document_id: string }) => {
+          return m.document_id === addedDocumentId;
         })
       ).toBe(true);
     });
@@ -376,7 +376,7 @@ describe('Conversations', () => {
     test('returns 404 for non-existent conversation', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/conversations/conv_nonexistent/messages')
-        .send({ message: 'Hello world', actorId });
+        .send({ message: 'Hello world', actor_id: actorId });
 
       expect(response.status).toBe(404);
     });
@@ -385,7 +385,11 @@ describe('Conversations', () => {
       const metadata = { phone: '5511999998888', channel: 'whatsapp' };
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
-        .send({ message: 'Message with metadata', actorId, metadata });
+        .send({
+          message: 'Message with metadata',
+          actor_id: actorId,
+          metadata,
+        });
 
       expect(response.status).toBe(201);
       expect(response.body.metadata).toEqual(metadata);
@@ -394,27 +398,27 @@ describe('Conversations', () => {
     test('returns null metadata when metadata is not provided', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
-        .send({ message: 'Message without metadata', actorId });
+        .send({ message: 'Message without metadata', actor_id: actorId });
 
       expect(response.status).toBe(201);
       expect(response.body.metadata).toBeNull();
     });
 
     test('metadata is persisted and returned in message list', async () => {
-      const metadata = { source: 'sms', externalId: 'msg_123' };
+      const metadata = { source: 'sms', external_id: 'msg_123' };
       const addRes = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
-        .send({ message: 'Persisted metadata', actorId, metadata });
+        .send({ message: 'Persisted metadata', actor_id: actorId, metadata });
 
       expect(addRes.status).toBe(201);
-      const docId = addRes.body.documentId;
+      const docId = addRes.body.document_id;
 
       const listRes = await authenticatedTestClient(userToken).get(
         `/api/v1/conversations/${conversationId}/messages`
       );
       expect(listRes.status).toBe(200);
       const found = listRes.body.data.find(
-        (m: { documentId: string }) => m.documentId === docId
+        (m: { document_id: string }) => m.document_id === docId
       );
       expect(found).toBeDefined();
       expect(found.metadata).toEqual(metadata);
@@ -428,13 +432,13 @@ describe('Conversations', () => {
     beforeAll(async () => {
       const convRes = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId });
+        .send({ project_id: projectId });
       conversationId = convRes.body.id;
 
       const msgRes = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
-        .send({ message: 'Remove me', actorId });
-      secondDocumentId = msgRes.body.documentId;
+        .send({ message: 'Remove me', actor_id: actorId });
+      secondDocumentId = msgRes.body.document_id;
     });
 
     test('user with permission can remove a message', async () => {
@@ -475,7 +479,7 @@ describe('Conversations', () => {
     test('user with permission can delete a conversation', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId });
+        .send({ project_id: projectId });
       const conversationId = createRes.body.id;
 
       const deleteRes = await authenticatedTestClient(userToken).delete(
@@ -493,7 +497,7 @@ describe('Conversations', () => {
     test('unauthenticated request returns 401', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId });
+        .send({ project_id: projectId });
 
       const response = await testClient.delete(
         `/api/v1/conversations/${createRes.body.id}`
@@ -518,26 +522,26 @@ describe('Conversations', () => {
     beforeAll(async () => {
       const convRes = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId });
+        .send({ project_id: projectId });
       conversationId = convRes.body.id;
 
       const actorRes = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ projectId, name: 'SecondActorForActors' });
+        .send({ project_id: projectId, name: 'SecondActorForActors' });
       secondActorIdForActorsTest = actorRes.body.id;
 
       await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
-        .send({ message: 'Message from actor 1', actorId });
+        .send({ message: 'Message from actor 1', actor_id: actorId });
       await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
         .send({
           message: 'Message from actor 2',
-          actorId: secondActorIdForActorsTest,
+          actor_id: secondActorIdForActorsTest,
         });
       await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
-        .send({ message: 'Another from actor 1', actorId });
+        .send({ message: 'Another from actor 1', actor_id: actorId });
     });
 
     test('returns distinct actors who sent messages', async () => {
@@ -578,12 +582,12 @@ describe('Conversations', () => {
     beforeAll(async () => {
       const convRes = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId });
+        .send({ project_id: projectId });
       conversationId = convRes.body.id;
 
       await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
-        .send({ message: 'Content check message', actorId });
+        .send({ message: 'Content check message', actor_id: actorId });
     });
 
     test('listed messages include content field', async () => {
@@ -604,13 +608,13 @@ describe('Conversations', () => {
     beforeAll(async () => {
       const convRes = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId });
+        .send({ project_id: projectId });
       conversationId = convRes.body.id;
 
       const msgRes = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
-        .send({ message: 'Orphan test message', actorId });
-      documentId = msgRes.body.documentId;
+        .send({ message: 'Orphan test message', actor_id: actorId });
+      documentId = msgRes.body.document_id;
     });
 
     test('removing a message also deletes the underlying document', async () => {
@@ -638,7 +642,7 @@ describe('Conversations', () => {
     test('creates conversation with a name and exposes it on GET', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId, name: 'Support Case 42' });
+        .send({ project_id: projectId, name: 'Support Case 42' });
       expect(createRes.status).toBe(201);
       expect(createRes.body.name).toBe('Support Case 42');
 
@@ -652,7 +656,7 @@ describe('Conversations', () => {
     test('updates a conversation name via PATCH', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId, name: 'Before' });
+        .send({ project_id: projectId, name: 'Before' });
       const convId = createRes.body.id;
 
       const patchRes = await authenticatedTestClient(userToken)
@@ -669,7 +673,7 @@ describe('Conversations', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId });
+        .send({ project_id: projectId });
       convId = res.body.id;
     });
 
@@ -683,14 +687,14 @@ describe('Conversations', () => {
     test('returns 501 when stream is requested', async () => {
       const res = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${convId}/generate`)
-        .send({ actorId, stream: true });
+        .send({ actor_id: actorId, stream: true });
       expect(res.status).toBe(501);
     });
 
     test('returns 400 when actor has no agentId or chatId', async () => {
       const res = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${convId}/generate`)
-        .send({ actorId });
+        .send({ actor_id: actorId });
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/agentId or chatId/i);
     });
@@ -698,21 +702,21 @@ describe('Conversations', () => {
     test('returns 404 for unknown conversation', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations/conv_does_not_exist/generate')
-        .send({ actorId });
+        .send({ actor_id: actorId });
       expect(res.status).toBe(404);
     });
 
     test('returns 401 when unauthenticated', async () => {
       const res = await testClient
         .post(`/api/v1/conversations/${convId}/generate`)
-        .send({ actorId });
+        .send({ actor_id: actorId });
       expect(res.status).toBe(401);
     });
 
     test('accepts toolContext in request body', async () => {
       const res = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${convId}/generate`)
-        .send({ actorId, toolContext: { userId: 'u1' } });
+        .send({ actor_id: actorId, tool_context: { user_id: 'u1' } });
 
       // toolContext is accepted by the schema (not rejected as an unknown property).
       // The 400 is from app logic (actor has no agentId/chatId), not from toolContext validation.
@@ -726,10 +730,10 @@ describe('Conversations', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
         .send({
-          projectId,
+          project_id: projectId,
           name: 'Bad Actor',
-          agentId: 'agt_fake',
-          chatId: 'cht_fake',
+          agent_id: 'agt_fake',
+          chat_id: 'cht_fake',
         });
       expect(res.status).toBe(400);
     });
@@ -738,9 +742,9 @@ describe('Conversations', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
         .send({
-          projectId,
+          project_id: projectId,
           name: 'Bad Actor 2',
-          agentId: 'agt_does_not_exist',
+          agent_id: 'agt_does_not_exist',
         });
       expect(res.status).toBe(400);
     });
@@ -751,18 +755,18 @@ describe('Conversations', () => {
       // Create a fresh actor and conversation, add a message, then try delete.
       const newActorRes = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ projectId, name: 'ActorWithMessages' });
+        .send({ project_id: projectId, name: 'ActorWithMessages' });
       expect(newActorRes.status).toBe(201);
       const newActorId = newActorRes.body.id;
 
       const convRes = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
-        .send({ projectId });
+        .send({ project_id: projectId });
       const newConvId = convRes.body.id;
 
       const msgRes = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${newConvId}/messages`)
-        .send({ actorId: newActorId, message: 'hello' });
+        .send({ actor_id: newActorId, message: 'hello' });
       expect(msgRes.status).toBe(201);
 
       const delRes = await authenticatedTestClient(userToken).delete(

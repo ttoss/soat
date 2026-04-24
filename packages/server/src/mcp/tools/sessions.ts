@@ -1,5 +1,6 @@
 import type { McpServer } from '@ttoss/http-server-mcp';
 import { apiCall, registerToolFromSchema } from '@ttoss/http-server-mcp';
+import { toMcpText } from './caseTransform';
 
 import { tools } from '../../lib/soat-tools/sessions';
 
@@ -13,8 +14,7 @@ const registerTools = (server: McpServer) => {
         const data = await apiCall(def.method, def.path(args), {
           body: def.body?.(args),
         });
-        const text =
-          data != null ? JSON.stringify(data) : 'Deleted successfully.';
+        const text = toMcpText(data);
         return { content: [{ type: 'text', text }] };
       },
     });

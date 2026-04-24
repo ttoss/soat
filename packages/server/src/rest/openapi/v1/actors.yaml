@@ -30,14 +30,14 @@ paths:
       description: Returns all actors the caller has access to. If projectId is provided, returns only actors in that project. project keys are scoped to a single project automatically. JWT users without projectId receive actors across all their accessible projects.
       operationId: listActors
       parameters:
-        - name: projectId
+        - name: project_id
           in: query
           required: false
           description: Project ID (optional)
           schema:
             type: string
             example: 'proj_V1StGXR8Z5jdHi6B'
-        - name: externalId
+        - name: external_id
           in: query
           required: false
           description: External ID to filter by (e.g. WhatsApp phone number)
@@ -80,7 +80,7 @@ paths:
               required:
                 - name
               properties:
-                projectId:
+                project_id:
                   type: string
                   description: Project ID. Required for JWT auth; omit when using an project key.
                   example: 'proj_V1StGXR8Z5jdHi6B'
@@ -91,7 +91,7 @@ paths:
                   type: string
                   description: Optional actor type (e.g. 'customer', 'agent')
                   example: 'customer'
-                externalId:
+                external_id:
                   type: string
                   description: Optional external identifier (e.g. WhatsApp phone number). If provided and an actor with this externalId already exists in the project, the existing actor is returned (idempotent — 200 OK).
                   example: '+15551234567'
@@ -210,7 +210,7 @@ components:
           type: string
           description: Actor ID
           example: 'act_V1StGXR8Z5jdHi6B'
-        projectId:
+        project_id:
           type: string
           description: Project ID
           example: 'proj_V1StGXR8Z5jdHi6B'
@@ -222,7 +222,7 @@ components:
           nullable: true
           description: Actor type (e.g. 'customer', 'agent')
           example: 'customer'
-        externalId:
+        external_id:
           type: string
           nullable: true
           description: External identifier (e.g. WhatsApp phone number)
@@ -231,11 +231,11 @@ components:
           type: string
           nullable: true
           description: Persona-specific instructions composed into the effective system prompt during conversation generation.
-        agentId:
+        agent_id:
           type: string
           nullable: true
           description: Agent this actor is linked to (mutually exclusive with chatId).
-        chatId:
+        chat_id:
           type: string
           nullable: true
           description: Chat this actor is linked to (mutually exclusive with agentId).
@@ -243,10 +243,10 @@ components:
           type: object
           additionalProperties:
             type: string
-        createdAt:
+        created_at:
           type: string
           format: date-time
-        updatedAt:
+        updated_at:
           type: string
           format: date-time
     ErrorResponse:

@@ -1167,7 +1167,7 @@ export interface components {
              * @description Project ID
              * @example proj_V1StGXR8Z5jdHi6B
              */
-            projectId?: string;
+            project_id?: string;
             /** @example Alice */
             name?: string;
             /**
@@ -1179,20 +1179,20 @@ export interface components {
              * @description External identifier (e.g. WhatsApp phone number)
              * @example +15551234567
              */
-            externalId?: string | null;
+            external_id?: string | null;
             /** @description Persona-specific instructions composed into the effective system prompt during conversation generation. */
             instructions?: string | null;
             /** @description Agent this actor is linked to (mutually exclusive with chatId). */
-            agentId?: string | null;
+            agent_id?: string | null;
             /** @description Chat this actor is linked to (mutually exclusive with agentId). */
-            chatId?: string | null;
+            chat_id?: string | null;
             tags?: {
                 [key: string]: string;
             };
             /** Format: date-time */
-            createdAt?: string;
+            created_at?: string;
             /** Format: date-time */
-            updatedAt?: string;
+            updated_at?: string;
         };
         ErrorResponse: {
             /** @example Actor not found */
@@ -1208,7 +1208,7 @@ export interface components {
              * @description Public ID of the owning project
              * @example proj_V1StGXR8Z5jdHi6B
              */
-            projectId?: string;
+            project_id?: string;
             /**
              * @description Tool name
              * @example get-weather
@@ -1231,13 +1231,13 @@ export interface components {
             /** @description SOAT platform actions to expose */
             actions?: string[] | null;
             /** Format: date-time */
-            createdAt?: string;
+            created_at?: string;
             /** Format: date-time */
-            updatedAt?: string;
+            updated_at?: string;
         };
         CreateAgentToolRequest: {
             /** @description Public ID of the project */
-            projectId?: string;
+            project_id?: string;
             /** @description Tool name */
             name: string;
             /**
@@ -1274,9 +1274,9 @@ export interface components {
              */
             id?: string;
             /** @description Public ID of the owning project */
-            projectId?: string;
+            project_id?: string;
             /** @description Public ID of the AI provider */
-            aiProviderId?: string;
+            ai_provider_id?: string;
             /** @description Display name */
             name?: string | null;
             /** @description System instructions guiding behavior */
@@ -1284,55 +1284,55 @@ export interface components {
             /** @description Model identifier */
             model?: string | null;
             /** @description Public IDs of attached agent tools */
-            toolIds?: string[] | null;
+            tool_ids?: string[] | null;
             /** @description Maximum reasoning steps */
-            maxSteps?: number | null;
+            max_steps?: number | null;
             /** @description Tool choice strategy */
-            toolChoice?: Record<string, never> | null;
+            tool_choice?: Record<string, never> | null;
             /** @description Stop conditions */
-            stopConditions?: Record<string, never>[] | null;
+            stop_conditions?: Record<string, never>[] | null;
             /** @description Subset of toolIds active per step */
-            activeToolIds?: string[] | null;
+            active_tool_ids?: string[] | null;
             /** @description Per-step overrides */
-            stepRules?: Record<string, never>[] | null;
+            step_rules?: Record<string, never>[] | null;
             /** @description Allowed/denied SOAT actions */
-            boundaryPolicy?: Record<string, never> | null;
+            boundary_policy?: Record<string, never> | null;
             /** @description Sampling temperature */
             temperature?: number | null;
             /** Format: date-time */
-            createdAt?: string;
+            created_at?: string;
             /** Format: date-time */
-            updatedAt?: string;
+            updated_at?: string;
         };
         CreateAgentRequest: {
             /** @description Public ID of the project */
-            projectId?: string;
+            project_id?: string;
             /** @description Public ID of the AI provider */
-            aiProviderId: string;
+            ai_provider_id: string;
             name?: string;
             instructions?: string;
             model?: string;
-            toolIds?: string[];
-            maxSteps?: number;
-            toolChoice?: Record<string, never>;
-            stopConditions?: Record<string, never>[];
-            activeToolIds?: string[];
-            stepRules?: Record<string, never>[];
-            boundaryPolicy?: Record<string, never>;
+            tool_ids?: string[];
+            max_steps?: number;
+            tool_choice?: Record<string, never>;
+            stop_conditions?: Record<string, never>[];
+            active_tool_ids?: string[];
+            step_rules?: Record<string, never>[];
+            boundary_policy?: Record<string, never>;
             temperature?: number;
         };
         UpdateAgentRequest: {
-            aiProviderId?: string;
+            ai_provider_id?: string;
             name?: string | null;
             instructions?: string | null;
             model?: string | null;
-            toolIds?: string[] | null;
-            maxSteps?: number | null;
-            toolChoice?: Record<string, never> | null;
-            stopConditions?: Record<string, never>[] | null;
-            activeToolIds?: string[] | null;
-            stepRules?: Record<string, never>[] | null;
-            boundaryPolicy?: Record<string, never> | null;
+            tool_ids?: string[] | null;
+            max_steps?: number | null;
+            tool_choice?: Record<string, never> | null;
+            stop_conditions?: Record<string, never>[] | null;
+            active_tool_ids?: string[] | null;
+            step_rules?: Record<string, never>[] | null;
+            boundary_policy?: Record<string, never> | null;
             temperature?: number | null;
         };
         CreateAgentGenerationRequest: {
@@ -1347,17 +1347,21 @@ export interface components {
              */
             stream: boolean;
             /** @description Optional trace ID to group generations */
-            traceId?: string;
+            trace_id?: string;
             /**
              * @description Maximum nested agent-call depth; 0 short-circuits with a depth-guard response
              * @default 10
              */
-            maxCallDepth: number;
+            max_call_depth: number;
+            /** @description Key-value pairs injected as context headers into all tool call requests made during this generation. */
+            tool_context?: {
+                [key: string]: string;
+            } | null;
         };
         SubmitToolOutputsRequest: {
-            toolOutputs: {
+            tool_outputs: {
                 /** @description ID of the tool call to respond to */
-                toolCallId: string;
+                tool_call_id: string;
                 /** @description Result of the tool execution */
                 output: unknown;
             }[];
@@ -1376,9 +1380,9 @@ export interface components {
             /** @description Final text output (when completed) */
             text?: string | null;
             /** @description Pending tool calls (when requires_action) */
-            toolCalls?: {
-                toolCallId?: string;
-                toolName?: string;
+            tool_calls?: {
+                tool_call_id?: string;
+                tool_name?: string;
                 args?: Record<string, never>;
             }[] | null;
         };
@@ -1388,11 +1392,11 @@ export interface components {
              * @example agt_trace_V1StGXR8Z5jdHi6B
              */
             id?: string;
-            projectId?: string;
-            agentId?: string;
+            project_id?: string;
+            agent_id?: string;
             generations?: Record<string, never>[];
             /** Format: date-time */
-            createdAt?: string;
+            created_at?: string;
         };
         Chat: {
             /**
@@ -1404,12 +1408,12 @@ export interface components {
              * @description Public ID of the owning project
              * @example proj_V1StGXR8Z5jdHi6B
              */
-            projectId?: string;
+            project_id?: string;
             /**
              * @description Public ID of the AI provider
              * @example aip_V1StGXR8Z5jdHi6B
              */
-            aiProviderId?: string;
+            ai_provider_id?: string;
             /**
              * @description Optional human-readable name
              * @example Support Bot
@@ -1419,28 +1423,28 @@ export interface components {
              * @description Optional system message sent with every completion
              * @example You are a helpful support assistant.
              */
-            systemMessage?: string | null;
+            system_message?: string | null;
             /**
              * @description Optional model override for this chat
              * @example gpt-4o
              */
             model?: string | null;
             /** Format: date-time */
-            createdAt?: string;
+            created_at?: string;
             /** Format: date-time */
-            updatedAt?: string;
+            updated_at?: string;
         };
         CreateChatRequest: {
             /**
              * @description Public ID of the AI provider
              * @example aip_V1StGXR8Z5jdHi6B
              */
-            aiProviderId: string;
+            ai_provider_id: string;
             /**
              * @description Public ID of the project. Required when the user belongs to multiple projects and no project key is used.
              * @example proj_V1StGXR8Z5jdHi6B
              */
-            projectId?: string;
+            project_id?: string;
             /**
              * @description Optional human-readable name
              * @example Support Bot
@@ -1450,7 +1454,7 @@ export interface components {
              * @description Optional system message applied to all completions on this chat
              * @example You are a helpful support assistant.
              */
-            systemMessage?: string;
+            system_message?: string;
             /**
              * @description Optional default model override
              * @example gpt-4o
@@ -1472,7 +1476,7 @@ export interface components {
              * @description Public ID of a document whose content is used as the message body (mutually exclusive with content). Only valid for user/assistant roles.
              * @example doc_V1StGXR8Z5jdHi6B
              */
-            documentId?: string;
+            document_id?: string;
         };
         ChatCompletionForChatRequest: {
             messages: components["schemas"]["ChatMessageInput"][];
@@ -1505,7 +1509,7 @@ export interface components {
              * @description Public ID of the AI provider to use. When omitted the server falls back to Ollama.
              * @example aip_V1StGXR8Z5jdHi6B
              */
-            aiProviderId?: string;
+            ai_provider_id?: string;
             /**
              * @description Model identifier. Overrides the provider's `defaultModel` when specified.
              * @example gpt-4o
@@ -1549,7 +1553,7 @@ export interface components {
              * @description Project ID
              * @example proj_V1StGXR8Z5jdHi6B
              */
-            projectId?: string;
+            project_id?: string;
             /** @description Optional human-readable name for the conversation. */
             name?: string | null;
             /**
@@ -1562,29 +1566,29 @@ export interface components {
              * Format: date-time
              * @description Creation timestamp
              */
-            createdAt?: string;
+            created_at?: string;
             /**
              * Format: date-time
              * @description Last update timestamp
              */
-            updatedAt?: string;
+            updated_at?: string;
             /**
              * @description Actor ID associated with this conversation
              * @example act_V1StGXR8Z5jdHi6B
              */
-            actorId?: string | null;
+            actor_id?: string | null;
         };
         ConversationMessageRecord: {
             /**
              * @description Document ID
              * @example doc_V1StGXR8Z5jdHi6B
              */
-            documentId?: string;
+            document_id?: string;
             /**
              * @description Actor ID who sent this message
              * @example act_V1StGXR8Z5jdHi6B
              */
-            actorId?: string;
+            actor_id?: string;
             /**
              * @description Zero-based position in the conversation
              * @example 0
@@ -1613,7 +1617,7 @@ export interface components {
              * @description Project ID
              * @example proj_V1StGXR8Z5jdHi6B
              */
-            projectId?: string;
+            project_id?: string;
             /**
              * @description Actor name
              * @example Alice
@@ -1628,17 +1632,17 @@ export interface components {
              * @description External identifier
              * @example ext_123
              */
-            externalId?: string;
+            external_id?: string;
             /**
              * Format: date-time
              * @description Creation timestamp
              */
-            createdAt?: string;
+            created_at?: string;
             /**
              * Format: date-time
              * @description Last update timestamp
              */
-            updatedAt?: string;
+            updated_at?: string;
         };
         GenerateConversationMessageResponse: {
             /**
@@ -1656,12 +1660,12 @@ export interface components {
              * @description ID of the underlying generation record.
              * @example gen_V1StGXR8Z5jdHi6B
              */
-            generationId: string;
+            generation_id?: string;
             /**
              * @description Trace ID for observability.
              * @example trc_V1StGXR8Z5jdHi6B
              */
-            traceId: string;
+            trace_id?: string;
             /**
              * @description Model used for generation.
              * @example gpt-4o
@@ -1677,14 +1681,14 @@ export interface components {
              * @description ID of the paused generation. Pass to the tool-outputs endpoint.
              * @example gen_V1StGXR8Z5jdHi6B
              */
-            generationId: string;
+            generation_id?: string;
             /**
              * @description Trace ID for observability.
              * @example trc_V1StGXR8Z5jdHi6B
              */
-            traceId: string;
+            trace_id?: string;
             /** @description Tool-call information the client must resolve. */
-            requiredAction: Record<string, never>;
+            required_action?: Record<string, never>;
         };
         DocumentRecord: {
             /**
@@ -1696,12 +1700,12 @@ export interface components {
              * @description Underlying file ID
              * @example file_V1StGXR8Z5jdHi6B
              */
-            fileId?: string;
+            file_id?: string;
             /**
              * @description Project ID
              * @example proj_V1StGXR8Z5jdHi6B
              */
-            projectId?: string;
+            project_id?: string;
             /**
              * @description Original filename
              * @example my-doc.txt
@@ -1718,9 +1722,9 @@ export interface components {
              */
             content?: string | null;
             /** Format: date-time */
-            createdAt?: string;
+            created_at?: string;
             /** Format: date-time */
-            updatedAt?: string;
+            updated_at?: string;
         };
         /** @description Stored file metadata */
         FileRecord: {
@@ -1749,12 +1753,12 @@ export interface components {
              * @example local
              * @enum {string}
              */
-            storageType?: "local" | "s3" | "gcs";
+            storage_type?: "local" | "s3" | "gcs";
             /**
              * @description Path where the file is stored
              * @example /uploads/document.pdf
              */
-            storagePath?: string;
+            storage_path?: string;
             /**
              * @description JSON string with additional metadata
              * @example {"author":"John"}
@@ -1764,12 +1768,12 @@ export interface components {
              * Format: date-time
              * @description Creation timestamp
              */
-            createdAt?: string;
+            created_at?: string;
             /**
              * Format: date-time
              * @description Last update timestamp
              */
-            updatedAt?: string;
+            updated_at?: string;
         };
         SessionRecord: {
             /**
@@ -1781,12 +1785,12 @@ export interface components {
              * @description Agent public ID
              * @example agt_V1StGXR8Z5jdHi6B
              */
-            agentId?: string;
+            agent_id?: string;
             /**
              * @description Underlying conversation public ID
              * @example conv_V1StGXR8Z5jdHi6B
              */
-            conversationId?: string;
+            conversation_id?: string;
             /**
              * @example open
              * @enum {string}
@@ -1798,7 +1802,7 @@ export interface components {
              * @description Public ID of the user actor
              * @example actr_V1StGXR8Z5jdHi6B
              */
-            actorId?: string | null;
+            actor_id?: string | null;
             tags?: {
                 [key: string]: string;
             };
@@ -1806,22 +1810,26 @@ export interface components {
              * @description When true, automatically triggers generation after each user message (if no generation is in progress).
              * @default false
              */
-            autoGenerate: boolean;
+            auto_generate: boolean;
             /**
              * Format: date-time
              * @description Timestamp when the current generation started, or null if not generating.
              */
-            generatingAt?: string | null;
+            generating_at?: string | null;
             /** Format: date-time */
-            createdAt?: string;
+            created_at?: string;
             /** Format: date-time */
-            updatedAt?: string;
+            updated_at?: string;
+            /** @description Key-value pairs injected as context headers into all tool call requests made during this session. */
+            tool_context?: {
+                [key: string]: string;
+            } | null;
         };
         SessionMessage: {
             /** @enum {string} */
             role?: "user" | "assistant" | "unknown";
             content?: string;
-            documentId?: string | null;
+            document_id?: string | null;
             position?: number;
             metadata?: Record<string, never> | null;
         };
@@ -1835,12 +1843,16 @@ export interface components {
              * @description Optional public ID of an existing actor to use as the user actor
              * @example actr_V1StGXR8Z5jdHi6B
              */
-            actorId?: string;
+            actor_id?: string;
             /**
              * @description When true, automatically triggers generation after each user message.
              * @default false
              */
-            autoGenerate: boolean;
+            auto_generate: boolean;
+            /** @description Key-value pairs injected as context headers into all tool call requests made during this session. */
+            tool_context?: {
+                [key: string]: string;
+            } | null;
         };
         UpdateSessionRequest: {
             /** @description Session name (set to null to clear) */
@@ -1851,7 +1863,11 @@ export interface components {
              */
             status?: "open" | "closed";
             /** @description Enable or disable automatic generation after user messages. */
-            autoGenerate?: boolean;
+            auto_generate?: boolean;
+            /** @description Key-value pairs injected as context headers into all tool call requests made during this session. */
+            tool_context?: {
+                [key: string]: string;
+            } | null;
         };
         AddSessionMessageRequest: {
             /**
@@ -1859,6 +1875,10 @@ export interface components {
              * @example Hello, how can I deploy my app?
              */
             message: string;
+            /** @description Key-value pairs injected as context headers into all tool call requests made during this generation. */
+            tool_context?: {
+                [key: string]: string;
+            } | null;
         };
         AddSessionMessageResponse: {
             /** @enum {string} */
@@ -1871,6 +1891,10 @@ export interface components {
              * @example gpt-4o
              */
             model?: string;
+            /** @description Key-value pairs injected as context headers into all tool call requests made during this generation. */
+            tool_context?: {
+                [key: string]: string;
+            } | null;
         };
         GenerateSessionResponse: {
             /** @enum {string} */
@@ -1880,11 +1904,11 @@ export interface components {
                 content?: string;
                 model?: string;
             };
-            generationId?: string;
-            traceId?: string;
+            generation_id?: string;
+            trace_id?: string;
             /** @description Present when status is requires_action */
-            requiredAction?: {
-                toolCalls?: {
+            required_action?: {
+                tool_calls?: {
                     id?: string;
                     name?: string;
                     arguments?: Record<string, never>;
@@ -1911,11 +1935,11 @@ export interface components {
                 content?: string;
                 model?: string;
             };
-            generationId?: string;
-            traceId?: string;
+            generation_id?: string;
+            trace_id?: string;
             /** @description Present when status is requires_action */
-            requiredAction?: {
-                toolCalls?: {
+            required_action?: {
+                tool_calls?: {
                     id?: string;
                     name?: string;
                     arguments?: Record<string, never>;
@@ -1924,9 +1948,9 @@ export interface components {
         };
         SubmitSessionToolOutputsRequest: {
             /** @description The generation ID from the requires_action response */
-            generationId: string;
-            toolOutputs: {
-                toolCallId: string;
+            generation_id: string;
+            tool_outputs: {
+                tool_call_id: string;
                 /** @description The tool output value */
                 output: unknown;
             }[];
@@ -1948,26 +1972,26 @@ export interface components {
              * Format: date-time
              * @example 2024-01-01T00:00:00.000Z
              */
-            createdAt?: string;
+            created_at?: string;
             /**
              * Format: date-time
              * @example 2024-01-01T00:00:00.000Z
              */
-            updatedAt?: string;
+            updated_at?: string;
         };
         Webhook: {
             id?: string;
-            projectId?: string;
-            policyId?: string | null;
+            project_id?: string;
+            policy_id?: string | null;
             name?: string;
             description?: string | null;
             url?: string;
             events?: string[];
             active?: boolean;
             /** Format: date-time */
-            createdAt?: string;
+            created_at?: string;
             /** Format: date-time */
-            updatedAt?: string;
+            updated_at?: string;
         };
         WebhookWithSecret: components["schemas"]["Webhook"] & {
             secret?: string;
@@ -1977,7 +2001,7 @@ export interface components {
             description?: string;
             url: string;
             events: string[];
-            policyId?: string;
+            policy_id?: string;
         };
         UpdateWebhookRequest: {
             name?: string;
@@ -1985,23 +2009,23 @@ export interface components {
             url?: string;
             events?: string[];
             active?: boolean;
-            policyId?: string | null;
+            policy_id?: string | null;
         };
         Delivery: {
             id?: string;
-            eventType?: string;
+            event_type?: string;
             payload?: Record<string, never>;
             /** @enum {string} */
             status?: "pending" | "success" | "failed";
-            statusCode?: number | null;
+            status_code?: number | null;
             attempts?: number;
             /** Format: date-time */
-            lastAttemptAt?: string | null;
-            responseBody?: string | null;
+            last_attempt_at?: string | null;
+            response_body?: string | null;
             /** Format: date-time */
-            createdAt?: string;
+            created_at?: string;
             /** Format: date-time */
-            updatedAt?: string;
+            updated_at?: string;
         };
         DeliveryListResponse: {
             data?: components["schemas"]["Delivery"][];
@@ -2056,9 +2080,9 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Project ID (optional) */
-                projectId?: string;
+                project_id?: string;
                 /** @description External ID to filter by (e.g. WhatsApp phone number) */
-                externalId?: string;
+                external_id?: string;
             };
             header?: never;
             path?: never;
@@ -2109,7 +2133,7 @@ export interface operations {
                      * @description Project ID. Required for JWT auth; omit when using an project key.
                      * @example proj_V1StGXR8Z5jdHi6B
                      */
-                    projectId?: string;
+                    project_id?: string;
                     /** @example Alice */
                     name: string;
                     /**
@@ -2121,7 +2145,7 @@ export interface operations {
                      * @description Optional external identifier (e.g. WhatsApp phone number). If provided and an actor with this externalId already exists in the project, the existing actor is returned (idempotent — 200 OK).
                      * @example +15551234567
                      */
-                    externalId?: string;
+                    external_id?: string;
                 };
             };
         };
@@ -2275,7 +2299,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Project public ID to filter by */
-                projectId?: string;
+                project_id?: string;
             };
             header?: never;
             path?: never;
@@ -2516,7 +2540,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Project public ID to filter by */
-                projectId?: string;
+                project_id?: string;
             };
             header?: never;
             path?: never;
@@ -2606,7 +2630,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Project public ID to filter by */
-                projectId?: string;
+                project_id?: string;
             };
             header?: never;
             path?: never;
@@ -2982,7 +3006,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Project ID (required if not using project key auth) */
-                projectId?: string;
+                project_id?: string;
                 /** @description Number of results per page */
                 limit?: number;
                 /** @description Number of results to skip */
@@ -3005,10 +3029,10 @@ export interface operations {
                         name?: string;
                         /** @enum {string} */
                         provider?: "openai" | "anthropic" | "google" | "cohere" | "mistral";
-                        defaultModel?: string;
-                        projectId?: string;
+                        default_model?: string;
+                        project_id?: string;
                         /** Format: date-time */
-                        createdAt?: string;
+                        created_at?: string;
                     }[];
                 };
             };
@@ -3049,7 +3073,7 @@ export interface operations {
                      * @description Project ID (required if not using project key auth)
                      * @example proj_V1StGXR8Z5jdHi6B
                      */
-                    projectId?: string;
+                    project_id?: string;
                     /**
                      * @description Provider configuration name
                      * @example OpenAI Production
@@ -3065,14 +3089,14 @@ export interface operations {
                      * @description Default model to use
                      * @example gpt-4
                      */
-                    defaultModel: string;
+                    default_model: string;
                     /**
                      * @description Secret ID containing API credentials
                      * @example secret_V1StGXR8Z5jdHi6B
                      */
-                    secretId?: string;
+                    secret_id?: string;
                     /** @description Custom base URL for the provider */
-                    baseUrl?: string;
+                    base_url?: string;
                     /** @description Additional provider-specific configuration */
                     config?: Record<string, never>;
                 };
@@ -3089,10 +3113,10 @@ export interface operations {
                         id?: string;
                         name?: string;
                         provider?: string;
-                        defaultModel?: string;
-                        projectId?: string;
+                        default_model?: string;
+                        project_id?: string;
                         /** Format: date-time */
-                        createdAt?: string;
+                        created_at?: string;
                     };
                 };
             };
@@ -3148,13 +3172,13 @@ export interface operations {
                         id?: string;
                         name?: string;
                         provider?: string;
-                        defaultModel?: string;
-                        projectId?: string;
-                        secretId?: string;
-                        baseUrl?: string;
+                        default_model?: string;
+                        project_id?: string;
+                        secret_id?: string;
+                        base_url?: string;
                         config?: Record<string, never>;
                         /** Format: date-time */
-                        createdAt?: string;
+                        created_at?: string;
                     };
                 };
             };
@@ -3237,9 +3261,9 @@ export interface operations {
             content: {
                 "application/json": {
                     name?: string;
-                    defaultModel?: string;
-                    secretId?: string;
-                    baseUrl?: string;
+                    default_model?: string;
+                    secret_id?: string;
+                    base_url?: string;
                     config?: Record<string, never>;
                 };
             };
@@ -3286,7 +3310,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Project public ID to filter by */
-                projectId?: string;
+                project_id?: string;
             };
             header?: never;
             path?: never;
@@ -3571,9 +3595,9 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Project ID (optional) */
-                projectId?: string;
+                project_id?: string;
                 /** @description Filter by actor ID */
-                actorId?: string;
+                actor_id?: string;
             };
             header?: never;
             path?: never;
@@ -3624,7 +3648,7 @@ export interface operations {
                      * @description Project ID. Required for JWT auth; omit when using an project key.
                      * @example proj_V1StGXR8Z5jdHi6B
                      */
-                    projectId?: string;
+                    project_id?: string;
                     /**
                      * @description Initial conversation status
                      * @default open
@@ -3637,7 +3661,7 @@ export interface operations {
                      * @description Actor ID to associate with this conversation
                      * @example act_V1StGXR8Z5jdHi6B
                      */
-                    actorId?: string | null;
+                    actor_id?: string | null;
                 };
             };
         };
@@ -3919,7 +3943,7 @@ export interface operations {
                      * @description Actor ID who is sending this message
                      * @example act_V1StGXR8Z5jdHi6B
                      */
-                    actorId: string;
+                    actor_id: string;
                     /**
                      * @description Zero-based position. Defaults to MAX+1 (append).
                      * @example 0
@@ -3999,11 +4023,15 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @description ID of the actor that will produce the next message. Must have `agentId` or `chatId` set. */
-                    actorId: string;
+                    actor_id: string;
                     /** @description Optional model override. Only honored for chat-backed actors. */
                     model?: string;
                     /** @description If true, stream tokens via SSE. NOT IMPLEMENTED in v1 — returns 501. */
                     stream?: boolean;
+                    /** @description Key-value pairs injected as context headers into all tool call requests made during this generation. */
+                    tool_context?: {
+                        [key: string]: string;
+                    } | null;
                 };
             };
         };
@@ -4168,7 +4196,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Project ID (optional) */
-                projectId?: string;
+                project_id?: string;
             };
             header?: never;
             path?: never;
@@ -4219,7 +4247,7 @@ export interface operations {
                      * @description Project ID. Required for JWT auth; omit when using an project key.
                      * @example proj_V1StGXR8Z5jdHi6B
                      */
-                    projectId?: string;
+                    project_id?: string;
                     /** @example The quick brown fox jumps over the lazy dog. */
                     content: string;
                     /** @example my-doc.txt */
@@ -4378,7 +4406,7 @@ export interface operations {
                      * @description Project ID (optional). Omit to search across all accessible projects.
                      * @example proj_V1StGXR8Z5jdHi6B
                      */
-                    projectId?: string;
+                    project_id?: string;
                     /** @example What is the capital of France? */
                     query: string;
                     /** @example 5 */
@@ -4484,12 +4512,12 @@ export interface operations {
                      * @example local
                      * @enum {string}
                      */
-                    storageType: "local" | "s3" | "gcs";
+                    storage_type: "local" | "s3" | "gcs";
                     /**
                      * @description Path where the file is stored
                      * @example /uploads/document.pdf
                      */
-                    storagePath: string;
+                    storage_path: string;
                     /**
                      * @description JSON string with additional metadata
                      * @example {"author":"John"}
@@ -4538,7 +4566,7 @@ export interface operations {
                      * @description Project ID to associate the file with
                      * @example proj_V1StGXR8Z5jdHi6B
                      */
-                    projectId: string;
+                    project_id: string;
                     /**
                      * @description Additional metadata as a JSON string
                      * @example {"author":"John"}
@@ -4747,12 +4775,12 @@ export interface operations {
                      * @description Project ID
                      * @example proj_V1StGXR8Z5jdHi6B
                      */
-                    projectId: string;
+                    project_id: string;
                     /**
                      * @description Policy ID that determines the key's permissions
                      * @example policy_abc123
                      */
-                    policyId: string;
+                    policy_id: string;
                     /**
                      * @description Key name for identification
                      * @example CI/CD Pipeline
@@ -4775,9 +4803,9 @@ export interface operations {
                          */
                         id?: string;
                         name?: string;
-                        projectId?: string;
+                        project_id?: string;
                         /** Format: date-time */
-                        createdAt?: string;
+                        created_at?: string;
                     };
                 };
             };
@@ -4832,9 +4860,9 @@ export interface operations {
                     "application/json": {
                         id?: string;
                         name?: string;
-                        projectId?: string;
+                        project_id?: string;
                         /** Format: date-time */
-                        createdAt?: string;
+                        created_at?: string;
                     };
                 };
             };
@@ -4875,7 +4903,7 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @description New policy ID */
-                    policyId: string;
+                    policy_id: string;
                 };
             };
         };
@@ -4986,7 +5014,7 @@ export interface operations {
                         id?: string;
                         name?: string;
                         /** Format: date-time */
-                        createdAt?: string;
+                        created_at?: string;
                     };
                 };
             };
@@ -5084,7 +5112,7 @@ export interface operations {
                      *     ]
                      */
                     permissions: string[];
-                    notPermissions?: string[];
+                    not_permissions?: string[];
                 };
             };
         };
@@ -5229,7 +5257,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Project ID (required if not using project key auth) */
-                projectId?: string;
+                project_id?: string;
                 /** @description Number of results per page */
                 limit?: number;
                 /** @description Number of results to skip */
@@ -5250,9 +5278,9 @@ export interface operations {
                     "application/json": {
                         id?: string;
                         name?: string;
-                        projectId?: string;
+                        project_id?: string;
                         /** Format: date-time */
-                        createdAt?: string;
+                        created_at?: string;
                     }[];
                 };
             };
@@ -5293,7 +5321,7 @@ export interface operations {
                      * @description Project ID (required if not using project key auth)
                      * @example proj_V1StGXR8Z5jdHi6B
                      */
-                    projectId?: string;
+                    project_id?: string;
                     /**
                      * @description Secret name
                      * @example DATABASE_PASSWORD
@@ -5317,9 +5345,9 @@ export interface operations {
                     "application/json": {
                         id?: string;
                         name?: string;
-                        projectId?: string;
+                        project_id?: string;
                         /** Format: date-time */
-                        createdAt?: string;
+                        created_at?: string;
                     };
                 };
             };
@@ -5376,9 +5404,9 @@ export interface operations {
                         name?: string;
                         /** @description Decrypted secret value */
                         value?: string;
-                        projectId?: string;
+                        project_id?: string;
                         /** Format: date-time */
-                        createdAt?: string;
+                        created_at?: string;
                     };
                 };
             };
@@ -5509,7 +5537,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Filter by actor public ID */
-                actorId?: string;
+                actor_id?: string;
                 /** @description Filter by session status (open or closed) */
                 status?: "open" | "closed";
                 limit?: number;
@@ -5766,7 +5794,7 @@ export interface operations {
                     "application/json": {
                         /** @enum {string} */
                         status?: "accepted";
-                        sessionId?: string;
+                        session_id?: string;
                     };
                 };
             };

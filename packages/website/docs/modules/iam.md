@@ -65,7 +65,7 @@ Policy documents are created and managed under a project via the project policy 
 Every addressable entity has a canonical identifier called a SOAT Resource Name:
 
 ```
-soat:<projectId>:<resourceType>:<resourceId>
+soat:<project_id>:<resource_type>:<resource_id>
 ```
 
 Examples:
@@ -294,8 +294,8 @@ The first user is created via the **bootstrap** endpoint, which is only availabl
 | `id`        | string | Public identifier prefixed with `user_` |
 | `username`  | string | Unique username                         |
 | `role`      | string | `"admin"` or `"user"`                   |
-| `createdAt` | string | ISO 8601 creation timestamp             |
-| `updatedAt` | string | ISO 8601 last-updated timestamp         |
+| `created_at` | string | ISO 8601 creation timestamp             |
+| `updated_at` | string | ISO 8601 last-updated timestamp         |
 
 Sensitive fields (`passwordHash`, internal numeric ID) are never exposed in responses.
 
