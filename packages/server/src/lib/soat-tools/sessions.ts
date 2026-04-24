@@ -13,6 +13,7 @@ export const tools: SoatToolDefinition[] = [
         name: args.name,
         actorId: args.actorId,
         autoGenerate: args.autoGenerate,
+        cancelPrevious: args.cancelPrevious,
         toolContext: args.toolContext,
       };
     },
@@ -30,6 +31,11 @@ export const tools: SoatToolDefinition[] = [
           type: 'boolean',
           description:
             'When true, automatically triggers generation after each user message if no generation is in progress',
+        },
+        cancelPrevious: {
+          type: 'boolean',
+          description:
+            'When true (default), starting a new generation cancels any in-flight one. When false, a new request is rejected with 409 if generation is already in progress.',
         },
         toolContext: {
           type: 'object',

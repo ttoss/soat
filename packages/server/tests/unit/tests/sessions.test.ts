@@ -1054,4 +1054,136 @@ describe('Sessions', () => {
       expect(sessionRes.body.generating_at).toBeNull();
     });
   });
+
+  // ── cancel_previous field ─────────────────────────────────────────────
+
+  describe('cancel_previous session field', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    test('session defaults cancel_previous to true', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({});
+      expect(res.status).toBe(201);
+      expect(res.body.cancel_previous).toBe(true);
+    });
+
+    test('can create session with cancel_previous: false', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ cancel_previous: false });
+      expect(res.status).toBe(201);
+      expect(res.body.cancel_previous).toBe(false);
+    });
+
+    test('PATCH session can toggle cancel_previous', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ cancel_previous: true });
+      const sessionId = createRes.body.id;
+
+      const patchRes = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${agentId}/sessions/${sessionId}`)
+        .send({ cancel_previous: false });
+      expect(patchRes.status).toBe(200);
+      expect(patchRes.body.cancel_previous).toBe(false);
+    });
+
+    test('when cancel_previous is false, second generate returns 409 while first is in-flight', async () => {
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ cancel_previous: false });
+      const rejectSessionId = sessionRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${rejectSessionId}/messages`)
+        .send({ message: 'Initial message' });
+
+      let signalStarted!: () => void;
+      const started = new Promise<void>((r) => {
+        signalStarted = r;
+      });
+
+      jest
+        .spyOn(agentsModule, 'createGeneration')
+        .mockImplementationOnce(() => {
+          return new Promise<GenerationResult>(() => {
+            signalStarted();
+            // never resolves — keeps session busy
+          });
+        });
+
+      // Start first generation as fire-and-forget
+      await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/sessions/${rejectSessionId}/generate?async=true`
+        )
+        .expect(202);
+
+      // Wait for mock to be entered so generatingAt is set
+      await started;
+
+      // Second generation should be rejected with 409
+      const secondRes = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${rejectSessionId}/generate`
+      );
+      expect(secondRes.status).toBe(409);
+    });
+
+    test('when cancel_previous is true, second generate aborts first and returns 200', async () => {
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ cancel_previous: true });
+      const preemptSessionId = sessionRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${preemptSessionId}/messages`)
+        .send({ message: 'Initial message' });
+
+      let signalStarted!: () => void;
+      const started = new Promise<void>((r) => {
+        signalStarted = r;
+      });
+
+      jest
+        .spyOn(agentsModule, 'createGeneration')
+        .mockImplementationOnce((args) => {
+          return new Promise<GenerationResult>((_, reject) => {
+            signalStarted();
+            args.signal?.addEventListener('abort', () => {
+              const err = new Error('The operation was aborted');
+              err.name = 'AbortError';
+              reject(err);
+            });
+          });
+        })
+        .mockImplementationOnce(() => {
+          return Promise.resolve<GenerationResult>({
+            id: 'gen_preempt_02',
+            traceId: 'trc_preempt_02',
+            status: 'completed',
+            output: {
+              model: 'test-model',
+              content: 'Replacement reply',
+              finishReason: 'stop',
+            },
+          });
+        });
+
+      await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/sessions/${preemptSessionId}/generate?async=true`
+        )
+        .expect(202);
+      await started;
+
+      const secondRes = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${preemptSessionId}/generate`
+      );
+      expect(secondRes.status).toBe(200);
+      expect(secondRes.body.message.content).toBe('Replacement reply');
+    });
+  });
 });

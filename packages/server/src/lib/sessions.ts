@@ -63,6 +63,7 @@ const mapSession = (
     actorId: session.userActor?.publicId ?? null,
     tags: session.tags ?? undefined,
     autoGenerate: session.autoGenerate ?? false,
+    cancelPrevious: session.cancelPrevious ?? true,
     toolContext: session.toolContext ?? null,
     generatingAt: session.generatingAt ?? null,
     createdAt: session.createdAt,
@@ -76,6 +77,7 @@ export const createSession = async (args: {
   name?: string | null;
   actorId?: string | null;
   autoGenerate?: boolean;
+  cancelPrevious?: boolean;
   toolContext?: Record<string, string> | null;
 }) => {
   const sequelize = db.sequelize;
@@ -141,6 +143,7 @@ export const createSession = async (args: {
         status: 'open',
         name: args.name ?? null,
         autoGenerate: args.autoGenerate ?? false,
+        cancelPrevious: args.cancelPrevious ?? true,
         toolContext: args.toolContext ?? null,
       },
       { transaction: t }
@@ -256,6 +259,7 @@ export const updateSession = async (args: {
   name?: string | null;
   status?: string;
   autoGenerate?: boolean;
+  cancelPrevious?: boolean;
   toolContext?: Record<string, string> | null;
 }) => {
   const session = await db.Session.findOne({
@@ -276,6 +280,10 @@ export const updateSession = async (args: {
 
   if (args.autoGenerate !== undefined) {
     session.autoGenerate = args.autoGenerate;
+  }
+
+  if (args.cancelPrevious !== undefined) {
+    session.cancelPrevious = args.cancelPrevious;
   }
 
   if (args.toolContext !== undefined) {
@@ -491,7 +499,9 @@ export const generateSessionResponse = async (args: {
 
   // Cancel any in-flight generation for this session so the new one always
   // sees the full, up-to-date message history (cancel-previous strategy).
-  const hadInFlightGeneration = abortSessionGeneration(sessionKey);
+  // Only applies when the session has cancelPrevious enabled (default: true).
+  const hadInFlightGeneration =
+    session.cancelPrevious && abortSessionGeneration(sessionKey);
 
   // Concurrency guard: if no in-memory controller was found but generatingAt is
   // still set (e.g. after a process restart or an edge-case race), use the
