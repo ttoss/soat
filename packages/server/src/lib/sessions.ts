@@ -7,6 +7,34 @@ import {
 } from './conversations';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 
+/**
+ * Tracks in-flight AbortControllers keyed by `${agentId}#${sessionId}`.
+ * Used to cancel a running generation when a new one starts for the same session,
+ * ensuring the new generation always sees the full, up-to-date message history.
+ */
+const sessionAbortControllers = new Map<string, AbortController>();
+
+const getSessionAbortKey = (args: {
+  agentId: number;
+  sessionId: string;
+}): string => {
+  return `${args.agentId}#${args.sessionId}`;
+};
+
+/**
+ * Aborts and removes the in-flight AbortController for a session, if any.
+ * Safe to call when no controller is registered (no-op).
+ */
+const abortSessionGeneration = (key: string): boolean => {
+  const controller = sessionAbortControllers.get(key);
+  if (controller) {
+    controller.abort();
+    sessionAbortControllers.delete(key);
+    return true;
+  }
+  return false;
+};
+
 const sessionIncludes = () => {
   return [
     { model: db.Project, as: 'project' },
@@ -456,8 +484,19 @@ export const generateSessionResponse = async (args: {
     return 'session_not_found' as const;
   }
 
-  // Concurrency guard: prevent concurrent LLM calls on the same session
-  if (session.generatingAt) {
+  const sessionKey = getSessionAbortKey({
+    agentId: args.agentId,
+    sessionId: args.sessionId,
+  });
+
+  // Cancel any in-flight generation for this session so the new one always
+  // sees the full, up-to-date message history (cancel-previous strategy).
+  const hadInFlightGeneration = abortSessionGeneration(sessionKey);
+
+  // Concurrency guard: if no in-memory controller was found but generatingAt is
+  // still set (e.g. after a process restart or an edge-case race), use the
+  // timeout-based fallback to prevent duplicate LLM calls.
+  if (!hadInFlightGeneration && session.generatingAt) {
     const elapsed = Date.now() - new Date(session.generatingAt).getTime();
     if (elapsed < GENERATING_TIMEOUT_MS) {
       return 'already_generating' as const;
@@ -494,6 +533,11 @@ export const generateSessionResponse = async (args: {
     ...(args.toolContext ?? {}),
   };
 
+  // Create a new AbortController for this generation and register it so a
+  // subsequent call can cancel us if needed.
+  const controller = new AbortController();
+  sessionAbortControllers.set(sessionKey, controller);
+
   await session.update({ generatingAt: new Date() });
 
   resolveProjectPublicId({ projectId: session.projectId }).then(
@@ -518,9 +562,23 @@ export const generateSessionResponse = async (args: {
       actorId: agentActor.publicId,
       model: args.model,
       toolContext: mergedToolContext,
+      signal: controller.signal,
     });
+  } catch (err) {
+    // If this generation was cancelled by a newer concurrent request, return
+    // gracefully so the caller can discard the result without a 500 error.
+    if ((err as { name?: string }).name === 'AbortError') {
+      return 'already_generating' as const;
+    }
+    throw err;
   } finally {
-    await session.update({ generatingAt: null });
+    // Only clean up generatingAt if we are still the active generation for this
+    // session. If a newer generation replaced us in the map, leave the DB state
+    // intact so the replacement's finally block handles the cleanup.
+    if (sessionAbortControllers.get(sessionKey) === controller) {
+      sessionAbortControllers.delete(sessionKey);
+      await session.update({ generatingAt: null });
+    }
   }
 
   if (typeof result === 'string') {

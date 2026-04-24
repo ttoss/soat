@@ -796,4 +796,158 @@ describe('Sessions', () => {
       });
     });
   });
+
+  // ── Cancel-Previous: AbortController lifecycle ────────────────────────
+
+  describe('cancel-previous: AbortController lifecycle', () => {
+    let cancelSessionId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'cancel-previous-test' });
+      cancelSessionId = res.body.id;
+
+      // Seed an initial user message
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${cancelSessionId}/messages`)
+        .send({ message: 'Initial message' });
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    test('second generate request aborts the first in-flight generation', async () => {
+      let signalFirstStarted!: () => void;
+      const firstStarted = new Promise<void>((r) => {
+        signalFirstStarted = r;
+      });
+      let firstAborted = false;
+
+      // First call: blocks until its AbortSignal fires
+      jest
+        .spyOn(agentsModule, 'createGeneration')
+        .mockImplementationOnce((args) => {
+          return new Promise<GenerationResult>((_, reject) => {
+            signalFirstStarted();
+            args.signal?.addEventListener('abort', () => {
+              firstAborted = true;
+              const err = new Error('The operation was aborted');
+              err.name = 'AbortError';
+              reject(err);
+            });
+          });
+        })
+        // Second call: resolves immediately so the sync request completes
+        .mockImplementationOnce(() => {
+          return Promise.resolve<GenerationResult>({
+            id: 'gen_cancel_02',
+            traceId: 'trc_cancel_02',
+            status: 'completed',
+            output: {
+              model: 'test-model',
+              content: 'New reply after abort',
+              finishReason: 'stop',
+            },
+          });
+        });
+
+      // Trigger first generation as fire-and-forget (async=true)
+      await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/sessions/${cancelSessionId}/generate?async=true`
+        )
+        .expect(202);
+
+      // Wait for the first generation mock to be entered
+      await firstStarted;
+
+      // Trigger second generation (sync) — should abort the first
+      const secondResult = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${cancelSessionId}/generate`
+      );
+
+      expect(secondResult.status).toBe(200);
+      expect(secondResult.body.status).toBe('completed');
+      expect(secondResult.body.message.content).toBe('New reply after abort');
+
+      // The first generation should have been aborted via its signal
+      expect(firstAborted).toBe(true);
+
+      // generatingAt should be null after the second generation completes
+      const sessionRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/${cancelSessionId}`
+      );
+      expect(sessionRes.body.generatingAt).toBeNull();
+    });
+
+    test('controller is removed from map after successful generation', async () => {
+      const successSessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'success-cleanup-test' });
+      const successSessionId = successSessionRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${successSessionId}/messages`)
+        .send({ message: 'Test message' });
+
+      jest
+        .spyOn(agentsModule, 'createGeneration')
+        .mockImplementationOnce(() => {
+          return Promise.resolve<GenerationResult>({
+            id: 'gen_success_01',
+            traceId: 'trc_success_01',
+            status: 'completed',
+            output: {
+              model: 'test-model',
+              content: 'Successful reply',
+              finishReason: 'stop',
+            },
+          });
+        });
+
+      const result = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${successSessionId}/generate`
+      );
+
+      expect(result.status).toBe(200);
+
+      // After successful generation, generatingAt must be cleared
+      const sessionRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/${successSessionId}`
+      );
+      expect(sessionRes.body.generatingAt).toBeNull();
+    });
+
+    test('controller is removed from map after generation error', async () => {
+      const errorSessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'error-cleanup-test' });
+      const errorSessionId = errorSessionRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${errorSessionId}/messages`)
+        .send({ message: 'Test message' });
+
+      jest
+        .spyOn(agentsModule, 'createGeneration')
+        .mockImplementationOnce(() => {
+          return Promise.reject(new Error('Simulated LLM error'));
+        });
+
+      const result = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${errorSessionId}/generate`
+      );
+
+      // Unexpected errors propagate as 500
+      expect(result.status).toBe(500);
+
+      // After an error, the finally block must still clear generatingAt
+      const sessionRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/${errorSessionId}`
+      );
+      expect(sessionRes.body.generatingAt).toBeNull();
+    });
+  });
 });

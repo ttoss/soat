@@ -140,12 +140,29 @@ By default `POST .../generate` waits for the LLM to finish and returns the resul
 { "status": "accepted", "sessionId": "sess_..." }
 ```
 
-### Concurrency guard
+### Concurrency and cancel-previous
 
-Both sync and async calls go through the same concurrency guard: if `generatingAt` is set and less than 5 minutes have elapsed, generation is rejected as already in progress.
+When a new generation request arrives while generation is already in progress for the same session, the server **cancels the in-flight generation** and starts a fresh one. This guarantees that the new generation always sees the full, up-to-date message history:
 
-- **Sync**: returns `409 Conflict` to the caller.
-- **Async**: the duplicate generation is silently dropped (the 202 response is still returned, but no LLM call is made). Any user message that was already saved via `POST .../messages` remains in the conversation history — it will simply have no assistant reply until the caller issues a new `POST .../generate` after the current generation completes.
+```
+pos 0  user       "Hello"
+pos 1  user       "What is 2+2?"
+        ← generation starts here
+pos 2  user       "Are you sure?"   ← arrives mid-generation
+        ← first generation is aborted; new generation starts
+pos 3  assistant  "Yes, 2+2 is definitely 4."
+```
+
+The cancellation is implemented with an in-memory `AbortController` map keyed by `${agentId}#${sessionId}`. The `AbortSignal` is threaded into the AI SDK call (`generateText`/`streamText`), so the LLM stream is terminated as soon as the signal fires. Any partial response from the cancelled generation is discarded.
+
+> **Note:** The in-memory map is per-process. In a multi-replica deployment, a new request on a different replica cannot cancel a generation running on another replica. For multi-replica deployments, a distributed cancel signal (e.g., a Redis pub/sub channel) would be needed.
+
+#### Fallback timeout guard
+
+If no in-memory controller is found for a session but `generatingAt` is still set (e.g., after a process restart), the server falls back to a 5-minute timeout guard: if the elapsed time is less than 5 minutes, the new request is rejected with `409 Conflict`. This is a safety net against stale state; it does not affect the normal cancel-previous flow.
+
+- **Sync**: a rejected request due to the fallback guard returns `409 Conflict`.
+- **Async**: a rejected generation is silently dropped (the `202` response is still returned).
 
 > **Note:** The guard is best-effort. Two simultaneous async requests arriving within the same milliseconds — before the first one writes `generatingAt` to the database — may both trigger generation. Use synchronous calls if strict single-generation semantics are required.
 

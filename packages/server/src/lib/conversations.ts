@@ -587,6 +587,7 @@ export const generateConversationMessage = async (args: {
   actorId: string;
   model?: string;
   toolContext?: Record<string, string>;
+  signal?: AbortSignal;
 }): Promise<GenerateConversationMessageResult> => {
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.conversationId },
@@ -711,6 +712,7 @@ export const generateConversationMessage = async (args: {
       agentId: agent.publicId,
       messages: messagesForModel,
       toolContext: args.toolContext,
+      signal: args.signal,
     });
 
     if (result === 'not_found') {
