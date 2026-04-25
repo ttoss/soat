@@ -107,6 +107,86 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
   }
 };
 
+const createJwtResolveProjectIds = (args: {
+  userId: number;
+  role: 'admin' | 'user';
+  db: Context['db'];
+  jwtIsAllowed: ReturnType<typeof createJwtIsAllowed>;
+}) => {
+  return async ({
+    projectPublicId,
+    action,
+  }: {
+    projectPublicId?: string;
+    action: string;
+  }) => {
+    if (projectPublicId) {
+      const allowed = await args.jwtIsAllowed({ projectPublicId, action });
+      if (!allowed) return null;
+      const proj = await args.db.Project.findOne({
+        where: { publicId: projectPublicId },
+      });
+      if (!proj) return null;
+      return [proj.id as number];
+    }
+    if (args.role === 'admin') return undefined;
+    const memberships = await args.db.UserProject.findAll({
+      where: { userId: args.userId },
+      include: [{ model: args.db.Project }],
+    });
+    const accessible: number[] = [];
+    for (const membership of memberships) {
+      const proj = (
+        membership as unknown as {
+          project: InstanceType<(typeof args.db)['Project']>;
+        }
+      ).project;
+      if (!proj) continue;
+      const allowed = await args.jwtIsAllowed({
+        projectPublicId: proj.publicId as string,
+        action,
+      });
+      if (allowed) accessible.push(proj.id as number);
+    }
+    return accessible;
+  };
+};
+
+const createJwtGetPolicies = (args: {
+  userId: number;
+  role: 'admin' | 'user';
+  db: Context['db'];
+}) => {
+  return async (reqProjectPublicId: string): Promise<PolicyDocument[]> => {
+    if (args.role === 'admin') {
+      // Admin has unrestricted access — return a single allow-all policy
+      return [
+        {
+          statement: [{ effect: 'Allow', action: ['*'], resource: ['*'] }],
+        },
+      ];
+    }
+    const project = await args.db.Project.findOne({
+      where: { publicId: reqProjectPublicId },
+    });
+    if (!project) return [];
+    const membership = await args.db.UserProject.findOne({
+      where: { userId: args.userId, projectId: project.id as number },
+    });
+    if (!membership) return [];
+    const policyIds = membership.policyIds as number[];
+    if (policyIds.length === 0) return [];
+    const policies = await args.db.ProjectPolicy.findAll({
+      where: { id: policyIds },
+    });
+    return policies.map(
+      (p: InstanceType<(typeof args.db)['ProjectPolicy']>) => {
+        return p.document as PolicyDocument;
+      }
+    );
+  };
+};
+
 const resolveJwt = async (ctx: Context, token: string) => {
   let payload: { publicId: string; role: string };
 
@@ -126,7 +206,6 @@ const resolveJwt = async (ctx: Context, token: string) => {
 
   const userId = user.id as number;
   const role = user.role as 'admin' | 'user';
-
   const jwtIsAllowed = createJwtIsAllowed({ role, userId, db: ctx.db });
 
   ctx.authUser = {
@@ -135,65 +214,13 @@ const resolveJwt = async (ctx: Context, token: string) => {
     username: user.username as string,
     role,
     isAllowed: jwtIsAllowed,
-    resolveProjectIds: async ({ projectPublicId, action }) => {
-      if (projectPublicId) {
-        const allowed = await jwtIsAllowed({ projectPublicId, action });
-        if (!allowed) return null;
-        const proj = await ctx.db.Project.findOne({
-          where: { publicId: projectPublicId },
-        });
-        if (!proj) return null;
-        return [proj.id as number];
-      }
-      if (role === 'admin') return undefined;
-      const memberships = await ctx.db.UserProject.findAll({
-        where: { userId },
-        include: [{ model: ctx.db.Project }],
-      });
-      const accessible: number[] = [];
-      for (const membership of memberships) {
-        const proj = (
-          membership as unknown as {
-            project: InstanceType<(typeof ctx.db)['Project']>;
-          }
-        ).project;
-        if (!proj) continue;
-        const allowed = await jwtIsAllowed({
-          projectPublicId: proj.publicId as string,
-          action,
-        });
-        if (allowed) accessible.push(proj.id as number);
-      }
-      return accessible;
-    },
-    getPolicies: async (
-      reqProjectPublicId: string
-    ): Promise<PolicyDocument[]> => {
-      if (role === 'admin') {
-        // Admin has unrestricted access — return a single allow-all policy
-        return [
-          {
-            statement: [{ effect: 'Allow', action: ['*'], resource: ['*'] }],
-          },
-        ];
-      }
-      const project = await ctx.db.Project.findOne({
-        where: { publicId: reqProjectPublicId },
-      });
-      if (!project) return [];
-      const membership = await ctx.db.UserProject.findOne({
-        where: { userId, projectId: project.id as number },
-      });
-      if (!membership) return [];
-      const policyIds = membership.policyIds as number[];
-      if (policyIds.length === 0) return [];
-      const policies = await ctx.db.ProjectPolicy.findAll({
-        where: { id: policyIds },
-      });
-      return policies.map((p) => {
-        return p.document as PolicyDocument;
-      });
-    },
+    resolveProjectIds: createJwtResolveProjectIds({
+      userId,
+      role,
+      db: ctx.db,
+      jwtIsAllowed,
+    }),
+    getPolicies: createJwtGetPolicies({ userId, role, db: ctx.db }),
   };
 };
 

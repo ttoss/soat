@@ -27,9 +27,59 @@ const getStorageDir = () => {
   return dir;
 };
 
+/**
+ * Normalize a file path to a consistent format
+ */
+const normalizePath = (filePath: string): string => {
+  if (!filePath) return '/';
+  let normalized = filePath.trim();
+  if (!normalized.startsWith('/')) {
+    normalized = '/' + normalized;
+  }
+  // Collapse multiple slashes
+  normalized = normalized.replace(/\/+/g, '/');
+  // Remove trailing slash (except for root)
+  if (normalized !== '/' && normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized;
+};
+
 type LoadedDoc = InstanceType<(typeof db)['Document']> & {
   file?: InstanceType<(typeof db)['File']> & {
     project?: InstanceType<(typeof db)['Project']>;
+  };
+};
+
+/**
+ * Build the Sequelize options for document queries with policy where clause
+ */
+const buildDocumentQueryOptions = (args: {
+  projectIds?: number[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  policyWhere?: Record<string, any>;
+  limit: number;
+  offset: number;
+}) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const topLevelWhere: Record<string, any> = {};
+  if (args.policyWhere && Object.keys(args.policyWhere).length > 0) {
+    Object.assign(topLevelWhere, args.policyWhere);
+  }
+
+  const fileWhere =
+    args.projectIds !== undefined ? { projectId: args.projectIds } : undefined;
+
+  const needsSubQueryFalse =
+    args.policyWhere !== undefined &&
+    Object.keys(args.policyWhere).some((k) => {
+      return k.startsWith('$');
+    });
+
+  return {
+    topLevelWhere,
+    fileWhere,
+    subQuery: needsSubQueryFalse ? false : undefined,
   };
 };
 
@@ -65,19 +115,12 @@ export const listDocuments = async (args: {
     return { data: [], total: 0, limit, offset };
   }
 
-  const fileWhere =
-    args.projectIds !== undefined ? { projectId: args.projectIds } : undefined;
-
-  // policyWhere may contain $file.path$ association references — use subQuery: false
-  const needsSubQueryFalse =
-    args.policyWhere !== undefined &&
-    Object.keys(args.policyWhere).some((k) => k.startsWith('$'));
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const topLevelWhere: Record<string, any> = {};
-  if (args.policyWhere && Object.keys(args.policyWhere).length > 0) {
-    Object.assign(topLevelWhere, args.policyWhere);
-  }
+  const { topLevelWhere, fileWhere, subQuery } = buildDocumentQueryOptions({
+    projectIds: args.projectIds,
+    policyWhere: args.policyWhere,
+    limit,
+    offset,
+  });
 
   const { count, rows } = await db.Document.findAndCountAll({
     distinct: true,
@@ -90,16 +133,21 @@ export const listDocuments = async (args: {
         include: [{ model: db.Project, as: 'project' }],
       },
     ],
-    subQuery: needsSubQueryFalse ? false : undefined,
+    subQuery,
     limit,
     offset,
   });
   return { data: rows.map(mapDocument), total: count, limit, offset };
 };
 
-export const getDocument = async (args: { id: string }) => {
-  const doc = await db.Document.findOne({
-    where: { publicId: args.id },
+/**
+ * Fetch a document by public ID with full file and project context
+ */
+const fetchDocumentWithContext = async (
+  publicId: string
+): Promise<LoadedDoc | null> => {
+  return db.Document.findOne({
+    where: { publicId },
     include: [
       {
         model: db.File,
@@ -108,6 +156,28 @@ export const getDocument = async (args: { id: string }) => {
       },
     ],
   });
+};
+
+/**
+ * Fetch a document by ID with full file and project context
+ */
+const fetchDocumentByIdWithContext = async (
+  id: number
+): Promise<LoadedDoc | null> => {
+  return db.Document.findOne({
+    where: { id },
+    include: [
+      {
+        model: db.File,
+        as: 'file',
+        include: [{ model: db.Project, as: 'project' }],
+      },
+    ],
+  });
+};
+
+export const getDocument = async (args: { id: string }) => {
+  const doc = await fetchDocumentWithContext(args.id);
 
   if (!doc) {
     return null;
@@ -121,6 +191,35 @@ export const getDocument = async (args: { id: string }) => {
   }
 
   return { ...mapped, content: null };
+};
+
+/**
+ * Update document content and file size/embedding
+ */
+const updateDocumentContent = async (args: {
+  doc: LoadedDoc;
+  content: string;
+}) => {
+  if (args.doc.file?.storagePath) {
+    fs.writeFileSync(args.doc.file.storagePath, args.content, 'utf-8');
+    await args.doc.file.update({
+      size: Buffer.byteLength(args.content, 'utf-8'),
+    });
+    const embedding = await getEmbedding({ text: args.content });
+    await args.doc.update({ embedding });
+  }
+};
+
+/**
+ * Update document metadata, title, and tags
+ */
+const updateDocumentMetadata = async (args: {
+  doc: LoadedDoc;
+  updates: Record<string, unknown>;
+}) => {
+  if (Object.keys(args.updates).length > 0) {
+    await args.doc.update(args.updates);
+  }
 };
 
 export const createDocument = async (args: {
@@ -163,16 +262,7 @@ export const createDocument = async (args: {
     tags: args.tags ?? null,
   });
 
-  const created = await db.Document.findOne({
-    where: { id: doc.id },
-    include: [
-      {
-        model: db.File,
-        as: 'file',
-        include: [{ model: db.Project, as: 'project' }],
-      },
-    ],
-  });
+  const created = await fetchDocumentByIdWithContext(doc.id as number);
 
   const mapped = mapDocument(created!);
 
@@ -186,16 +276,7 @@ export const createDocument = async (args: {
 };
 
 export const deleteDocument = async (args: { id: string }) => {
-  const doc = await db.Document.findOne({
-    where: { publicId: args.id },
-    include: [
-      {
-        model: db.File,
-        as: 'file',
-        include: [{ model: db.Project, as: 'project' }],
-      },
-    ],
-  });
+  const doc = await fetchDocumentWithContext(args.id);
 
   if (!doc) {
     return null;
@@ -233,28 +314,14 @@ export const updateDocument = async (args: {
   metadata?: Record<string, unknown>;
   tags?: Record<string, string>;
 }) => {
-  const doc = await db.Document.findOne({
-    where: { publicId: args.id },
-    include: [
-      {
-        model: db.File,
-        as: 'file',
-        include: [{ model: db.Project, as: 'project' }],
-      },
-    ],
-  });
+  const doc = await fetchDocumentWithContext(args.id);
 
   if (!doc) {
     return null;
   }
 
-  if (args.content !== undefined && doc.file?.storagePath) {
-    fs.writeFileSync(doc.file.storagePath, args.content, 'utf-8');
-    await doc.file.update({
-      size: Buffer.byteLength(args.content, 'utf-8'),
-    });
-    const embedding = await getEmbedding({ text: args.content });
-    await doc.update({ embedding });
+  if (args.content !== undefined) {
+    await updateDocumentContent({ doc, content: args.content });
   }
 
   if (args.path !== undefined && doc.file) {
@@ -267,20 +334,10 @@ export const updateDocument = async (args: {
   if (args.metadata !== undefined)
     updates.metadata = JSON.stringify(args.metadata);
   if (args.tags !== undefined) updates.tags = args.tags;
-  if (Object.keys(updates).length > 0) {
-    await doc.update(updates);
-  }
 
-  const refreshed = await db.Document.findOne({
-    where: { id: doc.id },
-    include: [
-      {
-        model: db.File,
-        as: 'file',
-        include: [{ model: db.Project, as: 'project' }],
-      },
-    ],
-  });
+  await updateDocumentMetadata({ doc, updates });
+
+  const refreshed = await fetchDocumentByIdWithContext(doc.id as number);
 
   const mapped = mapDocument(refreshed!);
 
@@ -291,6 +348,40 @@ export const updateDocument = async (args: {
   });
 
   return mapped;
+};
+
+/**
+ * Build Sequelize query options for document search
+ */
+const buildSearchQueryOptions = (args: {
+  projectIds?: number[];
+  tags?: Record<string, string>;
+}) => {
+  const fileWhere =
+    args.projectIds !== undefined ? { projectId: args.projectIds } : undefined;
+
+  const docWhere: Record<string, unknown> =
+    args.tags && Object.keys(args.tags).length > 0
+      ? { tags: { [Op.contains]: args.tags } }
+      : {};
+
+  return { fileWhere, docWhere };
+};
+
+/**
+ * Map database document to result with score
+ */
+const mapSearchResult = (doc: InstanceType<(typeof db)['Document']>) => {
+  const distance = parseFloat((doc.getDataValue('distance') as string) ?? '1');
+  const score = 1 - distance;
+  const mapped = mapDocument(doc);
+
+  let content: string | null = null;
+  if (doc.file?.storagePath && fs.existsSync(doc.file.storagePath)) {
+    content = fs.readFileSync(doc.file.storagePath, 'utf-8');
+  }
+
+  return { ...mapped, content, score };
 };
 
 export const searchDocuments = async (args: {
@@ -308,13 +399,10 @@ export const searchDocuments = async (args: {
   const limit = args.limit ?? 10;
   const embeddingLiteral = `[${embedding.join(',')}]`;
 
-  const fileWhere =
-    args.projectIds !== undefined ? { projectId: args.projectIds } : undefined;
-
-  const docWhere: Record<string, unknown> =
-    args.tags && Object.keys(args.tags).length > 0
-      ? { tags: { [Op.contains]: args.tags } }
-      : {};
+  const { fileWhere, docWhere } = buildSearchQueryOptions({
+    projectIds: args.projectIds,
+    tags: args.tags,
+  });
 
   const documents = await db.Document.findAll({
     where: docWhere,
@@ -342,24 +430,10 @@ export const searchDocuments = async (args: {
 
   return documents
     .map((doc: InstanceType<(typeof db)['Document']>) => {
-      const distance = parseFloat(
-        (doc.getDataValue('distance') as string) ?? '1'
-      );
-      const score = 1 - distance;
-      const mapped = mapDocument(doc);
-
-      let content: string | null = null;
-      if (doc.file?.storagePath && fs.existsSync(doc.file.storagePath)) {
-        content = fs.readFileSync(doc.file.storagePath, 'utf-8');
-      }
-
-      return { ...mapped, content, score };
+      return mapSearchResult(doc);
     })
     .filter((doc: { score: number }) => {
-      if (args.threshold !== undefined) {
-        return doc.score >= args.threshold;
-      }
-      return true;
+      return args.threshold === undefined || doc.score >= args.threshold;
     });
 };
 
@@ -373,41 +447,16 @@ export const getDocumentTags = async (args: { id: string }) => {
   return doc.tags ?? {};
 };
 
-export const updateDocumentTags = async (args: {
-  id: string;
-  tags: Record<string, string>;
-  merge?: boolean;
+/**
+ * Merge or replace document tags and emit lifecycle event
+ */
+const updateAndEmitTags = async (args: {
+  doc: LoadedDoc;
+  newTags: Record<string, string>;
 }) => {
-  const doc = await db.Document.findOne({
-    where: { publicId: args.id },
-    include: [
-      {
-        model: db.File,
-        as: 'file',
-        include: [{ model: db.Project, as: 'project' }],
-      },
-    ],
-  });
+  await args.doc.update({ tags: args.newTags });
 
-  if (!doc) {
-    return null;
-  }
-
-  const newTags = args.merge
-    ? { ...(doc.tags ?? {}), ...args.tags }
-    : args.tags;
-  await doc.update({ tags: newTags });
-
-  const refreshed = await db.Document.findOne({
-    where: { id: doc.id },
-    include: [
-      {
-        model: db.File,
-        as: 'file',
-        include: [{ model: db.Project, as: 'project' }],
-      },
-    ],
-  });
+  const refreshed = await fetchDocumentByIdWithContext(args.doc.id as number);
 
   const tagsMapped = mapDocument(refreshed!);
 
@@ -418,4 +467,22 @@ export const updateDocumentTags = async (args: {
   });
 
   return tagsMapped;
+};
+
+export const updateDocumentTags = async (args: {
+  id: string;
+  tags: Record<string, string>;
+  merge?: boolean;
+}) => {
+  const doc = await fetchDocumentWithContext(args.id);
+
+  if (!doc) {
+    return null;
+  }
+
+  const newTags = args.merge
+    ? { ...(doc.tags ?? {}), ...args.tags }
+    : args.tags;
+
+  return updateAndEmitTags({ doc, newTags });
 };
