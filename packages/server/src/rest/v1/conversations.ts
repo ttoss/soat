@@ -136,8 +136,8 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
 
   let resolvedProjectPublicId = body.projectId;
   if (!resolvedProjectPublicId) {
-    if (ctx.authUser.projectKeyProjectId) {
-      resolvedProjectPublicId = ctx.authUser.projectKeyProjectId;
+    if (ctx.authUser.apiKeyProjectId) {
+      resolvedProjectPublicId = ctx.authUser.apiKeyProjectId;
     } else {
       ctx.status = 400;
       ctx.body = { error: 'projectId is required' };

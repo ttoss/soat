@@ -8,8 +8,8 @@ import {
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
+import { Policy } from './Policy';
 import { Project } from './Project';
-import { ProjectPolicy } from './ProjectPolicy';
 
 @Table({
   tableName: 'webhooks',
@@ -44,18 +44,18 @@ export class Webhook extends Model {
   declare project: Project;
 
   @ForeignKey(() => {
-    return ProjectPolicy;
+    return Policy;
   })
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare policyId: number | null;
 
   @BelongsTo(
     () => {
-      return ProjectPolicy;
+      return Policy;
     },
     { onDelete: 'SET NULL' }
   )
-  declare policy: ProjectPolicy | null;
+  declare policy: Policy | null;
 
   @Column({
     type: DataType.STRING,

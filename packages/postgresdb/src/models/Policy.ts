@@ -3,16 +3,16 @@ import { Column, DataType, Model, Table } from '@ttoss/postgresdb';
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 
 @Table({
-  tableName: 'users',
+  tableName: 'policies',
   hooks: {
-    beforeValidate: (instance: User) => {
+    beforeValidate: (instance: Policy) => {
       if (!instance.publicId) {
-        instance.publicId = generatePublicId(PUBLIC_ID_PREFIXES.user);
+        instance.publicId = generatePublicId(PUBLIC_ID_PREFIXES.policy);
       }
     },
   },
 })
-export class User extends Model {
+export class Policy extends Model {
   @Column({
     type: DataType.STRING(32),
     unique: true,
@@ -22,30 +22,21 @@ export class User extends Model {
 
   @Column({
     type: DataType.STRING,
-    unique: true,
-    allowNull: false,
+    allowNull: true,
   })
-  declare username: string;
+  declare name: string | null;
 
   @Column({
-    type: DataType.STRING,
-    allowNull: false,
+    type: DataType.TEXT,
+    allowNull: true,
   })
-  declare passwordHash: string;
+  declare description: string | null;
 
   @Column({
-    type: DataType.ENUM('admin', 'user'),
+    type: DataType.JSONB,
     allowNull: false,
-    defaultValue: 'user',
   })
-  declare role: 'admin' | 'user';
-
-  @Column({
-    type: DataType.ARRAY(DataType.INTEGER),
-    allowNull: false,
-    defaultValue: [],
-  })
-  declare policyIds: number[];
+  declare document: object;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

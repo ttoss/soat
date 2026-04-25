@@ -8,14 +8,14 @@ The IAM (Identity and Access Management) module provides authentication, identit
 
 ## Overview
 
-SOAT uses a policy-based access control model. Every API request is authenticated via JWT (for users) or project key (for project-scoped clients). Authorization is evaluated in two layers: first the caller's **project membership** is verified, then the attached **policy documents** are run through the policy engine.
+SOAT uses a policy-based access control model. Every API request is authenticated via JWT (for users) or an API key. Authorization is evaluated entirely through the attached **policy documents** — there is no separate project membership gate.
 
 The IAM module covers:
 
 - **Users** — identity management, roles, and JWT authentication (see [Users](#users) below)
-- **Policy Documents** — structured permission rules attached to memberships and project keys
+- **Policy Documents** — structured permission rules attached to users and API keys (see [Policies](./policies.md))
 - **Policy Engine** — evaluation logic that resolves allow/deny decisions at request time
-- **Authorization Model** — the two-layer model that combines project membership with policy evaluation (see [Authorization Model](#authorization-model) below)
+- **Authorization Model** — how policies are resolved for each caller type (see [Authorization Model](#authorization-model) below)
 
 ## Authentication
 
@@ -23,11 +23,11 @@ SOAT supports two authentication methods. Both use the `Authorization: Bearer <t
 
 ### JWT (Users)
 
-Users authenticate via `POST /api/v1/users/login` with username and password. The server returns a signed JWT containing the user's public ID and role. Admin users bypass policy evaluation and have unrestricted access. Regular users are authorized through their project membership policies.
+Users authenticate via `POST /api/v1/users/login` with username and password. The server returns a signed JWT containing the user's public ID and role. Admin users bypass policy evaluation and have unrestricted access. Regular users are authorized through the [policies](./policies.md) attached to their account.
 
-### Project Keys
+### API Keys
 
-Project keys are prefixed with `pk_` and scoped to a single project. When an project key is used, authorization applies **intersection semantics**: both the owning user's membership policies _and_ the key's own attached policy must independently allow the action. This ensures project keys can never exceed the permissions of the user who created them.
+API keys are prefixed with `sk_` and identified by a `key_`-prefixed public ID. They can optionally be scoped to a single project and/or have their own policy list. When an API key has policies attached, authorization applies **intersection semantics**: both the owning user's policies _and_ the key's own policies must independently allow the action. This ensures API keys can never exceed the permissions of the user who created them. See [API Keys](./api-keys.md) for details.
 
 ## Policy Documents
 
@@ -59,7 +59,7 @@ A policy document is a JSON object containing one or more statements. Each state
 | `resource`  | `string[]` | No       | SRNs this statement applies to (default: `["*"]`)       |
 | `condition` | `object`   | No       | Conditions that must be true for the statement to apply |
 
-Policy documents are created and managed under a project via the project policy endpoints (see [Projects](projects.md)).
+Policy documents are created and managed globally via the [Policies](./policies.md) module and attached to users or API keys.
 
 ## SOAT Resource Names (SRNs)
 
@@ -81,23 +81,16 @@ Examples:
 
 ### Project Segment and Policy Scoping
 
-Because policies always belong to a single project (see [Projects — Policy Documents](projects.md#policy-documents)), and are only evaluated against resources within that same project (see [Authorization Model](#authorization-model)), the `<project_id>` segment in an SRN is **automatically constrained** by the policy's own project scope.
+Because policies are **global** (not scoped to any project), the `<project_id>` segment in an SRN is the primary mechanism for restricting access to specific projects.
 
-In practice this means:
+In practice:
 
-- `resource: ["*"]` — matches all resources in the policy's project. This is the **recommended** form for broad access.
-- `resource: ["soat:proj_ABC:document:*"]` — valid only if this policy belongs to `proj_ABC`. If it belongs to a different project, this pattern will never match any resource (it becomes a dead statement).
-
-You do **not** need to specify the project ID in resource patterns to limit cross-project access — that restriction is enforced by project membership at Layer 1 of the [Authorization Model](#authorization-model). The project segment exists for namespacing and forward compatibility, not for access control between projects.
+- `resource: ["*"]` — matches all resources in **all projects**. Use only for broad access.
+- `resource: ["soat:proj_ABC:*:*"]` — restricts access to resources in `proj_ABC` only.
+- `resource: ["soat:*:document:*"]` — matches all documents across all projects.
 
 :::tip
-When writing policies, prefer `resource: ["*"]` for broad access within the project. Use specific SRNs only when you need to restrict access to individual resources:
-
-```json
-{ "resource": ["soat:proj_ABC:document:doc_XYZ"] }
-```
-
-There is no need to specify the project ID to prevent cross-project access — project membership already enforces that.
+To give a user or API key access to a specific project without scoping the key via `project_id`, create a policy with `resource: ["soat:proj_ABC:*:*"]`. This achieves project-level scoping entirely through the policy engine, without creating a dedicated API key per project.
 :::
 
 ### Resource Types
@@ -110,7 +103,7 @@ There is no need to specify the project ID to prevent cross-project access — p
 | `conversation` | `conv_`          | Conversations |
 | `project`      | `proj_`          | Projects      |
 | `policy`       | `pol_`           | Policies      |
-| `api-key`      | `key_`           | project keys  |
+| `api-key`      | `key_`           | API Keys      |
 
 ## Actions
 
@@ -121,7 +114,7 @@ Actions follow the `module:Operation` pattern. Each module defines its own set o
 - [Documents Permissions](documents.md#permissions)
 - [Files Permissions](files.md#permissions)
 - [Projects Permissions](projects.md#permissions)
-- [Project Keys Permissions](projects.md#project-key-permissions)
+- [API Keys Permissions](api-keys.md#permissions)
 - [Users Permissions](#user-permissions)
 
 ### Wildcards
@@ -163,39 +156,32 @@ Conditions add attribute-based constraints to statements. A condition block maps
 
 ## Authorization Model
 
-Authorization in SOAT is a **two-layer** process. Both layers must pass for a request to be allowed.
+Authorization in SOAT is **policy-only** — there is no separate project membership gate. All access decisions are evaluated through the policy engine against the requested action and the target resource SRN.
 
-### Layer 1 — Project Membership
+### Policy Resolution by Caller Type
 
-Before any policy is evaluated, the server checks whether the caller has access to the target project:
+| Caller type                   | Policies used                                                               |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| **Admin (JWT)**               | Bypassed — admins have unrestricted access to all resources                 |
+| **Regular user (JWT)**        | All policies attached to the user (via `User.policyIds`)                    |
+| **API key (no policies)**     | Inherits the owning user's policies                                         |
+| **API key (with policies)**   | Intersection of user policies and key policies — both must allow the action |
+| **API key (with project_id)** | Same as above, but hard-locked to that project regardless of policy         |
 
-| Caller type            | Membership check                                                         |
-| ---------------------- | ------------------------------------------------------------------------ |
-| **Admin (JWT)**        | Bypassed — admins have unrestricted access to all projects               |
-| **Regular user (JWT)** | Must be a member of the target project (`UserProject` record must exist) |
-| **Project key**        | Locked to the single project the key was created for                     |
+### Why Intersection Semantics Matter
 
-If the membership check fails, the request is denied with `403 Forbidden` — policy evaluation never runs.
-
-### Layer 2 — Policy Evaluation
-
-Only after membership is confirmed does the server load the caller's policies and evaluate them against the requested action and resource SRN.
-
-### Why This Matters
-
-A policy with `resource: ["*"]` grants access to **all resources within the projects the caller is a member of** — not all resources globally. The wildcard matches any SRN pattern, but the membership check restricts which projects the caller can reach in the first place.
-
-For example, if Alice is a member of `proj_A` with a policy containing `resource: ["*"]`, she can access all resources in `proj_A`. She **cannot** access resources in `proj_B` unless she is separately added as a member of `proj_B` with its own policies.
+When an API key has policies attached, the key can **never exceed the permissions of the user who owns it**. Even if the key's policy is very permissive, the user's policies still apply as a ceiling. This allows safely delegating a scoped subset of permissions without risk of escalation.
 
 ### Authorization by Caller Type
 
-| Scenario                                                                                    | Result  | Reason                                      |
-| ------------------------------------------------------------------------------------------- | ------- | ------------------------------------------- |
-| Admin accessing any resource                                                                | Allowed | Admins bypass both layers                   |
-| User member of proj_A with `resource: ["*"]`, accessing proj_A                              | Allowed | Membership passes, policy matches           |
-| User member of proj_A with `resource: ["*"]`, accessing proj_B                              | Denied  | Not a member of proj_B — blocked at Layer 1 |
-| Project key for proj_A, accessing proj_B                                                    | Denied  | Key is locked to proj_A                     |
-| Project key for proj_A, action allowed by key policy but denied by user's membership policy | Denied  | Intersection semantics — both must allow    |
+| Scenario                                                            | Result  | Reason                                   |
+| ------------------------------------------------------------------- | ------- | ---------------------------------------- |
+| Admin accessing any resource                                        | Allowed | Admins bypass policy evaluation          |
+| User with `resource: ["soat:proj_A:*:*"]` accessing proj_A          | Allowed | Policy covers the SRN                    |
+| User with `resource: ["soat:proj_A:*:*"]` accessing proj_B          | Denied  | Policy does not cover proj_B SRN         |
+| API key scoped to proj_A, accessing proj_B                          | Denied  | Key is hard-locked to proj_A             |
+| API key with key policy allowed, but user policy denied             | Denied  | Intersection semantics — both must allow |
+| API key without policies, accessing resource allowed by user policy | Allowed | Key inherits user permissions            |
 
 ## Policy Evaluation
 
@@ -245,13 +231,12 @@ GET    /api/v1/<resource>/:id/tags    Get tags
 
 ## Examples
 
-### Full Admin Policy
+### Full Access Policy
 
-Equivalent to unrestricted access **within the project this policy is attached to**. The `resource: ["*"]` wildcard matches all SRNs, but the caller can only reach projects they are a member of (see [Authorization Model](#authorization-model)).
+Equivalent to unrestricted access across all projects. The `resource: ["*"]` wildcard matches all SRNs globally.
 
 ```json
 {
-  "version": "2025-01-01",
   "statement": [
     {
       "effect": "Allow",
@@ -262,9 +247,31 @@ Equivalent to unrestricted access **within the project this policy is attached t
 }
 ```
 
-### Read-only Across All Modules
+### Project-scoped Read-only Policy
 
-Grants read access to documents, files, actors, and conversations **within the project**. Attach the same policy to multiple project memberships to grant the same permissions across projects.
+Grants read access to a specific project's resources. Attach this to a user or API key.
+
+```json
+{
+  "statement": [
+    {
+      "effect": "Allow",
+      "action": [
+        "projects:GetProject",
+        "documents:GetDocument",
+        "documents:ListDocuments",
+        "files:GetFile",
+        "files:ListFiles"
+      ],
+      "resource": ["soat:proj_ABC:*:*"]
+    }
+  ]
+}
+```
+
+### Read-only Across All Modules (Global)
+
+Grants read access to documents, files, actors, and conversations across all projects. Attach to users who need broad read access.
 
 ```json
 {

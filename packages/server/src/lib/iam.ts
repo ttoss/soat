@@ -289,3 +289,38 @@ export const evaluatePoliciesMultiResource = (args: {
 
   return allowed;
 };
+
+/**
+ * Extracts distinct project publicIds from the Allow statements of a set of
+ * policies by parsing SRN resource patterns.
+ *
+ * Returns `undefined` when any statement grants access to all projects
+ * (wildcard `*` or `soat:*:...`), meaning the caller should treat the result
+ * as "all projects".
+ *
+ * Returns a (possibly empty) string[] of project publicIds when all patterns
+ * are scoped to specific projects.
+ */
+export const extractProjectIdsFromPolicies = (
+  policies: PolicyDocument[]
+): string[] | undefined => {
+  const projectIds = new Set<string>();
+
+  for (const policy of policies) {
+    for (const statement of policy.statement) {
+      if (statement.effect !== 'Allow') continue;
+      const resources = statement.resource ?? ['*'];
+      for (const resource of resources) {
+        if (resource === '*') return undefined;
+        if (!resource.startsWith('soat:')) continue;
+        const parts = resource.split(':');
+        if (parts.length < 4) continue;
+        const projectId = parts[1];
+        if (projectId === '*') return undefined;
+        projectIds.add(projectId);
+      }
+    }
+  }
+
+  return Array.from(projectIds);
+};

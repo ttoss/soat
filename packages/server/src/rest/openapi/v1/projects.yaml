@@ -63,161 +63,86 @@ paths:
           description: Forbidden (non-admin user)
         '500':
           description: Internal server error
-  /projects/{projectId}/policies:
+  /projects/{projectId}:
     get:
       tags:
         - Projects
-      summary: List project policies
-      description: Returns a list of policies for a project
-      operationId: listProjectPolicies
+      summary: Get a project
+      description: Returns details of a specific project.
+      operationId: getProject
+      security:
+        - bearerAuth: []
       parameters:
         - name: projectId
           in: path
           required: true
-          description: Project ID
+          description: Project public ID (proj_ prefix)
           schema:
             type: string
             example: proj_V1StGXR8Z5jdHi6B
       responses:
         '200':
-          description: List of policies
+          description: Project details
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id:
-                      type: string
-                    name:
-                      type: string
-                    description:
-                      type: string
+                $ref: '#/components/schemas/ProjectRecord'
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '404':
           description: Project not found
-    post:
+    delete:
       tags:
         - Projects
-      summary: Create a project policy
-      description: Creates a new policy for a project. Requires admin role.
-      operationId: createProjectPolicy
+      summary: Delete a project
+      description: Deletes a project. Requires admin role.
+      operationId: deleteProject
+      security:
+        - bearerAuth: []
       parameters:
         - name: projectId
           in: path
           required: true
-          description: Project ID
+          description: Project public ID (proj_ prefix)
           schema:
             type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - name
-                - permissions
-              properties:
-                name:
-                  type: string
-                  example: Editor
-                description:
-                  type: string
-                permissions:
-                  type: array
-                  items:
-                    type: string
-                  example: ['files:ListFiles', 'files:CreateFile']
-                not_permissions:
-                  type: array
-                  items:
-                    type: string
+            example: proj_V1StGXR8Z5jdHi6B
       responses:
-        '201':
-          description: Policy created successfully
-        '400':
-          description: Bad request
+        '204':
+          description: Project deleted successfully
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden
+          description: Forbidden (non-admin user)
         '404':
           description: Project not found
-  /projects/{projectId}/policies/{policyId}:
-    get:
-      tags:
-        - Projects
-      summary: Get a project policy
-      description: Returns a specific policy
-      operationId: getProjectPolicy
-      parameters:
-        - name: projectId
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: policyId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Policy details
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: Policy not found
-    put:
-      tags:
-        - Projects
-      summary: Update a project policy
-      description: Updates an existing policy. Requires admin role.
-      operationId: updateProjectPolicy
-      parameters:
-        - name: projectId
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: policyId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                description:
-                  type: string
-                document:
-                  type: object
-      responses:
-        '200':
-          description: Policy updated successfully
-        '400':
-          description: Bad request
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: Policy not found
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
+    ProjectRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public project ID (proj_ prefix)
+          example: proj_V1StGXR8Z5jdHi6B
+        name:
+          type: string
+          example: My Project
+        created_at:
+          type: string
+          format: date-time
+          example: '2024-01-01T00:00:00.000Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2024-01-01T00:00:00.000Z'
     ErrorResponse:
       type: object
       properties:

@@ -1,10 +1,12 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import {
+  attachUserPolicies,
   createFirstAdminUser,
   createUser,
   deleteUser,
   getUser,
+  getUserPolicies,
   listUsers,
   loginUser,
 } from 'src/lib/users';
@@ -132,6 +134,83 @@ usersRouter.delete('/users/:id', async (ctx: Context) => {
   }
 
   ctx.status = 204;
+});
+
+/**
+ * @openapi
+ * /api/v1/users/{userId}/policies:
+ *   put:
+ *     tags: [Users]
+ *     summary: Attach policies to a user (replaces existing)
+ *     security:
+ *       - bearerAuth: []
+ */
+usersRouter.put('/users/:userId/policies', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  if (ctx.authUser.role !== 'admin') {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const { policyIds } = ctx.request.body as { policyIds: string[] };
+
+  if (!Array.isArray(policyIds)) {
+    ctx.status = 400;
+    ctx.body = { error: 'policyIds must be an array' };
+    return;
+  }
+
+  const result = await attachUserPolicies({
+    userId: ctx.params.userId,
+    policyIds,
+  });
+
+  if (result === 'not_found') {
+    ctx.status = 404;
+    ctx.body = { error: 'User or policy not found' };
+    return;
+  }
+
+  ctx.status = 204;
+});
+
+/**
+ * @openapi
+ * /api/v1/users/{userId}/policies:
+ *   get:
+ *     tags: [Users]
+ *     summary: Get policies attached to a user
+ *     security:
+ *       - bearerAuth: []
+ */
+usersRouter.get('/users/:userId/policies', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  if (ctx.authUser.role !== 'admin') {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const policies = await getUserPolicies({ userId: ctx.params.userId });
+
+  if (policies === null) {
+    ctx.status = 404;
+    ctx.body = { error: 'User not found' };
+    return;
+  }
+
+  ctx.body = policies;
 });
 
 export { usersRouter };

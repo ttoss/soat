@@ -54,7 +54,7 @@ chatsRouter.post('/chats', async (ctx: Context) => {
     return;
   }
 
-  const targetProjectId = projectIds?.[0] ?? ctx.authUser.projectKeyProjectId;
+  const targetProjectId = projectIds?.[0] ?? ctx.authUser.apiKeyProjectId;
 
   if (!targetProjectId) {
     ctx.status = 400;

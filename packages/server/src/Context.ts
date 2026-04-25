@@ -33,6 +33,7 @@ export type AuthUser = {
    */
   getPolicies: (projectPublicId: string) => Promise<PolicyDocument[]>;
   projectKeyProjectId?: string;
+  apiKeyProjectId?: string;
 };
 
 export type Context = {
