@@ -7,12 +7,17 @@ import { db } from '../db';
 import { mapDocument } from './documentQuery';
 import { getEmbedding } from './embedding';
 import { emitEvent } from './eventBus';
+import { registerResourceFieldMap } from './policyCompiler';
 
-export {
-  DocumentQueryConfig,
-  QueryDocumentResult,
-  resolveDocumentQuery,
-} from './documentQuery';
+export type { DocumentQueryConfig, QueryDocumentResult } from './documentQuery';
+export { resolveDocumentQuery } from './documentQuery';
+
+registerResourceFieldMap({
+  resourceType: 'document',
+  publicIdColumn: { column: 'publicId' },
+  pathColumn: { column: 'path', alias: 'file' },
+  tagsColumn: { column: 'tags' },
+});
 
 const getStorageDir = () => {
   const dir = process.env.FILES_STORAGE_DIR;
@@ -48,6 +53,8 @@ const emitDocumentLifecycleEvent = (args: {
 
 export const listDocuments = async (args: {
   projectIds?: number[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  policyWhere?: Record<string, any>;
   limit?: number;
   offset?: number;
 }) => {
@@ -61,8 +68,20 @@ export const listDocuments = async (args: {
   const fileWhere =
     args.projectIds !== undefined ? { projectId: args.projectIds } : undefined;
 
+  // policyWhere may contain $file.path$ association references — use subQuery: false
+  const needsSubQueryFalse =
+    args.policyWhere !== undefined &&
+    Object.keys(args.policyWhere).some((k) => k.startsWith('$'));
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const topLevelWhere: Record<string, any> = {};
+  if (args.policyWhere && Object.keys(args.policyWhere).length > 0) {
+    Object.assign(topLevelWhere, args.policyWhere);
+  }
+
   const { count, rows } = await db.Document.findAndCountAll({
     distinct: true,
+    where: Object.keys(topLevelWhere).length > 0 ? topLevelWhere : undefined,
     include: [
       {
         model: db.File,
@@ -71,6 +90,7 @@ export const listDocuments = async (args: {
         include: [{ model: db.Project, as: 'project' }],
       },
     ],
+    subQuery: needsSubQueryFalse ? false : undefined,
     limit,
     offset,
   });
@@ -106,6 +126,7 @@ export const getDocument = async (args: { id: string }) => {
 export const createDocument = async (args: {
   projectId: number;
   content: string;
+  path?: string;
   filename?: string;
   title?: string;
   metadata?: Record<string, unknown>;
@@ -114,8 +135,10 @@ export const createDocument = async (args: {
   const storageDir = getStorageDir();
   fs.mkdirSync(storageDir, { recursive: true });
 
+  const effectivePath = args.path ?? args.filename ?? null;
   const file = await db.File.create({
     projectId: args.projectId,
+    path: effectivePath,
     filename: args.filename ?? 'document.txt',
     contentType: 'text/plain',
     size: Buffer.byteLength(args.content, 'utf-8'),
@@ -206,6 +229,7 @@ export const updateDocument = async (args: {
   id: string;
   content?: string;
   title?: string;
+  path?: string | null;
   metadata?: Record<string, unknown>;
   tags?: Record<string, string>;
 }) => {
@@ -231,6 +255,11 @@ export const updateDocument = async (args: {
     });
     const embedding = await getEmbedding({ text: args.content });
     await doc.update({ embedding });
+  }
+
+  if (args.path !== undefined && doc.file) {
+    const normalizedPath = args.path === null ? null : normalizePath(args.path);
+    await doc.file.update({ path: normalizedPath });
   }
 
   const updates: Record<string, unknown> = {};

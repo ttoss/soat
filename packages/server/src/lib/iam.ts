@@ -254,3 +254,38 @@ export const evaluatePolicies = (args: {
 
   return allowed;
 };
+
+/**
+ * Evaluates policies against multiple candidate resource SRNs (e.g. an ID-based
+ * SRN and a path-based SRN). Access is granted when at least one resource
+ * matches an Allow and no resource matches a Deny.
+ */
+export const evaluatePoliciesMultiResource = (args: {
+  policies: PolicyDocument[];
+  action: string;
+  resources: string[];
+  context?: Record<string, string>;
+}): boolean => {
+  const context = args.context ?? {};
+  let allowed = false;
+
+  for (const resource of args.resources) {
+    for (const policy of args.policies) {
+      for (const statement of policy.statement) {
+        if (
+          statementMatches({
+            statement,
+            action: args.action,
+            resource,
+            context,
+          })
+        ) {
+          if (statement.effect === 'Deny') return false; // deny wins globally
+          allowed = true;
+        }
+      }
+    }
+  }
+
+  return allowed;
+};

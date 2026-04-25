@@ -12,6 +12,12 @@ import { Project } from './Project';
 
 @Table({
   tableName: 'files',
+  indexes: [
+    {
+      unique: true,
+      fields: ['project_id', 'path'],
+    },
+  ],
   hooks: {
     beforeValidate: (instance: File) => {
       if (!instance.publicId) {
@@ -38,6 +44,9 @@ export class File extends Model {
     return Project;
   })
   declare project: Project;
+
+  @Column({ type: DataType.STRING(1024), allowNull: true })
+  declare path: string | null;
 
   @Column({ type: DataType.STRING })
   declare filename?: string;

@@ -43,18 +43,32 @@ OLLAMA_BASE_URL=http://localhost:11434
 
 ## Data Model
 
-| Field        | Type   | Description                                                   |
-| ------------ | ------ | ------------------------------------------------------------- |
-| `id`         | string | Public identifier prefixed with `doc_`                        |
-| `file_id`    | string | ID of the underlying File record                              |
-| `project_id` | string | ID of the owning project                                      |
-| `filename`   | string | Original filename (`.txt` extension)                          |
-| `size`       | number | File size in bytes                                            |
-| `content`    | string | Text content — only present in `GET /documents/:id` responses |
-| `created_at` | string | ISO 8601 creation timestamp                                   |
-| `updated_at` | string | ISO 8601 last-updated timestamp                               |
+| Field        | Type           | Description                                                                                                        |
+| ------------ | -------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `id`         | string         | Public identifier prefixed with `doc_`                                                                             |
+| `file_id`    | string         | ID of the underlying File record                                                                                   |
+| `project_id` | string         | ID of the owning project                                                                                           |
+| `path`       | string \| null | Logical path within the project (e.g. `/reports/q1.txt`). Also used as the resource ID segment in path-based SRNs. |
+| `filename`   | string         | Original filename (`.txt` extension)                                                                               |
+| `size`       | number         | File size in bytes                                                                                                 |
+| `content`    | string         | Text content — only present in `GET /documents/:id` responses                                                      |
+| `created_at` | string         | ISO 8601 creation timestamp                                                                                        |
+| `updated_at` | string         | ISO 8601 last-updated timestamp                                                                                    |
 
 The `embedding` column (pgvector `vector(N)`) is stored in the database but never returned via the API.
+
+### Path Field
+
+The `path` field is a logical, project-scoped identifier for a document — similar to a file path in a filesystem. It is optional at creation time; if omitted, the server defaults to `/<filename>`. Paths must be absolute (start with `/`) and are normalized (`.` and `..` are resolved). The combination of `project_id + path` is unique within a project.
+
+Path examples:
+
+```
+/reports/q1.txt
+/datasets/raw/2024-01-01.txt
+```
+
+PATCH `/documents/:id` accepts a `path` field to move a document to a new logical path.
 
 ## Permissions
 
@@ -69,7 +83,21 @@ Document operations are governed by per-project policies. Grant the following pe
 | Update a document | `documents:UpdateDocument`  | `PATCH /api/v1/documents/:id`   | `update-document`  |
 | Semantic search   | `documents:SearchDocuments` | `POST /api/v1/documents/search` | `search-documents` |
 
-See the [API Reference](../api/documents/list-documents) for full endpoint details, request/response schemas, and status codes.
+### Path-Based SRNs
+
+Policies can target documents by their logical path rather than their `id`. When a document has a `path` set, the server evaluates **both** the id-based SRN and the path-based SRN:
+
+| SRN form                                 | Matches                                      |
+| ---------------------------------------- | -------------------------------------------- |
+| `soat:proj_ABC:document:doc_XYZ`         | Specific document by ID                      |
+| `soat:proj_ABC:document:/reports/q1.txt` | Document at the exact path `/reports/q1.txt` |
+| `soat:proj_ABC:document:/reports/*`      | All documents under `/reports/`              |
+| `soat:proj_ABC:document:*`               | All documents in the project (id wildcard)   |
+| `*`                                      | All resources in the project                 |
+
+List and search endpoints apply policy filters at the SQL level — the database returns only rows the caller is permitted to see, so pagination counts are always accurate.
+
+See the [IAM Reference](iam.md) for full SRN syntax and policy authoring guidance.
 
 ## Project ID Resolution
 

@@ -1,5 +1,9 @@
 import type { DB } from '../db';
-import { evaluatePolicies, type PolicyDocument } from './iam';
+import {
+  evaluatePolicies,
+  evaluatePoliciesMultiResource,
+  type PolicyDocument,
+} from './iam';
 
 export const createProjectKeyIsAllowed = (args: {
   projectPublicId: string;
@@ -11,6 +15,7 @@ export const createProjectKeyIsAllowed = (args: {
     projectPublicId: string;
     action: string;
     resource?: string;
+    resources?: string[];
     context?: Record<string, string>;
   }): Promise<boolean> => {
     if (reqArgs.projectPublicId !== args.projectPublicId) return false;
@@ -23,6 +28,30 @@ export const createProjectKeyIsAllowed = (args: {
     ]);
 
     if (!projectKeyPolicy) return false;
+
+    const allPolicies = [
+      ...userPolicies.map((p) => p.document as PolicyDocument),
+      projectKeyPolicy.document as PolicyDocument,
+    ];
+
+    if (reqArgs.resources && reqArgs.resources.length > 0) {
+      // Intersection: both user policies and key policy must allow
+      const userDocs = userPolicies.map((p) => p.document as PolicyDocument);
+      const keyDoc = projectKeyPolicy.document as PolicyDocument;
+      const userOk = evaluatePoliciesMultiResource({
+        policies: userDocs,
+        action: reqArgs.action,
+        resources: reqArgs.resources,
+        context: reqArgs.context,
+      });
+      if (!userOk) return false;
+      return evaluatePoliciesMultiResource({
+        policies: [keyDoc],
+        action: reqArgs.action,
+        resources: reqArgs.resources,
+        context: reqArgs.context,
+      });
+    }
 
     const userAllowed = evaluatePolicies({
       policies: userPolicies.map((p) => {
@@ -53,6 +82,7 @@ export const createJwtIsAllowed = (args: {
     projectPublicId: string;
     action: string;
     resource?: string;
+    resources?: string[];
     context?: Record<string, string>;
   }): Promise<boolean> => {
     if (args.role === 'admin') return true;
@@ -69,10 +99,19 @@ export const createJwtIsAllowed = (args: {
     const policies = await args.db.ProjectPolicy.findAll({
       where: { id: policyIds },
     });
+    const policyDocs = policies.map((p) => p.document as PolicyDocument);
+
+    if (reqArgs.resources && reqArgs.resources.length > 0) {
+      return evaluatePoliciesMultiResource({
+        policies: policyDocs,
+        action: reqArgs.action,
+        resources: reqArgs.resources,
+        context: reqArgs.context,
+      });
+    }
+
     return evaluatePolicies({
-      policies: policies.map((p) => {
-        return p.document as PolicyDocument;
-      }),
+      policies: policyDocs,
       action: reqArgs.action,
       resource: reqArgs.resource,
       context: reqArgs.context,

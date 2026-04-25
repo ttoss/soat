@@ -219,6 +219,7 @@ A statement matches a request when **all** of the following are true:
 - `module:*` matches all actions in a module.
 - `soat:proj_ABC:document:*` matches all documents in a project.
 - Wildcards apply only at segment boundaries — partial wildcards like `doc_X*` are not supported.
+- **Path-based patterns**: when a resource has a `path` field, the resource ID segment of the SRN may be a logical path. Both the resource's `id` and its `path` are tested when evaluating a single-resource check. Glob patterns (`/reports/*`) are expanded to SQL `LIKE` for list queries.
 
 ## Tags
 

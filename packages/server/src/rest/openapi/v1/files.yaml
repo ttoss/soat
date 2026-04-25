@@ -60,6 +60,10 @@ paths:
                 - storage_type
                 - storage_path
               properties:
+                path:
+                  type: string
+                  description: Logical path within the project (e.g. /images/logo.png). Defaults to /filename if omitted.
+                  example: '/images/logo.png'
                 filename:
                   type: string
                   description: Name of the file
@@ -297,6 +301,11 @@ components:
           type: string
           description: Unique file identifier
           example: 'abc123'
+        path:
+          type: string
+          nullable: true
+          description: Logical path of the file within the project (e.g. /images/logo.png)
+          example: '/images/logo.png'
         filename:
           type: string
           description: Name of the file

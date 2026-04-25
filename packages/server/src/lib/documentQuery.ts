@@ -19,6 +19,7 @@ export const mapDocument = (
     id: doc.publicId,
     fileId: doc.file?.publicId,
     projectId: doc.file?.project?.publicId,
+    path: doc.file?.path ?? undefined,
     filename: doc.file?.filename,
     size: doc.file?.size,
     title: doc.title ?? undefined,
@@ -80,7 +81,7 @@ const buildFileInclude = (args: {
   if (args.paths && args.paths.length > 0) {
     conditions.push({
       [Op.or]: args.paths.map((p) => {
-        return { filename: { [Op.like]: `${p}%` } };
+        return { path: { [Op.like]: `${p}%` } };
       }),
     });
   }
@@ -134,17 +135,20 @@ const applyBoundaryFilter = (
 
 /**
  * Core document search engine used by the documents search endpoint and the
- * memories module. Applies three access-scoping layers:
+ * memories module. Applies access-scoping layers:
  *
  * 1. Caller permissions  — `projectIds` scope (resolved via `resolveProjectIds`)
- * 2. Agent boundary policy — optional SRN-level resource filtering per document
- * 3. Config filters        — search, paths, documentIds, minScore, limit
+ * 2. Policy WHERE        — optional SQL-level resource filter from compilePolicy
+ * 3. Config filters      — search, paths, documentIds, minScore, limit
  *
  * At least one of `search`, `paths`, or `documentIds` must be set in config.
  */
 export const resolveDocumentQuery = async (args: {
   projectIds?: number[];
   config: DocumentQueryConfig;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  policyWhere?: Record<string, any>;
+  /** @deprecated Use policyWhere instead */
   boundaryPolicy?: unknown;
 }): Promise<QueryDocumentResult[]> => {
   const { config, projectIds } = args;
@@ -157,13 +161,26 @@ export const resolveDocumentQuery = async (args: {
   const fileInclude = buildFileInclude({ projectIds, paths: config.paths });
   const docWhere = buildDocWhere(config.documentIds);
 
+  // Merge policyWhere into the top-level document WHERE
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mergedDocWhere: Record<string, any> = {
+    ...(docWhere ?? {}),
+    ...(args.policyWhere ?? {}),
+  };
+  const effectiveDocWhere =
+    Object.keys(mergedDocWhere).length > 0 ? mergedDocWhere : undefined;
+
+  const needsSubQueryFalse =
+    args.policyWhere !== undefined &&
+    Object.keys(args.policyWhere).some((k) => k.startsWith('$'));
+
   let rawDocuments: Array<InstanceType<(typeof db)['Document']>>;
 
   if (config.search) {
     const embedding = await getEmbedding({ text: config.search });
     const embeddingLiteral = `[${embedding.join(',')}]`;
     rawDocuments = await db.Document.findAll({
-      where: docWhere,
+      where: effectiveDocWhere,
       attributes: {
         include: [
           [
@@ -178,13 +195,15 @@ export const resolveDocumentQuery = async (args: {
       order: db.Document.sequelize!.literal(
         `embedding <=> '${embeddingLiteral}'`
       ),
+      subQuery: needsSubQueryFalse ? false : undefined,
       limit,
     });
   } else {
     rawDocuments = await db.Document.findAll({
-      where: docWhere,
+      where: effectiveDocWhere,
       include: [fileInclude],
       order: [['createdAt', 'ASC']],
+      subQuery: needsSubQueryFalse ? false : undefined,
       limit,
     });
   }
@@ -203,12 +222,5 @@ export const resolveDocumentQuery = async (args: {
         })
       : mapped;
 
-  if (!args.boundaryPolicy) {
-    return scored as QueryDocumentResult[];
-  }
-
-  return applyBoundaryFilter(
-    scored as QueryDocumentResult[],
-    args.boundaryPolicy as PolicyDocument
-  );
+  return scored as QueryDocumentResult[];
 };

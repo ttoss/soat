@@ -1,4 +1,5 @@
 import type { DB } from './db';
+import type { PolicyDocument } from './lib/iam';
 
 export type AuthUser = {
   id: number;
@@ -9,6 +10,8 @@ export type AuthUser = {
     projectPublicId: string;
     action: string;
     resource?: string;
+    /** Check against multiple SRNs — any Allow wins, any Deny loses. Used for path-based SRN fallback. */
+    resources?: string[];
     context?: Record<string, string>;
   }) => Promise<boolean>;
   /**
@@ -22,6 +25,13 @@ export type AuthUser = {
     projectPublicId?: string;
     action: string;
   }) => Promise<number[] | undefined | null>;
+  /**
+   * Returns the effective PolicyDocuments for the caller scoped to the given
+   * project. Used by the policy compiler to generate SQL-level access filters.
+   * - JWT admin: returns a single unrestricted Allow-all policy.
+   * - JWT user / project key: returns the actual policy documents.
+   */
+  getPolicies: (projectPublicId: string) => Promise<PolicyDocument[]>;
   projectKeyProjectId?: string;
 };
 

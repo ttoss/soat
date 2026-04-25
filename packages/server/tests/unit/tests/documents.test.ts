@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 
+import { compilePolicy } from '../../../src/lib/policyCompiler';
 import { resolveDocumentQuery } from '../../../src/lib/documentQuery';
 import { storageDir } from '../setupTests';
 import { authenticatedTestClient, loginAs, testClient } from '../testClient';
@@ -790,20 +791,31 @@ describe('Documents', () => {
     });
 
     test('boundaryPolicy allows only matching documents', async () => {
+      const { where: policyWhere, hasAccess } = compilePolicy({
+        policies: [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['documents:SearchDocuments'],
+                resource: [
+                  `soat:${boundaryProjectId}:document:${allowedDocId}`,
+                ],
+              },
+            ],
+          },
+        ],
+        action: 'documents:SearchDocuments',
+        resourceType: 'document',
+        projectPublicId: boundaryProjectId,
+      });
+      expect(hasAccess).toBe(true);
       const results = await resolveDocumentQuery({
         projectIds: [boundaryProjectInternalId],
         config: {
           documentIds: [allowedDocId, deniedDocId],
         },
-        boundaryPolicy: {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['documents:SearchDocuments'],
-              resource: [`soat:${boundaryProjectId}:document:${allowedDocId}`],
-            },
-          ],
-        },
+        policyWhere,
       });
 
       expect(results.length).toBe(1);
@@ -811,20 +823,29 @@ describe('Documents', () => {
     });
 
     test('boundaryPolicy with wildcard allows all documents', async () => {
+      const { where: policyWhere, hasAccess } = compilePolicy({
+        policies: [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['documents:SearchDocuments'],
+                resource: ['*'],
+              },
+            ],
+          },
+        ],
+        action: 'documents:SearchDocuments',
+        resourceType: 'document',
+        projectPublicId: boundaryProjectId,
+      });
+      expect(hasAccess).toBe(true);
       const results = await resolveDocumentQuery({
         projectIds: [boundaryProjectInternalId],
         config: {
           documentIds: [allowedDocId, deniedDocId],
         },
-        boundaryPolicy: {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['documents:SearchDocuments'],
-              resource: ['*'],
-            },
-          ],
-        },
+        policyWhere,
       });
 
       expect(results.length).toBe(2);
@@ -836,25 +857,34 @@ describe('Documents', () => {
     });
 
     test('boundaryPolicy with Deny effect filters out documents', async () => {
+      const { where: policyWhere, hasAccess } = compilePolicy({
+        policies: [
+          {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['documents:SearchDocuments'],
+                resource: ['*'],
+              },
+              {
+                effect: 'Deny',
+                action: ['documents:SearchDocuments'],
+                resource: [`soat:${boundaryProjectId}:document:${deniedDocId}`],
+              },
+            ],
+          },
+        ],
+        action: 'documents:SearchDocuments',
+        resourceType: 'document',
+        projectPublicId: boundaryProjectId,
+      });
+      expect(hasAccess).toBe(true);
       const results = await resolveDocumentQuery({
         projectIds: [boundaryProjectInternalId],
         config: {
           documentIds: [allowedDocId, deniedDocId],
         },
-        boundaryPolicy: {
-          statement: [
-            {
-              effect: 'Allow',
-              action: ['documents:SearchDocuments'],
-              resource: ['*'],
-            },
-            {
-              effect: 'Deny',
-              action: ['documents:SearchDocuments'],
-              resource: [`soat:${boundaryProjectId}:document:${deniedDocId}`],
-            },
-          ],
-        },
+        policyWhere,
       });
 
       expect(results.length).toBe(1);

@@ -12,6 +12,7 @@ import {
   updateDocumentTags,
 } from 'src/lib/documents';
 import { buildSrn } from 'src/lib/iam';
+import { compilePolicy } from 'src/lib/policyCompiler';
 
 const documentsRouter = new Router<Context>();
 
@@ -38,6 +39,28 @@ documentsRouter.get('/documents', async (ctx: Context) => {
   if (projectIds === null) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  // Compile SQL-level policy filter when a specific project is requested
+  if (projectPublicId) {
+    const policies = await ctx.authUser!.getPolicies(projectPublicId);
+    const { where: policyWhere, hasAccess } = compilePolicy({
+      policies,
+      action: 'documents:ListDocuments',
+      resourceType: 'document',
+      projectPublicId,
+    });
+    if (!hasAccess) {
+      ctx.body = {
+        data: [],
+        total: 0,
+        limit: limit ?? 50,
+        offset: offset ?? 0,
+      };
+      return;
+    }
+    ctx.body = await listDocuments({ projectIds, policyWhere, limit, offset });
     return;
   }
 
@@ -70,10 +93,20 @@ documentsRouter.get('/documents/:id', async (ctx: Context) => {
       context[`soat:ResourceTag/${k}`] = v;
     }
   }
+  const srnGetResources: string[] = [srn];
+  if (doc.path) {
+    srnGetResources.push(
+      buildSrn({
+        projectPublicId: doc.projectId!,
+        resourceType: 'document',
+        resourceId: doc.path,
+      })
+    );
+  }
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: doc.projectId!,
     action: 'documents:GetDocument',
-    resource: srn,
+    resources: srnGetResources,
     context,
   });
   if (!allowed) {
@@ -95,6 +128,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
   const body = ctx.request.body as {
     projectId?: string;
     content: string;
+    path?: string;
     filename?: string;
     title?: string;
     metadata?: Record<string, unknown>;
@@ -141,6 +175,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
   const doc = await createDocument({
     projectId: project.id,
     content: body.content,
+    path: body.path,
     filename: body.filename,
     title: body.title,
     metadata: body.metadata,
@@ -179,10 +214,20 @@ documentsRouter.delete('/documents/:id', async (ctx: Context) => {
       contextDel[`soat:ResourceTag/${k}`] = v;
     }
   }
+  const resourcesDel: string[] = [srnDel];
+  if (doc.path) {
+    resourcesDel.push(
+      buildSrn({
+        projectPublicId: doc.projectId!,
+        resourceType: 'document',
+        resourceId: doc.path,
+      })
+    );
+  }
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: doc.projectId!,
     action: 'documents:DeleteDocument',
-    resource: srnDel,
+    resources: resourcesDel,
     context: contextDel,
   });
   if (!allowed) {
@@ -230,10 +275,20 @@ documentsRouter.patch('/documents/:id', async (ctx: Context) => {
       contextUpd[`soat:ResourceTag/${k}`] = v;
     }
   }
+  const resourcesUpd: string[] = [srnUpd];
+  if (doc.path) {
+    resourcesUpd.push(
+      buildSrn({
+        projectPublicId: doc.projectId!,
+        resourceType: 'document',
+        resourceId: doc.path,
+      })
+    );
+  }
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: doc.projectId!,
     action: 'documents:UpdateDocument',
-    resource: srnUpd,
+    resources: resourcesUpd,
     context: contextUpd,
   });
   if (!allowed) {
@@ -245,6 +300,7 @@ documentsRouter.patch('/documents/:id', async (ctx: Context) => {
   const body = ctx.request.body as {
     content?: string;
     title?: string;
+    path?: string | null;
     metadata?: Record<string, unknown>;
     tags?: Record<string, string>;
   };
@@ -253,6 +309,7 @@ documentsRouter.patch('/documents/:id', async (ctx: Context) => {
     id: ctx.params.id,
     content: body.content,
     title: body.title,
+    path: body.path,
     metadata: body.metadata,
     tags: body.tags,
   });
@@ -295,8 +352,26 @@ documentsRouter.post('/documents/search', async (ctx: Context) => {
     return;
   }
 
+  // Compile SQL-level policy filter when a specific project is requested
+  let policyWhere: Record<string, unknown> | undefined;
+  if (body.projectId) {
+    const policies = await ctx.authUser!.getPolicies(body.projectId);
+    const compiled = compilePolicy({
+      policies,
+      action: 'documents:SearchDocuments',
+      resourceType: 'document',
+      projectPublicId: body.projectId,
+    });
+    if (!compiled.hasAccess) {
+      ctx.body = { documents: [] };
+      return;
+    }
+    policyWhere = compiled.where;
+  }
+
   const results = await resolveDocumentQuery({
     projectIds,
+    policyWhere,
     config: {
       search: body.search,
       minScore: body.minScore,
@@ -335,10 +410,20 @@ documentsRouter.get('/documents/:id/tags', async (ctx: Context) => {
       context[`soat:ResourceTag/${k}`] = v;
     }
   }
+  const srnTagsGetResources: string[] = [srn];
+  if (doc.path) {
+    srnTagsGetResources.push(
+      buildSrn({
+        projectPublicId: doc.projectId!,
+        resourceType: 'document',
+        resourceId: doc.path,
+      })
+    );
+  }
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: doc.projectId!,
     action: 'documents:GetDocument',
-    resource: srn,
+    resources: srnTagsGetResources,
     context,
   });
   if (!allowed) {
@@ -376,10 +461,20 @@ documentsRouter.put('/documents/:id/tags', async (ctx: Context) => {
       context[`soat:ResourceTag/${k}`] = v;
     }
   }
+  const srnTagsPutResources: string[] = [srn];
+  if (doc.path) {
+    srnTagsPutResources.push(
+      buildSrn({
+        projectPublicId: doc.projectId!,
+        resourceType: 'document',
+        resourceId: doc.path,
+      })
+    );
+  }
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: doc.projectId!,
     action: 'documents:UpdateDocument',
-    resource: srn,
+    resources: srnTagsPutResources,
     context,
   });
   if (!allowed) {
@@ -422,10 +517,20 @@ documentsRouter.patch('/documents/:id/tags', async (ctx: Context) => {
       context[`soat:ResourceTag/${k}`] = v;
     }
   }
+  const srnTagsPatchResources: string[] = [srn];
+  if (doc.path) {
+    srnTagsPatchResources.push(
+      buildSrn({
+        projectPublicId: doc.projectId!,
+        resourceType: 'document',
+        resourceId: doc.path,
+      })
+    );
+  }
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: doc.projectId!,
     action: 'documents:UpdateDocument',
-    resource: srn,
+    resources: srnTagsPatchResources,
     context,
   });
   if (!allowed) {

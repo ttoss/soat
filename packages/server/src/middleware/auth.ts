@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 import type { Context } from '../Context';
+import type { PolicyDocument } from '../lib/iam';
 import {
   createJwtIsAllowed,
   createProjectKeyIsAllowed,
@@ -79,6 +80,27 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
           if (!proj) return null;
           return [proj.id as number];
         },
+        getPolicies: async (reqProjectPublicId: string) => {
+          if (reqProjectPublicId !== projectPublicId) return [];
+          const [userPolicies, keyPolicy] = await Promise.all([
+            userPolicyIds.length > 0
+              ? ctx.db.ProjectPolicy.findAll({
+                  where: { id: userPolicyIds },
+                })
+              : Promise.resolve([]),
+            ctx.db.ProjectPolicy.findOne({
+              where: { id: projectKeyPolicyId },
+            }),
+          ]);
+          const docs: PolicyDocument[] = [];
+          for (const p of userPolicies) {
+            docs.push(p.document as PolicyDocument);
+          }
+          if (keyPolicy) {
+            docs.push(keyPolicy.document as PolicyDocument);
+          }
+          return docs;
+        },
       };
       break;
     }
@@ -143,6 +165,34 @@ const resolveJwt = async (ctx: Context, token: string) => {
         if (allowed) accessible.push(proj.id as number);
       }
       return accessible;
+    },
+    getPolicies: async (
+      reqProjectPublicId: string
+    ): Promise<PolicyDocument[]> => {
+      if (role === 'admin') {
+        // Admin has unrestricted access — return a single allow-all policy
+        return [
+          {
+            statement: [{ effect: 'Allow', action: ['*'], resource: ['*'] }],
+          },
+        ];
+      }
+      const project = await ctx.db.Project.findOne({
+        where: { publicId: reqProjectPublicId },
+      });
+      if (!project) return [];
+      const membership = await ctx.db.UserProject.findOne({
+        where: { userId, projectId: project.id as number },
+      });
+      if (!membership) return [];
+      const policyIds = membership.policyIds as number[];
+      if (policyIds.length === 0) return [];
+      const policies = await ctx.db.ProjectPolicy.findAll({
+        where: { id: policyIds },
+      });
+      return policies.map((p) => {
+        return p.document as PolicyDocument;
+      });
     },
   };
 };

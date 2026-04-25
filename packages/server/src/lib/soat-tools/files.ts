@@ -55,6 +55,7 @@ export const tools: SoatToolDefinition[] = [
       return {
         projectId: args.projectId,
         content: args.content,
+        path: args.path,
         filename: args.filename,
         contentType: args.contentType ?? args.mimeType,
         metadata: args.metadata,
@@ -65,6 +66,11 @@ export const tools: SoatToolDefinition[] = [
       properties: {
         projectId: { type: 'string', description: 'Project ID' },
         content: { type: 'string', description: 'Base64-encoded file content' },
+        path: {
+          type: 'string',
+          description:
+            'Logical path within the project (e.g. /images/logo.png). Defaults to /filename if omitted.',
+        },
         filename: { type: 'string', description: 'Original filename' },
         contentType: {
           type: 'string',

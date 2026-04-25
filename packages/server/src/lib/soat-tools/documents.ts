@@ -55,6 +55,7 @@ export const tools: SoatToolDefinition[] = [
       return {
         projectId: args.projectId,
         content: args.content,
+        path: args.path,
         filename: args.filename,
         title: args.title,
         metadata: args.metadata,
@@ -66,6 +67,11 @@ export const tools: SoatToolDefinition[] = [
       properties: {
         projectId: { type: 'string', description: 'Project ID' },
         content: { type: 'string', description: 'Document content' },
+        path: {
+          type: 'string',
+          description:
+            'Logical path within the project (e.g. /reports/q1.txt). Defaults to /filename if omitted.',
+        },
         filename: { type: 'string', description: 'Filename' },
         title: { type: 'string', description: 'Document title' },
         metadata: {

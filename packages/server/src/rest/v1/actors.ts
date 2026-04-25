@@ -12,6 +12,7 @@ import {
   updateActorTags,
 } from 'src/lib/actors';
 import { buildSrn } from 'src/lib/iam';
+import { compilePolicy } from 'src/lib/policyCompiler';
 
 const actorsRouter = new Router<Context>();
 
@@ -44,11 +45,33 @@ actorsRouter.get('/actors', async (ctx: Context) => {
     return;
   }
 
+  let policyWhere: Record<string, unknown> | undefined;
+  if (projectPublicId) {
+    const policies = await ctx.authUser!.getPolicies(projectPublicId);
+    const compiled = compilePolicy({
+      policies,
+      action: 'actors:ListActors',
+      resourceType: 'actor',
+      projectPublicId,
+    });
+    if (!compiled.hasAccess) {
+      ctx.body = {
+        data: [],
+        total: 0,
+        limit: limit ?? 50,
+        offset: offset ?? 0,
+      };
+      return;
+    }
+    policyWhere = compiled.where;
+  }
+
   ctx.body = await listActors({
     projectIds,
     externalId,
     name,
     type,
+    policyWhere,
     limit,
     offset,
   });

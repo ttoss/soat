@@ -325,15 +325,22 @@ if [ "$CONVO_ACTOR_DELETE_STATUS" != "204" ]; then
 fi
 echo "Conversations coverage: OK"
 
-# 4. Upload a file via multipart form
+# 4. Upload a file via multipart form (with path field)
 echo "--- Uploading file ---"
 echo "Hello, smoke test!" > /tmp/smoke.txt
 UPLOAD_RESP=$(curl -sf -X POST "$BASE_URL/files/upload" \
   -H "Authorization: Bearer $TOKEN" \
   -F "file=@/tmp/smoke.txt;type=text/plain" \
-  -F "project_id=$PROJECT_PUBLIC_ID")
+  -F "project_id=$PROJECT_PUBLIC_ID" \
+  -F "path=/reports/smoke.txt")
 FILE_ID=$(echo "$UPLOAD_RESP" | jq -r '.id')
+FILE_PATH=$(echo "$UPLOAD_RESP" | jq -r '.path')
 echo "File id: $FILE_ID"
+if [ "$FILE_PATH" != "/reports/smoke.txt" ]; then
+  echo "ERROR: file path field expected '/reports/smoke.txt', got '$FILE_PATH'" >&2
+  exit 1
+fi
+echo "File path: $FILE_PATH"
 
 # 5. Get file metadata
 echo "--- Getting file metadata ---"
@@ -388,31 +395,60 @@ if [ "$AFTER_DELETE_STATUS" != "404" ]; then
 fi
 echo "File correctly returns 404 after deletion."
 
-# 10. Create first document
+# 10. Create first document (with path field)
 echo "--- Creating first document ---"
 DOC1_RESP=$(curl -sf -X POST "$BASE_URL/documents" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"content\":\"The quick brown fox jumps over the lazy dog\",\"filename\":\"fox.txt\"}")
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"content\":\"The quick brown fox jumps over the lazy dog\",\"filename\":\"fox.txt\",\"path\":\"/animals/fox.txt\"}")
 DOC1_ID=$(echo "$DOC1_RESP" | jq -r '.id')
+DOC1_PATH=$(echo "$DOC1_RESP" | jq -r '.path')
 echo "Document 1 id: $DOC1_ID"
+if [ "$DOC1_PATH" != "/animals/fox.txt" ]; then
+  echo "ERROR: document path field expected '/animals/fox.txt', got '$DOC1_PATH'" >&2
+  exit 1
+fi
+echo "Document 1 path: $DOC1_PATH"
 
 # 11. Create second document
 echo "--- Creating second document ---"
 DOC2_RESP=$(curl -sf -X POST "$BASE_URL/documents" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"content\":\"Machine learning models require large amounts of training data\",\"filename\":\"ml.txt\"}")
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"content\":\"Machine learning models require large amounts of training data\",\"filename\":\"ml.txt\",\"path\":\"/tech/ml.txt\"}")
 DOC2_ID=$(echo "$DOC2_RESP" | jq -r '.id')
 echo "Document 2 id: $DOC2_ID"
+
+# 11b. Verify path persists on GET /documents/:id
+echo "--- Verifying document path field on GET ---"
+GET_DOC1_PATH=$(curl -sf "$BASE_URL/documents/$DOC1_ID" \
+  -H "Authorization: Bearer $TOKEN" | jq -r '.path')
+if [ "$GET_DOC1_PATH" != "/animals/fox.txt" ]; then
+  echo "ERROR: GET document path expected '/animals/fox.txt', got '$GET_DOC1_PATH'" >&2
+  exit 1
+fi
+echo "GET document path: OK"
+
+# 11c. Search documents by path prefix
+echo "--- Search documents by path prefix ---"
+PATH_SEARCH_RESP=$(curl -sf -X POST "$BASE_URL/documents/search" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"paths\":[\"/animals/\"]}")
+PATH_SEARCH_COUNT=$(echo "$PATH_SEARCH_RESP" | jq '.documents | length')
+if [ "$PATH_SEARCH_COUNT" -lt 1 ]; then
+  echo "ERROR: path-prefix search returned $PATH_SEARCH_COUNT results, expected at least 1" >&2
+  exit 1
+fi
+echo "Path-prefix search returned $PATH_SEARCH_COUNT result(s): OK"
 
 # 12. Search documents
 echo "--- Searching documents ---"
 SEARCH_RESP=$(curl -sf -X POST "$BASE_URL/documents/search" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"query\":\"fox animal jumping\",\"limit\":5}")
-SEARCH_COUNT=$(echo "$SEARCH_RESP" | jq 'length')
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"search\":\"fox animal jumping\",\"limit\":5}")
+SEARCH_COUNT=$(echo "$SEARCH_RESP" | jq '.documents | length')
 if [ "$SEARCH_COUNT" -lt 1 ]; then
   echo "ERROR: Document search returned $SEARCH_COUNT results, expected at least 1" >&2
   exit 1

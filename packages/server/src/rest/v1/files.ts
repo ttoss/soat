@@ -15,6 +15,7 @@ import {
   uploadFile,
 } from 'src/lib/files';
 import { buildSrn } from 'src/lib/iam';
+import { compilePolicy } from 'src/lib/policyCompiler';
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -43,6 +44,33 @@ filesRouter.get('/files', async (ctx: Context) => {
   if (projectIds === null) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  // Compile SQL-level policy filter when a specific project is requested
+  if (projectPublicId) {
+    const policies = await ctx.authUser!.getPolicies(projectPublicId);
+    const { where: policyWhere, hasAccess } = compilePolicy({
+      policies,
+      action: 'files:GetFile',
+      resourceType: 'file',
+      projectPublicId,
+    });
+    if (!hasAccess) {
+      ctx.body = {
+        data: [],
+        total: 0,
+        limit: limit ?? 50,
+        offset: offset ?? 0,
+      };
+      return;
+    }
+    ctx.body = await listFiles({
+      projectIds: projectIds ?? undefined,
+      policyWhere,
+      limit,
+      offset,
+    });
     return;
   }
 
@@ -80,10 +108,20 @@ filesRouter.get('/files/:id', async (ctx: Context) => {
       context[`soat:ResourceTag/${k}`] = v;
     }
   }
+  const resources: string[] = [srn];
+  if (file.path) {
+    resources.push(
+      buildSrn({
+        projectPublicId: file.projectId!,
+        resourceType: 'file',
+        resourceId: file.path,
+      })
+    );
+  }
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: file.projectId!,
     action: 'files:GetFile',
-    resource: srn,
+    resources,
     context,
   });
   if (!allowed) {
@@ -104,6 +142,7 @@ filesRouter.post('/files', async (ctx: Context) => {
 
   const body = ctx.request.body as {
     projectId: string;
+    path?: string;
     filename?: string;
     contentType?: string;
     size?: number;
@@ -172,10 +211,20 @@ filesRouter.delete('/files/:id', async (ctx: Context) => {
       contextDel[`soat:ResourceTag/${k}`] = v;
     }
   }
+  const resourcesDel: string[] = [srnDel];
+  if ((file as { path?: string | null }).path) {
+    resourcesDel.push(
+      buildSrn({
+        projectPublicId: file.project!.publicId,
+        resourceType: 'file',
+        resourceId: (file as { path: string }).path,
+      })
+    );
+  }
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: file.project!.publicId,
     action: 'files:DeleteFile',
-    resource: srnDel,
+    resources: resourcesDel,
     context: contextDel,
   });
   if (!allowed) {
@@ -209,6 +258,7 @@ filesRouter.post(
       projectId?: string;
       project_id?: string;
       metadata?: string;
+      path?: string;
     };
     const file = ctx.file as MulterFile | undefined;
     const projectId = body.projectId ?? body.project_id;
@@ -250,6 +300,7 @@ filesRouter.post(
       filename: file.originalname,
       contentType: file.mimetype,
       metadata: body.metadata,
+      path: body.path,
     });
 
     ctx.status = 201;
@@ -267,6 +318,7 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
   const body = ctx.request.body as {
     projectId: string;
     content: string;
+    path?: string;
     filename?: string;
     contentType?: string;
     metadata?: string;
@@ -308,6 +360,7 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
   const record = await uploadFile({
     projectId: project.id,
     fileBuffer,
+    path: body.path,
     filename: body.filename,
     contentType: body.contentType,
     metadata: body.metadata,
@@ -343,10 +396,20 @@ filesRouter.get('/files/:id/download', async (ctx: Context) => {
       contextDl[`soat:ResourceTag/${k}`] = v;
     }
   }
+  const resourcesDl: string[] = [srnDl];
+  if (fileRecord.path) {
+    resourcesDl.push(
+      buildSrn({
+        projectPublicId: fileRecord.projectId!,
+        resourceType: 'file',
+        resourceId: fileRecord.path,
+      })
+    );
+  }
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: fileRecord.projectId!,
     action: 'files:DownloadFile',
-    resource: srnDl,
+    resources: resourcesDl,
     context: contextDl,
   });
   if (!allowed) {
@@ -399,10 +462,20 @@ filesRouter.get('/files/:id/download/base64', async (ctx: Context) => {
       contextDlB64[`soat:ResourceTag/${k}`] = v;
     }
   }
+  const resourcesDlB64: string[] = [srnDlB64];
+  if (fileRecord.path) {
+    resourcesDlB64.push(
+      buildSrn({
+        projectPublicId: fileRecord.projectId!,
+        resourceType: 'file',
+        resourceId: fileRecord.path,
+      })
+    );
+  }
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: fileRecord.projectId!,
     action: 'files:DownloadFile',
-    resource: srnDlB64,
+    resources: resourcesDlB64,
     context: contextDlB64,
   });
   if (!allowed) {
@@ -459,10 +532,20 @@ filesRouter.patch('/files/:id/metadata', async (ctx: Context) => {
       contextMeta[`soat:ResourceTag/${k}`] = v;
     }
   }
+  const resourcesMeta: string[] = [srnMeta];
+  if (fileRecord.path) {
+    resourcesMeta.push(
+      buildSrn({
+        projectPublicId: fileRecord.projectId!,
+        resourceType: 'file',
+        resourceId: fileRecord.path,
+      })
+    );
+  }
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: fileRecord.projectId!,
     action: 'files:UpdateFileMetadata',
-    resource: srnMeta,
+    resources: resourcesMeta,
     context: contextMeta,
   });
   if (!allowed) {
@@ -507,10 +590,20 @@ filesRouter.get('/files/:id/tags', async (ctx: Context) => {
       context[`soat:ResourceTag/${k}`] = v;
     }
   }
+  const srnTagResources: string[] = [srn];
+  if (file.path) {
+    srnTagResources.push(
+      buildSrn({
+        projectPublicId: file.projectId!,
+        resourceType: 'file',
+        resourceId: file.path,
+      })
+    );
+  }
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: file.projectId!,
     action: 'files:GetFile',
-    resource: srn,
+    resources: srnTagResources,
     context,
   });
   if (!allowed) {
@@ -548,10 +641,20 @@ filesRouter.put('/files/:id/tags', async (ctx: Context) => {
       context[`soat:ResourceTag/${k}`] = v;
     }
   }
+  const srnPutResources: string[] = [srn];
+  if (file.path) {
+    srnPutResources.push(
+      buildSrn({
+        projectPublicId: file.projectId!,
+        resourceType: 'file',
+        resourceId: file.path,
+      })
+    );
+  }
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: file.projectId!,
     action: 'files:UpdateFileMetadata',
-    resource: srn,
+    resources: srnPutResources,
     context,
   });
   if (!allowed) {
@@ -590,10 +693,20 @@ filesRouter.patch('/files/:id/tags', async (ctx: Context) => {
       context[`soat:ResourceTag/${k}`] = v;
     }
   }
+  const srnPatchResources: string[] = [srn];
+  if (file.path) {
+    srnPatchResources.push(
+      buildSrn({
+        projectPublicId: file.projectId!,
+        resourceType: 'file',
+        resourceId: file.path,
+      })
+    );
+  }
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: file.projectId!,
     action: 'files:UpdateFileMetadata',
-    resource: srn,
+    resources: srnPatchResources,
     context,
   });
   if (!allowed) {

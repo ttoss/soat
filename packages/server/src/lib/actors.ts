@@ -1,6 +1,18 @@
 import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
+import {
+  type CompiledPolicy,
+  registerResourceFieldMap,
+} from './policyCompiler';
+
+export type { CompiledPolicy };
+
+registerResourceFieldMap({
+  resourceType: 'actor',
+  publicIdColumn: { column: 'publicId' },
+  tagsColumn: { column: 'tags' },
+});
 
 const mapActor = (
   actor: InstanceType<(typeof db)['Actor']> & {
@@ -37,6 +49,7 @@ export const listActors = async (args: {
   externalId?: string;
   name?: string;
   type?: string;
+  policyWhere?: Record<string, unknown>;
   limit?: number;
   offset?: number;
 }) => {
@@ -63,6 +76,10 @@ export const listActors = async (args: {
 
   if (args.type !== undefined) {
     where.type = args.type;
+  }
+
+  if (args.policyWhere) {
+    Object.assign(where, args.policyWhere);
   }
 
   const { count, rows } = await db.Actor.findAndCountAll({

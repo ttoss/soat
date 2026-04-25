@@ -1,6 +1,18 @@
 import fs from 'node:fs';
 
 import { db } from '../db';
+import {
+  registerResourceFieldMap,
+  type CompiledPolicy,
+} from './policyCompiler';
+
+export type { CompiledPolicy };
+
+registerResourceFieldMap({
+  resourceType: 'conversation',
+  publicIdColumn: { column: 'publicId' },
+  tagsColumn: { column: 'tags' },
+});
 import { createGeneration, type GenerationResult } from './agents';
 import { createChatCompletionForChat } from './chats';
 import { createDocument, deleteDocument } from './documents';
@@ -55,6 +67,7 @@ const mapMessage = (
 export const listConversations = async (args: {
   projectIds?: number[];
   actorId?: string;
+  policyWhere?: Record<string, unknown>;
   limit?: number;
   offset?: number;
 }) => {
@@ -87,6 +100,10 @@ export const listConversations = async (args: {
       }
     );
     where.id = conversationIds;
+  }
+
+  if (args.policyWhere) {
+    Object.assign(where, args.policyWhere);
   }
 
   const { count, rows } = await db.Conversation.findAndCountAll({

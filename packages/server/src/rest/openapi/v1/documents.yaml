@@ -80,6 +80,10 @@ paths:
                 content:
                   type: string
                   example: 'The quick brown fox jumps over the lazy dog.'
+                path:
+                  type: string
+                  description: Logical path within the project (e.g. /reports/q1.txt). Defaults to /filename if omitted.
+                  example: '/reports/q1.txt'
                 filename:
                   type: string
                   example: 'my-doc.txt'
@@ -183,6 +187,71 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - Documents
+      summary: Update a document
+      description: Updates document content, title, path, metadata, or tags. Supplying `path` moves the document to a new logical path within the project.
+      operationId: updateDocument
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Document ID
+          schema:
+            type: string
+            example: 'doc_V1StGXR8Z5jdHi6B'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+                  description: New text content
+                title:
+                  type: string
+                  description: New title
+                path:
+                  type: string
+                  nullable: true
+                  description: Logical path within the project (e.g. /reports/q1.txt). Pass null to clear.
+                  example: '/reports/q1.txt'
+                metadata:
+                  type: object
+                  description: Arbitrary metadata object
+                tags:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: Key-value tags
+      responses:
+        '200':
+          description: Document updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /documents/search:
     post:
       tags:
@@ -253,6 +322,11 @@ components:
           type: string
           description: Project ID
           example: 'proj_V1StGXR8Z5jdHi6B'
+        path:
+          type: string
+          nullable: true
+          description: Logical path of the document within the project (e.g. /reports/q1.txt)
+          example: '/reports/q1.txt'
         filename:
           type: string
           description: Original filename
