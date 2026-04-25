@@ -2,7 +2,9 @@
 
 ## Overview
 
-The Memory module provides a reusable, project-scoped mechanism for injecting contextual knowledge into agents and chats. A memory is a CRUD entity that defines **what** content to retrieve and **how** to retrieve it. When an agent or chat runs, attached memories are queried and the resulting documents are injected as system messages.
+The Memory module provides a reusable, project-scoped mechanism for injecting contextual knowledge into agents and chats. A memory is a **named, saved document query** — it defines filtering and search criteria that are evaluated at query time to return matching documents. When an agent or chat runs, attached memories are queried and the resulting documents are injected as system messages.
+
+The same query shape used by a memory is also available as an ad-hoc document search endpoint (`POST /api/v1/documents/search`). A memory is simply a persisted preset for that query.
 
 This module resolves two roadmap items:
 
@@ -20,21 +22,32 @@ A memory is a named, project-scoped configuration that describes how to retrieve
 | `id`          | string   | auto     | Public ID with `mem_` prefix                                                   |
 | `name`        | string   | yes      | Human-readable name. Also used as tool name when exposed to agents.            |
 | `description` | string   | no       | Description of what this memory provides. Used as tool description for agents. |
-| `type`        | enum     | yes      | One of: `rag`, `documents`, `paths`                                            |
-| `config`      | object   | yes      | Type-specific configuration (see below)                                        |
+| `config`      | object   | yes      | Query configuration (see Query Fields below)                                   |
 | `project_id`  | string   | yes      | The project this memory belongs to                                             |
 | `created_at`  | datetime | auto     |                                                                                |
 | `updated_at`  | datetime | auto     |                                                                                |
 
-### Memory Types
+### Query Fields
 
-#### `rag`
+All query fields are optional individually, but at least one of `search`, `paths`, or `document_ids` must be provided. When multiple fields are set, they act as AND filters — only documents matching **all** conditions are returned.
 
-Performs semantic search over project documents using embeddings.
+| Field          | Type     | Description                                                                  |
+| -------------- | -------- | ---------------------------------------------------------------------------- |
+| `search`       | string   | Semantic search query. Documents are ranked by embedding similarity.         |
+| `min_score`    | number   | Minimum similarity score threshold (0–1). Only applies when `search` is set. |
+| `limit`        | number   | Maximum number of documents to return. Default: 10.                          |
+| `paths`        | string[] | Filter to documents whose file path starts with any of these prefixes.       |
+| `document_ids` | string[] | Filter to these specific document public IDs.                                |
+
+### Examples
+
+**Semantic search:**
+
+**Semantic search:**
 
 ```json
 {
-  "type": "rag",
+  "name": "Bitcoin Knowledge",
   "config": {
     "search": "bitcoin price analysis",
     "limit": 10
@@ -42,44 +55,53 @@ Performs semantic search over project documents using embeddings.
 }
 ```
 
-| Config Field | Type   | Required | Default | Description                              |
-| ------------ | ------ | -------- | ------- | ---------------------------------------- |
-| `search`     | string | yes      | —       | The search query for semantic similarity |
-| `limit`      | number | no       | 10      | Maximum number of documents to return    |
-
-#### `documents`
-
-Fetches specific documents by their IDs.
+**Specific documents:**
 
 ```json
 {
-  "type": "documents",
+  "name": "Product Specs",
   "config": {
     "document_ids": ["doc_abc123", "doc_def456"]
   }
 }
 ```
 
-| Config Field   | Type     | Required | Description                             |
-| -------------- | -------- | -------- | --------------------------------------- |
-| `document_ids` | string[] | yes      | List of document public IDs to retrieve |
-
-#### `paths`
-
-Matches documents whose file path starts with the given prefixes.
+**Path prefix:**
 
 ```json
 {
-  "type": "paths",
+  "name": "Knowledge Base",
   "config": {
     "paths": ["/knowledge-base/bitcoin/", "/reports/2024/"]
   }
 }
 ```
 
-| Config Field | Type     | Required | Description                              |
-| ------------ | -------- | -------- | ---------------------------------------- |
-| `paths`      | string[] | yes      | Path prefixes to match documents against |
+**Combined — RAG scoped to a folder:**
+
+```json
+{
+  "name": "Bitcoin KB Search",
+  "config": {
+    "search": "bitcoin",
+    "paths": ["/knowledge-base/"],
+    "min_score": 0.8,
+    "limit": 5
+  }
+}
+```
+
+**Combined — RAG within specific documents:**
+
+```json
+{
+  "name": "Targeted Search",
+  "config": {
+    "search": "bitcoin",
+    "document_ids": ["doc_abc123", "doc_def456"]
+  }
+}
+```
 
 ### Query Result
 
@@ -98,8 +120,8 @@ When a memory is queried (via the API or internally by an agent/chat), it return
 }
 ```
 
-- `score` is present only for `rag` type (semantic similarity score).
-- `documents` and `paths` types return documents without a score.
+- `score` is present only when the memory has a `search` field (semantic similarity score).
+- Memories without `search` return documents without a score.
 
 ## Attachment to Agents and Chats
 
@@ -152,11 +174,13 @@ Attaching/detaching memories to chats uses **chat permissions** (`chats:UpdateCh
 
 ### Document Access Scoping
 
-When a memory is queried, the underlying document search is scoped by the **calling user's `projectIds`**. This means:
+When a memory is queried through an agent's `soat` tool, three layers determine what documents are returned:
 
-- A user can only see documents they have access to, even through an agent's memory.
-- The permission chain flows: user → agent/chat handler → memory resolution → document search, all using the same `projectIds`.
-- No additional permission checks are needed — the existing `projectIds` scoping on `searchDocuments`, `getDocument`, and file queries handles it.
+1. **Caller permissions** — the user or API key that triggered the generation must be allowed to search documents (`documents:SearchDocuments`), and the caller's policy may restrict **which resources** (e.g., specific files or paths) they can access. Only documents the caller is authorized to read are candidates.
+2. **Agent boundary policy** — if the agent defines a `boundary_policy`, it further restricts both the allowed **actions** and **resources**. The effective permission is the intersection of caller and boundary policies (see [SOAT Action Permissions](../modules/agents.md#soat-action-permissions)). A boundary that only allows `resource: ["file/reports/*"]` means the agent can never return documents outside that path, regardless of the caller's broader access.
+3. **Memory config filters** — `search`, `paths`, `document_ids`, `min_score`, and `limit` from the memory's `config` further narrow the result set within the already-permitted documents.
+
+All three layers AND together: the caller's policy determines the accessible document set, the boundary policy intersects it further, and the config filters scope the actual query within what remains. Everything lives inside a single project — no cross-project access is possible.
 
 ## REST API
 
@@ -181,13 +205,16 @@ All body fields use `snake_case` per project convention.
 
 `POST /api/v1/memories/:memoryId/query` allows users to preview/test what a memory returns. This is also the internal code path used by agents and chats at generation time.
 
-Optional request body for `rag` type:
+Optional request body to override any query fields:
 
 ```json
 {
-  "search": "override search query"
+  "search": "override search query",
+  "limit": 5
 }
 ```
+
+Any field passed in the request body overrides the corresponding saved field on the memory.
 
 Response:
 
@@ -208,17 +235,16 @@ Response:
 
 ### Memory Table
 
-| Column      | DB Type   | Notes                                |
-| ----------- | --------- | ------------------------------------ |
-| id          | UUID      | Internal primary key (never exposed) |
-| publicId    | VARCHAR   | `mem_` + nanoid, exposed as `id`     |
-| name        | VARCHAR   | Required                             |
-| description | TEXT      | Optional                             |
-| type        | ENUM      | `rag`, `documents`, `paths`          |
-| config      | JSONB     | Type-specific config object          |
-| projectId   | INTEGER   | FK → Project                         |
-| createdAt   | TIMESTAMP |                                      |
-| updatedAt   | TIMESTAMP |                                      |
+| Column      | DB Type   | Notes                                                                 |
+| ----------- | --------- | --------------------------------------------------------------------- |
+| id          | UUID      | Internal primary key (never exposed)                                  |
+| publicId    | VARCHAR   | `mem_` + nanoid, exposed as `id`                                      |
+| name        | VARCHAR   | Required                                                              |
+| description | TEXT      | Optional                                                              |
+| config      | JSONB     | Query config: `search`, `min_score`, `limit`, `paths`, `document_ids` |
+| projectId   | INTEGER   | FK → Project                                                          |
+| createdAt   | TIMESTAMP |                                                                       |
+| updatedAt   | TIMESTAMP |                                                                       |
 
 ### AgentMemory Join Table
 
@@ -244,8 +270,14 @@ When an agent or chat generates a response:
 
 1. Collect persisted memories (from join table) and per-request `memory_ids`.
 2. Merge into a deduplicated set.
-3. For each memory, call `queryMemory({ memoryId, projectIds })`.
-4. Combine all returned documents.
+3. For each memory, execute the saved query (scoped by caller's `projectIds`):
+   a. Start with all documents in the caller's accessible projects.
+   b. If `document_ids` → filter to those specific docs.
+   c. If `paths` → filter to docs matching those path prefixes.
+   d. If `search` → rank by semantic similarity, apply `min_score` threshold.
+   e. If no `search` → return docs in creation order.
+   f. Apply `limit`.
+4. Combine all returned documents from all memories.
 5. Format documents into system messages and prepend to the conversation.
 
 Each document becomes a system message:
@@ -273,13 +305,35 @@ Bitcoin is a decentralized digital currency...
 - [ ] **MCP tests**: Add memory tool tests to `packages/server/tests/unit/tests/mcp.test.ts`
 - [ ] **Smoke tests**: Add memory steps to `tests/smoke-tests.sh`
 
+## Document Search Endpoint
+
+The same query shape is available as an ad-hoc endpoint for searching documents without creating a memory:
+
+```
+POST /api/v1/documents/search
+```
+
+Request body:
+
+```json
+{
+  "search": "bitcoin",
+  "paths": ["/knowledge-base/"],
+  "min_score": 0.8,
+  "limit": 5
+}
+```
+
+Response shape is identical to the memory query endpoint. This shares the same underlying resolution function — a memory is just a named preset for this query.
+
 ## Future Extensions
 
 These are **not** in scope for V1 but are natural additions:
 
-| Feature                  | Description                                                 |
-| ------------------------ | ----------------------------------------------------------- |
-| `type: 'conversational'` | Auto-extract facts from chat history (Mem0/ChatGPT pattern) |
-| Agent self-editing       | Agent can create/update memories via tools (Letta pattern)  |
-| `type: 'episodic'`       | Few-shot examples from past successful interactions         |
-| Background processing    | Async memory refinement between conversations (sleep-time)  |
+| Feature               | Description                                                 |
+| --------------------- | ----------------------------------------------------------- |
+| Conversational memory | Auto-extract facts from chat history (Mem0/ChatGPT pattern) |
+| Agent self-editing    | Agent can create/update memories via tools (Letta pattern)  |
+| Episodic memory       | Few-shot examples from past successful interactions         |
+| Background processing | Async memory refinement between conversations (sleep-time)  |
+| Tags filter           | Add `tags` field to query for filtering by document tags    |

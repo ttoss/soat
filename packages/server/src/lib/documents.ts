@@ -4,8 +4,15 @@ import path from 'node:path';
 import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
+import { mapDocument } from './documentQuery';
 import { getEmbedding } from './embedding';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitEvent } from './eventBus';
+
+export {
+  DocumentQueryConfig,
+  QueryDocumentResult,
+  resolveDocumentQuery,
+} from './documentQuery';
 
 const getStorageDir = () => {
   const dir = process.env.FILES_STORAGE_DIR;
@@ -15,33 +22,28 @@ const getStorageDir = () => {
   return dir;
 };
 
-const mapDocument = (
-  doc: InstanceType<(typeof db)['Document']> & {
-    file?: InstanceType<(typeof db)['File']> & {
-      project?: InstanceType<(typeof db)['Project']>;
-    };
-  }
-) => {
-  return {
-    id: doc.publicId,
-    fileId: doc.file?.publicId,
-    projectId: doc.file?.project?.publicId,
-    filename: doc.file?.filename,
-    size: doc.file?.size,
-    title: doc.title ?? undefined,
-    metadata: doc.metadata
-      ? (() => {
-          try {
-            return JSON.parse(doc.metadata!);
-          } catch {
-            return doc.metadata;
-          }
-        })()
-      : undefined,
-    tags: doc.tags ?? undefined,
-    createdAt: doc.createdAt,
-    updatedAt: doc.updatedAt,
+type LoadedDoc = InstanceType<(typeof db)['Document']> & {
+  file?: InstanceType<(typeof db)['File']> & {
+    project?: InstanceType<(typeof db)['Project']>;
   };
+};
+
+const emitDocumentLifecycleEvent = (args: {
+  type: string;
+  doc: LoadedDoc;
+  data: Record<string, unknown>;
+}) => {
+  const project = args.doc.file?.project;
+  if (!project) return;
+  emitEvent({
+    type: args.type,
+    projectId: project.id,
+    projectPublicId: project.publicId,
+    resourceType: 'document',
+    resourceId: args.doc.publicId,
+    data: args.data,
+    timestamp: new Date().toISOString(),
+  });
 };
 
 export const listDocuments = async (args: {
@@ -151,17 +153,11 @@ export const createDocument = async (args: {
 
   const mapped = mapDocument(created!);
 
-  if (created!.file?.project) {
-    emitEvent({
-      type: 'documents.created',
-      projectId: created!.file.project.id,
-      projectPublicId: created!.file.project.publicId,
-      resourceType: 'document',
-      resourceId: created!.publicId,
-      data: mapped as unknown as Record<string, unknown>,
-      timestamp: new Date().toISOString(),
-    });
-  }
+  emitDocumentLifecycleEvent({
+    type: 'documents.created',
+    doc: created!,
+    data: mapped as unknown as Record<string, unknown>,
+  });
 
   return mapped;
 };
@@ -182,34 +178,26 @@ export const deleteDocument = async (args: { id: string }) => {
     return null;
   }
 
-  const docPublicId = doc.publicId;
-  const projectId = doc.file?.project?.id;
-  const projectPublicId = doc.file?.project?.publicId;
-
-  if (doc.file?.storagePath) {
+  const storagePath = doc.file?.storagePath;
+  if (storagePath) {
     try {
-      fs.unlinkSync(doc.file.storagePath);
+      fs.unlinkSync(storagePath);
     } catch {
       // Ignore missing file errors
     }
   }
 
+  const docPublicId = doc.publicId;
   await doc.destroy();
   if (doc.file) {
     await doc.file.destroy();
   }
 
-  if (projectId && projectPublicId) {
-    emitEvent({
-      type: 'documents.deleted',
-      projectId,
-      projectPublicId,
-      resourceType: 'document',
-      resourceId: docPublicId,
-      data: { id: docPublicId },
-      timestamp: new Date().toISOString(),
-    });
-  }
+  emitDocumentLifecycleEvent({
+    type: 'documents.deleted',
+    doc,
+    data: { id: docPublicId },
+  });
 
   return true;
 };
@@ -267,17 +255,11 @@ export const updateDocument = async (args: {
 
   const mapped = mapDocument(refreshed!);
 
-  if (refreshed!.file?.project) {
-    emitEvent({
-      type: 'documents.updated',
-      projectId: refreshed!.file.project.id,
-      projectPublicId: refreshed!.file.project.publicId,
-      resourceType: 'document',
-      resourceId: refreshed!.publicId,
-      data: mapped as unknown as Record<string, unknown>,
-      timestamp: new Date().toISOString(),
-    });
-  }
+  emitDocumentLifecycleEvent({
+    type: 'documents.updated',
+    doc: refreshed!,
+    data: mapped as unknown as Record<string, unknown>,
+  });
 
   return mapped;
 };
@@ -400,17 +382,11 @@ export const updateDocumentTags = async (args: {
 
   const tagsMapped = mapDocument(refreshed!);
 
-  if (refreshed!.file?.project) {
-    emitEvent({
-      type: 'documents.updated',
-      projectId: refreshed!.file.project.id,
-      projectPublicId: refreshed!.file.project.publicId,
-      resourceType: 'document',
-      resourceId: refreshed!.publicId,
-      data: tagsMapped as unknown as Record<string, unknown>,
-      timestamp: new Date().toISOString(),
-    });
-  }
+  emitDocumentLifecycleEvent({
+    type: 'documents.updated',
+    doc: refreshed!,
+    data: tagsMapped as unknown as Record<string, unknown>,
+  });
 
   return tagsMapped;
 };

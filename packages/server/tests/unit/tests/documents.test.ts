@@ -174,25 +174,25 @@ describe('Documents', () => {
     test('user with permission can search documents', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/search')
-        .send({ project_id: projectId, query: 'capital of France' });
+        .send({ project_id: projectId, search: 'capital of France' });
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.documents)).toBe(true);
     });
 
     test('search with limit returns at most limit results', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/search')
-        .send({ project_id: projectId, query: 'test content', limit: 1 });
+        .send({ project_id: projectId, search: 'test content', limit: 1 });
 
       expect(response.status).toBe(200);
-      expect(response.body.length).toBeLessThanOrEqual(1);
+      expect(response.body.documents.length).toBeLessThanOrEqual(1);
     });
 
     test('unauthenticated request cannot search documents', async () => {
       const response = await testClient
         .post('/api/v1/documents/search')
-        .send({ project_id: projectId, query: 'test' });
+        .send({ project_id: projectId, search: 'test' });
 
       expect(response.status).toBe(401);
     });
@@ -200,13 +200,13 @@ describe('Documents', () => {
     test('search without projectId returns results across accessible projects', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/search')
-        .send({ query: 'no project' });
+        .send({ search: 'no project' });
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.documents)).toBe(true);
     });
 
-    test('missing query returns 400', async () => {
+    test('missing search/paths/documentIds returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/search')
         .send({ project_id: projectId });
@@ -217,25 +217,41 @@ describe('Documents', () => {
     test('search results include score and content fields', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/search')
-        .send({ project_id: projectId, query: 'capital of France' });
+        .send({ project_id: projectId, search: 'capital of France' });
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      if (response.body.length > 0) {
-        expect(typeof response.body[0].score).toBe('number');
-        expect(typeof response.body[0].content).toBe('string');
+      expect(Array.isArray(response.body.documents)).toBe(true);
+      if (response.body.documents.length > 0) {
+        expect(typeof response.body.documents[0].score).toBe('number');
+        expect(typeof response.body.documents[0].content).toBe('string');
       }
     });
 
-    test('search with threshold filters low-score results', async () => {
+    test('search with minScore filters low-score results', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/search')
-        .send({ project_id: projectId, query: 'capital of France', threshold: 0.99 });
+        .send({
+          project_id: projectId,
+          search: 'capital of France',
+          min_score: 0.99,
+        });
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      for (const doc of response.body) {
+      expect(Array.isArray(response.body.documents)).toBe(true);
+      for (const doc of response.body.documents) {
         expect(doc.score).toBeGreaterThanOrEqual(0.99);
+      }
+    });
+
+    test('search by paths prefix returns matching documents', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/search')
+        .send({ project_id: projectId, paths: ['france'] });
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.documents)).toBe(true);
+      for (const doc of response.body.documents) {
+        expect(doc.filename).toMatch(/^france/);
       }
     });
   });
@@ -406,48 +422,43 @@ describe('Documents', () => {
     });
   });
 
-  describe('POST /api/v1/documents/search with tags (FEAT-13)', () => {
-    let taggedDocId: string;
+  describe('POST /api/v1/documents/search by documentIds', () => {
+    let targetDocId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/documents')
         .send({
           project_id: projectId,
-          content: 'Tag-filtered search document.',
-          filename: 'tag-search.txt',
-          tags: ['unique-search-tag'],
+          content: 'Specific document for ID-based retrieval.',
+          filename: 'specific-doc.txt',
         });
-      taggedDocId = res.body.id;
+      targetDocId = res.body.id;
     });
 
-    test('search by matching tag returns tagged document', async () => {
+    test('search by documentIds returns only those documents', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/search')
         .send({
           project_id: projectId,
-          query: 'tag-filtered',
-          tags: ['unique-search-tag'],
+          document_ids: [targetDocId],
         });
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      const ids = response.body.map((d: { id: string }) => {
+      expect(Array.isArray(response.body.documents)).toBe(true);
+      const ids = response.body.documents.map((d: { id: string }) => {
         return d.id;
       });
-      expect(ids).toContain(taggedDocId);
+      expect(ids).toContain(targetDocId);
     });
 
-    test('search by non-matching tag returns empty results', async () => {
+    test('search by non-existent documentId returns empty results', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/search')
-        .send({ project_id: projectId, query: 'tag-filtered', tags: ['no-such-tag-xyz'] });
+        .send({ project_id: projectId, document_ids: ['doc_nonexistent0000'] });
 
       expect(response.status).toBe(200);
-      const ids = response.body.map((d: { id: string }) => {
-        return d.id;
-      });
-      expect(ids).not.toContain(taggedDocId);
+      expect(response.body.documents).toHaveLength(0);
     });
   });
 
@@ -492,10 +503,10 @@ describe('Documents', () => {
       const response = await testClient
         .post('/api/v1/documents/search')
         .set('Authorization', `Bearer ${projectKey}`)
-        .send({ query: 'project key test' });
+        .send({ search: 'project key test' });
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.documents)).toBe(true);
     });
   });
 });

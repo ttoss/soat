@@ -101,8 +101,9 @@ export const tools: SoatToolDefinition[] = [
   {
     name: 'search-documents',
     description:
-      'Semantic search over documents using vector similarity. ' +
-      'Returns documents ranked by relevance.',
+      'Search documents using semantic similarity, path prefixes, or specific IDs. ' +
+      'At least one of search, paths, or documentIds must be provided. ' +
+      'Returns documents ranked by relevance when search is used.',
     method: 'POST',
     path: () => {
       return '/documents/search';
@@ -110,32 +111,43 @@ export const tools: SoatToolDefinition[] = [
     body: (args) => {
       return {
         projectId: args.projectId,
-        query: args.query,
+        search: args.search,
+        minScore: args.minScore,
         limit: args.limit,
-        threshold: args.threshold,
-        tags: args.tags,
+        paths: args.paths,
+        documentIds: args.documentIds,
       };
     },
     inputSchema: {
       type: 'object',
       properties: {
         projectId: { type: 'string', description: 'Project ID to search in' },
-        query: { type: 'string', description: 'Search query' },
+        search: {
+          type: 'string',
+          description:
+            'Semantic search query. Documents are ranked by embedding similarity.',
+        },
+        minScore: {
+          type: 'number',
+          description:
+            'Minimum similarity score threshold (0–1). Only applies when search is set.',
+        },
         limit: {
           type: 'number',
-          description: 'Maximum number of results to return',
+          description: 'Maximum number of results to return (default: 10)',
         },
-        threshold: {
-          type: 'number',
-          description: 'Minimum similarity score (0–1)',
-        },
-        tags: {
+        paths: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Tags to filter documents',
+          description:
+            'Filter to documents whose filename starts with any of these prefixes.',
+        },
+        documentIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Filter to these specific document public IDs.',
         },
       },
-      required: ['query'],
     },
     iamAction: 'documents:SearchDocuments',
   },

@@ -43,14 +43,14 @@ OLLAMA_BASE_URL=http://localhost:11434
 
 ## Data Model
 
-| Field       | Type   | Description                                                   |
-| ----------- | ------ | ------------------------------------------------------------- |
-| `id`        | string | Public identifier prefixed with `doc_`                        |
+| Field        | Type   | Description                                                   |
+| ------------ | ------ | ------------------------------------------------------------- |
+| `id`         | string | Public identifier prefixed with `doc_`                        |
 | `file_id`    | string | ID of the underlying File record                              |
 | `project_id` | string | ID of the owning project                                      |
-| `filename`  | string | Original filename (`.txt` extension)                          |
-| `size`      | number | File size in bytes                                            |
-| `content`   | string | Text content — only present in `GET /documents/:id` responses |
+| `filename`   | string | Original filename (`.txt` extension)                          |
+| `size`       | number | File size in bytes                                            |
+| `content`    | string | Text content — only present in `GET /documents/:id` responses |
 | `created_at` | string | ISO 8601 creation timestamp                                   |
 | `updated_at` | string | ISO 8601 last-updated timestamp                               |
 
@@ -75,11 +75,13 @@ See the [API Reference](../api/documents/list-documents) for full endpoint detai
 
 For endpoints that accept `project_id`, the field is optional. When omitted, the server resolves accessible projects based on the caller's identity:
 
-| Caller type | Behavior when `project_id` is omitted                                         |
+| Caller type | Behavior when `project_id` is omitted                                        |
 | ----------- | ---------------------------------------------------------------------------- |
 | project key | Infers the project from the key's own scope (single project)                 |
 | JWT admin   | No project filter — returns results across all projects                      |
 | JWT user    | Enumerates all projects the user is a member of with the required permission |
+
+Regular users can only access documents in projects they are members of. Even if a user's policy contains `resource: ["*"]`, the server checks project membership **before** evaluating policies — access is limited to the user's own projects. See [IAM — Authorization Model](iam.md#authorization-model) for the full evaluation flow.
 
 If `project_id` is supplied but the caller lacks permission for that project, the request returns `403 Forbidden`.
 
@@ -87,11 +89,11 @@ If `project_id` is supplied but the caller lacks permission for that project, th
 
 The following MCP tools are available for AI assistants:
 
-| Tool name          | Description                                                                |
-| ------------------ | -------------------------------------------------------------------------- |
+| Tool name          | Description                                                                 |
+| ------------------ | --------------------------------------------------------------------------- |
 | `list-documents`   | List documents; omit `project_id` to retrieve all accessible documents      |
-| `get-document`     | Retrieve a document including its text content                             |
-| `create-document`  | Create a new text document with automatic embedding                        |
-| `delete-document`  | Delete a document and its underlying file                                  |
-| `update-document`  | Update document content, title, metadata, or tags                          |
+| `get-document`     | Retrieve a document including its text content                              |
+| `create-document`  | Create a new text document with automatic embedding                         |
+| `delete-document`  | Delete a document and its underlying file                                   |
+| `update-document`  | Update document content, title, metadata, or tags                           |
 | `search-documents` | Semantic search; omit `project_id` to search across all accessible projects |

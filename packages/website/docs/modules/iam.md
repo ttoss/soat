@@ -8,13 +8,14 @@ The IAM (Identity and Access Management) module provides authentication, identit
 
 ## Overview
 
-SOAT uses a policy-based access control model. Every API request is authenticated via JWT (for users) or project key (for project-scoped clients). Authorization is evaluated by loading the caller's attached policy documents and running them through the policy engine.
+SOAT uses a policy-based access control model. Every API request is authenticated via JWT (for users) or project key (for project-scoped clients). Authorization is evaluated in two layers: first the caller's **project membership** is verified, then the attached **policy documents** are run through the policy engine.
 
 The IAM module covers:
 
 - **Users** — identity management, roles, and JWT authentication (see [Users](#users) below)
 - **Policy Documents** — structured permission rules attached to memberships and project keys
 - **Policy Engine** — evaluation logic that resolves allow/deny decisions at request time
+- **Authorization Model** — the two-layer model that combines project membership with policy evaluation (see [Authorization Model](#authorization-model) below)
 
 ## Authentication
 
@@ -78,6 +79,27 @@ Examples:
 | `soat:proj_ABC:actor:act_123`    | A specific actor           |
 | `soat:*:*:*`                     | Everything (admin-level)   |
 
+### Project Segment and Policy Scoping
+
+Because policies always belong to a single project (see [Projects — Policy Documents](projects.md#policy-documents)), and are only evaluated against resources within that same project (see [Authorization Model](#authorization-model)), the `<project_id>` segment in an SRN is **automatically constrained** by the policy's own project scope.
+
+In practice this means:
+
+- `resource: ["*"]` — matches all resources in the policy's project. This is the **recommended** form for broad access.
+- `resource: ["soat:proj_ABC:document:*"]` — valid only if this policy belongs to `proj_ABC`. If it belongs to a different project, this pattern will never match any resource (it becomes a dead statement).
+
+You do **not** need to specify the project ID in resource patterns to limit cross-project access — that restriction is enforced by project membership at Layer 1 of the [Authorization Model](#authorization-model). The project segment exists for namespacing and forward compatibility, not for access control between projects.
+
+:::tip
+When writing policies, prefer `resource: ["*"]` for broad access within the project. Use specific SRNs only when you need to restrict access to individual resources:
+
+```json
+{ "resource": ["soat:proj_ABC:document:doc_XYZ"] }
+```
+
+There is no need to specify the project ID to prevent cross-project access — project membership already enforces that.
+:::
+
 ### Resource Types
 
 | Resource Type  | Public ID Prefix | Module        |
@@ -139,9 +161,45 @@ Conditions add attribute-based constraints to statements. A condition block maps
 | `soat:ResourceTag/<key>` | Resource tags | Tag value on the target resource        |
 | `soat:ResourceType`      | Request       | The type of the resource being accessed |
 
+## Authorization Model
+
+Authorization in SOAT is a **two-layer** process. Both layers must pass for a request to be allowed.
+
+### Layer 1 — Project Membership
+
+Before any policy is evaluated, the server checks whether the caller has access to the target project:
+
+| Caller type            | Membership check                                                         |
+| ---------------------- | ------------------------------------------------------------------------ |
+| **Admin (JWT)**        | Bypassed — admins have unrestricted access to all projects               |
+| **Regular user (JWT)** | Must be a member of the target project (`UserProject` record must exist) |
+| **Project key**        | Locked to the single project the key was created for                     |
+
+If the membership check fails, the request is denied with `403 Forbidden` — policy evaluation never runs.
+
+### Layer 2 — Policy Evaluation
+
+Only after membership is confirmed does the server load the caller's policies and evaluate them against the requested action and resource SRN.
+
+### Why This Matters
+
+A policy with `resource: ["*"]` grants access to **all resources within the projects the caller is a member of** — not all resources globally. The wildcard matches any SRN pattern, but the membership check restricts which projects the caller can reach in the first place.
+
+For example, if Alice is a member of `proj_A` with a policy containing `resource: ["*"]`, she can access all resources in `proj_A`. She **cannot** access resources in `proj_B` unless she is separately added as a member of `proj_B` with its own policies.
+
+### Authorization by Caller Type
+
+| Scenario                                                                                    | Result  | Reason                                      |
+| ------------------------------------------------------------------------------------------- | ------- | ------------------------------------------- |
+| Admin accessing any resource                                                                | Allowed | Admins bypass both layers                   |
+| User member of proj_A with `resource: ["*"]`, accessing proj_A                              | Allowed | Membership passes, policy matches           |
+| User member of proj_A with `resource: ["*"]`, accessing proj_B                              | Denied  | Not a member of proj_B — blocked at Layer 1 |
+| Project key for proj_A, accessing proj_B                                                    | Denied  | Key is locked to proj_A                     |
+| Project key for proj_A, action allowed by key policy but denied by user's membership policy | Denied  | Intersection semantics — both must allow    |
+
 ## Policy Evaluation
 
-Policy evaluation follows AWS IAM semantics:
+Policy evaluation (Layer 2) follows AWS IAM semantics:
 
 1. **Default deny** — if no statement matches, access is denied.
 2. **Explicit deny wins** — if any statement explicitly denies, access is denied regardless of allows.
@@ -188,7 +246,7 @@ GET    /api/v1/<resource>/:id/tags    Get tags
 
 ### Full Admin Policy
 
-Equivalent to unrestricted access:
+Equivalent to unrestricted access **within the project this policy is attached to**. The `resource: ["*"]` wildcard matches all SRNs, but the caller can only reach projects they are a member of (see [Authorization Model](#authorization-model)).
 
 ```json
 {
@@ -204,6 +262,8 @@ Equivalent to unrestricted access:
 ```
 
 ### Read-only Across All Modules
+
+Grants read access to documents, files, actors, and conversations **within the project**. Attach the same policy to multiple project memberships to grant the same permissions across projects.
 
 ```json
 {
@@ -289,11 +349,11 @@ The first user is created via the **bootstrap** endpoint, which is only availabl
 
 ### User Data Model
 
-| Field       | Type   | Description                             |
-| ----------- | ------ | --------------------------------------- |
-| `id`        | string | Public identifier prefixed with `user_` |
-| `username`  | string | Unique username                         |
-| `role`      | string | `"admin"` or `"user"`                   |
+| Field        | Type   | Description                             |
+| ------------ | ------ | --------------------------------------- |
+| `id`         | string | Public identifier prefixed with `user_` |
+| `username`   | string | Unique username                         |
+| `role`       | string | `"admin"` or `"user"`                   |
 | `created_at` | string | ISO 8601 creation timestamp             |
 | `updated_at` | string | ISO 8601 last-updated timestamp         |
 

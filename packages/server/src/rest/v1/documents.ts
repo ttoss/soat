@@ -1,13 +1,13 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
+import { resolveDocumentQuery } from 'src/lib/documentQuery';
 import {
   createDocument,
   deleteDocument,
   getDocument,
   getDocumentTags,
   listDocuments,
-  searchDocuments,
   updateDocument,
   updateDocumentTags,
 } from 'src/lib/documents';
@@ -269,15 +269,18 @@ documentsRouter.post('/documents/search', async (ctx: Context) => {
 
   const body = ctx.request.body as {
     projectId?: string;
-    query: string;
+    search?: string;
+    minScore?: number;
     limit?: number;
-    threshold?: number;
-    tags?: Record<string, string>;
+    paths?: string[];
+    documentIds?: string[];
   };
 
-  if (!body.query) {
+  if (!body.search && !body.paths && !body.documentIds) {
     ctx.status = 400;
-    ctx.body = { error: 'query is required' };
+    ctx.body = {
+      error: 'At least one of search, paths, or documentIds is required',
+    };
     return;
   }
 
@@ -292,15 +295,18 @@ documentsRouter.post('/documents/search', async (ctx: Context) => {
     return;
   }
 
-  const results = await searchDocuments({
+  const results = await resolveDocumentQuery({
     projectIds,
-    query: body.query,
-    limit: body.limit,
-    threshold: body.threshold,
-    tags: body.tags,
+    config: {
+      search: body.search,
+      minScore: body.minScore,
+      limit: body.limit,
+      paths: body.paths,
+      documentIds: body.documentIds,
+    },
   });
 
-  ctx.body = results;
+  ctx.body = { documents: results };
 });
 
 documentsRouter.get('/documents/:id/tags', async (ctx: Context) => {

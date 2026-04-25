@@ -12,10 +12,10 @@ A Project is a top-level container that scopes all resources. Users access proje
 
 ## Data Model
 
-| Field       | Type   | Description                             |
-| ----------- | ------ | --------------------------------------- |
-| `id`        | string | Public identifier prefixed with `proj_` |
-| `name`      | string | Human-readable project name             |
+| Field        | Type   | Description                             |
+| ------------ | ------ | --------------------------------------- |
+| `id`         | string | Public identifier prefixed with `proj_` |
+| `name`       | string | Human-readable project name             |
 | `created_at` | string | ISO 8601 creation timestamp             |
 | `updated_at` | string | ISO 8601 last-updated timestamp         |
 
@@ -24,6 +24,8 @@ A Project is a top-level container that scopes all resources. Users access proje
 ### Membership
 
 Users are added to projects as members. Each membership associates the user with one or more policy documents that define what the user can do within that project. A user can be a member of multiple projects, each with different policies.
+
+**Project membership is the first authorization gate.** Before any policy is evaluated, the server checks that the caller is a member of the target project. If the caller is not a member, the request is denied with `403` — regardless of what the policy documents say. This means a policy with `resource: ["*"]` only grants access within the projects the user belongs to, not globally. See [IAM — Authorization Model](iam.md#authorization-model) for details.
 
 ### Policy Documents
 
@@ -37,9 +39,9 @@ Policy documents are scoped to a project and contain structured IAM statements. 
 | `name`        | string | Human-readable label                   |
 | `description` | string | Optional description                   |
 | `document`    | object | Policy document (see [IAM](iam.md))    |
-| `project_id`   | string | ID of the owning project               |
-| `created_at`   | string | ISO 8601 creation timestamp            |
-| `updated_at`   | string | ISO 8601 last-updated timestamp        |
+| `project_id`  | string | ID of the owning project               |
+| `created_at`  | string | ISO 8601 creation timestamp            |
+| `updated_at`  | string | ISO 8601 last-updated timestamp        |
 
 ### Visibility Rules
 
@@ -51,18 +53,18 @@ Policy documents are scoped to a project and contain structured IAM statements. 
 
 Project CRUD and management operations are restricted to admin users. The `projects:GetProject` action is used by the policy engine for listing and reading policies as a member.
 
-| Action                 | Permission            | REST Endpoint                                              | MCP Tool        |
-| ---------------------- | --------------------- | ---------------------------------------------------------- | --------------- |
-| List projects          | Authenticated         | `GET /api/v1/projects`                                     | `list-projects` |
-| Get project by ID      | Authenticated         | `GET /api/v1/projects/:id`                                 | `get-project`   |
-| Create project         | Admin only            | `POST /api/v1/projects`                                    | —               |
-| Delete project         | Admin only            | `DELETE /api/v1/projects/:id`                              | —               |
-| List policies          | `projects:GetProject` | `GET /api/v1/projects/:project_id/policies`                 | —               |
+| Action                 | Permission            | REST Endpoint                                                | MCP Tool        |
+| ---------------------- | --------------------- | ------------------------------------------------------------ | --------------- |
+| List projects          | Authenticated         | `GET /api/v1/projects`                                       | `list-projects` |
+| Get project by ID      | Authenticated         | `GET /api/v1/projects/:id`                                   | `get-project`   |
+| Create project         | Admin only            | `POST /api/v1/projects`                                      | —               |
+| Delete project         | Admin only            | `DELETE /api/v1/projects/:id`                                | —               |
+| List policies          | `projects:GetProject` | `GET /api/v1/projects/:project_id/policies`                  | —               |
 | Get policy             | `projects:GetProject` | `GET /api/v1/projects/:project_id/policies/:policy_id`       | —               |
-| Create policy          | Admin only            | `POST /api/v1/projects/:project_id/policies`                | —               |
+| Create policy          | Admin only            | `POST /api/v1/projects/:project_id/policies`                 | —               |
 | Update policy          | Admin only            | `PUT /api/v1/projects/:project_id/policies/:policy_id`       | —               |
 | Delete policy          | Admin only            | `DELETE /api/v1/projects/:project_id/policies/:policy_id`    | —               |
-| Add member             | Admin only            | `POST /api/v1/projects/:project_id/members`                 | —               |
+| Add member             | Admin only            | `POST /api/v1/projects/:project_id/members`                  | —               |
 | Update member policies | Admin only            | `PUT /api/v1/projects/:project_id/members/:user_id/policies` | —               |
 | Get member policies    | Admin only            | `GET /api/v1/projects/:project_id/members/:user_id/policies` | —               |
 
@@ -142,10 +144,10 @@ Project Keys are identified by an `id` prefixed with `key_`.
 
 ### Project Key Data Model
 
-| Field       | Type   | Description                                    |
-| ----------- | ------ | ---------------------------------------------- |
-| `id`        | string | Public identifier prefixed with `key_`         |
-| `name`      | string | Human-readable label                           |
+| Field        | Type   | Description                                    |
+| ------------ | ------ | ---------------------------------------------- |
+| `id`         | string | Public identifier prefixed with `key_`         |
+| `name`       | string | Human-readable label                           |
 | `key_prefix` | string | First 8 characters of the raw key (for lookup) |
 | `user_id`    | string | Public ID of the user who created the key      |
 | `project_id` | string | Public ID of the project the key is scoped to  |
