@@ -46,7 +46,49 @@ conversationsRouter.get('/conversations', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listConversations({ projectIds, actorId, limit, offset });
+  const conversations = await listConversations({
+    projectIds,
+    actorId,
+    limit,
+    offset,
+  });
+
+  const filteredData = (
+    await Promise.all(
+      conversations.data.map(async (conversation) => {
+        if (!conversation.projectId) return null;
+        const srn = buildSrn({
+          projectPublicId: conversation.projectId,
+          resourceType: 'conversation',
+          resourceId: conversation.id,
+        });
+        const context: Record<string, string> = {
+          'soat:ResourceType': 'conversation',
+        };
+        if (conversation.tags) {
+          for (const [k, v] of Object.entries(conversation.tags)) {
+            context[`soat:ResourceTag/${k}`] = v as string;
+          }
+        }
+        const allowed = await ctx.authUser!.isAllowed({
+          projectPublicId: conversation.projectId,
+          action: 'conversations:ListConversations',
+          resource: srn,
+          context,
+        });
+        return allowed ? conversation : null;
+      })
+    )
+  ).filter((conversation): conversation is NonNullable<typeof conversation> => {
+    return conversation !== null;
+  });
+
+  ctx.body = {
+    data: filteredData,
+    total: filteredData.length,
+    limit: conversations.limit,
+    offset: conversations.offset,
+  };
 });
 
 conversationsRouter.get('/conversations/:id', async (ctx: Context) => {

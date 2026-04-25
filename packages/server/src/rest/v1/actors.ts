@@ -44,7 +44,7 @@ actorsRouter.get('/actors', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listActors({
+  const actors = await listActors({
     projectIds,
     externalId,
     name,
@@ -52,6 +52,43 @@ actorsRouter.get('/actors', async (ctx: Context) => {
     limit,
     offset,
   });
+
+  const filteredData = (
+    await Promise.all(
+      actors.data.map(async (actor) => {
+        if (!actor.projectId) return null;
+        const srn = buildSrn({
+          projectPublicId: actor.projectId,
+          resourceType: 'actor',
+          resourceId: actor.id,
+        });
+        const context: Record<string, string> = {
+          'soat:ResourceType': 'actor',
+        };
+        if (actor.tags) {
+          for (const [k, v] of Object.entries(actor.tags)) {
+            context[`soat:ResourceTag/${k}`] = v as string;
+          }
+        }
+        const allowed = await ctx.authUser!.isAllowed({
+          projectPublicId: actor.projectId,
+          action: 'actors:ListActors',
+          resource: srn,
+          context,
+        });
+        return allowed ? actor : null;
+      })
+    )
+  ).filter((actor): actor is NonNullable<typeof actor> => {
+    return actor !== null;
+  });
+
+  ctx.body = {
+    data: filteredData,
+    total: filteredData.length,
+    limit: actors.limit,
+    offset: actors.offset,
+  };
 });
 
 actorsRouter.get('/actors/:id', async (ctx: Context) => {

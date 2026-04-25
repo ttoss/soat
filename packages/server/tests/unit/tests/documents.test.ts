@@ -509,4 +509,113 @@ describe('Documents', () => {
       expect(Array.isArray(response.body.documents)).toBe(true);
     });
   });
+
+  describe('resource-level SRN filtering on list/search endpoints', () => {
+    let srnUserToken: string;
+    let srnProjectId: string;
+    let allowedDocId: string;
+    let deniedDocId: string;
+    let srnPolicyId: string;
+
+    beforeAll(async () => {
+      const createUserRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'srnuser', password: 'srnpass' });
+      const srnUserId = createUserRes.body.id;
+      srnUserToken = await loginAs('srnuser', 'srnpass');
+
+      const projectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'SRN Filter Project' });
+      srnProjectId = projectRes.body.id;
+
+      // Create a basic policy and add user to project
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/projects/${srnProjectId}/policies`)
+        .send({
+          permissions: [
+            'documents:CreateDocument',
+            'documents:ListDocuments',
+            'documents:SearchDocuments',
+          ],
+        });
+      srnPolicyId = policyRes.body.id;
+
+      await authenticatedTestClient(adminToken)
+        .post(`/api/v1/projects/${srnProjectId}/members`)
+        .send({ user_id: srnUserId, policy_id: srnPolicyId });
+
+      // Create two documents
+      const allowedRes = await authenticatedTestClient(srnUserToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: srnProjectId,
+          content: 'This document is allowed.',
+          filename: 'allowed.txt',
+        });
+      allowedDocId = allowedRes.body.id;
+
+      const deniedRes = await authenticatedTestClient(srnUserToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: srnProjectId,
+          content: 'This document is denied.',
+          filename: 'denied.txt',
+        });
+      deniedDocId = deniedRes.body.id;
+
+      // Update the policy to restrict ListDocuments and SearchDocuments
+      // to only the allowed document's SRN
+      const allowedSrn = `soat:${srnProjectId}:document:${allowedDocId}`;
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/projects/${srnProjectId}/policies/${srnPolicyId}`)
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['documents:CreateDocument'],
+              },
+              {
+                effect: 'Allow',
+                action: [
+                  'documents:ListDocuments',
+                  'documents:SearchDocuments',
+                ],
+                resource: [allowedSrn],
+              },
+            ],
+          },
+        });
+    });
+
+    test('GET /documents only returns SRN-allowed documents', async () => {
+      const response = await authenticatedTestClient(srnUserToken).get(
+        `/api/v1/documents?project_id=${srnProjectId}`
+      );
+
+      expect(response.status).toBe(200);
+      const ids = response.body.data.map((d: { id: string }) => {
+        return d.id;
+      });
+      expect(ids).toContain(allowedDocId);
+      expect(ids).not.toContain(deniedDocId);
+    });
+
+    test('POST /documents/search only returns SRN-allowed documents', async () => {
+      const response = await authenticatedTestClient(srnUserToken)
+        .post('/api/v1/documents/search')
+        .send({
+          project_id: srnProjectId,
+          document_ids: [allowedDocId, deniedDocId],
+        });
+
+      expect(response.status).toBe(200);
+      const ids = response.body.documents.map((d: { id: string }) => {
+        return d.id;
+      });
+      expect(ids).toContain(allowedDocId);
+      expect(ids).not.toContain(deniedDocId);
+    });
+  });
 });

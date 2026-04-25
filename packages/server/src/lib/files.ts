@@ -47,10 +47,24 @@ export const listFiles = async (args: {
 
   const { count, rows } = await db.File.findAndCountAll({
     where: Object.keys(where).length > 0 ? where : undefined,
+    include: [{ model: db.Project, as: 'project' }],
     limit,
     offset,
   });
-  return { data: rows.map(mapFile), total: count, limit, offset };
+  return {
+    data: rows.map((file) => {
+      const f = file as InstanceType<(typeof db)['File']> & {
+        project?: InstanceType<(typeof db)['Project']>;
+      };
+      return {
+        ...mapFile(f),
+        projectId: f.project?.publicId as string | undefined,
+      };
+    }),
+    total: count,
+    limit,
+    offset,
+  };
 };
 
 export const getFile = async (args: { id: string }) => {
