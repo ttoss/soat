@@ -452,4 +452,88 @@ describe('Files', () => {
       expect(response.status).toBe(403);
     });
   });
+
+  describe('resource-level SRN filtering on GET /files', () => {
+    let srnUserToken: string;
+    let srnProjectId: string;
+    let allowedFileId: string;
+    let deniedFileId: string;
+    let srnPolicyId: string;
+
+    beforeAll(async () => {
+      const createUserRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'filesrnuser', password: 'filesrnpass' });
+      const srnUserId = createUserRes.body.id;
+      srnUserToken = await loginAs('filesrnuser', 'filesrnpass');
+
+      const projectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'File SRN Filter Project' });
+      srnProjectId = projectRes.body.id;
+
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/projects/${srnProjectId}/policies`)
+        .send({
+          permissions: ['files:UploadFile', 'files:GetFile'],
+        });
+      srnPolicyId = policyRes.body.id;
+
+      await authenticatedTestClient(adminToken)
+        .post(`/api/v1/projects/${srnProjectId}/members`)
+        .send({ user_id: srnUserId, policy_id: srnPolicyId });
+
+      // Upload two files
+      const allowedRes = await authenticatedTestClient(srnUserToken)
+        .post('/api/v1/files/upload')
+        .attach('file', Buffer.from('allowed file content'), {
+          filename: 'allowed.txt',
+          contentType: 'text/plain',
+        })
+        .field('project_id', srnProjectId);
+      allowedFileId = allowedRes.body.id;
+
+      const deniedRes = await authenticatedTestClient(srnUserToken)
+        .post('/api/v1/files/upload')
+        .attach('file', Buffer.from('denied file content'), {
+          filename: 'denied.txt',
+          contentType: 'text/plain',
+        })
+        .field('project_id', srnProjectId);
+      deniedFileId = deniedRes.body.id;
+
+      // Update policy to restrict GetFile to only the allowed file's SRN
+      const allowedSrn = `soat:${srnProjectId}:file:${allowedFileId}`;
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/projects/${srnProjectId}/policies/${srnPolicyId}`)
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['files:UploadFile'],
+              },
+              {
+                effect: 'Allow',
+                action: ['files:GetFile'],
+                resource: [allowedSrn],
+              },
+            ],
+          },
+        });
+    });
+
+    test('GET /files only returns SRN-allowed files', async () => {
+      const response = await authenticatedTestClient(srnUserToken).get(
+        `/api/v1/files?project_id=${srnProjectId}`
+      );
+
+      expect(response.status).toBe(200);
+      const ids = response.body.data.map((f: { id: string }) => {
+        return f.id;
+      });
+      expect(ids).toContain(allowedFileId);
+      expect(ids).not.toContain(deniedFileId);
+    });
+  });
 });

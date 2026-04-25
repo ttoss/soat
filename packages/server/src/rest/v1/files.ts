@@ -46,11 +46,48 @@ filesRouter.get('/files', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listFiles({
+  const files = await listFiles({
     projectIds: projectIds ?? undefined,
     limit,
     offset,
   });
+
+  const filteredData = (
+    await Promise.all(
+      files.data.map(async (file) => {
+        if (!file.projectId) return null;
+        const srn = buildSrn({
+          projectPublicId: file.projectId,
+          resourceType: 'file',
+          resourceId: file.id,
+        });
+        const context: Record<string, string> = {
+          'soat:ResourceType': 'file',
+        };
+        if (file.tags) {
+          for (const [k, v] of Object.entries(file.tags)) {
+            context[`soat:ResourceTag/${k}`] = v;
+          }
+        }
+        const allowed = await ctx.authUser!.isAllowed({
+          projectPublicId: file.projectId,
+          action: 'files:GetFile',
+          resource: srn,
+          context,
+        });
+        return allowed ? file : null;
+      })
+    )
+  ).filter((file): file is NonNullable<typeof file> => {
+    return file !== null;
+  });
+
+  ctx.body = {
+    data: filteredData,
+    total: filteredData.length,
+    limit: files.limit,
+    offset: files.offset,
+  };
 });
 
 filesRouter.get('/files/:id', async (ctx: Context) => {

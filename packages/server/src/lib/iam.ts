@@ -228,6 +228,53 @@ export const statementMatches = (args: {
   return true;
 };
 
+const matchesWildcardRequest = (statement: Statement): boolean => {
+  const policyResources = statement.resource ?? ['*'];
+  // Allow grants access to at least some resources (per-item filtering handles the rest).
+  // Deny only blocks when it applies globally (resource: '*').
+  if (statement.effect === 'Allow') return true;
+  return policyResources.some((r) => {
+    return r === '*';
+  });
+};
+
+const matchesExactResource = (
+  statement: Statement,
+  resource: string
+): boolean => {
+  const policyResources = statement.resource ?? ['*'];
+  return policyResources.some((pattern) => {
+    return matchesPattern({ pattern, value: resource });
+  });
+};
+
+const checkStatement = (args: {
+  statement: Statement;
+  action: string;
+  resource: string;
+  context: Record<string, string>;
+  isWildcardRequest: boolean;
+}): 'allow' | 'deny' | 'skip' => {
+  const { statement, action, resource, context, isWildcardRequest } = args;
+
+  const actionMatch = statement.action.some((pattern) => {
+    return matchesPattern({ pattern, value: action });
+  });
+  if (!actionMatch) return 'skip';
+
+  const resourceMatch = isWildcardRequest
+    ? matchesWildcardRequest(statement)
+    : matchesExactResource(statement, resource);
+  if (!resourceMatch) return 'skip';
+
+  if (statement.condition) {
+    if (!evaluateCondition({ condition: statement.condition, context }))
+      return 'skip';
+  }
+
+  return statement.effect === 'Deny' ? 'deny' : 'allow';
+};
+
 export const evaluatePolicies = (args: {
   policies: PolicyDocument[];
   action: string;
@@ -236,19 +283,21 @@ export const evaluatePolicies = (args: {
 }): boolean => {
   const resource = args.resource ?? '*';
   const context = args.context ?? {};
+  const isWildcardRequest = resource === '*';
 
   let allowed = false;
 
   for (const policy of args.policies) {
     for (const statement of policy.statement) {
-      if (
-        statementMatches({ statement, action: args.action, resource, context })
-      ) {
-        if (statement.effect === 'Deny') {
-          return false; // Explicit deny, short-circuit
-        }
-        allowed = true;
-      }
+      const result = checkStatement({
+        statement,
+        action: args.action,
+        resource,
+        context,
+        isWildcardRequest,
+      });
+      if (result === 'deny') return false;
+      if (result === 'allow') allowed = true;
     }
   }
 

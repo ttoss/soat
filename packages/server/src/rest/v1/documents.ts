@@ -15,6 +15,50 @@ import { buildSrn } from 'src/lib/iam';
 
 const documentsRouter = new Router<Context>();
 
+const buildDocumentSrnContext = (doc: {
+  id: string;
+  projectId?: string;
+  tags?: Record<string, string>;
+}) => {
+  const srn = buildSrn({
+    projectPublicId: doc.projectId!,
+    resourceType: 'document',
+    resourceId: doc.id,
+  });
+  const context: Record<string, string> = { 'soat:ResourceType': 'document' };
+  if (doc.tags) {
+    for (const [k, v] of Object.entries(doc.tags)) {
+      context[`soat:ResourceTag/${k}`] = v;
+    }
+  }
+  return { srn, context };
+};
+
+const filterDocsByPermission = async <
+  T extends { id: string; projectId?: string; tags?: Record<string, string> },
+>(
+  docs: T[],
+  action: string,
+  authUser: NonNullable<Context['authUser']>
+): Promise<T[]> => {
+  const results = await Promise.all(
+    docs.map(async (doc) => {
+      if (!doc.projectId) return null;
+      const { srn, context } = buildDocumentSrnContext(doc);
+      const allowed = await authUser.isAllowed({
+        projectPublicId: doc.projectId,
+        action,
+        resource: srn,
+        context,
+      });
+      return allowed ? doc : null;
+    })
+  );
+  return results.filter((d): d is T => {
+    return d !== null;
+  });
+};
+
 documentsRouter.get('/documents', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -41,7 +85,19 @@ documentsRouter.get('/documents', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listDocuments({ projectIds, limit, offset });
+  const docs = await listDocuments({ projectIds, limit, offset });
+  const filteredData = await filterDocsByPermission(
+    docs.data,
+    'documents:ListDocuments',
+    ctx.authUser!
+  );
+
+  ctx.body = {
+    data: filteredData,
+    total: filteredData.length,
+    limit: docs.limit,
+    offset: docs.offset,
+  };
 });
 
 documentsRouter.get('/documents/:id', async (ctx: Context) => {
@@ -59,17 +115,7 @@ documentsRouter.get('/documents/:id', async (ctx: Context) => {
     return;
   }
 
-  const srn = buildSrn({
-    projectPublicId: doc.projectId!,
-    resourceType: 'document',
-    resourceId: doc.id,
-  });
-  const context: Record<string, string> = { 'soat:ResourceType': 'document' };
-  if (doc.tags) {
-    for (const [k, v] of Object.entries(doc.tags)) {
-      context[`soat:ResourceTag/${k}`] = v;
-    }
-  }
+  const { srn, context } = buildDocumentSrnContext(doc);
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: doc.projectId!,
     action: 'documents:GetDocument',
@@ -166,19 +212,7 @@ documentsRouter.delete('/documents/:id', async (ctx: Context) => {
     return;
   }
 
-  const srnDel = buildSrn({
-    projectPublicId: doc.projectId!,
-    resourceType: 'document',
-    resourceId: doc.id,
-  });
-  const contextDel: Record<string, string> = {
-    'soat:ResourceType': 'document',
-  };
-  if (doc.tags) {
-    for (const [k, v] of Object.entries(doc.tags)) {
-      contextDel[`soat:ResourceTag/${k}`] = v;
-    }
-  }
+  const { srn: srnDel, context: contextDel } = buildDocumentSrnContext(doc);
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: doc.projectId!,
     action: 'documents:DeleteDocument',
@@ -217,19 +251,7 @@ documentsRouter.patch('/documents/:id', async (ctx: Context) => {
     return;
   }
 
-  const srnUpd = buildSrn({
-    projectPublicId: doc.projectId!,
-    resourceType: 'document',
-    resourceId: doc.id,
-  });
-  const contextUpd: Record<string, string> = {
-    'soat:ResourceType': 'document',
-  };
-  if (doc.tags) {
-    for (const [k, v] of Object.entries(doc.tags)) {
-      contextUpd[`soat:ResourceTag/${k}`] = v;
-    }
-  }
+  const { srn: srnUpd, context: contextUpd } = buildDocumentSrnContext(doc);
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: doc.projectId!,
     action: 'documents:UpdateDocument',
@@ -306,7 +328,13 @@ documentsRouter.post('/documents/search', async (ctx: Context) => {
     },
   });
 
-  ctx.body = { documents: results };
+  const filteredDocuments = await filterDocsByPermission(
+    results,
+    'documents:SearchDocuments',
+    ctx.authUser!
+  );
+
+  ctx.body = { documents: filteredDocuments };
 });
 
 documentsRouter.get('/documents/:id/tags', async (ctx: Context) => {
@@ -324,17 +352,7 @@ documentsRouter.get('/documents/:id/tags', async (ctx: Context) => {
     return;
   }
 
-  const srn = buildSrn({
-    projectPublicId: doc.projectId!,
-    resourceType: 'document',
-    resourceId: doc.id,
-  });
-  const context: Record<string, string> = { 'soat:ResourceType': 'document' };
-  if (doc.tags) {
-    for (const [k, v] of Object.entries(doc.tags)) {
-      context[`soat:ResourceTag/${k}`] = v;
-    }
-  }
+  const { srn, context } = buildDocumentSrnContext(doc);
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: doc.projectId!,
     action: 'documents:GetDocument',
@@ -365,24 +383,14 @@ documentsRouter.put('/documents/:id/tags', async (ctx: Context) => {
     return;
   }
 
-  const srn = buildSrn({
-    projectPublicId: doc.projectId!,
-    resourceType: 'document',
-    resourceId: doc.id,
-  });
-  const context: Record<string, string> = { 'soat:ResourceType': 'document' };
-  if (doc.tags) {
-    for (const [k, v] of Object.entries(doc.tags)) {
-      context[`soat:ResourceTag/${k}`] = v;
-    }
-  }
-  const allowed = await ctx.authUser.isAllowed({
+  const { srn: srnPut, context: contextPut } = buildDocumentSrnContext(doc);
+  const allowedPut = await ctx.authUser.isAllowed({
     projectPublicId: doc.projectId!,
     action: 'documents:UpdateDocument',
-    resource: srn,
-    context,
+    resource: srnPut,
+    context: contextPut,
   });
-  if (!allowed) {
+  if (!allowedPut) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
     return;
@@ -411,17 +419,7 @@ documentsRouter.patch('/documents/:id/tags', async (ctx: Context) => {
     return;
   }
 
-  const srn = buildSrn({
-    projectPublicId: doc.projectId!,
-    resourceType: 'document',
-    resourceId: doc.id,
-  });
-  const context: Record<string, string> = { 'soat:ResourceType': 'document' };
-  if (doc.tags) {
-    for (const [k, v] of Object.entries(doc.tags)) {
-      context[`soat:ResourceTag/${k}`] = v;
-    }
-  }
+  const { srn, context } = buildDocumentSrnContext(doc);
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: doc.projectId!,
     action: 'documents:UpdateDocument',
