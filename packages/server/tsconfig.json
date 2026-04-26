@@ -4,6 +4,7 @@
     "paths": {
       "src/*": ["./src/*"]
     },
+    "resolveJsonModule": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   },

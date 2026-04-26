@@ -6,7 +6,9 @@ const snakeToCamel = (str: string): string => {
 
 export const snakeToCamelDeep = (value: unknown): unknown => {
   if (Array.isArray(value)) {
-    return value.map((item) => snakeToCamelDeep(item));
+    return value.map((item) => {
+      return snakeToCamelDeep(item);
+    });
   }
 
   if (value !== null && typeof value === 'object') {

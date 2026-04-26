@@ -1,8 +1,8 @@
 import type { McpServer } from '@ttoss/http-server-mcp';
 import { apiCall, registerToolFromSchema } from '@ttoss/http-server-mcp';
-import { toMcpText } from './caseTransform';
 
 import { tools } from '../../lib/soat-tools/agents';
+import { toMcpText } from './caseTransform';
 
 const registerTools = (server: McpServer) => {
   for (const def of tools) {
