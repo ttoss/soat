@@ -1,8 +1,13 @@
 import {
   buildAllMessages,
+  buildCompletedGenerationResult,
   buildDepthGuardResult,
   findPendingClientTools,
+  pendingGenerations,
+  savePendingGeneration,
+  type TypedAgent,
 } from 'src/lib/agentGenerationHelpers';
+import { traces } from 'src/lib/agentTraces';
 
 describe('buildAllMessages', () => {
   test('returns messages unchanged when instructions is null', () => {
@@ -131,6 +136,138 @@ describe('findPendingClientTools', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = findPendingClientTools(steps, resolvedTools as any);
     expect(result).toHaveLength(2);
-    expect(result.every((r) => r.toolName === 'clientTool')).toBe(true);
+    expect(
+      result.every((r) => {
+        return r.toolName === 'clientTool';
+      })
+    ).toBe(true);
+  });
+});
+
+const mockAgent: TypedAgent = {
+  instructions: null,
+  model: 'test-model',
+  toolIds: null,
+  maxSteps: 5,
+  toolChoice: 'auto',
+  stopConditions: null,
+  activeToolIds: null,
+  stepRules: null,
+  boundaryPolicy: null,
+  temperature: null,
+  project: { id: 1, publicId: 'prj_test123' },
+  aiProvider: { publicId: 'aip_test123' },
+};
+
+describe('savePendingGeneration', () => {
+  beforeEach(() => {
+    traces.clear();
+    pendingGenerations.clear();
+  });
+
+  test('returns requires_action result and stores in pendingGenerations', () => {
+    const result = savePendingGeneration({
+      generationId: 'gen_test001',
+      traceId: 'trc_test001',
+      pendingToolCalls: [
+        { toolCallId: 'tc_1', toolName: 'myTool', input: { x: 1 } },
+      ],
+      allMessages: [{ role: 'user', content: 'Hello' }],
+      result: { steps: [], response: { messages: [] } },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      model: {} as any,
+      typedAgent: mockAgent,
+      agentId: 'agt_test001',
+      resolvedTools: {},
+    });
+
+    expect(result.status).toBe('requires_action');
+    expect(result.id).toBe('gen_test001');
+    expect(result.traceId).toBe('trc_test001');
+    expect(result.requiredAction?.type).toBe('submit_tool_outputs');
+    expect(result.requiredAction?.toolCalls).toHaveLength(1);
+    expect(result.requiredAction?.toolCalls[0].toolName).toBe('myTool');
+    expect(pendingGenerations.has('gen_test001')).toBe(true);
+    expect(traces.get('trc_test001')?.status).toBe('requires_action');
+  });
+
+  test('returns requires_action with multiple pending tool calls', () => {
+    const result = savePendingGeneration({
+      generationId: 'gen_test002',
+      traceId: 'trc_test002',
+      pendingToolCalls: [
+        { toolCallId: 'tc_1', toolName: 'toolA', input: { a: 1 } },
+        { toolCallId: 'tc_2', toolName: 'toolB', input: { b: 2 } },
+      ],
+      allMessages: [{ role: 'user', content: 'Call both tools' }],
+      result: { steps: [], response: { messages: [] } },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      model: {} as any,
+      typedAgent: mockAgent,
+      agentId: 'agt_test001',
+      resolvedTools: {},
+    });
+
+    expect(result.status).toBe('requires_action');
+    expect(result.requiredAction?.toolCalls).toHaveLength(2);
+  });
+});
+
+describe('buildCompletedGenerationResult', () => {
+  beforeEach(() => {
+    traces.clear();
+  });
+
+  test('returns completed result and updates traces', () => {
+    const result = buildCompletedGenerationResult({
+      generationId: 'gen_done001',
+      traceId: 'trc_done001',
+      result: {
+        steps: [],
+        response: { modelId: 'gpt-4' },
+        text: 'Hello world',
+        finishReason: 'stop',
+      },
+      typedAgent: mockAgent,
+      agentId: 'agt_test001',
+    });
+
+    expect(result.status).toBe('completed');
+    expect(result.id).toBe('gen_done001');
+    expect(result.traceId).toBe('trc_done001');
+    expect(result.output?.content).toBe('Hello world');
+    expect(result.output?.finishReason).toBe('stop');
+    expect(result.output?.model).toBe('gpt-4');
+    expect(traces.get('trc_done001')?.status).toBe('completed');
+  });
+
+  test('uses typedAgent model when response has no modelId', () => {
+    const result = buildCompletedGenerationResult({
+      generationId: 'gen_done002',
+      traceId: 'trc_done002',
+      result: { steps: [], response: {}, text: 'Hi', finishReason: 'stop' },
+      typedAgent: mockAgent,
+      agentId: 'agt_test001',
+    });
+
+    expect(result.output?.model).toBe('test-model');
+  });
+
+  test('uses empty string when both response modelId and typedAgent.model are absent', () => {
+    const agentWithoutModel: TypedAgent = { ...mockAgent, model: null };
+    const result = buildCompletedGenerationResult({
+      generationId: 'gen_done003',
+      traceId: 'trc_done003',
+      result: {
+        steps: [],
+        response: {},
+        text: 'No model',
+        finishReason: 'stop',
+      },
+      typedAgent: agentWithoutModel,
+      agentId: 'agt_test001',
+    });
+
+    expect(result.output?.model).toBe('');
   });
 });

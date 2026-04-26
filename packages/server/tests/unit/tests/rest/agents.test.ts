@@ -619,6 +619,15 @@ describe('Agents', () => {
 
       expect(response.status).not.toBe(400);
     });
+
+    test('user without CreateAgentGeneration permission returns 404 (no accessible projects)', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'Hello' }] });
+
+      // noPermToken has no policies → projectIds=[] → agent not found in empty scope
+      expect(response.status).toBe(404);
+    });
   });
 
   // ── Submit Tool Outputs ──────────────────────────────────────────────────
@@ -660,6 +669,40 @@ describe('Agents', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
+    });
+
+    test('generation_not_found returns 404 with valid toolOutputs', async () => {
+      const agentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
+      const agentId = agentRes.body.id;
+
+      const response = await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/generate/gen_doesnotexist000/tool-outputs`
+        )
+        .send({
+          toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }],
+        });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBeDefined();
+    });
+
+    test('user without CreateAgentGeneration permission returns 404 (no accessible projects)', async () => {
+      const agentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
+      const agentId = agentRes.body.id;
+
+      const response = await authenticatedTestClient(noPermToken)
+        .post(`/api/v1/agents/${agentId}/generate/gen_fake/tool-outputs`)
+        .send({
+          toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }],
+        });
+
+      // noPermToken has no policies → projectIds=[] → agent not found in empty scope
+      expect(response.status).toBe(404);
     });
   });
 

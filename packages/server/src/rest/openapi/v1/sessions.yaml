@@ -634,16 +634,18 @@ components:
           nullable: true
           description: Key-value pairs injected as context headers into all tool call requests made during this generation.
 
+    AddSessionMessageSaved:
+      type: object
+      description: Message saved; auto-generate is off or a generation is already in progress.
+      properties:
+        role:
+          type: string
+          enum: [user]
+        content:
+          type: string
     AddSessionMessageResponse:
       oneOf:
-        - type: object
-          description: Message saved; auto-generate is off or a generation is already in progress.
-          properties:
-            role:
-              type: string
-              enum: [user]
-            content:
-              type: string
+        - $ref: '#/components/schemas/AddSessionMessageSaved'
         - $ref: '#/components/schemas/GenerateSessionResponse'
 
     GenerateSessionRequest:

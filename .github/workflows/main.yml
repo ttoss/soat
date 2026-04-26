@@ -37,7 +37,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build and test
-        run: pnpm turbo run test
+        run: pnpm turbo run build typecheck lint test
 
   smoke-test:
     name: Smoke Tests

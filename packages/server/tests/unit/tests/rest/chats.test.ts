@@ -1,3 +1,5 @@
+import * as chatsLib from 'src/lib/chats';
+
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Chats', () => {
@@ -338,6 +340,62 @@ describe('Chats', () => {
       // The important thing is that we reached the ollama fallback path (not the aiProviderId path).
       expect(response.status).not.toBe(401);
       expect(response.status).not.toBe(403);
+    });
+  });
+
+  describe('POST /api/v1/chats/:chatId/completions - with mocked AI', () => {
+    let chatId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats')
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
+      chatId = res.body.id;
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    test('returns 200 with completion result when createChatCompletionForChat succeeds', async () => {
+      jest
+        .spyOn(chatsLib, 'createChatCompletionForChat')
+        .mockResolvedValueOnce({
+          model: 'mock-model',
+          content: 'Mock AI response',
+          finishReason: 'stop',
+        });
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/chats/${chatId}/completions`)
+        .send({ messages: [{ role: 'user', content: 'Hello' }] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.object).toBe('chat.completion');
+    });
+  });
+
+  describe('POST /api/v1/chats/completions - with mocked AI', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    test('returns 200 with completion result when createChatCompletion succeeds', async () => {
+      jest.spyOn(chatsLib, 'createChatCompletion').mockResolvedValueOnce({
+        model: 'direct-model',
+        content: 'Direct completion response',
+        finishReason: 'stop',
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats/completions')
+        .send({
+          ai_provider_id: aiProviderId,
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.object).toBe('chat.completion');
     });
   });
 });

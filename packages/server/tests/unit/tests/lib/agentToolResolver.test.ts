@@ -327,3 +327,120 @@ describe('resolveUrlPathParams', () => {
     expect(result.remainingArgs).toEqual({});
   });
 });
+
+describe('resolveAgentTools - mcp and soat types', () => {
+  let adminToken: string;
+  let projectId: string;
+  let mcpToolId: string;
+
+  beforeAll(async () => {
+    // toolresolveradmin was bootstrapped by the first describe's beforeAll
+    adminToken = await loginAs('toolresolveradmin', 'supersecret');
+
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'MCP Tool Resolver Project' });
+    projectId = projectRes.body.id;
+
+    const mcpToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents/tools')
+      .send({
+        project_id: projectId,
+        name: 'myMcpServer',
+        type: 'mcp',
+        description: 'Test MCP server',
+        mcp: { url: 'http://localhost:19999/mcp' },
+      });
+    mcpToolId = mcpToolRes.body.id;
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('resolves mcp tools via fetch mock', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          result: {
+            tools: [
+              {
+                name: 'search',
+                description: 'Search tool',
+                inputSchema: {
+                  type: 'object',
+                  properties: { query: { type: 'string' } },
+                },
+              },
+            ],
+          },
+        }),
+        { status: 200 }
+      )
+    );
+
+    const tools = await resolveAgentTools({ toolIds: [mcpToolId] });
+
+    expect(tools).toHaveProperty('search');
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  test('mcp tool returns empty result when fetch returns non-OK status', async () => {
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response('', { status: 500 }));
+
+    const tools = await resolveAgentTools({ toolIds: [mcpToolId] });
+
+    expect(Object.keys(tools)).toHaveLength(0);
+  });
+
+  test('mcp tool returns empty result when fetch throws', async () => {
+    jest
+      .spyOn(global, 'fetch')
+      .mockRejectedValueOnce(new Error('Network error'));
+
+    const tools = await resolveAgentTools({ toolIds: [mcpToolId] });
+
+    expect(Object.keys(tools)).toHaveLength(0);
+  });
+
+  test('http tool execute appends query params with & when URL already has ?', async () => {
+    const urlWithQueryRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents/tools')
+      .send({
+        project_id: projectId,
+        name: 'toolWithExistingQuery',
+        type: 'http',
+        description: 'Tool with existing query params in URL',
+        parameters: {
+          type: 'object',
+          properties: { filter: { type: 'string' } },
+        },
+        execute: { url: 'https://example.com/api?version=1', method: 'GET' },
+      });
+
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+
+    const tools = await resolveAgentTools({
+      toolIds: [urlWithQueryRes.body.id],
+    });
+    if (
+      'execute' in tools.toolWithExistingQuery &&
+      typeof tools.toolWithExistingQuery.execute === 'function'
+    ) {
+      await tools.toolWithExistingQuery.execute({ filter: 'active' });
+    }
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('version=1'),
+      expect.anything()
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('filter=active'),
+      expect.anything()
+    );
+  });
+});

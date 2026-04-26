@@ -335,6 +335,14 @@ describe('Sessions', () => {
 
       expect(response.status).toBe(401);
     });
+
+    test('non-existent session returns 404', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/sess_doesnotexist/messages`
+      );
+
+      expect(response.status).toBe(404);
+    });
   });
 
   // ── Add Session Message ────────────────────────────────────────────────
@@ -381,6 +389,15 @@ describe('Sessions', () => {
         .send({ message: 'Hi', tool_context: { req_key: 'val' } });
 
       expect(response.status).toBe(201);
+    });
+
+    test('missing message body returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .send({});
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
     });
   });
 
@@ -481,6 +498,30 @@ describe('Sessions', () => {
       expect(response.status).toBe(200);
       expect(response.body.env).toBe('production');
       expect(response.body.team).toBe('support');
+    });
+
+    test('GET tags returns 404 for non-existent session', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/sess_nonexistent/tags`
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    test('PUT tags returns 404 for non-existent session', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agentId}/sessions/sess_nonexistent/tags`)
+        .send({ env: 'test' });
+
+      expect(response.status).toBe(404);
+    });
+
+    test('PATCH tags returns 404 for non-existent session', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${agentId}/sessions/sess_nonexistent/tags`)
+        .send({ env: 'test' });
+
+      expect(response.status).toBe(404);
     });
   });
 
@@ -787,6 +828,98 @@ describe('Sessions', () => {
         expect(res.body.role).toBe('user');
         expect(res.body.content).toBe('Message while busy');
       });
+    });
+  });
+
+  // ── Tool Outputs ─────────────────────────────────────────────────────────
+
+  describe('POST /api/v1/agents/:agentId/sessions/:sessionId/tool-outputs', () => {
+    let sessionId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'Tool Outputs Test' });
+      sessionId = res.body.id;
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/tool-outputs`)
+        .send({
+          generationId: 'gen_1',
+          toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }],
+        });
+
+      expect(response.status).toBe(401);
+    });
+
+    test('missing generationId returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/tool-outputs`)
+        .send({ toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }] });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toMatch(/generationId/);
+    });
+
+    test('missing toolOutputs returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/tool-outputs`)
+        .send({ generationId: 'gen_test_001' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
+    });
+
+    test('empty toolOutputs array returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/tool-outputs`)
+        .send({ generationId: 'gen_test_001', toolOutputs: [] });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
+    });
+  });
+
+  // ── Sync Generate ─────────────────────────────────────────────────────────
+
+  describe('POST /api/v1/agents/:agentId/sessions/:sessionId/generate - sync', () => {
+    let syncSessionId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'Sync Generate Test' });
+      syncSessionId = res.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${syncSessionId}/messages`)
+        .send({ message: 'Hello sync' });
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    test('sync generate returns 200 with generation result when successful', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_sync_test',
+        traceId: 'trc_sync_test',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: 'Sync response',
+          finishReason: 'stop',
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${syncSessionId}/generate`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body).toBeDefined();
     });
   });
 });

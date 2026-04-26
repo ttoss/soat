@@ -385,15 +385,19 @@ export const resolveAgentTools = async (args: {
         break;
       case 'mcp':
         if (!typedTool.mcp?.url) break;
-        Object.assign(
-          resolvedTools,
-          await resolveMcpTools(
-            typedTool as {
-              mcp: { url: string; headers?: Record<string, string> };
-            },
-            args.toolContext
-          )
-        );
+        try {
+          Object.assign(
+            resolvedTools,
+            await resolveMcpTools(
+              typedTool as {
+                mcp: { url: string; headers?: Record<string, string> };
+              },
+              args.toolContext
+            )
+          );
+        } catch {
+          // Network errors resolving MCP tools should not abort entire resolution
+        }
         break;
       case 'soat':
         Object.assign(resolvedTools, resolveSoatTools(typedTool, args));

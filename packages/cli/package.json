@@ -1,17 +1,24 @@
 {
   "name": "@soat/cli",
   "version": "0.3.3",
+  "type": "module",
   "scripts": {
-    "build": "tsup"
+    "generate": "tsx scripts/generate.ts",
+    "build": "pnpm generate && tsup"
   },
   "dependencies": {
-    "@ttoss/logger": "^0.7.1",
-    "commander": "^14.0.2"
+    "@inquirer/input": "^5.0.12",
+    "@inquirer/password": "^5.0.12",
+    "@soat/sdk": "workspace:*",
+    "@ttoss/logger": "^0.8.10",
+    "commander": "^14.0.3"
   },
   "devDependencies": {
     "@ttoss/config": "^1.37.10",
     "@types/jest": "^30.0.0",
+    "@types/js-yaml": "^4.0.9",
     "jest": "^30.3.0",
+    "js-yaml": "^4.1.1",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0"
   },

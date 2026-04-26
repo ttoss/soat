@@ -43,7 +43,7 @@ jobs:
           aws-region: us-east-1
 
       - name: Build, test and deploy
-        run: pnpm turbo run deploy
+        run: pnpm turbo run build typecheck lint test deploy
         env:
           CARLIN_BRANCH: ${{ github.event.pull_request.head.ref }}
 

@@ -427,6 +427,32 @@ describe('Documents', () => {
 
       expect(response.status).toBe(403);
     });
+
+    test('normalizes path without leading slash (adds /)', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/documents/${documentId}`)
+        .send({ path: 'no-leading-slash' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.path).toBe('/no-leading-slash');
+    });
+
+    test('normalizes path with trailing slash (removes it)', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/documents/${documentId}`)
+        .send({ path: '/with-trailing-slash/' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.path).toBe('/with-trailing-slash');
+    });
+
+    test('sets path to null when null is passed', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/documents/${documentId}`)
+        .send({ path: null });
+
+      expect(response.status).toBe(200);
+    });
   });
 
   describe('POST /api/v1/documents/search by documentIds', () => {
