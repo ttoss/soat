@@ -28,10 +28,12 @@ const mapWebhook = (
   };
 };
 
-const webhookIncludes = () => [
-  { model: db.Project, as: 'project' },
-  { model: db.Policy, as: 'policy' },
-];
+const webhookIncludes = () => {
+  return [
+    { model: db.Project, as: 'project' },
+    { model: db.Policy, as: 'policy' },
+  ];
+};
 
 export const listWebhooks = async (args: { projectIds: number[] }) => {
   const webhooks = await db.Webhook.findAll({

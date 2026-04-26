@@ -15,15 +15,16 @@ servers:
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: your-soat.com
         default: your-soat.com
   - url: http://{host}/api/v1
     description: Development (HTTP)
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: localhost:5047
         default: localhost:5047
+tags:
+  - name: Sessions
+    description: Manage agent sessions
 paths:
   /agents/{agentId}/sessions:
     post:
@@ -693,20 +694,6 @@ components:
                     type: string
                   arguments:
                     type: object
-
-    SendSessionMessageRequest:
-      type: object
-      required:
-        - message
-      properties:
-        message:
-          type: string
-          description: User message text
-          example: Hello, how can I deploy my app?
-        model:
-          type: string
-          description: Optional model override
-          example: gpt-4o
 
     SendSessionMessageResponse:
       type: object

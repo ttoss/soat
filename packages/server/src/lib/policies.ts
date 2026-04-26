@@ -6,12 +6,20 @@ export const mapPolicy = (policy: InstanceType<(typeof db)['Policy']>) => {
   const doc = policy.document as PolicyDocument | undefined;
   const permissions =
     doc?.statement
-      ?.filter((s) => s.effect === 'Allow')
-      .flatMap((s) => s.action) ?? [];
+      ?.filter((s) => {
+        return s.effect === 'Allow';
+      })
+      .flatMap((s) => {
+        return s.action;
+      }) ?? [];
   const notPermissions =
     doc?.statement
-      ?.filter((s) => s.effect === 'Deny')
-      .flatMap((s) => s.action) ?? [];
+      ?.filter((s) => {
+        return s.effect === 'Deny';
+      })
+      .flatMap((s) => {
+        return s.action;
+      }) ?? [];
   return {
     id: policy.publicId,
     name: policy.name,
@@ -25,7 +33,9 @@ export const mapPolicy = (policy: InstanceType<(typeof db)['Policy']>) => {
 
 export const listPolicies = async () => {
   const policies = await db.Policy.findAll();
-  return policies.map((p: InstanceType<(typeof db)['Policy']>) => mapPolicy(p));
+  return policies.map((p: InstanceType<(typeof db)['Policy']>) => {
+    return mapPolicy(p);
+  });
 };
 
 export const createPolicy = async (args: {

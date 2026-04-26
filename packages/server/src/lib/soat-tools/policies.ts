@@ -5,7 +5,9 @@ export const tools: SoatToolDefinition[] = [
     name: 'list-policies',
     description: 'List all global policies (admin only)',
     method: 'GET',
-    path: () => '/policies',
+    path: () => {
+      return '/policies';
+    },
     inputSchema: { type: 'object', properties: {} },
     iamAction: 'policies:ListPolicies',
   },
@@ -13,7 +15,9 @@ export const tools: SoatToolDefinition[] = [
     name: 'get-policy',
     description: 'Get a global policy by ID (admin only)',
     method: 'GET',
-    path: (args) => `/policies/${args.policyId}`,
+    path: (args) => {
+      return `/policies/${args.policyId}`;
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -30,12 +34,16 @@ export const tools: SoatToolDefinition[] = [
     name: 'create-policy',
     description: 'Create a new global policy (admin only)',
     method: 'POST',
-    path: () => '/policies',
-    body: (args) => ({
-      name: args.name,
-      description: args.description,
-      document: args.document,
-    }),
+    path: () => {
+      return '/policies';
+    },
+    body: (args) => {
+      return {
+        name: args.name,
+        description: args.description,
+        document: args.document,
+      };
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -70,12 +78,16 @@ export const tools: SoatToolDefinition[] = [
     name: 'update-policy',
     description: 'Update an existing global policy (admin only)',
     method: 'PUT',
-    path: (args) => `/policies/${args.policyId}`,
-    body: (args) => ({
-      name: args.name,
-      description: args.description,
-      document: args.document,
-    }),
+    path: (args) => {
+      return `/policies/${args.policyId}`;
+    },
+    body: (args) => {
+      return {
+        name: args.name,
+        description: args.description,
+        document: args.document,
+      };
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -113,7 +125,9 @@ export const tools: SoatToolDefinition[] = [
     name: 'delete-policy',
     description: 'Delete a global policy (admin only)',
     method: 'DELETE',
-    path: (args) => `/policies/${args.policyId}`,
+    path: (args) => {
+      return `/policies/${args.policyId}`;
+    },
     inputSchema: {
       type: 'object',
       properties: {

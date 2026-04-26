@@ -12,15 +12,16 @@ servers:
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: your-soat.com
         default: your-soat.com
   - url: http://{host}/api/v1
     description: Development (HTTP)
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: localhost:5047
         default: localhost:5047
+tags:
+  - name: Conversations
+    description: Manage conversations
 paths:
   /conversations:
     get:
@@ -44,15 +45,38 @@ paths:
           schema:
             type: string
             example: 'act_V1StGXR8Z5jdHi6B'
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
       responses:
         '200':
           description: List of conversations
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ConversationRecord'
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConversationRecord'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
         '401':
           description: Unauthorized
           content:
@@ -269,15 +293,38 @@ paths:
           schema:
             type: string
             example: 'conv_V1StGXR8Z5jdHi6B'
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
       responses:
         '200':
           description: List of messages
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ConversationMessageRecord'
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConversationMessageRecord'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
         '401':
           description: Unauthorized
           content:
@@ -530,6 +577,146 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Conversation or message not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /conversations/{id}/tags:
+    get:
+      tags:
+        - Conversations
+      summary: Get conversation tags
+      description: Returns all tags attached to the conversation
+      operationId: getConversationTags
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            example: 'conv_V1StGXR8Z5jdHi6B'
+      responses:
+        '200':
+          description: Conversation tags
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Conversations
+      summary: Replace conversation tags
+      description: Replaces all tags on the conversation with the provided tags
+      operationId: replaceConversationTags
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            example: 'conv_V1StGXR8Z5jdHi6B'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+      responses:
+        '200':
+          description: Tags replaced
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - Conversations
+      summary: Merge conversation tags
+      description: Merges provided tags with existing tags
+      operationId: mergeConversationTags
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            example: 'conv_V1StGXR8Z5jdHi6B'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+      responses:
+        '200':
+          description: Tags merged
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation not found
           content:
             application/json:
               schema:

@@ -6,12 +6,16 @@ export const tools: SoatToolDefinition[] = [
     description:
       'Create a new API key for the current user. Optionally scope it to a project and/or attach policies. The raw key value is only returned once.',
     method: 'POST',
-    path: () => '/api-keys',
-    body: (args) => ({
-      name: args.name,
-      project_id: args.projectId,
-      policy_ids: args.policyIds,
-    }),
+    path: () => {
+      return '/api-keys';
+    },
+    body: (args) => {
+      return {
+        name: args.name,
+        project_id: args.projectId,
+        policy_ids: args.policyIds,
+      };
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -36,7 +40,9 @@ export const tools: SoatToolDefinition[] = [
     name: 'get-api-key',
     description: 'Get an API key by ID (owner or admin only)',
     method: 'GET',
-    path: (args) => `/api-keys/${args.id}`,
+    path: (args) => {
+      return `/api-keys/${args.id}`;
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -51,12 +57,16 @@ export const tools: SoatToolDefinition[] = [
     description:
       'Update an API key name, project scope, or policies (owner or admin only)',
     method: 'PUT',
-    path: (args) => `/api-keys/${args.id}`,
-    body: (args) => ({
-      name: args.name,
-      project_id: args.projectId,
-      policy_ids: args.policyIds,
-    }),
+    path: (args) => {
+      return `/api-keys/${args.id}`;
+    },
+    body: (args) => {
+      return {
+        name: args.name,
+        project_id: args.projectId,
+        policy_ids: args.policyIds,
+      };
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -82,7 +92,9 @@ export const tools: SoatToolDefinition[] = [
     name: 'delete-api-key',
     description: 'Delete an API key (owner or admin only)',
     method: 'DELETE',
-    path: (args) => `/api-keys/${args.id}`,
+    path: (args) => {
+      return `/api-keys/${args.id}`;
+    },
     inputSchema: {
       type: 'object',
       properties: {

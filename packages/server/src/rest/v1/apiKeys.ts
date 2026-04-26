@@ -62,7 +62,9 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
       return;
     }
     resolvedPolicyIds = policies.map(
-      (p: InstanceType<(typeof db)['Policy']>) => p.id as number
+      (p: InstanceType<(typeof db)['Policy']>) => {
+        return p.id as number;
+      }
     );
   }
 
@@ -182,7 +184,9 @@ apiKeysRouter.put('/api-keys/:id', async (ctx: Context) => {
         return;
       }
       resolvedPolicyIds = policies.map(
-        (p: InstanceType<(typeof db)['Policy']>) => p.id as number
+        (p: InstanceType<(typeof db)['Policy']>) => {
+          return p.id as number;
+        }
       );
     }
   }

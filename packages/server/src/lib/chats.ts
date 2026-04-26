@@ -13,6 +13,76 @@ import { getDocument } from 'src/lib/documents';
 
 import { db } from '../db';
 
+const buildBedrockModel = (
+  apiKey: string,
+  config: Record<string, unknown> | undefined,
+  model: string
+): LanguageModel => {
+  let parsedCredentials:
+    | {
+        accessKeyId?: string;
+        secretAccessKey?: string;
+        sessionToken?: string;
+      }
+    | undefined;
+
+  if (apiKey) {
+    try {
+      parsedCredentials = JSON.parse(apiKey);
+    } catch {
+      // fall back to default AWS credential chain
+    }
+  }
+
+  const region = (config?.region as string | undefined) ?? 'us-east-1';
+
+  return createAmazonBedrock({
+    region,
+    accessKeyId: parsedCredentials?.accessKeyId,
+    secretAccessKey: parsedCredentials?.secretAccessKey,
+    sessionToken: parsedCredentials?.sessionToken,
+  })(model);
+};
+
+const isOpenAILikeProvider = (provider: AiProviderSlug): boolean => {
+  return (
+    provider === 'openai' || provider === 'gateway' || provider === 'custom'
+  );
+};
+
+const getProviderFactory = (args: {
+  provider: AiProviderSlug;
+  apiKey: string;
+  baseUrl: string | undefined;
+  config: Record<string, unknown> | undefined;
+}): LanguageModel | null => {
+  const { provider, apiKey, baseUrl, config } = args;
+
+  if (isOpenAILikeProvider(provider)) {
+    return createOpenAI({ apiKey, baseURL: baseUrl });
+  }
+  if (provider === 'anthropic') {
+    return createAnthropic({ apiKey, baseURL: baseUrl });
+  }
+  if (provider === 'google') {
+    return createGoogleGenerativeAI({ apiKey });
+  }
+  if (provider === 'xai') {
+    return createXai({ apiKey });
+  }
+  if (provider === 'groq') {
+    return createGroq({ apiKey });
+  }
+  if (provider === 'azure') {
+    const resourceName = (config?.resourceName as string | undefined) ?? '';
+    return createAzure({ apiKey, resourceName });
+  }
+  if (provider === 'bedrock') {
+    return buildBedrockModel(apiKey, config, '') as unknown as LanguageModel;
+  }
+  return null;
+};
+
 const buildModel = (args: {
   provider: AiProviderSlug;
   secretValue: string | null;
@@ -23,64 +93,15 @@ const buildModel = (args: {
   const { provider, secretValue, model, baseUrl, config } = args;
   const apiKey = secretValue ?? '';
 
-  switch (provider) {
-    case 'openai':
-      return createOpenAI({ apiKey, baseURL: baseUrl })(model);
-
-    case 'anthropic':
-      return createAnthropic({ apiKey, baseURL: baseUrl })(model);
-
-    case 'google':
-      return createGoogleGenerativeAI({ apiKey })(model);
-
-    case 'xai':
-      return createXai({ apiKey })(model);
-
-    case 'groq':
-      return createGroq({ apiKey })(model);
-
-    case 'azure': {
-      const resourceName = (config?.resourceName as string | undefined) ?? '';
-      return createAzure({ apiKey, resourceName })(model);
-    }
-
-    case 'bedrock': {
-      let parsedCredentials:
-        | {
-            accessKeyId?: string;
-            secretAccessKey?: string;
-            sessionToken?: string;
-          }
-        | undefined;
-
-      if (apiKey) {
-        try {
-          parsedCredentials = JSON.parse(apiKey);
-        } catch {
-          // fall back to default AWS credential chain
-        }
-      }
-
-      const region = (config?.region as string | undefined) ?? 'us-east-1';
-
-      return createAmazonBedrock({
-        region,
-        accessKeyId: parsedCredentials?.accessKeyId,
-        secretAccessKey: parsedCredentials?.secretAccessKey,
-        sessionToken: parsedCredentials?.sessionToken,
-      })(model);
-    }
-
-    case 'ollama':
-      return createOpenAI({
-        apiKey: 'ollama',
-        baseURL: baseUrl ? `${baseUrl}/v1` : undefined,
-      })(model);
-
-    case 'gateway':
-    case 'custom':
-      return createOpenAI({ apiKey, baseURL: baseUrl })(model);
+  const factory = getProviderFactory({ provider, apiKey, baseUrl, config });
+  if (factory) {
+    return factory(model);
   }
+
+  return createOpenAI({
+    apiKey: 'ollama',
+    baseURL: baseUrl ? `${baseUrl}/v1` : undefined,
+  })(model);
 };
 
 const resolveModel = async (args: {
@@ -303,6 +324,29 @@ export const streamChatCompletion = async (args: {
   return result.textStream;
 };
 
+const buildChatFinalMessages = (
+  resolvedMessages: ChatMessage[],
+  systemMessage: string | null
+): ChatMessage[] => {
+  const userAssistantMessages = resolvedMessages.filter((m) => {
+    return m.role !== 'system';
+  });
+
+  return systemMessage
+    ? [{ role: 'system', content: systemMessage }, ...userAssistantMessages]
+    : userAssistantMessages;
+};
+
+const getChatSystemMessage = (
+  resolvedMessages: ChatMessage[],
+  defaultSystemMessage: string | null
+): string | null => {
+  const systemFromRequest = resolvedMessages.find((m) => {
+    return m.role === 'system';
+  });
+  return systemFromRequest?.content ?? defaultSystemMessage;
+};
+
 export const createChatCompletionForChat = async (args: {
   chatId: string;
   messages: ChatMessageInput[];
@@ -332,19 +376,11 @@ export const createChatCompletionForChat = async (args: {
   }
 
   const resolvedMessages = await resolveMessages(args.messages);
-
-  const systemFromRequest = resolvedMessages.find((m) => {
-    return m.role === 'system';
-  });
-  const systemMessage = systemFromRequest?.content ?? typedChat.systemMessage;
-
-  const userAssistantMessages = resolvedMessages.filter((m) => {
-    return m.role !== 'system';
-  });
-
-  const finalMessages: ChatMessage[] = systemMessage
-    ? [{ role: 'system', content: systemMessage }, ...userAssistantMessages]
-    : userAssistantMessages;
+  const systemMessage = getChatSystemMessage(
+    resolvedMessages,
+    typedChat.systemMessage
+  );
+  const finalMessages = buildChatFinalMessages(resolvedMessages, systemMessage);
 
   const model = buildModel({
     provider: resolved.provider,

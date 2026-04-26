@@ -6,6 +6,7 @@ import {
   Model,
   Table,
 } from '@ttoss/postgresdb';
+
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { AiProvider } from './AiProvider';
 import { Project } from './Project';
@@ -28,18 +29,26 @@ export class Chat extends Model {
   })
   declare publicId: string;
 
-  @ForeignKey(() => Project)
+  @ForeignKey(() => {
+    return Project;
+  })
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare projectId: number;
 
-  @BelongsTo(() => Project)
+  @BelongsTo(() => {
+    return Project;
+  })
   declare project: Project;
 
-  @ForeignKey(() => AiProvider)
+  @ForeignKey(() => {
+    return AiProvider;
+  })
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare aiProviderId: number;
 
-  @BelongsTo(() => AiProvider)
+  @BelongsTo(() => {
+    return AiProvider;
+  })
   declare aiProvider: AiProvider;
 
   @Column({ type: DataType.STRING, allowNull: true })

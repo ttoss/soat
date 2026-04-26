@@ -61,9 +61,9 @@ export const getApiKey = async (args: { id: string }) => {
       where: { id: storedPolicyIds },
     });
     policyPublicIds.push(
-      ...policies.map(
-        (p: InstanceType<(typeof db)['Policy']>) => p.publicId as string
-      )
+      ...policies.map((p: InstanceType<(typeof db)['Policy']>) => {
+        return p.publicId as string;
+      })
     );
   }
 

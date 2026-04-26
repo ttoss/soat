@@ -1,9 +1,13 @@
 import fs from 'node:fs';
 
 import { db } from '../db';
+import { createGeneration, type GenerationResult } from './agents';
+import { createChatCompletionForChat } from './chats';
+import { createDocument, deleteDocument } from './documents';
+import { emitEvent, resolveProjectPublicId } from './eventBus';
 import {
-  registerResourceFieldMap,
   type CompiledPolicy,
+  registerResourceFieldMap,
 } from './policyCompiler';
 
 export type { CompiledPolicy };
@@ -13,10 +17,6 @@ registerResourceFieldMap({
   publicIdColumn: { column: 'publicId' },
   tagsColumn: { column: 'tags' },
 });
-import { createGeneration, type GenerationResult } from './agents';
-import { createChatCompletionForChat } from './chats';
-import { createDocument, deleteDocument } from './documents';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
 
 const mapConversation = (
   conversation: InstanceType<(typeof db)['Conversation']> & {

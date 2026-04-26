@@ -31,9 +31,9 @@ export const createApiKeyIsAllowed = (args: {
         ? await args.db.Policy.findAll({ where: { id: args.userPolicyIds } })
         : [];
 
-    const userDocs = userPolicies.map(
-      (p: InstanceType<DB['Policy']>) => p.document as PolicyDocument
-    );
+    const userDocs = userPolicies.map((p: InstanceType<DB['Policy']>) => {
+      return p.document as PolicyDocument;
+    });
 
     const evalUser = (resources?: string[], resource?: string) => {
       if (resources && resources.length > 0) {
@@ -64,9 +64,9 @@ export const createApiKeyIsAllowed = (args: {
     const keyPolicies = await args.db.Policy.findAll({
       where: { id: args.apiKeyPolicyIds },
     });
-    const keyDocs = keyPolicies.map(
-      (p: InstanceType<DB['Policy']>) => p.document as PolicyDocument
-    );
+    const keyDocs = keyPolicies.map((p: InstanceType<DB['Policy']>) => {
+      return p.document as PolicyDocument;
+    });
 
     if (reqArgs.resources && reqArgs.resources.length > 0) {
       return evaluatePoliciesMultiResource({
@@ -105,9 +105,9 @@ export const createJwtIsAllowed = (args: {
     const policies = await args.db.Policy.findAll({
       where: { id: args.userPolicyIds },
     });
-    const policyDocs = policies.map(
-      (p: InstanceType<DB['Policy']>) => p.document as PolicyDocument
-    );
+    const policyDocs = policies.map((p: InstanceType<DB['Policy']>) => {
+      return p.document as PolicyDocument;
+    });
 
     if (reqArgs.resources && reqArgs.resources.length > 0) {
       return evaluatePoliciesMultiResource({

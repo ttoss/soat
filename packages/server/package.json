@@ -5,7 +5,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsx watch src/server.ts",
-    "lint-openapi": "spectral lint packages/server/src/rest/openapi/**/*.yaml",
+    "lint": "pnpm run lint-openapi && eslint src",
+    "lint-openapi": "spectral lint src/rest/openapi/**/*.yaml",
     "test": "jest --projects tests/unit"
   },
   "type": "module",

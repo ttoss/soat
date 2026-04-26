@@ -12,15 +12,16 @@ servers:
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: your-soat.com
         default: your-soat.com
   - url: http://{host}/api/v1
     description: Development (HTTP)
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: localhost:5047
         default: localhost:5047
+tags:
+  - name: Policies
+    description: Manage policies
 paths:
   /policies:
     get:

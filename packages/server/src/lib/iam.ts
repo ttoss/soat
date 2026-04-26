@@ -40,6 +40,127 @@ const isValidSrnPattern = (srn: string): boolean => {
   return /^soat:[^:]+:[^:]+:[^:]+$/.test(srn);
 };
 
+const validateEffectField = (
+  effect: unknown,
+  prefix: string,
+  errors: string[]
+): void => {
+  if (!VALID_EFFECTS.includes(effect as Effect)) {
+    errors.push(`${prefix}.effect: must be one of ${VALID_EFFECTS.join(', ')}`);
+  }
+};
+
+const validateActionField = (
+  action: unknown,
+  prefix: string,
+  errors: string[]
+): void => {
+  if (!Array.isArray(action) || action.length === 0) {
+    errors.push(`${prefix}.action: must be a non-empty array`);
+  } else {
+    for (const act of action) {
+      if (typeof act !== 'string' || !isValidAction(act)) {
+        errors.push(
+          `${prefix}.action: "${act}" is invalid — must be *, module:*, or module:Operation`
+        );
+      }
+    }
+  }
+};
+
+const validateResourceField = (
+  resource: unknown,
+  prefix: string,
+  errors: string[]
+): void => {
+  if (resource === undefined) {
+    return;
+  }
+
+  if (!Array.isArray(resource) || resource.length === 0) {
+    errors.push(`${prefix}.resource: must be a non-empty array when present`);
+  } else {
+    for (const res of resource) {
+      if (typeof res !== 'string' || !isValidSrnPattern(res)) {
+        errors.push(
+          `${prefix}.resource: "${res}" is invalid — must be * or soat:<project>:<type>:<id>`
+        );
+      }
+    }
+  }
+};
+
+const validateConditionBlock = (args: {
+  block: Record<string, unknown>;
+  op: string;
+  prefix: string;
+  errors: string[];
+}): void => {
+  if (
+    !args.block ||
+    typeof args.block !== 'object' ||
+    Array.isArray(args.block)
+  ) {
+    args.errors.push(`${args.prefix}.condition.${args.op}: must be an object`);
+    return;
+  }
+
+  for (const key of Object.keys(args.block)) {
+    if (!key.startsWith('soat:')) {
+      args.errors.push(
+        `${args.prefix}.condition.${args.op}: key "${key}" must start with "soat:"`
+      );
+    }
+  }
+};
+
+const validateConditionField = (
+  condition: unknown,
+  prefix: string,
+  errors: string[]
+): void => {
+  if (condition === undefined) {
+    return;
+  }
+
+  if (!condition || typeof condition !== 'object' || Array.isArray(condition)) {
+    errors.push(`${prefix}.condition: must be an object`);
+    return;
+  }
+
+  const cond = condition as Record<string, unknown>;
+  for (const op of Object.keys(cond)) {
+    if (!VALID_OPERATORS.includes(op as ConditionOperator)) {
+      errors.push(
+        `${prefix}.condition: "${op}" is not a valid operator — must be one of ${VALID_OPERATORS.join(', ')}`
+      );
+    } else {
+      const block = cond[op] as Record<string, unknown>;
+      validateConditionBlock({ block, op, prefix, errors });
+    }
+  }
+};
+
+const validateStatement = (
+  stmt: unknown,
+  index: number,
+  errors: string[]
+): void => {
+  const prefix = `statement[${index}]`;
+
+  if (!stmt || typeof stmt !== 'object' || Array.isArray(stmt)) {
+    errors.push(`${prefix}: must be an object`);
+    return;
+  }
+
+  const stmtObj = stmt as Record<string, unknown>;
+
+  validateEffectField(stmtObj.effect, prefix, errors);
+  validateActionField(stmtObj.action, prefix, errors);
+  validateResourceField(stmtObj.resource, prefix, errors);
+  validateConditionField(stmtObj.condition, prefix, errors);
+};
+
 export const validatePolicyDocument = (
   doc: unknown
 ): { valid: boolean; errors: string[] } => {
@@ -58,83 +179,7 @@ export const validatePolicyDocument = (
   }
 
   for (let i = 0; i < d.statement.length; i++) {
-    const stmt = d.statement[i] as Record<string, unknown>;
-    const prefix = `statement[${i}]`;
-
-    if (!stmt || typeof stmt !== 'object' || Array.isArray(stmt)) {
-      errors.push(`${prefix}: must be an object`);
-      continue;
-    }
-
-    // Validate effect
-    if (!VALID_EFFECTS.includes(stmt.effect as Effect)) {
-      errors.push(
-        `${prefix}.effect: must be one of ${VALID_EFFECTS.join(', ')}`
-      );
-    }
-
-    // Validate action
-    if (!Array.isArray(stmt.action) || stmt.action.length === 0) {
-      errors.push(`${prefix}.action: must be a non-empty array`);
-    } else {
-      for (const act of stmt.action) {
-        if (typeof act !== 'string' || !isValidAction(act)) {
-          errors.push(
-            `${prefix}.action: "${act}" is invalid — must be *, module:*, or module:Operation`
-          );
-        }
-      }
-    }
-
-    // Validate resource (optional)
-    if (stmt.resource !== undefined) {
-      if (!Array.isArray(stmt.resource) || stmt.resource.length === 0) {
-        errors.push(
-          `${prefix}.resource: must be a non-empty array when present`
-        );
-      } else {
-        for (const res of stmt.resource) {
-          if (typeof res !== 'string' || !isValidSrnPattern(res)) {
-            errors.push(
-              `${prefix}.resource: "${res}" is invalid — must be * or soat:<project>:<type>:<id>`
-            );
-          }
-        }
-      }
-    }
-
-    // Validate condition (optional)
-    if (stmt.condition !== undefined) {
-      if (
-        !stmt.condition ||
-        typeof stmt.condition !== 'object' ||
-        Array.isArray(stmt.condition)
-      ) {
-        errors.push(`${prefix}.condition: must be an object`);
-      } else {
-        const cond = stmt.condition as Record<string, unknown>;
-        for (const op of Object.keys(cond)) {
-          if (!VALID_OPERATORS.includes(op as ConditionOperator)) {
-            errors.push(
-              `${prefix}.condition: "${op}" is not a valid operator — must be one of ${VALID_OPERATORS.join(', ')}`
-            );
-          } else {
-            const block = cond[op] as Record<string, unknown>;
-            if (!block || typeof block !== 'object' || Array.isArray(block)) {
-              errors.push(`${prefix}.condition.${op}: must be an object`);
-            } else {
-              for (const key of Object.keys(block)) {
-                if (!key.startsWith('soat:')) {
-                  errors.push(
-                    `${prefix}.condition.${op}: key "${key}" must start with "soat:"`
-                  );
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+    validateStatement(d.statement[i], i, errors);
   }
 
   return { valid: errors.length === 0, errors };
@@ -171,6 +216,23 @@ export const matchesPattern = (args: {
   return new RegExp(`^${regexStr}$`).test(value);
 };
 
+const evaluateConditionForKey = (
+  op: ConditionOperator,
+  actual: string | undefined,
+  expected: string
+): boolean => {
+  if (op === 'StringEquals') {
+    return actual === expected;
+  }
+  if (op === 'StringNotEquals') {
+    return actual !== expected;
+  }
+  if (op === 'StringLike') {
+    return matchesPattern({ pattern: expected, value: actual ?? '' });
+  }
+  return true;
+};
+
 export const evaluateCondition = (args: {
   condition: Condition;
   context: Record<string, string>;
@@ -183,14 +245,8 @@ export const evaluateCondition = (args: {
 
     for (const [key, expected] of Object.entries(block)) {
       const actual = context[key];
-
-      if (op === 'StringEquals') {
-        if (actual !== expected) return false;
-      } else if (op === 'StringNotEquals') {
-        if (actual === expected) return false;
-      } else if (op === 'StringLike') {
-        if (!matchesPattern({ pattern: expected, value: actual ?? '' }))
-          return false;
+      if (!evaluateConditionForKey(op, actual, expected)) {
+        return false;
       }
     }
   }
@@ -255,6 +311,35 @@ export const evaluatePolicies = (args: {
   return allowed;
 };
 
+const checkPoliciesForResource = (args: {
+  resource: string;
+  policies: PolicyDocument[];
+  action: string;
+  context: Record<string, string>;
+}): { denied: boolean; allowed: boolean } => {
+  let allowed = false;
+
+  for (const policy of args.policies) {
+    for (const statement of policy.statement) {
+      if (
+        statementMatches({
+          statement,
+          action: args.action,
+          resource: args.resource,
+          context: args.context,
+        })
+      ) {
+        if (statement.effect === 'Deny') {
+          return { denied: true, allowed: false };
+        }
+        allowed = true;
+      }
+    }
+  }
+
+  return { denied: false, allowed };
+};
+
 /**
  * Evaluates policies against multiple candidate resource SRNs (e.g. an ID-based
  * SRN and a path-based SRN). Access is granted when at least one resource
@@ -270,20 +355,17 @@ export const evaluatePoliciesMultiResource = (args: {
   let allowed = false;
 
   for (const resource of args.resources) {
-    for (const policy of args.policies) {
-      for (const statement of policy.statement) {
-        if (
-          statementMatches({
-            statement,
-            action: args.action,
-            resource,
-            context,
-          })
-        ) {
-          if (statement.effect === 'Deny') return false; // deny wins globally
-          allowed = true;
-        }
-      }
+    const result = checkPoliciesForResource({
+      resource,
+      policies: args.policies,
+      action: args.action,
+      context,
+    });
+    if (result.denied) {
+      return false;
+    }
+    if (result.allowed) {
+      allowed = true;
     }
   }
 

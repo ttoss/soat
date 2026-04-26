@@ -1,7 +1,7 @@
 import { addHealthCheck, App, bodyParser, cors } from '@ttoss/http-server';
 
-import { mcpRouter } from './mcp/server';
 import { initializeDispatcher } from './lib/webhookDispatcher';
+import { mcpRouter } from './mcp/server';
 import { authMiddleware } from './middleware/auth';
 import { restRouter } from './rest/router';
 

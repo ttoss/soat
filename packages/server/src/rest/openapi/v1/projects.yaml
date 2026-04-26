@@ -12,15 +12,16 @@ servers:
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: your-soat.com
         default: your-soat.com
   - url: http://{host}/api/v1
     description: Development (HTTP)
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: localhost:5047
         default: localhost:5047
+tags:
+  - name: Projects
+    description: Manage projects
 paths:
   /projects:
     post:
@@ -143,10 +144,3 @@ components:
           type: string
           format: date-time
           example: '2024-01-01T00:00:00.000Z'
-    ErrorResponse:
-      type: object
-      properties:
-        error:
-          type: string
-        message:
-          type: string

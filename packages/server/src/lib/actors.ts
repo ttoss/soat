@@ -44,6 +44,82 @@ const actorIncludes = () => {
   ];
 };
 
+const buildActorListWhere = (args: {
+  projectIds?: number[];
+  externalId?: string;
+  name?: string;
+  type?: string;
+}): Record<string, unknown> => {
+  const where: Record<string, unknown> = {};
+  if (args.projectIds !== undefined) {
+    where.projectId = args.projectIds;
+  }
+  if (args.externalId !== undefined) {
+    where.externalId = args.externalId;
+  }
+  if (args.name !== undefined) {
+    where.name = { [Op.iLike]: `%${args.name}%` };
+  }
+  if (args.type !== undefined) {
+    where.type = args.type;
+  }
+  return where;
+};
+
+const updateAgentIdField = async (
+  agentId: string | null | undefined,
+  updates: Record<string, unknown>
+): Promise<string | void> => {
+  if (agentId === undefined) return;
+  if (agentId === null) {
+    updates.agentId = null;
+    return;
+  }
+  const agent = await db.Agent.findOne({
+    where: { publicId: agentId },
+  });
+  if (!agent) return 'agent_not_found' as const;
+  updates.agentId = agent.id;
+};
+
+const updateChatIdField = async (
+  chatId: string | null | undefined,
+  updates: Record<string, unknown>
+): Promise<string | void> => {
+  if (chatId === undefined) return;
+  if (chatId === null) {
+    updates.chatId = null;
+    return;
+  }
+  const chat = await db.Chat.findOne({
+    where: { publicId: chatId },
+  });
+  if (!chat) return 'chat_not_found' as const;
+  updates.chatId = chat.id;
+};
+
+const buildActorUpdates = (args: {
+  name?: string;
+  type?: string;
+  externalId?: string;
+  instructions?: string | null;
+}): Record<string, unknown> => {
+  const updates: Record<string, unknown> = {};
+  if (args.name !== undefined) {
+    updates.name = args.name;
+  }
+  if (args.type !== undefined) {
+    updates.type = args.type;
+  }
+  if (args.externalId !== undefined) {
+    updates.externalId = args.externalId;
+  }
+  if (args.instructions !== undefined) {
+    updates.instructions = args.instructions;
+  }
+  return updates;
+};
+
 export const listActors = async (args: {
   projectIds?: number[];
   externalId?: string;
@@ -60,23 +136,12 @@ export const listActors = async (args: {
     return { data: [], total: 0, limit, offset };
   }
 
-  const where: Record<string, unknown> = {};
-
-  if (args.projectIds !== undefined) {
-    where.projectId = args.projectIds;
-  }
-
-  if (args.externalId !== undefined) {
-    where.externalId = args.externalId;
-  }
-
-  if (args.name !== undefined) {
-    where.name = { [Op.iLike]: `%${args.name}%` };
-  }
-
-  if (args.type !== undefined) {
-    where.type = args.type;
-  }
+  const where = buildActorListWhere({
+    projectIds: args.projectIds,
+    externalId: args.externalId,
+    name: args.name,
+    type: args.type,
+  });
 
   if (args.policyWhere) {
     Object.assign(where, args.policyWhere);
@@ -198,69 +263,35 @@ export const updateActor = async (args: {
   chatId?: string | null;
 }) => {
   const actor = await db.Actor.findOne({ where: { publicId: args.id } });
-
   if (!actor) {
     return null;
   }
 
-  const updates: Record<string, unknown> = {};
-  if (args.name !== undefined) {
-    updates.name = args.name;
-  }
-  if (args.type !== undefined) {
-    updates.type = args.type;
-  }
-  if (args.externalId !== undefined) {
-    updates.externalId = args.externalId;
-  }
-  if (args.instructions !== undefined) {
-    updates.instructions = args.instructions;
-  }
+  const updates = buildActorUpdates({
+    name: args.name,
+    type: args.type,
+    externalId: args.externalId,
+    instructions: args.instructions,
+  });
 
-  if (args.agentId !== undefined) {
-    if (args.agentId === null) {
-      updates.agentId = null;
-    } else {
-      const agent = await db.Agent.findOne({
-        where: { publicId: args.agentId },
-      });
-      if (!agent) {
-        return 'agent_not_found' as const;
-      }
-      updates.agentId = agent.id;
-    }
-  }
+  const agentError = await updateAgentIdField(args.agentId, updates);
+  if (agentError) return agentError;
 
-  if (args.chatId !== undefined) {
-    if (args.chatId === null) {
-      updates.chatId = null;
-    } else {
-      const chat = await db.Chat.findOne({
-        where: { publicId: args.chatId },
-      });
-      if (!chat) {
-        return 'chat_not_found' as const;
-      }
-      updates.chatId = chat.id;
-    }
-  }
+  const chatError = await updateChatIdField(args.chatId, updates);
+  if (chatError) return chatError;
 
-  // Enforce mutual exclusivity: if we're setting one, clear the other unless it was also provided.
-  const resultingAgent =
+  const finalAgent =
     args.agentId !== undefined ? updates.agentId : actor.agentId;
-  const resultingChat =
-    args.chatId !== undefined ? updates.chatId : actor.chatId;
-  if (resultingAgent && resultingChat) {
+  const finalChat = args.chatId !== undefined ? updates.chatId : actor.chatId;
+  if (finalAgent && finalChat) {
     return 'agent_and_chat_exclusive' as const;
   }
 
   await actor.update(updates);
-
   const actorWithProject = await db.Actor.findOne({
     where: { id: actor.id },
     include: actorIncludes(),
   });
-
   return mapActor(actorWithProject!);
 };
 

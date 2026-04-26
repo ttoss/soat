@@ -8,6 +8,15 @@ import { buildSrn, evaluatePolicies, type PolicyDocument } from './iam';
 
 // ── Shared document mapper ───────────────────────────────────────────────
 
+const parseMetadata = (metadata: string | null | undefined): unknown => {
+  if (!metadata) return undefined;
+  try {
+    return JSON.parse(metadata);
+  } catch {
+    return metadata;
+  }
+};
+
 export const mapDocument = (
   doc: InstanceType<(typeof db)['Document']> & {
     file?: InstanceType<(typeof db)['File']> & {
@@ -23,15 +32,7 @@ export const mapDocument = (
     filename: doc.file?.filename,
     size: doc.file?.size,
     title: doc.title ?? undefined,
-    metadata: doc.metadata
-      ? (() => {
-          try {
-            return JSON.parse(doc.metadata!);
-          } catch {
-            return doc.metadata;
-          }
-        })()
-      : undefined,
+    metadata: parseMetadata(doc.metadata),
     tags: doc.tags ?? undefined,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
@@ -112,7 +113,7 @@ const mapRawDocument = (
   return { ...base, content };
 };
 
-const applyBoundaryFilter = (
+const _applyBoundaryFilter = (
   docs: QueryDocumentResult[],
   policy: PolicyDocument
 ) => {
@@ -131,18 +132,91 @@ const applyBoundaryFilter = (
   });
 };
 
+// Note: _applyBoundaryFilter is kept for potential future use in policy-based filtering
+
 // ── Query engine ─────────────────────────────────────────────────────────
 
-/**
- * Core document search engine used by the documents search endpoint and the
- * memories module. Applies access-scoping layers:
- *
- * 1. Caller permissions  — `projectIds` scope (resolved via `resolveProjectIds`)
- * 2. Policy WHERE        — optional SQL-level resource filter from compilePolicy
- * 3. Config filters      — search, paths, documentIds, minScore, limit
- *
- * At least one of `search`, `paths`, or `documentIds` must be set in config.
- */
+const findDocumentsWithSearch = async (args: {
+  config: DocumentQueryConfig;
+  fileInclude: unknown;
+  effectiveDocWhere: unknown;
+  needsSubQueryFalse: boolean;
+  limit: number;
+}): Promise<Array<InstanceType<(typeof db)['Document']>>> => {
+  const embedding = await getEmbedding({ text: args.config.search! });
+  const embeddingLiteral = `[${embedding.join(',')}]`;
+
+  return db.Document.findAll({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    where: args.effectiveDocWhere as any,
+    attributes: {
+      include: [
+        [
+          db.Document.sequelize!.literal(`embedding <=> '${embeddingLiteral}'`),
+          'distance',
+        ],
+      ],
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    include: [args.fileInclude] as any,
+    order: db.Document.sequelize!.literal(
+      `embedding <=> '${embeddingLiteral}'`
+    ),
+    subQuery: args.needsSubQueryFalse ? false : undefined,
+    limit: args.limit,
+  });
+};
+
+const findDocumentsWithoutSearch = async (args: {
+  fileInclude: unknown;
+  effectiveDocWhere: unknown;
+  needsSubQueryFalse: boolean;
+  limit: number;
+}): Promise<Array<InstanceType<(typeof db)['Document']>>> => {
+  return db.Document.findAll({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    where: args.effectiveDocWhere as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    include: [args.fileInclude] as any,
+    order: [['createdAt', 'ASC']],
+    subQuery: args.needsSubQueryFalse ? false : undefined,
+    limit: args.limit,
+  });
+};
+
+const mergeWhereClauses = (
+  docWhere: unknown,
+  policyWhere: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const merged: Record<string, any> = {
+    ...(docWhere ?? {}),
+    ...(policyWhere ?? {}),
+  };
+  return Object.keys(merged).length > 0 ? merged : undefined;
+};
+
+const checkNeedsSubQueryFalse = (
+  policyWhere: Record<string, unknown> | undefined
+): boolean => {
+  if (!policyWhere) return false;
+  return Object.keys(policyWhere).some((k) => {
+    return k.startsWith('$');
+  });
+};
+
+const filterByScore = (
+  docs: QueryDocumentResult[],
+  config: DocumentQueryConfig
+): QueryDocumentResult[] => {
+  if (!config.search || config.minScore === undefined) return docs;
+  const minScore = config.minScore;
+  return docs.filter((doc) => {
+    const score = (doc as { score?: number }).score;
+    return score !== undefined && score >= minScore;
+  });
+};
+
 export const resolveDocumentQuery = async (args: {
   projectIds?: number[];
   config: DocumentQueryConfig;
@@ -161,66 +235,27 @@ export const resolveDocumentQuery = async (args: {
   const fileInclude = buildFileInclude({ projectIds, paths: config.paths });
   const docWhere = buildDocWhere(config.documentIds);
 
-  // Merge policyWhere into the top-level document WHERE
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mergedDocWhere: Record<string, any> = {
-    ...(docWhere ?? {}),
-    ...(args.policyWhere ?? {}),
-  };
-  const effectiveDocWhere =
-    Object.keys(mergedDocWhere).length > 0 ? mergedDocWhere : undefined;
+  const effectiveDocWhere = mergeWhereClauses(docWhere, args.policyWhere);
+  const needsSubQueryFalse = checkNeedsSubQueryFalse(args.policyWhere);
 
-  const needsSubQueryFalse =
-    args.policyWhere !== undefined &&
-    Object.keys(args.policyWhere).some((k) => k.startsWith('$'));
-
-  let rawDocuments: Array<InstanceType<(typeof db)['Document']>>;
-
-  if (config.search) {
-    const embedding = await getEmbedding({ text: config.search });
-    const embeddingLiteral = `[${embedding.join(',')}]`;
-    rawDocuments = await db.Document.findAll({
-      where: effectiveDocWhere,
-      attributes: {
-        include: [
-          [
-            db.Document.sequelize!.literal(
-              `embedding <=> '${embeddingLiteral}'`
-            ),
-            'distance',
-          ],
-        ],
-      },
-      include: [fileInclude],
-      order: db.Document.sequelize!.literal(
-        `embedding <=> '${embeddingLiteral}'`
-      ),
-      subQuery: needsSubQueryFalse ? false : undefined,
-      limit,
-    });
-  } else {
-    rawDocuments = await db.Document.findAll({
-      where: effectiveDocWhere,
-      include: [fileInclude],
-      order: [['createdAt', 'ASC']],
-      subQuery: needsSubQueryFalse ? false : undefined,
-      limit,
-    });
-  }
+  const rawDocuments = config.search
+    ? await findDocumentsWithSearch({
+        config,
+        fileInclude,
+        effectiveDocWhere,
+        needsSubQueryFalse,
+        limit,
+      })
+    : await findDocumentsWithoutSearch({
+        fileInclude,
+        effectiveDocWhere,
+        needsSubQueryFalse,
+        limit,
+      });
 
   const mapped = rawDocuments.map((doc) => {
     return mapRawDocument(doc, config);
   });
 
-  const scored =
-    config.search && config.minScore !== undefined
-      ? mapped.filter((doc) => {
-          return (
-            (doc as { score?: number }).score !== undefined &&
-            (doc as { score?: number }).score! >= config.minScore!
-          );
-        })
-      : mapped;
-
-  return scored as QueryDocumentResult[];
+  return filterByScore(mapped, config);
 };

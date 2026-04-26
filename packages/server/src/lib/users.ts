@@ -128,9 +128,9 @@ export const attachUserPolicies = async (args: {
   }
 
   await user.update({
-    policyIds: policies.map(
-      (p: InstanceType<(typeof db)['Policy']>) => p.id as number
-    ),
+    policyIds: policies.map((p: InstanceType<(typeof db)['Policy']>) => {
+      return p.id as number;
+    }),
   });
 
   return true;
@@ -151,5 +151,7 @@ export const getUserPolicies = async (args: { userId: string }) => {
 
   const policies = await db.Policy.findAll({ where: { id: policyIds } });
 
-  return policies.map((p: InstanceType<(typeof db)['Policy']>) => mapPolicy(p));
+  return policies.map((p: InstanceType<(typeof db)['Policy']>) => {
+    return mapPolicy(p);
+  });
 };

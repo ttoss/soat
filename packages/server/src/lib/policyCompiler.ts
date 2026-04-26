@@ -94,20 +94,89 @@ const buildResourceFragment = (
 };
 
 /**
+ * Build a WHERE fragment for a single tag key-value pair with StringEquals.
+ */
+const buildTagEqualsFragment = (
+  col: string,
+  tagKey: string,
+  expected: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Record<string, any> => {
+  return { [col]: { [Op.contains]: { [tagKey]: expected } } };
+};
+
+/**
+ * Build a WHERE fragment for a single tag key-value pair with StringNotEquals.
+ */
+const buildTagNotEqualsFragment = (
+  col: string,
+  tagKey: string,
+  expected: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Record<string, any> => {
+  return {
+    [Op.not]: { [col]: { [Op.contains]: { [tagKey]: expected } } },
+  };
+};
+
+/**
+ * Build a WHERE fragment for a single tag key-value pair with StringLike.
+ */
+const buildTagLikeFragment = (
+  fieldMap: ResourceFieldMap,
+  tagKey: string,
+  expected: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Record<string, any> | null => {
+  if (!/^[\w.-]+$/.test(tagKey)) return null; // skip unsafe keys
+  const tagsColumn = fieldMap.tagsColumn!;
+  const colPath = tagsColumn.alias
+    ? `${tagsColumn.alias}.${tagsColumn.column}`
+    : tagsColumn.column;
+  return Sequelize.where(
+    Sequelize.fn('jsonb_extract_path_text', Sequelize.col(colPath), tagKey),
+    { [Op.like]: globToLike(expected) }
+  ) as unknown as Record<string, unknown>;
+};
+
+/**
  * Build WHERE fragments for condition keys that match `soat:ResourceTag/<key>`.
  * Uses `Op.contains` for parameterized JSONB equality, and Sequelize.fn for
  * LIKE/NOT-LIKE comparisons.
  */
+const buildTagFragmentForKey = (args: {
+  op: string;
+  col: string;
+  tagKey: string;
+  expected: string;
+  fieldMap: ResourceFieldMap;
+}): Array<Record<string, unknown>> => {
+  if (args.op === 'StringEquals') {
+    return [buildTagEqualsFragment(args.col, args.tagKey, args.expected)];
+  }
+  if (args.op === 'StringNotEquals') {
+    return [buildTagNotEqualsFragment(args.col, args.tagKey, args.expected)];
+  }
+  if (args.op === 'StringLike') {
+    const frag = buildTagLikeFragment(
+      args.fieldMap,
+      args.tagKey,
+      args.expected
+    );
+    return frag ? [frag] : [];
+  }
+  return [];
+};
+
 const buildTagFragments = (
   condition: PolicyDocument['statement'][0]['condition'],
   fieldMap: ResourceFieldMap
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Array<Record<string, any>> => {
+): Array<Record<string, unknown>> => {
   if (!condition || !fieldMap.tagsColumn) return [];
 
   const col = colRef(fieldMap.tagsColumn);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const frags: Array<Record<string, any>> = [];
+
+  const frags: Array<Record<string, unknown>> = [];
 
   for (const [op, block] of Object.entries(condition)) {
     if (!block) continue;
@@ -117,34 +186,112 @@ const buildTagFragments = (
       if (!key.startsWith('soat:ResourceTag/')) continue;
       const tagKey = key.slice('soat:ResourceTag/'.length);
 
-      if (op === 'StringEquals') {
-        frags.push({ [col]: { [Op.contains]: { [tagKey]: expected } } });
-      } else if (op === 'StringNotEquals') {
-        frags.push({
-          [Op.not]: { [col]: { [Op.contains]: { [tagKey]: expected } } },
-        });
-      } else if (op === 'StringLike') {
-        // Use jsonb_extract_path_text + LIKE for glob pattern matching on tags.
-        // Key is validated against a safe character set before use.
-        if (!/^[\w.-]+$/.test(tagKey)) continue; // skip unsafe keys
-        const colPath = fieldMap.tagsColumn.alias
-          ? `${fieldMap.tagsColumn.alias}.${fieldMap.tagsColumn.column}`
-          : fieldMap.tagsColumn.column;
-        frags.push(
-          Sequelize.where(
-            Sequelize.fn(
-              'jsonb_extract_path_text',
-              Sequelize.col(colPath),
-              tagKey
-            ),
-            { [Op.like]: globToLike(expected) }
-          ) as unknown as Record<string, unknown>
-        );
-      }
+      const tagFrags = buildTagFragmentForKey({
+        op,
+        col,
+        tagKey,
+        expected,
+        fieldMap,
+      });
+      frags.push(...tagFrags);
     }
   }
 
   return frags;
+};
+
+/**
+ * Process resources for a statement and determine if it's unrestricted.
+ * Returns the list of resource fragments and unrestricted flag.
+ */
+const processStatementResources = (
+  resources: string[],
+  fieldMap: ResourceFieldMap
+): { frags: Array<Record<string, unknown>>; unrestricted: boolean } => {
+  const frags: Array<Record<string, unknown>> = [];
+
+  for (const srnPattern of resources) {
+    if (srnPattern === '*') return { frags, unrestricted: true };
+
+    const parts = srnPattern.split(':');
+    if (parts.length < 4) return { frags, unrestricted: true };
+
+    const resourceSegment = parts.slice(3).join(':');
+    if (resourceSegment === '*') return { frags, unrestricted: true };
+
+    const frag = buildResourceFragment(resourceSegment, fieldMap);
+    if (frag === null) return { frags, unrestricted: true };
+
+    frags.push(frag);
+  }
+
+  return { frags, unrestricted: false };
+};
+
+/**
+ * Build combined fragments from resources and tags.
+ */
+
+const buildStatementFragments = (args: {
+  resourceFrags: Array<Record<string, unknown>>;
+  tagFrags: Array<Record<string, unknown>>;
+  unrestricted: boolean;
+}): Array<Record<string, unknown>> => {
+  return [
+    ...(args.unrestricted
+      ? []
+      : args.resourceFrags.length === 1
+        ? args.resourceFrags
+        : args.resourceFrags.length > 1
+          ? [{ [Op.or]: args.resourceFrags }]
+          : []),
+    ...args.tagFrags,
+  ];
+};
+
+/**
+ * Process a single statement and update allow/deny fragments.
+ */
+const processStatement = (args: {
+  statement: PolicyDocument['statement'][0];
+  action: string;
+  fieldMap: ResourceFieldMap;
+  allowFragments: Array<Record<string, unknown>>;
+  denyFragments: Array<Record<string, unknown>>;
+  context: { hasAnyAllow: boolean; unconditionalAllow: boolean };
+}): boolean => {
+  const actionMatch = args.statement.action.some((a) => {
+    return matchesPattern({ pattern: a, value: args.action });
+  });
+  if (!actionMatch) return false;
+
+  const resources = args.statement.resource ?? ['*'];
+  const { frags: resourceFrags, unrestricted } = processStatementResources(
+    resources,
+    args.fieldMap
+  );
+
+  const tagFrags = buildTagFragments(args.statement.condition, args.fieldMap);
+  const allFrags = buildStatementFragments({
+    resourceFrags,
+    tagFrags,
+    unrestricted,
+  });
+
+  if (args.statement.effect === 'Deny') {
+    if (unrestricted && tagFrags.length === 0) return true; // deny-all
+    const denyWhere = allFrags.length === 0 ? {} : { [Op.and]: allFrags };
+    args.denyFragments.push(denyWhere);
+  } else {
+    args.context.hasAnyAllow = true;
+    if (unrestricted && tagFrags.length === 0) {
+      args.context.unconditionalAllow = true;
+    }
+    const allowWhere = allFrags.length === 0 ? {} : { [Op.and]: allFrags };
+    args.allowFragments.push(allowWhere);
+  }
+
+  return false;
 };
 
 // ── Core compiler ─────────────────────────────────────────────────────────
@@ -180,85 +327,28 @@ export const compilePolicy = (args: {
   const allowFragments: Array<Record<string, any>> = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const denyFragments: Array<Record<string, any>> = [];
-  let hasAnyAllow = false;
-  let unconditionalAllow = false;
+  const context = { hasAnyAllow: false, unconditionalAllow: false };
 
   for (const policy of args.policies) {
     for (const statement of policy.statement) {
-      const actionMatch = statement.action.some((a) => {
-        return matchesPattern({ pattern: a, value: args.action });
+      const isDenyAll = processStatement({
+        statement,
+        action: args.action,
+        fieldMap,
+        allowFragments,
+        denyFragments,
+        context,
       });
-      if (!actionMatch) continue;
-
-      const resources = statement.resource ?? ['*'];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const resourceFrags: Array<Record<string, any>> = [];
-      let stmtUnrestricted = false;
-
-      for (const srnPattern of resources) {
-        if (srnPattern === '*') {
-          stmtUnrestricted = true;
-          break;
-        }
-        const parts = srnPattern.split(':');
-        if (parts.length < 4) {
-          stmtUnrestricted = true;
-          break;
-        }
-        // SRN: soat:<project>:<type>:<resource-segment>
-        // Segments after index 3 are joined (path segments contain '/')
-        const resourceSegment = parts.slice(3).join(':');
-        if (resourceSegment === '*') {
-          stmtUnrestricted = true;
-          break;
-        }
-        const frag = buildResourceFragment(resourceSegment, fieldMap);
-        if (frag === null) {
-          stmtUnrestricted = true;
-          break;
-        }
-        resourceFrags.push(frag);
-      }
-
-      const tagFrags = buildTagFragments(statement.condition, fieldMap);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const allFrags: Array<Record<string, any>> = [
-        ...(stmtUnrestricted
-          ? []
-          : resourceFrags.length === 1
-            ? resourceFrags
-            : resourceFrags.length > 1
-              ? [{ [Op.or]: resourceFrags }]
-              : []),
-        ...tagFrags,
-      ];
-
-      if (statement.effect === 'Deny') {
-        if (stmtUnrestricted && tagFrags.length === 0) {
-          // Unconditional deny-all — no query needed
-          return { where: {}, hasAccess: false };
-        }
-        const denyWhere = allFrags.length === 0 ? {} : { [Op.and]: allFrags };
-        denyFragments.push(denyWhere);
-      } else {
-        hasAnyAllow = true;
-        if (stmtUnrestricted && tagFrags.length === 0) {
-          unconditionalAllow = true;
-        }
-        const allowWhere = allFrags.length === 0 ? {} : { [Op.and]: allFrags };
-        allowFragments.push(allowWhere);
-      }
+      if (isDenyAll) return { where: {}, hasAccess: false };
     }
   }
 
-  if (!hasAnyAllow) {
-    return { where: {}, hasAccess: false };
-  }
+  if (!context.hasAnyAllow) return { where: {}, hasAccess: false };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const whereParts: Array<Record<string, any>> = [];
 
-  if (!unconditionalAllow && allowFragments.length > 0) {
+  if (!context.unconditionalAllow && allowFragments.length > 0) {
     whereParts.push({ [Op.or]: allowFragments });
   }
 
