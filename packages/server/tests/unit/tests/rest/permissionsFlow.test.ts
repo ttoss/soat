@@ -1,4 +1,4 @@
-import { authenticatedTestClient, loginAs, testClient } from '../testClient';
+import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
  * Integration test for the full IAM permissions flow:

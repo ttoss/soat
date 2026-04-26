@@ -475,7 +475,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: JWT token or SDK_ project key
+      description: JWT token or sk_ api key
 
   parameters:
     AgentId:

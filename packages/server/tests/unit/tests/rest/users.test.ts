@@ -1,4 +1,4 @@
-import { authenticatedTestClient, loginAs, testClient } from '../testClient';
+import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('POST /api/v1/users/bootstrap', () => {
   test('should create the first admin user and return 201', async () => {

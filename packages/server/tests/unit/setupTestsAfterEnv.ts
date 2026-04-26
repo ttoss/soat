@@ -5,6 +5,12 @@ import type { Sequelize } from '@ttoss/postgresdb';
 import { initialize } from '@ttoss/postgresdb';
 import { app } from 'src/app';
 import { initializeDatabase } from 'src/db';
+import * as agentsModule from 'src/lib/agents';
+
+export const mockCreateGeneration = jest.spyOn(
+  agentsModule,
+  'createGeneration'
+);
 
 jest.mock('ollama', () => {
   return {

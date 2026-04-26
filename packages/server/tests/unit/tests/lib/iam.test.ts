@@ -6,7 +6,7 @@ import {
   type PolicyDocument,
   statementMatches,
   validatePolicyDocument,
-} from '../../../src/lib/iam';
+} from 'src/lib/iam';
 
 describe('IAM', () => {
   describe('validatePolicyDocument', () => {

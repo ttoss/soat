@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
-import { storageDir } from '../setupTests';
-import { authenticatedTestClient, loginAs, testClient } from '../testClient';
+import { storageDir } from '../../setupTests';
+import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Files', () => {
   let adminToken: string;

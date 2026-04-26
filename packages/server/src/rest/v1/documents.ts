@@ -1,7 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
-import { resolveDocumentQuery } from 'src/lib/documentQuery';
 import {
   createDocument,
   deleteDocument,
@@ -11,6 +10,7 @@ import {
   updateDocument,
   updateDocumentTags,
 } from 'src/lib/documents';
+import { resolveDocumentSearch } from 'src/lib/documentSearch';
 import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
 
@@ -347,7 +347,7 @@ documentsRouter.post('/documents/search', async (ctx: Context) => {
     policyWhere = compiled.where;
   }
 
-  const results = await resolveDocumentQuery({
+  const results = await resolveDocumentSearch({
     projectIds,
     policyWhere,
     config: {

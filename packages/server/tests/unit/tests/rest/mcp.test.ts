@@ -2,7 +2,7 @@ import type http from 'node:http';
 
 import { app } from 'src/app';
 
-import { authenticatedTestClient, loginAs, testClient } from '../testClient';
+import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 let httpServer: http.Server;
 

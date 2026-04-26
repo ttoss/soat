@@ -195,7 +195,7 @@ const filterByScore = (
   });
 };
 
-export const resolveDocumentQuery = async (args: {
+export const resolveDocumentSearch = async (args: {
   projectIds?: number[];
   config: DocumentQueryConfig;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

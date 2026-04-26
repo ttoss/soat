@@ -1,4 +1,4 @@
-import { authenticatedTestClient, loginAs, testClient } from '../testClient';
+import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('API Keys', () => {
   let adminToken: string;

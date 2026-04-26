@@ -1,6 +1,5 @@
-import type { GenerationResult } from '../../../src/lib/agents';
-import * as agentsModule from '../../../src/lib/agents';
-import { authenticatedTestClient, loginAs, testClient } from '../testClient';
+import { mockCreateGeneration } from '../../setupTestsAfterEnv';
+import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Sessions', () => {
   let adminToken: string;
@@ -531,28 +530,26 @@ describe('Sessions', () => {
         .send({ name: 'ordering-test' });
       orderingSessionId = res.body.id;
 
-      jest
-        .spyOn(agentsModule, 'createGeneration')
-        .mockImplementationOnce(() => {
-          return new Promise<GenerationResult>((resolve) => {
-            resolveGeneration = () => {
-              return resolve({
-                id: 'gen_test_01',
-                traceId: 'trc_test_01',
-                status: 'completed',
-                output: {
-                  model: 'test-model',
-                  content: 'Hi there',
-                  finishReason: 'stop',
-                },
-              });
-            };
-          });
+      mockCreateGeneration.mockImplementationOnce(() => {
+        return new Promise((resolve) => {
+          resolveGeneration = () => {
+            return resolve({
+              id: 'gen_test_01',
+              traceId: 'trc_test_01',
+              status: 'completed',
+              output: {
+                model: 'test-model',
+                content: 'Hi there',
+                finishReason: 'stop',
+              },
+            });
+          };
         });
+      });
     });
 
     afterEach(() => {
-      jest.restoreAllMocks();
+      jest.clearAllMocks();
       jest.useFakeTimers({ advanceTimers: true });
     });
 
@@ -690,29 +687,27 @@ describe('Sessions', () => {
         generationStarted = new Promise<void>((r) => {
           signalGenerationStarted = r;
         });
-        jest
-          .spyOn(agentsModule, 'createGeneration')
-          .mockImplementationOnce(() => {
-            return new Promise((resolve) => {
-              signalGenerationStarted();
-              resolveGeneration = () => {
-                return resolve({
-                  id: 'gen_auto_01',
-                  traceId: 'trc_auto_01',
-                  status: 'completed',
-                  output: {
-                    model: 'test-model',
-                    content: 'Auto reply',
-                    finishReason: 'stop',
-                  },
-                });
-              };
-            });
+        mockCreateGeneration.mockImplementationOnce(() => {
+          return new Promise((resolve) => {
+            signalGenerationStarted();
+            resolveGeneration = () => {
+              return resolve({
+                id: 'gen_auto_01',
+                traceId: 'trc_auto_01',
+                status: 'completed',
+                output: {
+                  model: 'test-model',
+                  content: 'Auto reply',
+                  finishReason: 'stop',
+                },
+              });
+            };
           });
+        });
       });
 
       afterEach(() => {
-        jest.restoreAllMocks();
+        jest.clearAllMocks();
       });
 
       test('triggers generation and returns generation result', async () => {
@@ -755,7 +750,7 @@ describe('Sessions', () => {
       });
 
       afterEach(() => {
-        jest.restoreAllMocks();
+        jest.clearAllMocks();
       });
 
       test('returns saved user message when generation is already in progress', async () => {
@@ -764,7 +759,7 @@ describe('Sessions', () => {
           signalGenerationStarted = r;
         });
 
-        jest.spyOn(agentsModule, 'createGeneration').mockImplementation(() => {
+        mockCreateGeneration.mockImplementation(() => {
           return new Promise(() => {
             // Signal that createGeneration was called (generatingAt is already
             // set in DB before this point), then never resolve to keep session busy

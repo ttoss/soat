@@ -4,13 +4,16 @@ import path from 'node:path';
 import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
-import { mapDocument } from './documentQuery';
+import { mapDocument } from './documentSearch';
 import { getEmbedding } from './embedding';
 import { emitEvent } from './eventBus';
 import { registerResourceFieldMap } from './policyCompiler';
 
-export type { DocumentQueryConfig, QueryDocumentResult } from './documentQuery';
-export { resolveDocumentQuery } from './documentQuery';
+export type {
+  DocumentQueryConfig,
+  QueryDocumentResult,
+} from './documentSearch';
+export { resolveDocumentSearch } from './documentSearch';
 
 registerResourceFieldMap({
   resourceType: 'document',
