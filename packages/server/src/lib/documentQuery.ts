@@ -4,7 +4,6 @@ import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
 import { getEmbedding } from './embedding';
-import { buildSrn, evaluatePolicies, type PolicyDocument } from './iam';
 
 // ── Shared document mapper ───────────────────────────────────────────────
 
@@ -112,27 +111,6 @@ const mapRawDocument = (
   }
   return { ...base, content };
 };
-
-const _applyBoundaryFilter = (
-  docs: QueryDocumentResult[],
-  policy: PolicyDocument
-) => {
-  return docs.filter((doc) => {
-    if (!doc.projectId) return false;
-    const srn = buildSrn({
-      projectPublicId: doc.projectId,
-      resourceType: 'document',
-      resourceId: doc.id,
-    });
-    return evaluatePolicies({
-      policies: [policy],
-      action: 'documents:SearchDocuments',
-      resource: srn,
-    });
-  });
-};
-
-// Note: _applyBoundaryFilter is kept for potential future use in policy-based filtering
 
 // ── Query engine ─────────────────────────────────────────────────────────
 

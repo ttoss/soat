@@ -181,9 +181,6 @@ webhooksRouter.put(
       if (body.policyId === null) {
         policyInternalId = null;
       } else {
-        const _project = await db.Project.findOne({
-          where: { publicId: ctx.params.projectId },
-        });
         const policy = await db.Policy.findOne({
           where: { publicId: body.policyId },
         });
