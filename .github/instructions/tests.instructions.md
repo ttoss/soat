@@ -38,7 +38,7 @@ Tests are integration tests that run against `app.callback()` via supertest. A r
 - `authenticatedTestClient(token)` — returns a client that sets `Authorization: Bearer <token>` on every request
 - `loginAs(username, password)` — bootstrap helper that logs in and returns the token string
 
-For API key authentication, pass the raw `SDK_`-prefixed key directly to `authenticatedTestClient`.
+For API key authentication, pass the raw `sk_`-prefixed key directly to `authenticatedTestClient`.
 
 ## Writing Unit Tests
 

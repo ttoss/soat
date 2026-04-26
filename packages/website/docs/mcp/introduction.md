@@ -29,7 +29,7 @@ The server implements the MCP specification over HTTP with `enableJsonResponse: 
 
 ## Authentication
 
-All tools require authentication. Pass either a JWT session token or an `SDK_`-prefixed API key as a Bearer token in the `Authorization` header of every MCP request:
+All tools require authentication. Pass either a JWT session token or an `sk_`-prefixed API key as a Bearer token in the `Authorization` header of every MCP request:
 
 ```
 Authorization: Bearer <token>

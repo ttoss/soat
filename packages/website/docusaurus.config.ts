@@ -118,6 +118,7 @@ const config: Config = {
           'modules/*',
           'tutorials/*',
           'sdk/*',
+          'cli/*',
           'mcp/*',
           'openapi-specs.md',
         ],
@@ -163,6 +164,12 @@ const config: Config = {
           sidebarId: 'sdkSidebar',
           position: 'left',
           label: 'SDK',
+        },
+        {
+          type: 'docSidebar',
+          sidebarId: 'cliSidebar',
+          position: 'left',
+          label: 'CLI',
         },
         {
           type: 'docSidebar',

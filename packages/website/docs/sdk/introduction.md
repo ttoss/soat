@@ -85,12 +85,12 @@ When `error` is set, `data` is `undefined`. Use early returns or throws to guard
 SOAT accepts two token types as the `auth` value in `createConfig`:
 
 - **JWT session token** — obtained from `POST /api/v1/users/login`
-- **Project-scoped API key** — obtained from `POST /api/v1/project-keys` (prefixed `SDK_`)
+- **Project-scoped API key** — obtained from `POST /api/v1/project-keys` (prefixed `sk_`)
 
 ```ts
 // JWT token
 const client = createClient(createConfig({ baseUrl, auth: sessionToken }));
 
 // Project key
-const client = createClient(createConfig({ baseUrl, auth: 'SDK_...' }));
+const client = createClient(createConfig({ baseUrl, auth: 'sk_...' }));
 ```
