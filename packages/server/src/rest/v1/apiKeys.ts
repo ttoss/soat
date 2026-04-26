@@ -15,9 +15,12 @@ const apiKeysRouter = new Router<Context>();
  */
 const resolveProjectId = async (args: {
   projectId: string | null | undefined;
-}): Promise<{ id: number | undefined; error?: string }> => {
-  if (args.projectId === undefined || args.projectId === null) {
+}): Promise<{ id: number | null | undefined; error?: string }> => {
+  if (args.projectId === undefined) {
     return { id: undefined };
+  }
+  if (args.projectId === null) {
+    return { id: null }; // explicitly clearing the project scope
   }
 
   const project = await db.Project.findOne({
@@ -92,7 +95,7 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
   const apiKey = await createApiKey({
     userId: ctx.authUser.id,
     name,
-    projectId: projectResult.id,
+    projectId: projectResult.id ?? undefined,
     policyIds: policyResult.ids,
   });
 

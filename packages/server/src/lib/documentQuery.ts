@@ -200,8 +200,6 @@ export const resolveDocumentQuery = async (args: {
   config: DocumentQueryConfig;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
-  /** @deprecated Use policyWhere instead */
-  boundaryPolicy?: unknown;
 }): Promise<QueryDocumentResult[]> => {
   const { config, projectIds } = args;
   const limit = config.limit ?? 10;
