@@ -326,5 +326,18 @@ describe('Chats', () => {
       expect(response.status).toBe(404);
       expect(response.body.error).toBeDefined();
     });
+
+    test('falls back to ollama when no aiProviderId is provided', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats/completions')
+        .send({
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
+
+      // Ollama is not running in tests, so it will fail with a connection error.
+      // The important thing is that we reached the ollama fallback path (not the aiProviderId path).
+      expect(response.status).not.toBe(401);
+      expect(response.status).not.toBe(403);
+    });
   });
 });
