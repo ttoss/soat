@@ -1,15 +1,15 @@
+import { execSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as url from 'node:url';
 
 import yaml from 'js-yaml';
-import openapiTS, { astToString } from 'openapi-typescript';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const SPECS_DIR = path.resolve(__dirname, '../../server/src/rest/openapi/v1');
-
-const OUTPUT_FILE = path.resolve(__dirname, '../src/generated/openapi.ts');
+const MERGED_SPEC_FILE = path.resolve(__dirname, '../merged-spec.json');
+const SDK_ROOT = path.resolve(__dirname, '..');
 
 interface OpenApiSpec {
   openapi: string;
@@ -25,6 +25,7 @@ interface OpenApiSpec {
   security?: unknown[];
 }
 
+// eslint-disable-next-line complexity
 const main = async () => {
   const specFiles = fs
     .readdirSync(SPECS_DIR)
@@ -96,21 +97,22 @@ const main = async () => {
       }
     }
   }
-  const ast = await openapiTS(merged as any);
-  const output = astToString(ast);
-
-  const outputDir = path.dirname(OUTPUT_FILE);
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
-  }
-
-  fs.writeFileSync(
-    OUTPUT_FILE,
-    `// THIS FILE IS AUTO-GENERATED. DO NOT EDIT MANUALLY.\n// Run \`pnpm generate\` to regenerate.\n\n${output}`
-  );
+  fs.writeFileSync(MERGED_SPEC_FILE, JSON.stringify(merged, null, 2));
 
   // eslint-disable-next-line no-console
-  console.log(`Generated: ${OUTPUT_FILE}`);
+  console.log(`Merged spec written to: ${MERGED_SPEC_FILE}`);
+
+  try {
+    execSync('node_modules/.bin/openapi-ts --file openapi-ts.config.ts', {
+      cwd: SDK_ROOT,
+      stdio: 'inherit',
+    });
+  } finally {
+    fs.unlinkSync(MERGED_SPEC_FILE);
+  }
+
+  // eslint-disable-next-line no-console
+  console.log('SDK generation complete.');
 };
 
 main().catch((error) => {

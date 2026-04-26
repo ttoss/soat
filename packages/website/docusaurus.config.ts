@@ -117,6 +117,7 @@ const config: Config = {
           'getting-started/*',
           'modules/*',
           'tutorials/*',
+          'sdk/*',
           'mcp/*',
           'openapi-specs.md',
         ],
@@ -156,6 +157,12 @@ const config: Config = {
           sidebarId: 'apiSidebar',
           position: 'left',
           label: 'API',
+        },
+        {
+          type: 'docSidebar',
+          sidebarId: 'sdkSidebar',
+          position: 'left',
+          label: 'SDK',
         },
         {
           type: 'docSidebar',

@@ -31,14 +31,13 @@
   "publishConfig": {
     "access": "public"
   },
-  "dependencies": {
-    "openapi-fetch": "^0.17.0"
-  },
+  "dependencies": {},
   "devDependencies": {
+    "@hey-api/client-fetch": "^0.13.1",
+    "@hey-api/openapi-ts": "^0.96.1",
     "@ttoss/config": "^1.37.10",
     "@types/js-yaml": "^4.0.9",
     "js-yaml": "^4.1.1",
-    "openapi-typescript": "^7.13.0",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0"
   }
