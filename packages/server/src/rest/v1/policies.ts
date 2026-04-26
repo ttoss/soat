@@ -11,22 +11,6 @@ import {
 
 const policiesRouter = new Router<Context>();
 
-/**
- * @openapi
- * /api/v1/policies:
- *   get:
- *     tags: [Policies]
- *     summary: List all policies
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Array of policies
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden
- */
 policiesRouter.get('/policies', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -43,15 +27,6 @@ policiesRouter.get('/policies', async (ctx: Context) => {
   ctx.body = await listPolicies();
 });
 
-/**
- * @openapi
- * /api/v1/policies:
- *   post:
- *     tags: [Policies]
- *     summary: Create a policy
- *     security:
- *       - bearerAuth: []
- */
 policiesRouter.post('/policies', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -103,15 +78,6 @@ policiesRouter.post('/policies', async (ctx: Context) => {
   ctx.body = result;
 });
 
-/**
- * @openapi
- * /api/v1/policies/{policyId}:
- *   get:
- *     tags: [Policies]
- *     summary: Get a policy by ID
- *     security:
- *       - bearerAuth: []
- */
 policiesRouter.get('/policies/:policyId', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -136,15 +102,6 @@ policiesRouter.get('/policies/:policyId', async (ctx: Context) => {
   ctx.body = policy;
 });
 
-/**
- * @openapi
- * /api/v1/policies/{policyId}:
- *   put:
- *     tags: [Policies]
- *     summary: Update a policy
- *     security:
- *       - bearerAuth: []
- */
 policiesRouter.put('/policies/:policyId', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -192,15 +149,6 @@ policiesRouter.put('/policies/:policyId', async (ctx: Context) => {
   ctx.body = result;
 });
 
-/**
- * @openapi
- * /api/v1/policies/{policyId}:
- *   delete:
- *     tags: [Policies]
- *     summary: Delete a policy
- *     security:
- *       - bearerAuth: []
- */
 policiesRouter.delete('/policies/:policyId', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;

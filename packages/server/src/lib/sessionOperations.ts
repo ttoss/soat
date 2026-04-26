@@ -23,7 +23,7 @@ const sessionIncludes = () => {
 export const findSessionRecord = async (args: {
   agentId: number;
   sessionId: string;
-}) => {
+}): Promise<InstanceType<(typeof db)['Session']> | null> => {
   return db.Session.findOne({
     where: { publicId: args.sessionId, agentId: args.agentId },
     include: sessionIncludes(),

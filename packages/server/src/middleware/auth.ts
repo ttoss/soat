@@ -317,18 +317,20 @@ const resolveJwt = async (ctx: Context, token: string) => {
   };
 };
 
-export const authMiddleware = async (ctx: Context, next: Next) => {
-  const authHeader: string | undefined = ctx.headers?.authorization;
+export const authMiddleware =
+  // eslint-disable-next-line max-lines-per-function, complexity
+  async (ctx: Context, next: Next) => {
+    const authHeader: string | undefined = ctx.headers?.authorization;
 
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.slice(7);
 
-    if (token.startsWith(API_KEY_RAW_PREFIX)) {
-      await resolveProjectKey(ctx, token);
-    } else {
-      await resolveJwt(ctx, token);
+      if (token.startsWith(API_KEY_RAW_PREFIX)) {
+        await resolveProjectKey(ctx, token);
+      } else {
+        await resolveJwt(ctx, token);
+      }
     }
-  }
 
-  await next();
-};
+    await next();
+  };

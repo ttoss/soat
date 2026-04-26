@@ -10,7 +10,6 @@ import {
   getSessionTags,
   listSessionMessages,
   listSessions,
-  sendSessionMessage,
   submitSessionToolOutputs,
   updateSession,
   updateSessionTags,
@@ -30,30 +29,6 @@ const resolveAgent = async (agentPublicId: string) => {
 
 // ── Create Session ───────────────────────────────────────────────────────
 
-/**
- * @openapi
- * /agents/{agentId}/sessions:
- *   post:
- *     tags: [Sessions]
- *     summary: Create a new session
- *     operationId: createSession
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: agentId
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/CreateSessionRequest'
- *     responses:
- *       '201':
- *         description: Session created
- */
 sessionsRouter.post('/', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -124,41 +99,6 @@ sessionsRouter.post('/', async (ctx: Context) => {
 
 // ── List Sessions ────────────────────────────────────────────────────────
 
-/**
- * @openapi
- * /agents/{agentId}/sessions:
- *   get:
- *     tags: [Sessions]
- *     summary: List sessions for an agent
- *     operationId: listSessions
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: agentId
- *         required: true
- *         schema:
- *           type: string
- *       - in: query
- *         name: actorId
- *         schema:
- *           type: string
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *       - in: query
- *         name: offset
- *         schema:
- *           type: integer
- *     responses:
- *       '200':
- *         description: List of sessions
- */
 sessionsRouter.get('/', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -211,30 +151,6 @@ sessionsRouter.get('/', async (ctx: Context) => {
 
 // ── Get Session ──────────────────────────────────────────────────────────
 
-/**
- * @openapi
- * /agents/{agentId}/sessions/{sessionId}:
- *   get:
- *     tags: [Sessions]
- *     summary: Get a session
- *     operationId: getSession
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: agentId
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: sessionId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       '200':
- *         description: Session details
- */
 sessionsRouter.get('/:sessionId', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -284,35 +200,6 @@ sessionsRouter.get('/:sessionId', async (ctx: Context) => {
 
 // ── Update Session ───────────────────────────────────────────────────────
 
-/**
- * @openapi
- * /agents/{agentId}/sessions/{sessionId}:
- *   patch:
- *     tags: [Sessions]
- *     summary: Update a session
- *     operationId: updateSession
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: agentId
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: sessionId
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/UpdateSessionRequest'
- *     responses:
- *       '200':
- *         description: Updated session
- */
 sessionsRouter.patch('/:sessionId', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -373,30 +260,6 @@ sessionsRouter.patch('/:sessionId', async (ctx: Context) => {
 
 // ── Delete Session ───────────────────────────────────────────────────────
 
-/**
- * @openapi
- * /agents/{agentId}/sessions/{sessionId}:
- *   delete:
- *     tags: [Sessions]
- *     summary: Delete a session
- *     operationId: deleteSession
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: agentId
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: sessionId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       '204':
- *         description: Session deleted
- */
 sessionsRouter.delete('/:sessionId', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -446,38 +309,6 @@ sessionsRouter.delete('/:sessionId', async (ctx: Context) => {
 
 // ── List Messages ────────────────────────────────────────────────────────
 
-/**
- * @openapi
- * /agents/{agentId}/sessions/{sessionId}/messages:
- *   get:
- *     tags: [Sessions]
- *     summary: List messages in a session
- *     operationId: listSessionMessages
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: agentId
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: sessionId
- *         required: true
- *         schema:
- *           type: string
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *       - in: query
- *         name: offset
- *         schema:
- *           type: integer
- *     responses:
- *       '200':
- *         description: List of messages
- */
 sessionsRouter.get('/:sessionId/messages', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -531,40 +362,6 @@ sessionsRouter.get('/:sessionId/messages', async (ctx: Context) => {
 
 // ── Add Message ──────────────────────────────────────────────────────────
 
-/**
- * @openapi
- * /agents/{agentId}/sessions/{sessionId}/messages:
- *   post:
- *     tags: [Sessions]
- *     summary: Add a user message to the session (save only, no LLM call)
- *     operationId: addSessionMessage
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: agentId
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: sessionId
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/AddSessionMessageRequest'
- *     responses:
- *       '201':
- *         description: Message saved
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AddSessionMessageResponse'
- */
 sessionsRouter.post('/:sessionId/messages', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -628,50 +425,6 @@ sessionsRouter.post('/:sessionId/messages', async (ctx: Context) => {
 
 // ── Generate Response ────────────────────────────────────────────────────
 
-/**
- * @openapi
- * /agents/{agentId}/sessions/{sessionId}/generate:
- *   post:
- *     tags: [Sessions]
- *     summary: Trigger LLM generation for the session
- *     operationId: generateSessionResponse
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: agentId
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: sessionId
- *         required: true
- *         schema:
- *           type: string
- *       - in: query
- *         name: async
- *         required: false
- *         schema:
- *           type: boolean
- *         description: If true, trigger generation asynchronously and return 202 immediately
- *     requestBody:
- *       required: false
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/GenerateSessionRequest'
- *     responses:
- *       '200':
- *         description: Generation result (sync)
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/GenerateSessionResponse'
- *       '202':
- *         description: Generation accepted (async)
- *       '409':
- *         description: Generation already in progress
- */
 sessionsRouter.post('/:sessionId/generate', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -756,36 +509,6 @@ sessionsRouter.post('/:sessionId/generate', async (ctx: Context) => {
 
 // ── Submit Tool Outputs ──────────────────────────────────────────────────
 
-/**
- * @openapi
- * /agents/{agentId}/sessions/{sessionId}/tool-outputs:
- *   post:
- *     tags: [Sessions]
- *     summary: Submit tool outputs for client tools
- *     operationId: submitSessionToolOutputs
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: agentId
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: sessionId
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/SubmitSessionToolOutputsRequest'
- *     responses:
- *       '200':
- *         description: Generation result
- */
 sessionsRouter.post('/:sessionId/tool-outputs', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -869,30 +592,6 @@ sessionsRouter.post('/:sessionId/tool-outputs', async (ctx: Context) => {
 
 // ── Tags ─────────────────────────────────────────────────────────────────
 
-/**
- * @openapi
- * /agents/{agentId}/sessions/{sessionId}/tags:
- *   get:
- *     tags: [Sessions]
- *     summary: Get session tags
- *     operationId: getSessionTags
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: agentId
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: sessionId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       '200':
- *         description: Session tags
- */
 sessionsRouter.get('/:sessionId/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -940,38 +639,6 @@ sessionsRouter.get('/:sessionId/tags', async (ctx: Context) => {
   ctx.body = result;
 });
 
-/**
- * @openapi
- * /agents/{agentId}/sessions/{sessionId}/tags:
- *   put:
- *     tags: [Sessions]
- *     summary: Replace session tags
- *     operationId: replaceSessionTags
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: agentId
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: sessionId
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             additionalProperties:
- *               type: string
- *     responses:
- *       '200':
- *         description: Updated tags
- */
 sessionsRouter.put('/:sessionId/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -1023,38 +690,6 @@ sessionsRouter.put('/:sessionId/tags', async (ctx: Context) => {
   ctx.body = result;
 });
 
-/**
- * @openapi
- * /agents/{agentId}/sessions/{sessionId}/tags:
- *   patch:
- *     tags: [Sessions]
- *     summary: Merge session tags
- *     operationId: mergeSessionTags
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: agentId
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: sessionId
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             additionalProperties:
- *               type: string
- *     responses:
- *       '200':
- *         description: Updated tags
- */
 sessionsRouter.patch('/:sessionId/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;

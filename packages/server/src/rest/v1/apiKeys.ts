@@ -11,14 +11,54 @@ import {
 const apiKeysRouter = new Router<Context>();
 
 /**
- * @openapi
- * /api/v1/api-keys:
- *   post:
- *     tags: [ApiKeys]
- *     summary: Create an API key
- *     security:
- *       - bearerAuth: []
+ * Resolves a project public ID to its internal ID
  */
+const resolveProjectId = async (args: {
+  projectId: string | null | undefined;
+}): Promise<{ id: number | null | undefined; error?: string }> => {
+  if (args.projectId === undefined) {
+    return { id: undefined };
+  }
+  if (args.projectId === null) {
+    return { id: null };
+  }
+
+  const project = await db.Project.findOne({
+    where: { publicId: args.projectId },
+  });
+  if (!project) {
+    return { id: undefined, error: 'Invalid project' };
+  }
+  return { id: project.id as number };
+};
+
+/**
+ * Resolves policy public IDs to their internal IDs
+ */
+const resolvePolicyIds = async (args: {
+  policyIds: string[] | undefined;
+}): Promise<{ ids: number[] | undefined; error?: string }> => {
+  if (args.policyIds === undefined) {
+    return { ids: undefined };
+  }
+  if (args.policyIds.length === 0) {
+    return { ids: [] };
+  }
+
+  const policies = await db.Policy.findAll({
+    where: { publicId: args.policyIds },
+  });
+  if (policies.length !== args.policyIds.length) {
+    return { ids: undefined, error: 'One or more invalid policy IDs' };
+  }
+
+  return {
+    ids: policies.map((p: InstanceType<(typeof db)['Policy']>) => {
+      return p.id as number;
+    }),
+  };
+};
+
 apiKeysRouter.post('/api-keys', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -38,56 +78,31 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
     return;
   }
 
-  let resolvedProjectId: number | undefined;
-  if (projectId) {
-    const project = await db.Project.findOne({
-      where: { publicId: projectId },
-    });
-    if (!project) {
-      ctx.status = 400;
-      ctx.body = { error: 'Invalid project' };
-      return;
-    }
-    resolvedProjectId = project.id as number;
+  const projectResult = await resolveProjectId({ projectId });
+  if (projectResult.error) {
+    ctx.status = 400;
+    ctx.body = { error: projectResult.error };
+    return;
   }
 
-  let resolvedPolicyIds: number[] | undefined;
-  if (policyIds && policyIds.length > 0) {
-    const policies = await db.Policy.findAll({
-      where: { publicId: policyIds },
-    });
-    if (policies.length !== policyIds.length) {
-      ctx.status = 400;
-      ctx.body = { error: 'One or more invalid policy IDs' };
-      return;
-    }
-    resolvedPolicyIds = policies.map(
-      (p: InstanceType<(typeof db)['Policy']>) => {
-        return p.id as number;
-      }
-    );
+  const policyResult = await resolvePolicyIds({ policyIds });
+  if (policyResult.error) {
+    ctx.status = 400;
+    ctx.body = { error: policyResult.error };
+    return;
   }
 
   const apiKey = await createApiKey({
     userId: ctx.authUser.id,
     name,
-    projectId: resolvedProjectId,
-    policyIds: resolvedPolicyIds,
+    projectId: projectResult.id,
+    policyIds: policyResult.ids,
   });
 
   ctx.status = 201;
   ctx.body = apiKey;
 });
 
-/**
- * @openapi
- * /api/v1/api-keys/{id}:
- *   get:
- *     tags: [ApiKeys]
- *     summary: Get an API key
- *     security:
- *       - bearerAuth: []
- */
 apiKeysRouter.get('/api-keys/:id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -115,15 +130,6 @@ apiKeysRouter.get('/api-keys/:id', async (ctx: Context) => {
   ctx.body = apiKey;
 });
 
-/**
- * @openapi
- * /api/v1/api-keys/{id}:
- *   put:
- *     tags: [ApiKeys]
- *     summary: Update an API key
- *     security:
- *       - bearerAuth: []
- */
 apiKeysRouter.put('/api-keys/:id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -153,63 +159,30 @@ apiKeysRouter.put('/api-keys/:id', async (ctx: Context) => {
     return;
   }
 
-  let resolvedProjectId: number | null | undefined;
-  if (projectId !== undefined) {
-    if (projectId === null) {
-      resolvedProjectId = null;
-    } else {
-      const project = await db.Project.findOne({
-        where: { publicId: projectId },
-      });
-      if (!project) {
-        ctx.status = 400;
-        ctx.body = { error: 'Invalid project' };
-        return;
-      }
-      resolvedProjectId = project.id as number;
-    }
+  const projectResult = await resolveProjectId({ projectId });
+  if (projectResult.error) {
+    ctx.status = 400;
+    ctx.body = { error: projectResult.error };
+    return;
   }
 
-  let resolvedPolicyIds: number[] | undefined;
-  if (policyIds !== undefined) {
-    if (policyIds.length === 0) {
-      resolvedPolicyIds = [];
-    } else {
-      const policies = await db.Policy.findAll({
-        where: { publicId: policyIds },
-      });
-      if (policies.length !== policyIds.length) {
-        ctx.status = 400;
-        ctx.body = { error: 'One or more invalid policy IDs' };
-        return;
-      }
-      resolvedPolicyIds = policies.map(
-        (p: InstanceType<(typeof db)['Policy']>) => {
-          return p.id as number;
-        }
-      );
-    }
+  const policyResult = await resolvePolicyIds({ policyIds });
+  if (policyResult.error) {
+    ctx.status = 400;
+    ctx.body = { error: policyResult.error };
+    return;
   }
 
   const updated = await updateApiKey({
     id: ctx.params.id,
     name,
-    projectId: resolvedProjectId,
-    policyIds: resolvedPolicyIds,
+    projectId: projectResult.id,
+    policyIds: policyResult.ids,
   });
 
   ctx.body = updated;
 });
 
-/**
- * @openapi
- * /api/v1/api-keys/{id}:
- *   delete:
- *     tags: [ApiKeys]
- *     summary: Delete an API key
- *     security:
- *       - bearerAuth: []
- */
 apiKeysRouter.delete('/api-keys/:id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;

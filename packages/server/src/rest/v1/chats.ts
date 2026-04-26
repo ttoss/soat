@@ -14,61 +14,76 @@ import {
   streamChatCompletionForChat,
 } from 'src/lib/chats';
 
+import {
+  checkAuth,
+  checkProjectId,
+  getTargetProjectId,
+  resolveProjectIdsWithAction,
+} from './helpers';
+
 export const chatsRouter = new Router<Context>();
 
-chatsRouter.post('/chats', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  const {
-    aiProviderId,
-    name,
-    systemMessage,
-    model,
-    projectId: projectPublicId,
-  } = ctx.request.body as {
-    aiProviderId?: unknown;
-    name?: unknown;
-    systemMessage?: unknown;
-    model?: unknown;
-    projectId?: string;
-  };
+/**
+ * Validates POST /chats request body
+ */
+const validateCreateChatBody = (
+  body: unknown
+): {
+  aiProviderId?: string;
+  name?: string;
+  systemMessage?: string;
+  model?: string;
+  projectId?: string;
+  error?: string;
+} => {
+  const { aiProviderId, name, systemMessage, model, projectId } =
+    body as Record<string, unknown>;
 
   if (!aiProviderId || typeof aiProviderId !== 'string') {
-    ctx.status = 400;
-    ctx.body = { error: 'aiProviderId is required' };
-    return;
+    return { error: 'aiProviderId is required' };
   }
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
-    projectPublicId,
-    action: 'chats:CreateChat',
-  });
-
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const targetProjectId = projectIds?.[0] ?? ctx.authUser.apiKeyProjectId;
-
-  if (!targetProjectId) {
-    ctx.status = 400;
-    ctx.body = { error: 'projectId is required' };
-    return;
-  }
-
-  const result = await createChat({
-    projectId: Number(targetProjectId),
+  return {
     aiProviderId,
     name: typeof name === 'string' ? name : undefined,
     systemMessage:
       typeof systemMessage === 'string' ? systemMessage : undefined,
     model: typeof model === 'string' ? model : undefined,
+    projectId: typeof projectId === 'string' ? projectId : undefined,
+  };
+};
+
+chatsRouter.post('/chats', async (ctx: Context) => {
+  if (!checkAuth(ctx)) return;
+
+  const validated = validateCreateChatBody(ctx.request.body);
+  if (validated.error) {
+    ctx.status = 400;
+    ctx.body = { error: validated.error };
+    return;
+  }
+
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
+    projectPublicId: validated.projectId,
+    action: 'chats:CreateChat',
+  });
+
+  if (projectIds === null) return;
+
+  const targetProjectId = getTargetProjectId({
+    projectIds,
+    apiKeyProjectId: ctx.authUser?.apiKeyProjectId,
+  });
+
+  if (!checkProjectId({ ctx, projectId: targetProjectId })) return;
+
+  const result = await createChat({
+    projectId: Number(targetProjectId),
+    aiProviderId: validated.aiProviderId,
+    name: validated.name,
+    systemMessage: validated.systemMessage,
+    model: validated.model,
   });
 
   if (result === 'ai_provider_not_found') {
@@ -82,24 +97,17 @@ chatsRouter.post('/chats', async (ctx: Context) => {
 });
 
 chatsRouter.get('/chats', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  if (!checkAuth(ctx)) return;
 
   const projectPublicId = ctx.query.projectId as string | undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'chats:ListChats',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   ctx.body = await listChats({ projectIds: projectIds ?? [] });
 });
@@ -144,12 +152,53 @@ chatsRouter.delete('/chats/:chatId', async (ctx: Context) => {
   ctx.status = 204;
 });
 
-chatsRouter.post('/chats/:chatId/completions', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
+/**
+ * Handles streaming chat completion response
+ */
+const handleStreamingCompletion = async (args: {
+  ctx: Context;
+  chatId: string;
+  messages: ChatMessageInput[];
+  model?: string;
+}): Promise<void> => {
+  args.ctx.respond = false;
+  args.ctx.res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  });
+
+  try {
+    const textStream = await streamChatCompletionForChat({
+      chatId: args.chatId,
+      messages: args.messages,
+      model: args.model,
+    });
+
+    if (typeof textStream === 'string') {
+      args.ctx.res.write(`data: ${JSON.stringify({ error: textStream })}\n\n`);
+      args.ctx.res.end();
+      return;
+    }
+
+    for await (const chunk of textStream) {
+      args.ctx.res.write(
+        `data: ${JSON.stringify({ choices: [{ delta: { content: chunk } }] })}\n\n`
+      );
+    }
+
+    args.ctx.res.write('data: [DONE]\n\n');
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Internal server error';
+    args.ctx.res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
+  } finally {
+    args.ctx.res.end();
   }
+};
+
+chatsRouter.post('/chats/:chatId/completions', async (ctx: Context) => {
+  if (!checkAuth(ctx)) return;
 
   const { chatId } = ctx.params;
 
@@ -168,41 +217,12 @@ chatsRouter.post('/chats/:chatId/completions', async (ctx: Context) => {
   const chatMessages = messages as ChatMessageInput[];
 
   if (stream) {
-    ctx.respond = false;
-    ctx.res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
+    await handleStreamingCompletion({
+      ctx,
+      chatId,
+      messages: chatMessages,
+      model,
     });
-
-    try {
-      const textStream = await streamChatCompletionForChat({
-        chatId,
-        messages: chatMessages,
-        model,
-      });
-
-      if (typeof textStream === 'string') {
-        ctx.res.write(`data: ${JSON.stringify({ error: textStream })}\n\n`);
-        ctx.res.end();
-        return;
-      }
-
-      for await (const chunk of textStream) {
-        ctx.res.write(
-          `data: ${JSON.stringify({ choices: [{ delta: { content: chunk } }] })}\n\n`
-        );
-      }
-
-      ctx.res.write('data: [DONE]\n\n');
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Internal server error';
-      ctx.res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
-    } finally {
-      ctx.res.end();
-    }
-
     return;
   }
 
@@ -237,12 +257,18 @@ chatsRouter.post('/chats/:chatId/completions', async (ctx: Context) => {
   };
 });
 
-chatsRouter.post('/chats/completions', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
+/**
+ * Validates messages parameter
+ */
+const validateMessages = (messages: unknown): ChatMessage[] | null => {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return null;
   }
+  return messages as ChatMessage[];
+};
+
+chatsRouter.post('/chats/completions', async (ctx: Context) => {
+  if (!checkAuth(ctx)) return;
 
   const { aiProviderId, model, messages, stream } = ctx.request.body as {
     aiProviderId?: string;
@@ -251,13 +277,12 @@ chatsRouter.post('/chats/completions', async (ctx: Context) => {
     stream?: boolean;
   };
 
-  if (!Array.isArray(messages) || messages.length === 0) {
+  const chatMessages = validateMessages(messages);
+  if (!chatMessages) {
     ctx.status = 400;
     ctx.body = { error: 'messages is required and must be a non-empty array' };
     return;
   }
-
-  const chatMessages = messages as ChatMessage[];
 
   if (stream) {
     ctx.respond = false;

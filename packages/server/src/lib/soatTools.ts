@@ -67,7 +67,7 @@ const snakeToCamel = (str: string): string => {
 };
 
 const resolveSchema = (
-  schema: any,
+  schema: Record<string, unknown> | undefined,
   spec: OpenApiSpec
 ): {
   type?: string;
@@ -89,7 +89,7 @@ const resolveSchema = (
  * Otherwise returns the parameter as-is.
  */
 const resolveParameter = (
-  param: any,
+  param: Record<string, unknown> | undefined,
   spec: OpenApiSpec
 ): {
   name?: string;
@@ -236,6 +236,174 @@ const buildBodyFn = (
 };
 
 /**
+ * Extracts and normalizes path parameters from an operation
+ */
+const extractPathParams = (args: {
+  parameters: Array<{ name?: string; in?: string; [key: string]: unknown }>;
+  spec: OpenApiSpec;
+}): Array<{ name: string; camelName: string }> => {
+  return (args.parameters || [])
+    .map((p) => {
+      return resolveParameter(p, args.spec);
+    })
+    .filter((p) => {
+      return p.in === 'path';
+    })
+    .map((p) => {
+      return {
+        name: p.name || '',
+        camelName: snakeToCamel(p.name || ''),
+      };
+    });
+};
+
+/**
+ * Extracts and normalizes query parameters from an operation
+ */
+const extractQueryParams = (args: {
+  parameters: Array<{ name?: string; in?: string; [key: string]: unknown }>;
+  spec: OpenApiSpec;
+}): Array<{
+  name: string;
+  camelName: string;
+  description: string;
+  required: boolean;
+  type: string;
+}> => {
+  return (args.parameters || [])
+    .map((p) => {
+      return resolveParameter(p, args.spec);
+    })
+    .filter((p) => {
+      return p.in === 'query';
+    })
+    .map((p) => {
+      return {
+        name: p.name || '',
+        camelName: snakeToCamel(p.name || ''),
+        description: p.description || '',
+        required: p.required || false,
+        type: p.schema?.type || 'string',
+      };
+    });
+};
+
+/**
+ * Extracts and normalizes body properties from an operation
+ */
+const extractBodyProps = (args: {
+  requestBody?: {
+    required?: boolean;
+    content?: {
+      'application/json'?: {
+        schema?: {
+          type?: string;
+          required?: string[];
+          properties?: Record<string, unknown>;
+          $ref?: string;
+        };
+      };
+    };
+  };
+  spec: OpenApiSpec;
+}): Array<{
+  snakeName: string;
+  camelName: string;
+  description: string;
+  required: boolean;
+  type: string;
+}> => {
+  const rawBodySchema = args.requestBody?.content?.['application/json']?.schema;
+  const bodySchema = resolveSchema(rawBodySchema, args.spec);
+  return bodySchema?.properties
+    ? Object.entries(bodySchema.properties).map(
+        ([key, value]: [string, Record<string, unknown>]) => {
+          return {
+            snakeName: key,
+            camelName: snakeToCamel(key),
+            description: value.description || '',
+            required: (bodySchema.required || []).includes(key),
+            type: value.type || 'string',
+          };
+        }
+      )
+    : [];
+};
+
+/**
+ * Processes a single operation to create a tool definition
+ */
+const processOperation = (args: {
+  pathTemplate: string;
+  method: string;
+  operation: OperationSpec;
+  spec: OpenApiSpec;
+}): ToolDefinition | null => {
+  const httpMethod = args.method.toUpperCase();
+  if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(httpMethod)) {
+    return null;
+  }
+
+  if (!args.operation.operationId) return null;
+
+  const toolName = operationIdToToolName(args.operation.operationId);
+
+  // Extract parameters
+  const pathParams = extractPathParams({
+    parameters: args.operation.parameters || [],
+    spec: args.spec,
+  });
+
+  const queryParams = extractQueryParams({
+    parameters: args.operation.parameters || [],
+    spec: args.spec,
+  });
+
+  const bodyProps = extractBodyProps({
+    requestBody: args.operation.requestBody,
+    spec: args.spec,
+  });
+
+  const inputSchema = buildInputSchema(pathParams, queryParams, bodyProps);
+
+  return {
+    name: toolName,
+    description: (args.operation.description || '')
+      .replace(/'/g, "\\'")
+      .replace(/\n/g, ' ')
+      .trim(),
+    inputSchema,
+    method: httpMethod,
+    path: buildPathFn(args.pathTemplate, pathParams),
+    body: buildBodyFn(bodyProps),
+    iamAction: args.operation['x-iam-action'],
+  };
+};
+
+/**
+ * Processes all operations in a single path
+ */
+const processPath = (args: {
+  pathTemplate: string;
+  pathItem: Record<string, OperationSpec>;
+  spec: OpenApiSpec;
+}): ToolDefinition[] => {
+  const tools: ToolDefinition[] = [];
+  for (const [method, operation] of Object.entries(args.pathItem)) {
+    const tool = processOperation({
+      pathTemplate: args.pathTemplate,
+      method,
+      operation,
+      spec: args.spec,
+    });
+    if (tool) {
+      tools.push(tool);
+    }
+  }
+  return tools;
+};
+
+/**
  * Loads and processes YAML specs to generate tool definitions
  */
 const loadToolDefinitions = (): ToolDefinition[] => {
@@ -259,88 +427,15 @@ const loadToolDefinitions = (): ToolDefinition[] => {
 
       for (const [pathTemplate, pathItem] of Object.entries(paths)) {
         const pathItemObj = pathItem as Record<string, OperationSpec>;
-        for (const [method, operation] of Object.entries(pathItemObj)) {
-          const httpMethod = method.toUpperCase();
-          if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(httpMethod)) {
-            continue;
-          }
-
-          if (!operation.operationId) continue;
-
-          const toolName = operationIdToToolName(operation.operationId);
-
-          // Extract path parameters
-          const pathParams = (operation.parameters || [])
-            .map((p) => {
-              return resolveParameter(p, spec);
-            })
-            .filter((p) => {
-              return p.in === 'path';
-            })
-            .map((p) => {
-              return {
-                name: p.name || '',
-                camelName: snakeToCamel(p.name || ''),
-              };
-            });
-
-          // Extract query parameters
-          const queryParams = (operation.parameters || [])
-            .map((p) => {
-              return resolveParameter(p, spec);
-            })
-            .filter((p) => {
-              return p.in === 'query';
-            })
-            .map((p) => {
-              return {
-                name: p.name || '',
-                camelName: snakeToCamel(p.name || ''),
-                description: p.description || '',
-                required: p.required || false,
-                type: p.schema?.type || 'string',
-              };
-            });
-
-          // Extract body properties, resolving $ref if needed
-          const rawBodySchema =
-            operation.requestBody?.content?.['application/json']?.schema;
-          const bodySchema = resolveSchema(rawBodySchema, spec);
-          const bodyProps = bodySchema?.properties
-            ? Object.entries(bodySchema.properties).map(
-                ([key, value]: [string, any]) => {
-                  return {
-                    snakeName: key,
-                    camelName: snakeToCamel(key),
-                    description: value.description || '',
-                    required: (bodySchema.required || []).includes(key),
-                    type: value.type || 'string',
-                  };
-                }
-              )
-            : [];
-
-          const inputSchema = buildInputSchema(
-            pathParams,
-            queryParams,
-            bodyProps
-          );
-
-          tools.push({
-            name: toolName,
-            description: (operation.description || '')
-              .replace(/'/g, "\\'")
-              .replace(/\n/g, ' ')
-              .trim(),
-            inputSchema,
-            method: httpMethod,
-            path: buildPathFn(pathTemplate, pathParams),
-            body: buildBodyFn(bodyProps),
-            iamAction: operation['x-iam-action'],
-          });
-        }
+        const pathTools = processPath({
+          pathTemplate,
+          pathItem: pathItemObj,
+          spec,
+        });
+        tools.push(...pathTools);
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error(`Error processing ${file}:`, error);
     }
   }

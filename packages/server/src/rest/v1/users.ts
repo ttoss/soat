@@ -136,15 +136,6 @@ usersRouter.delete('/users/:id', async (ctx: Context) => {
   ctx.status = 204;
 });
 
-/**
- * @openapi
- * /api/v1/users/{userId}/policies:
- *   put:
- *     tags: [Users]
- *     summary: Attach policies to a user (replaces existing)
- *     security:
- *       - bearerAuth: []
- */
 usersRouter.put('/users/:userId/policies', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -180,15 +171,6 @@ usersRouter.put('/users/:userId/policies', async (ctx: Context) => {
   ctx.status = 204;
 });
 
-/**
- * @openapi
- * /api/v1/users/{userId}/policies:
- *   get:
- *     tags: [Users]
- *     summary: Get policies attached to a user
- *     security:
- *       - bearerAuth: []
- */
 usersRouter.get('/users/:userId/policies', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;

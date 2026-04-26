@@ -10,7 +10,7 @@ export const createSessionTransaction = async (args: {
   toolContext?: Record<string, string> | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   transaction: any;
-}) => {
+}): Promise<InstanceType<(typeof db)['Session']>> => {
   let userActorId = args.existingUserActorId;
   if (!userActorId) {
     const userActor = await db.Actor.create(
