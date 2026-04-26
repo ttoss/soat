@@ -1,10 +1,8 @@
 import { db } from '../db';
 import { submitToolOutputs } from './agents';
-import {
-  addConversationMessage,
-  generateConversationMessage,
-  listConversationMessages,
-} from './conversations';
+import { generateConversationMessage } from './conversationGeneration';
+import { addConversationMessage } from './conversationMessages';
+import { listConversationMessages } from './conversations';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 
 const GENERATING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes

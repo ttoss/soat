@@ -125,5 +125,3 @@ github-app/
 **/i18n/unused/
 tsup.config.bundled*.mjs
 .playwright-mcp/
-# Generated SOAT tools from OpenAPI specs
-packages/server/src/mcp/tools/generated/

@@ -82,9 +82,14 @@ paths:
             schema:
               type: object
               required:
+                - project_id
                 - storage_type
                 - storage_path
               properties:
+                project_id:
+                  type: string
+                  description: Public ID of the project
+                  example: 'proj_V1StGXR8Z5jdHi6B'
                 path:
                   type: string
                   description: Logical path within the project (e.g. /images/logo.png). Defaults to /filename if omitted.
@@ -93,7 +98,7 @@ paths:
                   type: string
                   description: Name of the file
                   example: 'document.pdf'
-                contentType:
+                content_type:
                   type: string
                   description: MIME type of the file
                   example: 'application/pdf'
@@ -165,6 +170,36 @@ paths:
                 $ref: '#/components/schemas/FileRecord'
         '400':
           description: Missing file or invalid project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /files/upload/base64:
+    post:
+      tags:
+        - Files
+      summary: Upload a file using base64 encoding
+      description: Uploads a file to the server using base64-encoded content
+      operationId: uploadFileBase64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadFileBase64Request'
+      responses:
+        '201':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileRecord'
+        '400':
+          description: Missing content or invalid project
           content:
             application/json:
               schema:
@@ -338,9 +373,18 @@ paths:
               schema:
                 type: object
                 properties:
-                  data:
+                  content:
                     type: string
                     description: Base64-encoded file content
+                  filename:
+                    type: string
+                    description: Original filename
+                  contentType:
+                    type: string
+                    description: MIME type of the file
+                  size:
+                    type: integer
+                    description: File size in bytes
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -466,6 +510,36 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 components:
   schemas:
+    UploadFileBase64Request:
+      type: object
+      required:
+        - project_id
+        - content
+      properties:
+        project_id:
+          type: string
+          description: Public ID of the project
+          example: 'proj_V1StGXR8Z5jdHi6B'
+        content:
+          type: string
+          description: Base64-encoded file content
+          example: 'SGVsbG8gV29ybGQ='
+        filename:
+          type: string
+          description: Name of the file
+          example: 'document.txt'
+        path:
+          type: string
+          description: Logical path within the project (e.g. /images/logo.png). Defaults to /filename if omitted.
+          example: '/documents/document.txt'
+        content_type:
+          type: string
+          description: MIME type of the file
+          example: 'text/plain'
+        metadata:
+          type: string
+          description: JSON string with additional metadata
+          example: '{"author":"John"}'
     FileRecord:
       type: object
       description: Stored file metadata

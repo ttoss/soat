@@ -3,9 +3,8 @@
   "version": "0.3.4",
   "main": "dist/server.js",
   "scripts": {
-    "build": "pnpm run generate-tools && tsup",
+    "build": "tsup",
     "dev": "tsx watch src/server.ts",
-    "generate-tools": "tsx scripts/generateSoatTools.ts",
     "lint": "pnpm run lint-openapi && eslint src",
     "lint-openapi": "spectral lint src/rest/openapi/**/*.yaml",
     "test": "jest --projects tests/unit"

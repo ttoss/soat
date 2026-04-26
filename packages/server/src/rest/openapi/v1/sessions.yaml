@@ -35,7 +35,7 @@ paths:
         Creates a new session for the specified agent. Internally creates a
         conversation and two actors (agent + user) so the caller only needs
         this single call to start interacting with the agent.
-      operationId: createSession
+      operationId: createAgentSession
       security:
         - bearerAuth: []
       parameters:
@@ -63,7 +63,7 @@ paths:
         - Sessions
       summary: List sessions
       description: Returns sessions for the specified agent, optionally filtered by actorId and status.
-      operationId: listSessions
+      operationId: listAgentSessions
       security:
         - bearerAuth: []
       parameters:
@@ -124,7 +124,7 @@ paths:
         - Sessions
       summary: Get a session
       description: Returns details of a single session.
-      operationId: getSession
+      operationId: getAgentSession
       security:
         - bearerAuth: []
       parameters:
@@ -177,7 +177,7 @@ paths:
         - Sessions
       summary: Delete a session
       description: Deletes the session and its underlying conversation and actors.
-      operationId: deleteSession
+      operationId: deleteAgentSession
       security:
         - bearerAuth: []
       parameters:
@@ -201,7 +201,7 @@ paths:
       description: >
         Returns messages in the session with simplified roles (user/assistant)
         instead of raw actor IDs.
-      operationId: listSessionMessages
+      operationId: listAgentSessionMessages
       security:
         - bearerAuth: []
       parameters:

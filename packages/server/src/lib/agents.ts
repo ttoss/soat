@@ -18,7 +18,7 @@ import {
 
 import { db } from '../db';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
-import { allSoatTools } from './soat-tools';
+import { soatTools } from './soatTools';
 
 // ── Path Parameter Interpolation ─────────────────────────────────────────
 
@@ -825,7 +825,7 @@ const resolveAgentTools = async (args: {
         const base = `http://localhost:${process.env.PORT || 5047}/api/v1`;
 
         for (const action of actions) {
-          const def = allSoatTools.find((t) => {
+          const def = soatTools.find((t) => {
             return t.name === action;
           });
           if (!def) continue;

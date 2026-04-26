@@ -1,17 +1,19 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
+import { generateConversationMessage } from 'src/lib/conversationGeneration';
 import {
   addConversationMessage,
+  removeConversationMessage,
+} from 'src/lib/conversationMessages';
+import {
   createConversation,
   deleteConversation,
-  generateConversationMessage,
   getConversation,
   getConversationTags,
   listConversationActors,
   listConversationMessages,
   listConversations,
-  removeConversationMessage,
   updateConversation,
   updateConversationTags,
 } from 'src/lib/conversations';

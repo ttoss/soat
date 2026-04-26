@@ -1,7 +1,13 @@
-import { createMcpRouter, McpServer } from '@ttoss/http-server-mcp';
+import {
+  apiCall,
+  createMcpRouter,
+  McpServer,
+  registerToolFromSchema,
+} from '@ttoss/http-server-mcp';
 
 import { version } from '../../package.json' with { type: 'json' };
-import { registerGeneratedTools } from './tools/generated';
+import { soatTools } from '../lib/soatTools';
+import { toMcpText } from './toMcpText';
 
 const mcpServer = new McpServer({
   name: 'soat',
@@ -18,7 +24,22 @@ const mcpServer = new McpServer({
   ],
 });
 
-registerGeneratedTools(mcpServer);
+// Register all SOAT tools as MCP tools
+for (const tool of soatTools) {
+  registerToolFromSchema(mcpServer, {
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema,
+    handler: async (args: Record<string, unknown>) => {
+      const data = await apiCall(
+        tool.method,
+        tool.path(args),
+        tool.body ? { body: tool.body(args) } : {}
+      );
+      return { content: [{ type: 'text' as const, text: toMcpText(data) }] };
+    },
+  });
+}
 
 const mcpRouter = createMcpRouter(mcpServer, {
   apiBaseUrl: `http://localhost:${process.env.PORT || 5047}/api/v1`,

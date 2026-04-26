@@ -88,7 +88,7 @@ describe('MCP tools - happy path', () => {
   // ── Files ────────────────────────────────────────────────────────────────
 
   test('upload-file creates a file', async () => {
-    const res = await mcpCall('upload-file', {
+    const res = await mcpCall('upload-file-base64', {
       projectId,
       content: Buffer.from('hello mcp').toString('base64'),
       filename: 'mcp-test.txt',
@@ -114,7 +114,7 @@ describe('MCP tools - happy path', () => {
   });
 
   test('download-file returns base64 content', async () => {
-    const res = await mcpCall('download-file', { id: fileId });
+    const res = await mcpCall('download-file-base64', { id: fileId });
     expect(res.status).toBe(200);
     const result = parseResult(res);
     expect(result.content).toBeDefined();
@@ -319,7 +319,7 @@ describe('MCP tools - happy path', () => {
   });
 
   test('get-project returns the project', async () => {
-    const res = await mcpCall('get-project', { id: projectId });
+    const res = await mcpCall('get-project', { projectId });
     expect(res.status).toBe(200);
     const result = parseResult(res);
     expect(result.id).toBe(projectId);
@@ -348,7 +348,7 @@ describe('MCP tools - happy path', () => {
   });
 
   test('get-secret returns the secret', async () => {
-    const res = await mcpCall('get-secret', { id: secretId });
+    const res = await mcpCall('get-secret', { secretId });
     expect(res.status).toBe(200);
     const result = parseResult(res);
     expect(result.id).toBe(secretId);
@@ -356,7 +356,7 @@ describe('MCP tools - happy path', () => {
 
   test('update-secret updates the name', async () => {
     const res = await mcpCall('update-secret', {
-      id: secretId,
+      secretId,
       name: 'mcp-secret-renamed',
     });
     expect(res.status).toBe(200);
@@ -390,7 +390,9 @@ describe('MCP tools - happy path', () => {
   });
 
   test('get-ai-provider returns the provider', async () => {
-    const res = await mcpCall('get-ai-provider', { id: testAiProviderId });
+    const res = await mcpCall('get-ai-provider', {
+      aiProviderId: testAiProviderId,
+    });
     expect(res.status).toBe(200);
     const result = parseResult(res);
     expect(result.id).toBe(testAiProviderId);
@@ -398,7 +400,7 @@ describe('MCP tools - happy path', () => {
 
   test('update-ai-provider updates the name', async () => {
     const res = await mcpCall('update-ai-provider', {
-      id: testAiProviderId,
+      aiProviderId: testAiProviderId,
       name: 'Test Provider Updated',
     });
     expect(res.status).toBe(200);
@@ -719,7 +721,11 @@ describe('MCP tools - happy path', () => {
     expect(res.status).toBe(200);
     const result = parseResult(res);
     expect(Array.isArray(result)).toBe(true);
-    expect(result.some((p: { id: string }) => p.id === mcpPolicyId)).toBe(true);
+    expect(
+      result.some((p: { id: string }) => {
+        return p.id === mcpPolicyId;
+      })
+    ).toBe(true);
   });
 
   test('get-policy returns the policy', async () => {
