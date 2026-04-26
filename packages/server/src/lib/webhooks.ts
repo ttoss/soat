@@ -9,7 +9,7 @@ const generateSecret = () => {
 const mapWebhook = (
   instance: InstanceType<(typeof db)['Webhook']> & {
     project?: InstanceType<(typeof db)['Project']>;
-    policy?: InstanceType<(typeof db)['ProjectPolicy']> | null;
+    policy?: InstanceType<(typeof db)['Policy']> | null;
   },
   args?: { includeSecret?: boolean }
 ) => {
@@ -30,7 +30,7 @@ const mapWebhook = (
 
 const webhookIncludes = () => [
   { model: db.Project, as: 'project' },
-  { model: db.ProjectPolicy, as: 'policy' },
+  { model: db.Policy, as: 'policy' },
 ];
 
 export const listWebhooks = async (args: { projectIds: number[] }) => {

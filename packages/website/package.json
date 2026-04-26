@@ -4,8 +4,10 @@
   "private": true,
   "scripts": {
     "docusaurus": "docusaurus",
-    "dev": "docusaurus start",
-    "build": "docusaurus gen-api-docs all && pnpm generate-mcp-tools-docs && docusaurus build",
+    "copy-openapi-specs": "node -e \"const fs=require('fs');const path=require('path');const src=path.resolve(__dirname,'../../packages/server/src/rest/openapi/v1');const dest=path.resolve(__dirname,'static/openapi');fs.mkdirSync(dest,{recursive:true});fs.readdirSync(src).filter(f=>f.endsWith('.yaml')).forEach(f=>fs.copyFileSync(path.join(src,f),path.join(dest,f)));console.log('OpenAPI specs copied to static/openapi/')\"",
+    "generate-openapi-specs-page": "tsx scripts/generateOpenApiSpecsPage.ts",
+    "dev": "pnpm copy-openapi-specs && pnpm generate-openapi-specs-page && docusaurus start",
+    "build": "pnpm copy-openapi-specs && pnpm generate-openapi-specs-page && docusaurus gen-api-docs all && pnpm generate-mcp-tools-docs && docusaurus build",
     "swizzle": "docusaurus swizzle",
     "deploy": "carlin deploy static-app",
     "deploy-report": "carlin deploy report --channel=github-pr",
@@ -34,6 +36,7 @@
     "@docusaurus/module-type-aliases": "3.10.0",
     "@docusaurus/tsconfig": "3.10.0",
     "@docusaurus/types": "3.10.0",
+    "docusaurus-plugin-llms": "^0.4.0",
     "tsx": "^4.21.0",
     "typescript": "~6.0.3"
   },

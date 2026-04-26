@@ -8,6 +8,7 @@ describe('AI Providers', () => {
   let otherProjectId: string;
   let policyId: string;
   let secretId: string;
+  let noPermToken: string;
 
   beforeAll(async () => {
     await testClient
@@ -34,7 +35,7 @@ describe('AI Providers', () => {
     otherProjectId = otherProjectRes.body.id;
 
     const policyRes = await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/policies`)
+      .post('/api/v1/policies')
       .send({
         permissions: [
           'aiProviders:ListAiProviders',
@@ -47,8 +48,14 @@ describe('AI Providers', () => {
     policyId = policyRes.body.id;
 
     await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/members`)
-      .send({ user_id: userId, policy_id: policyId });
+      .put(`/api/v1/users/${userId}/policies`)
+      .send({ policy_ids: [policyId] });
+
+    const noPermRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'aiprovnoperm', password: 'nopassword' });
+    expect(noPermRes.status).toBe(201);
+    noPermToken = await loginAs('aiprovnoperm', 'nopassword');
 
     const secretRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/secrets')
@@ -76,7 +83,7 @@ describe('AI Providers', () => {
     });
 
     test('user without access to project returns 403', async () => {
-      const response = await authenticatedTestClient(userToken)
+      const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/ai-providers')
         .query({ project_id: otherProjectId });
 
@@ -183,7 +190,7 @@ describe('AI Providers', () => {
     });
 
     test('user without permission on project returns 403', async () => {
-      const response = await authenticatedTestClient(userToken)
+      const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/ai-providers')
         .send({
           project_id: otherProjectId,
@@ -239,7 +246,7 @@ describe('AI Providers', () => {
           default_model: 'gpt-4o',
         });
 
-      const response = await authenticatedTestClient(userToken).get(
+      const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/ai-providers/${adminRes.body.id}`
       );
       expect(response.status).toBe(403);
@@ -305,7 +312,7 @@ describe('AI Providers', () => {
           default_model: 'gpt-4o',
         });
 
-      const response = await authenticatedTestClient(userToken)
+      const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/ai-providers/${adminRes.body.id}`)
         .send({ name: 'x' });
       expect(response.status).toBe(403);
@@ -354,7 +361,7 @@ describe('AI Providers', () => {
           default_model: 'gpt-4o',
         });
 
-      const response = await authenticatedTestClient(userToken).delete(
+      const response = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/ai-providers/${adminRes.body.id}`
       );
       expect(response.status).toBe(403);

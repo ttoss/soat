@@ -9,6 +9,7 @@ describe('Files', () => {
   let userId: string;
   let projectId: string;
   let policyId: string;
+  let noPermToken: string;
 
   beforeAll(async () => {
     await testClient
@@ -30,7 +31,7 @@ describe('Files', () => {
     projectId = projectRes.body.id;
 
     const policyRes = await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/policies`)
+      .post('/api/v1/policies')
       .send({
         permissions: [
           'files:UploadFile',
@@ -44,8 +45,14 @@ describe('Files', () => {
     policyId = policyRes.body.id;
 
     await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/members`)
-      .send({ user_id: userId, policy_id: policyId });
+      .put(`/api/v1/users/${userId}/policies`)
+      .send({ policy_ids: [policyId] });
+
+    const noPermRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'filesnoperm', password: 'nopassword' });
+    expect(noPermRes.status).toBe(201);
+    noPermToken = await loginAs('filesnoperm', 'nopassword');
   });
 
   afterAll(() => {
@@ -402,12 +409,12 @@ describe('Files', () => {
       secondProjectId = projectRes.body.id;
 
       const policyRes = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${secondProjectId}/policies`)
+        .post('/api/v1/policies')
         .send({ permissions: ['files:UploadFile', 'files:GetFile'] });
 
       await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${secondProjectId}/members`)
-        .send({ user_id: userId, policy_id: policyRes.body.id });
+        .put(`/api/v1/users/${userId}/policies`)
+        .send({ policy_ids: [policyRes.body.id] });
 
       await authenticatedTestClient(userToken)
         .post('/api/v1/files/upload')
@@ -445,7 +452,7 @@ describe('Files', () => {
         .send({ name: 'Forbidden Files Project' });
       const forbiddenProjectId = forbiddenProjectRes.body.id;
 
-      const response = await authenticatedTestClient(userToken).get(
+      const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/files?project_id=${forbiddenProjectId}`
       );
 

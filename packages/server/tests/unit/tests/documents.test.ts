@@ -11,6 +11,7 @@ describe('Documents', () => {
   let userId: string;
   let projectId: string;
   let policyId: string;
+  let noPermToken: string;
 
   beforeAll(async () => {
     await testClient
@@ -32,7 +33,7 @@ describe('Documents', () => {
     projectId = projectRes.body.id;
 
     const policyRes = await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/policies`)
+      .post('/api/v1/policies')
       .send({
         permissions: [
           'documents:ListDocuments',
@@ -46,8 +47,14 @@ describe('Documents', () => {
     policyId = policyRes.body.id;
 
     await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/members`)
-      .send({ user_id: userId, policy_id: policyId });
+      .put(`/api/v1/users/${userId}/policies`)
+      .send({ policy_ids: [policyId] });
+
+    const noPermRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'docsnoperm', password: 'nopassword' });
+    expect(noPermRes.status).toBe(201);
+    noPermToken = await loginAs('docsnoperm', 'nopassword');
   });
 
   afterAll(() => {
@@ -407,14 +414,14 @@ describe('Documents', () => {
       const noUpdateToken = await loginAs('noupdate', 'nopass');
 
       const policyRes = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/policies`)
+        .post('/api/v1/policies')
         .send({
           permissions: ['documents:GetDocument'],
         });
 
       await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/members`)
-        .send({ user_id: noUpdateUserId, policy_id: policyRes.body.id });
+        .put(`/api/v1/users/${noUpdateUserId}/policies`)
+        .send({ policy_ids: [policyRes.body.id] });
 
       const response = await authenticatedTestClient(noUpdateToken)
         .patch(`/api/v1/documents/${documentId}`)
@@ -464,54 +471,6 @@ describe('Documents', () => {
     });
   });
 
-  describe('project key access', () => {
-    let projectKey: string;
-
-    beforeAll(async () => {
-      const policyRes = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/policies`)
-        .send({
-          permissions: ['documents:ListDocuments', 'documents:SearchDocuments'],
-        });
-      const projectKeyPolicyId = policyRes.body.id;
-
-      const projectKeyRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/project-keys')
-        .send({
-          project_id: projectId,
-          policy_id: projectKeyPolicyId,
-          name: 'Docs Test project key',
-        });
-      projectKey = projectKeyRes.body.key;
-
-      await authenticatedTestClient(userToken).post('/api/v1/documents').send({
-        project_id: projectId,
-        content: 'project key test document.',
-        filename: 'projectkey-doc.txt',
-      });
-    });
-
-    test('project key can list documents without providing projectId', async () => {
-      const response = await testClient
-        .get('/api/v1/documents')
-        .set('Authorization', `Bearer ${projectKey}`);
-
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body.data)).toBe(true);
-      expect(response.body.data.length).toBeGreaterThan(0);
-    });
-
-    test('project key can search documents without providing projectId', async () => {
-      const response = await testClient
-        .post('/api/v1/documents/search')
-        .set('Authorization', `Bearer ${projectKey}`)
-        .send({ search: 'project key test' });
-
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body.documents)).toBe(true);
-    });
-  });
-
   describe('POST /api/v1/documents/search — 403 without SearchDocuments permission', () => {
     test('user without SearchDocuments permission returns 403', async () => {
       const createRes = await authenticatedTestClient(adminToken)
@@ -521,12 +480,12 @@ describe('Documents', () => {
       const noSearchToken = await loginAs('nosearch', 'nosearchpass');
 
       const policyRes = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/policies`)
+        .post('/api/v1/policies')
         .send({ permissions: ['documents:GetDocument'] });
 
       await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/members`)
-        .send({ user_id: noSearchUserId, policy_id: policyRes.body.id });
+        .put(`/api/v1/users/${noSearchUserId}/policies`)
+        .send({ policy_ids: [policyRes.body.id] });
 
       const response = await authenticatedTestClient(noSearchToken)
         .post('/api/v1/documents/search')
@@ -686,27 +645,7 @@ describe('Documents', () => {
         .send({ name: 'Isolated Project B' });
       projectBId = projectBRes.body.id;
 
-      // Admin creates a policy with full doc access on project B
-      const policyBRes = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectBId}/policies`)
-        .send({
-          permissions: [
-            'documents:CreateDocument',
-            'documents:SearchDocuments',
-          ],
-        });
-
-      // Add admin as member so they can create docs in project B
-      const adminUserRes =
-        await authenticatedTestClient(adminToken).get('/api/v1/users/me');
-      await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectBId}/members`)
-        .send({
-          user_id: adminUserRes.body.id,
-          policy_id: policyBRes.body.id,
-        });
-
-      // Create a document in project B
+      // Create a document in project B (admin bypasses permission checks)
       const docRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/documents')
         .send({
@@ -730,7 +669,7 @@ describe('Documents', () => {
     });
 
     test('user gets 403 when searching explicitly in project B', async () => {
-      const response = await authenticatedTestClient(userToken)
+      const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/documents/search')
         .send({ project_id: projectBId, search: 'secret' });
 

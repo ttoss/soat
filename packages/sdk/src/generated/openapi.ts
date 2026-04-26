@@ -286,6 +286,54 @@ export interface paths {
         patch: operations["updateAiProvider"];
         trace?: never;
     };
+    "/api-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create an API key
+         * @description Creates a new API key for the authenticated user. - If `project_id` is provided, the key is scoped to that project. - If `policy_ids` is provided, the key's effective permissions are the intersection of the user's policies and the key's policies. - If neither is provided, the key inherits the user's full permissions.
+         */
+        post: operations["createApiKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api-keys/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an API key
+         * @description Returns details of an API key. Only the owner or an admin can access it.
+         */
+        get: operations["getApiKey"];
+        /**
+         * Update an API key
+         * @description Updates an API key's name, project scope, or policies. Only the owner or an admin can update it.
+         */
+        put: operations["updateApiKey"];
+        post?: never;
+        /**
+         * Delete an API key
+         * @description Deletes an API key. Only the owner or an admin can delete it.
+         */
+        delete: operations["deleteApiKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/chats": {
         parameters: {
             query?: never;
@@ -558,7 +606,11 @@ export interface paths {
         delete: operations["deleteDocument"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update a document
+         * @description Updates document content, title, path, metadata, or tags. Supplying `path` moves the document to a new logical path within the project.
+         */
+        patch: operations["updateDocument"];
         trace?: never;
     };
     "/documents/search": {
@@ -689,27 +741,31 @@ export interface paths {
         patch: operations["updateFileMetadata"];
         trace?: never;
     };
-    "/project-keys": {
+    "/policies": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List all policies
+         * @description Returns a list of all global policies. Requires admin role.
+         */
+        get: operations["listPolicies"];
         put?: never;
         /**
-         * Create a project key
-         * @description Creates a new API key for programmatic access to a project
+         * Create a policy
+         * @description Creates a new global policy. Requires admin role.
          */
-        post: operations["createProjectKey"];
+        post: operations["createPolicy"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/project-keys/{id}": {
+    "/policies/{policyId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -717,21 +773,21 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get a project key
-         * @description Returns details of a project key
+         * Get a policy
+         * @description Returns details of a specific policy. Requires admin role.
          */
-        get: operations["getProjectKey"];
+        get: operations["getPolicy"];
         /**
-         * Update a project key
-         * @description Updates an existing project key's policy
+         * Update a policy
+         * @description Updates an existing global policy. Requires admin role.
          */
-        put: operations["updateProjectKey"];
+        put: operations["updatePolicy"];
         post?: never;
         /**
-         * Delete a project key
-         * @description Deletes a project key
+         * Delete a policy
+         * @description Deletes a global policy. Requires admin role.
          */
-        delete: operations["deleteProjectKey"];
+        delete: operations["deletePolicy"];
         options?: never;
         head?: never;
         patch?: never;
@@ -757,7 +813,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/projects/{projectId}/policies": {
+    "/projects/{projectId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -765,41 +821,17 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List project policies
-         * @description Returns a list of policies for a project
+         * Get a project
+         * @description Returns details of a specific project.
          */
-        get: operations["listProjectPolicies"];
+        get: operations["getProject"];
         put?: never;
-        /**
-         * Create a project policy
-         * @description Creates a new policy for a project. Requires admin role.
-         */
-        post: operations["createProjectPolicy"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/projects/{projectId}/policies/{policyId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get a project policy
-         * @description Returns a specific policy
-         */
-        get: operations["getProjectPolicy"];
-        /**
-         * Update a project policy
-         * @description Updates an existing policy. Requires admin role.
-         */
-        put: operations["updateProjectPolicy"];
         post?: never;
-        delete?: never;
+        /**
+         * Delete a project
+         * @description Deletes a project. Requires admin role.
+         */
+        delete: operations["deleteProject"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1059,6 +1091,30 @@ export interface paths {
          * @description Creates the first admin user. Returns 409 if any user already exists.
          */
         post: operations["bootstrapUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{userId}/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get policies attached to a user
+         * @description Returns the list of policies attached to a user. Requires admin role.
+         */
+        get: operations["getUserPolicies"];
+        /**
+         * Attach policies to a user
+         * @description Replaces the user's policy list with the provided policy IDs. Requires admin role.
+         */
+        put: operations["attachUserPolicies"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1398,6 +1454,54 @@ export interface components {
             /** Format: date-time */
             created_at?: string;
         };
+        ApiKeyRecord: {
+            /**
+             * @description Public API key ID (key_ prefix)
+             * @example key_V1StGXR8Z5jdHi6B
+             */
+            id?: string;
+            /** @example CI/CD Pipeline */
+            name?: string;
+            /**
+             * @description First 8 characters of the raw key for identification
+             * @example sk_a1b2c3
+             */
+            key_prefix?: string;
+            /**
+             * @description Owner user public ID
+             * @example usr_V1StGXR8Z5jdHi6B
+             */
+            user_id?: string;
+            /**
+             * @description Optional project scope
+             * @example proj_V1StGXR8Z5jdHi6B
+             */
+            project_id?: string | null;
+            /**
+             * @description Public IDs of policies attached to this key
+             * @example [
+             *       "pol_V1StGXR8Z5jdHi6B"
+             *     ]
+             */
+            policy_ids?: string[];
+            /**
+             * Format: date-time
+             * @example 2024-01-01T00:00:00.000Z
+             */
+            created_at?: string;
+            /**
+             * Format: date-time
+             * @example 2024-01-01T00:00:00.000Z
+             */
+            updated_at?: string;
+        };
+        ApiKeyCreated: components["schemas"]["ApiKeyRecord"] & {
+            /**
+             * @description The raw API key value (only returned once at creation). Use as Bearer token.
+             * @example sk_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4
+             */
+            key?: string;
+        };
         Chat: {
             /**
              * @description Public ID of the chat
@@ -1707,6 +1811,11 @@ export interface components {
              */
             project_id?: string;
             /**
+             * @description Logical path of the document within the project (e.g. /reports/q1.txt)
+             * @example /reports/q1.txt
+             */
+            path?: string | null;
+            /**
              * @description Original filename
              * @example my-doc.txt
              */
@@ -1733,6 +1842,11 @@ export interface components {
              * @example abc123
              */
             id?: string;
+            /**
+             * @description Logical path of the file within the project (e.g. /images/logo.png)
+             * @example /images/logo.png
+             */
+            path?: string | null;
             /**
              * @description Name of the file
              * @example document.pdf
@@ -1772,6 +1886,69 @@ export interface components {
             /**
              * Format: date-time
              * @description Last update timestamp
+             */
+            updated_at?: string;
+        };
+        PolicyStatement: {
+            /**
+             * @example Allow
+             * @enum {string}
+             */
+            effect: "Allow" | "Deny";
+            /**
+             * @example [
+             *       "files:ListFiles",
+             *       "files:CreateFile"
+             *     ]
+             */
+            action: string[];
+            /**
+             * @example [
+             *       "soat:proj_abc:files:*"
+             *     ]
+             */
+            resource?: string[];
+        };
+        PolicyDocument: {
+            statement: components["schemas"]["PolicyStatement"][];
+        };
+        PolicyRecord: {
+            /**
+             * @description Public policy ID (pol_ prefix)
+             * @example pol_V1StGXR8Z5jdHi6B
+             */
+            id?: string;
+            /** @example ReadOnlyAccess */
+            name?: string;
+            description?: string;
+            document?: components["schemas"]["PolicyDocument"];
+            /**
+             * Format: date-time
+             * @example 2024-01-01T00:00:00.000Z
+             */
+            created_at?: string;
+            /**
+             * Format: date-time
+             * @example 2024-01-01T00:00:00.000Z
+             */
+            updated_at?: string;
+        };
+        ProjectRecord: {
+            /**
+             * @description Public project ID (proj_ prefix)
+             * @example proj_V1StGXR8Z5jdHi6B
+             */
+            id?: string;
+            /** @example My Project */
+            name?: string;
+            /**
+             * Format: date-time
+             * @example 2024-01-01T00:00:00.000Z
+             */
+            created_at?: string;
+            /**
+             * Format: date-time
+             * @example 2024-01-01T00:00:00.000Z
              */
             updated_at?: string;
         };
@@ -3306,6 +3483,222 @@ export interface operations {
             };
         };
     };
+    createApiKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description Key name for identification
+                     * @example CI/CD Pipeline
+                     */
+                    name: string;
+                    /**
+                     * @description Optional project ID to scope this key to a specific project
+                     * @example proj_V1StGXR8Z5jdHi6B
+                     */
+                    project_id?: string;
+                    /**
+                     * @description Optional list of policy IDs to attach. Key permissions become the intersection of user policies and these policies.
+                     * @example [
+                     *       "pol_V1StGXR8Z5jdHi6B"
+                     *     ]
+                     */
+                    policy_ids?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description API key created successfully. The raw key value is only returned once. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeyCreated"];
+                };
+            };
+            /** @description Bad request (missing name, invalid project or policy IDs) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getApiKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description API key public ID (key_ prefix) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description API key details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeyRecord"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden (not the key owner or admin) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API key not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateApiKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description API key public ID (key_ prefix) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @example Updated Key Name */
+                    name?: string;
+                    /**
+                     * @description Set to null to remove project scope
+                     * @example proj_V1StGXR8Z5jdHi6B
+                     */
+                    project_id?: string | null;
+                    /**
+                     * @description Replace the key's policy list (empty array removes all)
+                     * @example [
+                     *       "pol_V1StGXR8Z5jdHi6B"
+                     *     ]
+                     */
+                    policy_ids?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description API key updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeyRecord"];
+                };
+            };
+            /** @description Bad request (invalid project or policy IDs) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden (not the key owner or admin) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API key not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteApiKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description API key public ID (key_ prefix) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description API key deleted successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden (not the key owner or admin) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API key not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     listChats: {
         parameters: {
             query?: {
@@ -4250,6 +4643,11 @@ export interface operations {
                     project_id?: string;
                     /** @example The quick brown fox jumps over the lazy dog. */
                     content: string;
+                    /**
+                     * @description Logical path within the project (e.g. /reports/q1.txt). Defaults to /filename if omitted.
+                     * @example /reports/q1.txt
+                     */
+                    path?: string;
                     /** @example my-doc.txt */
                     filename?: string;
                 };
@@ -4392,6 +4790,76 @@ export interface operations {
             };
         };
     };
+    updateDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Document ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description New text content */
+                    content?: string;
+                    /** @description New title */
+                    title?: string;
+                    /**
+                     * @description Logical path within the project (e.g. /reports/q1.txt). Pass null to clear.
+                     * @example /reports/q1.txt
+                     */
+                    path?: string | null;
+                    /** @description Arbitrary metadata object */
+                    metadata?: Record<string, never>;
+                    /** @description Key-value tags */
+                    tags?: {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Document updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentRecord"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Document not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     searchDocuments: {
         parameters: {
             query?: never;
@@ -4492,6 +4960,11 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /**
+                     * @description Logical path within the project (e.g. /images/logo.png). Defaults to /filename if omitted.
+                     * @example /images/logo.png
+                     */
+                    path?: string;
                     /**
                      * @description Name of the file
                      * @example document.pdf
@@ -4761,7 +5234,41 @@ export interface operations {
             };
         };
     };
-    createProjectKey: {
+    listPolicies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of policies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyRecord"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden (non-admin user) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createPolicy: {
         parameters: {
             query?: never;
             header?: never;
@@ -4771,50 +5278,32 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /**
-                     * @description Project ID
-                     * @example proj_V1StGXR8Z5jdHi6B
-                     */
-                    project_id: string;
-                    /**
-                     * @description Policy ID that determines the key's permissions
-                     * @example policy_abc123
-                     */
-                    policy_id: string;
-                    /**
-                     * @description Key name for identification
-                     * @example CI/CD Pipeline
-                     */
-                    name: string;
+                    /** @example ReadOnlyAccess */
+                    name?: string;
+                    /** @example Allows read-only access to all resources */
+                    description?: string;
+                    document: components["schemas"]["PolicyDocument"];
                 };
             };
         };
         responses: {
-            /** @description Project key created successfully */
+            /** @description Policy created successfully */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /**
-                         * @description The API key ID (to use as bearer token)
-                         * @example SDK_V1StGXR8Z5jdHi6B
-                         */
-                        id?: string;
-                        name?: string;
-                        project_id?: string;
-                        /** Format: date-time */
-                        created_at?: string;
-                    };
+                    "application/json": components["schemas"]["PolicyRecord"];
                 };
             };
-            /** @description Bad request (missing fields, invalid project/policy) */
+            /** @description Bad request (invalid policy document) */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
             /** @description Unauthorized */
             401: {
@@ -4823,15 +5312,8 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Forbidden (not a project member) */
+            /** @description Forbidden (non-admin user) */
             403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Internal server error */
-            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4839,31 +5321,25 @@ export interface operations {
             };
         };
     };
-    getProjectKey: {
+    getPolicy: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Project key ID */
-                id: string;
+                /** @description Policy public ID (pol_ prefix) */
+                policyId: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Project key details */
+            /** @description Policy details */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        id?: string;
-                        name?: string;
-                        project_id?: string;
-                        /** Format: date-time */
-                        created_at?: string;
-                    };
+                    "application/json": components["schemas"]["PolicyRecord"];
                 };
             };
             /** @description Unauthorized */
@@ -4873,14 +5349,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Forbidden (not the key owner) */
+            /** @description Forbidden (non-admin user) */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Project key not found */
+            /** @description Policy not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4889,38 +5365,43 @@ export interface operations {
             };
         };
     };
-    updateProjectKey: {
+    updatePolicy: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Project key ID */
-                id: string;
+                /** @description Policy public ID (pol_ prefix) */
+                policyId: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description New policy ID */
-                    policy_id: string;
+                    name?: string;
+                    description?: string;
+                    document: components["schemas"]["PolicyDocument"];
                 };
             };
         };
         responses: {
-            /** @description Project key updated successfully */
+            /** @description Policy updated successfully */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PolicyRecord"];
+                };
             };
-            /** @description Bad request (invalid policy) */
+            /** @description Bad request (invalid policy document) */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
             /** @description Unauthorized */
             401: {
@@ -4929,14 +5410,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Forbidden (not the key owner) */
+            /** @description Forbidden (non-admin user) */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Project key not found */
+            /** @description Policy not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4945,20 +5426,20 @@ export interface operations {
             };
         };
     };
-    deleteProjectKey: {
+    deletePolicy: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Project key ID */
-                id: string;
+                /** @description Policy public ID (pol_ prefix) */
+                policyId: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Project key deleted successfully */
-            200: {
+            /** @description Policy deleted successfully */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4971,14 +5452,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Forbidden (not the key owner) */
+            /** @description Forbidden (non-admin user) */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Project key not found */
+            /** @description Policy not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5041,29 +5522,25 @@ export interface operations {
             };
         };
     };
-    listProjectPolicies: {
+    getProject: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Project ID */
+                /** @description Project public ID (proj_ prefix) */
                 projectId: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description List of policies */
+            /** @description Project details */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        id?: string;
-                        name?: string;
-                        description?: string;
-                    }[];
+                    "application/json": components["schemas"]["ProjectRecord"];
                 };
             };
             /** @description Unauthorized */
@@ -5089,85 +5566,20 @@ export interface operations {
             };
         };
     };
-    createProjectPolicy: {
+    deleteProject: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Project ID */
+                /** @description Project public ID (proj_ prefix) */
                 projectId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @example Editor */
-                    name: string;
-                    description?: string;
-                    /**
-                     * @example [
-                     *       "files:ListFiles",
-                     *       "files:CreateFile"
-                     *     ]
-                     */
-                    permissions: string[];
-                    not_permissions?: string[];
-                };
-            };
-        };
-        responses: {
-            /** @description Policy created successfully */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Bad request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Project not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    getProjectPolicy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: string;
-                policyId: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Policy details */
-            200: {
+            /** @description Project deleted successfully */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5180,71 +5592,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Forbidden */
+            /** @description Forbidden (non-admin user) */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Policy not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    updateProjectPolicy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: string;
-                policyId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    name?: string;
-                    description?: string;
-                    document?: Record<string, never>;
-                };
-            };
-        };
-        responses: {
-            /** @description Policy updated successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Bad request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Policy not found */
+            /** @description Project not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6109,6 +6464,118 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
+            };
+        };
+    };
+    getUserPolicies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User public ID (usr_ prefix) */
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of policies attached to the user */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example pol_V1StGXR8Z5jdHi6B */
+                        id?: string;
+                        name?: string;
+                        description?: string;
+                    }[];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden (non-admin user) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description User not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    attachUserPolicies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User public ID (usr_ prefix) */
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description List of policy public IDs to attach (replaces existing)
+                     * @example [
+                     *       "pol_V1StGXR8Z5jdHi6B"
+                     *     ]
+                     */
+                    policy_ids: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Policies attached successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad request (policy_ids must be an array) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden (non-admin user) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description User or policy not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

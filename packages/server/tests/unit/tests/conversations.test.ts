@@ -28,7 +28,7 @@ describe('Conversations', () => {
     projectId = projectRes.body.id;
 
     const policyRes = await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/policies`)
+      .post('/api/v1/policies')
       .send({
         permissions: [
           'actors:CreateActor',
@@ -49,8 +49,8 @@ describe('Conversations', () => {
     policyId = policyRes.body.id;
 
     await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/members`)
-      .send({ user_id: userId, policy_id: policyId });
+      .put(`/api/v1/users/${userId}/policies`)
+      .send({ policy_ids: [policyId] });
 
     const actorRes = await authenticatedTestClient(userToken)
       .post('/api/v1/actors')

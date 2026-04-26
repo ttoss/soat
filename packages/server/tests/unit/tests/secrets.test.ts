@@ -7,6 +7,7 @@ describe('Secrets', () => {
   let projectId: string;
   let otherProjectId: string;
   let policyId: string;
+  let noPermToken: string;
 
   beforeAll(async () => {
     await testClient
@@ -33,7 +34,7 @@ describe('Secrets', () => {
     otherProjectId = otherProjectRes.body.id;
 
     const policyRes = await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/policies`)
+      .post('/api/v1/policies')
       .send({
         permissions: [
           'secrets:ListSecrets',
@@ -46,8 +47,14 @@ describe('Secrets', () => {
     policyId = policyRes.body.id;
 
     await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/members`)
-      .send({ user_id: userId, policy_id: policyId });
+      .put(`/api/v1/users/${userId}/policies`)
+      .send({ policy_ids: [policyId] });
+
+    const noPermRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'secretsnoperm', password: 'nopassword' });
+    expect(noPermRes.status).toBe(201);
+    noPermToken = await loginAs('secretsnoperm', 'nopassword');
   });
 
   describe('GET /api/v1/secrets', () => {
@@ -66,7 +73,7 @@ describe('Secrets', () => {
     });
 
     test('user without access to project returns 403', async () => {
-      const response = await authenticatedTestClient(userToken)
+      const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/secrets')
         .query({ projectId: otherProjectId });
 
@@ -78,7 +85,11 @@ describe('Secrets', () => {
     test('authenticated user with permission can create a secret', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/secrets')
-        .send({ project_id: projectId, name: 'Test Secret', value: 'supersecretvalue' });
+        .send({
+          project_id: projectId,
+          name: 'Test Secret',
+          value: 'supersecretvalue',
+        });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
@@ -106,7 +117,7 @@ describe('Secrets', () => {
     });
 
     test('user without permission on project returns 403', async () => {
-      const response = await authenticatedTestClient(userToken)
+      const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/secrets')
         .send({ project_id: otherProjectId, name: 'Test' });
 
@@ -147,7 +158,7 @@ describe('Secrets', () => {
         .send({ project_id: otherProjectId, name: 'Other Secret' });
       const otherId = adminRes.body.id;
 
-      const response = await authenticatedTestClient(userToken).get(
+      const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/secrets/${otherId}`
       );
       expect(response.status).toBe(403);
@@ -195,7 +206,7 @@ describe('Secrets', () => {
         .post('/api/v1/secrets')
         .send({ project_id: otherProjectId, name: 'Other Patch Secret' });
 
-      const response = await authenticatedTestClient(userToken)
+      const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/secrets/${adminRes.body.id}`)
         .send({ name: 'x' });
       expect(response.status).toBe(403);
@@ -234,7 +245,7 @@ describe('Secrets', () => {
         .post('/api/v1/secrets')
         .send({ project_id: otherProjectId, name: 'Other Delete Secret' });
 
-      const response = await authenticatedTestClient(userToken).delete(
+      const response = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/secrets/${adminRes.body.id}`
       );
       expect(response.status).toBe(403);

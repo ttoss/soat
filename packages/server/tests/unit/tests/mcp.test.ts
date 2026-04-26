@@ -692,4 +692,115 @@ describe('MCP tools - happy path', () => {
     });
     expect(res.status).toBe(200);
   });
+
+  // ── Policies ─────────────────────────────────────────────────────────────
+
+  let mcpPolicyId: string;
+
+  test('create-policy creates a policy', async () => {
+    const res = await mcpCall('create-policy', {
+      name: 'MCP Test Policy',
+      document: {
+        statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+      },
+    });
+
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toMatch(/^pol_/);
+    expect(result.name).toBe('MCP Test Policy');
+    expect(result.permissions).toContain('files:GetFile');
+    mcpPolicyId = result.id;
+  });
+
+  test('list-policies returns results', async () => {
+    const res = await mcpCall('list-policies');
+
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(Array.isArray(result)).toBe(true);
+    expect(result.some((p: { id: string }) => p.id === mcpPolicyId)).toBe(true);
+  });
+
+  test('get-policy returns the policy', async () => {
+    const res = await mcpCall('get-policy', { policyId: mcpPolicyId });
+
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBe(mcpPolicyId);
+    expect(result.name).toBe('MCP Test Policy');
+  });
+
+  test('update-policy updates the policy', async () => {
+    const res = await mcpCall('update-policy', {
+      policyId: mcpPolicyId,
+      name: 'MCP Updated Policy',
+      document: {
+        statement: [
+          { effect: 'Allow', action: ['files:GetFile', 'files:ListFiles'] },
+        ],
+      },
+    });
+
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBe(mcpPolicyId);
+    expect(result.name).toBe('MCP Updated Policy');
+    expect(result.permissions).toContain('files:ListFiles');
+  });
+
+  // ── API Keys ──────────────────────────────────────────────────────────────
+
+  let mcpApiKeyId: string;
+
+  test('create-api-key creates a key', async () => {
+    const res = await mcpCall('create-api-key', {
+      name: 'MCP Test Key',
+      projectId,
+      policyIds: [mcpPolicyId],
+    });
+
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toMatch(/^key_/);
+    expect(result.name).toBe('MCP Test Key');
+    expect(result.key).toMatch(/^sk_/); // only at creation
+    mcpApiKeyId = result.id;
+  });
+
+  test('get-api-key returns the key', async () => {
+    const res = await mcpCall('get-api-key', { id: mcpApiKeyId });
+
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBe(mcpApiKeyId);
+    expect(result.name).toBe('MCP Test Key');
+    expect(result.key).toBeUndefined(); // not returned after creation
+    expect(result.projectId).toBe(projectId);
+    expect(result.policyIds).toContain(mcpPolicyId);
+  });
+
+  test('update-api-key updates the key', async () => {
+    const res = await mcpCall('update-api-key', {
+      id: mcpApiKeyId,
+      name: 'MCP Updated Key',
+    });
+
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBe(mcpApiKeyId);
+    expect(result.name).toBe('MCP Updated Key');
+  });
+
+  test('delete-api-key deletes the key', async () => {
+    const res = await mcpCall('delete-api-key', { id: mcpApiKeyId });
+
+    expect(res.status).toBe(200);
+  });
+
+  test('delete-policy deletes the policy', async () => {
+    const res = await mcpCall('delete-policy', { policyId: mcpPolicyId });
+
+    expect(res.status).toBe(200);
+  });
 });

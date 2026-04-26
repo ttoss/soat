@@ -27,7 +27,7 @@ describe('Webhooks', () => {
     projectId = projectRes.body.id;
 
     const policyRes = await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/policies`)
+      .post('/api/v1/policies')
       .send({
         permissions: [
           'webhooks:ListWebhooks',
@@ -43,8 +43,8 @@ describe('Webhooks', () => {
     policyId = policyRes.body.id;
 
     await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/members`)
-      .send({ user_id: userId, policy_id: policyId });
+      .put(`/api/v1/users/${userId}/policies`)
+      .send({ policy_ids: [policyId] });
   });
 
   describe('POST /api/v1/projects/:projectId/webhooks', () => {
@@ -92,16 +92,7 @@ describe('Webhooks', () => {
         .post('/api/v1/users')
         .send({ username: 'webhooksnoperm', password: 'pass123' });
 
-      const noPermPolicyRes = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/policies`)
-        .send({ permissions: [] });
-
-      await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/members`)
-        .send({
-          user_id: noPermUserRes.body.id,
-          policy_id: noPermPolicyRes.body.id,
-        });
+      expect(noPermUserRes.status).toBe(201);
 
       const noPermToken = await loginAs('webhooksnoperm', 'pass123');
 

@@ -27,7 +27,7 @@ describe('Actors', () => {
     projectId = projectRes.body.id;
 
     const policyRes = await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/policies`)
+      .post('/api/v1/policies')
       .send({
         permissions: [
           'actors:ListActors',
@@ -40,8 +40,8 @@ describe('Actors', () => {
     policyId = policyRes.body.id;
 
     await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/members`)
-      .send({ user_id: userId, policy_id: policyId });
+      .put(`/api/v1/users/${userId}/policies`)
+      .send({ policy_ids: [policyId] });
   });
 
   describe('POST /api/v1/actors', () => {
@@ -367,20 +367,16 @@ describe('Actors', () => {
 
   describe('GET /api/v1/actors with name and type filters (FEAT-9)', () => {
     beforeAll(async () => {
-      await authenticatedTestClient(userToken)
-        .post('/api/v1/actors')
-        .send({
-          project_id: projectId,
-          name: 'NameFilterAgent',
-          type: 'agent',
-        });
-      await authenticatedTestClient(userToken)
-        .post('/api/v1/actors')
-        .send({
-          project_id: projectId,
-          name: 'NameFilterCustomer',
-          type: 'customer',
-        });
+      await authenticatedTestClient(userToken).post('/api/v1/actors').send({
+        project_id: projectId,
+        name: 'NameFilterAgent',
+        type: 'agent',
+      });
+      await authenticatedTestClient(userToken).post('/api/v1/actors').send({
+        project_id: projectId,
+        name: 'NameFilterCustomer',
+        type: 'customer',
+      });
       await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
         .send({ project_id: projectId, name: 'Unrelated', type: 'agent' });

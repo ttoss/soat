@@ -31,7 +31,7 @@ describe('Sessions', () => {
     projectId = projectRes.body.id;
 
     const policyRes = await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/policies`)
+      .post('/api/v1/policies')
       .send({
         permissions: [
           'agents:CreateAgent',
@@ -48,8 +48,8 @@ describe('Sessions', () => {
     policyId = policyRes.body.id;
 
     await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/members`)
-      .send({ user_id: userId, policy_id: policyId });
+      .put(`/api/v1/users/${userId}/policies`)
+      .send({ policy_ids: [policyId] });
 
     const aiProvRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/ai-providers')
@@ -491,20 +491,12 @@ describe('Sessions', () => {
     let unprivilegedToken: string;
 
     beforeAll(async () => {
+      // User with no policies has no access to project resources
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/users')
         .send({ username: 'sessnoperm', password: 'sessnopass' });
 
       unprivilegedToken = await loginAs('sessnoperm', 'sessnopass');
-
-      // Add to project with no session permissions
-      const emptyPolicy = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/policies`)
-        .send({ permissions: [] });
-
-      await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/members`)
-        .send({ user_id: res.body.id, policy_id: emptyPolicy.body.id });
     });
 
     test('user without CreateSession permission returns 403', async () => {

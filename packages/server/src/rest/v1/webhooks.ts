@@ -103,8 +103,8 @@ webhooksRouter.post('/projects/:projectId/webhooks', async (ctx: Context) => {
 
   let policyInternalId: number | null = null;
   if (body.policyId) {
-    const policy = await db.ProjectPolicy.findOne({
-      where: { publicId: body.policyId, projectId: project.id },
+    const policy = await db.Policy.findOne({
+      where: { publicId: body.policyId },
     });
     if (!policy) {
       ctx.status = 400;
@@ -216,8 +216,8 @@ webhooksRouter.put(
         const project = await db.Project.findOne({
           where: { publicId: ctx.params.projectId },
         });
-        const policy = await db.ProjectPolicy.findOne({
-          where: { publicId: body.policyId, projectId: project!.id },
+        const policy = await db.Policy.findOne({
+          where: { publicId: body.policyId },
         });
         if (!policy) {
           ctx.status = 400;

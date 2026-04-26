@@ -7,6 +7,8 @@
 # Generated files
 .docusaurus
 .cache-loader
+/static/openapi
+/docs/openapi-specs.md
 
 # Misc
 .DS_Store

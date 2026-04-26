@@ -101,6 +101,27 @@ const config: Config = {
         config: buildOpenApiConfig(),
       },
     ],
+    [
+      'docusaurus-plugin-llms',
+      {
+        title: 'SOAT',
+        description:
+          'Infrastructure for AI Apps — Backend, identity, storage, memory, and orchestration.',
+        generateLLMsTxt: true,
+        generateLLMsFullTxt: true,
+        generateMarkdownFiles: true,
+        excludeImports: true,
+        removeDuplicateHeadings: true,
+        ignoreFiles: ['api/**'],
+        includeOrder: [
+          'getting-started/*',
+          'modules/*',
+          'tutorials/*',
+          'mcp/*',
+          'openapi-specs.md',
+        ],
+      },
+    ],
   ],
 
   themes: ['docusaurus-theme-openapi-docs'],

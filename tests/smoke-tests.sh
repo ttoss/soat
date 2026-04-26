@@ -40,12 +40,12 @@ PROJECT_RESP=$(curl -sf -X POST "$BASE_URL/projects" \
 PROJECT_PUBLIC_ID=$(echo "$PROJECT_RESP" | jq -r '.id')
 echo "Project id: $PROJECT_PUBLIC_ID"
 
-# 3b. Create project policies for project-keys module coverage
-echo "--- Creating project policies ---"
-POLICY_READ_RESP=$(curl -sf -X POST "$BASE_URL/projects/$PROJECT_PUBLIC_ID/policies" \
+# 3b. Policies module coverage
+echo "--- Policies coverage ---"
+POLICY_READ_RESP=$(curl -sf -X POST "$BASE_URL/policies" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"permissions":["files:read"]}')
+  -d "{\"permissions\":[\"files:GetFile\"],\"name\":\"smoke-read-policy\"}")
 POLICY_READ_ID=$(echo "$POLICY_READ_RESP" | jq -r '.id')
 if [ -z "$POLICY_READ_ID" ] || [ "$POLICY_READ_ID" = "null" ]; then
   echo "ERROR: Failed to create read policy" >&2
@@ -53,10 +53,10 @@ if [ -z "$POLICY_READ_ID" ] || [ "$POLICY_READ_ID" = "null" ]; then
   exit 1
 fi
 
-POLICY_WRITE_RESP=$(curl -sf -X POST "$BASE_URL/projects/$PROJECT_PUBLIC_ID/policies" \
+POLICY_WRITE_RESP=$(curl -sf -X POST "$BASE_URL/policies" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"permissions":["files:write"]}')
+  -d "{\"permissions\":[\"files:PutFile\"],\"name\":\"smoke-write-policy\"}")
 POLICY_WRITE_ID=$(echo "$POLICY_WRITE_RESP" | jq -r '.id')
 if [ -z "$POLICY_WRITE_ID" ] || [ "$POLICY_WRITE_ID" = "null" ]; then
   echo "ERROR: Failed to create write policy" >&2
@@ -64,71 +64,152 @@ if [ -z "$POLICY_WRITE_ID" ] || [ "$POLICY_WRITE_ID" = "null" ]; then
   exit 1
 fi
 
-ADD_MEMBER_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/projects/$PROJECT_PUBLIC_ID/members" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{\"user_id\":\"$ADMIN_USER_ID\",\"policy_id\":\"$POLICY_READ_ID\"}")
-if [ "$ADD_MEMBER_STATUS" != "201" ]; then
-  echo "ERROR: Failed to add admin as project member, got $ADD_MEMBER_STATUS" >&2
-  exit 1
-fi
-echo "Policies created: $POLICY_READ_ID, $POLICY_WRITE_ID"
-
-# 3c. Project keys module coverage
-echo "--- Project keys coverage ---"
-PROJECT_KEY_CREATE_STATUS=$(curl -s -o /tmp/project_key_create.json -w "%{http_code}" -X POST "$BASE_URL/project-keys" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"policy_id\":\"$POLICY_READ_ID\",\"name\":\"smoke-project-key\"}")
-if [ "$PROJECT_KEY_CREATE_STATUS" != "201" ]; then
-  echo "ERROR: CREATE project key returned $PROJECT_KEY_CREATE_STATUS, expected 201" >&2
-  cat /tmp/project_key_create.json >&2
-  exit 1
-fi
-PROJECT_KEY_RESP=$(cat /tmp/project_key_create.json)
-PROJECT_KEY_ID=$(echo "$PROJECT_KEY_RESP" | jq -r '.id')
-PROJECT_KEY_RAW=$(echo "$PROJECT_KEY_RESP" | jq -r '.key')
-if [ -z "$PROJECT_KEY_ID" ] || [ "$PROJECT_KEY_ID" = "null" ]; then
-  echo "ERROR: Failed to create project key" >&2
-  echo "$PROJECT_KEY_RESP" >&2
-  exit 1
-fi
-if [ -z "$PROJECT_KEY_RAW" ] || [ "$PROJECT_KEY_RAW" = "null" ]; then
-  echo "ERROR: Expected full project key on creation response" >&2
-  echo "$PROJECT_KEY_RESP" >&2
-  exit 1
-fi
-
-PROJECT_KEY_GET_STATUS=$(curl -s -o /tmp/project_key_get.json -w "%{http_code}" "$BASE_URL/project-keys/$PROJECT_KEY_ID" \
+# List policies
+POLICY_LIST_STATUS=$(curl -s -o /tmp/policy_list.json -w "%{http_code}" "$BASE_URL/policies" \
   -H "Authorization: Bearer $TOKEN")
-if [ "$PROJECT_KEY_GET_STATUS" != "200" ]; then
-  echo "ERROR: GET project key returned $PROJECT_KEY_GET_STATUS, expected 200" >&2
-  cat /tmp/project_key_get.json >&2
-  exit 1
-fi
-PROJECT_KEY_GET_ID=$(jq -r '.id' /tmp/project_key_get.json)
-if [ "$PROJECT_KEY_GET_ID" != "$PROJECT_KEY_ID" ]; then
-  echo "ERROR: GET project key returned mismatched id '$PROJECT_KEY_GET_ID'" >&2
-  cat /tmp/project_key_get.json >&2
+if [ "$POLICY_LIST_STATUS" != "200" ]; then
+  echo "ERROR: LIST policies returned $POLICY_LIST_STATUS, expected 200" >&2
+  cat /tmp/policy_list.json >&2
   exit 1
 fi
 
-PROJECT_KEY_UPDATE_STATUS=$(curl -s -o /tmp/project_key_put.json -w "%{http_code}" -X PUT "$BASE_URL/project-keys/$PROJECT_KEY_ID" \
+# Get policy
+POLICY_GET_STATUS=$(curl -s -o /tmp/policy_get.json -w "%{http_code}" "$BASE_URL/policies/$POLICY_READ_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$POLICY_GET_STATUS" != "200" ]; then
+  echo "ERROR: GET policy returned $POLICY_GET_STATUS, expected 200" >&2
+  cat /tmp/policy_get.json >&2
+  exit 1
+fi
+POLICY_GET_ID=$(jq -r '.id' /tmp/policy_get.json)
+if [ "$POLICY_GET_ID" != "$POLICY_READ_ID" ]; then
+  echo "ERROR: GET policy returned mismatched id '$POLICY_GET_ID'" >&2
+  exit 1
+fi
+
+# Update policy
+POLICY_UPDATE_STATUS=$(curl -s -o /tmp/policy_put.json -w "%{http_code}" -X PUT "$BASE_URL/policies/$POLICY_READ_ID" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"policy_id\":\"$POLICY_WRITE_ID\"}")
-if [ "$PROJECT_KEY_UPDATE_STATUS" != "200" ]; then
-  echo "ERROR: PUT project key returned $PROJECT_KEY_UPDATE_STATUS, expected 200" >&2
-  cat /tmp/project_key_put.json >&2
+  -d "{\"document\":{\"statement\":[{\"effect\":\"Allow\",\"action\":[\"files:GetFile\",\"files:ListFiles\"]}]},\"name\":\"smoke-read-policy-updated\"}")
+if [ "$POLICY_UPDATE_STATUS" != "200" ]; then
+  echo "ERROR: PUT policy returned $POLICY_UPDATE_STATUS, expected 200" >&2
+  cat /tmp/policy_put.json >&2
   exit 1
 fi
-PROJECT_KEY_UPDATED_POLICY=$(jq -r '.policy_id' /tmp/project_key_put.json)
-if [ "$PROJECT_KEY_UPDATED_POLICY" != "$POLICY_WRITE_ID" ]; then
-  echo "ERROR: PUT project key did not update policy_id" >&2
-  cat /tmp/project_key_put.json >&2
+
+# Attach policy to admin user
+ATTACH_POLICY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X PUT "$BASE_URL/users/$ADMIN_USER_ID/policies" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{\"policy_ids\":[\"$POLICY_READ_ID\",\"$POLICY_WRITE_ID\"]}")
+if [ "$ATTACH_POLICY_STATUS" != "204" ]; then
+  echo "ERROR: Attach policies to user returned $ATTACH_POLICY_STATUS, expected 204" >&2
   exit 1
 fi
-echo "Project keys coverage: OK"
+
+# Get user policies
+USER_POLICIES_STATUS=$(curl -s -o /tmp/user_policies.json -w "%{http_code}" "$BASE_URL/users/$ADMIN_USER_ID/policies" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$USER_POLICIES_STATUS" != "200" ]; then
+  echo "ERROR: GET user policies returned $USER_POLICIES_STATUS, expected 200" >&2
+  cat /tmp/user_policies.json >&2
+  exit 1
+fi
+echo "Policies coverage: OK"
+
+# 3c. API keys module coverage
+echo "--- API keys coverage ---"
+API_KEY_CREATE_STATUS=$(curl -s -o /tmp/api_key_create.json -w "%{http_code}" -X POST "$BASE_URL/api-keys" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{\"name\":\"smoke-api-key\",\"project_id\":\"$PROJECT_PUBLIC_ID\",\"policy_ids\":[\"$POLICY_READ_ID\"]}")
+if [ "$API_KEY_CREATE_STATUS" != "201" ]; then
+  echo "ERROR: CREATE api-key returned $API_KEY_CREATE_STATUS, expected 201" >&2
+  cat /tmp/api_key_create.json >&2
+  exit 1
+fi
+API_KEY_RESP=$(cat /tmp/api_key_create.json)
+API_KEY_ID=$(echo "$API_KEY_RESP" | jq -r '.id')
+API_KEY_RAW=$(echo "$API_KEY_RESP" | jq -r '.key')
+if [ -z "$API_KEY_ID" ] || [ "$API_KEY_ID" = "null" ]; then
+  echo "ERROR: Failed to create api-key" >&2
+  echo "$API_KEY_RESP" >&2
+  exit 1
+fi
+if [ -z "$API_KEY_RAW" ] || [ "$API_KEY_RAW" = "null" ]; then
+  echo "ERROR: Expected full api key on creation response" >&2
+  echo "$API_KEY_RESP" >&2
+  exit 1
+fi
+
+# GET api-key (key field must not appear)
+API_KEY_GET_STATUS=$(curl -s -o /tmp/api_key_get.json -w "%{http_code}" "$BASE_URL/api-keys/$API_KEY_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$API_KEY_GET_STATUS" != "200" ]; then
+  echo "ERROR: GET api-key returned $API_KEY_GET_STATUS, expected 200" >&2
+  cat /tmp/api_key_get.json >&2
+  exit 1
+fi
+if jq -e '.key' /tmp/api_key_get.json >/dev/null 2>&1; then
+  echo "ERROR: key field must not appear in GET api-key response" >&2
+  exit 1
+fi
+
+# UPDATE api-key
+API_KEY_UPDATE_STATUS=$(curl -s -o /tmp/api_key_put.json -w "%{http_code}" -X PUT "$BASE_URL/api-keys/$API_KEY_ID" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{\"name\":\"smoke-api-key-updated\",\"policy_ids\":[\"$POLICY_READ_ID\",\"$POLICY_WRITE_ID\"]}")
+if [ "$API_KEY_UPDATE_STATUS" != "200" ]; then
+  echo "ERROR: PUT api-key returned $API_KEY_UPDATE_STATUS, expected 200" >&2
+  cat /tmp/api_key_put.json >&2
+  exit 1
+fi
+API_KEY_UPDATED_NAME=$(jq -r '.name' /tmp/api_key_put.json)
+if [ "$API_KEY_UPDATED_NAME" != "smoke-api-key-updated" ]; then
+  echo "ERROR: PUT api-key did not update name" >&2
+  cat /tmp/api_key_put.json >&2
+  exit 1
+fi
+
+# Verify API key authentication works
+API_KEY_AUTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/projects" \
+  -H "Authorization: Bearer $API_KEY_RAW")
+if [ "$API_KEY_AUTH_STATUS" != "200" ]; then
+  echo "ERROR: API key auth returned $API_KEY_AUTH_STATUS, expected 200" >&2
+  exit 1
+fi
+
+# DELETE api-key
+API_KEY_DELETE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/api-keys/$API_KEY_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$API_KEY_DELETE_STATUS" != "204" ]; then
+  echo "ERROR: DELETE api-key returned $API_KEY_DELETE_STATUS, expected 204" >&2
+  exit 1
+fi
+API_KEY_AFTER_DELETE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api-keys/$API_KEY_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$API_KEY_AFTER_DELETE" != "404" ]; then
+  echo "ERROR: Expected 404 after api-key deletion, got $API_KEY_AFTER_DELETE" >&2
+  exit 1
+fi
+echo "API keys coverage: OK"
+
+# Delete policies (cleanup + CRUD coverage)
+POLICY_DELETE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/policies/$POLICY_READ_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$POLICY_DELETE_STATUS" != "204" ]; then
+  echo "ERROR: DELETE policy returned $POLICY_DELETE_STATUS, expected 204" >&2
+  exit 1
+fi
+POLICY_AFTER_DELETE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/policies/$POLICY_READ_ID" \
+  -H "Authorization: Bearer $TOKEN")
+if [ "$POLICY_AFTER_DELETE" != "404" ]; then
+  echo "ERROR: Expected 404 after policy deletion, got $POLICY_AFTER_DELETE" >&2
+  exit 1
+fi
+echo "Policy DELETE coverage: OK"
 
 # 3d. Secrets module coverage
 echo "--- Secrets coverage ---"

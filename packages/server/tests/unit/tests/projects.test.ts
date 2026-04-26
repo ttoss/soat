@@ -73,88 +73,63 @@ describe('Projects', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user only sees projects they are a member of', async () => {
-      const projectRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/projects')
-        .send({ name: 'Member Project' });
-      const memberProjectId = projectRes.body.id;
-
+    test('user with no policies sees no projects', async () => {
       await authenticatedTestClient(adminToken)
-        .post('/api/v1/projects')
-        .send({ name: 'Other Project' });
-
-      const policyRes = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${memberProjectId}/policies`)
-        .send({ permissions: ['projects:GetProject'] });
-      const policyId = policyRes.body.id;
-
-      await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${memberProjectId}/members`)
-        .send({ user_id: userId, policy_id: policyId });
+        .put(`/api/v1/users/${userId}/policies`)
+        .send({ policy_ids: [] });
 
       const response =
         await authenticatedTestClient(userToken).get('/api/v1/projects');
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
-      expect(
-        response.body.some((p: { id: string }) => {
-          return p.id === memberProjectId;
-        })
-      ).toBe(true);
-      expect(response.body.length).toBe(1);
+      expect(response.body.length).toBe(0);
     });
-    describe('project key only sees its scoped project', () => {
+
+    describe('api key scoped to project sees only that project', () => {
       let projectAId: string;
-      let rawProjectKey: string;
+      let rawApiKey: string;
 
       beforeAll(async () => {
         const projARes = await authenticatedTestClient(adminToken)
           .post('/api/v1/projects')
-          .send({ name: 'project key Project A' });
+          .send({ name: 'api key Scope Project A' });
+
         projectAId = projARes.body.id;
 
-        const projBRes = await authenticatedTestClient(adminToken)
+        await authenticatedTestClient(adminToken)
           .post('/api/v1/projects')
-          .send({ name: 'project key Project B' });
-        const projectBId = projBRes.body.id;
+          .send({ name: 'api key Scope Project B' });
 
-        const policyARes = await authenticatedTestClient(adminToken)
-          .post(`/api/v1/projects/${projectAId}/policies`)
-          .send({ permissions: ['projects:GetProject'] });
-        const policyAId = policyARes.body.id;
+        const listPolicyRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/policies')
+          .send({ permissions: ['projects:ListProjects'] });
 
         await authenticatedTestClient(adminToken)
-          .post(`/api/v1/projects/${projectAId}/members`)
-          .send({ user_id: userId, policy_id: policyAId });
+          .put(`/api/v1/users/${userId}/policies`)
+          .send({ policy_ids: [listPolicyRes.body.id] });
 
-        const policyBRes = await authenticatedTestClient(adminToken)
-          .post(`/api/v1/projects/${projectBId}/policies`)
-          .send({ permissions: ['projects:GetProject'] });
-        const policyBId = policyBRes.body.id;
+        const apiKeyRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/api-keys')
+          .send({ name: 'Scoped Key', project_id: projectAId });
 
-        await authenticatedTestClient(adminToken)
-          .post(`/api/v1/projects/${projectBId}/members`)
-          .send({ user_id: userId, policy_id: policyBId });
-
-        const projectKeyRes = await authenticatedTestClient(userToken)
-          .post('/api/v1/project-keys')
-          .send({
-            project_id: projectAId,
-            policy_id: policyAId,
-            name: 'Scoped Key',
-          });
-        rawProjectKey = projectKeyRes.body.key;
+        rawApiKey = apiKeyRes.body.key;
       });
 
-      test('project key user only sees the scoped project', async () => {
+      test('api key only sees its scoped project', async () => {
         const response =
-          await authenticatedTestClient(rawProjectKey).get('/api/v1/projects');
+          await authenticatedTestClient(rawApiKey).get('/api/v1/projects');
 
         expect(response.status).toBe(200);
         expect(Array.isArray(response.body)).toBe(true);
         expect(response.body.length).toBe(1);
         expect(response.body[0].id).toBe(projectAId);
+      });
+
+      afterAll(async () => {
+        await authenticatedTestClient(adminToken)
+          .put(`/api/v1/users/${userId}/policies`)
+          .send({ policy_ids: [] });
       });
     });
   });
@@ -166,6 +141,7 @@ describe('Projects', () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/projects')
         .send({ name: 'Gettable Project' });
+
       projectId = res.body.id;
     });
 
@@ -185,7 +161,11 @@ describe('Projects', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user cannot get a project they are not a member of', async () => {
+    test('user with no policies cannot get a project', async () => {
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${userId}/policies`)
+        .send({ policy_ids: [] });
+
       const response = await authenticatedTestClient(userToken).get(
         `/api/v1/projects/${projectId}`
       );
@@ -193,15 +173,14 @@ describe('Projects', () => {
       expect(response.status).toBe(403);
     });
 
-    test('user can get a project they are a member of', async () => {
+    test('user with projects:GetProject policy can get a project', async () => {
       const policyRes = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/policies`)
+        .post('/api/v1/policies')
         .send({ permissions: ['projects:GetProject'] });
-      const policyId = policyRes.body.id;
 
       await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/members`)
-        .send({ user_id: userId, policy_id: policyId });
+        .put(`/api/v1/users/${userId}/policies`)
+        .send({ policy_ids: [policyRes.body.id] });
 
       const response = await authenticatedTestClient(userToken).get(
         `/api/v1/projects/${projectId}`
@@ -209,6 +188,10 @@ describe('Projects', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(projectId);
+
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${userId}/policies`)
+        .send({ policy_ids: [] });
     });
 
     test('returns 404 for unknown project id', async () => {
@@ -225,16 +208,19 @@ describe('Projects', () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/projects')
         .send({ name: 'To Delete' });
+
       const { id } = createRes.body;
 
       const deleteRes = await authenticatedTestClient(adminToken).delete(
         `/api/v1/projects/${id}`
       );
+
       expect(deleteRes.status).toBe(204);
 
       const getRes = await authenticatedTestClient(adminToken).get(
         `/api/v1/projects/${id}`
       );
+
       expect(getRes.status).toBe(404);
     });
 
@@ -242,8 +228,8 @@ describe('Projects', () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/projects')
         .send({ name: 'Not Deletable Unauth' });
-      const { id } = createRes.body;
 
+      const { id } = createRes.body;
       const response = await testClient.delete(`/api/v1/projects/${id}`);
 
       expect(response.status).toBe(401);
@@ -253,8 +239,8 @@ describe('Projects', () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/projects')
         .send({ name: 'Not Deletable User' });
-      const { id } = createRes.body;
 
+      const { id } = createRes.body;
       const response = await authenticatedTestClient(userToken).delete(
         `/api/v1/projects/${id}`
       );
@@ -269,226 +255,39 @@ describe('Projects', () => {
 
       expect(response.status).toBe(404);
     });
-  });
 
-  describe('POST /api/v1/projects/:projectId/policies', () => {
-    let projectId: string;
-
-    beforeAll(async () => {
-      const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/projects')
-        .send({ name: 'Policy Project' });
-      projectId = res.body.id;
-    });
-
-    test('admin can create a project policy', async () => {
-      const response = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/policies`)
-        .send({ permissions: ['files:read', 'files:write'] });
-
-      expect(response.status).toBe(201);
-      expect(response.body.id).toBeDefined();
-      expect(response.body.permissions).toEqual(['files:read', 'files:write']);
-      expect(response.body.project_id).toBe(projectId);
-    });
-
-    test('admin can create a policy with notPermissions', async () => {
-      const response = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/policies`)
-        .send({
-          permissions: ['files:read'],
-          not_permissions: ['files:delete'],
-        });
-
-      expect(response.status).toBe(201);
-      expect(response.body.not_permissions).toEqual(['files:delete']);
-    });
-
-    test('unauthenticated request cannot create a policy', async () => {
-      const response = await testClient
-        .post(`/api/v1/projects/${projectId}/policies`)
-        .send({ permissions: ['files:read'] });
-
-      expect(response.status).toBe(401);
-    });
-
-    test('non-admin user cannot create a policy', async () => {
-      const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/projects/${projectId}/policies`)
-        .send({ permissions: ['files:read'] });
-
-      expect(response.status).toBe(403);
-    });
-
-    test('returns 404 for non-existent project', async () => {
-      const response = await authenticatedTestClient(adminToken)
-        .post('/api/v1/projects/proj_nonexistent12345/policies')
-        .send({ permissions: ['files:read'] });
-
-      expect(response.status).toBe(404);
-    });
-  });
-
-  describe('GET /api/v1/projects/:projectId/policies', () => {
-    let projectId: string;
-    let memberUserToken: string;
-    let memberUserId: string;
-
-    beforeAll(async () => {
-      const projRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/projects')
-        .send({ name: 'List Policies Project' });
-      projectId = projRes.body.id;
-
-      const userRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/users')
-        .send({ username: 'policyuser', password: 'policypass' });
-      memberUserId = userRes.body.id;
-      memberUserToken = await loginAs('policyuser', 'policypass');
-
-      const policyRes = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/policies`)
-        .send({ permissions: ['projects:GetProject'] });
-
-      await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/members`)
-        .send({ user_id: memberUserId, policy_id: policyRes.body.id });
-    });
-
-    test('admin can list project policies', async () => {
-      const response = await authenticatedTestClient(adminToken).get(
-        `/api/v1/projects/${projectId}/policies`
-      );
-
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
-    });
-
-    test('project member can list policies', async () => {
-      const response = await authenticatedTestClient(memberUserToken).get(
-        `/api/v1/projects/${projectId}/policies`
-      );
-
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-    });
-
-    test('unauthenticated request cannot list policies', async () => {
-      const response = await testClient.get(
-        `/api/v1/projects/${projectId}/policies`
-      );
-
-      expect(response.status).toBe(401);
-    });
-
-    test('non-member user cannot list policies', async () => {
-      const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/projects/${projectId}/policies`
-      );
-
-      expect(response.status).toBe(403);
-    });
-  });
-
-  describe('POST /api/v1/projects/:projectId/members', () => {
-    let projectId: string;
-    let policyId: string;
-
-    beforeAll(async () => {
-      const projRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/projects')
-        .send({ name: 'Members Project' });
-      projectId = projRes.body.id;
-
-      const policyRes = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/policies`)
-        .send({ permissions: ['projects:GetProject'] });
-      policyId = policyRes.body.id;
-    });
-
-    test('admin can add a user to a project', async () => {
-      const response = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/members`)
-        .send({ user_id: userId, policy_id: policyId });
-
-      expect(response.status).toBe(201);
-    });
-
-    test('unauthenticated request cannot add a member', async () => {
-      const response = await testClient
-        .post(`/api/v1/projects/${projectId}/members`)
-        .send({ user_id: userId, policy_id: policyId });
-
-      expect(response.status).toBe(401);
-    });
-
-    test('non-admin user cannot add a member', async () => {
-      const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/projects/${projectId}/members`)
-        .send({ user_id: userId, policy_id: policyId });
-
-      expect(response.status).toBe(403);
-    });
-
-    test('returns 404 for non-existent project', async () => {
-      const response = await authenticatedTestClient(adminToken)
-        .post('/api/v1/projects/proj_nonexistent12345/members')
-        .send({ user_id: userId, policy_id: policyId });
-
-      expect(response.status).toBe(404);
-    });
-  });
-
-  describe('cascade deletion when a project is deleted', () => {
-    test('deleting a project removes its policies, memberships, and project keys', async () => {
+    test('deleting a project removes api keys scoped to it', async () => {
       const projRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/projects')
         .send({ name: 'Cascade Test Project' });
+
       expect(projRes.status).toBe(201);
-      const projectId = projRes.body.id;
+      const cascadeProjectId = projRes.body.id;
 
-      const policyRes = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/policies`)
-        .send({ permissions: ['projects:GetProject'] });
-      expect(policyRes.status).toBe(201);
-      const policyId = policyRes.body.id;
+      const keyRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Cascade Key', project_id: cascadeProjectId });
 
-      const memberRes = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/projects/${projectId}/members`)
-        .send({ user_id: userId, policy_id: policyId });
-      expect(memberRes.status).toBe(201);
-
-      const projectKeyRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/project-keys')
-        .send({ project_id: projectId, policy_id: policyId, name: 'Cascade Test Key' });
-      expect(projectKeyRes.status).toBe(201);
-      const projectKeyId = projectKeyRes.body.id;
+      expect(keyRes.status).toBe(201);
+      const keyId = keyRes.body.id;
 
       const deleteRes = await authenticatedTestClient(adminToken).delete(
-        `/api/v1/projects/${projectId}`
+        `/api/v1/projects/${cascadeProjectId}`
       );
+
       expect(deleteRes.status).toBe(204);
 
-      // Policies cascade-deleted: project no longer found, so list returns []
-      const policiesRes = await authenticatedTestClient(adminToken).get(
-        `/api/v1/projects/${projectId}/policies`
+      const getProjectRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${cascadeProjectId}`
       );
-      expect(policiesRes.body).toEqual([]);
 
-      // UserProject cascade-deleted: deleted project no longer in alice's project list
-      const projectsRes =
-        await authenticatedTestClient(userToken).get('/api/v1/projects');
-      const projectIds = projectsRes.body.map((p: { id: string }) => {
-        return p.id;
-      });
-      expect(projectIds).not.toContain(projectId);
+      expect(getProjectRes.status).toBe(404);
 
-      // ProjectKey cascade-deleted: key no longer found
-      const projectKeyGetRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/project-keys/${projectKeyId}`
+      const getKeyRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/api-keys/${keyId}`
       );
-      expect(projectKeyGetRes.status).toBe(404);
+
+      expect(getKeyRes.status).toBe(404);
     });
   });
 });

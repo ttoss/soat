@@ -8,6 +8,7 @@ describe('Chats', () => {
   let otherProjectId: string;
   let policyId: string;
   let aiProviderId: string;
+  let noPermToken: string;
 
   beforeAll(async () => {
     await testClient
@@ -34,7 +35,7 @@ describe('Chats', () => {
     otherProjectId = otherProjectRes.body.id;
 
     const policyRes = await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/policies`)
+      .post('/api/v1/policies')
       .send({
         permissions: [
           'chats:CreateChat',
@@ -47,8 +48,14 @@ describe('Chats', () => {
     policyId = policyRes.body.id;
 
     await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/members`)
-      .send({ user_id: userId, policy_id: policyId });
+      .put(`/api/v1/users/${userId}/policies`)
+      .send({ policy_ids: [policyId] });
+
+    const noPermRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'chatsnoperm', password: 'nopassword' });
+    expect(noPermRes.status).toBe(201);
+    noPermToken = await loginAs('chatsnoperm', 'nopassword');
 
     const aiProvRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/ai-providers')
@@ -80,7 +87,7 @@ describe('Chats', () => {
     });
 
     test('user without project access returns 403', async () => {
-      const response = await authenticatedTestClient(userToken)
+      const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/chats')
         .send({ ai_provider_id: aiProviderId, project_id: otherProjectId });
 
@@ -90,7 +97,10 @@ describe('Chats', () => {
     test('unknown aiProviderId returns 404', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/chats')
-        .send({ ai_provider_id: 'aip_doesnotexist000000', project_id: projectId });
+        .send({
+          ai_provider_id: 'aip_doesnotexist000000',
+          project_id: projectId,
+        });
 
       expect(response.status).toBe(404);
       expect(response.body.error).toBeDefined();
@@ -133,7 +143,7 @@ describe('Chats', () => {
     });
 
     test('user without project access returns 403', async () => {
-      const response = await authenticatedTestClient(userToken)
+      const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/chats')
         .query({ projectId: otherProjectId });
 

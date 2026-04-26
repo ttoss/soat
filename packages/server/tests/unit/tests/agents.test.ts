@@ -99,6 +99,7 @@ describe('Agents', () => {
   let otherProjectId: string;
   let policyId: string;
   let aiProviderId: string;
+  let noPermToken: string;
 
   beforeAll(async () => {
     await testClient
@@ -125,7 +126,7 @@ describe('Agents', () => {
     otherProjectId = otherProjectRes.body.id;
 
     const policyRes = await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/policies`)
+      .post('/api/v1/policies')
       .send({
         permissions: [
           'agents:CreateAgent',
@@ -146,8 +147,14 @@ describe('Agents', () => {
     policyId = policyRes.body.id;
 
     await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/members`)
-      .send({ user_id: userId, policy_id: policyId });
+      .put(`/api/v1/users/${userId}/policies`)
+      .send({ policy_ids: [policyId] });
+
+    const noPermRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'agentsnoperm', password: 'nopassword' });
+    expect(noPermRes.status).toBe(201);
+    noPermToken = await loginAs('agentsnoperm', 'nopassword');
 
     const aiProvRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/ai-providers')
@@ -181,7 +188,7 @@ describe('Agents', () => {
     });
 
     test('user without project access returns 403', async () => {
-      const response = await authenticatedTestClient(userToken)
+      const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/agents/tools')
         .send({ name: 'test-tool', project_id: otherProjectId });
 
@@ -278,7 +285,7 @@ describe('Agents', () => {
     });
 
     test('user without project access returns 403', async () => {
-      const response = await authenticatedTestClient(userToken)
+      const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/agents/tools')
         .query({ projectId: otherProjectId });
 
@@ -427,7 +434,7 @@ describe('Agents', () => {
     });
 
     test('user without project access returns 403', async () => {
-      const response = await authenticatedTestClient(userToken)
+      const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/agents')
         .send({ ai_provider_id: aiProviderId, project_id: otherProjectId });
 
@@ -437,7 +444,10 @@ describe('Agents', () => {
     test('unknown aiProviderId returns 404', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/agents')
-        .send({ ai_provider_id: 'aip_doesnotexist000000', project_id: projectId });
+        .send({
+          ai_provider_id: 'aip_doesnotexist000000',
+          project_id: projectId,
+        });
 
       expect(response.status).toBe(404);
       expect(response.body.error).toBeDefined();
@@ -485,7 +495,7 @@ describe('Agents', () => {
     });
 
     test('user without project access returns 403', async () => {
-      const response = await authenticatedTestClient(userToken)
+      const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/agents')
         .query({ projectId: otherProjectId });
 
@@ -510,7 +520,11 @@ describe('Agents', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
-        .send({ ai_provider_id: aiProviderId, project_id: projectId, name: 'Get Agent Test' });
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Get Agent Test',
+        });
       agentId = res.body.id;
     });
 
@@ -545,7 +559,11 @@ describe('Agents', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
-        .send({ ai_provider_id: aiProviderId, project_id: projectId, name: 'Update Agent Test' });
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Update Agent Test',
+        });
       agentId = res.body.id;
     });
 
@@ -639,7 +657,11 @@ describe('Agents', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
-        .send({ ai_provider_id: aiProviderId, project_id: projectId, name: 'Generation Agent' });
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Generation Agent',
+        });
       agentId = res.body.id;
     });
 
@@ -741,7 +763,7 @@ describe('Agents', () => {
     });
 
     test('user without project access returns 403', async () => {
-      const response = await authenticatedTestClient(userToken)
+      const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/agents/traces')
         .query({ projectId: otherProjectId });
 
