@@ -1,5 +1,5 @@
 /**
- * Generates packages/website/docs/mcp/tools.md from soat-tools source files.
+ * Generates packages/website/docs/mcp/tools.md from OpenAPI YAML specs.
  * Run with: pnpm tsx scripts/generateMcpToolsDocs.ts
  */
 
@@ -7,19 +7,35 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as url from 'node:url';
 
+import yaml from 'js-yaml';
+
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
-const SOAT_TOOLS_DIR = path.resolve(
-  __dirname,
-  '../../server/src/lib/soat-tools'
-);
+const SPECS_DIR = path.resolve(__dirname, '../../server/src/rest/openapi/v1');
 
 const OUTPUT_FILE = path.resolve(__dirname, '../docs/mcp/tools.md');
+
+interface OpenApiSpec {
+  tags?: Array<{ name: string }>;
+  paths?: Record<string, Record<string, OperationSpec>>;
+}
+
+interface OperationSpec {
+  operationId?: string;
+  description?: string;
+}
 
 interface ToolEntry {
   name: string;
   description: string;
 }
+
+const operationIdToToolName = (operationId: string): string => {
+  return operationId
+    .replace(/([A-Z])/g, '-$1')
+    .toLowerCase()
+    .replace(/^-/, '');
+};
 
 interface ModuleConfig {
   file: string;
@@ -27,43 +43,50 @@ interface ModuleConfig {
   docLink: string;
 }
 
-const MODULES: ModuleConfig[] = [
-  { file: 'actors', label: 'Actors', docLink: '../modules/actors.md' },
-  { file: 'agents', label: 'Agents', docLink: '../modules/agents.md' },
-  {
-    file: 'aiProviders',
-    label: 'AI Providers',
-    docLink: '../modules/ai-providers.md',
-  },
-  { file: 'chats', label: 'Chats', docLink: '../modules/chats.md' },
-  {
-    file: 'conversations',
-    label: 'Conversations',
-    docLink: '../modules/conversations.md',
-  },
-  {
-    file: 'documents',
-    label: 'Documents',
-    docLink: '../modules/documents.md',
-  },
-  { file: 'files', label: 'Files', docLink: '../modules/files.md' },
-  { file: 'projects', label: 'Projects', docLink: '../modules/projects.md' },
-  { file: 'secrets', label: 'Secrets', docLink: '../modules/secrets.md' },
-  { file: 'sessions', label: 'Sessions', docLink: '../modules/sessions.md' },
-  { file: 'webhooks', label: 'Webhooks', docLink: '../modules/webhooks.md' },
-];
+const toTitleCase = (kebab: string): string => {
+  return kebab
+    .split('-')
+    .map((w) => {
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    })
+    .join(' ');
+};
 
-const loadTools = async (moduleName: string): Promise<ToolEntry[]> => {
-  const filePath = path.join(SOAT_TOOLS_DIR, `${moduleName}.ts`);
-  const mod = await import(filePath);
-  const tools: ToolEntry[] = (mod.tools ?? []).map(
-    (t: { name: string; description: string }) => {
-      return {
-        name: t.name,
-        description: t.description,
-      };
+const loadModules = (): ModuleConfig[] => {
+  return fs
+    .readdirSync(SPECS_DIR)
+    .filter((f) => {
+      return f.endsWith('.yaml');
+    })
+    .sort()
+    .map((f) => {
+      const file = f.replace(/\.yaml$/, '');
+      const spec = yaml.load(
+        fs.readFileSync(path.join(SPECS_DIR, f), 'utf-8')
+      ) as OpenApiSpec;
+      const label = spec.tags?.[0]?.name ?? toTitleCase(file);
+      return { file, label, docLink: `../modules/${file}.md` };
+    });
+};
+
+const loadTools = (moduleName: string): ToolEntry[] => {
+  const specPath = path.join(SPECS_DIR, `${moduleName}.yaml`);
+  if (!fs.existsSync(specPath)) return [];
+
+  const spec = yaml.load(fs.readFileSync(specPath, 'utf-8')) as OpenApiSpec;
+  const tools: ToolEntry[] = [];
+  const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);
+
+  for (const pathItem of Object.values(spec.paths ?? {})) {
+    for (const [method, operation] of Object.entries(pathItem)) {
+      if (!HTTP_METHODS.has(method) || !operation.operationId) continue;
+      tools.push({
+        name: operationIdToToolName(operation.operationId),
+        description: operation.description ?? '',
+      });
     }
-  );
+  }
+
   return tools;
 };
 
@@ -76,7 +99,7 @@ const renderTable = (tools: ToolEntry[]): string => {
   );
 };
 
-const main = async () => {
+const main = () => {
   const sections: string[] = [
     '---',
     'sidebar_position: 3',
@@ -87,8 +110,8 @@ const main = async () => {
     'Complete list of all MCP tools exposed by the SOAT server, grouped by module. Each tool name maps directly to the MCP `tools/call` method name.',
   ];
 
-  for (const mod of MODULES) {
-    const tools = await loadTools(mod.file);
+  for (const mod of loadModules()) {
+    const tools = loadTools(mod.file);
     if (tools.length === 0) continue;
 
     sections.push('');
@@ -106,8 +129,4 @@ const main = async () => {
   fs.writeFileSync(OUTPUT_FILE, sections.join('\n'), 'utf-8');
 };
 
-main().catch((error) => {
-  // eslint-disable-next-line no-console
-  console.error(error);
-  process.exit(1);
-});
+main();

@@ -1,7 +1,7 @@
 import { createMcpRouter, McpServer } from '@ttoss/http-server-mcp';
 
 import { version } from '../../package.json' with { type: 'json' };
-import { registerTools } from './tools/index';
+import { registerGeneratedTools } from './tools/generated';
 
 const mcpServer = new McpServer({
   name: 'soat',
@@ -18,7 +18,7 @@ const mcpServer = new McpServer({
   ],
 });
 
-registerTools(mcpServer);
+registerGeneratedTools(mcpServer);
 
 const mcpRouter = createMcpRouter(mcpServer, {
   apiBaseUrl: `http://localhost:${process.env.PORT || 5047}/api/v1`,

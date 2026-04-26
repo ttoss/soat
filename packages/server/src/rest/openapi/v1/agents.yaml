@@ -23,12 +23,12 @@ servers:
         default: localhost:5047
 
 tags:
+  - name: Agents
+    description: Manage AI agents
   - name: Agent Tools
     description: Manage agent tools
   - name: Agent Traces
     description: View agent traces
-  - name: Agents
-    description: Manage AI agents
 
 paths:
   /agents/tools:
