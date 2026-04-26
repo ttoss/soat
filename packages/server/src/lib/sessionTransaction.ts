@@ -3,7 +3,7 @@ import { db } from '../db';
 export const createSessionTransaction = async (args: {
   projectId: number;
   agentId: number;
-  agentName: string;
+  agentName: string | null;
   name?: string | null;
   existingUserActorId?: number | null;
   autoGenerate?: boolean;

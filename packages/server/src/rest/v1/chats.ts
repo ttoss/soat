@@ -28,14 +28,16 @@ export const chatsRouter = new Router<Context>();
  */
 const validateCreateChatBody = (
   body: unknown
-): {
-  aiProviderId?: string;
-  name?: string;
-  systemMessage?: string;
-  model?: string;
-  projectId?: string;
-  error?: string;
-} => {
+):
+  | {
+      aiProviderId: string;
+      name?: string;
+      systemMessage?: string;
+      model?: string;
+      projectId?: string;
+      error?: undefined;
+    }
+  | { error: string; aiProviderId?: undefined } => {
   const { aiProviderId, name, systemMessage, model, projectId } =
     body as Record<string, unknown>;
 
@@ -57,7 +59,7 @@ chatsRouter.post('/chats', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const validated = validateCreateChatBody(ctx.request.body);
-  if (validated.error) {
+  if (validated.error !== undefined) {
     ctx.status = 400;
     ctx.body = { error: validated.error };
     return;

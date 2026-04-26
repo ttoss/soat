@@ -492,7 +492,7 @@ describe('Sessions', () => {
 
     beforeAll(async () => {
       // User with no policies has no access to project resources
-      const res = await authenticatedTestClient(adminToken)
+      const _res = await authenticatedTestClient(adminToken)
         .post('/api/v1/users')
         .send({ username: 'sessnoperm', password: 'sessnopass' });
 
@@ -690,12 +690,13 @@ describe('Sessions', () => {
         generationStarted = new Promise<void>((r) => {
           signalGenerationStarted = r;
         });
-        jest.spyOn(agentsModule, 'createGeneration').mockImplementationOnce(
-          () =>
-            new Promise((resolve) => {
+        jest
+          .spyOn(agentsModule, 'createGeneration')
+          .mockImplementationOnce(() => {
+            return new Promise((resolve) => {
               signalGenerationStarted();
-              resolveGeneration = () =>
-                resolve({
+              resolveGeneration = () => {
+                return resolve({
                   id: 'gen_auto_01',
                   traceId: 'trc_auto_01',
                   status: 'completed',
@@ -705,8 +706,9 @@ describe('Sessions', () => {
                     finishReason: 'stop',
                   },
                 });
-            })
-        );
+              };
+            });
+          });
       });
 
       afterEach(() => {
@@ -726,7 +728,9 @@ describe('Sessions', () => {
         const messagePromise = authenticatedTestClient(userToken)
           .post(`/api/v1/agents/${agentId}/sessions/${autoSessionId}/messages`)
           .send({ message: 'Trigger auto-gen' })
-          .then((r) => r);
+          .then((r) => {
+            return r;
+          });
 
         // Wait for mock to be entered using Promise signaling (timer-independent)
         await generationStarted;
@@ -760,14 +764,13 @@ describe('Sessions', () => {
           signalGenerationStarted = r;
         });
 
-        jest.spyOn(agentsModule, 'createGeneration').mockImplementation(
-          () =>
-            new Promise(() => {
-              // Signal that createGeneration was called (generatingAt is already
-              // set in DB before this point), then never resolve to keep session busy
-              signalGenerationStarted();
-            })
-        );
+        jest.spyOn(agentsModule, 'createGeneration').mockImplementation(() => {
+          return new Promise(() => {
+            // Signal that createGeneration was called (generatingAt is already
+            // set in DB before this point), then never resolve to keep session busy
+            signalGenerationStarted();
+          });
+        });
 
         // Trigger async generation to set generatingAt in the background
         await authenticatedTestClient(userToken)

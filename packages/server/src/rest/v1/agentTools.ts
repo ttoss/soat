@@ -32,7 +32,7 @@ const resolveToolProjectId = async (
   ctx: Context,
   action: string,
   projectPublicId?: string
-): Promise<string | null> => {
+): Promise<number | null> => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -53,7 +53,7 @@ const resolveToolProjectId = async (
     ctx.body = { error: 'projectId is required' };
     return null;
   }
-  return targetProjectId;
+  return targetProjectId!;
 };
 
 const checkToolsAccess = async (

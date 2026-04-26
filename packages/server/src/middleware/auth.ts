@@ -88,7 +88,7 @@ const resolveProjectIdsByPublicIdAndPolicy = async (args: {
   if (projectPublicIds != null && projectPublicIds.length === 0) return [];
 
   return filterAccessibleProjects({
-    projectPublicIds,
+    projectPublicIds: projectPublicIds ?? null,
     action: args.action,
     isAllowed: args.isAllowed,
     db: args.db,
@@ -96,7 +96,7 @@ const resolveProjectIdsByPublicIdAndPolicy = async (args: {
 };
 
 const resolveApiKeyScopedProjectIds = async (args: {
-  apiKeyProjectId: string;
+  apiKeyProjectPublicId: string;
   reqProjectPublicId?: string;
   action: string;
   apiKeyIsAllowed: (a: {
@@ -105,10 +105,10 @@ const resolveApiKeyScopedProjectIds = async (args: {
   }) => Promise<boolean>;
   db: Context['db'];
 }): Promise<number[] | null> => {
-  const targetId = args.reqProjectPublicId ?? args.apiKeyProjectId;
+  const targetId = args.reqProjectPublicId ?? args.apiKeyProjectPublicId;
   if (
     args.reqProjectPublicId &&
-    args.reqProjectPublicId !== args.apiKeyProjectId
+    args.reqProjectPublicId !== args.apiKeyProjectPublicId
   )
     return null;
   const allowed = await args.apiKeyIsAllowed({
@@ -142,7 +142,7 @@ const resolveApiKeyUnscopedProjectIds = async (args: {
 };
 
 const createApiKeyResolveProjectIds = (args: {
-  apiKeyProjectId?: string;
+  apiKeyProjectPublicId?: string;
   apiKeyIsAllowed: IsAllowedFn;
   apiKeyPolicyIds: number[];
   userPolicyIds: number[];
@@ -155,9 +155,9 @@ const createApiKeyResolveProjectIds = (args: {
     projectPublicId?: string;
     action: string;
   }): Promise<number[] | null | undefined> => {
-    if (args.apiKeyProjectId) {
+    if (args.apiKeyProjectPublicId) {
       return resolveApiKeyScopedProjectIds({
-        apiKeyProjectId: args.apiKeyProjectId,
+        apiKeyProjectPublicId: args.apiKeyProjectPublicId,
         reqProjectPublicId: reqId,
         action,
         apiKeyIsAllowed: args.apiKeyIsAllowed,
@@ -191,16 +191,18 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
       const userPolicyIds = (keyUser.policyIds as number[]) ?? [];
       const apiKeyPolicyIds = (row.policyIds as number[]) ?? [];
 
-      let apiKeyProjectId: string | undefined;
+      let apiKeyProjectPublicId: string | undefined;
+      let apiKeyProjectId: number | undefined;
       if (row.projectId) {
+        apiKeyProjectId = row.projectId as number;
         const proj = await ctx.db.Project.findOne({
-          where: { id: row.projectId as number },
+          where: { id: apiKeyProjectId },
         });
-        apiKeyProjectId = proj?.publicId as string | undefined;
+        apiKeyProjectPublicId = proj?.publicId as string | undefined;
       }
 
       const apiKeyIsAllowed = createApiKeyIsAllowed({
-        apiKeyProjectId,
+        apiKeyProjectPublicId,
         userPolicyIds,
         apiKeyPolicyIds,
         db: ctx.db,
@@ -212,9 +214,10 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
         username: keyUser.username as string,
         role: keyUser.role as 'admin' | 'user',
         apiKeyProjectId,
+        apiKeyProjectPublicId,
         isAllowed: apiKeyIsAllowed,
         resolveProjectIds: createApiKeyResolveProjectIds({
-          apiKeyProjectId,
+          apiKeyProjectPublicId,
           apiKeyIsAllowed,
           apiKeyPolicyIds,
           userPolicyIds,
@@ -223,7 +226,10 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
         getPolicies: async (
           reqProjectPublicId: string
         ): Promise<PolicyDocument[]> => {
-          if (apiKeyProjectId && reqProjectPublicId !== apiKeyProjectId) {
+          if (
+            apiKeyProjectPublicId &&
+            reqProjectPublicId !== apiKeyProjectPublicId
+          ) {
             return [];
           }
           if (apiKeyPolicyIds.length > 0) {

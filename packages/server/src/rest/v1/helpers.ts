@@ -23,6 +23,9 @@ export const resolveProjectIdsWithAction = async (args: {
   projectPublicId?: string;
   action: string;
 }): Promise<number[] | null | undefined> => {
+  if (!args.ctx.authUser) {
+    return null;
+  }
   const projectIds = await args.ctx.authUser.resolveProjectIds({
     projectPublicId: args.projectPublicId,
     action: args.action,

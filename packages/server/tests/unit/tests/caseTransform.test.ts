@@ -57,9 +57,9 @@ describe('caseTransform middleware', () => {
       await authenticatedTestClient(adminToken).get('/api/v1/projects');
     expect(listRes.status).toBe(200);
 
-    const project = listRes.body.find(
-      (p: Record<string, unknown>) => p.id === projectId
-    );
+    const project = listRes.body.find((p: Record<string, unknown>) => {
+      return p.id === projectId;
+    });
     expect(project).toBeDefined();
     expect(project.created_at).toBeDefined();
     expect(project.updated_at).toBeDefined();

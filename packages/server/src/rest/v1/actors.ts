@@ -29,7 +29,7 @@ const resolveActorProjectPublicId = (
   authUser: NonNullable<Context['authUser']>
 ): string | null => {
   if (body.projectId) return body.projectId;
-  if (authUser.apiKeyProjectId) return authUser.apiKeyProjectId;
+  if (authUser.apiKeyProjectPublicId) return authUser.apiKeyProjectPublicId;
   return null;
 };
 
@@ -160,7 +160,7 @@ actorsRouter.get('/actors/:id', async (ctx: Context) => {
 });
 
 const performCreateActor = async (args: {
-  project: { id: unknown };
+  project: { id: number };
   body: CreateActorBody;
   agentDbId: number | undefined;
   chatDbId: number | undefined;
@@ -169,7 +169,7 @@ const performCreateActor = async (args: {
 > => {
   if (args.body.externalId !== undefined) {
     const result = await findOrCreateActor({
-      projectId: args.project.id,
+      projectId: args.project.id!,
       externalId: args.body.externalId,
       name: args.body.name,
       type: args.body.type,
@@ -187,7 +187,7 @@ const performCreateActor = async (args: {
   }
 
   const actor = await createActor({
-    projectId: args.project.id,
+    projectId: args.project.id!,
     name: args.body.name,
     type: args.body.type,
     externalId: args.body.externalId,
@@ -270,7 +270,7 @@ actorsRouter.post('/actors', async (ctx: Context) => {
   }
 
   const result = await performCreateActor({
-    project,
+    project: { id: projectDbId },
     body,
     agentDbId,
     chatDbId,

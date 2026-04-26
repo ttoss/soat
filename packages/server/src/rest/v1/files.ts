@@ -36,7 +36,7 @@ const buildFileTagContext = (file: {
 const listFilesWithPolicy = async (args: {
   authUser: NonNullable<Context['authUser']>;
   projectPublicId: string;
-  projectIds: string[];
+  projectIds: number[];
   limit?: number;
   offset?: number;
 }) => {

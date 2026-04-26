@@ -84,13 +84,19 @@ const parseUpdateAgentBody = (body: Record<string, unknown>) => {
 const resolveAgentProjectId = async (
   authUser: NonNullable<Context['authUser']>,
   projectPublicId: string | undefined
-): Promise<string | 403 | 400 | null> => {
+): Promise<number | 403 | 400> => {
   const projectIds = await authUser.resolveProjectIds({
     projectPublicId,
     action: 'agents:CreateAgent',
   });
   if (projectIds === null) return 403;
-  const targetProjectId = projectIds?.[0] ?? authUser.apiKeyProjectId ?? null;
+  let targetProjectId = projectIds?.[0];
+  if (!targetProjectId && authUser.apiKeyProjectId) {
+    const project = await db.Project.findOne({
+      where: { id: authUser.apiKeyProjectId },
+    });
+    if (project) targetProjectId = project.id as number;
+  }
   if (!targetProjectId) return 400;
   return targetProjectId;
 };
@@ -155,7 +161,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
   }
 
   const result = await createAgent(
-    buildCreateAgentArgs(Number(targetProjectId), reqBody)
+    buildCreateAgentArgs(targetProjectId, reqBody)
   );
 
   if (result === 'ai_provider_not_found') {

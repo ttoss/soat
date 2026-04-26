@@ -7,6 +7,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as url from 'node:url';
 
+import type { JsonObjectSchema } from '@ttoss/http-server-mcp';
 import type { JSONSchema7 } from 'ai';
 import yaml from 'js-yaml';
 
@@ -15,7 +16,7 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 interface ToolDefinition {
   name: string;
   description: string;
-  inputSchema: JSONSchema7;
+  inputSchema: JsonObjectSchema;
   method: string;
   path: (args: Record<string, unknown>) => string;
   body?: (args: Record<string, unknown>) => Record<string, unknown>;
@@ -75,7 +76,7 @@ const resolveSchema = (
   properties?: Record<string, unknown>;
 } => {
   if (!schema) return {};
-  if (schema.$ref) {
+  if (typeof schema.$ref === 'string') {
     const refName = schema.$ref.replace('#/components/schemas/', '');
     const resolved = spec.components?.schemas?.[refName];
     return resolved || {};
@@ -102,7 +103,7 @@ const resolveParameter = (
   };
 } => {
   if (!param) return {};
-  if (param.$ref) {
+  if (typeof param.$ref === 'string') {
     const refName = param.$ref.replace('#/components/parameters/', '');
     const resolved = spec.components?.parameters?.[refName];
     return resolved || {};
@@ -118,7 +119,16 @@ const operationIdToToolName = (operationId: string): string => {
     .replace(/^-/, '');
 };
 
-const getJsonSchemaType = (schemaType: string | undefined): string => {
+const getJsonSchemaType = (
+  schemaType: string | undefined
+):
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'array'
+  | 'integer'
+  | 'object'
+  | 'null' => {
   if (schemaType === 'integer' || schemaType === 'number') return 'number';
   if (schemaType === 'boolean') return 'boolean';
   if (schemaType === 'array') return 'array';
@@ -144,7 +154,7 @@ const buildInputSchema = (
     required: boolean;
     type: string;
   }>
-): JSONSchema7 => {
+): JsonObjectSchema => {
   const allParams = [...pathParams, ...queryParams, ...bodyProps];
 
   if (allParams.length === 0) {
@@ -175,16 +185,31 @@ const buildInputSchema = (
 
   const properties: Record<string, JSONSchema7> = {};
   for (const param of allParams) {
-    const jsonType = getJsonSchemaType(param.type);
-    const typeStr = param.type === 'array' ? ['array', 'string'] : [jsonType];
-    const description = (param.description || '')
-      .replace(/'/g, "\\'")
-      .replace(/\n/g, ' ')
-      .trim();
-    properties[param.camelName] = {
-      type: typeStr.length === 1 ? typeStr[0] : typeStr,
-      description,
-    };
+    if ('type' in param) {
+      const jsonType = getJsonSchemaType(param.type);
+      const description = (param.description || '')
+        .replace(/'/g, "\\'")
+        .replace(/\n/g, ' ')
+        .trim();
+      if (param.type === 'array') {
+        properties[param.camelName] = {
+          type: 'array',
+          items: { type: 'string' },
+          description,
+        };
+      } else {
+        properties[param.camelName] = {
+          type: jsonType,
+          description,
+        };
+      }
+    } else {
+      // path param
+      properties[param.camelName] = {
+        type: 'string',
+        description: '',
+      };
+    }
   }
 
   return {
@@ -317,13 +342,15 @@ const extractBodyProps = (args: {
   const bodySchema = resolveSchema(rawBodySchema, args.spec);
   return bodySchema?.properties
     ? Object.entries(bodySchema.properties).map(
-        ([key, value]: [string, Record<string, unknown>]) => {
+        ([key, value]: [string, unknown]) => {
+          const val = value as { description?: unknown; type?: unknown };
           return {
             snakeName: key,
             camelName: snakeToCamel(key),
-            description: value.description || '',
+            description:
+              typeof val.description === 'string' ? val.description : '',
             required: (bodySchema.required || []).includes(key),
-            type: value.type || 'string',
+            type: typeof val.type === 'string' ? val.type : 'string',
           };
         }
       )

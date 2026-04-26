@@ -15,12 +15,9 @@ const apiKeysRouter = new Router<Context>();
  */
 const resolveProjectId = async (args: {
   projectId: string | null | undefined;
-}): Promise<{ id: number | null | undefined; error?: string }> => {
-  if (args.projectId === undefined) {
+}): Promise<{ id: number | undefined; error?: string }> => {
+  if (args.projectId === undefined || args.projectId === null) {
     return { id: undefined };
-  }
-  if (args.projectId === null) {
-    return { id: null };
   }
 
   const project = await db.Project.findOne({

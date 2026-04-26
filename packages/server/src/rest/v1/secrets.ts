@@ -83,8 +83,8 @@ secretsRouter.post('/secrets', async (ctx: Context) => {
 
   let resolvedProjectPublicId = body.projectId;
   if (!resolvedProjectPublicId) {
-    if (ctx.authUser.apiKeyProjectId) {
-      resolvedProjectPublicId = ctx.authUser.apiKeyProjectId;
+    if (ctx.authUser.apiKeyProjectPublicId) {
+      resolvedProjectPublicId = ctx.authUser.apiKeyProjectPublicId;
     } else {
       ctx.status = 400;
       ctx.body = { error: 'projectId is required' };

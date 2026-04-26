@@ -3,9 +3,9 @@ import {
   evaluateCondition,
   evaluatePolicies,
   matchesPattern,
+  type PolicyDocument,
   statementMatches,
   validatePolicyDocument,
-  type PolicyDocument,
 } from '../../../src/lib/iam';
 
 describe('IAM', () => {
@@ -47,14 +47,22 @@ describe('IAM', () => {
       };
       const result = validatePolicyDocument(doc);
       expect(result.valid).toBe(false);
-      expect(result.errors.some((e) => e.includes('effect'))).toBe(true);
+      expect(
+        result.errors.some((e) => {
+          return e.includes('effect');
+        })
+      ).toBe(true);
     });
 
     test('empty action array fails', () => {
       const doc = { statement: [{ effect: 'Allow', action: [] }] };
       const result = validatePolicyDocument(doc);
       expect(result.valid).toBe(false);
-      expect(result.errors.some((e) => e.includes('action'))).toBe(true);
+      expect(
+        result.errors.some((e) => {
+          return e.includes('action');
+        })
+      ).toBe(true);
     });
 
     test('invalid action format fails', () => {
@@ -85,7 +93,11 @@ describe('IAM', () => {
       };
       const result = validatePolicyDocument(doc);
       expect(result.valid).toBe(false);
-      expect(result.errors.some((e) => e.includes('resource'))).toBe(true);
+      expect(
+        result.errors.some((e) => {
+          return e.includes('resource');
+        })
+      ).toBe(true);
     });
 
     test('valid SRN with wildcard passes', () => {
@@ -114,7 +126,11 @@ describe('IAM', () => {
       };
       const result = validatePolicyDocument(doc);
       expect(result.valid).toBe(false);
-      expect(result.errors.some((e) => e.includes('operator'))).toBe(true);
+      expect(
+        result.errors.some((e) => {
+          return e.includes('operator');
+        })
+      ).toBe(true);
     });
 
     test('condition key not starting with soat: fails', () => {
@@ -139,7 +155,11 @@ describe('IAM', () => {
     test('missing statement array fails', () => {
       const result = validatePolicyDocument({ foo: 'bar' });
       expect(result.valid).toBe(false);
-      expect(result.errors.some((e) => e.includes('statement'))).toBe(true);
+      expect(
+        result.errors.some((e) => {
+          return e.includes('statement');
+        })
+      ).toBe(true);
     });
   });
 

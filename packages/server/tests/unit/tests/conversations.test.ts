@@ -417,9 +417,9 @@ describe('Conversations', () => {
         `/api/v1/conversations/${conversationId}/messages`
       );
       expect(listRes.status).toBe(200);
-      const found = listRes.body.data.find(
-        (m: { document_id: string }) => m.document_id === docId
-      );
+      const found = listRes.body.data.find((m: { document_id: string }) => {
+        return m.document_id === docId;
+      });
       expect(found).toBeDefined();
       expect(found.metadata).toEqual(metadata);
     });

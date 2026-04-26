@@ -7,6 +7,10 @@
       "outputs": [],
       "cache": false
     },
+    "typecheck": {
+      "outputs": [],
+      "cache": false
+    },
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", "build/**"]

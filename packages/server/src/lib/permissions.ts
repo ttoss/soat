@@ -6,7 +6,7 @@ import {
 } from './iam';
 
 export const createApiKeyIsAllowed = (args: {
-  apiKeyProjectId?: string;
+  apiKeyProjectPublicId?: string;
   userPolicyIds: number[];
   apiKeyPolicyIds: number[];
   db: DB;
@@ -20,8 +20,8 @@ export const createApiKeyIsAllowed = (args: {
   }): Promise<boolean> => {
     // Hard project scope: if the key is scoped to a project, reject cross-project access
     if (
-      args.apiKeyProjectId &&
-      reqArgs.projectPublicId !== args.apiKeyProjectId
+      args.apiKeyProjectPublicId &&
+      reqArgs.projectPublicId !== args.apiKeyProjectPublicId
     ) {
       return false;
     }

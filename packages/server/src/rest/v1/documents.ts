@@ -187,8 +187,8 @@ documentsRouter.post('/documents', async (ctx: Context) => {
   // Resolve projectId: use explicit value, infer from project key, or error for JWT
   let resolvedProjectPublicId = body.projectId;
   if (!resolvedProjectPublicId) {
-    if (ctx.authUser.apiKeyProjectId) {
-      resolvedProjectPublicId = ctx.authUser.apiKeyProjectId;
+    if (ctx.authUser.apiKeyProjectPublicId) {
+      resolvedProjectPublicId = ctx.authUser.apiKeyProjectPublicId;
     } else {
       ctx.status = 400;
       ctx.body = { error: 'projectId is required' };

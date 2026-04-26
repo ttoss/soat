@@ -55,7 +55,7 @@ const getProviderFactory = (args: {
   apiKey: string;
   baseUrl: string | undefined;
   config: Record<string, unknown> | undefined;
-}): LanguageModel | null => {
+}): ((model: string) => LanguageModel) | null => {
   const { provider, apiKey, baseUrl, config } = args;
 
   if (isOpenAILikeProvider(provider)) {
@@ -78,7 +78,9 @@ const getProviderFactory = (args: {
     return createAzure({ apiKey, resourceName });
   }
   if (provider === 'bedrock') {
-    return buildBedrockModel(apiKey, config, '') as unknown as LanguageModel;
+    return (model: string) => {
+      return buildBedrockModel(apiKey, config, model);
+    };
   }
   return null;
 };

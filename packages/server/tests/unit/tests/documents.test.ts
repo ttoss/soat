@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
-import { compilePolicy } from '../../../src/lib/policyCompiler';
 import { resolveDocumentQuery } from '../../../src/lib/documentQuery';
+import { compilePolicy } from '../../../src/lib/policyCompiler';
 import { storageDir } from '../setupTests';
 import { authenticatedTestClient, loginAs, testClient } from '../testClient';
 

@@ -337,9 +337,11 @@ describe('Policies', () => {
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.some((p: { id: string }) => p.id === policyId)).toBe(
-        true
-      );
+      expect(
+        response.body.some((p: { id: string }) => {
+          return p.id === policyId;
+        })
+      ).toBe(true);
     });
 
     test('returned policy has expected shape', async () => {
@@ -347,9 +349,9 @@ describe('Policies', () => {
         `/api/v1/users/${targetUserId}/policies`
       );
 
-      const policy = response.body.find(
-        (p: { id: string }) => p.id === policyId
-      );
+      const policy = response.body.find((p: { id: string }) => {
+        return p.id === policyId;
+      });
       expect(policy.id).toMatch(/^pol_/);
       expect(policy.name).toBe('Target Policy');
       expect(policy.permissions).toBeDefined();

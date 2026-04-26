@@ -32,8 +32,10 @@ export type AuthUser = {
    * - JWT user / project key: returns the actual policy documents.
    */
   getPolicies: (projectPublicId: string) => Promise<PolicyDocument[]>;
-  projectKeyProjectId?: string;
-  apiKeyProjectId?: string;
+  /** Internal numeric DB id of the project the API key is scoped to. */
+  apiKeyProjectId?: number;
+  /** Public string id of the project the API key is scoped to. */
+  apiKeyProjectPublicId?: string;
 };
 
 export type Context = {

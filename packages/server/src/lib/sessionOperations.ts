@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { submitToolOutputs } from './agents';
+import { type GenerationResult, submitToolOutputs } from './agents';
 import { generateConversationMessage } from './conversationGeneration';
 import { addConversationMessage } from './conversationMessages';
 import { listConversationMessages } from './conversations';
@@ -368,7 +368,7 @@ const fetchSessionAndConversationActors = async (args: {
 };
 
 const processToolOutputResult = async (args: {
-  result: Awaited<ReturnType<typeof submitToolOutputs>>;
+  result: GenerationResult;
   conversation: InstanceType<(typeof db)['Conversation']>;
   agentActor: InstanceType<(typeof db)['Actor']>;
 }) => {

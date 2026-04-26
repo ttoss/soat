@@ -42,7 +42,7 @@ const resolveAiProviderProjectPublicId = (
   authUser: NonNullable<Context['authUser']>
 ): string | null => {
   if (body.projectId) return body.projectId;
-  if (authUser.apiKeyProjectId) return authUser.apiKeyProjectId;
+  if (authUser.apiKeyProjectPublicId) return authUser.apiKeyProjectPublicId;
   return null;
 };
 

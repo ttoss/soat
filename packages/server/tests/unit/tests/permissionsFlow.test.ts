@@ -18,7 +18,7 @@ import { authenticatedTestClient, loginAs, testClient } from '../testClient';
 
 describe('Group 1: Setup - Admin creates project, user, and assigns permissions', () => {
   let adminToken: string;
-  let projectId: string;
+  let _projectId: string;
   let userId: string;
 
   beforeAll(async () => {
@@ -32,7 +32,7 @@ describe('Group 1: Setup - Admin creates project, user, and assigns permissions'
       .post('/api/v1/projects')
       .send({ name: 'Test Project' });
 
-    projectId = projectResponse.body.id;
+    _projectId = projectResponse.body.id;
 
     const userResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/users')
