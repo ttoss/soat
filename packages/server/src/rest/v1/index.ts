@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 
 import { actorsRouter } from './actors';
+import { actorTagsRouter } from './actorTags';
 import { agentsRouter } from './agents';
 import { aiProvidersRouter } from './aiProviders';
 import { apiKeysRouter } from './apiKeys';
@@ -19,6 +20,7 @@ const v1Router = new Router();
 v1Router.use(agentsRouter.routes());
 v1Router.use(chatsRouter.routes());
 v1Router.use(actorsRouter.routes());
+v1Router.use(actorTagsRouter.routes());
 v1Router.use(aiProvidersRouter.routes());
 v1Router.use(apiKeysRouter.routes());
 v1Router.use(policiesRouter.routes());

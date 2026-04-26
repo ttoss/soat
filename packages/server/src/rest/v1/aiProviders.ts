@@ -13,6 +13,39 @@ import {
 
 const aiProvidersRouter = new Router<Context>();
 
+type CreateAiProviderBody = {
+  projectId?: string;
+  secretId?: string;
+  name?: string;
+  provider?: string;
+  defaultModel?: string;
+  baseUrl?: string;
+  config?: Record<string, unknown>;
+};
+
+const validateCreateAiProviderBody = (
+  body: CreateAiProviderBody
+): string | null => {
+  if (!body.name) return 'name is required';
+  if (
+    !body.provider ||
+    !AI_PROVIDER_SLUGS.includes(body.provider as AiProviderSlug)
+  ) {
+    return `provider must be one of: ${AI_PROVIDER_SLUGS.join(', ')}`;
+  }
+  if (!body.defaultModel) return 'defaultModel is required';
+  return null;
+};
+
+const resolveAiProviderProjectPublicId = (
+  body: CreateAiProviderBody,
+  authUser: NonNullable<Context['authUser']>
+): string | null => {
+  if (body.projectId) return body.projectId;
+  if (authUser.apiKeyProjectId) return authUser.apiKeyProjectId;
+  return null;
+};
+
 aiProvidersRouter.get('/ai-providers', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -70,46 +103,23 @@ aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
     return;
   }
 
-  const body = ctx.request.body as {
-    projectId?: string;
-    secretId?: string;
-    name?: string;
-    provider?: string;
-    defaultModel?: string;
-    baseUrl?: string;
-    config?: Record<string, unknown>;
-  };
+  const body = ctx.request.body as CreateAiProviderBody;
 
-  if (!body.name) {
+  const validationError = validateCreateAiProviderBody(body);
+  if (validationError) {
     ctx.status = 400;
-    ctx.body = { error: 'name is required' };
-    return;
-  }
-  if (
-    !body.provider ||
-    !AI_PROVIDER_SLUGS.includes(body.provider as AiProviderSlug)
-  ) {
-    ctx.status = 400;
-    ctx.body = {
-      error: `provider must be one of: ${AI_PROVIDER_SLUGS.join(', ')}`,
-    };
-    return;
-  }
-  if (!body.defaultModel) {
-    ctx.status = 400;
-    ctx.body = { error: 'defaultModel is required' };
+    ctx.body = { error: validationError };
     return;
   }
 
-  let resolvedProjectPublicId = body.projectId;
+  const resolvedProjectPublicId = resolveAiProviderProjectPublicId(
+    body,
+    ctx.authUser
+  );
   if (!resolvedProjectPublicId) {
-    if (ctx.authUser.apiKeyProjectId) {
-      resolvedProjectPublicId = ctx.authUser.apiKeyProjectId;
-    } else {
-      ctx.status = 400;
-      ctx.body = { error: 'projectId is required' };
-      return;
-    }
+    ctx.status = 400;
+    ctx.body = { error: 'projectId is required' };
+    return;
   }
 
   const allowed = await ctx.authUser.isAllowed({
@@ -147,9 +157,9 @@ aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
   const provider = await createAiProvider({
     projectId: project.id,
     secretId: resolvedSecretId,
-    name: body.name,
+    name: body.name!,
     provider: body.provider as AiProviderSlug,
-    defaultModel: body.defaultModel,
+    defaultModel: body.defaultModel!,
     baseUrl: body.baseUrl,
     config: body.config,
   });

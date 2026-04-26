@@ -21,6 +21,39 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const filesRouter = new Router<Context>();
 
+const buildFileTagContext = (file: {
+  tags?: Record<string, unknown> | null;
+}): Record<string, string> => {
+  const context: Record<string, string> = { 'soat:ResourceType': 'file' };
+  if (file.tags) {
+    for (const [k, v] of Object.entries(file.tags)) {
+      context[`soat:ResourceTag/${k}`] = v as string;
+    }
+  }
+  return context;
+};
+
+const listFilesWithPolicy = async (args: {
+  authUser: NonNullable<Context['authUser']>;
+  projectPublicId: string;
+  projectIds: string[];
+  limit?: number;
+  offset?: number;
+}) => {
+  const { authUser, projectPublicId, projectIds, limit, offset } = args;
+  const policies = await authUser.getPolicies(projectPublicId);
+  const { where: policyWhere, hasAccess } = compilePolicy({
+    policies,
+    action: 'files:GetFile',
+    resourceType: 'file',
+    projectPublicId,
+  });
+  if (!hasAccess) {
+    return { data: [], total: 0, limit: limit ?? 50, offset: offset ?? 0 };
+  }
+  return listFiles({ projectIds, policyWhere, limit, offset });
+};
+
 filesRouter.get('/files', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -47,27 +80,11 @@ filesRouter.get('/files', async (ctx: Context) => {
     return;
   }
 
-  // Compile SQL-level policy filter when a specific project is requested
   if (projectPublicId) {
-    const policies = await ctx.authUser!.getPolicies(projectPublicId);
-    const { where: policyWhere, hasAccess } = compilePolicy({
-      policies,
-      action: 'files:GetFile',
-      resourceType: 'file',
+    ctx.body = await listFilesWithPolicy({
+      authUser: ctx.authUser,
       projectPublicId,
-    });
-    if (!hasAccess) {
-      ctx.body = {
-        data: [],
-        total: 0,
-        limit: limit ?? 50,
-        offset: offset ?? 0,
-      };
-      return;
-    }
-    ctx.body = await listFiles({
-      projectIds: projectIds ?? undefined,
-      policyWhere,
+      projectIds: projectIds ?? [],
       limit,
       offset,
     });
@@ -370,6 +387,31 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
   ctx.body = record;
 });
 
+const buildFileDownloadResources = (fileRecord: {
+  id: string;
+  projectId?: string | null;
+  path?: string | null;
+  tags?: Record<string, unknown> | null;
+}): { srns: string[]; context: Record<string, string> } => {
+  const srn = buildSrn({
+    projectPublicId: fileRecord.projectId!,
+    resourceType: 'file',
+    resourceId: fileRecord.id,
+  });
+  const context = buildFileTagContext(fileRecord);
+  const srns: string[] = [srn];
+  if (fileRecord.path) {
+    srns.push(
+      buildSrn({
+        projectPublicId: fileRecord.projectId!,
+        resourceType: 'file',
+        resourceId: fileRecord.path,
+      })
+    );
+  }
+  return { srns, context };
+};
+
 filesRouter.get('/files/:id/download', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -385,32 +427,12 @@ filesRouter.get('/files/:id/download', async (ctx: Context) => {
     return;
   }
 
-  const srnDl = buildSrn({
-    projectPublicId: fileRecord.projectId!,
-    resourceType: 'file',
-    resourceId: fileRecord.id,
-  });
-  const contextDl: Record<string, string> = { 'soat:ResourceType': 'file' };
-  if (fileRecord.tags) {
-    for (const [k, v] of Object.entries(fileRecord.tags)) {
-      contextDl[`soat:ResourceTag/${k}`] = v;
-    }
-  }
-  const resourcesDl: string[] = [srnDl];
-  if (fileRecord.path) {
-    resourcesDl.push(
-      buildSrn({
-        projectPublicId: fileRecord.projectId!,
-        resourceType: 'file',
-        resourceId: fileRecord.path,
-      })
-    );
-  }
+  const { srns, context } = buildFileDownloadResources(fileRecord);
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: fileRecord.projectId!,
     action: 'files:DownloadFile',
-    resources: resourcesDl,
-    context: contextDl,
+    resources: srns,
+    context,
   });
   if (!allowed) {
     ctx.status = 403;

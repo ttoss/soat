@@ -25,6 +25,156 @@ export const signUserToken = (payload: { publicId: string; role: string }) => {
 
 type Next = () => Promise<void>;
 
+type IsAllowedFn = (args: {
+  projectPublicId: string;
+  action: string;
+}) => Promise<boolean>;
+
+const filterAccessibleProjects = async (args: {
+  projectPublicIds: string[] | null;
+  action: string;
+  isAllowed: IsAllowedFn;
+  db: Context['db'];
+}): Promise<number[]> => {
+  const projects = args.projectPublicIds
+    ? await args.db.Project.findAll({
+        where: { publicId: args.projectPublicIds },
+      })
+    : await args.db.Project.findAll();
+
+  const accessible: number[] = [];
+  for (const proj of projects) {
+    const allowed = await args.isAllowed({
+      projectPublicId: proj.publicId as string,
+      action: args.action,
+    });
+    if (allowed) accessible.push(proj.id as number);
+  }
+  return accessible;
+};
+
+const resolveProjectIdsByPublicIdAndPolicy = async (args: {
+  reqProjectPublicId?: string;
+  action: string;
+  isAllowed: IsAllowedFn;
+  policyIds: number[];
+  db: Context['db'];
+}): Promise<number[] | null> => {
+  if (args.reqProjectPublicId) {
+    const allowed = await args.isAllowed({
+      projectPublicId: args.reqProjectPublicId,
+      action: args.action,
+    });
+    if (!allowed) return null;
+    const proj = await args.db.Project.findOne({
+      where: { publicId: args.reqProjectPublicId },
+    });
+    if (!proj) return null;
+    return [proj.id as number];
+  }
+
+  if (args.policyIds.length === 0) return [];
+
+  const policies = await args.db.Policy.findAll({
+    where: { id: args.policyIds },
+  });
+  const policyDocs = policies.map(
+    (p: InstanceType<(typeof args.db)['Policy']>) => {
+      return p.document as PolicyDocument;
+    }
+  );
+  const projectPublicIds = extractProjectIdsFromPolicies(policyDocs);
+
+  if (projectPublicIds != null && projectPublicIds.length === 0) return [];
+
+  return filterAccessibleProjects({
+    projectPublicIds,
+    action: args.action,
+    isAllowed: args.isAllowed,
+    db: args.db,
+  });
+};
+
+const resolveApiKeyScopedProjectIds = async (args: {
+  apiKeyProjectId: string;
+  reqProjectPublicId?: string;
+  action: string;
+  apiKeyIsAllowed: (a: {
+    projectPublicId: string;
+    action: string;
+  }) => Promise<boolean>;
+  db: Context['db'];
+}): Promise<number[] | null> => {
+  const targetId = args.reqProjectPublicId ?? args.apiKeyProjectId;
+  if (
+    args.reqProjectPublicId &&
+    args.reqProjectPublicId !== args.apiKeyProjectId
+  )
+    return null;
+  const allowed = await args.apiKeyIsAllowed({
+    projectPublicId: targetId,
+    action: args.action,
+  });
+  if (!allowed) return null;
+  const proj = await args.db.Project.findOne({ where: { publicId: targetId } });
+  if (!proj) return null;
+  return [proj.id as number];
+};
+
+const resolveApiKeyUnscopedProjectIds = async (args: {
+  reqProjectPublicId?: string;
+  action: string;
+  apiKeyIsAllowed: IsAllowedFn;
+  apiKeyPolicyIds: number[];
+  userPolicyIds: number[];
+  db: Context['db'];
+}): Promise<number[] | null> => {
+  const effectivePolicyIds =
+    args.apiKeyPolicyIds.length > 0 ? args.apiKeyPolicyIds : args.userPolicyIds;
+
+  return resolveProjectIdsByPublicIdAndPolicy({
+    reqProjectPublicId: args.reqProjectPublicId,
+    action: args.action,
+    isAllowed: args.apiKeyIsAllowed,
+    policyIds: effectivePolicyIds,
+    db: args.db,
+  });
+};
+
+const createApiKeyResolveProjectIds = (args: {
+  apiKeyProjectId?: string;
+  apiKeyIsAllowed: IsAllowedFn;
+  apiKeyPolicyIds: number[];
+  userPolicyIds: number[];
+  db: Context['db'];
+}) => {
+  return async ({
+    projectPublicId: reqId,
+    action,
+  }: {
+    projectPublicId?: string;
+    action: string;
+  }): Promise<number[] | null | undefined> => {
+    if (args.apiKeyProjectId) {
+      return resolveApiKeyScopedProjectIds({
+        apiKeyProjectId: args.apiKeyProjectId,
+        reqProjectPublicId: reqId,
+        action,
+        apiKeyIsAllowed: args.apiKeyIsAllowed,
+        db: args.db,
+      });
+    }
+    return resolveApiKeyUnscopedProjectIds({
+      reqProjectPublicId: reqId,
+      action,
+      apiKeyIsAllowed: args.apiKeyIsAllowed,
+      apiKeyPolicyIds: args.apiKeyPolicyIds,
+      userPolicyIds: args.userPolicyIds,
+      db: args.db,
+    });
+  };
+};
+
 const resolveProjectKey = async (ctx: Context, rawKey: string) => {
   const keyPrefix = rawKey.substring(0, 8);
 
@@ -41,7 +191,6 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
       const userPolicyIds = (keyUser.policyIds as number[]) ?? [];
       const apiKeyPolicyIds = (row.policyIds as number[]) ?? [];
 
-      // Resolve the optional project scope to a publicId
       let apiKeyProjectId: string | undefined;
       if (row.projectId) {
         const proj = await ctx.db.Project.findOne({
@@ -64,98 +213,20 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
         role: keyUser.role as 'admin' | 'user',
         apiKeyProjectId,
         isAllowed: apiKeyIsAllowed,
-        resolveProjectIds: async ({
-          projectPublicId: reqId,
-          action,
-        }: {
-          projectPublicId?: string;
-          action: string;
-        }) => {
-          // When the key is hard-scoped to one project
-          if (apiKeyProjectId) {
-            const targetId = reqId ?? apiKeyProjectId;
-            if (reqId && reqId !== apiKeyProjectId) return null;
-            const allowed = await apiKeyIsAllowed({
-              projectPublicId: targetId,
-              action,
-            });
-            if (!allowed) return null;
-            const proj = await ctx.db.Project.findOne({
-              where: { publicId: targetId },
-            });
-            if (!proj) return null;
-            return [proj.id as number];
-          }
-
-          // Key is not project-scoped
-          if (reqId) {
-            const allowed = await apiKeyIsAllowed({
-              projectPublicId: reqId,
-              action,
-            });
-            if (!allowed) return null;
-            const proj = await ctx.db.Project.findOne({
-              where: { publicId: reqId },
-            });
-            if (!proj) return null;
-            return [proj.id as number];
-          }
-
-          // No explicit project — enumerate from policy SRN patterns
-          const effectivePolicyIds =
-            apiKeyPolicyIds.length > 0 ? apiKeyPolicyIds : userPolicyIds;
-          const effectivePolicies =
-            effectivePolicyIds.length > 0
-              ? await ctx.db.Policy.findAll({
-                  where: { id: effectivePolicyIds },
-                })
-              : [];
-          const effectiveDocs = effectivePolicies.map(
-            (p: InstanceType<(typeof ctx.db)['Policy']>) => {
-              return p.document as PolicyDocument;
-            }
-          );
-          const projectPublicIds = extractProjectIdsFromPolicies(effectiveDocs);
-
-          if (!projectPublicIds) {
-            // Wildcard — all projects (filter by isAllowed)
-            const allProjects = await ctx.db.Project.findAll();
-            const accessible: number[] = [];
-            for (const proj of allProjects) {
-              const allowed = await apiKeyIsAllowed({
-                projectPublicId: proj.publicId as string,
-                action,
-              });
-              if (allowed) accessible.push(proj.id as number);
-            }
-            return accessible;
-          }
-
-          if (projectPublicIds.length === 0) return [];
-
-          const projects = await ctx.db.Project.findAll({
-            where: { publicId: projectPublicIds },
-          });
-          const accessible: number[] = [];
-          for (const proj of projects) {
-            const allowed = await apiKeyIsAllowed({
-              projectPublicId: proj.publicId as string,
-              action,
-            });
-            if (allowed) accessible.push(proj.id as number);
-          }
-          return accessible;
-        },
+        resolveProjectIds: createApiKeyResolveProjectIds({
+          apiKeyProjectId,
+          apiKeyIsAllowed,
+          apiKeyPolicyIds,
+          userPolicyIds,
+          db: ctx.db,
+        }),
         getPolicies: async (
           reqProjectPublicId: string
         ): Promise<PolicyDocument[]> => {
-          // Reject if key is project-scoped and this is a different project
           if (apiKeyProjectId && reqProjectPublicId !== apiKeyProjectId) {
             return [];
           }
-
           if (apiKeyPolicyIds.length > 0) {
-            // Key has explicit policies — use them as the SQL filter scope
             const keyPolicies = await ctx.db.Policy.findAll({
               where: { id: apiKeyPolicyIds },
             });
@@ -165,8 +236,6 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
               }
             );
           }
-
-          // No key policies — inherit user policies
           if (userPolicyIds.length === 0) return [];
           const userPolicies = await ctx.db.Policy.findAll({
             where: { id: userPolicyIds },
@@ -197,59 +266,15 @@ const createJwtResolveProjectIds = (args: {
     projectPublicId?: string;
     action: string;
   }) => {
-    if (projectPublicId) {
-      const allowed = await args.jwtIsAllowed({ projectPublicId, action });
-      if (!allowed) return null;
-      const proj = await args.db.Project.findOne({
-        where: { publicId: projectPublicId },
-      });
-      if (!proj) return null;
-      return [proj.id as number];
-    }
+    if (args.role === 'admin' && !projectPublicId) return undefined;
 
-    if (args.role === 'admin') return undefined;
-
-    // Enumerate accessible projects from policy SRN patterns
-    if (args.userPolicyIds.length === 0) return [];
-
-    const policies = await args.db.Policy.findAll({
-      where: { id: args.userPolicyIds },
+    return resolveProjectIdsByPublicIdAndPolicy({
+      reqProjectPublicId: projectPublicId,
+      action,
+      isAllowed: args.jwtIsAllowed,
+      policyIds: args.userPolicyIds,
+      db: args.db,
     });
-    const policyDocs = policies.map(
-      (p: InstanceType<(typeof args.db)['Policy']>) => {
-        return p.document as PolicyDocument;
-      }
-    );
-    const projectPublicIds = extractProjectIdsFromPolicies(policyDocs);
-
-    if (!projectPublicIds) {
-      // Wildcard patterns — check all projects
-      const allProjects = await args.db.Project.findAll();
-      const accessible: number[] = [];
-      for (const proj of allProjects) {
-        const allowed = await args.jwtIsAllowed({
-          projectPublicId: proj.publicId as string,
-          action,
-        });
-        if (allowed) accessible.push(proj.id as number);
-      }
-      return accessible;
-    }
-
-    if (projectPublicIds.length === 0) return [];
-
-    const projects = await args.db.Project.findAll({
-      where: { publicId: projectPublicIds },
-    });
-    const accessible: number[] = [];
-    for (const proj of projects) {
-      const allowed = await args.jwtIsAllowed({
-        projectPublicId: proj.publicId as string,
-        action,
-      });
-      if (allowed) accessible.push(proj.id as number);
-    }
-    return accessible;
   };
 };
 
@@ -317,20 +342,18 @@ const resolveJwt = async (ctx: Context, token: string) => {
   };
 };
 
-export const authMiddleware =
-  // eslint-disable-next-line max-lines-per-function, complexity
-  async (ctx: Context, next: Next) => {
-    const authHeader: string | undefined = ctx.headers?.authorization;
+export const authMiddleware = async (ctx: Context, next: Next) => {
+  const authHeader: string | undefined = ctx.headers?.authorization;
 
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.slice(7);
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
 
-      if (token.startsWith(API_KEY_RAW_PREFIX)) {
-        await resolveProjectKey(ctx, token);
-      } else {
-        await resolveJwt(ctx, token);
-      }
+    if (token.startsWith(API_KEY_RAW_PREFIX)) {
+      await resolveProjectKey(ctx, token);
+    } else {
+      await resolveJwt(ctx, token);
     }
+  }
 
-    await next();
-  };
+  await next();
+};
