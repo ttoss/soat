@@ -42,8 +42,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build SDK and CLI
+        run: pnpm turbo run build --filter=@soat/sdk --filter=@soat/cli
+
       - name: Publish SDK and CLI
-        run: pnpm turbo run release --filter=@soat/sdk --filter=@soat/cli
+        run: |
+          pnpm --filter @soat/sdk publish --no-git-checks
+          pnpm --filter @soat/cli publish --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

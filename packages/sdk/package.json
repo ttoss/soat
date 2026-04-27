@@ -19,8 +19,7 @@
   },
   "scripts": {
     "build": "pnpm generate && tsup",
-    "generate": "tsx scripts/generate.ts",
-    "release": "pnpm publish --no-git-checks --provenance"
+    "generate": "tsx scripts/generate.ts"
   },
   "files": [
     "dist"
@@ -30,7 +29,8 @@
     "url": "https://github.com/ttoss/soat"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "dependencies": {},
   "devDependencies": {

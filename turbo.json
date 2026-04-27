@@ -24,12 +24,6 @@
       "dependsOn": ["build", "test"],
       "env": ["AWS_*", "CARLIN_*"],
       "outputs": [".carlin/**"]
-    },
-    "release": {
-      "dependsOn": ["build"],
-      "env": ["NODE_AUTH_TOKEN"],
-      "outputs": [],
-      "cache": false
     }
   }
 }

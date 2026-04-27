@@ -4,8 +4,7 @@
   "type": "module",
   "scripts": {
     "generate": "tsx scripts/generate.ts",
-    "build": "pnpm generate && tsup",
-    "release": "pnpm publish --no-git-checks --provenance"
+    "build": "pnpm generate && tsup"
   },
   "dependencies": {
     "@inquirer/input": "^5.0.12",
@@ -33,6 +32,7 @@
   },
   "bin": "./bin/soat",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   }
 }
