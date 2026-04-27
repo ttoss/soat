@@ -78,13 +78,13 @@ Content-Type: application/json
 
 ---
 
-## Project Keys
+## API Keys
 
-Project Keys provide project key-based authentication for programmatic access to SOAT. Each key is scoped to a single project and bound to a single policy document. The raw key is returned only once at creation time — it cannot be retrieved afterwards.
+API Keys provide key-based authentication for programmatic access to SOAT. Each key is scoped to a single project and bound to a single policy document. The raw key is returned only once at creation time — it cannot be retrieved afterwards.
 
-Project Keys are identified by an `id` prefixed with `key_`.
+API Keys are identified by an `id` prefixed with `key_`.
 
-### Project Key Data Model
+### API Key Data Model
 
 | Field        | Type   | Description                                    |
 | ------------ | ------ | ---------------------------------------------- |
@@ -118,12 +118,12 @@ Both must independently evaluate to `Allow`. This ensures a key can never exceed
 
 A project key is scoped to exactly one project. Requests made with the key can only access resources within that project. The project is resolved automatically from the key — callers do not need to specify the project explicitly.
 
-### Project Key Permissions
+### API Key Permissions
 
 Project key operations require authentication. The creator of a key is the only user who can read or update it (ownership enforcement).
 
-| Action            | Permission     | REST Endpoint                  | MCP Tool |
-| ----------------- | -------------- | ------------------------------ | -------- |
-| Create key        | Project member | `POST /api/v1/project-keys`    | —        |
-| Get key by ID     | Key owner only | `GET /api/v1/project-keys/:id` | —        |
-| Update key policy | Key owner only | `PUT /api/v1/project-keys/:id` | —        |
+| Action            | Permission     | REST Endpoint              | MCP Tool |
+| ----------------- | -------------- | -------------------------- | -------- |
+| Create key        | Project member | `POST /api/v1/api-keys`    | —        |
+| Get key by ID     | Key owner only | `GET /api/v1/api-keys/:id` | —        |
+| Update key policy | Key owner only | `PUT /api/v1/api-keys/:id` | —        |

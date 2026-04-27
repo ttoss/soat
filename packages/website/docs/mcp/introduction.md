@@ -35,7 +35,7 @@ All tools require authentication. Pass either a JWT session token or an `sk_`-pr
 Authorization: Bearer <token>
 ```
 
-Obtain a session token by calling `POST /api/v1/users/login`. Obtain a project-scoped API key by calling `POST /api/v1/project-keys`. See [Projects module](/docs/modules/projects#project-keys) for details.
+Obtain a session token by calling `POST /api/v1/users/login`. Obtain a project-scoped API key by calling `POST /api/v1/api-keys`. See [Projects module](/docs/modules/projects#api-keys) for details.
 
 ## Available Modules
 

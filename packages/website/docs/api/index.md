@@ -144,7 +144,7 @@ The REST API is organized into modules, each covering a specific resource:
 | ----------------------------------------------------------- | -------------------------------------------- |
 | [Users](/docs/api/users/list-users)                         | User accounts, authentication, and bootstrap |
 | [Projects](/docs/api/projects/create-project)               | Projects, membership, and access control     |
-| [Project Keys](/docs/api/project-keys/create-project-key)   | API keys scoped to projects                  |
+| [API Keys](/docs/api/api-keys/create-api-key)               | API keys scoped to projects                  |
 | [Secrets](/docs/api/secrets/list-secrets)                   | Encrypted project secrets                    |
 | [Files](/docs/api/files/list-files)                         | File storage and retrieval                   |
 | [Documents](/docs/api/documents/list-documents)             | Document management and processing           |
