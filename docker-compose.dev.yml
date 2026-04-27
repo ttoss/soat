@@ -50,7 +50,7 @@ services:
       - '5047:5047'
     environment:
       SOAT_ADMIN_USERNAME: admin
-      SOAT_ADMIN_PASSWORD: adminpassword
+      SOAT_ADMIN_PASSWORD: Admin1234!
       DATABASE_HOST: database
       DATABASE_PORT: '5432'
       DATABASE_NAME: ${DATABASE_NAME:-soat_dev}

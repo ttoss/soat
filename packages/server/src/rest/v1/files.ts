@@ -172,6 +172,7 @@ filesRouter.post('/files', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: body.projectId,
     action: 'files:CreateFile',
+    resource: `soat:${body.projectId}:*:*`,
   });
   if (!allowed) {
     ctx.status = 403;
@@ -295,6 +296,7 @@ filesRouter.post(
     const allowed = await ctx.authUser.isAllowed({
       projectPublicId: projectId,
       action: 'files:UploadFile',
+      resource: `soat:${projectId}:*:*`,
     });
     if (!allowed) {
       ctx.status = 403;
@@ -356,6 +358,7 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: body.projectId,
     action: 'files:UploadFile',
+    resource: `soat:${body.projectId}:*:*`,
   });
   if (!allowed) {
     ctx.status = 403;

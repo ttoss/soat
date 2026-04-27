@@ -867,3 +867,228 @@ describe('Group 9: notPermissions overrides permissions when action appears in b
     expect(response.body.error).toBe('Forbidden');
   });
 });
+
+// ─── Group 10: Regression — project-scoped resource SRN in JWT policy ───────
+//
+// Before the auth.ts fix, isAllowed() was called without a `resource` arg when
+// resolving which projects a user can access. That caused the default resource
+// value of '*' to be tested against a policy pattern like
+// `soat:proj_xxx:*:*`, which never matched — so every policy-scoped user got
+// 403 even when their policy explicitly granted access.
+//
+// These tests would have failed on main before the fix.
+
+describe('Group 10: JWT — policy with explicit project-scoped resource SRN grants access', () => {
+  let adminToken: string;
+  let projectAId: string;
+  let projectBId: string;
+  let userToken: string;
+  let userId: string;
+  let fileInProjectA: string;
+  let fileInProjectB: string;
+
+  beforeAll(async () => {
+    await testClient
+      .post('/api/v1/users/bootstrap')
+      .send({ username: 'admin', password: 'supersecret' });
+
+    adminToken = await loginAs('admin', 'supersecret');
+
+    const projectARes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'SRN JWT Project A' });
+
+    projectAId = projectARes.body.id;
+
+    const projectBRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'SRN JWT Project B' });
+
+    projectBId = projectBRes.body.id;
+
+    const userRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'mary', password: 'marypass' });
+
+    userId = userRes.body.id;
+    userToken = await loginAs('mary', 'marypass');
+
+    // Policy that targets Project A explicitly via a resource SRN.
+    // A user with this policy should be able to read files in Project A
+    // but not in Project B.
+    const policyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['files:GetFile'],
+              resource: [`soat:${projectAId}:*:*`],
+            },
+          ],
+        },
+      });
+
+    await authenticatedTestClient(adminToken)
+      .put(`/api/v1/users/${userId}/policies`)
+      .send({ policy_ids: [policyRes.body.id] });
+
+    const fileARes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/files')
+      .send({
+        project_id: projectAId,
+        filename: 'srn-jwt-a.txt',
+        storage_type: 'local',
+        storage_path: '/tmp/srn-jwt-a.txt',
+      });
+
+    fileInProjectA = fileARes.body.id;
+
+    const fileBRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/files')
+      .send({
+        project_id: projectBId,
+        filename: 'srn-jwt-b.txt',
+        storage_type: 'local',
+        storage_path: '/tmp/srn-jwt-b.txt',
+      });
+
+    fileInProjectB = fileBRes.body.id;
+  });
+
+  test('user can read a file in the project targeted by the policy SRN', async () => {
+    // Regression: was returning 403 before the resource SRN fix in auth.ts
+    const response = await authenticatedTestClient(userToken).get(
+      `/api/v1/files/${fileInProjectA}`
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.id).toBe(fileInProjectA);
+  });
+
+  test('user cannot read a file in a project not covered by the policy SRN', async () => {
+    const response = await authenticatedTestClient(userToken).get(
+      `/api/v1/files/${fileInProjectB}`
+    );
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe('Forbidden');
+  });
+
+  test('listing files filtered by the allowed project returns results', async () => {
+    // Exercises filterAccessibleProjects with a resource SRN
+    const response = await authenticatedTestClient(userToken).get(
+      `/api/v1/files?projectId=${projectAId}`
+    );
+
+    expect(response.status).toBe(200);
+
+    const ids = (response.body.data as Array<{ id: string }>).map((f) => {
+      return f.id;
+    });
+    expect(ids).toContain(fileInProjectA);
+  });
+
+  test('listing files filtered by the denied project returns 403', async () => {
+    const response = await authenticatedTestClient(userToken).get(
+      `/api/v1/files?projectId=${projectBId}`
+    );
+
+    expect(response.status).toBe(403);
+  });
+});
+
+// ─── Group 11: Regression — project-scoped resource SRN in API key policy ─
+//
+// Mirrors Group 10 for the API key code path (resolveApiKeyScopedProjectIds).
+// The key's own policy carries an explicit resource SRN; before the fix the
+// apiKeyIsAllowed call omitted the resource arg and always evaluated to false.
+
+describe('Group 11: API key — scoped key with project-resource SRN in key policy grants access', () => {
+  let adminToken: string;
+  let projectAId: string;
+  let userToken: string;
+  let apiKey: string;
+  let fileInProjectA: string;
+
+  beforeAll(async () => {
+    await testClient
+      .post('/api/v1/users/bootstrap')
+      .send({ username: 'admin', password: 'supersecret' });
+
+    adminToken = await loginAs('admin', 'supersecret');
+
+    const projectARes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'SRN API Key Project A' });
+
+    projectAId = projectARes.body.id;
+
+    const userRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'nancy', password: 'nancypass' });
+
+    userToken = await loginAs('nancy', 'nancypass');
+
+    // Give user a broad policy so they can create the API key and are not
+    // blocked by the user-level check.
+    const userPolicyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: {
+          statement: [{ effect: 'Allow', action: ['*'] }],
+        },
+      });
+
+    await authenticatedTestClient(adminToken)
+      .put(`/api/v1/users/${userRes.body.id}/policies`)
+      .send({ policy_ids: [userPolicyRes.body.id] });
+
+    // Key policy targets Project A via an explicit resource SRN.
+    const keyPolicyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['files:GetFile'],
+              resource: [`soat:${projectAId}:*:*`],
+            },
+          ],
+        },
+      });
+
+    const apiKeyRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/api-keys')
+      .send({
+        project_id: projectAId,
+        policy_ids: [keyPolicyRes.body.id],
+        name: 'SRN scoped key',
+      });
+
+    apiKey = apiKeyRes.body.key;
+
+    const fileARes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/files')
+      .send({
+        project_id: projectAId,
+        filename: 'srn-api-a.txt',
+        storage_type: 'local',
+        storage_path: '/tmp/srn-api-a.txt',
+      });
+
+    fileInProjectA = fileARes.body.id;
+  });
+
+  test('API key can read a file when the key policy SRN matches the project', async () => {
+    // Regression: was returning 403 before the resource SRN fix in auth.ts
+    const response = await testClient
+      .get(`/api/v1/files/${fileInProjectA}`)
+      .set('Authorization', `Bearer ${apiKey}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.id).toBe(fileInProjectA);
+  });
+});
