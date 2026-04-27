@@ -1,7 +1,3 @@
----
-sidebar_position: 11
----
-
 # Sessions
 
 ## Overview
@@ -69,11 +65,11 @@ Sessions support the same `tool_context` mechanism as direct agent generations �
 
 When a generation is triggered through a session (either via `POST .../generate` or auto-generate), the server automatically injects the following keys into `tool_context` before forwarding to tool calls:
 
-| Header                           | Value                                              |
-| -------------------------------- | -------------------------------------------------- |
-| `X-Soat-Context-actor_id`         | Public ID of the session's user actor (`actr_...`) |
+| Header                             | Value                                              |
+| ---------------------------------- | -------------------------------------------------- |
+| `X-Soat-Context-actor_id`          | Public ID of the session's user actor (`actr_...`) |
 | `X-Soat-Context-actor_external_id` | External ID of the session's user actor            |
-| `X-Soat-Context-session_id`       | Public ID of the session (`sess_...`)              |
+| `X-Soat-Context-session_id`        | Public ID of the session (`sess_...`)              |
 
 Any values provided by the caller in `tool_context` are merged on top and take precedence over the auto-populated values.
 
@@ -95,17 +91,16 @@ The tool will receive all four headers: `X-Soat-Context-actor_id`, `X-Soat-Conte
 
 ### Session
 
-| Field            | Type    | Description                                                                                                    |
-| ---------------- | ------- | -------------------------------------------------------------------------------------------------------------- |
-| `id`             | string  | Public identifier prefixed with `sess_`                                                                        |
+| Field             | Type    | Description                                                                                                    |
+| ----------------- | ------- | -------------------------------------------------------------------------------------------------------------- |
+| `id`              | string  | Public identifier prefixed with `sess_`                                                                        |
 | `agent_id`        | string  | Public ID of the agent this session belongs to                                                                 |
 | `conversation_id` | string  | Public ID of the underlying conversation                                                                       |
-| `status`         | string  | `open` (default) or `closed`                                                                                   |
-| `name`           | string  | Optional display name                                                                                          |
+| `status`          | string  | `open` (default) or `closed`                                                                                   |
+| `name`            | string  | Optional display name                                                                                          |
 | `actor_id`        | string  | Public ID of the user actor (`actr_` prefix)                                                                   |
-| `tags`           | object  | Free-form key-value metadata                                                                                   |
+| `tags`            | object  | Free-form key-value metadata                                                                                   |
 | `auto_generate`   | boolean | When `true`, saving a message via `POST .../messages` automatically triggers LLM generation (default: `false`) |
-| `cancel_previous` | boolean | When `true` (default), a new generation request cancels any in-flight generation; when `false`, a new request is rejected with `409` if one is already in progress |
 | `created_at`      | string  | ISO 8601 creation timestamp                                                                                    |
 | `updated_at`      | string  | ISO 8601 last-updated timestamp                                                                                |
 
@@ -113,11 +108,11 @@ The tool will receive all four headers: `X-Soat-Context-actor_id`, `X-Soat-Conte
 
 Messages are returned with simplified roles:
 
-| Field       | Type   | Description                                         |
-| ----------- | ------ | --------------------------------------------------- |
-| `role`      | string | `user` or `assistant` (mapped from actor ownership) |
-| `content`   | string | Message text                                        |
-| `model`     | string | Model used for assistant messages                   |
+| Field        | Type   | Description                                         |
+| ------------ | ------ | --------------------------------------------------- |
+| `role`       | string | `user` or `assistant` (mapped from actor ownership) |
+| `content`    | string | Message text                                        |
+| `model`      | string | Model used for assistant messages                   |
 | `created_at` | string | ISO 8601 timestamp                                  |
 
 ## Permissions
@@ -141,51 +136,12 @@ By default `POST .../generate` waits for the LLM to finish and returns the resul
 { "status": "accepted", "session_id": "sess_..." }
 ```
 
-### Concurrency and cancel-previous
+### Concurrency guard
 
-The concurrency behavior when a new generation starts while one is already in progress is controlled by the `cancel_previous` field on the session.
+Both sync and async calls go through the same concurrency guard: if `generating_at` is set and less than 5 minutes have elapsed, generation is rejected as already in progress.
 
-#### `cancel_previous: true` (default)
-
-When a new generation request arrives while generation is already in progress for the same session, the server **cancels the in-flight generation** and starts a fresh one. This guarantees that the new generation always sees the full, up-to-date message history:
-
-```
-pos 0  user       "Hello"
-pos 1  user       "What is 2+2?"
-        ← generation starts here
-pos 2  user       "Are you sure?"   ← arrives mid-generation
-        ← first generation is aborted; new generation starts
-pos 3  assistant  "Yes, 2+2 is definitely 4."
-```
-
-The cancellation is implemented with an in-memory `AbortController` map keyed by `${agentId}#${sessionId}`. The `AbortSignal` is threaded into the AI SDK call (`generateText`/`streamText`), so the LLM stream is terminated as soon as the signal fires. Any partial response from the cancelled generation is discarded.
-
-> **Note:** The in-memory map is per-process. In a multi-replica deployment, a new request on a different replica cannot cancel a generation running on another replica. For multi-replica deployments, a distributed cancel signal (e.g., a Redis pub/sub channel) would be needed.
-
-#### `cancel_previous: false`
-
-When `cancel_previous` is set to `false`, the session uses the conservative concurrency mode: a new generation request is rejected with `409 Conflict` if one is already in progress. The in-flight generation continues undisturbed.
-
-```http
-POST /agents/:agent_id/sessions/:session_id/generate
-→ 409 Conflict  { "error": "Generation already in progress" }
-```
-
-Set `cancel_previous` to `false` at creation or patch it at any time:
-
-```http
-PATCH /agents/:agent_id/sessions/:session_id
-Content-Type: application/json
-
-{ "cancel_previous": false }
-```
-
-#### Fallback timeout guard
-
-If no in-memory controller is found for a session but `generating_at` is still set (e.g., after a process restart), the server falls back to a 5-minute timeout guard: if the elapsed time is less than 5 minutes, the new request is rejected with `409 Conflict`. This is a safety net against stale state; it does not affect the normal cancel-previous flow.
-
-- **Sync**: a rejected request due to the fallback guard returns `409 Conflict`.
-- **Async**: a rejected generation is silently dropped (the `202` response is still returned).
+- **Sync**: returns `409 Conflict` to the caller.
+- **Async**: the duplicate generation is silently dropped (the 202 response is still returned, but no LLM call is made). Any user message that was already saved via `POST .../messages` remains in the conversation history — it will simply have no assistant reply until the caller issues a new `POST .../generate` after the current generation completes.
 
 > **Note:** The guard is best-effort. Two simultaneous async requests arriving within the same milliseconds — before the first one writes `generating_at` to the database — may both trigger generation. Use synchronous calls if strict single-generation semantics are required.
 

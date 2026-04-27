@@ -1,7 +1,3 @@
----
-sidebar_position: 12
----
-
 # Webhooks
 
 The Webhooks module lets you subscribe to events that occur within a project and receive HTTP POST callbacks when those events fire. Every delivery is signed with HMAC-SHA256 so you can verify authenticity on the receiving end.
@@ -61,43 +57,43 @@ You can optionally attach a project policy to a webhook. When a policy is set, t
 | Field         | Type           | Description                                 |
 | ------------- | -------------- | ------------------------------------------- |
 | `id`          | string         | Public identifier                           |
-| `project_id`   | string         | ID of the owning project                    |
-| `policy_id`    | string \| null | Optional project policy that gates delivery |
+| `project_id`  | string         | ID of the owning project                    |
+| `policy_id`   | string \| null | Optional project policy that gates delivery |
 | `name`        | string         | Human-readable name                         |
 | `description` | string \| null | Optional description                        |
 | `url`         | string         | HTTPS endpoint that receives deliveries     |
 | `events`      | string[]       | List of event patterns to subscribe to      |
 | `active`      | boolean        | Whether the webhook is enabled              |
 | `secret`      | string         | Returned only on create and secret rotation |
-| `created_at`   | string         | ISO 8601 creation timestamp                 |
-| `updated_at`   | string         | ISO 8601 last-updated timestamp             |
+| `created_at`  | string         | ISO 8601 creation timestamp                 |
+| `updated_at`  | string         | ISO 8601 last-updated timestamp             |
 
 ### Webhook Delivery
 
-| Field           | Type                               | Description                                |
-| --------------- | ---------------------------------- | ------------------------------------------ |
-| `id`            | string                             | Public identifier                          |
-| `event_type`     | string                             | The event type that triggered the delivery |
-| `payload`       | object                             | The event payload that was sent            |
-| `status`        | `pending` \| `success` \| `failed` | Delivery outcome                           |
-| `status_code`    | number \| null                     | HTTP response status code                  |
-| `attempts`      | number                             | Number of delivery attempts made           |
+| Field             | Type                               | Description                                |
+| ----------------- | ---------------------------------- | ------------------------------------------ |
+| `id`              | string                             | Public identifier                          |
+| `event_type`      | string                             | The event type that triggered the delivery |
+| `payload`         | object                             | The event payload that was sent            |
+| `status`          | `pending` \| `success` \| `failed` | Delivery outcome                           |
+| `status_code`     | number \| null                     | HTTP response status code                  |
+| `attempts`        | number                             | Number of delivery attempts made           |
 | `last_attempt_at` | string \| null                     | Timestamp of the most recent attempt       |
-| `response_body`  | string \| null                     | Truncated response body from the receiver  |
-| `created_at`     | string                             | ISO 8601 creation timestamp                |
-| `updated_at`     | string                             | ISO 8601 last-updated timestamp            |
+| `response_body`   | string \| null                     | Truncated response body from the receiver  |
+| `created_at`      | string                             | ISO 8601 creation timestamp                |
+| `updated_at`      | string                             | ISO 8601 last-updated timestamp            |
 
 ## Permissions
 
 Webhook operations are governed by per-project policies. Grant the following permissions to allow a user to perform each action:
 
-| Action           | Permission                       | REST Endpoint                                                         | MCP Tool                  |
-| ---------------- | -------------------------------- | --------------------------------------------------------------------- | ------------------------- |
-| List webhooks    | `webhooks:ListWebhooks`          | `GET /api/v1/projects/:project_id/webhooks`                            | `list-webhooks`           |
-| Create a webhook | `webhooks:CreateWebhook`         | `POST /api/v1/projects/:project_id/webhooks`                           | `create-webhook`          |
-| Get a webhook    | `webhooks:GetWebhook`            | `GET /api/v1/projects/:project_id/webhooks/:id`                        | `get-webhook`             |
-| Update a webhook | `webhooks:UpdateWebhook`         | `PUT /api/v1/projects/:project_id/webhooks/:id`                        | `update-webhook`          |
-| Delete a webhook | `webhooks:DeleteWebhook`         | `DELETE /api/v1/projects/:project_id/webhooks/:id`                     | `delete-webhook`          |
-| Rotate secret    | `webhooks:RotateWebhookSecret`   | `POST /api/v1/projects/:project_id/webhooks/:id/rotate-secret`         | `rotate-webhook-secret`   |
-| List deliveries  | `webhooks:ListWebhookDeliveries` | `GET /api/v1/projects/:project_id/webhooks/:id/deliveries`             | `list-webhook-deliveries` |
+| Action           | Permission                       | REST Endpoint                                                           | MCP Tool                  |
+| ---------------- | -------------------------------- | ----------------------------------------------------------------------- | ------------------------- |
+| List webhooks    | `webhooks:ListWebhooks`          | `GET /api/v1/projects/:project_id/webhooks`                             | `list-webhooks`           |
+| Create a webhook | `webhooks:CreateWebhook`         | `POST /api/v1/projects/:project_id/webhooks`                            | `create-webhook`          |
+| Get a webhook    | `webhooks:GetWebhook`            | `GET /api/v1/projects/:project_id/webhooks/:id`                         | `get-webhook`             |
+| Update a webhook | `webhooks:UpdateWebhook`         | `PUT /api/v1/projects/:project_id/webhooks/:id`                         | `update-webhook`          |
+| Delete a webhook | `webhooks:DeleteWebhook`         | `DELETE /api/v1/projects/:project_id/webhooks/:id`                      | `delete-webhook`          |
+| Rotate secret    | `webhooks:RotateWebhookSecret`   | `POST /api/v1/projects/:project_id/webhooks/:id/rotate-secret`          | `rotate-webhook-secret`   |
+| List deliveries  | `webhooks:ListWebhookDeliveries` | `GET /api/v1/projects/:project_id/webhooks/:id/deliveries`              | `list-webhook-deliveries` |
 | Get a delivery   | `webhooks:GetWebhookDelivery`    | `GET /api/v1/projects/:project_id/webhooks/:id/deliveries/:delivery_id` | `get-webhook-delivery`    |

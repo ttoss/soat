@@ -5,7 +5,9 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsx watch src/server.ts",
-    "lint-openapi": "spectral lint packages/server/src/rest/openapi/**/*.yaml",
+    "typecheck": "tsc --noEmit",
+    "lint": "pnpm run lint-openapi && eslint src",
+    "lint-openapi": "spectral lint src/rest/openapi/**/*.yaml",
     "test": "jest --projects tests/unit"
   },
   "type": "module",
@@ -34,10 +36,12 @@
     "@ttoss/config": "^1.37.10",
     "@ttoss/test-utils": "^4.2.9",
     "@types/jest": "^30.0.0",
+    "@types/js-yaml": "^4.0.9",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/pg": "^8.20.0",
     "@types/supertest": "^7.2.0",
     "jest": "^30.3.0",
+    "js-yaml": "^4.1.1",
     "supertest": "^7.2.2",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0"

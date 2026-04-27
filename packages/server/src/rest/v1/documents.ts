@@ -7,13 +7,87 @@ import {
   getDocument,
   getDocumentTags,
   listDocuments,
-  searchDocuments,
   updateDocument,
   updateDocumentTags,
 } from 'src/lib/documents';
+import { resolveDocumentSearch } from 'src/lib/documentSearch';
 import { buildSrn } from 'src/lib/iam';
+import { compilePolicy } from 'src/lib/policyCompiler';
 
 const documentsRouter = new Router<Context>();
+
+/**
+ * Build context object from document tags for permission evaluation
+ */
+const buildDocumentContext = (doc: {
+  tags?: Record<string, unknown>;
+}): Record<string, string> => {
+  const context: Record<string, string> = { 'soat:ResourceType': 'document' };
+  if (doc.tags) {
+    for (const [k, v] of Object.entries(doc.tags)) {
+      context[`soat:ResourceTag/${k}`] = String(v);
+    }
+  }
+  return context;
+};
+
+/**
+ * Build SRN resources array (id and path-based) for permission evaluation
+ */
+const buildDocumentResources = (
+  doc: {
+    id: string;
+    path?: string;
+    projectId?: string;
+  },
+  projectPublicId: string
+): string[] => {
+  const srn = buildSrn({
+    projectPublicId,
+    resourceType: 'document',
+    resourceId: doc.id,
+  });
+  const resources: string[] = [srn];
+  if (doc.path) {
+    resources.push(
+      buildSrn({
+        projectPublicId,
+        resourceType: 'document',
+        resourceId: doc.path,
+      })
+    );
+  }
+  return resources;
+};
+
+/**
+ * Check if user is allowed to perform action on document
+ * Returns false if not allowed (after setting ctx.status to 403)
+ */
+const checkDocumentPermission = async (
+  ctx: Context,
+  doc: {
+    id: string;
+    path?: string;
+    projectId?: string;
+    tags?: Record<string, unknown>;
+  },
+  action: string
+): Promise<boolean> => {
+  const context = buildDocumentContext(doc);
+  const resources = buildDocumentResources(doc, doc.projectId!);
+  const allowed = await ctx.authUser!.isAllowed({
+    projectPublicId: doc.projectId!,
+    action,
+    resources,
+    context,
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+  }
+  return allowed;
+};
 
 documentsRouter.get('/documents', async (ctx: Context) => {
   if (!ctx.authUser) {
@@ -41,6 +115,28 @@ documentsRouter.get('/documents', async (ctx: Context) => {
     return;
   }
 
+  // Compile SQL-level policy filter when a specific project is requested
+  if (projectPublicId) {
+    const policies = await ctx.authUser!.getPolicies(projectPublicId);
+    const { where: policyWhere, hasAccess } = compilePolicy({
+      policies,
+      action: 'documents:ListDocuments',
+      resourceType: 'document',
+      projectPublicId,
+    });
+    if (!hasAccess) {
+      ctx.body = {
+        data: [],
+        total: 0,
+        limit: limit ?? 50,
+        offset: offset ?? 0,
+      };
+      return;
+    }
+    ctx.body = await listDocuments({ projectIds, policyWhere, limit, offset });
+    return;
+  }
+
   ctx.body = await listDocuments({ projectIds, limit, offset });
 });
 
@@ -52,33 +148,13 @@ documentsRouter.get('/documents/:id', async (ctx: Context) => {
   }
 
   const doc = await getDocument({ id: ctx.params.id });
-
   if (!doc) {
     ctx.status = 404;
     ctx.body = { error: 'Document not found' };
     return;
   }
 
-  const srn = buildSrn({
-    projectPublicId: doc.projectId!,
-    resourceType: 'document',
-    resourceId: doc.id,
-  });
-  const context: Record<string, string> = { 'soat:ResourceType': 'document' };
-  if (doc.tags) {
-    for (const [k, v] of Object.entries(doc.tags)) {
-      context[`soat:ResourceTag/${k}`] = v;
-    }
-  }
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: doc.projectId!,
-    action: 'documents:GetDocument',
-    resource: srn,
-    context,
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
+  if (!(await checkDocumentPermission(ctx, doc, 'documents:GetDocument'))) {
     return;
   }
 
@@ -95,6 +171,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
   const body = ctx.request.body as {
     projectId?: string;
     content: string;
+    path?: string;
     filename?: string;
     title?: string;
     metadata?: Record<string, unknown>;
@@ -110,8 +187,8 @@ documentsRouter.post('/documents', async (ctx: Context) => {
   // Resolve projectId: use explicit value, infer from project key, or error for JWT
   let resolvedProjectPublicId = body.projectId;
   if (!resolvedProjectPublicId) {
-    if (ctx.authUser.projectKeyProjectId) {
-      resolvedProjectPublicId = ctx.authUser.projectKeyProjectId;
+    if (ctx.authUser.apiKeyProjectPublicId) {
+      resolvedProjectPublicId = ctx.authUser.apiKeyProjectPublicId;
     } else {
       ctx.status = 400;
       ctx.body = { error: 'projectId is required' };
@@ -141,6 +218,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
   const doc = await createDocument({
     projectId: project.id,
     content: body.content,
+    path: body.path,
     filename: body.filename,
     title: body.title,
     metadata: body.metadata,
@@ -159,40 +237,17 @@ documentsRouter.delete('/documents/:id', async (ctx: Context) => {
   }
 
   const doc = await getDocument({ id: ctx.params.id });
-
   if (!doc) {
     ctx.status = 404;
     ctx.body = { error: 'Document not found' };
     return;
   }
 
-  const srnDel = buildSrn({
-    projectPublicId: doc.projectId!,
-    resourceType: 'document',
-    resourceId: doc.id,
-  });
-  const contextDel: Record<string, string> = {
-    'soat:ResourceType': 'document',
-  };
-  if (doc.tags) {
-    for (const [k, v] of Object.entries(doc.tags)) {
-      contextDel[`soat:ResourceTag/${k}`] = v;
-    }
-  }
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: doc.projectId!,
-    action: 'documents:DeleteDocument',
-    resource: srnDel,
-    context: contextDel,
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
+  if (!(await checkDocumentPermission(ctx, doc, 'documents:DeleteDocument'))) {
     return;
   }
 
   const result = await deleteDocument({ id: ctx.params.id });
-
   if (result === null) {
     ctx.status = 404;
     ctx.body = { error: 'Document not found' };
@@ -210,41 +265,20 @@ documentsRouter.patch('/documents/:id', async (ctx: Context) => {
   }
 
   const doc = await getDocument({ id: ctx.params.id });
-
   if (!doc) {
     ctx.status = 404;
     ctx.body = { error: 'Document not found' };
     return;
   }
 
-  const srnUpd = buildSrn({
-    projectPublicId: doc.projectId!,
-    resourceType: 'document',
-    resourceId: doc.id,
-  });
-  const contextUpd: Record<string, string> = {
-    'soat:ResourceType': 'document',
-  };
-  if (doc.tags) {
-    for (const [k, v] of Object.entries(doc.tags)) {
-      contextUpd[`soat:ResourceTag/${k}`] = v;
-    }
-  }
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: doc.projectId!,
-    action: 'documents:UpdateDocument',
-    resource: srnUpd,
-    context: contextUpd,
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
+  if (!(await checkDocumentPermission(ctx, doc, 'documents:UpdateDocument'))) {
     return;
   }
 
   const body = ctx.request.body as {
     content?: string;
     title?: string;
+    path?: string | null;
     metadata?: Record<string, unknown>;
     tags?: Record<string, string>;
   };
@@ -253,6 +287,7 @@ documentsRouter.patch('/documents/:id', async (ctx: Context) => {
     id: ctx.params.id,
     content: body.content,
     title: body.title,
+    path: body.path,
     metadata: body.metadata,
     tags: body.tags,
   });
@@ -269,15 +304,18 @@ documentsRouter.post('/documents/search', async (ctx: Context) => {
 
   const body = ctx.request.body as {
     projectId?: string;
-    query: string;
+    search?: string;
+    minScore?: number;
     limit?: number;
-    threshold?: number;
-    tags?: Record<string, string>;
+    paths?: string[];
+    documentIds?: string[];
   };
 
-  if (!body.query) {
+  if (!body.search && !body.paths && !body.documentIds) {
     ctx.status = 400;
-    ctx.body = { error: 'query is required' };
+    ctx.body = {
+      error: 'At least one of search, paths, or documentIds is required',
+    };
     return;
   }
 
@@ -292,15 +330,36 @@ documentsRouter.post('/documents/search', async (ctx: Context) => {
     return;
   }
 
-  const results = await searchDocuments({
+  // Compile SQL-level policy filter when a specific project is requested
+  let policyWhere: Record<string, unknown> | undefined;
+  if (body.projectId) {
+    const policies = await ctx.authUser!.getPolicies(body.projectId);
+    const compiled = compilePolicy({
+      policies,
+      action: 'documents:SearchDocuments',
+      resourceType: 'document',
+      projectPublicId: body.projectId,
+    });
+    if (!compiled.hasAccess) {
+      ctx.body = { documents: [] };
+      return;
+    }
+    policyWhere = compiled.where;
+  }
+
+  const results = await resolveDocumentSearch({
     projectIds,
-    query: body.query,
-    limit: body.limit,
-    threshold: body.threshold,
-    tags: body.tags,
+    policyWhere,
+    config: {
+      search: body.search,
+      minScore: body.minScore,
+      limit: body.limit,
+      paths: body.paths,
+      documentIds: body.documentIds,
+    },
   });
 
-  ctx.body = results;
+  ctx.body = { documents: results };
 });
 
 documentsRouter.get('/documents/:id/tags', async (ctx: Context) => {
@@ -311,33 +370,13 @@ documentsRouter.get('/documents/:id/tags', async (ctx: Context) => {
   }
 
   const doc = await getDocument({ id: ctx.params.id });
-
   if (!doc) {
     ctx.status = 404;
     ctx.body = { error: 'Document not found' };
     return;
   }
 
-  const srn = buildSrn({
-    projectPublicId: doc.projectId!,
-    resourceType: 'document',
-    resourceId: doc.id,
-  });
-  const context: Record<string, string> = { 'soat:ResourceType': 'document' };
-  if (doc.tags) {
-    for (const [k, v] of Object.entries(doc.tags)) {
-      context[`soat:ResourceTag/${k}`] = v;
-    }
-  }
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: doc.projectId!,
-    action: 'documents:GetDocument',
-    resource: srn,
-    context,
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
+  if (!(await checkDocumentPermission(ctx, doc, 'documents:GetDocument'))) {
     return;
   }
 
@@ -352,33 +391,13 @@ documentsRouter.put('/documents/:id/tags', async (ctx: Context) => {
   }
 
   const doc = await getDocument({ id: ctx.params.id });
-
   if (!doc) {
     ctx.status = 404;
     ctx.body = { error: 'Document not found' };
     return;
   }
 
-  const srn = buildSrn({
-    projectPublicId: doc.projectId!,
-    resourceType: 'document',
-    resourceId: doc.id,
-  });
-  const context: Record<string, string> = { 'soat:ResourceType': 'document' };
-  if (doc.tags) {
-    for (const [k, v] of Object.entries(doc.tags)) {
-      context[`soat:ResourceTag/${k}`] = v;
-    }
-  }
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: doc.projectId!,
-    action: 'documents:UpdateDocument',
-    resource: srn,
-    context,
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
+  if (!(await checkDocumentPermission(ctx, doc, 'documents:UpdateDocument'))) {
     return;
   }
 
@@ -398,33 +417,13 @@ documentsRouter.patch('/documents/:id/tags', async (ctx: Context) => {
   }
 
   const doc = await getDocument({ id: ctx.params.id });
-
   if (!doc) {
     ctx.status = 404;
     ctx.body = { error: 'Document not found' };
     return;
   }
 
-  const srn = buildSrn({
-    projectPublicId: doc.projectId!,
-    resourceType: 'document',
-    resourceId: doc.id,
-  });
-  const context: Record<string, string> = { 'soat:ResourceType': 'document' };
-  if (doc.tags) {
-    for (const [k, v] of Object.entries(doc.tags)) {
-      context[`soat:ResourceTag/${k}`] = v;
-    }
-  }
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: doc.projectId!,
-    action: 'documents:UpdateDocument',
-    resource: srn,
-    context,
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
+  if (!(await checkDocumentPermission(ctx, doc, 'documents:UpdateDocument'))) {
     return;
   }
 

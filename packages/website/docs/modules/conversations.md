@@ -1,7 +1,3 @@
----
-sidebar_position: 10
----
-
 # Conversations
 
 The Conversations module represents a multi-party dialogue within a project. A Conversation groups ordered messages, where each message is authored by an [Actor](./actors.md) — either a human contact (e.g. a WhatsApp user) or an AI-backed actor linked to an [Agent](./agents.md) or [Chat](./chats.md).
@@ -16,14 +12,14 @@ Conversations are identified by an `id` prefixed with `conv_`. The internal data
 
 ### Conversation
 
-| Field       | Type   | Description                                                        |
-| ----------- | ------ | ------------------------------------------------------------------ |
-| `id`        | string | Public identifier prefixed with `conv_`                            |
+| Field        | Type   | Description                                                        |
+| ------------ | ------ | ------------------------------------------------------------------ |
+| `id`         | string | Public identifier prefixed with `conv_`                            |
 | `project_id` | string | ID of the owning project                                           |
-| `name`      | string | Optional human-readable title for the conversation                 |
-| `status`    | string | Conversation status: `open` or `closed`                            |
+| `name`       | string | Optional human-readable title for the conversation                 |
+| `status`     | string | Conversation status: `open` or `closed`                            |
 | `actor_id`   | string | Optional ID of the Actor who **owns** this conversation (nullable) |
-| `tags`      | object | Free-form string tags                                              |
+| `tags`       | object | Free-form string tags                                              |
 | `created_at` | string | ISO 8601 creation timestamp                                        |
 | `updated_at` | string | ISO 8601 last-updated timestamp                                    |
 
@@ -31,13 +27,13 @@ Conversations are identified by an `id` prefixed with `conv_`. The internal data
 
 ### Conversation Message
 
-| Field        | Type           | Description                                                                                                                |
-| ------------ | -------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Field         | Type           | Description                                                                                                                |
+| ------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `document_id` | string         | ID of the Document attached as a message                                                                                   |
 | `actor_id`    | string         | ID of the Actor who authored the message                                                                                   |
-| `position`   | integer        | Zero-based position of the message in the conversation                                                                     |
-| `metadata`   | object \| null | Optional structured key-value data attached to the message (e.g. `phone`, `channel`). Injected into the AI prompt context. |
-| `content`    | string         | Full text content of the message (read from the underlying document)                                                       |
+| `position`    | integer        | Zero-based position of the message in the conversation                                                                     |
+| `metadata`    | object \| null | Optional structured key-value data attached to the message (e.g. `phone`, `channel`). Injected into the AI prompt context. |
+| `content`     | string         | Full text content of the message (read from the underlying document)                                                       |
 
 The pair `(conversation_id, position)` is uniquely indexed. See [Message ordering](#message-ordering) for insertion semantics.
 

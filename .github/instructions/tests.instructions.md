@@ -22,6 +22,9 @@ pnpm --filter @soat/server test --testPathPatterns=users.test.ts
 ## Test File Location and Naming
 
 - Server unit tests live in `packages/server/tests/unit/tests/`
+- Tests are divided into two sub-folders:
+  - `rest/` — tests that call the REST API via supertest (e.g., `rest/projects.test.ts`). **Prefer this kind of test.** These cover HTTP concerns: status codes, response shapes, authentication, and authorization.
+  - `lib/` — tests that call lib functions directly (e.g., `lib/agents.test.ts`). Use only when the behavior cannot be adequately covered through the REST API (e.g., internal helpers, complex async coordination).
 - Test file name must match the module: `<module>.test.ts` (e.g., `projects.test.ts`)
 - Every public lib function and every REST route must have at least one test
 
@@ -35,7 +38,7 @@ Tests are integration tests that run against `app.callback()` via supertest. A r
 - `authenticatedTestClient(token)` — returns a client that sets `Authorization: Bearer <token>` on every request
 - `loginAs(username, password)` — bootstrap helper that logs in and returns the token string
 
-For API key authentication, pass the raw `SDK_`-prefixed key directly to `authenticatedTestClient`.
+For API key authentication, pass the raw `sk_`-prefixed key directly to `authenticatedTestClient`.
 
 ## Writing Unit Tests
 
@@ -105,7 +108,9 @@ Some lib modules (e.g., `agents.ts`, `conversations.ts`) are loaded transitively
 
 **Do not use `jest.mock` for modules that are transitively imported by `app.ts`.** Use `jest.spyOn` instead. `jest.spyOn` mutates a property on the _existing_ exports object, which is the same reference held by every module that imported it at startup.
 
-### Pattern
+### Pattern — local spy (created per test)
+
+Create the spy inside `beforeEach` and restore it in `afterEach`. Safe to use `jest.restoreAllMocks()` because the spy is recreated on the next `beforeEach`.
 
 ```ts
 import * as agentsModule from '../../../src/lib/agents';
@@ -135,14 +140,39 @@ describe('something that pauses async work', () => {
   });
 
   afterEach(() => {
-    jest.restoreAllMocks(); // always restore spies after each test
+    jest.restoreAllMocks(); // safe — spy is recreated in the next beforeEach
+  });
+});
+```
+
+### Pattern — shared spy (created in `setupTestsAfterEnv.ts`)
+
+When a spy needs to be reused across multiple `describe` blocks (e.g., exported from `setupTestsAfterEnv.ts`), **do not call `jest.restoreAllMocks()`**. Restoring disconnects the spy from the module permanently — subsequent `mockImplementationOnce` calls queue on a dead object and the real function runs instead, causing tests to hang.
+
+Use `jest.clearAllMocks()` instead — it resets call counts and queued implementations without unwiring the spy.
+
+```ts
+// setupTestsAfterEnv.ts
+export const mockCreateGeneration = jest.spyOn(agentsModule, 'createGeneration');
+
+// sessions.test.ts
+import { mockCreateGeneration } from '../../setupTestsAfterEnv';
+
+describe('something that pauses async work', () => {
+  beforeEach(() => {
+    mockCreateGeneration.mockImplementationOnce(() => new Promise(...));
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks(); // resets state but keeps the spy wired — do NOT use restoreAllMocks here
   });
 });
 ```
 
 ### Key rules
 
-- **Always `jest.restoreAllMocks()` in `afterEach`** (or call `.mockRestore()` on the spy). Without this, the spy persists and corrupts other tests.
+- **For local spies (created in `beforeEach`)**: call `jest.restoreAllMocks()` in `afterEach`. The spy is recreated each time so restoring is safe.
+- **For shared spies (exported from `setupTestsAfterEnv.ts`)**: call `jest.clearAllMocks()` in `afterEach`. `jest.restoreAllMocks()` would permanently disconnect the spy, causing all subsequent tests that rely on it to silently call the real function.
 - **Never use `jest.mock(path, factory)` for a path that is transitively required by `app.ts`**. Identify such modules by tracing the import chain: `app.ts` → routers → lib modules. Any module on that chain must be spied on, not mocked.
 - When the target function is used in a fire-and-forget async path (e.g., `.catch(() => {})`), poll for a side-effect (e.g., a flag set inside the mock, or a DB column change) rather than awaiting the call directly.
 

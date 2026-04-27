@@ -15,15 +15,17 @@ servers:
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: your-soat.com
         default: your-soat.com
   - url: http://{host}/api/v1
     description: Development (HTTP)
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: localhost:5047
         default: localhost:5047
+
+tags:
+  - name: Chats
+    description: Manage chats
 
 paths:
   /chats:
@@ -325,6 +327,79 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: AI provider not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /chats/{chatId}/actors:
+    post:
+      tags:
+        - Chats
+      summary: Create an actor for a chat
+      description: Creates a new actor associated with the specified chat
+      operationId: createChatActor
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          description: Chat ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  example: 'Alice'
+                type:
+                  type: string
+                  description: Optional actor type
+                  example: 'user'
+                external_id:
+                  type: string
+                  description: Optional external identifier
+                tags:
+                  type: object
+                  additionalProperties:
+                    type: string
+      responses:
+        '201':
+          description: Actor created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Chat not found
           content:
             application/json:
               schema:

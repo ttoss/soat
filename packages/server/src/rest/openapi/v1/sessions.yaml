@@ -15,15 +15,16 @@ servers:
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: your-soat.com
         default: your-soat.com
   - url: http://{host}/api/v1
     description: Development (HTTP)
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: localhost:5047
         default: localhost:5047
+tags:
+  - name: Sessions
+    description: Manage agent sessions
 paths:
   /agents/{agentId}/sessions:
     post:
@@ -34,7 +35,7 @@ paths:
         Creates a new session for the specified agent. Internally creates a
         conversation and two actors (agent + user) so the caller only needs
         this single call to start interacting with the agent.
-      operationId: createSession
+      operationId: createAgentSession
       security:
         - bearerAuth: []
       parameters:
@@ -62,7 +63,7 @@ paths:
         - Sessions
       summary: List sessions
       description: Returns sessions for the specified agent, optionally filtered by actorId and status.
-      operationId: listSessions
+      operationId: listAgentSessions
       security:
         - bearerAuth: []
       parameters:
@@ -123,7 +124,7 @@ paths:
         - Sessions
       summary: Get a session
       description: Returns details of a single session.
-      operationId: getSession
+      operationId: getAgentSession
       security:
         - bearerAuth: []
       parameters:
@@ -176,7 +177,7 @@ paths:
         - Sessions
       summary: Delete a session
       description: Deletes the session and its underlying conversation and actors.
-      operationId: deleteSession
+      operationId: deleteAgentSession
       security:
         - bearerAuth: []
       parameters:
@@ -200,7 +201,7 @@ paths:
       description: >
         Returns messages in the session with simplified roles (user/assistant)
         instead of raw actor IDs.
-      operationId: listSessionMessages
+      operationId: listAgentSessionMessages
       security:
         - bearerAuth: []
       parameters:
@@ -474,7 +475,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: JWT token or SDK_ project key
+      description: JWT token or sk_ api key
 
   parameters:
     AgentId:
@@ -539,10 +540,6 @@ components:
           type: boolean
           default: false
           description: When true, automatically triggers generation after each user message (if no generation is in progress).
-        cancel_previous:
-          type: boolean
-          default: true
-          description: When true (default), starting a new generation for this session cancels any in-flight generation. When false, a new generation request is rejected with 409 if one is already in progress.
         generating_at:
           type: string
           format: date-time
@@ -593,10 +590,6 @@ components:
           type: boolean
           default: false
           description: When true, automatically triggers generation after each user message.
-        cancel_previous:
-          type: boolean
-          default: true
-          description: When true (default), starting a new generation cancels any in-flight one. When false, the new request is rejected with 409 if a generation is already in progress.
         tool_context:
           type: object
           additionalProperties:
@@ -618,9 +611,6 @@ components:
         auto_generate:
           type: boolean
           description: Enable or disable automatic generation after user messages.
-        cancel_previous:
-          type: boolean
-          description: Enable or disable cancel-previous concurrency mode for this session.
         tool_context:
           type: object
           additionalProperties:
@@ -644,16 +634,18 @@ components:
           nullable: true
           description: Key-value pairs injected as context headers into all tool call requests made during this generation.
 
+    AddSessionMessageSaved:
+      type: object
+      description: Message saved; auto-generate is off or a generation is already in progress.
+      properties:
+        role:
+          type: string
+          enum: [user]
+        content:
+          type: string
     AddSessionMessageResponse:
       oneOf:
-        - type: object
-          description: Message saved; auto-generate is off or a generation is already in progress.
-          properties:
-            role:
-              type: string
-              enum: [user]
-            content:
-              type: string
+        - $ref: '#/components/schemas/AddSessionMessageSaved'
         - $ref: '#/components/schemas/GenerateSessionResponse'
 
     GenerateSessionRequest:
@@ -704,20 +696,6 @@ components:
                     type: string
                   arguments:
                     type: object
-
-    SendSessionMessageRequest:
-      type: object
-      required:
-        - message
-      properties:
-        message:
-          type: string
-          description: User message text
-          example: Hello, how can I deploy my app?
-        model:
-          type: string
-          description: Optional model override
-          example: gpt-4o
 
     SendSessionMessageResponse:
       type: object

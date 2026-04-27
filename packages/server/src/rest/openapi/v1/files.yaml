@@ -12,15 +12,16 @@ servers:
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: your-soat.com
         default: your-soat.com
   - url: http://{host}/api/v1
     description: Development (HTTP)
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: localhost:5047
         default: localhost:5047
+tags:
+  - name: Files
+    description: Manage files
 paths:
   /files:
     get:
@@ -29,15 +30,39 @@ paths:
       summary: List all files
       description: Returns a list of all stored files
       operationId: listFiles
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
       responses:
         '200':
           description: List of files returned successfully
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/FileRecord'
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FileRecord'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
         '500':
           description: Internal server error
           content:
@@ -57,14 +82,23 @@ paths:
             schema:
               type: object
               required:
+                - project_id
                 - storage_type
                 - storage_path
               properties:
+                project_id:
+                  type: string
+                  description: Public ID of the project
+                  example: 'proj_V1StGXR8Z5jdHi6B'
+                path:
+                  type: string
+                  description: Logical path within the project (e.g. /images/logo.png). Defaults to /filename if omitted.
+                  example: '/images/logo.png'
                 filename:
                   type: string
                   description: Name of the file
                   example: 'document.pdf'
-                contentType:
+                content_type:
                   type: string
                   description: MIME type of the file
                   example: 'application/pdf'
@@ -136,6 +170,36 @@ paths:
                 $ref: '#/components/schemas/FileRecord'
         '400':
           description: Missing file or invalid project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /files/upload/base64:
+    post:
+      tags:
+        - Files
+      summary: Upload a file using base64 encoding
+      description: Uploads a file to the server using base64-encoded content
+      operationId: uploadFileBase64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadFileBase64Request'
+      responses:
+        '201':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileRecord'
+        '400':
+          description: Missing content or invalid project
           content:
             application/json:
               schema:
@@ -287,8 +351,195 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /files/{id}/download/base64:
+    get:
+      tags:
+        - Files
+      summary: Download file as base64
+      description: Returns the file content encoded as base64
+      operationId: downloadFileBase64
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: File ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File content as base64
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: string
+                    description: Base64-encoded file content
+                  filename:
+                    type: string
+                    description: Original filename
+                  contentType:
+                    type: string
+                    description: MIME type of the file
+                  size:
+                    type: integer
+                    description: File size in bytes
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /files/{id}/tags:
+    get:
+      tags:
+        - Files
+      summary: Get file tags
+      description: Returns all tags attached to the file
+      operationId: getFileTags
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: File ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File tags
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Files
+      summary: Replace file tags
+      description: Replaces all tags on the file with the provided tags
+      operationId: replaceFileTags
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: File ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+      responses:
+        '200':
+          description: Tags replaced
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - Files
+      summary: Merge file tags
+      description: Merges provided tags with existing tags
+      operationId: mergeFileTags
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: File ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+      responses:
+        '200':
+          description: Tags merged
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   schemas:
+    UploadFileBase64Request:
+      type: object
+      required:
+        - project_id
+        - content
+      properties:
+        project_id:
+          type: string
+          description: Public ID of the project
+          example: 'proj_V1StGXR8Z5jdHi6B'
+        content:
+          type: string
+          description: Base64-encoded file content
+          example: 'SGVsbG8gV29ybGQ='
+        filename:
+          type: string
+          description: Name of the file
+          example: 'document.txt'
+        path:
+          type: string
+          description: Logical path within the project (e.g. /images/logo.png). Defaults to /filename if omitted.
+          example: '/documents/document.txt'
+        content_type:
+          type: string
+          description: MIME type of the file
+          example: 'text/plain'
+        metadata:
+          type: string
+          description: JSON string with additional metadata
+          example: '{"author":"John"}'
     FileRecord:
       type: object
       description: Stored file metadata
@@ -297,6 +548,11 @@ components:
           type: string
           description: Unique file identifier
           example: 'abc123'
+        path:
+          type: string
+          nullable: true
+          description: Logical path of the file within the project (e.g. /images/logo.png)
+          example: '/images/logo.png'
         filename:
           type: string
           description: Name of the file
@@ -349,4 +605,5 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
-          example: 'File not found'
+          example:
+            error: 'File not found'

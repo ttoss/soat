@@ -14,14 +14,6 @@ import {
 
 const webhooksRouter = new Router<Context>();
 
-/**
- * @openapi
- * /projects/{projectId}/webhooks:
- *   get:
- *     tags: [Webhooks]
- *     summary: List webhooks for a project
- *     operationId: listWebhooks
- */
 webhooksRouter.get('/projects/:projectId/webhooks', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -51,14 +43,6 @@ webhooksRouter.get('/projects/:projectId/webhooks', async (ctx: Context) => {
   ctx.body = await listWebhooks({ projectIds: [project.id] });
 });
 
-/**
- * @openapi
- * /projects/{projectId}/webhooks:
- *   post:
- *     tags: [Webhooks]
- *     summary: Create a webhook
- *     operationId: createWebhook
- */
 webhooksRouter.post('/projects/:projectId/webhooks', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -103,8 +87,8 @@ webhooksRouter.post('/projects/:projectId/webhooks', async (ctx: Context) => {
 
   let policyInternalId: number | null = null;
   if (body.policyId) {
-    const policy = await db.ProjectPolicy.findOne({
-      where: { publicId: body.policyId, projectId: project.id },
+    const policy = await db.Policy.findOne({
+      where: { publicId: body.policyId },
     });
     if (!policy) {
       ctx.status = 400;
@@ -127,14 +111,6 @@ webhooksRouter.post('/projects/:projectId/webhooks', async (ctx: Context) => {
   ctx.body = webhook;
 });
 
-/**
- * @openapi
- * /projects/{projectId}/webhooks/{webhookId}:
- *   get:
- *     tags: [Webhooks]
- *     summary: Get a webhook
- *     operationId: getWebhook
- */
 webhooksRouter.get(
   '/projects/:projectId/webhooks/:webhookId',
   async (ctx: Context) => {
@@ -165,14 +141,6 @@ webhooksRouter.get(
   }
 );
 
-/**
- * @openapi
- * /projects/{projectId}/webhooks/{webhookId}:
- *   put:
- *     tags: [Webhooks]
- *     summary: Update a webhook
- *     operationId: updateWebhook
- */
 webhooksRouter.put(
   '/projects/:projectId/webhooks/:webhookId',
   async (ctx: Context) => {
@@ -213,11 +181,8 @@ webhooksRouter.put(
       if (body.policyId === null) {
         policyInternalId = null;
       } else {
-        const project = await db.Project.findOne({
-          where: { publicId: ctx.params.projectId },
-        });
-        const policy = await db.ProjectPolicy.findOne({
-          where: { publicId: body.policyId, projectId: project!.id },
+        const policy = await db.Policy.findOne({
+          where: { publicId: body.policyId },
         });
         if (!policy) {
           ctx.status = 400;
@@ -242,14 +207,6 @@ webhooksRouter.put(
   }
 );
 
-/**
- * @openapi
- * /projects/{projectId}/webhooks/{webhookId}:
- *   delete:
- *     tags: [Webhooks]
- *     summary: Delete a webhook
- *     operationId: deleteWebhook
- */
 webhooksRouter.delete(
   '/projects/:projectId/webhooks/:webhookId',
   async (ctx: Context) => {
@@ -281,14 +238,6 @@ webhooksRouter.delete(
   }
 );
 
-/**
- * @openapi
- * /projects/{projectId}/webhooks/{webhookId}/deliveries:
- *   get:
- *     tags: [Webhooks]
- *     summary: List deliveries for a webhook
- *     operationId: listWebhookDeliveries
- */
 webhooksRouter.get(
   '/projects/:projectId/webhooks/:webhookId/deliveries',
   async (ctx: Context) => {
@@ -338,14 +287,6 @@ webhooksRouter.get(
   }
 );
 
-/**
- * @openapi
- * /projects/{projectId}/webhooks/{webhookId}/deliveries/{deliveryId}:
- *   get:
- *     tags: [Webhooks]
- *     summary: Get a delivery
- *     operationId: getWebhookDelivery
- */
 webhooksRouter.get(
   '/projects/:projectId/webhooks/:webhookId/deliveries/:deliveryId',
   async (ctx: Context) => {
@@ -378,14 +319,6 @@ webhooksRouter.get(
   }
 );
 
-/**
- * @openapi
- * /projects/{projectId}/webhooks/{webhookId}/rotate-secret:
- *   post:
- *     tags: [Webhooks]
- *     summary: Rotate webhook secret
- *     operationId: rotateWebhookSecret
- */
 webhooksRouter.post(
   '/projects/:projectId/webhooks/:webhookId/rotate-secret',
   async (ctx: Context) => {

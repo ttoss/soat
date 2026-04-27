@@ -35,7 +35,7 @@ const evaluateWebhookPolicy = async (args: {
   policyId: number;
   event: SoatEvent;
 }): Promise<boolean> => {
-  const policy = await db.ProjectPolicy.findOne({
+  const policy = await db.Policy.findOne({
     where: { id: args.policyId },
   });
   if (!policy) return false;

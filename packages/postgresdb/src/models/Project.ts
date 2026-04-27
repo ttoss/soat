@@ -1,4 +1,4 @@
-import { Column, DataType, HasMany, Model, Table } from '@ttoss/postgresdb';
+import { Column, DataType, Model, Table } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 

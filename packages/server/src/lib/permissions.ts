@@ -1,42 +1,84 @@
 import type { DB } from '../db';
-import { evaluatePolicies, type PolicyDocument } from './iam';
+import {
+  evaluatePolicies,
+  evaluatePoliciesMultiResource,
+  type PolicyDocument,
+} from './iam';
 
-export const createProjectKeyIsAllowed = (args: {
-  projectPublicId: string;
+export const createApiKeyIsAllowed = (args: {
+  apiKeyProjectPublicId?: string;
   userPolicyIds: number[];
-  projectKeyPolicyId: number;
+  apiKeyPolicyIds: number[];
   db: DB;
 }) => {
   return async (reqArgs: {
     projectPublicId: string;
     action: string;
     resource?: string;
+    resources?: string[];
     context?: Record<string, string>;
   }): Promise<boolean> => {
-    if (reqArgs.projectPublicId !== args.projectPublicId) return false;
+    // Hard project scope: if the key is scoped to a project, reject cross-project access
+    if (
+      args.apiKeyProjectPublicId &&
+      reqArgs.projectPublicId !== args.apiKeyProjectPublicId
+    ) {
+      return false;
+    }
 
-    const [userPolicies, projectKeyPolicy] = await Promise.all([
+    const userPolicies =
       args.userPolicyIds.length > 0
-        ? args.db.ProjectPolicy.findAll({ where: { id: args.userPolicyIds } })
-        : Promise.resolve([]),
-      args.db.ProjectPolicy.findOne({ where: { id: args.projectKeyPolicyId } }),
-    ]);
+        ? await args.db.Policy.findAll({ where: { id: args.userPolicyIds } })
+        : [];
 
-    if (!projectKeyPolicy) return false;
-
-    const userAllowed = evaluatePolicies({
-      policies: userPolicies.map((p) => {
-        return p.document as PolicyDocument;
-      }),
-      action: reqArgs.action,
-      resource: reqArgs.resource,
-      context: reqArgs.context,
+    const userDocs = userPolicies.map((p: InstanceType<DB['Policy']>) => {
+      return p.document as PolicyDocument;
     });
 
-    if (!userAllowed) return false;
+    const evalUser = (resources?: string[], resource?: string) => {
+      if (resources && resources.length > 0) {
+        return evaluatePoliciesMultiResource({
+          policies: userDocs,
+          action: reqArgs.action,
+          resources,
+          context: reqArgs.context,
+        });
+      }
+      return evaluatePolicies({
+        policies: userDocs,
+        action: reqArgs.action,
+        resource,
+        context: reqArgs.context,
+      });
+    };
+
+    // No key policies: user policies alone determine access (key inherits user permissions)
+    if (args.apiKeyPolicyIds.length === 0) {
+      return evalUser(reqArgs.resources, reqArgs.resource);
+    }
+
+    // Intersection: both user policies AND key policies must allow
+    const userOk = evalUser(reqArgs.resources, reqArgs.resource);
+    if (!userOk) return false;
+
+    const keyPolicies = await args.db.Policy.findAll({
+      where: { id: args.apiKeyPolicyIds },
+    });
+    const keyDocs = keyPolicies.map((p: InstanceType<DB['Policy']>) => {
+      return p.document as PolicyDocument;
+    });
+
+    if (reqArgs.resources && reqArgs.resources.length > 0) {
+      return evaluatePoliciesMultiResource({
+        policies: keyDocs,
+        action: reqArgs.action,
+        resources: reqArgs.resources,
+        context: reqArgs.context,
+      });
+    }
 
     return evaluatePolicies({
-      policies: [projectKeyPolicy.document as PolicyDocument],
+      policies: keyDocs,
       action: reqArgs.action,
       resource: reqArgs.resource,
       context: reqArgs.context,
@@ -46,33 +88,38 @@ export const createProjectKeyIsAllowed = (args: {
 
 export const createJwtIsAllowed = (args: {
   role: 'admin' | 'user';
-  userId: number;
+  userPolicyIds: number[];
   db: DB;
 }) => {
   return async (reqArgs: {
     projectPublicId: string;
     action: string;
     resource?: string;
+    resources?: string[];
     context?: Record<string, string>;
   }): Promise<boolean> => {
     if (args.role === 'admin') return true;
-    const project = await args.db.Project.findOne({
-      where: { publicId: reqArgs.projectPublicId },
+
+    if (args.userPolicyIds.length === 0) return false;
+
+    const policies = await args.db.Policy.findAll({
+      where: { id: args.userPolicyIds },
     });
-    if (!project) return false;
-    const membership = await args.db.UserProject.findOne({
-      where: { userId: args.userId, projectId: project.id as number },
+    const policyDocs = policies.map((p: InstanceType<DB['Policy']>) => {
+      return p.document as PolicyDocument;
     });
-    if (!membership) return false;
-    const policyIds = membership.policyIds as number[];
-    if (policyIds.length === 0) return false;
-    const policies = await args.db.ProjectPolicy.findAll({
-      where: { id: policyIds },
-    });
+
+    if (reqArgs.resources && reqArgs.resources.length > 0) {
+      return evaluatePoliciesMultiResource({
+        policies: policyDocs,
+        action: reqArgs.action,
+        resources: reqArgs.resources,
+        context: reqArgs.context,
+      });
+    }
+
     return evaluatePolicies({
-      policies: policies.map((p) => {
-        return p.document as PolicyDocument;
-      }),
+      policies: policyDocs,
       action: reqArgs.action,
       resource: reqArgs.resource,
       context: reqArgs.context,

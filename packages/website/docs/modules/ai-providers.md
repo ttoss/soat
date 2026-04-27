@@ -1,7 +1,3 @@
----
-sidebar_position: 7
----
-
 # AI Providers
 
 The AI Providers module lets you register and manage LLM provider configurations for a project. Each provider record stores the model slug, optional base URL, optional configuration, and an optional link to a [Secret](./secrets.md) that supplies the API key.
@@ -14,16 +10,16 @@ When a provider is linked to a secret the secret's encrypted value is retrieved 
 
 ## Data Model
 
-| Field          | Type             | Description                                               |
-| -------------- | ---------------- | --------------------------------------------------------- |
-| `id`           | string           | Public identifier (e.g. `aip_…`)                          |
+| Field           | Type             | Description                                               |
+| --------------- | ---------------- | --------------------------------------------------------- |
+| `id`            | string           | Public identifier (e.g. `aip_…`)                          |
 | `project_id`    | string           | ID of the owning project                                  |
 | `secret_id`     | string \| null   | Public ID of the linked secret, or `null`                 |
-| `name`         | string           | Human-readable label                                      |
-| `provider`     | `AiProviderSlug` | Provider slug (see below)                                 |
+| `name`          | string           | Human-readable label                                      |
+| `provider`      | `AiProviderSlug` | Provider slug (see below)                                 |
 | `default_model` | string           | Default model name sent to the provider API               |
 | `base_url`      | string \| null   | Override base URL (optional, useful for self-hosted LLMs) |
-| `config`       | object \| null   | Arbitrary provider-specific configuration object          |
+| `config`        | object \| null   | Arbitrary provider-specific configuration object          |
 | `created_at`    | string           | ISO 8601 creation timestamp                               |
 | `updated_at`    | string           | ISO 8601 last-updated timestamp                           |
 
@@ -46,10 +42,10 @@ Valid values for the `provider` field:
 
 ## Permissions
 
-| Action          | Permission                     | REST Endpoint                               | MCP Tool             |
-| --------------- | ------------------------------ | ------------------------------------------- | -------------------- |
-| List providers  | `aiProviders:ListAiProviders`  | `GET /api/v1/ai-providers`                  | `list-ai-providers`  |
+| Action          | Permission                     | REST Endpoint                                 | MCP Tool             |
+| --------------- | ------------------------------ | --------------------------------------------- | -------------------- |
+| List providers  | `aiProviders:ListAiProviders`  | `GET /api/v1/ai-providers`                    | `list-ai-providers`  |
 | Get a provider  | `aiProviders:GetAiProvider`    | `GET /api/v1/ai-providers/:ai_provider_id`    | `get-ai-provider`    |
-| Create provider | `aiProviders:CreateAiProvider` | `POST /api/v1/ai-providers`                 | `create-ai-provider` |
+| Create provider | `aiProviders:CreateAiProvider` | `POST /api/v1/ai-providers`                   | `create-ai-provider` |
 | Update provider | `aiProviders:UpdateAiProvider` | `PATCH /api/v1/ai-providers/:ai_provider_id`  | `update-ai-provider` |
 | Delete provider | `aiProviders:DeleteAiProvider` | `DELETE /api/v1/ai-providers/:ai_provider_id` | `delete-ai-provider` |

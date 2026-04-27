@@ -2,24 +2,30 @@ openapi: 3.0.3
 info:
   title: SOAT Webhooks API
   version: 1.0.0
+  description: API for managing webhooks for project events
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
 servers:
   - url: https://{host}/api/v1
     description: Production (HTTPS)
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: your-soat.com
         default: your-soat.com
   - url: http://{host}/api/v1
     description: Development (HTTP)
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: localhost:5047
         default: localhost:5047
+tags:
+  - name: Webhooks
+    description: Manage webhooks
 paths:
   /projects/{projectId}/webhooks:
     get:
+      description: Lists all webhooks configured for the specified project
       tags:
         - Webhooks
       summary: List webhooks for a project
@@ -44,6 +50,7 @@ paths:
         '403':
           description: Forbidden
     post:
+      description: Creates a new webhook for the specified project
       tags:
         - Webhooks
       summary: Create a webhook
@@ -76,6 +83,7 @@ paths:
 
   /projects/{projectId}/webhooks/{webhookId}:
     get:
+      description: Retrieves the details of a specific webhook
       tags:
         - Webhooks
       summary: Get a webhook
@@ -105,6 +113,7 @@ paths:
         '404':
           description: Webhook not found
     put:
+      description: Updates an existing webhook's configuration
       tags:
         - Webhooks
       summary: Update a webhook
@@ -142,6 +151,7 @@ paths:
         '404':
           description: Webhook not found
     delete:
+      description: Deletes a webhook and stops all event deliveries
       tags:
         - Webhooks
       summary: Delete a webhook
@@ -169,6 +179,7 @@ paths:
 
   /projects/{projectId}/webhooks/{webhookId}/deliveries:
     get:
+      description: Lists all event deliveries for a specific webhook
       tags:
         - Webhooks
       summary: List deliveries for a webhook
@@ -212,6 +223,7 @@ paths:
 
   /projects/{projectId}/webhooks/{webhookId}/deliveries/{deliveryId}:
     get:
+      description: Retrieves the details of a specific webhook delivery
       tags:
         - Webhooks
       summary: Get a delivery
@@ -248,6 +260,7 @@ paths:
 
   /projects/{projectId}/webhooks/{webhookId}/rotate-secret:
     post:
+      description: Rotates the secret key for the specified webhook
       tags:
         - Webhooks
       summary: Rotate webhook secret

@@ -40,6 +40,13 @@ export class User extends Model {
   })
   declare role: 'admin' | 'user';
 
+  @Column({
+    type: DataType.ARRAY(DataType.INTEGER),
+    allowNull: false,
+    defaultValue: [],
+  })
+  declare policyIds: number[];
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

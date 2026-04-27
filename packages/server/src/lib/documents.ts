@@ -4,8 +4,23 @@ import path from 'node:path';
 import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
+import { mapDocument } from './documentSearch';
 import { getEmbedding } from './embedding';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitEvent } from './eventBus';
+import { registerResourceFieldMap } from './policyCompiler';
+
+export type {
+  DocumentQueryConfig,
+  QueryDocumentResult,
+} from './documentSearch';
+export { resolveDocumentSearch } from './documentSearch';
+
+registerResourceFieldMap({
+  resourceType: 'document',
+  publicIdColumn: { column: 'publicId' },
+  pathColumn: { column: 'path', alias: 'file' },
+  tagsColumn: { column: 'tags' },
+});
 
 const getStorageDir = () => {
   const dir = process.env.FILES_STORAGE_DIR;
@@ -15,37 +30,84 @@ const getStorageDir = () => {
   return dir;
 };
 
-const mapDocument = (
-  doc: InstanceType<(typeof db)['Document']> & {
-    file?: InstanceType<(typeof db)['File']> & {
-      project?: InstanceType<(typeof db)['Project']>;
-    };
+/**
+ * Normalize a file path to a consistent format
+ */
+const normalizePath = (filePath: string): string => {
+  if (!filePath) return '/';
+  let normalized = filePath.trim();
+  if (!normalized.startsWith('/')) {
+    normalized = '/' + normalized;
   }
-) => {
-  return {
-    id: doc.publicId,
-    fileId: doc.file?.publicId,
-    projectId: doc.file?.project?.publicId,
-    filename: doc.file?.filename,
-    size: doc.file?.size,
-    title: doc.title ?? undefined,
-    metadata: doc.metadata
-      ? (() => {
-          try {
-            return JSON.parse(doc.metadata!);
-          } catch {
-            return doc.metadata;
-          }
-        })()
-      : undefined,
-    tags: doc.tags ?? undefined,
-    createdAt: doc.createdAt,
-    updatedAt: doc.updatedAt,
+  // Collapse multiple slashes
+  normalized = normalized.replace(/\/+/g, '/');
+  // Remove trailing slash (except for root)
+  if (normalized !== '/' && normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized;
+};
+
+type LoadedDoc = InstanceType<(typeof db)['Document']> & {
+  file?: InstanceType<(typeof db)['File']> & {
+    project?: InstanceType<(typeof db)['Project']>;
   };
+};
+
+/**
+ * Build the Sequelize options for document queries with policy where clause
+ */
+const buildDocumentQueryOptions = (args: {
+  projectIds?: number[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  policyWhere?: Record<string, any>;
+  limit: number;
+  offset: number;
+}) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const topLevelWhere: Record<string, any> = {};
+  if (args.policyWhere && Object.keys(args.policyWhere).length > 0) {
+    Object.assign(topLevelWhere, args.policyWhere);
+  }
+
+  const fileWhere =
+    args.projectIds !== undefined ? { projectId: args.projectIds } : undefined;
+
+  const needsSubQueryFalse =
+    args.policyWhere !== undefined &&
+    Object.keys(args.policyWhere).some((k) => {
+      return k.startsWith('$');
+    });
+
+  return {
+    topLevelWhere,
+    fileWhere,
+    subQuery: needsSubQueryFalse ? false : undefined,
+  };
+};
+
+const emitDocumentLifecycleEvent = (args: {
+  type: string;
+  doc: LoadedDoc;
+  data: Record<string, unknown>;
+}) => {
+  const project = args.doc.file?.project;
+  if (!project) return;
+  emitEvent({
+    type: args.type,
+    projectId: project.id,
+    projectPublicId: project.publicId,
+    resourceType: 'document',
+    resourceId: args.doc.publicId,
+    data: args.data,
+    timestamp: new Date().toISOString(),
+  });
 };
 
 export const listDocuments = async (args: {
   projectIds?: number[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  policyWhere?: Record<string, any>;
   limit?: number;
   offset?: number;
 }) => {
@@ -56,11 +118,16 @@ export const listDocuments = async (args: {
     return { data: [], total: 0, limit, offset };
   }
 
-  const fileWhere =
-    args.projectIds !== undefined ? { projectId: args.projectIds } : undefined;
+  const { topLevelWhere, fileWhere, subQuery } = buildDocumentQueryOptions({
+    projectIds: args.projectIds,
+    policyWhere: args.policyWhere,
+    limit,
+    offset,
+  });
 
   const { count, rows } = await db.Document.findAndCountAll({
     distinct: true,
+    where: Object.keys(topLevelWhere).length > 0 ? topLevelWhere : undefined,
     include: [
       {
         model: db.File,
@@ -69,15 +136,21 @@ export const listDocuments = async (args: {
         include: [{ model: db.Project, as: 'project' }],
       },
     ],
+    subQuery,
     limit,
     offset,
   });
   return { data: rows.map(mapDocument), total: count, limit, offset };
 };
 
-export const getDocument = async (args: { id: string }) => {
-  const doc = await db.Document.findOne({
-    where: { publicId: args.id },
+/**
+ * Fetch a document by public ID with full file and project context
+ */
+const fetchDocumentWithContext = async (
+  publicId: string
+): Promise<LoadedDoc | null> => {
+  return db.Document.findOne({
+    where: { publicId },
     include: [
       {
         model: db.File,
@@ -86,6 +159,28 @@ export const getDocument = async (args: { id: string }) => {
       },
     ],
   });
+};
+
+/**
+ * Fetch a document by ID with full file and project context
+ */
+const fetchDocumentByIdWithContext = async (
+  id: number
+): Promise<LoadedDoc | null> => {
+  return db.Document.findOne({
+    where: { id },
+    include: [
+      {
+        model: db.File,
+        as: 'file',
+        include: [{ model: db.Project, as: 'project' }],
+      },
+    ],
+  });
+};
+
+export const getDocument = async (args: { id: string }) => {
+  const doc = await fetchDocumentWithContext(args.id);
 
   if (!doc) {
     return null;
@@ -101,9 +196,39 @@ export const getDocument = async (args: { id: string }) => {
   return { ...mapped, content: null };
 };
 
+/**
+ * Update document content and file size/embedding
+ */
+const updateDocumentContent = async (args: {
+  doc: LoadedDoc;
+  content: string;
+}) => {
+  if (args.doc.file?.storagePath) {
+    fs.writeFileSync(args.doc.file.storagePath, args.content, 'utf-8');
+    await args.doc.file.update({
+      size: Buffer.byteLength(args.content, 'utf-8'),
+    });
+    const embedding = await getEmbedding({ text: args.content });
+    await args.doc.update({ embedding });
+  }
+};
+
+/**
+ * Update document metadata, title, and tags
+ */
+const updateDocumentMetadata = async (args: {
+  doc: LoadedDoc;
+  updates: Record<string, unknown>;
+}) => {
+  if (Object.keys(args.updates).length > 0) {
+    await args.doc.update(args.updates);
+  }
+};
+
 export const createDocument = async (args: {
   projectId: number;
   content: string;
+  path?: string;
   filename?: string;
   title?: string;
   metadata?: Record<string, unknown>;
@@ -112,8 +237,10 @@ export const createDocument = async (args: {
   const storageDir = getStorageDir();
   fs.mkdirSync(storageDir, { recursive: true });
 
+  const effectivePath = args.path ?? args.filename ?? null;
   const file = await db.File.create({
     projectId: args.projectId,
+    path: effectivePath,
     filename: args.filename ?? 'document.txt',
     contentType: 'text/plain',
     size: Buffer.byteLength(args.content, 'utf-8'),
@@ -138,78 +265,46 @@ export const createDocument = async (args: {
     tags: args.tags ?? null,
   });
 
-  const created = await db.Document.findOne({
-    where: { id: doc.id },
-    include: [
-      {
-        model: db.File,
-        as: 'file',
-        include: [{ model: db.Project, as: 'project' }],
-      },
-    ],
-  });
+  const created = await fetchDocumentByIdWithContext(doc.id as number);
 
   const mapped = mapDocument(created!);
 
-  if (created!.file?.project) {
-    emitEvent({
-      type: 'documents.created',
-      projectId: created!.file.project.id,
-      projectPublicId: created!.file.project.publicId,
-      resourceType: 'document',
-      resourceId: created!.publicId,
-      data: mapped as unknown as Record<string, unknown>,
-      timestamp: new Date().toISOString(),
-    });
-  }
+  emitDocumentLifecycleEvent({
+    type: 'documents.created',
+    doc: created!,
+    data: mapped as unknown as Record<string, unknown>,
+  });
 
   return mapped;
 };
 
 export const deleteDocument = async (args: { id: string }) => {
-  const doc = await db.Document.findOne({
-    where: { publicId: args.id },
-    include: [
-      {
-        model: db.File,
-        as: 'file',
-        include: [{ model: db.Project, as: 'project' }],
-      },
-    ],
-  });
+  const doc = await fetchDocumentWithContext(args.id);
 
   if (!doc) {
     return null;
   }
 
-  const docPublicId = doc.publicId;
-  const projectId = doc.file?.project?.id;
-  const projectPublicId = doc.file?.project?.publicId;
-
-  if (doc.file?.storagePath) {
+  const storagePath = doc.file?.storagePath;
+  if (storagePath) {
     try {
-      fs.unlinkSync(doc.file.storagePath);
+      fs.unlinkSync(storagePath);
     } catch {
       // Ignore missing file errors
     }
   }
 
+  const docPublicId = doc.publicId;
   await doc.destroy();
   if (doc.file) {
     await doc.file.destroy();
   }
 
-  if (projectId && projectPublicId) {
-    emitEvent({
-      type: 'documents.deleted',
-      projectId,
-      projectPublicId,
-      resourceType: 'document',
-      resourceId: docPublicId,
-      data: { id: docPublicId },
-      timestamp: new Date().toISOString(),
-    });
-  }
+  emitDocumentLifecycleEvent({
+    type: 'documents.deleted',
+    doc,
+    data: { id: docPublicId },
+  });
 
   return true;
 };
@@ -218,31 +313,23 @@ export const updateDocument = async (args: {
   id: string;
   content?: string;
   title?: string;
+  path?: string | null;
   metadata?: Record<string, unknown>;
   tags?: Record<string, string>;
 }) => {
-  const doc = await db.Document.findOne({
-    where: { publicId: args.id },
-    include: [
-      {
-        model: db.File,
-        as: 'file',
-        include: [{ model: db.Project, as: 'project' }],
-      },
-    ],
-  });
+  const doc = await fetchDocumentWithContext(args.id);
 
   if (!doc) {
     return null;
   }
 
-  if (args.content !== undefined && doc.file?.storagePath) {
-    fs.writeFileSync(doc.file.storagePath, args.content, 'utf-8');
-    await doc.file.update({
-      size: Buffer.byteLength(args.content, 'utf-8'),
-    });
-    const embedding = await getEmbedding({ text: args.content });
-    await doc.update({ embedding });
+  if (args.content !== undefined) {
+    await updateDocumentContent({ doc, content: args.content });
+  }
+
+  if (args.path !== undefined && doc.file) {
+    const normalizedPath = args.path === null ? null : normalizePath(args.path);
+    await doc.file.update({ path: normalizedPath });
   }
 
   const updates: Record<string, unknown> = {};
@@ -250,36 +337,54 @@ export const updateDocument = async (args: {
   if (args.metadata !== undefined)
     updates.metadata = JSON.stringify(args.metadata);
   if (args.tags !== undefined) updates.tags = args.tags;
-  if (Object.keys(updates).length > 0) {
-    await doc.update(updates);
-  }
 
-  const refreshed = await db.Document.findOne({
-    where: { id: doc.id },
-    include: [
-      {
-        model: db.File,
-        as: 'file',
-        include: [{ model: db.Project, as: 'project' }],
-      },
-    ],
-  });
+  await updateDocumentMetadata({ doc, updates });
+
+  const refreshed = await fetchDocumentByIdWithContext(doc.id as number);
 
   const mapped = mapDocument(refreshed!);
 
-  if (refreshed!.file?.project) {
-    emitEvent({
-      type: 'documents.updated',
-      projectId: refreshed!.file.project.id,
-      projectPublicId: refreshed!.file.project.publicId,
-      resourceType: 'document',
-      resourceId: refreshed!.publicId,
-      data: mapped as unknown as Record<string, unknown>,
-      timestamp: new Date().toISOString(),
-    });
-  }
+  emitDocumentLifecycleEvent({
+    type: 'documents.updated',
+    doc: refreshed!,
+    data: mapped as unknown as Record<string, unknown>,
+  });
 
   return mapped;
+};
+
+/**
+ * Build Sequelize query options for document search
+ */
+const buildSearchQueryOptions = (args: {
+  projectIds?: number[];
+  tags?: Record<string, string>;
+}) => {
+  const fileWhere =
+    args.projectIds !== undefined ? { projectId: args.projectIds } : undefined;
+
+  const docWhere: Record<string, unknown> =
+    args.tags && Object.keys(args.tags).length > 0
+      ? { tags: { [Op.contains]: args.tags } }
+      : {};
+
+  return { fileWhere, docWhere };
+};
+
+/**
+ * Map database document to result with score
+ */
+const mapSearchResult = (doc: InstanceType<(typeof db)['Document']>) => {
+  const distance = parseFloat((doc.getDataValue('distance') as string) ?? '1');
+  const score = 1 - distance;
+  const mapped = mapDocument(doc);
+
+  let content: string | null = null;
+  if (doc.file?.storagePath && fs.existsSync(doc.file.storagePath)) {
+    content = fs.readFileSync(doc.file.storagePath, 'utf-8');
+  }
+
+  return { ...mapped, content, score };
 };
 
 export const searchDocuments = async (args: {
@@ -297,13 +402,10 @@ export const searchDocuments = async (args: {
   const limit = args.limit ?? 10;
   const embeddingLiteral = `[${embedding.join(',')}]`;
 
-  const fileWhere =
-    args.projectIds !== undefined ? { projectId: args.projectIds } : undefined;
-
-  const docWhere: Record<string, unknown> =
-    args.tags && Object.keys(args.tags).length > 0
-      ? { tags: { [Op.contains]: args.tags } }
-      : {};
+  const { fileWhere, docWhere } = buildSearchQueryOptions({
+    projectIds: args.projectIds,
+    tags: args.tags,
+  });
 
   const documents = await db.Document.findAll({
     where: docWhere,
@@ -331,24 +433,10 @@ export const searchDocuments = async (args: {
 
   return documents
     .map((doc: InstanceType<(typeof db)['Document']>) => {
-      const distance = parseFloat(
-        (doc.getDataValue('distance') as string) ?? '1'
-      );
-      const score = 1 - distance;
-      const mapped = mapDocument(doc);
-
-      let content: string | null = null;
-      if (doc.file?.storagePath && fs.existsSync(doc.file.storagePath)) {
-        content = fs.readFileSync(doc.file.storagePath, 'utf-8');
-      }
-
-      return { ...mapped, content, score };
+      return mapSearchResult(doc);
     })
     .filter((doc: { score: number }) => {
-      if (args.threshold !== undefined) {
-        return doc.score >= args.threshold;
-      }
-      return true;
+      return args.threshold === undefined || doc.score >= args.threshold;
     });
 };
 
@@ -362,21 +450,34 @@ export const getDocumentTags = async (args: { id: string }) => {
   return doc.tags ?? {};
 };
 
+/**
+ * Merge or replace document tags and emit lifecycle event
+ */
+const updateAndEmitTags = async (args: {
+  doc: LoadedDoc;
+  newTags: Record<string, string>;
+}) => {
+  await args.doc.update({ tags: args.newTags });
+
+  const refreshed = await fetchDocumentByIdWithContext(args.doc.id as number);
+
+  const tagsMapped = mapDocument(refreshed!);
+
+  emitDocumentLifecycleEvent({
+    type: 'documents.updated',
+    doc: refreshed!,
+    data: tagsMapped as unknown as Record<string, unknown>,
+  });
+
+  return tagsMapped;
+};
+
 export const updateDocumentTags = async (args: {
   id: string;
   tags: Record<string, string>;
   merge?: boolean;
 }) => {
-  const doc = await db.Document.findOne({
-    where: { publicId: args.id },
-    include: [
-      {
-        model: db.File,
-        as: 'file',
-        include: [{ model: db.Project, as: 'project' }],
-      },
-    ],
-  });
+  const doc = await fetchDocumentWithContext(args.id);
 
   if (!doc) {
     return null;
@@ -385,32 +486,6 @@ export const updateDocumentTags = async (args: {
   const newTags = args.merge
     ? { ...(doc.tags ?? {}), ...args.tags }
     : args.tags;
-  await doc.update({ tags: newTags });
 
-  const refreshed = await db.Document.findOne({
-    where: { id: doc.id },
-    include: [
-      {
-        model: db.File,
-        as: 'file',
-        include: [{ model: db.Project, as: 'project' }],
-      },
-    ],
-  });
-
-  const tagsMapped = mapDocument(refreshed!);
-
-  if (refreshed!.file?.project) {
-    emitEvent({
-      type: 'documents.updated',
-      projectId: refreshed!.file.project.id,
-      projectPublicId: refreshed!.file.project.publicId,
-      resourceType: 'document',
-      resourceId: refreshed!.publicId,
-      data: tagsMapped as unknown as Record<string, unknown>,
-      timestamp: new Date().toISOString(),
-    });
-  }
-
-  return tagsMapped;
+  return updateAndEmitTags({ doc, newTags });
 };

@@ -4,6 +4,7 @@ import {
   hashPassword,
   signUserToken,
 } from '../middleware/auth';
+import { mapPolicy } from './policies';
 
 const mapUser = (user: InstanceType<(typeof db)['User']>) => {
   return {
@@ -101,4 +102,56 @@ export const deleteUser = async (args: { id: string }) => {
 
   await user.destroy();
   return true;
+};
+
+export const attachUserPolicies = async (args: {
+  userId: string;
+  policyIds: string[];
+}) => {
+  const user = await db.User.findOne({ where: { publicId: args.userId } });
+
+  if (!user) {
+    return 'not_found' as const;
+  }
+
+  if (args.policyIds.length === 0) {
+    await user.update({ policyIds: [] });
+    return true;
+  }
+
+  const policies = await db.Policy.findAll({
+    where: { publicId: args.policyIds },
+  });
+
+  if (policies.length !== args.policyIds.length) {
+    return 'not_found' as const;
+  }
+
+  await user.update({
+    policyIds: policies.map((p: InstanceType<(typeof db)['Policy']>) => {
+      return p.id as number;
+    }),
+  });
+
+  return true;
+};
+
+export const getUserPolicies = async (args: { userId: string }) => {
+  const user = await db.User.findOne({ where: { publicId: args.userId } });
+
+  if (!user) {
+    return null;
+  }
+
+  const policyIds = (user.policyIds as number[]) ?? [];
+
+  if (policyIds.length === 0) {
+    return [];
+  }
+
+  const policies = await db.Policy.findAll({ where: { id: policyIds } });
+
+  return policies.map((p: InstanceType<(typeof db)['Policy']>) => {
+    return mapPolicy(p);
+  });
 };

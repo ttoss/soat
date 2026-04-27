@@ -4,13 +4,13 @@ Features that elevate SOAT from infrastructure primitives to a complete platform
 
 ---
 
-## 1. Agent Sessions
+## 1. ~~Agent Sessions~~ ✅
 
 **1 user ↔ 1 agent in 2 API calls.**
 
 Nested under `/agents/:agentId/sessions`. Hides the conversation/actor plumbing and gives developers the simplest possible "send message, get reply" experience. Sessions manage history, actors, and generation automatically.
 
-Status: PRD complete (`docs/prd-sessions.md`).
+Status: **Implemented.**
 
 ---
 
@@ -22,11 +22,13 @@ Connect a document collection to an agent so it retrieves relevant context befor
 
 ---
 
-## 3. Multi-Agent Workflows
+## 3. ~~Multi-Agent Workflows~~ ✅
 
 **Agents that delegate to other agents.**
 
 Allow an agent to call another agent as a tool. Enables supervisor/worker patterns, routing agents, and multi-step pipelines where each agent has its own tools, instructions, and model. Traces show the full call graph.
+
+Status: **Implemented.** Agents can call other agents via `soat`-type agent tools.
 
 ---
 
@@ -54,11 +56,13 @@ Provide a response schema when creating a generation or sending a session messag
 
 ---
 
-## 7. Long-Running / Background Agents
+## 7. ~~Long-Running / Background Agents~~ ✅
 
 **Agents that run asynchronously beyond a request lifecycle.**
 
 Kick off an agent generation that runs in the background. Poll or receive a webhook when it completes. Supports multi-step tasks that take minutes, not seconds.
+
+Status: **Implemented.** Agent generations run asynchronously with pollable status.
 
 ---
 
@@ -98,13 +102,13 @@ Configure an agent to run automatically — on a time schedule (e.g., daily summ
 
 | Priority | Feature                        | Reason                                      |
 | -------- | ------------------------------ | ------------------------------------------- |
-| P0       | Agent Sessions                 | Foundation for everything else              |
+| ~~P0~~   | ~~Agent Sessions~~             | ~~Foundation for everything else~~          |
 | P0       | Built-in RAG                   | Most requested agent capability             |
-| P1       | Multi-Agent Workflows          | Unlocks complex use cases                   |
+| ~~P1~~   | ~~Multi-Agent Workflows~~      | ~~Unlocks complex use cases~~               |
 | P1       | Structured Outputs             | Essential for production apps               |
 | P1       | Guardrails & Boundary Policies | Required for production safety              |
 | P2       | Agent Handoff                  | Natural extension of sessions + multi-agent |
-| P2       | Long-Running Agents            | Unlocks async/batch workloads               |
+| ~~P2~~   | ~~Long-Running Agents~~        | ~~Unlocks async/batch workloads~~           |
 | P2       | Agent Memory                   | Differentiator for stateful assistants      |
 | P3       | Evaluation & Testing           | Quality at scale                            |
 | P3       | Observability Dashboard        | Operational visibility                      |

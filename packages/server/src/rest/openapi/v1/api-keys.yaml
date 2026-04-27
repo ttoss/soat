@@ -1,0 +1,246 @@
+openapi: 3.0.3
+info:
+  title: SOAT API Keys API
+  version: 1.0.0
+  description: API for managing API keys with optional project scope and policy attachments
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: https://{host}/api/v1
+    description: Production (HTTPS)
+    variables:
+      host:
+        description: The hostname of your SOAT deployment
+        default: your-soat.com
+  - url: http://{host}/api/v1
+    description: Development (HTTP)
+    variables:
+      host:
+        description: The hostname of your SOAT deployment
+        default: localhost:5047
+tags:
+  - name: API Keys
+    description: Manage API keys
+paths:
+  /api-keys:
+    post:
+      tags:
+        - API Keys
+      summary: Create an API key
+      description: >
+        Creates a new API key for the authenticated user.
+        - If `project_id` is provided, the key is scoped to that project.
+        - If `policy_ids` is provided, the key's effective permissions are the intersection of the user's policies and the key's policies.
+        - If neither is provided, the key inherits the user's full permissions.
+      operationId: createApiKey
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: Key name for identification
+                  example: CI/CD Pipeline
+                project_id:
+                  type: string
+                  description: Optional project ID to scope this key to a specific project
+                  example: proj_V1StGXR8Z5jdHi6B
+                policy_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: Optional list of policy IDs to attach. Key permissions become the intersection of user policies and these policies.
+                  example: ['pol_V1StGXR8Z5jdHi6B']
+      responses:
+        '201':
+          description: API key created successfully. The raw key value is only returned once.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyCreated'
+        '400':
+          description: Bad request (missing name, invalid project or policy IDs)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+  /api-keys/{id}:
+    get:
+      tags:
+        - API Keys
+      summary: Get an API key
+      description: Returns details of an API key. Only the owner or an admin can access it.
+      operationId: getApiKey
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: API key public ID (key_ prefix)
+          schema:
+            type: string
+            example: key_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: API key details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyRecord'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (not the key owner or admin)
+        '404':
+          description: API key not found
+    put:
+      tags:
+        - API Keys
+      summary: Update an API key
+      description: Updates an API key's name, project scope, or policies. Only the owner or an admin can update it.
+      operationId: updateApiKey
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: API key public ID (key_ prefix)
+          schema:
+            type: string
+            example: key_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Updated Key Name
+                project_id:
+                  type: string
+                  nullable: true
+                  description: Set to null to remove project scope
+                  example: proj_V1StGXR8Z5jdHi6B
+                policy_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: Replace the key's policy list (empty array removes all)
+                  example: ['pol_V1StGXR8Z5jdHi6B']
+      responses:
+        '200':
+          description: API key updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyRecord'
+        '400':
+          description: Bad request (invalid project or policy IDs)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (not the key owner or admin)
+        '404':
+          description: API key not found
+    delete:
+      tags:
+        - API Keys
+      summary: Delete an API key
+      description: Deletes an API key. Only the owner or an admin can delete it.
+      operationId: deleteApiKey
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: API key public ID (key_ prefix)
+          schema:
+            type: string
+            example: key_V1StGXR8Z5jdHi6B
+      responses:
+        '204':
+          description: API key deleted successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (not the key owner or admin)
+        '404':
+          description: API key not found
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ApiKeyRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public API key ID (key_ prefix)
+          example: key_V1StGXR8Z5jdHi6B
+        name:
+          type: string
+          example: CI/CD Pipeline
+        key_prefix:
+          type: string
+          description: First 8 characters of the raw key for identification
+          example: sk_a1b2c3
+        user_id:
+          type: string
+          description: Owner user public ID
+          example: usr_V1StGXR8Z5jdHi6B
+        project_id:
+          type: string
+          nullable: true
+          description: Optional project scope
+          example: proj_V1StGXR8Z5jdHi6B
+        policy_ids:
+          type: array
+          items:
+            type: string
+          description: Public IDs of policies attached to this key
+          example: ['pol_V1StGXR8Z5jdHi6B']
+        created_at:
+          type: string
+          format: date-time
+          example: '2024-01-01T00:00:00.000Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2024-01-01T00:00:00.000Z'
+    ApiKeyCreated:
+      allOf:
+        - $ref: '#/components/schemas/ApiKeyRecord'
+        - type: object
+          properties:
+            key:
+              type: string
+              description: The raw API key value (only returned once at creation). Use as Bearer token.
+              example: sk_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: An error occurred

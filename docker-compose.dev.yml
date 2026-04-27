@@ -37,7 +37,9 @@ services:
       start_period: 30s
 
   server:
-    build: .
+    build:
+      context: .
+      target: production
     container_name: soat-server-dev-docker
     depends_on:
       database:

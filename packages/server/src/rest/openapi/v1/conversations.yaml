@@ -12,15 +12,16 @@ servers:
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: your-soat.com
         default: your-soat.com
   - url: http://{host}/api/v1
     description: Development (HTTP)
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: localhost:5047
         default: localhost:5047
+tags:
+  - name: Conversations
+    description: Manage conversations
 paths:
   /conversations:
     get:
@@ -44,15 +45,38 @@ paths:
           schema:
             type: string
             example: 'act_V1StGXR8Z5jdHi6B'
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
       responses:
         '200':
           description: List of conversations
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ConversationRecord'
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConversationRecord'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
         '401':
           description: Unauthorized
           content:
@@ -269,15 +293,38 @@ paths:
           schema:
             type: string
             example: 'conv_V1StGXR8Z5jdHi6B'
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
       responses:
         '200':
           description: List of messages
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ConversationMessageRecord'
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConversationMessageRecord'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
         '401':
           description: Unauthorized
           content:
@@ -534,6 +581,146 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /conversations/{id}/tags:
+    get:
+      tags:
+        - Conversations
+      summary: Get conversation tags
+      description: Returns all tags attached to the conversation
+      operationId: getConversationTags
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            example: 'conv_V1StGXR8Z5jdHi6B'
+      responses:
+        '200':
+          description: Conversation tags
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Conversations
+      summary: Replace conversation tags
+      description: Replaces all tags on the conversation with the provided tags
+      operationId: replaceConversationTags
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            example: 'conv_V1StGXR8Z5jdHi6B'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+      responses:
+        '200':
+          description: Tags replaced
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - Conversations
+      summary: Merge conversation tags
+      description: Merges provided tags with existing tags
+      operationId: mergeConversationTags
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Conversation ID
+          schema:
+            type: string
+            example: 'conv_V1StGXR8Z5jdHi6B'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+      responses:
+        '200':
+          description: Tags merged
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   schemas:
     ConversationRecord:
@@ -627,55 +814,64 @@ components:
           type: string
           format: date-time
           description: Last update timestamp
+    GenerateConversationMessageCompleted:
+      type: object
+      required: [status, content, message, generation_id, trace_id]
+      properties:
+        status:
+          type: string
+          enum: [completed]
+          description: Indicates generation finished successfully.
+        content:
+          type: string
+          description: >
+            The AI-generated text of the reply. This is the canonical field
+            for the assistant's response text.
+          example: 'Hello! How can I help you today?'
+        message:
+          $ref: '#/components/schemas/ConversationMessageRecord'
+        generation_id:
+          type: string
+          description: ID of the underlying generation record.
+          example: 'gen_V1StGXR8Z5jdHi6B'
+        trace_id:
+          type: string
+          description: Trace ID for observability.
+          example: 'trc_V1StGXR8Z5jdHi6B'
+        model:
+          type: string
+          description: Model used for generation.
+          example: 'gpt-4o'
+    GenerateConversationMessageRequiresAction:
+      type: object
+      required: [status, generation_id, trace_id, required_action]
+      properties:
+        status:
+          type: string
+          enum: [requires_action]
+          description: >
+            Indicates the agent requires tool-call outputs before it can
+            produce a reply. No message is persisted yet.
+        generation_id:
+          type: string
+          description: ID of the paused generation. Pass to the tool-outputs endpoint.
+          example: 'gen_V1StGXR8Z5jdHi6B'
+        trace_id:
+          type: string
+          description: Trace ID for observability.
+          example: 'trc_V1StGXR8Z5jdHi6B'
+        required_action:
+          type: object
+          description: Tool-call information the client must resolve.
     GenerateConversationMessageResponse:
       oneOf:
-        - type: object
-          required: [status, content, message, generationId, traceId]
-          properties:
-            status:
-              type: string
-              enum: [completed]
-              description: Indicates generation finished successfully.
-            content:
-              type: string
-              description: >
-                The AI-generated text of the reply. This is the canonical field
-                for the assistant's response text.
-              example: 'Hello! How can I help you today?'
-            message:
-              $ref: '#/components/schemas/ConversationMessageRecord'
-            generation_id:
-              type: string
-              description: ID of the underlying generation record.
-              example: 'gen_V1StGXR8Z5jdHi6B'
-            trace_id:
-              type: string
-              description: Trace ID for observability.
-              example: 'trc_V1StGXR8Z5jdHi6B'
-            model:
-              type: string
-              description: Model used for generation.
-              example: 'gpt-4o'
-        - type: object
-          required: [status, generationId, traceId, requiredAction]
-          properties:
-            status:
-              type: string
-              enum: [requires_action]
-              description: >
-                Indicates the agent requires tool-call outputs before it can
-                produce a reply. No message is persisted yet.
-            generation_id:
-              type: string
-              description: ID of the paused generation. Pass to the tool-outputs endpoint.
-              example: 'gen_V1StGXR8Z5jdHi6B'
-            trace_id:
-              type: string
-              description: Trace ID for observability.
-              example: 'trc_V1StGXR8Z5jdHi6B'
-            required_action:
-              type: object
-              description: Tool-call information the client must resolve.
+        - $ref: '#/components/schemas/GenerateConversationMessageCompleted'
+        - $ref: '#/components/schemas/GenerateConversationMessageRequiresAction'
+      discriminator:
+        propertyName: status
+        mapping:
+          completed: '#/components/schemas/GenerateConversationMessageCompleted'
+          requires_action: '#/components/schemas/GenerateConversationMessageRequiresAction'
     ErrorResponse:
       type: object
       properties:

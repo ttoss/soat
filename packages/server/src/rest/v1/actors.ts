@@ -6,14 +6,56 @@ import {
   deleteActor,
   findOrCreateActor,
   getActor,
-  getActorTags,
   listActors,
   updateActor,
-  updateActorTags,
 } from 'src/lib/actors';
 import { buildSrn } from 'src/lib/iam';
+import { compilePolicy } from 'src/lib/policyCompiler';
 
 const actorsRouter = new Router<Context>();
+
+type CreateActorBody = {
+  projectId?: string;
+  name: string;
+  type?: string;
+  externalId?: string;
+  instructions?: string | null;
+  agentId?: string;
+  chatId?: string;
+};
+
+const resolveActorProjectPublicId = (
+  body: CreateActorBody,
+  authUser: NonNullable<Context['authUser']>
+): string | null => {
+  if (body.projectId) return body.projectId;
+  if (authUser.apiKeyProjectPublicId) return authUser.apiKeyProjectPublicId;
+  return null;
+};
+
+const resolveActorAgentDbId = async (
+  agentId: string | undefined,
+  projectDbId: number
+): Promise<number | null | undefined> => {
+  if (agentId === undefined) return undefined;
+  const agent = await db.Agent.findOne({
+    where: { publicId: agentId, projectId: projectDbId },
+  });
+  if (!agent) return null;
+  return agent.id as number;
+};
+
+const resolveActorChatDbId = async (
+  chatId: string | undefined,
+  projectDbId: number
+): Promise<number | null | undefined> => {
+  if (chatId === undefined) return undefined;
+  const chat = await db.Chat.findOne({
+    where: { publicId: chatId, projectId: projectDbId },
+  });
+  if (!chat) return null;
+  return chat.id as number;
+};
 
 actorsRouter.get('/actors', async (ctx: Context) => {
   if (!ctx.authUser) {
@@ -44,11 +86,33 @@ actorsRouter.get('/actors', async (ctx: Context) => {
     return;
   }
 
+  let policyWhere: Record<string, unknown> | undefined;
+  if (projectPublicId) {
+    const policies = await ctx.authUser!.getPolicies(projectPublicId);
+    const compiled = compilePolicy({
+      policies,
+      action: 'actors:ListActors',
+      resourceType: 'actor',
+      projectPublicId,
+    });
+    if (!compiled.hasAccess) {
+      ctx.body = {
+        data: [],
+        total: 0,
+        limit: limit ?? 50,
+        offset: offset ?? 0,
+      };
+      return;
+    }
+    policyWhere = compiled.where;
+  }
+
   ctx.body = await listActors({
     projectIds,
     externalId,
     name,
     type,
+    policyWhere,
     limit,
     offset,
   });
@@ -95,6 +159,57 @@ actorsRouter.get('/actors/:id', async (ctx: Context) => {
   ctx.body = actor;
 });
 
+const performCreateActor = async (args: {
+  project: { id: number };
+  body: CreateActorBody;
+  agentDbId: number | undefined;
+  chatDbId: number | undefined;
+}): Promise<
+  { status: 200 | 201; actor: unknown } | { status: 400; error: string }
+> => {
+  if (args.body.externalId !== undefined) {
+    const result = await findOrCreateActor({
+      projectId: args.project.id!,
+      externalId: args.body.externalId,
+      name: args.body.name,
+      type: args.body.type,
+      instructions: args.body.instructions ?? null,
+      agentId: args.agentDbId,
+      chatId: args.chatDbId,
+    });
+    if (result === 'agent_and_chat_exclusive') {
+      return {
+        status: 400,
+        error: 'agentId and chatId are mutually exclusive',
+      };
+    }
+    return { status: result.created ? 201 : 200, actor: result.actor };
+  }
+
+  const actor = await createActor({
+    projectId: args.project.id!,
+    name: args.body.name,
+    type: args.body.type,
+    externalId: args.body.externalId,
+    instructions: args.body.instructions ?? null,
+    agentId: args.agentDbId,
+    chatId: args.chatDbId,
+  });
+
+  if (actor === 'agent_and_chat_exclusive') {
+    return { status: 400, error: 'agentId and chatId are mutually exclusive' };
+  }
+
+  return { status: 201, actor };
+};
+
+const validateCreateActorBody = (body: CreateActorBody): string | null => {
+  if (!body.name) return 'name is required';
+  if (body.agentId && body.chatId)
+    return 'agentId and chatId are mutually exclusive';
+  return null;
+};
+
 actorsRouter.post('/actors', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -102,39 +217,22 @@ actorsRouter.post('/actors', async (ctx: Context) => {
     return;
   }
 
-  const body = ctx.request.body as {
-    projectId?: string;
-    name: string;
-    type?: string;
-    externalId?: string;
-    instructions?: string | null;
-    agentId?: string;
-    chatId?: string;
-  };
-
-  if (!body.name) {
+  const body = ctx.request.body as CreateActorBody;
+  const validationError = validateCreateActorBody(body);
+  if (validationError) {
     ctx.status = 400;
-    ctx.body = { error: 'name is required' };
+    ctx.body = { error: validationError };
     return;
   }
 
-  if (body.agentId && body.chatId) {
-    ctx.status = 400;
-    ctx.body = {
-      error: 'agentId and chatId are mutually exclusive',
-    };
-    return;
-  }
-
-  let resolvedProjectPublicId = body.projectId;
+  const resolvedProjectPublicId = resolveActorProjectPublicId(
+    body,
+    ctx.authUser
+  );
   if (!resolvedProjectPublicId) {
-    if (ctx.authUser.projectKeyProjectId) {
-      resolvedProjectPublicId = ctx.authUser.projectKeyProjectId;
-    } else {
-      ctx.status = 400;
-      ctx.body = { error: 'projectId is required' };
-      return;
-    }
+    ctx.status = 400;
+    ctx.body = { error: 'projectId is required' };
+    return;
   }
 
   const allowed = await ctx.authUser.isAllowed({
@@ -156,72 +254,36 @@ actorsRouter.post('/actors', async (ctx: Context) => {
     return;
   }
 
-  let agentDbId: number | null | undefined;
-  if (body.agentId !== undefined) {
-    const agent = await db.Agent.findOne({
-      where: { publicId: body.agentId, projectId: project.id as number },
-    });
-    if (!agent) {
-      ctx.status = 400;
-      ctx.body = { error: 'Invalid agentId' };
-      return;
-    }
-    agentDbId = agent.id as number;
-  }
-
-  let chatDbId: number | null | undefined;
-  if (body.chatId !== undefined) {
-    const chat = await db.Chat.findOne({
-      where: { publicId: body.chatId, projectId: project.id as number },
-    });
-    if (!chat) {
-      ctx.status = 400;
-      ctx.body = { error: 'Invalid chatId' };
-      return;
-    }
-    chatDbId = chat.id as number;
-  }
-
-  if (body.externalId !== undefined) {
-    const result = await findOrCreateActor({
-      projectId: project.id,
-      externalId: body.externalId,
-      name: body.name,
-      type: body.type,
-      instructions: body.instructions ?? null,
-      agentId: agentDbId,
-      chatId: chatDbId,
-    });
-
-    if (result === 'agent_and_chat_exclusive') {
-      ctx.status = 400;
-      ctx.body = { error: 'agentId and chatId are mutually exclusive' };
-      return;
-    }
-
-    ctx.status = result.created ? 201 : 200;
-    ctx.body = result.actor;
+  const projectDbId = project.id as number;
+  const agentDbId = await resolveActorAgentDbId(body.agentId, projectDbId);
+  if (agentDbId === null) {
+    ctx.status = 400;
+    ctx.body = { error: 'Invalid agentId' };
     return;
   }
 
-  const actor = await createActor({
-    projectId: project.id,
-    name: body.name,
-    type: body.type,
-    externalId: body.externalId,
-    instructions: body.instructions ?? null,
-    agentId: agentDbId,
-    chatId: chatDbId,
+  const chatDbId = await resolveActorChatDbId(body.chatId, projectDbId);
+  if (chatDbId === null) {
+    ctx.status = 400;
+    ctx.body = { error: 'Invalid chatId' };
+    return;
+  }
+
+  const result = await performCreateActor({
+    project: { id: projectDbId },
+    body,
+    agentDbId,
+    chatDbId,
   });
 
-  if (actor === 'agent_and_chat_exclusive') {
-    ctx.status = 400;
-    ctx.body = { error: 'agentId and chatId are mutually exclusive' };
+  if ('error' in result) {
+    ctx.status = result.status;
+    ctx.body = { error: result.error };
     return;
   }
 
-  ctx.status = 201;
-  ctx.body = actor;
+  ctx.status = result.status;
+  ctx.body = result.actor;
 });
 
 actorsRouter.delete('/actors/:id', async (ctx: Context) => {
@@ -348,131 +410,6 @@ actorsRouter.patch('/actors/:id', async (ctx: Context) => {
   }
 
   ctx.body = updated;
-});
-
-actorsRouter.get('/actors/:id/tags', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  const actor = await getActor({ id: ctx.params.id });
-
-  if (!actor) {
-    ctx.status = 404;
-    ctx.body = { error: 'Actor not found' };
-    return;
-  }
-
-  const srn = buildSrn({
-    projectPublicId: actor.projectId!,
-    resourceType: 'actor',
-    resourceId: actor.id,
-  });
-  const context: Record<string, string> = { 'soat:ResourceType': 'actor' };
-  if (actor.tags) {
-    for (const [k, v] of Object.entries(actor.tags)) {
-      context[`soat:ResourceTag/${k}`] = v as string;
-    }
-  }
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: actor.projectId!,
-    action: 'actors:GetActor',
-    resource: srn,
-    context,
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  ctx.body = await getActorTags({ id: ctx.params.id });
-});
-
-actorsRouter.put('/actors/:id/tags', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  const actor = await getActor({ id: ctx.params.id });
-
-  if (!actor) {
-    ctx.status = 404;
-    ctx.body = { error: 'Actor not found' };
-    return;
-  }
-
-  const srn = buildSrn({
-    projectPublicId: actor.projectId!,
-    resourceType: 'actor',
-    resourceId: actor.id,
-  });
-  const context: Record<string, string> = { 'soat:ResourceType': 'actor' };
-  if (actor.tags) {
-    for (const [k, v] of Object.entries(actor.tags)) {
-      context[`soat:ResourceTag/${k}`] = v as string;
-    }
-  }
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: actor.projectId!,
-    action: 'actors:UpdateActor',
-    resource: srn,
-    context,
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const tags = ctx.request.body as Record<string, string>;
-  ctx.body = await updateActorTags({ id: ctx.params.id, tags, merge: false });
-});
-
-actorsRouter.patch('/actors/:id/tags', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  const actor = await getActor({ id: ctx.params.id });
-
-  if (!actor) {
-    ctx.status = 404;
-    ctx.body = { error: 'Actor not found' };
-    return;
-  }
-
-  const srn = buildSrn({
-    projectPublicId: actor.projectId!,
-    resourceType: 'actor',
-    resourceId: actor.id,
-  });
-  const context: Record<string, string> = { 'soat:ResourceType': 'actor' };
-  if (actor.tags) {
-    for (const [k, v] of Object.entries(actor.tags)) {
-      context[`soat:ResourceTag/${k}`] = v as string;
-    }
-  }
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: actor.projectId!,
-    action: 'actors:UpdateActor',
-    resource: srn,
-    context,
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const tags = ctx.request.body as Record<string, string>;
-  ctx.body = await updateActorTags({ id: ctx.params.id, tags, merge: true });
 });
 
 export { actorsRouter };

@@ -29,13 +29,13 @@ The server implements the MCP specification over HTTP with `enableJsonResponse: 
 
 ## Authentication
 
-All tools require authentication. Pass either a JWT session token or an `SDK_`-prefixed API key as a Bearer token in the `Authorization` header of every MCP request:
+All tools require authentication. Pass either a JWT session token or an `sk_`-prefixed API key as a Bearer token in the `Authorization` header of every MCP request:
 
 ```
 Authorization: Bearer <token>
 ```
 
-Obtain a session token by calling `POST /api/v1/users/login`. Obtain a project-scoped API key by calling `POST /api/v1/project-keys`. See [Projects module](/docs/modules/projects#project-keys) for details.
+Obtain a session token by calling `POST /api/v1/users/login`. Obtain a project-scoped API key by calling `POST /api/v1/api-keys`. See [Projects module](/docs/modules/projects#api-keys) for details.
 
 ## Available Modules
 

@@ -52,11 +52,11 @@ curl -X POST https://your-soat-server.com/api/v1/project-keys \
   -H "Authorization: Bearer <user-token>" \
   -H "Content-Type: application/json" \
   -d '{"projectPublicId": "proj_xyz", "policyIds": [1]}'
-# Response: {"id": "SDK_...", "secret": "sk_..."}
+# Response: {"id": "sk_...", "secret": "sk_..."}
 
 # Use the key in requests (set the full "ID" string as bearer token)
 curl https://your-soat-server.com/api/v1/projects/proj_xyz/files \
-  -H "Authorization: Bearer SDK_..."
+  -H "Authorization: Bearer sk_..."
 ```
 
 Project keys are scoped to a single project and inherit permissions from the associated policy.
@@ -144,7 +144,7 @@ The REST API is organized into modules, each covering a specific resource:
 | ----------------------------------------------------------- | -------------------------------------------- |
 | [Users](/docs/api/users/list-users)                         | User accounts, authentication, and bootstrap |
 | [Projects](/docs/api/projects/create-project)               | Projects, membership, and access control     |
-| [Project Keys](/docs/api/project-keys/create-project-key)   | API keys scoped to projects                  |
+| [API Keys](/docs/api/api-keys/create-api-key)               | API keys scoped to projects                  |
 | [Secrets](/docs/api/secrets/list-secrets)                   | Encrypted project secrets                    |
 | [Files](/docs/api/files/list-files)                         | File storage and retrieval                   |
 | [Documents](/docs/api/documents/list-documents)             | Document management and processing           |

@@ -12,15 +12,16 @@ servers:
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: your-soat.com
         default: your-soat.com
   - url: http://{host}/api/v1
     description: Development (HTTP)
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: localhost:5047
         default: localhost:5047
+tags:
+  - name: Documents
+    description: Manage documents
 paths:
   /documents:
     get:
@@ -80,6 +81,10 @@ paths:
                 content:
                   type: string
                   example: 'The quick brown fox jumps over the lazy dog.'
+                path:
+                  type: string
+                  description: Logical path within the project (e.g. /reports/q1.txt). Defaults to /filename if omitted.
+                  example: '/reports/q1.txt'
                 filename:
                   type: string
                   example: 'my-doc.txt'
@@ -183,12 +188,222 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - Documents
+      summary: Update a document
+      description: Updates document content, title, path, metadata, or tags. Supplying `path` moves the document to a new logical path within the project.
+      operationId: updateDocument
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Document ID
+          schema:
+            type: string
+            example: 'doc_V1StGXR8Z5jdHi6B'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+                  description: New text content
+                title:
+                  type: string
+                  description: New title
+                path:
+                  type: string
+                  nullable: true
+                  description: Logical path within the project (e.g. /reports/q1.txt). Pass null to clear.
+                  example: '/reports/q1.txt'
+                metadata:
+                  type: object
+                  description: Arbitrary metadata object
+                tags:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: Key-value tags
+      responses:
+        '200':
+          description: Document updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /documents/{id}/tags:
+    get:
+      tags:
+        - Documents
+      summary: Get document tags
+      description: Returns all tags attached to the document
+      operationId: getDocumentTags
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Document ID
+          schema:
+            type: string
+            example: 'doc_V1StGXR8Z5jdHi6B'
+      responses:
+        '200':
+          description: Document tags
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Documents
+      summary: Replace document tags
+      description: Replaces all tags on the document with the provided tags (not merged)
+      operationId: replaceDocumentTags
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Document ID
+          schema:
+            type: string
+            example: 'doc_V1StGXR8Z5jdHi6B'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+              example:
+                category: research
+                status: draft
+      responses:
+        '200':
+          description: Tags replaced
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - Documents
+      summary: Merge document tags
+      description: Merges provided tags with existing tags (existing tags are preserved unless overridden)
+      operationId: mergeDocumentTags
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Document ID
+          schema:
+            type: string
+            example: 'doc_V1StGXR8Z5jdHi6B'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+              example:
+                priority: high
+      responses:
+        '200':
+          description: Tags merged
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /documents/search:
     post:
       tags:
         - Documents
       summary: Semantic search over documents
-      description: Embeds the query text and returns the most similar documents using cosine distance. If projectId is omitted, searches across all projects the caller has access to.
+      description: Searches documents using semantic search, file paths, or document IDs. At least one of search, paths, or document_ids must be provided. Returns results ordered by similarity score.
       operationId: searchDocuments
       requestBody:
         required: true
@@ -196,28 +411,47 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - query
               properties:
                 project_id:
                   type: string
                   description: Project ID (optional). Omit to search across all accessible projects.
                   example: 'proj_V1StGXR8Z5jdHi6B'
-                query:
+                search:
                   type: string
+                  description: Semantic search query text. Embeds the query and returns similar documents.
                   example: 'What is the capital of France?'
+                min_score:
+                  type: number
+                  description: Minimum similarity score threshold (0-1). Results below this score are filtered out.
+                  example: 0.5
                 limit:
                   type: integer
-                  example: 5
+                  description: Maximum number of results to return
+                  example: 10
+                paths:
+                  type: array
+                  items:
+                    type: string
+                  description: Filter results to documents with these file paths
+                  example: ['/docs/readme.md', '/docs/api.md']
+                document_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: Filter results to these specific document IDs
+                  example: ['doc_V1StGXR8Z5jdHi6B', 'doc_V2StGXR8Z5jdHi6B']
       responses:
         '200':
           description: Search results
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/DocumentRecord'
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DocumentRecord'
         '400':
           description: Invalid request body
           content:
@@ -253,6 +487,11 @@ components:
           type: string
           description: Project ID
           example: 'proj_V1StGXR8Z5jdHi6B'
+        path:
+          type: string
+          nullable: true
+          description: Logical path of the document within the project (e.g. /reports/q1.txt)
+          example: '/reports/q1.txt'
         filename:
           type: string
           description: Original filename

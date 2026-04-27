@@ -1,10 +1,18 @@
-import fs from 'node:fs';
-
 import { db } from '../db';
-import { createGeneration, type GenerationResult } from './agents';
-import { createChatCompletionForChat } from './chats';
-import { createDocument, deleteDocument } from './documents';
+import { mapMessage } from './conversationMessages';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
+import {
+  type CompiledPolicy,
+  registerResourceFieldMap,
+} from './policyCompiler';
+
+export type { CompiledPolicy };
+
+registerResourceFieldMap({
+  resourceType: 'conversation',
+  publicIdColumn: { column: 'publicId' },
+  tagsColumn: { column: 'tags' },
+});
 
 const mapConversation = (
   conversation: InstanceType<(typeof db)['Conversation']> & {
@@ -24,37 +32,10 @@ const mapConversation = (
   };
 };
 
-const mapMessage = (
-  message: InstanceType<(typeof db)['ConversationMessage']> & {
-    document?: InstanceType<(typeof db)['Document']> & {
-      file?: InstanceType<(typeof db)['File']>;
-    };
-    actor?: InstanceType<(typeof db)['Actor']>;
-  }
-) => {
-  let content: string | null = null;
-  if (message.document?.file?.storagePath) {
-    try {
-      if (fs.existsSync(message.document.file.storagePath)) {
-        content = fs.readFileSync(message.document.file.storagePath, 'utf-8');
-      }
-    } catch {
-      // Ignore read errors
-    }
-  }
-
-  return {
-    documentId: message.document?.publicId,
-    actorId: message.actor?.publicId,
-    position: message.position,
-    content,
-    metadata: message.metadata ?? null,
-  };
-};
-
 export const listConversations = async (args: {
   projectIds?: number[];
   actorId?: string;
+  policyWhere?: Record<string, unknown>;
   limit?: number;
   offset?: number;
 }) => {
@@ -87,6 +68,10 @@ export const listConversations = async (args: {
       }
     );
     where.id = conversationIds;
+  }
+
+  if (args.policyWhere) {
+    Object.assign(where, args.policyWhere);
   }
 
   const { count, rows } = await db.Conversation.findAndCountAll({
@@ -343,179 +328,6 @@ export const listConversationMessages = async (args: {
   return { data: rows.map(mapMessage), total: count, limit, offset };
 };
 
-export const addConversationMessage = async (args: {
-  conversationId: string;
-  message: string;
-  actorId: string;
-  position?: number;
-  metadata?: Record<string, unknown>;
-}) => {
-  const conversation = await db.Conversation.findOne({
-    where: { publicId: args.conversationId },
-  });
-
-  if (!conversation) {
-    return null;
-  }
-
-  const actor = await db.Actor.findOne({ where: { publicId: args.actorId } });
-
-  if (!actor) {
-    return null;
-  }
-
-  const createdDoc = await createDocument({
-    projectId: conversation.projectId,
-    content: args.message,
-  });
-
-  const document = await db.Document.findOne({
-    where: { publicId: createdDoc.id },
-  });
-
-  if (!document) {
-    return null;
-  }
-
-  const sequelize = db.sequelize;
-
-  const result = await sequelize.transaction(async (t) => {
-    let position = args.position;
-
-    if (position === undefined) {
-      const maxMessage = await db.ConversationMessage.findOne({
-        where: { conversationId: conversation.id },
-        order: [['position', 'DESC']],
-        transaction: t,
-      });
-      position = maxMessage ? maxMessage.position + 1 : 0;
-    } else {
-      // Insert-between: if the position collides, shift existing messages up.
-      const collision = await db.ConversationMessage.findOne({
-        where: { conversationId: conversation.id, position },
-        transaction: t,
-      });
-      if (collision) {
-        // Shift in descending order to avoid unique index violations mid-shift.
-        const toShift = await db.ConversationMessage.findAll({
-          where: { conversationId: conversation.id },
-          order: [['position', 'DESC']],
-          transaction: t,
-        });
-        for (const m of toShift) {
-          if (m.position >= position) {
-            await m.update({ position: m.position + 1 }, { transaction: t });
-          }
-        }
-      }
-    }
-
-    const message = await db.ConversationMessage.create(
-      {
-        conversationId: conversation.id,
-        documentId: document.id,
-        actorId: actor.id,
-        position,
-        metadata: args.metadata ?? null,
-      },
-      { transaction: t }
-    );
-
-    return message;
-  });
-
-  const messageWithAssociations = await db.ConversationMessage.findOne({
-    where: { id: result.id },
-    include: [
-      {
-        model: db.Document,
-        as: 'document',
-        include: [{ model: db.File, as: 'file' }],
-      },
-      { model: db.Actor, as: 'actor' },
-    ],
-  });
-
-  const mapped = mapMessage(messageWithAssociations!);
-
-  resolveProjectPublicId({ projectId: conversation.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'conversations.message.created',
-        projectId: conversation.projectId,
-        projectPublicId,
-        resourceType: 'conversation_message',
-        resourceId: mapped.documentId,
-        data: {
-          ...mapped,
-          conversationId: args.conversationId,
-        } as unknown as Record<string, unknown>,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
-
-  return mapped;
-};
-
-export const removeConversationMessage = async (args: {
-  conversationId: string;
-  documentId: string;
-}) => {
-  const conversation = await db.Conversation.findOne({
-    where: { publicId: args.conversationId },
-  });
-
-  if (!conversation) {
-    return null;
-  }
-
-  const document = await db.Document.findOne({
-    where: { publicId: args.documentId },
-  });
-
-  if (!document) {
-    return null;
-  }
-
-  const message = await db.ConversationMessage.findOne({
-    where: {
-      conversationId: conversation.id,
-      documentId: document.id,
-    },
-  });
-
-  if (!message) {
-    return null;
-  }
-
-  await message.destroy();
-
-  // Also delete the associated document to avoid orphans (Bug #3)
-  if (document.publicId) {
-    await deleteDocument({ id: document.publicId });
-  }
-
-  resolveProjectPublicId({ projectId: conversation.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'conversations.message.deleted',
-        projectId: conversation.projectId,
-        projectPublicId,
-        resourceType: 'conversation_message',
-        resourceId: args.documentId,
-        data: {
-          conversationId: args.conversationId,
-          documentId: args.documentId,
-        },
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
-
-  return { conversationId: args.conversationId, documentId: args.documentId };
-};
-
 export const listConversationActors = async (args: {
   conversationId: string;
 }) => {
@@ -558,265 +370,4 @@ export const listConversationActors = async (args: {
       updatedAt: actor.updatedAt,
     };
   });
-};
-
-export type GenerateConversationMessageResult =
-  | {
-      status: 'completed';
-      /** AI-generated text of the reply. Always present when status is `completed`. */
-      content: string;
-      message: ReturnType<typeof mapMessage>;
-      generationId: string;
-      traceId: string;
-      model?: string;
-    }
-  | {
-      status: 'requires_action';
-      generationId: string;
-      traceId: string;
-      requiredAction: NonNullable<GenerationResult['requiredAction']>;
-    }
-  | 'conversation_not_found'
-  | 'actor_not_found'
-  | 'actor_missing_agent_or_chat'
-  | 'ai_provider_not_found'
-  | 'agent_or_chat_not_found';
-
-export const generateConversationMessage = async (args: {
-  conversationId: string;
-  actorId: string;
-  model?: string;
-  toolContext?: Record<string, string>;
-  signal?: AbortSignal;
-}): Promise<GenerateConversationMessageResult> => {
-  const conversation = await db.Conversation.findOne({
-    where: { publicId: args.conversationId },
-  });
-
-  if (!conversation) {
-    return 'conversation_not_found';
-  }
-
-  const generatingActor = await db.Actor.findOne({
-    where: { publicId: args.actorId, projectId: conversation.projectId },
-    include: [
-      { model: db.Agent, as: 'agent' },
-      { model: db.Chat, as: 'chat' },
-    ],
-  });
-
-  if (!generatingActor) {
-    return 'actor_not_found';
-  }
-
-  if (!generatingActor.agentId && !generatingActor.chatId) {
-    return 'actor_missing_agent_or_chat';
-  }
-
-  // Load history ordered by position
-  const messages = await db.ConversationMessage.findAll({
-    where: { conversationId: conversation.id },
-    include: [
-      {
-        model: db.Document,
-        as: 'document',
-        include: [{ model: db.File, as: 'file' }],
-      },
-      { model: db.Actor, as: 'actor' },
-    ],
-    order: [['position', 'ASC']],
-  });
-
-  // Snapshot the highest position BEFORE the LLM call so the assistant reply
-  // is inserted immediately after the messages the model actually saw, even
-  // if new user messages arrive while generation is in-flight.
-  const snapshotPosition =
-    messages.length > 0 ? messages[messages.length - 1].position : -1;
-
-  // Build chat-style message history
-  const history: Array<{ role: string; content: string }> = [];
-  for (const m of messages) {
-    const msg = m as InstanceType<(typeof db)['ConversationMessage']> & {
-      document?: InstanceType<(typeof db)['Document']> & {
-        file?: InstanceType<(typeof db)['File']>;
-      };
-      actor?: InstanceType<(typeof db)['Actor']>;
-    };
-
-    let content = '';
-    if (msg.document?.file?.storagePath) {
-      try {
-        if (fs.existsSync(msg.document.file.storagePath)) {
-          content = fs.readFileSync(msg.document.file.storagePath, 'utf-8');
-        }
-      } catch {
-        // Ignore read errors
-      }
-    }
-
-    if (msg.actorId === generatingActor.id) {
-      history.push({ role: 'assistant', content });
-    } else {
-      const speakerName = msg.actor?.name ?? 'participant';
-      const meta = (msg as { metadata?: Record<string, unknown> | null })
-        .metadata;
-      const metadataStr =
-        meta && Object.keys(meta).length > 0
-          ? ` [${Object.entries(meta)
-              .map(([k, v]) => {
-                return `${k}: ${v}`;
-              })
-              .join(', ')}]`
-          : '';
-      history.push({
-        role: 'user',
-        content: `[${speakerName}]${metadataStr}: ${content}`,
-      });
-    }
-  }
-
-  // Build persona override instructions from the generating actor
-  const personaLines: string[] = [];
-  if (generatingActor.instructions) {
-    personaLines.push(generatingActor.instructions);
-  }
-  personaLines.push(
-    `You are ${generatingActor.name}. Reply as this participant only — do not speak for any other actor.`
-  );
-  const personaSystem = personaLines.join('\n\n');
-
-  // Prepend the persona as a system message. The underlying agent or chat
-  // will combine its own instructions/systemMessage with this one.
-  const messagesForModel: Array<{ role: string; content: string }> = [
-    { role: 'system', content: personaSystem },
-    ...history,
-  ];
-
-  let generationId: string;
-  let traceId: string;
-  let modelName = '';
-  let assistantContent = '';
-  let requiredAction: GenerationResult['requiredAction'] | undefined;
-
-  if (generatingActor.agentId) {
-    const agent = (
-      generatingActor as unknown as {
-        agent?: InstanceType<(typeof db)['Agent']>;
-      }
-    ).agent;
-    if (!agent) {
-      return 'agent_or_chat_not_found';
-    }
-
-    const result = await createGeneration({
-      agentId: agent.publicId,
-      messages: messagesForModel,
-      toolContext: args.toolContext,
-      signal: args.signal,
-    });
-
-    if (result === 'not_found') {
-      return 'agent_or_chat_not_found';
-    }
-    if (result === 'ai_provider_not_found') {
-      return 'ai_provider_not_found';
-    }
-    if (result instanceof ReadableStream) {
-      // Should not happen because we did not request streaming
-      return 'ai_provider_not_found';
-    }
-
-    generationId = result.id;
-    traceId = result.traceId;
-
-    if (result.status === 'requires_action') {
-      return {
-        status: 'requires_action',
-        generationId,
-        traceId,
-        requiredAction: result.requiredAction!,
-      };
-    }
-
-    assistantContent = result.output?.content ?? '';
-    modelName = result.output?.model ?? '';
-    requiredAction = undefined;
-  } else {
-    const chat = (
-      generatingActor as unknown as {
-        chat?: InstanceType<(typeof db)['Chat']>;
-      }
-    ).chat;
-    if (!chat) {
-      return 'agent_or_chat_not_found';
-    }
-
-    const result = await createChatCompletionForChat({
-      chatId: chat.publicId,
-      messages: messagesForModel as Array<{
-        role: 'system' | 'user' | 'assistant';
-        content: string;
-      }>,
-      model: args.model,
-    });
-
-    if (result === 'chat_not_found') {
-      return 'agent_or_chat_not_found';
-    }
-    if (result === 'ai_provider_not_found') {
-      return 'ai_provider_not_found';
-    }
-
-    // Chats don't expose generation/trace IDs — synthesize local ones.
-    generationId = '';
-    traceId = '';
-    assistantContent = result.content;
-    modelName = result.model;
-  }
-
-  // Persist the assistant reply as a new conversation message, inserting it
-  // at snapshotPosition + 1.  If new user messages were added during the LLM
-  // call they will have claimed later positions; the collision-shift logic in
-  // addConversationMessage will push them up by one to preserve causal order.
-  const persisted = await addConversationMessage({
-    conversationId: args.conversationId,
-    message: assistantContent,
-    actorId: args.actorId,
-    position: snapshotPosition + 1,
-  });
-
-  if (!persisted) {
-    return 'conversation_not_found';
-  }
-
-  // Suppress unused-variable lint warnings for branches that don't use it
-  void requiredAction;
-
-  resolveProjectPublicId({ projectId: conversation.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'conversations.message.generated',
-        projectId: conversation.projectId,
-        projectPublicId,
-        resourceType: 'conversation_message',
-        resourceId: persisted.documentId,
-        data: {
-          conversationId: args.conversationId,
-          actorId: args.actorId,
-          generationId,
-          traceId,
-        },
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
-
-  return {
-    status: 'completed',
-    content: assistantContent,
-    message: persisted,
-    generationId,
-    traceId,
-    model: modelName,
-  };
 };

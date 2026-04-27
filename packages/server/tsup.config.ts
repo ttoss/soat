@@ -1,5 +1,8 @@
 import { tsupConfig } from '@ttoss/config';
 
-export const tsup = tsupConfig({
-  entry: ['src/server.ts'],
-});
+export const tsup = {
+  ...tsupConfig({
+    entry: ['src/server.ts'],
+  }),
+  format: ['esm'],
+};

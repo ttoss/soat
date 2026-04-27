@@ -12,15 +12,18 @@ servers:
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: your-soat.com
         default: your-soat.com
   - url: http://{host}/api/v1
     description: Development (HTTP)
     variables:
       host:
         description: The hostname of your SOAT deployment
-        example: localhost:5047
         default: localhost:5047
+tags:
+  - name: Users
+    description: Manage users
+  - name: User Policies
+    description: Manage user policies
 paths:
   /users:
     get:
@@ -118,6 +121,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Users
+      summary: Delete a user by ID
+      description: Deletes a specific user
+      operationId: deleteUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: string
+            example: usr_V1StGXR8Z5jdHi6B
+      responses:
+        '204':
+          description: User deleted successfully
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /users/bootstrap:
     post:
       tags:
@@ -161,7 +193,141 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /users/login:
+    post:
+      tags:
+        - Users
+      summary: Login user
+      description: Authenticates a user and returns a JWT token
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  example: admin
+                password:
+                  type: string
+                  format: password
+                  example: supersecret
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /users/{userId}/policies:
+    get:
+      tags:
+        - Users
+      summary: Get policies attached to a user
+      description: Returns the list of policies attached to a user. Requires admin role.
+      operationId: getUserPolicies
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: User public ID (usr_ prefix)
+          schema:
+            type: string
+            example: usr_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: List of policies attached to the user
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      example: pol_V1StGXR8Z5jdHi6B
+                    name:
+                      type: string
+                    description:
+                      type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (non-admin user)
+        '404':
+          description: User not found
+    put:
+      tags:
+        - Users
+      summary: Attach policies to a user
+      description: Replaces the user's policy list with the provided policy IDs. Requires admin role.
+      operationId: attachUserPolicies
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: User public ID (usr_ prefix)
+          schema:
+            type: string
+            example: usr_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - policy_ids
+              properties:
+                policy_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: List of policy public IDs to attach (replaces existing)
+                  example: ['pol_V1StGXR8Z5jdHi6B']
+      responses:
+        '204':
+          description: Policies attached successfully
+        '400':
+          description: Bad request (policy_ids must be an array)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (non-admin user)
+        '404':
+          description: User or policy not found
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Bearer token for authentication
   schemas:
     UserRecord:
       type: object
@@ -185,6 +351,24 @@ components:
           type: string
           format: date-time
           example: '2024-01-01T00:00:00.000Z'
+    LoginResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public user ID (usr_ prefix)
+          example: usr_V1StGXR8Z5jdHi6B
+        username:
+          type: string
+          example: admin
+        role:
+          type: string
+          enum: [admin, user]
+          example: admin
+        token:
+          type: string
+          description: JWT bearer token
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
     ErrorResponse:
       type: object
       properties:

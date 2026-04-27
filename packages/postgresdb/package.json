@@ -12,6 +12,8 @@
   },
   "scripts": {
     "build": "tsup",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
     "sync": "ttoss-postgresdb sync",
     "db-dev:start": "docker compose -f docker-compose.dev.yml up -d",
     "db-dev:stop": "docker compose -f docker-compose.dev.yml down",
