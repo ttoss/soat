@@ -711,7 +711,7 @@ describe('MCP tools - happy path', () => {
     const result = parseResult(res);
     expect(result.id).toMatch(/^pol_/);
     expect(result.name).toBe('MCP Test Policy');
-    expect(result.permissions).toContain('files:GetFile');
+    expect(result.document.statement[0].action).toContain('files:GetFile');
     mcpPolicyId = result.id;
   });
 
@@ -752,7 +752,7 @@ describe('MCP tools - happy path', () => {
     const result = parseResult(res);
     expect(result.id).toBe(mcpPolicyId);
     expect(result.name).toBe('MCP Updated Policy');
-    expect(result.permissions).toContain('files:ListFiles');
+    expect(result.document.statement[0].action).toContain('files:ListFiles');
   });
 
   // ── API Keys ──────────────────────────────────────────────────────────────

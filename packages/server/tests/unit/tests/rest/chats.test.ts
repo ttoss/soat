@@ -39,13 +39,20 @@ describe('Chats', () => {
     const policyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: [
-          'chats:CreateChat',
-          'chats:ListChats',
-          'chats:GetChat',
-          'chats:DeleteChat',
-          'chats:CreateChatCompletion',
-        ],
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: [
+                'chats:CreateChat',
+                'chats:ListChats',
+                'chats:GetChat',
+                'chats:DeleteChat',
+                'chats:CreateChatCompletion',
+              ],
+            },
+          ],
+        },
       });
     policyId = policyRes.body.id;
 

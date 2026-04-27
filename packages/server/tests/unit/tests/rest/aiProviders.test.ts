@@ -37,13 +37,20 @@ describe('AI Providers', () => {
     const policyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: [
-          'aiProviders:ListAiProviders',
-          'aiProviders:GetAiProvider',
-          'aiProviders:CreateAiProvider',
-          'aiProviders:UpdateAiProvider',
-          'aiProviders:DeleteAiProvider',
-        ],
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: [
+                'aiProviders:ListAiProviders',
+                'aiProviders:GetAiProvider',
+                'aiProviders:CreateAiProvider',
+                'aiProviders:UpdateAiProvider',
+                'aiProviders:DeleteAiProvider',
+              ],
+            },
+          ],
+        },
       });
     policyId = policyRes.body.id;
 

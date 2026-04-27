@@ -44,25 +44,7 @@ describe('Policies', () => {
   });
 
   describe('POST /api/v1/policies', () => {
-    test('admin can create a policy with shorthand permissions', async () => {
-      const response = await authenticatedTestClient(adminToken)
-        .post('/api/v1/policies')
-        .send({
-          name: 'Shorthand Policy',
-          permissions: ['files:GetFile'],
-          not_permissions: ['files:DeleteFile'],
-        });
-
-      expect(response.status).toBe(201);
-      expect(response.body.id).toMatch(/^pol_/);
-      expect(response.body.name).toBe('Shorthand Policy');
-      expect(response.body.permissions).toEqual(['files:GetFile']);
-      expect(response.body.not_permissions).toEqual(['files:DeleteFile']);
-      expect(response.body.created_at).toBeDefined();
-      expect(response.body.updated_at).toBeDefined();
-    });
-
-    test('admin can create a policy with full document', async () => {
+    test('admin can create a policy with document', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
         .send({
@@ -74,6 +56,10 @@ describe('Policies', () => {
                 action: ['files:GetFile'],
                 resource: ['*'],
               },
+              {
+                effect: 'Deny',
+                action: ['files:DeleteFile'],
+              },
             ],
           },
         });
@@ -81,13 +67,30 @@ describe('Policies', () => {
       expect(response.status).toBe(201);
       expect(response.body.id).toMatch(/^pol_/);
       expect(response.body.name).toBe('Full Doc Policy');
-      expect(response.body.permissions).toContain('files:GetFile');
+      expect(response.body.document.statement[0].action).toContain(
+        'files:GetFile'
+      );
+      expect(response.body.document.statement[1].action).toContain(
+        'files:DeleteFile'
+      );
+      expect(response.body.created_at).toBeDefined();
+      expect(response.body.updated_at).toBeDefined();
+    });
+
+    test('returns 400 when document is missing', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({ name: 'No Document Policy' });
+
+      expect(response.status).toBe(400);
     });
 
     test('unauthenticated request returns 401', async () => {
-      const response = await testClient
-        .post('/api/v1/policies')
-        .send({ permissions: ['files:GetFile'] });
+      const response = await testClient.post('/api/v1/policies').send({
+        document: {
+          statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+        },
+      });
 
       expect(response.status).toBe(401);
     });
@@ -95,7 +98,11 @@ describe('Policies', () => {
     test('non-admin user returns 403', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/policies')
-        .send({ permissions: ['files:GetFile'] });
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+          },
+        });
 
       expect(response.status).toBe(403);
     });
@@ -107,7 +114,12 @@ describe('Policies', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
-        .send({ name: 'Get Me', permissions: ['files:GetFile'] });
+        .send({
+          name: 'Get Me',
+          document: {
+            statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+          },
+        });
 
       policyId = res.body.id;
     });
@@ -120,7 +132,9 @@ describe('Policies', () => {
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(policyId);
       expect(response.body.name).toBe('Get Me');
-      expect(response.body.permissions).toEqual(['files:GetFile']);
+      expect(response.body.document.statement[0].action).toContain(
+        'files:GetFile'
+      );
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -152,7 +166,12 @@ describe('Policies', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
-        .send({ name: 'Update Me', permissions: ['files:GetFile'] });
+        .send({
+          name: 'Update Me',
+          document: {
+            statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+          },
+        });
 
       policyId = res.body.id;
     });
@@ -175,8 +194,12 @@ describe('Policies', () => {
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(policyId);
       expect(response.body.name).toBe('Updated Policy');
-      expect(response.body.permissions).toContain('files:GetFile');
-      expect(response.body.permissions).toContain('files:ListFiles');
+      expect(response.body.document.statement[0].action).toContain(
+        'files:GetFile'
+      );
+      expect(response.body.document.statement[0].action).toContain(
+        'files:ListFiles'
+      );
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -205,10 +228,16 @@ describe('Policies', () => {
   });
 
   describe('DELETE /api/v1/policies/:policyId', () => {
+    const sendDoc = () => ({
+      document: {
+        statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+      },
+    });
+
     test('admin can delete a policy', async () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
-        .send({ permissions: ['files:GetFile'] });
+        .send(sendDoc());
 
       const policyId = createRes.body.id;
 
@@ -226,7 +255,7 @@ describe('Policies', () => {
     test('unauthenticated request returns 401', async () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
-        .send({ permissions: ['files:GetFile'] });
+        .send(sendDoc());
 
       const response = await testClient.delete(
         `/api/v1/policies/${createRes.body.id}`
@@ -238,7 +267,7 @@ describe('Policies', () => {
     test('non-admin user returns 403', async () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
-        .send({ permissions: ['files:GetFile'] });
+        .send(sendDoc());
 
       const response = await authenticatedTestClient(userToken).delete(
         `/api/v1/policies/${createRes.body.id}`
@@ -262,7 +291,11 @@ describe('Policies', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
-        .send({ permissions: ['files:GetFile'] });
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+          },
+        });
 
       policyId = res.body.id;
     });
@@ -321,7 +354,12 @@ describe('Policies', () => {
 
       const policyRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
-        .send({ name: 'Target Policy', permissions: ['files:GetFile'] });
+        .send({
+          name: 'Target Policy',
+          document: {
+            statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+          },
+        });
 
       policyId = policyRes.body.id;
 
@@ -354,8 +392,7 @@ describe('Policies', () => {
       });
       expect(policy.id).toMatch(/^pol_/);
       expect(policy.name).toBe('Target Policy');
-      expect(policy.permissions).toBeDefined();
-      expect(policy.not_permissions).toBeDefined();
+      expect(policy.document).toBeDefined();
       expect(policy.created_at).toBeDefined();
     });
 

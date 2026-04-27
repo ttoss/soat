@@ -66,22 +66,34 @@ describe('Group 1: Setup - Admin creates project, user, and assigns permissions'
     const response = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: ['files:GetFile'],
-        not_permissions: ['files:DeleteFile'],
+        document: {
+          statement: [
+            { effect: 'Allow', action: ['files:GetFile'] },
+            { effect: 'Deny', action: ['files:DeleteFile'] },
+          ],
+        },
       });
 
     expect(response.status).toBe(201);
     expect(response.body.id).toBeDefined();
-    expect(response.body.permissions).toEqual(['files:GetFile']);
-    expect(response.body.not_permissions).toEqual(['files:DeleteFile']);
+    expect(response.body.document.statement[0].action).toEqual([
+      'files:GetFile',
+    ]);
+    expect(response.body.document.statement[1].action).toEqual([
+      'files:DeleteFile',
+    ]);
   });
 
   test('admin attaches policy to user', async () => {
     const policyResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: ['files:GetFile'],
-        not_permissions: ['files:DeleteFile'],
+        document: {
+          statement: [
+            { effect: 'Allow', action: ['files:GetFile'] },
+            { effect: 'Deny', action: ['files:DeleteFile'] },
+          ],
+        },
       });
 
     const policyId = policyResponse.body.id;
@@ -126,8 +138,12 @@ describe('Group 2: JWT Permissions - User can read but not delete file', () => {
     const policyResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: ['files:GetFile'],
-        not_permissions: ['files:DeleteFile'],
+        document: {
+          statement: [
+            { effect: 'Allow', action: ['files:GetFile'] },
+            { effect: 'Deny', action: ['files:DeleteFile'] },
+          ],
+        },
       });
 
     await authenticatedTestClient(adminToken)
@@ -200,8 +216,15 @@ describe('Group 3: API Key Permissions - Create key, assign permissions, test ac
     const userPolicyResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: ['files:GetFile', 'projects:GetProject'],
-        not_permissions: ['files:DeleteFile'],
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['files:GetFile', 'projects:GetProject'],
+            },
+            { effect: 'Deny', action: ['files:DeleteFile'] },
+          ],
+        },
       });
 
     await authenticatedTestClient(adminToken)
@@ -212,7 +235,11 @@ describe('Group 3: API Key Permissions - Create key, assign permissions, test ac
     const keyPolicyResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: ['files:GetFile', 'files:DeleteFile'],
+        document: {
+          statement: [
+            { effect: 'Allow', action: ['files:GetFile', 'files:DeleteFile'] },
+          ],
+        },
       });
 
     const apiKeyResponse = await authenticatedTestClient(userToken)
@@ -240,7 +267,11 @@ describe('Group 3: API Key Permissions - Create key, assign permissions, test ac
   test('user can create an API key for the project', async () => {
     const keyPolicyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
-      .send({ permissions: ['files:GetFile'] });
+      .send({
+        document: {
+          statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+        },
+      });
 
     const response = await authenticatedTestClient(userToken)
       .post('/api/v1/api-keys')
@@ -315,15 +346,19 @@ describe('Group 4: Two users in the same project with different policies', () =>
     const readPolicyResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: ['files:GetFile'],
-        not_permissions: [],
+        document: {
+          statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+        },
       });
 
     const editPolicyResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: ['files:GetFile', 'files:DeleteFile'],
-        not_permissions: [],
+        document: {
+          statement: [
+            { effect: 'Allow', action: ['files:GetFile', 'files:DeleteFile'] },
+          ],
+        },
       });
 
     await authenticatedTestClient(adminToken)
@@ -417,8 +452,11 @@ describe('Group 5: User with multiple API keys scoped to different permissions',
     const memberPolicyResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: ['files:GetFile', 'files:DeleteFile'],
-        not_permissions: [],
+        document: {
+          statement: [
+            { effect: 'Allow', action: ['files:GetFile', 'files:DeleteFile'] },
+          ],
+        },
       });
 
     await authenticatedTestClient(adminToken)
@@ -429,16 +467,18 @@ describe('Group 5: User with multiple API keys scoped to different permissions',
     const readKeyPolicyResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: ['files:GetFile'],
-        not_permissions: [],
+        document: {
+          statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+        },
       });
 
     // API key policy 2: delete-only
     const deleteKeyPolicyResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: ['files:DeleteFile'],
-        not_permissions: [],
+        document: {
+          statement: [{ effect: 'Allow', action: ['files:DeleteFile'] }],
+        },
       });
 
     const readKeyResponse = await authenticatedTestClient(userToken)
@@ -550,8 +590,9 @@ describe('Group 6: API key cannot access files in a different project', () => {
     const policyResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: ['files:GetFile'],
-        not_permissions: [],
+        document: {
+          statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+        },
       });
 
     await authenticatedTestClient(adminToken)
@@ -642,8 +683,9 @@ describe('Group 7: Policy with wildcard * grants all permissions', () => {
     const policyResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: ['*'],
-        not_permissions: [],
+        document: {
+          statement: [{ effect: 'Allow', action: ['*'] }],
+        },
       });
 
     await authenticatedTestClient(adminToken)
@@ -712,8 +754,9 @@ describe('Group 8: Policy with files:* grants all file-namespace permissions', (
     const policyResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: ['files:*'],
-        not_permissions: [],
+        document: {
+          statement: [{ effect: 'Allow', action: ['files:*'] }],
+        },
       });
 
     await authenticatedTestClient(adminToken)
@@ -782,8 +825,12 @@ describe('Group 9: notPermissions overrides permissions when action appears in b
     const policyResponse = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: ['files:GetFile', 'files:DeleteFile'],
-        not_permissions: ['files:DeleteFile'],
+        document: {
+          statement: [
+            { effect: 'Allow', action: ['files:GetFile', 'files:DeleteFile'] },
+            { effect: 'Deny', action: ['files:DeleteFile'] },
+          ],
+        },
       });
 
     await authenticatedTestClient(adminToken)

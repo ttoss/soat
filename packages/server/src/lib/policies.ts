@@ -3,29 +3,11 @@ import type { PolicyDocument } from './iam';
 import { validatePolicyDocument } from './iam';
 
 export const mapPolicy = (policy: InstanceType<(typeof db)['Policy']>) => {
-  const doc = policy.document as PolicyDocument | undefined;
-  const permissions =
-    doc?.statement
-      ?.filter((s) => {
-        return s.effect === 'Allow';
-      })
-      .flatMap((s) => {
-        return s.action;
-      }) ?? [];
-  const notPermissions =
-    doc?.statement
-      ?.filter((s) => {
-        return s.effect === 'Deny';
-      })
-      .flatMap((s) => {
-        return s.action;
-      }) ?? [];
   return {
     id: policy.publicId,
     name: policy.name,
     description: policy.description,
-    permissions,
-    notPermissions,
+    document: policy.document as PolicyDocument | undefined,
     createdAt: policy.createdAt,
     updatedAt: policy.updatedAt,
   };

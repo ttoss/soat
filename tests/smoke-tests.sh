@@ -82,7 +82,7 @@ echo "Project id: $PROJECT_PUBLIC_ID"
 # 3b. Policies module coverage
 echo "--- Policies coverage ---"
 POLICY_READ_RESP=$($SOAT_CLI create-policy \
-  --permissions '["files:GetFile"]' \
+  --document '{"statement":[{"effect":"Allow","action":["files:GetFile"]}]}' \
   --name smoke-read-policy)
 POLICY_READ_ID=$(echo "$POLICY_READ_RESP" | jq -r '.id')
 if [ -z "$POLICY_READ_ID" ] || [ "$POLICY_READ_ID" = "null" ]; then
@@ -92,7 +92,7 @@ if [ -z "$POLICY_READ_ID" ] || [ "$POLICY_READ_ID" = "null" ]; then
 fi
 
 POLICY_WRITE_RESP=$($SOAT_CLI create-policy \
-  --permissions '["files:PutFile"]' \
+  --document '{"statement":[{"effect":"Allow","action":["files:PutFile"]}]}' \
   --name smoke-write-policy)
 POLICY_WRITE_ID=$(echo "$POLICY_WRITE_RESP" | jq -r '.id')
 if [ -z "$POLICY_WRITE_ID" ] || [ "$POLICY_WRITE_ID" = "null" ]; then

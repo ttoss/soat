@@ -37,21 +37,28 @@ describe('Agents', () => {
     const policyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: [
-          'agents:CreateAgent',
-          'agents:ListAgents',
-          'agents:GetAgent',
-          'agents:UpdateAgent',
-          'agents:DeleteAgent',
-          'agents:CreateAgentGeneration',
-          'agents:CreateAgentTool',
-          'agents:ListAgentTools',
-          'agents:GetAgentTool',
-          'agents:UpdateAgentTool',
-          'agents:DeleteAgentTool',
-          'agents:ListAgentTraces',
-          'agents:GetAgentTrace',
-        ],
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: [
+                'agents:CreateAgent',
+                'agents:ListAgents',
+                'agents:GetAgent',
+                'agents:UpdateAgent',
+                'agents:DeleteAgent',
+                'agents:CreateAgentGeneration',
+                'agents:CreateAgentTool',
+                'agents:ListAgentTools',
+                'agents:GetAgentTool',
+                'agents:UpdateAgentTool',
+                'agents:DeleteAgentTool',
+                'agents:ListAgentTraces',
+                'agents:GetAgentTrace',
+              ],
+            },
+          ],
+        },
       });
     policyId = policyRes.body.id;
 

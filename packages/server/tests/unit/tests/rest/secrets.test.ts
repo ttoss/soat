@@ -36,13 +36,20 @@ describe('Secrets', () => {
     const policyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: [
-          'secrets:ListSecrets',
-          'secrets:GetSecret',
-          'secrets:CreateSecret',
-          'secrets:UpdateSecret',
-          'secrets:DeleteSecret',
-        ],
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: [
+                'secrets:ListSecrets',
+                'secrets:GetSecret',
+                'secrets:CreateSecret',
+                'secrets:UpdateSecret',
+                'secrets:DeleteSecret',
+              ],
+            },
+          ],
+        },
       });
     policyId = policyRes.body.id;
 

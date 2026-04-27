@@ -40,32 +40,22 @@ policiesRouter.post('/policies', async (ctx: Context) => {
     return;
   }
 
-  const { name, description, permissions, notPermissions, document } = ctx
-    .request.body as {
+  const { name, description, document } = ctx.request.body as {
     name?: string;
     description?: string;
-    permissions?: string[];
-    notPermissions?: string[];
     document?: object;
   };
 
-  const policyDocument: PolicyDocument = document
-    ? (document as PolicyDocument)
-    : {
-        statement: [
-          ...(permissions?.length
-            ? [{ effect: 'Allow' as const, action: permissions }]
-            : []),
-          ...(notPermissions?.length
-            ? [{ effect: 'Deny' as const, action: notPermissions }]
-            : []),
-        ],
-      };
+  if (!document) {
+    ctx.status = 400;
+    ctx.body = { error: 'document is required' };
+    return;
+  }
 
   const result = await createPolicy({
     name,
     description,
-    document: policyDocument,
+    document: document as PolicyDocument,
   });
 
   if ('invalid' in result) {

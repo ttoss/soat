@@ -103,7 +103,13 @@ describe('Projects', () => {
 
         const listPolicyRes = await authenticatedTestClient(adminToken)
           .post('/api/v1/policies')
-          .send({ permissions: ['projects:ListProjects'] });
+          .send({
+            document: {
+              statement: [
+                { effect: 'Allow', action: ['projects:ListProjects'] },
+              ],
+            },
+          });
 
         await authenticatedTestClient(adminToken)
           .put(`/api/v1/users/${userId}/policies`)
@@ -176,7 +182,11 @@ describe('Projects', () => {
     test('user with projects:GetProject policy can get a project', async () => {
       const policyRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
-        .send({ permissions: ['projects:GetProject'] });
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['projects:GetProject'] }],
+          },
+        });
 
       await authenticatedTestClient(adminToken)
         .put(`/api/v1/users/${userId}/policies`)
