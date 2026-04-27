@@ -1,14 +1,19 @@
+/* eslint-disable no-console */
 import input from '@inquirer/input';
 import password from '@inquirer/password';
+import * as sdk from '@soat/sdk';
 import { program } from 'commander';
+
 import pkg from '../package.json' with { type: 'json' };
 import { resolveClient, writeProfile } from './config.js';
 import { routes } from './generated/routes.js';
-import * as sdk from '@soat/sdk';
 
 /** Convert kebab-case flag name to camelCase key (e.g. actor-id → actorId). */
-const kebabToCamel = (s: string) =>
-  s.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+const kebabToCamel = (s: string) => {
+  return s.replace(/-([a-z])/g, (_, c: string) => {
+    return c.toUpperCase();
+  });
+};
 
 /** Parse unknown args like --foo bar --baz 1 into a flat Record. */
 const parseUnknown = (args: string[]): Record<string, string> => {
@@ -29,6 +34,33 @@ const parseUnknown = (args: string[]): Record<string, string> => {
   return result;
 };
 
+/** Normalize symbol names to compare exports across acronym casing differences. */
+const normalizeSymbol = (name: string) => {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+};
+
+/** Resolve SDK service exports even when generated names differ by acronym casing. */
+const resolveServiceClass = (serviceClassName: string) => {
+  const sdkExports = sdk as Record<string, unknown>;
+
+  const exactMatch = sdkExports[serviceClassName];
+  if (exactMatch) return exactMatch;
+
+  const normalizedTarget = normalizeSymbol(serviceClassName);
+
+  const fuzzyMatches = Object.entries(sdkExports).filter(
+    ([exportName, value]) => {
+      return Boolean(value) && normalizeSymbol(exportName) === normalizedTarget;
+    }
+  );
+
+  if (fuzzyMatches.length === 1) {
+    return fuzzyMatches[0][1];
+  }
+
+  return undefined;
+};
+
 program
   .name('soat')
   .description('SOAT CLI')
@@ -42,9 +74,13 @@ program
   .description('Save credentials to a named profile (~/.soat/config.json)')
   .option('-p, --profile <name>', 'profile name', 'default')
   .action(async (opts) => {
-    const baseUrl = await input({ message: 'Base URL:', default: 'https://api.soat.dev' });
+    const baseUrl = await input({
+      message: 'Base URL:',
+      default: 'https://api.soat.dev',
+    });
     const token = await password({ message: 'Token (hidden):' });
     writeProfile(opts.profile, { baseUrl, token });
+
     console.log(`Profile "${opts.profile}" saved.`);
   });
 
@@ -54,7 +90,11 @@ program
   .command('list-commands')
   .description('List all available API commands')
   .action(() => {
-    const pad = Math.max(...Object.keys(routes).map((k) => k.length));
+    const pad = Math.max(
+      ...Object.keys(routes).map((k) => {
+        return k.length;
+      })
+    );
     for (const [cmd, r] of Object.entries(routes).sort()) {
       console.log(`  ${cmd.padEnd(pad)}  ${r.serviceClass}.${r.operationId}`);
     }
@@ -66,6 +106,7 @@ program
   .argument('[command]', 'API command in kebab-case (e.g. list-actors)')
   .argument('[args...]')
   .allowUnknownOption()
+  // eslint-disable-next-line complexity
   .action(async (commandName) => {
     if (!commandName) {
       program.help();
@@ -101,18 +142,21 @@ program
       }
     }
 
-    const profileOpt = flags['profile'] ?? program.opts<{ profile?: string }>().profile;
+    const profileOpt =
+      flags['profile'] ?? program.opts<{ profile?: string }>().profile;
     const client = resolveClient(profileOpt);
 
-    const serviceClass = (sdk as Record<string, Record<string, (opts: unknown) => Promise<{ data?: unknown; error?: unknown }>>>)[route.serviceClass];
+    const serviceClass = resolveServiceClass(route.serviceClass);
     if (!serviceClass) {
       console.error(`SDK class "${route.serviceClass}" not found.`);
       process.exit(1);
     }
 
-    const method = serviceClass[route.operationId];
+    const method = (serviceClass as Record<string, unknown>)[route.operationId];
     if (typeof method !== 'function') {
-      console.error(`Method "${route.operationId}" not found on ${route.serviceClass}.`);
+      console.error(
+        `Method "${route.operationId}" not found on ${route.serviceClass}.`
+      );
       process.exit(1);
     }
 

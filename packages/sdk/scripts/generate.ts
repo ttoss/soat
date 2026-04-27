@@ -103,7 +103,7 @@ const main = async () => {
   console.log(`Merged spec written to: ${MERGED_SPEC_FILE}`);
 
   try {
-    execSync('node_modules/.bin/openapi-ts --file openapi-ts.config.ts', {
+    execSync('pnpm exec openapi-ts --file openapi-ts.config.ts', {
       cwd: SDK_ROOT,
       stdio: 'inherit',
     });
