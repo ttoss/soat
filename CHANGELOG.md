@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.4.1](https://github.com/ttoss/soat/compare/v0.4.0...v0.4.1) (2026-04-27)
+
+### Bug Fixes
+
+* npm publish ([a48e3ed](https://github.com/ttoss/soat/commit/a48e3ed81a266b0d139230055fe02f063504901c))
+
 # [0.4.0](https://github.com/ttoss/soat/compare/v0.3.4...v0.4.0) (2026-04-27)
 
 ### Bug Fixes
