@@ -922,4 +922,98 @@ describe('Sessions', () => {
       expect(response.body).toBeDefined();
     });
   });
+
+  // ── Generate - requires_action ────────────────────────────────────────────
+
+  describe('POST /api/v1/agents/:agentId/sessions/:sessionId/generate - requires_action', () => {
+    let sessionId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'Requires Action Test' });
+      sessionId = res.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .send({ message: 'Use a tool' });
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    test('returns requires_action when generation needs tool outputs', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_req_action_01',
+        traceId: 'trc_req_action_01',
+        status: 'requires_action',
+        requiredAction: {
+          type: 'submit_tool_outputs' as const,
+          toolCalls: [
+            {
+              id: 'tc_req_001',
+              toolName: 'get_weather',
+              args: { location: 'Paris' },
+            },
+          ],
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${sessionId}/generate`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('requires_action');
+      expect(response.body.generation_id).toBe('gen_req_action_01');
+      expect(response.body.required_action).toBeDefined();
+    });
+  });
+
+  // ── Tool Outputs - execution paths ────────────────────────────────────────
+
+  describe('POST /api/v1/agents/:agentId/sessions/:sessionId/tool-outputs - execution', () => {
+    let sessionId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'Tool Outputs Exec Test' });
+      sessionId = res.body.id;
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    test('returns 404 when generationId does not exist in pending generations', async () => {
+      // submitToolOutputs checks pendingGenerations map; an unknown generationId
+      // returns 'generation_not_found', exercising submitSessionToolOutputs and
+      // fetchSessionAndConversationActors.
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/tool-outputs`)
+        .send({
+          generationId: 'gen_nonexistent_tooltest_001',
+          toolOutputs: [{ toolCallId: 'tc_1', output: 'some result' }],
+        });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toMatch(/generation/i);
+    });
+
+    test('returns 404 when session does not exist', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/sessions/sess_doesnotexist000/tool-outputs`
+        )
+        .send({
+          generationId: 'gen_any_001',
+          toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }],
+        });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBeDefined();
+    });
+  });
 });

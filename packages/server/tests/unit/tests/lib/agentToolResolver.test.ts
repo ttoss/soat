@@ -4,6 +4,7 @@ import {
   resolveAgentTools,
   resolveUrlPathParams,
 } from 'src/lib/agentToolResolver';
+
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('resolveAgentTools', () => {
@@ -99,7 +100,7 @@ describe('resolveAgentTools', () => {
     const httpTool = tools.myHttpTool;
 
     if ('execute' in httpTool && typeof httpTool.execute === 'function') {
-      await httpTool.execute({ query: 'test', page: 1 });
+      await httpTool.execute({ query: 'test', page: 1 }, {} as never);
     }
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -135,7 +136,7 @@ describe('resolveAgentTools', () => {
     const postTool = tools.myPostHttpTool;
 
     if ('execute' in postTool && typeof postTool.execute === 'function') {
-      await postTool.execute({ name: 'test item' });
+      await postTool.execute({ name: 'test item' }, {} as never);
     }
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -431,7 +432,10 @@ describe('resolveAgentTools - mcp and soat types', () => {
       'execute' in tools.toolWithExistingQuery &&
       typeof tools.toolWithExistingQuery.execute === 'function'
     ) {
-      await tools.toolWithExistingQuery.execute({ filter: 'active' });
+      await tools.toolWithExistingQuery.execute(
+        { filter: 'active' },
+        {} as never
+      );
     }
 
     expect(fetchMock).toHaveBeenCalledWith(

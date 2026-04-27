@@ -281,6 +281,14 @@ describe('Chats', () => {
   });
 
   describe('POST /api/v1/chats/completions', () => {
+    beforeEach(() => {
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .post('/api/v1/chats/completions')
@@ -396,6 +404,262 @@ describe('Chats', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.object).toBe('chat.completion');
+    });
+  });
+
+  // ── Streaming /chats/:chatId/completions ────────────────────────────────
+
+  describe('POST /api/v1/chats/:chatId/completions - streaming (real lib)', () => {
+    let chatId: string;
+    let chatWithSystemId: string;
+
+    beforeEach(() => {
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats')
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
+      chatId = res.body.id;
+
+      // Chat with a pre-configured system message to exercise buildChatFinalMessages
+      const res2 = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          system_message: 'You are a helpful assistant.',
+        });
+      chatWithSystemId = res2.body.id;
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient
+        .post(`/api/v1/chats/${chatId}/completions`)
+        .send({ messages: [{ role: 'user', content: 'Hello' }], stream: true });
+
+      expect(response.status).toBe(401);
+    });
+
+    test('streams SSE response for existing chat', async () => {
+      // Ollama is not running in tests; the stream will fail during iteration,
+      // but the SSE response headers are set and the function body is fully exercised.
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/chats/${chatId}/completions`)
+        .send({ messages: [{ role: 'user', content: 'Hello' }], stream: true });
+
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toMatch(/text\/event-stream/);
+      expect(response.text).toContain('data:');
+    });
+
+    test('sends chat_not_found error via SSE for unknown chatId', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats/cht_doesnotexist0000/completions')
+        .send({ messages: [{ role: 'user', content: 'Hello' }], stream: true });
+
+      expect(response.status).toBe(200);
+      expect(response.text).toContain('chat_not_found');
+    });
+
+    test('streams SSE response when chat has a system message', async () => {
+      // Exercises the system-message branch inside streamChatCompletionForChat
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/chats/${chatWithSystemId}/completions`)
+        .send({ messages: [{ role: 'user', content: 'Hello' }], stream: true });
+
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toMatch(/text\/event-stream/);
+    });
+
+    test('streams SSE response when messages include a system message', async () => {
+      // Exercises the systemFromRequest branch inside streamChatCompletionForChat
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/chats/${chatId}/completions`)
+        .send({
+          messages: [
+            { role: 'system', content: 'Be concise.' },
+            { role: 'user', content: 'Hello' },
+          ],
+          stream: true,
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toMatch(/text\/event-stream/);
+    });
+  });
+
+  // ── Streaming /chats/completions ────────────────────────────────────────
+
+  describe('POST /api/v1/chats/completions - streaming (real lib)', () => {
+    beforeEach(() => {
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient.post('/api/v1/chats/completions').send({
+        ai_provider_id: aiProviderId,
+        messages: [{ role: 'user', content: 'Hello' }],
+        stream: true,
+      });
+
+      expect(response.status).toBe(401);
+    });
+
+    test('streams SSE response with ai_provider_id', async () => {
+      // resolveModel + buildModel + getProviderFactory are exercised for the Ollama provider.
+      // The stream iteration fails (Ollama not running), caught by the error handler.
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats/completions')
+        .send({
+          ai_provider_id: aiProviderId,
+          messages: [{ role: 'user', content: 'Hello' }],
+          stream: true,
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toMatch(/text\/event-stream/);
+      expect(response.text).toContain('data:');
+    });
+
+    test('streams SSE response without ai_provider_id (ollama fallback)', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats/completions')
+        .send({
+          messages: [{ role: 'user', content: 'Hello' }],
+          stream: true,
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toMatch(/text\/event-stream/);
+    });
+  });
+
+  // ── Real createChatCompletionForChat execution (admin) ──────────────────
+
+  describe('POST /api/v1/chats/:chatId/completions - real lib paths (admin)', () => {
+    let realChatId: string;
+    let openAiProviderId: string;
+
+    beforeEach(() => {
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    beforeAll(async () => {
+      const chatRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/chats')
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
+      realChatId = chatRes.body.id;
+
+      // openai provider to exercise getProviderFactory openai branch
+      const aiRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'OpenAI Path Provider',
+          provider: 'openai',
+          default_model: 'gpt-4o',
+        });
+      openAiProviderId = aiRes.body.id;
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    test('non-streaming completions with ollama provider (reaches generateText, propagates AI error status)', async () => {
+      // createChatCompletionForChat runs getChatSystemMessage + buildChatFinalMessages before
+      // calling generateText. generateText throws because ollama falls back to OpenAI
+      // (no baseUrl set), and OpenAI returns 401 for the 'ollama' api key. Koa propagates
+      // that statusCode as the HTTP response status.
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/chats/${realChatId}/completions`)
+        .send({ messages: [{ role: 'user', content: 'Hello' }] });
+
+      // Not 200/201 — execution reached createChatCompletionForChat which then threw
+      expect(res.status).not.toBe(200);
+      expect(res.status).not.toBe(404);
+    });
+
+    test('openai provider exercises getProviderFactory openai branch and buildModel factory-true branch (streaming)', async () => {
+      // isOpenAILikeProvider('openai') = true → factory is non-null → buildModel uses factory.
+      // OpenAI API fails (no valid key) → error written to SSE stream.
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/chats/completions')
+        .send({
+          ai_provider_id: openAiProviderId,
+          messages: [{ role: 'user', content: 'Hi' }],
+          stream: true,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.text).toContain('data:');
+    });
+  });
+
+  // ── POST /chats/:chatId/actors ──────────────────────────────────────────
+
+  describe('POST /api/v1/chats/:chatId/actors', () => {
+    let chatId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats')
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
+      chatId = res.body.id;
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient
+        .post(`/api/v1/chats/${chatId}/actors`)
+        .send({ name: 'Test Actor' });
+
+      expect(response.status).toBe(401);
+    });
+
+    test('non-existent chatId returns 404', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats/cht_doesnotexist0000/actors')
+        .send({ name: 'Test Actor' });
+
+      expect(response.status).toBe(404);
+    });
+
+    test('missing name returns 400', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/chats/${chatId}/actors`)
+        .send({});
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
+    });
+
+    test('user without actors:CreateActor permission returns 403', async () => {
+      // userToken only has chat permissions, not actors:CreateActor
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/chats/${chatId}/actors`)
+        .send({ name: 'Test Actor' });
+
+      expect(response.status).toBe(403);
+    });
+
+    test('admin can create an actor for a chat', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/chats/${chatId}/actors`)
+        .send({ name: 'Chat Test Actor' });
+
+      expect(response.status).toBe(201);
+      expect(response.body.id).toBeDefined();
+      expect(response.body.name).toBe('Chat Test Actor');
     });
   });
 });

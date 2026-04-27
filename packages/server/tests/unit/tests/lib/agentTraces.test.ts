@@ -93,8 +93,16 @@ describe('listTraces', () => {
     });
     const result = await listTraces({ projectIds: [1] });
     expect(result).toHaveLength(2);
-    expect(result.map((t) => t.id)).toContain('trace-1');
-    expect(result.map((t) => t.id)).toContain('trace-2');
+    expect(
+      result.map((t) => {
+        return t.id;
+      })
+    ).toContain('trace-1');
+    expect(
+      result.map((t) => {
+        return t.id;
+      })
+    ).toContain('trace-2');
   });
 });
 

@@ -1,10 +1,11 @@
 import { emitEvent } from 'src/lib/eventBus';
+
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('webhookDispatcher', () => {
   let adminToken: string;
   let projectId: string;
-  let projectInternalId: number;
+  let projectInternalId: number | undefined;
   let fetchMock: jest.SpyInstance;
 
   beforeAll(async () => {
@@ -53,7 +54,9 @@ describe('webhookDispatcher', () => {
     });
 
     // allow the async delivery to run
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await new Promise((resolve) => {
+      return setTimeout(resolve, 200);
+    });
 
     const webhookCalls = fetchMock.mock.calls.filter(([url]) => {
       return (
@@ -83,7 +86,9 @@ describe('webhookDispatcher', () => {
       timestamp: new Date().toISOString(),
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await new Promise((resolve) => {
+      return setTimeout(resolve, 200);
+    });
     // No assertion needed — we're verifying the dispatch doesn't throw
   });
 
@@ -106,7 +111,9 @@ describe('webhookDispatcher', () => {
       timestamp: new Date().toISOString(),
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await new Promise((resolve) => {
+      return setTimeout(resolve, 200);
+    });
     // No assertion needed — we're verifying the dispatch doesn't throw
   });
 
@@ -131,7 +138,9 @@ describe('webhookDispatcher', () => {
       timestamp: new Date().toISOString(),
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await new Promise((resolve) => {
+      return setTimeout(resolve, 200);
+    });
 
     const nomatchCalls = fetchMock.mock.calls.filter(([url]) => {
       return (
