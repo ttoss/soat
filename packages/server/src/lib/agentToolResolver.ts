@@ -353,6 +353,40 @@ type AgentToolRow = {
   actions: string[] | null;
 };
 
+const resolveToolByType = async (
+  typedTool: AgentToolRow,
+  args: {
+    boundaryPolicy?: unknown;
+    authHeader?: string;
+    toolContext?: Record<string, string>;
+  }
+): Promise<Record<string, Tool>> => {
+  switch (typedTool.type) {
+    case 'http':
+      return { [typedTool.name]: resolveHttpTool(typedTool, args.toolContext) };
+    case 'client':
+      return { [typedTool.name]: resolveClientTool(typedTool) };
+    case 'mcp': {
+      if (!typedTool.mcp?.url) return {};
+      try {
+        return await resolveMcpTools(
+          typedTool as {
+            mcp: { url: string; headers?: Record<string, string> };
+          },
+          args.toolContext
+        );
+      } catch {
+        // Network errors resolving MCP tools should not abort entire resolution
+        return {};
+      }
+    }
+    case 'soat':
+      return resolveSoatTools(typedTool, args);
+    default:
+      return {};
+  }
+};
+
 export const resolveAgentTools = async (args: {
   toolIds: string[];
   projectIds?: number[];
@@ -372,39 +406,7 @@ export const resolveAgentTools = async (args: {
     if (!agentTool) continue;
 
     const typedTool = agentTool as unknown as AgentToolRow;
-
-    switch (typedTool.type) {
-      case 'http':
-        resolvedTools[typedTool.name] = resolveHttpTool(
-          typedTool,
-          args.toolContext
-        );
-        break;
-      case 'client':
-        resolvedTools[typedTool.name] = resolveClientTool(typedTool);
-        break;
-      case 'mcp':
-        if (!typedTool.mcp?.url) break;
-        try {
-          Object.assign(
-            resolvedTools,
-            await resolveMcpTools(
-              typedTool as {
-                mcp: { url: string; headers?: Record<string, string> };
-              },
-              args.toolContext
-            )
-          );
-        } catch {
-          // Network errors resolving MCP tools should not abort entire resolution
-        }
-        break;
-      case 'soat':
-        Object.assign(resolvedTools, resolveSoatTools(typedTool, args));
-        break;
-      default:
-        break;
-    }
+    Object.assign(resolvedTools, await resolveToolByType(typedTool, args));
   }
 
   return resolvedTools;
