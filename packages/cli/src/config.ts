@@ -43,6 +43,14 @@ export const resolveClient = (
     );
   }
 
+  if (envBaseUrl && !envToken) {
+    return createClient(
+      createConfig({
+        baseUrl: envBaseUrl,
+      })
+    );
+  }
+
   // 2. Profile from arg → env → 'default'
   const name = profileName ?? process.env['SOAT_PROFILE'] ?? 'default';
   const config = readConfig();

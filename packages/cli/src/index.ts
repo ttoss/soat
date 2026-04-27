@@ -34,6 +34,27 @@ const parseUnknown = (args: string[]): Record<string, string> => {
   return result;
 };
 
+const parseFlagValue = (value: string): unknown => {
+  const trimmed = value.trim();
+
+  if (
+    trimmed.startsWith('{') ||
+    trimmed.startsWith('[') ||
+    trimmed === 'true' ||
+    trimmed === 'false' ||
+    trimmed === 'null' ||
+    /^-?\d+(\.\d+)?$/.test(trimmed)
+  ) {
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return value;
+    }
+  }
+
+  return value;
+};
+
 /** Normalize symbol names to compare exports across acronym casing differences. */
 const normalizeSymbol = (name: string) => {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -76,7 +97,6 @@ program
   .action(async (opts) => {
     const baseUrl = await input({
       message: 'Base URL:',
-      default: 'https://api.soat.dev',
     });
     const token = await password({ message: 'Token (hidden):' });
     writeProfile(opts.profile, { baseUrl, token });
@@ -126,19 +146,20 @@ program
     const flags = parseUnknown(rawArgs);
 
     // Split flags into path / query / body
-    const pathArgs: Record<string, string> = {};
-    const queryArgs: Record<string, string> = {};
-    const bodyArgs: Record<string, string> = {};
+    const pathArgs: Record<string, unknown> = {};
+    const queryArgs: Record<string, unknown> = {};
+    const bodyArgs: Record<string, unknown> = {};
 
     for (const [flagKey, val] of Object.entries(flags)) {
       if (flagKey === 'profile') continue;
       const camel = kebabToCamel(flagKey);
+      const parsedValue = parseFlagValue(val);
       if (route.pathParams.includes(flagKey)) {
-        pathArgs[camel] = val;
+        pathArgs[camel] = parsedValue;
       } else if (route.queryParams.includes(flagKey)) {
-        queryArgs[camel] = val;
+        queryArgs[camel] = parsedValue;
       } else {
-        bodyArgs[camel] = val;
+        bodyArgs[camel] = parsedValue;
       }
     }
 
@@ -168,7 +189,20 @@ program
     const result = await method(callOpts);
 
     if (result.error) {
-      console.error(JSON.stringify(result.error, null, 2));
+      const status =
+        result.response && 'status' in result.response
+          ? result.response.status
+          : undefined;
+      console.error(
+        JSON.stringify(
+          {
+            status,
+            error: result.error,
+          },
+          null,
+          2
+        )
+      );
       process.exit(1);
     }
 

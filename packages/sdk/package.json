@@ -19,7 +19,8 @@
   },
   "scripts": {
     "build": "pnpm generate && tsup",
-    "generate": "tsx scripts/generate.ts"
+    "generate": "tsx scripts/generate.ts",
+    "release": "pnpm publish --no-git-checks --provenance"
   },
   "files": [
     "dist"

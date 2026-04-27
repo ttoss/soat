@@ -121,6 +121,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Users
+      summary: Delete a user by ID
+      description: Deletes a specific user
+      operationId: deleteUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: string
+            example: usr_V1StGXR8Z5jdHi6B
+      responses:
+        '204':
+          description: User deleted successfully
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /users/bootstrap:
     post:
       tags:
@@ -154,6 +183,49 @@ paths:
                 $ref: '#/components/schemas/UserRecord'
         '409':
           description: Users already exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /users/login:
+    post:
+      tags:
+        - Users
+      summary: Login user
+      description: Authenticates a user and returns a JWT token
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  example: admin
+                password:
+                  type: string
+                  format: password
+                  example: supersecret
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
           content:
             application/json:
               schema:
@@ -279,6 +351,24 @@ components:
           type: string
           format: date-time
           example: '2024-01-01T00:00:00.000Z'
+    LoginResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public user ID (usr_ prefix)
+          example: usr_V1StGXR8Z5jdHi6B
+        username:
+          type: string
+          example: admin
+        role:
+          type: string
+          enum: [admin, user]
+          example: admin
+        token:
+          type: string
+          description: JWT bearer token
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
     ErrorResponse:
       type: object
       properties:

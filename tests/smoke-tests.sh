@@ -4,6 +4,35 @@ set -e
 SERVER_URL="${SERVER_URL:-http://localhost:50477}"
 BASE_URL="$SERVER_URL/api/v1"
 
+# ── CLI setup ─────────────────────────────────────────────────────────────────
+# Set env vars consumed by the CLI (no profile / config file needed)
+# The SDK paths are relative to /api/v1 (per OpenAPI server URL)
+export SOAT_BASE_URL="$SERVER_URL/api/v1"
+SOAT_CLI="node /app/packages/cli/dist/esm/index.js"
+
+expect_cli_error_status() {
+  EXPECTED_STATUS="$1"
+  shift
+
+  set +e
+  CLI_OUTPUT=$($SOAT_CLI "$@" 2>&1)
+  CLI_EXIT=$?
+  set -e
+
+  if [ "$CLI_EXIT" -eq 0 ]; then
+    echo "ERROR: Expected command '$*' to fail with status $EXPECTED_STATUS, but it succeeded" >&2
+    echo "$CLI_OUTPUT" >&2
+    exit 1
+  fi
+
+  CLI_STATUS=$(printf '%s\n' "$CLI_OUTPUT" | jq -r '.status // empty' 2>/dev/null)
+  if [ "$CLI_STATUS" != "$EXPECTED_STATUS" ]; then
+    echo "ERROR: Expected command '$*' to fail with status $EXPECTED_STATUS, got '$CLI_STATUS'" >&2
+    echo "$CLI_OUTPUT" >&2
+    exit 1
+  fi
+}
+
 echo "=== Smoke test started ==="
 
 # Remove unescaped control characters that may appear in LLM-generated text
@@ -14,20 +43,24 @@ sanitize_json() {
 
 # 1. Bootstrap admin user (201 on first run, 409 if already exists)
 echo "--- Bootstrapping admin user ---"
-BOOTSTRAP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/users/bootstrap" \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"Admin1234!"}')
-if [ "$BOOTSTRAP_STATUS" != "201" ] && [ "$BOOTSTRAP_STATUS" != "409" ]; then
-  echo "ERROR: Bootstrap returned $BOOTSTRAP_STATUS" >&2
+set +e
+BOOTSTRAP_RESP=$($SOAT_CLI bootstrap-user --username admin --password 'Admin1234!' 2>&1)
+BOOTSTRAP_EXIT=$?
+set -e
+if [ "$BOOTSTRAP_EXIT" -eq 0 ]; then
+  BOOTSTRAP_STATUS=201
+elif printf '%s\n' "$BOOTSTRAP_RESP" | jq -e '.status == 409' >/dev/null 2>&1; then
+  BOOTSTRAP_STATUS=409
+else
+  echo "ERROR: Bootstrap failed" >&2
+  echo "$BOOTSTRAP_RESP" >&2
   exit 1
 fi
 echo "Bootstrap status: $BOOTSTRAP_STATUS"
 
 # 2. Login to get JWT token
 echo "--- Logging in ---"
-LOGIN_RESP=$(curl -sf -X POST "$BASE_URL/users/login" \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"Admin1234!"}')
+LOGIN_RESP=$($SOAT_CLI login-user --username admin --password 'Admin1234!')
 TOKEN=$(echo "$LOGIN_RESP" | jq -r '.token')
 ADMIN_USER_ID=$(echo "$LOGIN_RESP" | jq -r '.id')
 if [ -z "$ADMIN_USER_ID" ] || [ "$ADMIN_USER_ID" = "null" ]; then
@@ -37,12 +70,7 @@ if [ -z "$ADMIN_USER_ID" ] || [ "$ADMIN_USER_ID" = "null" ]; then
 fi
 echo "Token: $(echo "$TOKEN" | cut -c1-20)..."
 
-# ── CLI setup ─────────────────────────────────────────────────────────────────
-# Set env vars consumed by the CLI (no profile / config file needed)
-# The SDK paths are relative to /api/v1 (per OpenAPI server URL)
-export SOAT_BASE_URL="$SERVER_URL/api/v1"
 export SOAT_TOKEN="$TOKEN"
-SOAT_CLI="node /app/packages/cli/dist/esm/index.js"
 echo "CLI: $SOAT_CLI"
 
 # 3. Create a project
@@ -53,10 +81,9 @@ echo "Project id: $PROJECT_PUBLIC_ID"
 
 # 3b. Policies module coverage
 echo "--- Policies coverage ---"
-POLICY_READ_RESP=$(curl -sf -X POST "$BASE_URL/policies" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{\"permissions\":[\"files:GetFile\"],\"name\":\"smoke-read-policy\"}")
+POLICY_READ_RESP=$($SOAT_CLI create-policy \
+  --permissions '["files:GetFile"]' \
+  --name smoke-read-policy)
 POLICY_READ_ID=$(echo "$POLICY_READ_RESP" | jq -r '.id')
 if [ -z "$POLICY_READ_ID" ] || [ "$POLICY_READ_ID" = "null" ]; then
   echo "ERROR: Failed to create read policy" >&2
@@ -64,10 +91,9 @@ if [ -z "$POLICY_READ_ID" ] || [ "$POLICY_READ_ID" = "null" ]; then
   exit 1
 fi
 
-POLICY_WRITE_RESP=$(curl -sf -X POST "$BASE_URL/policies" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{\"permissions\":[\"files:PutFile\"],\"name\":\"smoke-write-policy\"}")
+POLICY_WRITE_RESP=$($SOAT_CLI create-policy \
+  --permissions '["files:PutFile"]' \
+  --name smoke-write-policy)
 POLICY_WRITE_ID=$(echo "$POLICY_WRITE_RESP" | jq -r '.id')
 if [ -z "$POLICY_WRITE_ID" ] || [ "$POLICY_WRITE_ID" = "null" ]; then
   echo "ERROR: Failed to create write policy" >&2
@@ -76,71 +102,49 @@ if [ -z "$POLICY_WRITE_ID" ] || [ "$POLICY_WRITE_ID" = "null" ]; then
 fi
 
 # List policies
-POLICY_LIST_STATUS=$(curl -s -o /tmp/policy_list.json -w "%{http_code}" "$BASE_URL/policies" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$POLICY_LIST_STATUS" != "200" ]; then
-  echo "ERROR: LIST policies returned $POLICY_LIST_STATUS, expected 200" >&2
-  cat /tmp/policy_list.json >&2
+POLICY_LIST_RESP=$($SOAT_CLI list-policies)
+if ! printf '%s\n' "$POLICY_LIST_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
+  echo "ERROR: LIST policies did not return an array" >&2
+  echo "$POLICY_LIST_RESP" >&2
   exit 1
 fi
 
 # Get policy
-POLICY_GET_STATUS=$(curl -s -o /tmp/policy_get.json -w "%{http_code}" "$BASE_URL/policies/$POLICY_READ_ID" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$POLICY_GET_STATUS" != "200" ]; then
-  echo "ERROR: GET policy returned $POLICY_GET_STATUS, expected 200" >&2
-  cat /tmp/policy_get.json >&2
-  exit 1
-fi
-POLICY_GET_ID=$(jq -r '.id' /tmp/policy_get.json)
+POLICY_GET_RESP=$($SOAT_CLI get-policy --policyId "$POLICY_READ_ID")
+POLICY_GET_ID=$(printf '%s\n' "$POLICY_GET_RESP" | jq -r '.id')
 if [ "$POLICY_GET_ID" != "$POLICY_READ_ID" ]; then
   echo "ERROR: GET policy returned mismatched id '$POLICY_GET_ID'" >&2
   exit 1
 fi
 
 # Update policy
-POLICY_UPDATE_STATUS=$(curl -s -o /tmp/policy_put.json -w "%{http_code}" -X PUT "$BASE_URL/policies/$POLICY_READ_ID" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{\"document\":{\"statement\":[{\"effect\":\"Allow\",\"action\":[\"files:GetFile\",\"files:ListFiles\"]}]},\"name\":\"smoke-read-policy-updated\"}")
-if [ "$POLICY_UPDATE_STATUS" != "200" ]; then
-  echo "ERROR: PUT policy returned $POLICY_UPDATE_STATUS, expected 200" >&2
-  cat /tmp/policy_put.json >&2
+POLICY_UPDATE_RESP=$($SOAT_CLI update-policy --policyId "$POLICY_READ_ID" \
+  --document '{"statement":[{"effect":"Allow","action":["files:GetFile","files:ListFiles"]}]}' \
+  --name smoke-read-policy-updated)
+if ! printf '%s\n' "$POLICY_UPDATE_RESP" | jq -e --arg id "$POLICY_READ_ID" '.id == $id' >/dev/null 2>&1; then
+  echo "ERROR: PUT policy did not return updated policy" >&2
+  echo "$POLICY_UPDATE_RESP" >&2
   exit 1
 fi
 
 # Attach policy to admin user
-ATTACH_POLICY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X PUT "$BASE_URL/users/$ADMIN_USER_ID/policies" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{\"policy_ids\":[\"$POLICY_READ_ID\",\"$POLICY_WRITE_ID\"]}")
-if [ "$ATTACH_POLICY_STATUS" != "204" ]; then
-  echo "ERROR: Attach policies to user returned $ATTACH_POLICY_STATUS, expected 204" >&2
-  exit 1
-fi
+$SOAT_CLI attach-user-policies --userId "$ADMIN_USER_ID" --policy_ids "[\"$POLICY_READ_ID\",\"$POLICY_WRITE_ID\"]"
 
 # Get user policies
-USER_POLICIES_STATUS=$(curl -s -o /tmp/user_policies.json -w "%{http_code}" "$BASE_URL/users/$ADMIN_USER_ID/policies" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$USER_POLICIES_STATUS" != "200" ]; then
-  echo "ERROR: GET user policies returned $USER_POLICIES_STATUS, expected 200" >&2
-  cat /tmp/user_policies.json >&2
+USER_POLICIES_RESP=$($SOAT_CLI get-user-policies --userId "$ADMIN_USER_ID")
+if ! printf '%s\n' "$USER_POLICIES_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
+  echo "ERROR: GET user policies did not return an array" >&2
+  echo "$USER_POLICIES_RESP" >&2
   exit 1
 fi
 echo "Policies coverage: OK"
 
 # 3c. API keys module coverage
 echo "--- API keys coverage ---"
-API_KEY_CREATE_STATUS=$(curl -s -o /tmp/api_key_create.json -w "%{http_code}" -X POST "$BASE_URL/api-keys" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{\"name\":\"smoke-api-key\",\"project_id\":\"$PROJECT_PUBLIC_ID\",\"policy_ids\":[\"$POLICY_READ_ID\"]}")
-if [ "$API_KEY_CREATE_STATUS" != "201" ]; then
-  echo "ERROR: CREATE api-key returned $API_KEY_CREATE_STATUS, expected 201" >&2
-  cat /tmp/api_key_create.json >&2
-  exit 1
-fi
-API_KEY_RESP=$(cat /tmp/api_key_create.json)
+API_KEY_RESP=$($SOAT_CLI create-api-key \
+  --name smoke-api-key \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --policy_ids "[\"$POLICY_READ_ID\"]")
 API_KEY_ID=$(echo "$API_KEY_RESP" | jq -r '.id')
 API_KEY_RAW=$(echo "$API_KEY_RESP" | jq -r '.key')
 if [ -z "$API_KEY_ID" ] || [ "$API_KEY_ID" = "null" ]; then
@@ -155,71 +159,41 @@ if [ -z "$API_KEY_RAW" ] || [ "$API_KEY_RAW" = "null" ]; then
 fi
 
 # GET api-key (key field must not appear)
-API_KEY_GET_STATUS=$(curl -s -o /tmp/api_key_get.json -w "%{http_code}" "$BASE_URL/api-keys/$API_KEY_ID" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$API_KEY_GET_STATUS" != "200" ]; then
-  echo "ERROR: GET api-key returned $API_KEY_GET_STATUS, expected 200" >&2
-  cat /tmp/api_key_get.json >&2
-  exit 1
-fi
-if jq -e '.key' /tmp/api_key_get.json >/dev/null 2>&1; then
+API_KEY_GET_RESP=$($SOAT_CLI get-api-key --id "$API_KEY_ID")
+if printf '%s\n' "$API_KEY_GET_RESP" | jq -e '.key' >/dev/null 2>&1; then
   echo "ERROR: key field must not appear in GET api-key response" >&2
   exit 1
 fi
 
 # UPDATE api-key
-API_KEY_UPDATE_STATUS=$(curl -s -o /tmp/api_key_put.json -w "%{http_code}" -X PUT "$BASE_URL/api-keys/$API_KEY_ID" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{\"name\":\"smoke-api-key-updated\",\"policy_ids\":[\"$POLICY_READ_ID\",\"$POLICY_WRITE_ID\"]}")
-if [ "$API_KEY_UPDATE_STATUS" != "200" ]; then
-  echo "ERROR: PUT api-key returned $API_KEY_UPDATE_STATUS, expected 200" >&2
-  cat /tmp/api_key_put.json >&2
-  exit 1
-fi
-API_KEY_UPDATED_NAME=$(jq -r '.name' /tmp/api_key_put.json)
+API_KEY_PUT_RESP=$($SOAT_CLI update-api-key --id "$API_KEY_ID" \
+  --name smoke-api-key-updated \
+  --policy_ids "[\"$POLICY_READ_ID\",\"$POLICY_WRITE_ID\"]")
+API_KEY_UPDATED_NAME=$(printf '%s\n' "$API_KEY_PUT_RESP" | jq -r '.name')
 if [ "$API_KEY_UPDATED_NAME" != "smoke-api-key-updated" ]; then
   echo "ERROR: PUT api-key did not update name" >&2
-  cat /tmp/api_key_put.json >&2
+  echo "$API_KEY_PUT_RESP" >&2
   exit 1
 fi
 
 # Verify API key authentication works
-API_KEY_AUTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/projects" \
-  -H "Authorization: Bearer $API_KEY_RAW")
-if [ "$API_KEY_AUTH_STATUS" != "200" ]; then
-  echo "ERROR: API key auth returned $API_KEY_AUTH_STATUS, expected 200" >&2
+set +e
+SOAT_TOKEN="$API_KEY_RAW" $SOAT_CLI list-files >/dev/null 2>&1
+API_KEY_AUTH_STATUS=$?
+set -e
+if [ "$API_KEY_AUTH_STATUS" != "0" ]; then
+  echo "ERROR: API key auth failed" >&2
   exit 1
 fi
 
 # DELETE api-key
-API_KEY_DELETE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/api-keys/$API_KEY_ID" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$API_KEY_DELETE_STATUS" != "204" ]; then
-  echo "ERROR: DELETE api-key returned $API_KEY_DELETE_STATUS, expected 204" >&2
-  exit 1
-fi
-API_KEY_AFTER_DELETE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api-keys/$API_KEY_ID" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$API_KEY_AFTER_DELETE" != "404" ]; then
-  echo "ERROR: Expected 404 after api-key deletion, got $API_KEY_AFTER_DELETE" >&2
-  exit 1
-fi
+$SOAT_CLI delete-api-key --id "$API_KEY_ID"
+expect_cli_error_status 404 get-api-key --id "$API_KEY_ID"
 echo "API keys coverage: OK"
 
 # Delete policies (cleanup + CRUD coverage)
-POLICY_DELETE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/policies/$POLICY_READ_ID" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$POLICY_DELETE_STATUS" != "204" ]; then
-  echo "ERROR: DELETE policy returned $POLICY_DELETE_STATUS, expected 204" >&2
-  exit 1
-fi
-POLICY_AFTER_DELETE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/policies/$POLICY_READ_ID" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$POLICY_AFTER_DELETE" != "404" ]; then
-  echo "ERROR: Expected 404 after policy deletion, got $POLICY_AFTER_DELETE" >&2
-  exit 1
-fi
+$SOAT_CLI delete-policy --policyId "$POLICY_READ_ID"
+expect_cli_error_status 404 get-policy --policyId "$POLICY_READ_ID"
 echo "Policy DELETE coverage: OK"
 
 # 3d. Secrets module coverage
@@ -244,12 +218,7 @@ $SOAT_CLI update-secret --secretId "$SECRET_ID" --name smoke-secret-updated --va
 
 $SOAT_CLI delete-secret --secretId "$SECRET_ID"
 
-SECRET_AFTER_DELETE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/secrets/$SECRET_ID" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$SECRET_AFTER_DELETE_STATUS" != "404" ]; then
-  echo "ERROR: Expected 404 after secret deletion, got $SECRET_AFTER_DELETE_STATUS" >&2
-  exit 1
-fi
+expect_cli_error_status 404 get-secret --secretId "$SECRET_ID"
 echo "Secrets coverage: OK"
 
 # 3e. Actors module coverage
@@ -271,12 +240,7 @@ $SOAT_CLI update-actor --id "$ACTOR_ID" --name smoke-actor-updated
 
 $SOAT_CLI delete-actor --id "$ACTOR_ID"
 
-ACTOR_AFTER_DELETE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/actors/$ACTOR_ID" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$ACTOR_AFTER_DELETE_STATUS" != "404" ]; then
-  echo "ERROR: Expected 404 after actor deletion, got $ACTOR_AFTER_DELETE_STATUS" >&2
-  exit 1
-fi
+expect_cli_error_status 404 get-actor --id "$ACTOR_ID"
 echo "Actors coverage: OK"
 
 # 3f. Conversations module coverage
@@ -300,11 +264,10 @@ fi
 
 $SOAT_CLI list-conversations --project_id "$PROJECT_PUBLIC_ID"
 
-CONVO_MSG_LIST_STATUS=$(curl -s -o /tmp/conversation_messages_before.json -w "%{http_code}" "$BASE_URL/conversations/$CONVO_ID/messages" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$CONVO_MSG_LIST_STATUS" != "200" ]; then
-  echo "ERROR: LIST conversation messages returned $CONVO_MSG_LIST_STATUS, expected 200" >&2
-  cat /tmp/conversation_messages_before.json >&2
+CONVO_MSG_LIST_RESP=$($SOAT_CLI list-conversation-messages --id "$CONVO_ID")
+if ! printf '%s\n' "$CONVO_MSG_LIST_RESP" | jq -e '((type == "array") or (type == "object" and (.data | type == "array")))' >/dev/null 2>&1; then
+  echo "ERROR: LIST conversation messages did not return an array" >&2
+  echo "$CONVO_MSG_LIST_RESP" >&2
   exit 1
 fi
 
@@ -323,24 +286,21 @@ $SOAT_CLI update-conversation --id "$CONVO_ID" --status closed
 
 $SOAT_CLI delete-conversation --id "$CONVO_ID"
 
-CONVO_AFTER_DELETE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/conversations/$CONVO_ID" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$CONVO_AFTER_DELETE_STATUS" != "404" ]; then
-  echo "ERROR: Expected 404 after conversation deletion, got $CONVO_AFTER_DELETE_STATUS" >&2
-  exit 1
-fi
+expect_cli_error_status 404 get-conversation --id "$CONVO_ID"
 
 $SOAT_CLI delete-actor --id "$CONVO_ACTOR_ID"
 echo "Conversations coverage: OK"
 
-# 4. Upload a file via multipart form (with path field)
+# 4. Upload a file via base64 (with path field)
 echo "--- Uploading file ---"
 echo "Hello, smoke test!" > /tmp/smoke.txt
-UPLOAD_RESP=$(curl -sf -X POST "$BASE_URL/files/upload" \
-  -H "Authorization: Bearer $TOKEN" \
-  -F "file=@/tmp/smoke.txt;type=text/plain" \
-  -F "project_id=$PROJECT_PUBLIC_ID" \
-  -F "path=/reports/smoke.txt")
+SMOKE_FILE_B64=$(base64 /tmp/smoke.txt | tr -d '\n')
+UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --filename smoke.txt \
+  --path /reports/smoke.txt \
+  --content "$SMOKE_FILE_B64" \
+  --content_type text/plain)
 FILE_ID=$(echo "$UPLOAD_RESP" | jq -r '.id')
 FILE_PATH=$(echo "$UPLOAD_RESP" | jq -r '.path')
 echo "File id: $FILE_ID"
@@ -352,18 +312,18 @@ echo "File path: $FILE_PATH"
 
 # 5. Get file metadata
 echo "--- Getting file metadata ---"
-GET_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/files/$FILE_ID" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$GET_STATUS" != "200" ]; then
-  echo "ERROR: GET file returned $GET_STATUS, expected 200" >&2
+GET_FILE_RESP=$($SOAT_CLI get-file --id "$FILE_ID")
+GET_FILE_ID=$(printf '%s\n' "$GET_FILE_RESP" | jq -r '.id')
+if [ "$GET_FILE_ID" != "$FILE_ID" ]; then
+  echo "ERROR: GET file returned mismatched id '$GET_FILE_ID'" >&2
   exit 1
 fi
-echo "GET status: $GET_STATUS"
+echo "GET status: 200"
 
 # 6. Download file and verify content
 echo "--- Downloading file ---"
-CONTENT=$(curl -sf "$BASE_URL/files/$FILE_ID/download" \
-  -H "Authorization: Bearer $TOKEN")
+DOWNLOAD_RESP=$($SOAT_CLI download-file-base64 --id "$FILE_ID")
+CONTENT=$(printf '%s\n' "$DOWNLOAD_RESP" | jq -r '.content' | base64 -d)
 EXPECTED="Hello, smoke test!"
 if [ "$CONTENT" != "$EXPECTED" ]; then
   echo "ERROR: Content mismatch. Got '$CONTENT', expected '$EXPECTED'" >&2
@@ -373,34 +333,22 @@ echo "Content matches."
 
 # 7. Update metadata
 echo "--- Updating metadata ---"
-PATCH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X PATCH "$BASE_URL/files/$FILE_ID/metadata" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"metadata":"smoke-tested"}')
-if [ "$PATCH_STATUS" != "200" ]; then
-  echo "ERROR: PATCH metadata returned $PATCH_STATUS, expected 200" >&2
+PATCH_RESP=$($SOAT_CLI update-file-metadata --id "$FILE_ID" --metadata smoke-tested)
+PATCH_ID=$(printf '%s\n' "$PATCH_RESP" | jq -r '.id')
+if [ "$PATCH_ID" != "$FILE_ID" ]; then
+  echo "ERROR: PATCH metadata did not update expected file" >&2
   exit 1
 fi
-echo "PATCH status: $PATCH_STATUS"
+echo "PATCH status: 200"
 
 # 8. Delete file
 echo "--- Deleting file ---"
-DELETE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/files/$FILE_ID" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$DELETE_STATUS" != "204" ]; then
-  echo "ERROR: DELETE returned $DELETE_STATUS, expected 204" >&2
-  exit 1
-fi
-echo "DELETE status: $DELETE_STATUS"
+$SOAT_CLI delete-file --id "$FILE_ID"
+echo "DELETE status: 204"
 
 # 9. Verify file is gone (404)
 echo "--- Verifying deletion ---"
-AFTER_DELETE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/files/$FILE_ID" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$AFTER_DELETE_STATUS" != "404" ]; then
-  echo "ERROR: Expected 404 after deletion, got $AFTER_DELETE_STATUS" >&2
-  exit 1
-fi
+expect_cli_error_status 404 get-file --id "$FILE_ID"
 echo "File correctly returns 404 after deletion."
 
 # 10. Create first document (with path field)
@@ -441,10 +389,9 @@ echo "GET document path: OK"
 
 # 11c. Search documents by path prefix
 echo "--- Search documents by path prefix ---"
-PATH_SEARCH_RESP=$(curl -sf -X POST "$BASE_URL/documents/search" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"paths\":[\"/animals/\"]}")
+PATH_SEARCH_RESP=$($SOAT_CLI search-documents \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --paths '["/animals/"]')
 PATH_SEARCH_COUNT=$(echo "$PATH_SEARCH_RESP" | jq '.documents | length')
 if [ "$PATH_SEARCH_COUNT" -lt 1 ]; then
   echo "ERROR: path-prefix search returned $PATH_SEARCH_COUNT results, expected at least 1" >&2
@@ -454,10 +401,10 @@ echo "Path-prefix search returned $PATH_SEARCH_COUNT result(s): OK"
 
 # 12. Search documents
 echo "--- Searching documents ---"
-SEARCH_RESP=$(curl -sf -X POST "$BASE_URL/documents/search" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"search\":\"fox animal jumping\",\"limit\":5}")
+SEARCH_RESP=$($SOAT_CLI search-documents \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --search "fox animal jumping" \
+  --limit 5)
 SEARCH_COUNT=$(echo "$SEARCH_RESP" | jq '.documents | length')
 if [ "$SEARCH_COUNT" -lt 1 ]; then
   echo "ERROR: Document search returned $SEARCH_COUNT results, expected at least 1" >&2
@@ -473,33 +420,17 @@ echo "Documents deleted."
 
 # 14. Chat completion — 401 without auth
 echo "--- Chat completion: 401 without auth ---"
-CHAT_UNAUTH=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/chats/completions" \
-  -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"hello"}]}')
-if [ "$CHAT_UNAUTH" != "401" ]; then
-  echo "ERROR: Expected 401, got $CHAT_UNAUTH" >&2
-  exit 1
-fi
+SOAT_TOKEN=invalid expect_cli_error_status 401 create-chat-completion --messages '[{"role":"user","content":"hello"}]'
 echo "401 without auth: OK"
 
 # 15. Chat completion — 400 without messages
 echo "--- Chat completion: 400 without messages ---"
-CHAT_NOMSG=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/chats/completions" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{}')
-if [ "$CHAT_NOMSG" != "400" ]; then
-  echo "ERROR: Expected 400, got $CHAT_NOMSG" >&2
-  exit 1
-fi
+expect_cli_error_status 400 create-chat-completion
 echo "400 without messages: OK"
 
 # 16. Chat completion — valid non-streaming request (Ollama fallback)
 echo "--- Chat completion: valid request ---"
-CHAT_RESP=$(curl -sf -X POST "$BASE_URL/chats/completions" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"messages":[{"role":"user","content":"say hello"}]}')
+CHAT_RESP=$($SOAT_CLI create-chat-completion --messages '[{"role":"user","content":"say hello"}]')
 CHAT_OBJECT=$(echo "$CHAT_RESP" | jq -r '.object')
 if [ "$CHAT_OBJECT" != "chat.completion" ]; then
   echo "ERROR: Expected object=chat.completion, got $CHAT_OBJECT" >&2
@@ -510,22 +441,15 @@ echo "Chat completion OK. Response: $(echo "$CHAT_RESP" | jq -r '.choices[0].mes
 
 # 17. Chat completion — SSE streaming request
 echo "--- Chat completion: SSE streaming ---"
-CHAT_SSE_STATUS=$(curl -s -o /tmp/chat_sse.txt -w "%{http_code}" -X POST "$BASE_URL/chats/completions" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"messages":[{"role":"user","content":"say hello"}],"stream":true}')
-if [ "$CHAT_SSE_STATUS" != "200" ]; then
-  echo "ERROR: Chat SSE stream returned $CHAT_SSE_STATUS, expected 200" >&2
-  exit 1
-fi
-if ! grep -q "data: \[DONE\]" /tmp/chat_sse.txt; then
+CHAT_SSE_RESP=$($SOAT_CLI create-chat-completion --messages '[{"role":"user","content":"say hello"}]' --stream true)
+if ! printf '%s\n' "$CHAT_SSE_RESP" | grep -q "data: \[DONE\]"; then
   echo "ERROR: Chat SSE stream missing 'data: [DONE]'" >&2
-  cat /tmp/chat_sse.txt >&2
+  echo "$CHAT_SSE_RESP" >&2
   exit 1
 fi
 echo "Chat SSE stream OK."
 echo "--- Chat SSE stream output ---"
-cat /tmp/chat_sse.txt
+echo "$CHAT_SSE_RESP"
 
 # 18. Create AI provider (Ollama with qwen2.5:0.5b available in test env)
 echo "--- Creating AI provider ---"
@@ -540,51 +464,32 @@ echo "AI Provider id: $AI_PROVIDER_ID"
 
 # 19. Create an HTTP agent tool that calls GET /api/v1/projects on the SOAT server
 echo "--- Creating HTTP agent tool (list-projects) ---"
-TOOL_RESP=$(curl -sf -X POST "$BASE_URL/agents/tools" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{
-    \"project_id\": \"$PROJECT_PUBLIC_ID\",
-    \"name\": \"list-projects\",
-    \"type\": \"http\",
-    \"description\": \"Lists all projects from the SOAT API. Call this tool whenever the user asks for the list of projects.\",
-    \"parameters\": {
-      \"type\": \"object\",
-      \"properties\": {},
-      \"required\": []
-    },
-    \"execute\": {
-      \"url\": \"$SERVER_URL/api/v1/projects\",
-      \"headers\": {
-        \"Authorization\": \"Bearer $TOKEN\"
-      }
-    }
-  }")
+TOOL_RESP=$($SOAT_CLI create-agent-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name list-projects \
+  --type http \
+  --description "Lists all projects from the SOAT API. Call this tool whenever the user asks for the list of projects." \
+  --parameters '{"type":"object","properties":{},"required":[]}' \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
 TOOL_ID=$(echo "$TOOL_RESP" | jq -r '.id')
 echo "Agent Tool id: $TOOL_ID"
 
 # 20. Create an agent with the list-projects tool
 echo "--- Creating agent ---"
-AGENT_RESP=$(curl -sf -X POST "$BASE_URL/agents" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{
-    \"project_id\": \"$PROJECT_PUBLIC_ID\",
-    \"ai_provider_id\": \"$AI_PROVIDER_ID\",
-    \"name\": \"project-lister\",
-    \"instructions\": \"You are a helpful assistant. When the user asks you to list projects, you MUST call the list-projects tool and return the results. Always use the tool, never make up data.\",
-    \"tool_ids\": [\"$TOOL_ID\"],
-    \"max_steps\": 5
-  }")
+AGENT_RESP=$($SOAT_CLI create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --name project-lister \
+  --instructions "You are a helpful assistant. When the user asks you to list projects, you MUST call the list-projects tool and return the results. Always use the tool, never make up data." \
+  --tool_ids "[\"$TOOL_ID\"]" \
+  --max_steps 5)
 AGENT_ID=$(echo "$AGENT_RESP" | jq -r '.id')
 echo "Agent id: $AGENT_ID"
 
 # 21. Run the agent — ask it to list projects (non-streaming)
 echo "--- Running agent generation ---"
-GEN_RESP=$(curl -sf --max-time 120 -X POST "$BASE_URL/agents/$AGENT_ID/generate" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"messages":[{"role":"user","content":"List all the projects. Use the list-projects tool."}]}' | sanitize_json)
+GEN_RESP=$($SOAT_CLI create-agent-generation --agentId "$AGENT_ID" \
+  --messages '[{"role":"user","content":"List all the projects. Use the list-projects tool."}]' | sanitize_json)
 echo "Generation response:"
 printf '%s\n' "$GEN_RESP" | jq .
 
@@ -606,17 +511,12 @@ fi
 
 # 22b. Run the same agent generation with SSE streaming
 echo "--- Running agent generation (SSE stream) ---"
-AGENT_STREAM_STATUS=$(curl -s -o /tmp/agent_stream_sse.txt -w "%{http_code}" --max-time 120 -X POST "$BASE_URL/agents/$AGENT_ID/generate" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"messages":[{"role":"user","content":"List all the projects. Use the list-projects tool."}],"stream":true}')
-if [ "$AGENT_STREAM_STATUS" != "200" ]; then
-  echo "ERROR: Agent SSE stream returned $AGENT_STREAM_STATUS, expected 200" >&2
-  exit 1
-fi
-if ! grep -q "data: \[DONE\]" /tmp/agent_stream_sse.txt; then
+AGENT_STREAM_RESP=$($SOAT_CLI create-agent-generation --agentId "$AGENT_ID" \
+  --messages '[{"role":"user","content":"List all the projects. Use the list-projects tool."}]' \
+  --stream true)
+if ! printf '%s\n' "$AGENT_STREAM_RESP" | grep -q "data: \[DONE\]"; then
   echo "ERROR: Agent SSE stream missing 'data: [DONE]'" >&2
-  cat /tmp/agent_stream_sse.txt >&2
+  echo "$AGENT_STREAM_RESP" >&2
   exit 1
 fi
 echo "Agent SSE stream OK."
@@ -633,46 +533,31 @@ echo "Agent tool deleted."
 
 # 25. Create an MCP agent tool pointing at the SOAT MCP server
 echo "--- Creating MCP agent tool ---"
-MCP_TOOL_RESP=$(curl -sf -X POST "$BASE_URL/agents/tools" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{
-    \"project_id\": \"$PROJECT_PUBLIC_ID\",
-    \"name\": \"soat-mcp\",
-    \"type\": \"mcp\",
-    \"description\": \"SOAT MCP server — exposes all SOAT tools over the MCP protocol.\",
-    \"mcp\": {
-      \"url\": \"$SERVER_URL/mcp\",
-      \"headers\": {
-        \"Authorization\": \"Bearer $TOKEN\"
-      }
-    }
-  }")
+MCP_TOOL_RESP=$($SOAT_CLI create-agent-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name soat-mcp \
+  --type mcp \
+  --description "SOAT MCP server - exposes all SOAT tools over the MCP protocol." \
+  --mcp "{\"url\":\"$SERVER_URL/mcp\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
 MCP_TOOL_ID=$(echo "$MCP_TOOL_RESP" | jq -r '.id')
 echo "MCP Agent Tool id: $MCP_TOOL_ID"
 
 # 26. Create an agent backed by the MCP tool
 echo "--- Creating MCP agent ---"
-MCP_AGENT_RESP=$(curl -sf -X POST "$BASE_URL/agents" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{
-    \"project_id\": \"$PROJECT_PUBLIC_ID\",
-    \"ai_provider_id\": \"$AI_PROVIDER_ID\",
-    \"name\": \"mcp-agent-lister\",
-    \"instructions\": \"You are a helpful assistant with access to SOAT tools via MCP. When asked to list agents, call the list-agents MCP tool and return the results. Always use the tool.\",
-    \"tool_ids\": [\"$MCP_TOOL_ID\"],
-    \"max_steps\": 5
-  }")
+MCP_AGENT_RESP=$($SOAT_CLI create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --name mcp-agent-lister \
+  --instructions "You are a helpful assistant with access to SOAT tools via MCP. When asked to list agents, call the list-agents MCP tool and return the results. Always use the tool." \
+  --tool_ids "[\"$MCP_TOOL_ID\"]" \
+  --max_steps 5)
 MCP_AGENT_ID=$(echo "$MCP_AGENT_RESP" | jq -r '.id')
 echo "MCP Agent id: $MCP_AGENT_ID"
 
 # 27. Ask the agent to list agents via MCP
 echo "--- Running MCP agent generation ---"
-MCP_GEN_RESP=$(curl -sf --max-time 300 -X POST "$BASE_URL/agents/$MCP_AGENT_ID/generate" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"messages":[{"role":"user","content":"List all agents. Use the list-agents tool."}]}' | sanitize_json)
+MCP_GEN_RESP=$($SOAT_CLI create-agent-generation --agentId "$MCP_AGENT_ID" \
+  --messages '[{"role":"user","content":"List all agents. Use the list-agents tool."}]' | sanitize_json)
 echo "MCP Generation response:"
 printf '%s\n' "$MCP_GEN_RESP" | jq .
 
@@ -706,22 +591,12 @@ echo "MCP Agent tool deleted."
 
 # 31. Create a client-type agent tool
 echo "--- Creating client agent tool ---"
-CLIENT_TOOL_RESP=$(curl -sf -X POST "$BASE_URL/agents/tools" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{
-    \"project_id\": \"$PROJECT_PUBLIC_ID\",
-    \"name\": \"get_weather\",
-    \"type\": \"client\",
-    \"description\": \"Returns the current weather for a given city.\",
-    \"parameters\": {
-      \"type\": \"object\",
-      \"properties\": {
-        \"city\": { \"type\": \"string\", \"description\": \"The city name\" }
-      },
-      \"required\": [\"city\"]
-    }
-  }")
+CLIENT_TOOL_RESP=$($SOAT_CLI create-agent-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name get_weather \
+  --type client \
+  --description "Returns the current weather for a given city." \
+  --parameters '{"type":"object","properties":{"city":{"type":"string","description":"The city name"}},"required":["city"]}')
 CLIENT_TOOL_ID=$(echo "$CLIENT_TOOL_RESP" | jq -r '.id')
 if [ -z "$CLIENT_TOOL_ID" ] || [ "$CLIENT_TOOL_ID" = "null" ]; then
   echo "ERROR: Failed to create client agent tool" >&2
@@ -732,18 +607,14 @@ echo "Client Agent Tool id: $CLIENT_TOOL_ID"
 
 # 32. Create an agent that uses the client tool
 echo "--- Creating client-tool agent ---"
-CLIENT_AGENT_RESP=$(curl -sf -X POST "$BASE_URL/agents" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{
-    \"project_id\": \"$PROJECT_PUBLIC_ID\",
-    \"ai_provider_id\": \"$AI_PROVIDER_ID\",
-    \"name\": \"weather-agent\",
-    \"instructions\": \"You are a weather assistant. When the user asks about the weather, call the get_weather tool with the city name.\",
-    \"tool_ids\": [\"$CLIENT_TOOL_ID\"],
-    \"tool_choice\": { \"type\": \"tool\", \"tool_name\": \"get_weather\" },
-    \"max_steps\": 3
-  }")
+CLIENT_AGENT_RESP=$($SOAT_CLI create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --name weather-agent \
+  --instructions "You are a weather assistant. When the user asks about the weather, call the get_weather tool with the city name." \
+  --tool_ids "[\"$CLIENT_TOOL_ID\"]" \
+  --tool_choice '{"type":"tool","tool_name":"get_weather"}' \
+  --max_steps 3)
 CLIENT_AGENT_ID=$(echo "$CLIENT_AGENT_RESP" | jq -r '.id')
 if [ -z "$CLIENT_AGENT_ID" ] || [ "$CLIENT_AGENT_ID" = "null" ]; then
   echo "ERROR: Failed to create client-tool agent" >&2
@@ -758,10 +629,8 @@ CLIENT_GEN_RESP=''
 CLIENT_GEN_STATUS=''
 CLIENT_ATTEMPT=1
 while [ "$CLIENT_ATTEMPT" -le 3 ]; do
-  CLIENT_GEN_RESP=$(curl -sf --max-time 60 -X POST "$BASE_URL/agents/$CLIENT_AGENT_ID/generate" \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer $TOKEN" \
-    -d '{"messages":[{"role":"user","content":"Call get_weather with city Paris and wait for tool output. Do not answer directly."}]}' | sanitize_json)
+  CLIENT_GEN_RESP=$($SOAT_CLI create-agent-generation --agentId "$CLIENT_AGENT_ID" \
+    --messages '[{"role":"user","content":"Call get_weather with city Paris and wait for tool output. Do not answer directly."}]' | sanitize_json)
   CLIENT_GEN_STATUS=$(printf '%s\n' "$CLIENT_GEN_RESP" | jq -r '.status')
   if [ "$CLIENT_GEN_STATUS" = "requires_action" ]; then
     break
@@ -803,17 +672,10 @@ echo "Tool call id: $CLIENT_TOOL_CALL_ID"
 
 # 34. Submit tool output (simulate client executing get_weather)
 echo "--- Submitting client tool output ---"
-SUBMIT_RESP=$(curl -sf --max-time 60 -X POST "$BASE_URL/agents/$CLIENT_AGENT_ID/generate/$CLIENT_GEN_ID/tool-outputs" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{
-    \"tool_outputs\": [
-      {
-        \"tool_call_id\": \"$CLIENT_TOOL_CALL_ID\",
-        \"output\": { \"city\": \"Paris\", \"temperature\": \"18°C\", \"condition\": \"Partly cloudy\" }
-      }
-    ]
-  }" | sanitize_json)
+SUBMIT_RESP=$($SOAT_CLI submit-agent-tool-outputs \
+  --agentId "$CLIENT_AGENT_ID" \
+  --generationId "$CLIENT_GEN_ID" \
+  --tool_outputs "[{\"tool_call_id\":\"$CLIENT_TOOL_CALL_ID\",\"output\":{\"city\":\"Paris\",\"temperature\":\"18C\",\"condition\":\"Partly cloudy\"}}]" | sanitize_json)
 echo "Submit tool output response:"
 echo "$SUBMIT_RESP" | jq .
 
@@ -827,8 +689,8 @@ echo "Client tool generation completed after tool output: OK"
 # 34b. Trace checks (list traces + fetch current generation trace)
 echo "--- Verifying trace endpoints ---"
 TRACES_RESP=$($SOAT_CLI list-agent-traces --project_id "$PROJECT_PUBLIC_ID")
-if ! printf '%s\n' "$TRACES_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
-  echo "ERROR: list-agent-traces did not return a JSON array" >&2
+if ! printf '%s\n' "$TRACES_RESP" | jq -e '((type == "array") or (type == "object" and (.data | type == "array")))' >/dev/null 2>&1; then
+  echo "ERROR: list-agent-traces did not return a JSON array/data array" >&2
   echo "$TRACES_RESP" >&2
   exit 1
 fi
@@ -862,16 +724,12 @@ echo "Client agent tool deleted."
 
 # 37. Create a SOAT agent tool exposing list-projects action
 echo "--- Creating SOAT agent tool ---"
-SOAT_TOOL_RESP=$(curl -sf -X POST "$BASE_URL/agents/tools" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{
-    \"project_id\": \"$PROJECT_PUBLIC_ID\",
-    \"name\": \"soat-platform\",
-    \"type\": \"soat\",
-    \"description\": \"SOAT platform actions exposed as tools.\",
-    \"actions\": [\"list-projects\"]
-  }")
+SOAT_TOOL_RESP=$($SOAT_CLI create-agent-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name soat-platform \
+  --type soat \
+  --description "SOAT platform actions exposed as tools." \
+  --actions '["list-projects"]')
 SOAT_TOOL_ID=$(echo "$SOAT_TOOL_RESP" | jq -r '.id')
 if [ -z "$SOAT_TOOL_ID" ] || [ "$SOAT_TOOL_ID" = "null" ]; then
   echo "ERROR: Failed to create SOAT agent tool" >&2
@@ -882,17 +740,13 @@ echo "SOAT Agent Tool id: $SOAT_TOOL_ID"
 
 # 38. Create an agent that uses the SOAT tool
 echo "--- Creating SOAT agent ---"
-SOAT_AGENT_RESP=$(curl -sf -X POST "$BASE_URL/agents" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{
-    \"project_id\": \"$PROJECT_PUBLIC_ID\",
-    \"ai_provider_id\": \"$AI_PROVIDER_ID\",
-    \"name\": \"soat-project-lister\",
-    \"instructions\": \"You are a helpful assistant. Use the SOAT list-projects action to list projects for the user.\",
-    \"tool_ids\": [\"$SOAT_TOOL_ID\"],
-    \"max_steps\": 5
-  }")
+SOAT_AGENT_RESP=$($SOAT_CLI create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --name soat-project-lister \
+  --instructions "You are a helpful assistant. Use the SOAT list-projects action to list projects for the user." \
+  --tool_ids "[\"$SOAT_TOOL_ID\"]" \
+  --max_steps 5)
 SOAT_AGENT_ID=$(echo "$SOAT_AGENT_RESP" | jq -r '.id')
 if [ -z "$SOAT_AGENT_ID" ] || [ "$SOAT_AGENT_ID" = "null" ]; then
   echo "ERROR: Failed to create SOAT agent" >&2
@@ -903,10 +757,8 @@ echo "SOAT Agent id: $SOAT_AGENT_ID"
 
 # 39. Run generation with the SOAT-backed agent
 echo "--- Running SOAT agent generation ---"
-SOAT_GEN_RESP=$(curl -sf --max-time 120 -X POST "$BASE_URL/agents/$SOAT_AGENT_ID/generate" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"messages":[{"role":"user","content":"List all projects. Use the soat-platform tool."}]}' | sanitize_json)
+SOAT_GEN_RESP=$($SOAT_CLI create-agent-generation --agentId "$SOAT_AGENT_ID" \
+  --messages '[{"role":"user","content":"List all projects. Use the soat-platform tool."}]' | sanitize_json)
 echo "SOAT generation response:"
 printf '%s\n' "$SOAT_GEN_RESP" | jq .
 
@@ -940,15 +792,11 @@ echo "SOAT agent tool deleted."
 
 # 43. Create a bare agent (no tools) for conversation generation
 echo "--- Creating conversation-generate agent ---"
-CONVO_GEN_AGENT_RESP=$(curl -sf -X POST "$BASE_URL/agents" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{
-    \"project_id\": \"$PROJECT_PUBLIC_ID\",
-    \"ai_provider_id\": \"$AI_PROVIDER_ID\",
-    \"name\": \"convo-gen-agent\",
-    \"instructions\": \"You are a helpful conversation participant. Reply concisely.\"
-  }")
+CONVO_GEN_AGENT_RESP=$($SOAT_CLI create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --name convo-gen-agent \
+  --instructions "You are a helpful conversation participant. Reply concisely.")
 CONVO_GEN_AGENT_ID=$(echo "$CONVO_GEN_AGENT_RESP" | jq -r '.id')
 if [ -z "$CONVO_GEN_AGENT_ID" ] || [ "$CONVO_GEN_AGENT_ID" = "null" ]; then
   echo "ERROR: Failed to create conversation-generate agent" >&2
@@ -986,10 +834,10 @@ echo "Conversation rename: OK"
 
 # 45. Create an agent-backed actor using the convenience endpoint POST /agents/:id/actors
 echo "--- Creating agent-backed actor via convenience endpoint ---"
-AGENT_ACTOR_RESP=$(curl -sf -X POST "$BASE_URL/agents/$CONVO_GEN_AGENT_ID/actors" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"name\":\"convo-agent-actor\",\"instructions\":\"Reply as a friendly assistant.\"}")
+AGENT_ACTOR_RESP=$($SOAT_CLI create-agent-actor --agentId "$CONVO_GEN_AGENT_ID" \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name convo-agent-actor \
+  --instructions "Reply as a friendly assistant.")
 AGENT_ACTOR_ID=$(echo "$AGENT_ACTOR_RESP" | jq -r '.id')
 AGENT_ACTOR_AGENT_ID=$(echo "$AGENT_ACTOR_RESP" | jq -r '.agent_id')
 AGENT_ACTOR_INSTRUCTIONS=$(echo "$AGENT_ACTOR_RESP" | jq -r '.instructions')
@@ -1010,8 +858,7 @@ echo "Agent-backed actor id: $AGENT_ACTOR_ID, agent_id: $AGENT_ACTOR_AGENT_ID, i
 
 # 45b. Verify actor fields on GET /actors/:id
 echo "--- Verifying actor shape on GET ---"
-ACTOR_GET_RESP=$(curl -sf "$BASE_URL/actors/$AGENT_ACTOR_ID" \
-  -H "Authorization: Bearer $TOKEN")
+ACTOR_GET_RESP=$($SOAT_CLI get-actor --id "$AGENT_ACTOR_ID")
 ACTOR_GET_AGENT_ID=$(echo "$ACTOR_GET_RESP" | jq -r '.agent_id')
 ACTOR_GET_INSTRUCTIONS=$(echo "$ACTOR_GET_RESP" | jq -r '.instructions')
 if [ "$ACTOR_GET_AGENT_ID" != "$CONVO_GEN_AGENT_ID" ]; then
@@ -1026,14 +873,11 @@ echo "GET /actors/:id shape: OK"
 
 # 45c. Verify mutual exclusion: actor with both agent_id and chat_id must fail (400)
 echo "--- Verifying actor agent_id+chat_id mutual exclusion ---"
-MUTUAL_EXCL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/actors" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"name\":\"bad-actor\",\"agent_id\":\"$CONVO_GEN_AGENT_ID\",\"chat_id\":\"fake-id\"}")
-if [ "$MUTUAL_EXCL_STATUS" != "400" ]; then
-  echo "ERROR: Expected 400 for actor with both agent_id and chat_id, got $MUTUAL_EXCL_STATUS" >&2
-  exit 1
-fi
+expect_cli_error_status 400 create-actor \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name bad-actor \
+  --agent_id "$CONVO_GEN_AGENT_ID" \
+  --chat_id fake-id
 echo "Actor mutual exclusion (agent_id+chat_id): OK (400 as expected)"
 
 # 46. Create a plain user actor for the conversation
@@ -1065,10 +909,7 @@ echo "--- Generating conversation message ---"
 CONVO_GEN_STATUS="in_progress"
 CONVO_GEN_ATTEMPTS=0
 while [ "$CONVO_GEN_STATUS" = "in_progress" ] && [ "$CONVO_GEN_ATTEMPTS" -lt "30" ]; do
-  CONVO_GEN_RESP=$(curl -sf --max-time 120 -X POST "$BASE_URL/conversations/$NAMED_CONVO_ID/generate" \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer $TOKEN" \
-    -d "{\"actor_id\":\"$AGENT_ACTOR_ID\"}" | sanitize_json)
+  CONVO_GEN_RESP=$($SOAT_CLI generate-conversation-message --id "$NAMED_CONVO_ID" --actor_id "$AGENT_ACTOR_ID" | sanitize_json)
   CONVO_GEN_STATUS=$(printf '%s\n' "$CONVO_GEN_RESP" | jq -r '.status')
   CONVO_GEN_ATTEMPTS=$((CONVO_GEN_ATTEMPTS + 1))
   if [ "$CONVO_GEN_STATUS" = "in_progress" ]; then
@@ -1090,9 +931,8 @@ echo "Conversation generate: OK (message document_id: $CONVO_GEN_MSG_ID)"
 
 # 48b. Verify the generated message is listed in conversation messages
 echo "--- Verifying generated message persisted ---"
-CONVO_MSGS_RESP=$(curl -sf "$BASE_URL/conversations/$NAMED_CONVO_ID/messages" \
-  -H "Authorization: Bearer $TOKEN")
-MSG_COUNT=$(echo "$CONVO_MSGS_RESP" | jq 'length')
+CONVO_MSGS_RESP=$($SOAT_CLI list-conversation-messages --id "$NAMED_CONVO_ID")
+MSG_COUNT=$(echo "$CONVO_MSGS_RESP" | jq 'if type=="array" then length else (.data | length) end')
 if [ "$MSG_COUNT" -lt "2" ]; then
   echo "ERROR: Expected at least 2 conversation messages (user + generated), got $MSG_COUNT" >&2
   exit 1
@@ -1101,9 +941,8 @@ echo "Conversation messages count: $MSG_COUNT (OK)"
 
 # 49. Verify GET /conversations/:id/actors lists both actors
 echo "--- Verifying GET /conversations/:id/actors ---"
-CONVO_ACTORS_RESP=$(curl -sf "$BASE_URL/conversations/$NAMED_CONVO_ID/actors" \
-  -H "Authorization: Bearer $TOKEN")
-CONVO_ACTORS_COUNT=$(echo "$CONVO_ACTORS_RESP" | jq 'length')
+CONVO_ACTORS_RESP=$($SOAT_CLI list-conversation-actors --id "$NAMED_CONVO_ID")
+CONVO_ACTORS_COUNT=$(echo "$CONVO_ACTORS_RESP" | jq 'if type=="array" then length else (.data | length) end')
 if [ "$CONVO_ACTORS_COUNT" -lt "2" ]; then
   echo "ERROR: Expected at least 2 actors in conversation, got $CONVO_ACTORS_COUNT" >&2
   exit 1
@@ -1112,12 +951,7 @@ echo "GET /conversations/:id/actors count: $CONVO_ACTORS_COUNT (OK)"
 
 # 50. Verify delete-block: agent-backed actor with messages cannot be deleted (409)
 echo "--- Verifying actor delete-block (409 when actor has messages) ---"
-ACTOR_DEL_BLOCKED_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/actors/$AGENT_ACTOR_ID" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$ACTOR_DEL_BLOCKED_STATUS" != "409" ]; then
-  echo "ERROR: Expected 409 when deleting actor with messages, got $ACTOR_DEL_BLOCKED_STATUS" >&2
-  exit 1
-fi
+expect_cli_error_status 409 delete-actor --id "$AGENT_ACTOR_ID"
 echo "Actor delete-block: OK (409 as expected)"
 
 # 51. Cleanup — delete the conversation (cascades messages)
@@ -1148,10 +982,10 @@ echo "=== Webhooks ==="
 
 # Create webhook
 echo "--- Creating webhook ---"
-WEBHOOK_CREATE_RESP=$(curl -sf -X POST "$BASE_URL/projects/$PROJECT_PUBLIC_ID/webhooks" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"name":"Smoke Webhook","url":"https://example.com/smoke-hook","events":["file.*"]}')
+WEBHOOK_CREATE_RESP=$($SOAT_CLI create-webhook --projectId "$PROJECT_PUBLIC_ID" \
+  --name "Smoke Webhook" \
+  --url "https://example.com/smoke-hook" \
+  --events '["file.*"]')
 WEBHOOK_ID=$(echo "$WEBHOOK_CREATE_RESP" | jq -r '.id')
 if [ -z "$WEBHOOK_ID" ] || [ "$WEBHOOK_ID" = "null" ]; then
   echo "ERROR: Failed to create webhook" >&2
@@ -1162,64 +996,53 @@ echo "Webhook created: $WEBHOOK_ID"
 
 # List webhooks
 echo "--- Listing webhooks ---"
-WEBHOOK_LIST_STATUS=$(curl -s -o /tmp/webhook_list.json -w "%{http_code}" "$BASE_URL/projects/$PROJECT_PUBLIC_ID/webhooks" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$WEBHOOK_LIST_STATUS" != "200" ]; then
-  echo "ERROR: LIST webhooks returned $WEBHOOK_LIST_STATUS, expected 200" >&2
+WEBHOOK_LIST_RESP=$($SOAT_CLI list-webhooks --projectId "$PROJECT_PUBLIC_ID")
+if ! printf '%s\n' "$WEBHOOK_LIST_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
+  echo "ERROR: LIST webhooks did not return an array" >&2
+  echo "$WEBHOOK_LIST_RESP" >&2
   exit 1
 fi
 echo "Webhooks listed."
 
 # Get webhook
 echo "--- Getting webhook ---"
-WEBHOOK_GET_STATUS=$(curl -s -o /tmp/webhook_get.json -w "%{http_code}" "$BASE_URL/projects/$PROJECT_PUBLIC_ID/webhooks/$WEBHOOK_ID" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$WEBHOOK_GET_STATUS" != "200" ]; then
-  echo "ERROR: GET webhook returned $WEBHOOK_GET_STATUS, expected 200" >&2
+WEBHOOK_GET_RESP=$($SOAT_CLI get-webhook --projectId "$PROJECT_PUBLIC_ID" --webhookId "$WEBHOOK_ID")
+if ! printf '%s\n' "$WEBHOOK_GET_RESP" | jq -e --arg id "$WEBHOOK_ID" '.id == $id' >/dev/null 2>&1; then
+  echo "ERROR: GET webhook returned unexpected payload" >&2
+  echo "$WEBHOOK_GET_RESP" >&2
   exit 1
 fi
 echo "Webhook retrieved."
 
 # Update webhook
 echo "--- Updating webhook ---"
-WEBHOOK_UPDATE_STATUS=$(curl -s -o /tmp/webhook_update.json -w "%{http_code}" -X PUT "$BASE_URL/projects/$PROJECT_PUBLIC_ID/webhooks/$WEBHOOK_ID" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"name":"Updated Smoke Webhook","active":false}')
-if [ "$WEBHOOK_UPDATE_STATUS" != "200" ]; then
-  echo "ERROR: UPDATE webhook returned $WEBHOOK_UPDATE_STATUS, expected 200" >&2
+WEBHOOK_UPDATE_RESP=$($SOAT_CLI update-webhook --projectId "$PROJECT_PUBLIC_ID" --webhookId "$WEBHOOK_ID" \
+  --name "Updated Smoke Webhook" --active false)
+if ! printf '%s\n' "$WEBHOOK_UPDATE_RESP" | jq -e '.active == false' >/dev/null 2>&1; then
+  echo "ERROR: UPDATE webhook did not return active=false" >&2
+  echo "$WEBHOOK_UPDATE_RESP" >&2
   exit 1
 fi
 echo "Webhook updated."
 
 # Rotate secret
 echo "--- Rotating webhook secret ---"
-WEBHOOK_ROTATE_STATUS=$(curl -s -o /tmp/webhook_rotate.json -w "%{http_code}" -X POST "$BASE_URL/projects/$PROJECT_PUBLIC_ID/webhooks/$WEBHOOK_ID/rotate-secret" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$WEBHOOK_ROTATE_STATUS" != "200" ]; then
-  echo "ERROR: ROTATE webhook secret returned $WEBHOOK_ROTATE_STATUS, expected 200" >&2
-  exit 1
-fi
+$SOAT_CLI rotate-webhook-secret --projectId "$PROJECT_PUBLIC_ID" --webhookId "$WEBHOOK_ID" >/dev/null
 echo "Webhook secret rotated."
 
 # List deliveries
 echo "--- Listing webhook deliveries ---"
-WEBHOOK_DELIVERIES_STATUS=$(curl -s -o /tmp/webhook_deliveries.json -w "%{http_code}" "$BASE_URL/projects/$PROJECT_PUBLIC_ID/webhooks/$WEBHOOK_ID/deliveries" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$WEBHOOK_DELIVERIES_STATUS" != "200" ]; then
-  echo "ERROR: LIST webhook deliveries returned $WEBHOOK_DELIVERIES_STATUS, expected 200" >&2
+WEBHOOK_DELIVERIES_RESP=$($SOAT_CLI list-webhook-deliveries --projectId "$PROJECT_PUBLIC_ID" --webhookId "$WEBHOOK_ID")
+if ! printf '%s\n' "$WEBHOOK_DELIVERIES_RESP" | jq -e '((type == "array") or (type == "object" and (.data | type == "array")))' >/dev/null 2>&1; then
+  echo "ERROR: LIST webhook deliveries did not return an array" >&2
+  echo "$WEBHOOK_DELIVERIES_RESP" >&2
   exit 1
 fi
 echo "Webhook deliveries listed."
 
 # Delete webhook
 echo "--- Deleting webhook ---"
-WEBHOOK_DELETE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BASE_URL/projects/$PROJECT_PUBLIC_ID/webhooks/$WEBHOOK_ID" \
-  -H "Authorization: Bearer $TOKEN")
-if [ "$WEBHOOK_DELETE_STATUS" != "204" ]; then
-  echo "ERROR: DELETE webhook returned $WEBHOOK_DELETE_STATUS, expected 204" >&2
-  exit 1
-fi
+$SOAT_CLI delete-webhook --projectId "$PROJECT_PUBLIC_ID" --webhookId "$WEBHOOK_ID"
 echo "Webhook deleted."
 echo "Webhooks coverage: OK"
 

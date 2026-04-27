@@ -13,8 +13,8 @@ env:
   ENVIRONMENT: Production
 
 jobs:
-  publish-sdk:
-    name: Publish SDK
+  release:
+    name: Release Packages and Website
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -30,32 +30,6 @@ jobs:
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build SDK
-        run: pnpm --filter @soat/sdk build
-
-      - name: Publish SDK
-        working-directory: packages/sdk
-        run: pnpm publish --no-git-checks --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-  deploy-website:
-    name: Deploy Website
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: pnpm/action-setup@v5
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-          cache: 'pnpm'
-
       - name: Cache Turbo
         uses: actions/cache@v5
         with:
@@ -66,6 +40,11 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Publish SDK and CLI
+        run: pnpm turbo run release --filter=@soat/sdk --filter=@soat/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -81,6 +60,7 @@ jobs:
           CARLIN_ACM: ${{ vars.AWS_ACM }}
 
   publish-docker:
+    needs: release
     name: Publish Docker Image
     runs-on: ubuntu-latest
 
