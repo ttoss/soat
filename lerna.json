@@ -11,16 +11,12 @@
     "version": {
       "conventionalCommits": true,
       "createRelease": "github",
+      "forcePublish": true,
       "message": "chore(release): publish packages",
       "syncWorkspaceLock": true,
       "allowPeerDependenciesUpdate": true
     }
   },
-  "ignoreChanges": [
-    "**/__fixtures__/**",
-    "**/tests/**"
-  ],
-  "packages": [
-    "packages/*"
-  ]
+  "ignoreChanges": ["**/__fixtures__/**", "**/tests/**"],
+  "packages": ["packages/*"]
 }
