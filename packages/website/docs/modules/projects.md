@@ -1,7 +1,3 @@
----
-sidebar_position: 2
----
-
 # Projects
 
 The Projects module provides multi-tenant namespaces in SOAT. Every resource ([document](./documents.md), [file](./files.md), [actor](./actors.md), [conversation](./conversations.md)) belongs to a project. Projects are identified by an `id` prefixed with `proj_`.

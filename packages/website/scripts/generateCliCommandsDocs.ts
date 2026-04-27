@@ -177,7 +177,7 @@ const main = () => {
     sections.push(`## ${mod.label}`);
     sections.push('');
     sections.push(
-      `See [${mod.label} module docs](../../modules/${mod.file}.md) for permissions and data model.`
+      `See [${mod.label} module docs](../modules/${mod.file}) for permissions and data model.`
     );
     sections.push('');
     sections.push(renderTable(commands));

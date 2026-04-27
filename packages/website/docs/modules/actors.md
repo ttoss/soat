@@ -1,7 +1,3 @@
----
-sidebar_position: 6
----
-
 # Actors
 
 The Actors module represents entities — people, bots, or other participants — that interact within a project. A common use case is storing external contacts such as WhatsApp numbers, where `external_id` holds the phone number and correlates the actor with a record in the external system.
@@ -20,19 +16,19 @@ The module covers:
 
 ## Data Model
 
-| Field          | Type           | Required | Description                                                                                    |
-| -------------- | -------------- | -------- | ---------------------------------------------------------------------------------------------- |
-| `id`           | string         | —        | Public identifier prefixed with `act_`                                                         |
-| `project_id`    | string         | —        | Public ID of the owning project (`proj_` prefix)                                               |
-| `name`         | string         | Yes      | Display name of the actor                                                                      |
-| `type`         | string         | No       | Free-form actor type (e.g. `customer`, `agent`)                                                |
-| `external_id`   | string         | No       | External identifier (e.g. WhatsApp phone number). Unique per project; `null` is never unique   |
-| `instructions` | string \| null | No       | Persona-specific instructions composed into the effective system prompt for generate calls     |
-| `agent_id`      | string \| null | No       | Public ID of the linked [Agent](./agents.md) (`agt_` prefix). Mutually exclusive with `chat_id` |
-| `chat_id`       | string \| null | No       | Public ID of the linked [Chat](./chats.md) (`chat_` prefix). Mutually exclusive with `agent_id` |
-| `tags`         | object         | No       | Key-value string pairs used for ABAC conditions (see [Tags](#tags))                            |
-| `created_at`    | string         | —        | ISO 8601 creation timestamp                                                                    |
-| `updated_at`    | string         | —        | ISO 8601 last-updated timestamp                                                                |
+| Field          | Type           | Required | Description                                                                                     |
+| -------------- | -------------- | -------- | ----------------------------------------------------------------------------------------------- |
+| `id`           | string         | —        | Public identifier prefixed with `act_`                                                          |
+| `project_id`   | string         | —        | Public ID of the owning project (`proj_` prefix)                                                |
+| `name`         | string         | Yes      | Display name of the actor                                                                       |
+| `type`         | string         | No       | Free-form actor type (e.g. `customer`, `agent`)                                                 |
+| `external_id`  | string         | No       | External identifier (e.g. WhatsApp phone number). Unique per project; `null` is never unique    |
+| `instructions` | string \| null | No       | Persona-specific instructions composed into the effective system prompt for generate calls      |
+| `agent_id`     | string \| null | No       | Public ID of the linked [Agent](./agents.md) (`agt_` prefix). Mutually exclusive with `chat_id` |
+| `chat_id`      | string \| null | No       | Public ID of the linked [Chat](./chats.md) (`chat_` prefix). Mutually exclusive with `agent_id` |
+| `tags`         | object         | No       | Key-value string pairs used for ABAC conditions (see [Tags](#tags))                             |
+| `created_at`   | string         | —        | ISO 8601 creation timestamp                                                                     |
+| `updated_at`   | string         | —        | ISO 8601 last-updated timestamp                                                                 |
 
 ## Key Concepts
 
@@ -84,14 +80,14 @@ Pass `null` to `PATCH /actors/:id` to clear the instructions.
 
 `GET /actors` supports the following query parameters for filtering:
 
-| Parameter    | Description                                                                  |
-| ------------ | ---------------------------------------------------------------------------- |
+| Parameter     | Description                                                                  |
+| ------------- | ---------------------------------------------------------------------------- |
 | `project_id`  | Limit results to a specific project (required for JWT callers in most cases) |
 | `external_id` | Exact match — use to resolve an external identifier to an `act_` ID          |
-| `name`       | Partial, case-insensitive match against the actor's display name             |
-| `type`       | Exact match against the actor's type                                         |
-| `limit`      | Maximum number of results to return (default: `50`)                          |
-| `offset`     | Number of results to skip for pagination (default: `0`)                      |
+| `name`        | Partial, case-insensitive match against the actor's display name             |
+| `type`        | Exact match against the actor's type                                         |
+| `limit`       | Maximum number of results to return (default: `50`)                          |
+| `offset`      | Number of results to skip for pagination (default: `0`)                      |
 
 The response envelope is:
 

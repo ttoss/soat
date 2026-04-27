@@ -65,7 +65,7 @@ const loadModules = (): ModuleConfig[] => {
         fs.readFileSync(path.join(SPECS_DIR, f), 'utf-8')
       ) as OpenApiSpec;
       const label = spec.tags?.[0]?.name ?? toTitleCase(file);
-      return { file, label, docLink: `../modules/${file}.md` };
+      return { file, label, docLink: `../modules/${file}` };
     });
 };
 

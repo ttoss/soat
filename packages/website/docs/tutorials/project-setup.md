@@ -174,7 +174,7 @@ curl -s -X POST $BASE_URL/projects/$PROJECT_ID/members \
   -d "{\"user_id\": \"$BOB_ID\", \"policy_ids\": [\"$READONLY_POLICY_ID\"]}" | jq .
 ```
 
-See [Projects — Membership](/docs/modules/projects#membership) for details on how membership and policies work together.
+See [Projects — Authorization Model](/docs/modules/projects#authorization-model) for details on how access and policies work together.
 
 ## 6. Verify user access
 

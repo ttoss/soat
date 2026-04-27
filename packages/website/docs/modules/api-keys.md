@@ -1,7 +1,3 @@
----
-sidebar_position: 11
----
-
 # API Keys
 
 The API Keys module provides long-lived programmatic credentials for users. An API key authenticates as its owning user and optionally restricts access to a single project and/or a subset of that user's policies.

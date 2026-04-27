@@ -1,7 +1,3 @@
----
-sidebar_position: 10
----
-
 # Policies
 
 The Policies module provides global, reusable IAM policy documents that can be attached to users and API keys. Policies are managed by admins and define fine-grained permission rules evaluated at request time.

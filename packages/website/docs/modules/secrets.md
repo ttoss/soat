@@ -1,7 +1,3 @@
----
-sidebar_position: 3
----
-
 # Secrets
 
 The Secrets module provides encrypted storage for sensitive values such as API keys and credentials. Values are encrypted at rest using AES-256-GCM and are never returned by any API response.
@@ -26,11 +22,11 @@ openssl rand -hex 32
 
 ## Data Model
 
-| Field       | Type    | Description                              |
-| ----------- | ------- | ---------------------------------------- |
-| `id`        | string  | Public identifier (e.g. `sec_…`)         |
+| Field        | Type    | Description                              |
+| ------------ | ------- | ---------------------------------------- |
+| `id`         | string  | Public identifier (e.g. `sec_…`)         |
 | `project_id` | string  | ID of the owning project                 |
-| `name`      | string  | Human-readable label                     |
+| `name`       | string  | Human-readable label                     |
 | `has_value`  | boolean | `true` when an encrypted value is stored |
 | `created_at` | string  | ISO 8601 creation timestamp              |
 | `updated_at` | string  | ISO 8601 last-updated timestamp          |
@@ -41,10 +37,10 @@ By default, deleting a secret that is still referenced by one or more AI provide
 
 ## Permissions
 
-| Action        | Permission             | REST Endpoint                      | MCP Tool        |
-| ------------- | ---------------------- | ---------------------------------- | --------------- |
-| List secrets  | `secrets:ListSecrets`  | `GET /api/v1/secrets`              | `list-secrets`  |
+| Action        | Permission             | REST Endpoint                       | MCP Tool        |
+| ------------- | ---------------------- | ----------------------------------- | --------------- |
+| List secrets  | `secrets:ListSecrets`  | `GET /api/v1/secrets`               | `list-secrets`  |
 | Get a secret  | `secrets:GetSecret`    | `GET /api/v1/secrets/:secret_id`    | `get-secret`    |
-| Create secret | `secrets:CreateSecret` | `POST /api/v1/secrets`             | `create-secret` |
+| Create secret | `secrets:CreateSecret` | `POST /api/v1/secrets`              | `create-secret` |
 | Update secret | `secrets:UpdateSecret` | `PATCH /api/v1/secrets/:secret_id`  | `update-secret` |
 | Delete secret | `secrets:DeleteSecret` | `DELETE /api/v1/secrets/:secret_id` | `delete-secret` |

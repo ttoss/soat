@@ -1,7 +1,3 @@
----
-sidebar_position: 11
----
-
 # Sessions
 
 ## Overview
@@ -69,11 +65,11 @@ Sessions support the same `tool_context` mechanism as direct agent generations â
 
 When a generation is triggered through a session (either via `POST .../generate` or auto-generate), the server automatically injects the following keys into `tool_context` before forwarding to tool calls:
 
-| Header                           | Value                                              |
-| -------------------------------- | -------------------------------------------------- |
-| `X-Soat-Context-actor_id`         | Public ID of the session's user actor (`actr_...`) |
+| Header                             | Value                                              |
+| ---------------------------------- | -------------------------------------------------- |
+| `X-Soat-Context-actor_id`          | Public ID of the session's user actor (`actr_...`) |
 | `X-Soat-Context-actor_external_id` | External ID of the session's user actor            |
-| `X-Soat-Context-session_id`       | Public ID of the session (`sess_...`)              |
+| `X-Soat-Context-session_id`        | Public ID of the session (`sess_...`)              |
 
 Any values provided by the caller in `tool_context` are merged on top and take precedence over the auto-populated values.
 
@@ -95,15 +91,15 @@ The tool will receive all four headers: `X-Soat-Context-actor_id`, `X-Soat-Conte
 
 ### Session
 
-| Field            | Type    | Description                                                                                                    |
-| ---------------- | ------- | -------------------------------------------------------------------------------------------------------------- |
-| `id`             | string  | Public identifier prefixed with `sess_`                                                                        |
+| Field             | Type    | Description                                                                                                    |
+| ----------------- | ------- | -------------------------------------------------------------------------------------------------------------- |
+| `id`              | string  | Public identifier prefixed with `sess_`                                                                        |
 | `agent_id`        | string  | Public ID of the agent this session belongs to                                                                 |
 | `conversation_id` | string  | Public ID of the underlying conversation                                                                       |
-| `status`         | string  | `open` (default) or `closed`                                                                                   |
-| `name`           | string  | Optional display name                                                                                          |
+| `status`          | string  | `open` (default) or `closed`                                                                                   |
+| `name`            | string  | Optional display name                                                                                          |
 | `actor_id`        | string  | Public ID of the user actor (`actr_` prefix)                                                                   |
-| `tags`           | object  | Free-form key-value metadata                                                                                   |
+| `tags`            | object  | Free-form key-value metadata                                                                                   |
 | `auto_generate`   | boolean | When `true`, saving a message via `POST .../messages` automatically triggers LLM generation (default: `false`) |
 | `created_at`      | string  | ISO 8601 creation timestamp                                                                                    |
 | `updated_at`      | string  | ISO 8601 last-updated timestamp                                                                                |
@@ -112,11 +108,11 @@ The tool will receive all four headers: `X-Soat-Context-actor_id`, `X-Soat-Conte
 
 Messages are returned with simplified roles:
 
-| Field       | Type   | Description                                         |
-| ----------- | ------ | --------------------------------------------------- |
-| `role`      | string | `user` or `assistant` (mapped from actor ownership) |
-| `content`   | string | Message text                                        |
-| `model`     | string | Model used for assistant messages                   |
+| Field        | Type   | Description                                         |
+| ------------ | ------ | --------------------------------------------------- |
+| `role`       | string | `user` or `assistant` (mapped from actor ownership) |
+| `content`    | string | Message text                                        |
+| `model`      | string | Model used for assistant messages                   |
 | `created_at` | string | ISO 8601 timestamp                                  |
 
 ## Permissions

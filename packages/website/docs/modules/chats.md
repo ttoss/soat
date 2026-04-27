@@ -1,7 +1,3 @@
----
-sidebar_position: 8
----
-
 # Chats
 
 The Chats module provides both a stateless completions endpoint and a stateful Chat resource. A Chat stores the AI provider, an optional default system message, and an optional model override so callers only need to pass the conversation history per request.
@@ -60,25 +56,25 @@ Both endpoints support SSE streaming via `stream: true`.
 
 A Chat is a persistent resource belonging to a project. It stores:
 
-| Field           | Type     | Description                                                     |
-| --------------- | -------- | --------------------------------------------------------------- |
-| `id`            | `string` | Public ID prefixed with `cht_`                                  |
-| `project_id`     | `string` | Public ID of the owning project                                 |
-| `ai_provider_id`  | `string` | Public ID of the AI provider used for completions               |
-| `name`          | `string` | Optional human-readable name                                    |
-| `system_message` | `string` | Optional default system prompt applied to all completions       |
-| `model`         | `string` | Optional model override (falls back to provider's default_model) |
-| `created_at`     | `string` | ISO 8601 creation timestamp                                     |
-| `updated_at`     | `string` | ISO 8601 last-updated timestamp                                 |
+| Field            | Type     | Description                                                      |
+| ---------------- | -------- | ---------------------------------------------------------------- |
+| `id`             | `string` | Public ID prefixed with `cht_`                                   |
+| `project_id`     | `string` | Public ID of the owning project                                  |
+| `ai_provider_id` | `string` | Public ID of the AI provider used for completions                |
+| `name`           | `string` | Optional human-readable name                                     |
+| `system_message` | `string` | Optional default system prompt applied to all completions        |
+| `model`          | `string` | Optional model override (falls back to provider's default_model) |
+| `created_at`     | `string` | ISO 8601 creation timestamp                                      |
+| `updated_at`     | `string` | ISO 8601 last-updated timestamp                                  |
 
 ### Messages
 
 Each message in the `messages` array can specify content in two ways:
 
-| Field        | Type                              | Description                                                               |
-| ------------ | --------------------------------- | ------------------------------------------------------------------------- |
-| `role`       | `system` \| `user` \| `assistant` | Identifies the author of the message                                      |
-| `content`    | `string`                          | Text body _(use this or `document_id`, not both)_                          |
+| Field         | Type                              | Description                                                               |
+| ------------- | --------------------------------- | ------------------------------------------------------------------------- |
+| `role`        | `system` \| `user` \| `assistant` | Identifies the author of the message                                      |
+| `content`     | `string`                          | Text body _(use this or `document_id`, not both)_                         |
 | `document_id` | `string`                          | Public ID of a document — the server resolves its content before the call |
 
 When `document_id` is supplied the server fetches the document and uses its `content` field as the message body.
@@ -97,11 +93,11 @@ Set `stream: true` in the request body to receive an SSE stream. Each event cont
 
 ## Permissions
 
-| Action                   | Permission                     | REST Endpoint                      | MCP Tool                          |
-| ------------------------ | ------------------------------ | ---------------------------------- | --------------------------------- |
-| Create a chat            | `chats:CreateChat`             | `POST /chats`                      | `create-chat`                     |
-| List chats               | `chats:ListChats`              | `GET /chats`                       | `list-chats`                      |
+| Action                   | Permission                     | REST Endpoint                       | MCP Tool                          |
+| ------------------------ | ------------------------------ | ----------------------------------- | --------------------------------- |
+| Create a chat            | `chats:CreateChat`             | `POST /chats`                       | `create-chat`                     |
+| List chats               | `chats:ListChats`              | `GET /chats`                        | `list-chats`                      |
 | Get a chat               | `chats:GetChat`                | `GET /chats/{chat_id}`              | `get-chat`                        |
 | Delete a chat            | `chats:DeleteChat`             | `DELETE /chats/{chat_id}`           | `delete-chat`                     |
 | Run per-chat completion  | `chats:CreateChatCompletion`   | `POST /chats/{chat_id}/completions` | `create-chat-completion-for-chat` |
-| Run stateless completion | Authenticated user (no policy) | `POST /chats/completions`          | `create-chat-completion`          |
+| Run stateless completion | Authenticated user (no policy) | `POST /chats/completions`           | `create-chat-completion`          |

@@ -1,7 +1,3 @@
----
-sidebar_position: 1
----
-
 # IAM
 
 The IAM (Identity and Access Management) module provides authentication, identity management, and fine-grained authorization for the SOAT platform. It implements an AWS IAM-inspired policy engine with structured policy statements supporting `Effect`, `Action`, `Resource`, and `Condition`.

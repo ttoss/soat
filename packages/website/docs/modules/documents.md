@@ -1,7 +1,3 @@
----
-sidebar_position: 5
----
-
 # Documents
 
 The Documents module stores plain-text documents along with an embedding vector in PostgreSQL, enabling semantic (vector) search across project content. Under the hood each document is backed by a [Files](./files.md) record stored on disk.
