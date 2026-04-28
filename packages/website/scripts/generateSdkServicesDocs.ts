@@ -104,10 +104,6 @@ const main = () => {
     '# Services Reference',
     '',
     'Complete list of all SDK service classes and their methods, grouped by module. Each method corresponds to one REST endpoint.',
-    '',
-    ':::note',
-    'This file is auto-generated. Run `pnpm generate-sdk-services-docs` to update it.',
-    ':::',
   ];
 
   for (const mod of loadModules()) {

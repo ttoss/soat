@@ -74,7 +74,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
-  /api-keys/{id}:
+  /api-keys/{api_key_id}:
     get:
       tags:
         - API Keys
@@ -84,7 +84,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: id
+        - name: api_key_id
           in: path
           required: true
           description: API key public ID (key_ prefix)
@@ -113,7 +113,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: id
+        - name: api_key_id
           in: path
           required: true
           description: API key public ID (key_ prefix)
@@ -169,7 +169,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: id
+        - name: api_key_id
           in: path
           required: true
           description: API key public ID (key_ prefix)

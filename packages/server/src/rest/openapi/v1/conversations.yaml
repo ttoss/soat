@@ -145,7 +145,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /conversations/{id}:
+  /conversations/{conversation_id}:
     get:
       tags:
         - Conversations
@@ -153,7 +153,7 @@ paths:
       description: Returns a conversation by its ID
       operationId: getConversation
       parameters:
-        - name: id
+        - name: conversation_id
           in: path
           required: true
           description: Conversation ID
@@ -192,7 +192,7 @@ paths:
       description: Updates the status of a conversation
       operationId: updateConversation
       parameters:
-        - name: id
+        - name: conversation_id
           in: path
           required: true
           description: Conversation ID
@@ -250,7 +250,7 @@ paths:
       description: Deletes a conversation by its ID
       operationId: deleteConversation
       parameters:
-        - name: id
+        - name: conversation_id
           in: path
           required: true
           description: Conversation ID
@@ -278,7 +278,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /conversations/{id}/messages:
+  /conversations/{conversation_id}/messages:
     get:
       tags:
         - Conversations
@@ -286,7 +286,7 @@ paths:
       description: Returns all messages (documents) attached to a conversation, ordered by position
       operationId: listConversationMessages
       parameters:
-        - name: id
+        - name: conversation_id
           in: path
           required: true
           description: Conversation ID
@@ -350,7 +350,7 @@ paths:
       description: Creates a document from the message text and attaches it to the conversation at the given position. If position is omitted, it is appended at the end.
       operationId: addConversationMessage
       parameters:
-        - name: id
+        - name: conversation_id
           in: path
           required: true
           description: Conversation ID
@@ -418,7 +418,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /conversations/{id}/generate:
+  /conversations/{conversation_id}/generate:
     post:
       tags:
         - Conversations
@@ -430,7 +430,7 @@ paths:
         submit tool outputs via the Agents module and re-invoke generate.
       operationId: generateConversationMessage
       parameters:
-        - name: id
+        - name: conversation_id
           in: path
           required: true
           schema:
@@ -496,7 +496,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /conversations/{id}/actors:
+  /conversations/{conversation_id}/actors:
     get:
       tags:
         - Conversations
@@ -504,7 +504,7 @@ paths:
       description: Returns all distinct actors who have sent at least one message in the conversation
       operationId: listConversationActors
       parameters:
-        - name: id
+        - name: conversation_id
           in: path
           required: true
           description: Conversation ID
@@ -538,7 +538,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /conversations/{id}/messages/{document_id}:
+  /conversations/{conversation_id}/messages/{document_id}:
     delete:
       tags:
         - Conversations
@@ -546,7 +546,7 @@ paths:
       description: Removes a document from a conversation
       operationId: removeConversationMessage
       parameters:
-        - name: id
+        - name: conversation_id
           in: path
           required: true
           description: Conversation ID
@@ -581,7 +581,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /conversations/{id}/tags:
+  /conversations/{conversation_id}/tags:
     get:
       tags:
         - Conversations
@@ -589,7 +589,7 @@ paths:
       description: Returns all tags attached to the conversation
       operationId: getConversationTags
       parameters:
-        - name: id
+        - name: conversation_id
           in: path
           required: true
           description: Conversation ID
@@ -630,7 +630,7 @@ paths:
       description: Replaces all tags on the conversation with the provided tags
       operationId: replaceConversationTags
       parameters:
-        - name: id
+        - name: conversation_id
           in: path
           required: true
           description: Conversation ID
@@ -679,7 +679,7 @@ paths:
       description: Merges provided tags with existing tags
       operationId: mergeConversationTags
       parameters:
-        - name: id
+        - name: conversation_id
           in: path
           required: true
           description: Conversation ID

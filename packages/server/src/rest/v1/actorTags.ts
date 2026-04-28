@@ -17,14 +17,14 @@ const buildActorTagContext = (actor: {
   return context;
 };
 
-actorTagsRouter.get('/actors/:id/tags', async (ctx: Context) => {
+actorTagsRouter.get('/actors/:actor_id/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const actor = await getActor({ id: ctx.params.id });
+  const actor = await getActor({ id: ctx.params.actor_id });
   if (!actor) {
     ctx.status = 404;
     ctx.body = { error: 'Actor not found' };
@@ -48,17 +48,17 @@ actorTagsRouter.get('/actors/:id/tags', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await getActorTags({ id: ctx.params.id });
+  ctx.body = await getActorTags({ id: ctx.params.actor_id });
 });
 
-actorTagsRouter.put('/actors/:id/tags', async (ctx: Context) => {
+actorTagsRouter.put('/actors/:actor_id/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const actor = await getActor({ id: ctx.params.id });
+  const actor = await getActor({ id: ctx.params.actor_id });
   if (!actor) {
     ctx.status = 404;
     ctx.body = { error: 'Actor not found' };
@@ -83,17 +83,21 @@ actorTagsRouter.put('/actors/:id/tags', async (ctx: Context) => {
   }
 
   const tags = ctx.request.body as Record<string, string>;
-  ctx.body = await updateActorTags({ id: ctx.params.id, tags, merge: false });
+  ctx.body = await updateActorTags({
+    id: ctx.params.actor_id,
+    tags,
+    merge: false,
+  });
 });
 
-actorTagsRouter.patch('/actors/:id/tags', async (ctx: Context) => {
+actorTagsRouter.patch('/actors/:actor_id/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const actor = await getActor({ id: ctx.params.id });
+  const actor = await getActor({ id: ctx.params.actor_id });
   if (!actor) {
     ctx.status = 404;
     ctx.body = { error: 'Actor not found' };
@@ -118,7 +122,11 @@ actorTagsRouter.patch('/actors/:id/tags', async (ctx: Context) => {
   }
 
   const tags = ctx.request.body as Record<string, string>;
-  ctx.body = await updateActorTags({ id: ctx.params.id, tags, merge: true });
+  ctx.body = await updateActorTags({
+    id: ctx.params.actor_id,
+    tags,
+    merge: true,
+  });
 });
 
 export { actorTagsRouter };

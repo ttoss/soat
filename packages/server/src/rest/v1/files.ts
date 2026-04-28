@@ -98,14 +98,14 @@ filesRouter.get('/files', async (ctx: Context) => {
   });
 });
 
-filesRouter.get('/files/:id', async (ctx: Context) => {
+filesRouter.get('/files/:file_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const file = await getFile({ id: ctx.params.id });
+  const file = await getFile({ id: ctx.params.file_id });
 
   if (!file) {
     ctx.status = 404;
@@ -198,7 +198,7 @@ filesRouter.post('/files', async (ctx: Context) => {
   ctx.body = file;
 });
 
-filesRouter.delete('/files/:id', async (ctx: Context) => {
+filesRouter.delete('/files/:file_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -207,7 +207,7 @@ filesRouter.delete('/files/:id', async (ctx: Context) => {
 
   // Get file to check project permission
   const file = await db.File.findOne({
-    where: { publicId: ctx.params.id },
+    where: { publicId: ctx.params.file_id },
     include: [{ model: db.Project, as: 'project' }],
   });
 
@@ -251,7 +251,7 @@ filesRouter.delete('/files/:id', async (ctx: Context) => {
     return;
   }
 
-  const result = await deleteFile({ id: ctx.params.id });
+  const result = await deleteFile({ id: ctx.params.file_id });
 
   if (result === null) {
     ctx.status = 404;
@@ -415,14 +415,14 @@ const buildFileDownloadResources = (fileRecord: {
   return { srns, context };
 };
 
-filesRouter.get('/files/:id/download', async (ctx: Context) => {
+filesRouter.get('/files/:file_id/download', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const fileRecord = await getFile({ id: ctx.params.id });
+  const fileRecord = await getFile({ id: ctx.params.file_id });
 
   if (!fileRecord) {
     ctx.status = 404;
@@ -443,7 +443,7 @@ filesRouter.get('/files/:id/download', async (ctx: Context) => {
     return;
   }
 
-  const result = await downloadFile({ id: ctx.params.id });
+  const result = await downloadFile({ id: ctx.params.file_id });
 
   if (!result) {
     ctx.status = 404;
@@ -461,14 +461,14 @@ filesRouter.get('/files/:id/download', async (ctx: Context) => {
   ctx.body = result.stream;
 });
 
-filesRouter.get('/files/:id/download/base64', async (ctx: Context) => {
+filesRouter.get('/files/:file_id/download/base64', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const fileRecord = await getFile({ id: ctx.params.id });
+  const fileRecord = await getFile({ id: ctx.params.file_id });
 
   if (!fileRecord) {
     ctx.status = 404;
@@ -509,7 +509,7 @@ filesRouter.get('/files/:id/download/base64', async (ctx: Context) => {
     return;
   }
 
-  const result = await downloadFile({ id: ctx.params.id });
+  const result = await downloadFile({ id: ctx.params.file_id });
 
   if (!result) {
     ctx.status = 404;
@@ -531,14 +531,14 @@ filesRouter.get('/files/:id/download/base64', async (ctx: Context) => {
   };
 });
 
-filesRouter.patch('/files/:id/metadata', async (ctx: Context) => {
+filesRouter.patch('/files/:file_id/metadata', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const fileRecord = await getFile({ id: ctx.params.id });
+  const fileRecord = await getFile({ id: ctx.params.file_id });
 
   if (!fileRecord) {
     ctx.status = 404;
@@ -581,7 +581,7 @@ filesRouter.patch('/files/:id/metadata', async (ctx: Context) => {
 
   const body = ctx.request.body as { metadata?: string; filename?: string };
   const updated = await updateFileMetadata({
-    id: ctx.params.id,
+    id: ctx.params.file_id,
     metadata: body.metadata,
     filename: body.filename,
   });
@@ -589,14 +589,14 @@ filesRouter.patch('/files/:id/metadata', async (ctx: Context) => {
   ctx.body = updated;
 });
 
-filesRouter.get('/files/:id/tags', async (ctx: Context) => {
+filesRouter.get('/files/:file_id/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const file = await getFile({ id: ctx.params.id });
+  const file = await getFile({ id: ctx.params.file_id });
 
   if (!file) {
     ctx.status = 404;
@@ -637,17 +637,17 @@ filesRouter.get('/files/:id/tags', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await getFileTags({ id: ctx.params.id });
+  ctx.body = await getFileTags({ id: ctx.params.file_id });
 });
 
-filesRouter.put('/files/:id/tags', async (ctx: Context) => {
+filesRouter.put('/files/:file_id/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const file = await getFile({ id: ctx.params.id });
+  const file = await getFile({ id: ctx.params.file_id });
 
   if (!file) {
     ctx.status = 404;
@@ -689,17 +689,21 @@ filesRouter.put('/files/:id/tags', async (ctx: Context) => {
   }
 
   const tags = ctx.request.body as Record<string, string>;
-  ctx.body = await updateFileTags({ id: ctx.params.id, tags, merge: false });
+  ctx.body = await updateFileTags({
+    id: ctx.params.file_id,
+    tags,
+    merge: false,
+  });
 });
 
-filesRouter.patch('/files/:id/tags', async (ctx: Context) => {
+filesRouter.patch('/files/:file_id/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const file = await getFile({ id: ctx.params.id });
+  const file = await getFile({ id: ctx.params.file_id });
 
   if (!file) {
     ctx.status = 404;
@@ -741,7 +745,11 @@ filesRouter.patch('/files/:id/tags', async (ctx: Context) => {
   }
 
   const tags = ctx.request.body as Record<string, string>;
-  ctx.body = await updateFileTags({ id: ctx.params.id, tags, merge: true });
+  ctx.body = await updateFileTags({
+    id: ctx.params.file_id,
+    tags,
+    merge: true,
+  });
 });
 
 export { filesRouter };

@@ -110,10 +110,13 @@ Flow:
    - `model` — the model name used for this generation.
 
    ```ts
-   const { data } = await soat.POST('/api/v1/conversations/{id}/generate', {
-     params: { path: { id: conversation_id } },
-     body: { actor_id },
-   });
+   const { data } = await soat.POST(
+     '/api/v1/conversations/{conversation_id}/generate',
+     {
+       params: { path: { conversation_id } },
+       body: { actor_id },
+     }
+   );
    // data.content is always the AI-generated text when data.status === 'completed'
    const responseText = data?.content;
    ```

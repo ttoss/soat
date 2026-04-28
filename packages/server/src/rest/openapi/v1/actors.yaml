@@ -150,7 +150,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /actors/{id}:
+  /actors/{actor_id}:
     get:
       tags:
         - Actors
@@ -158,7 +158,7 @@ paths:
       description: Returns an actor by its ID
       operationId: getActor
       parameters:
-        - name: id
+        - name: actor_id
           in: path
           required: true
           description: Actor ID
@@ -197,7 +197,7 @@ paths:
       description: Deletes an actor by its ID
       operationId: deleteActor
       parameters:
-        - name: id
+        - name: actor_id
           in: path
           required: true
           description: Actor ID
@@ -232,7 +232,7 @@ paths:
       description: Updates an actor's properties
       operationId: updateActor
       parameters:
-        - name: id
+        - name: actor_id
           in: path
           required: true
           description: Actor ID
@@ -285,7 +285,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /actors/{id}/tags:
+  /actors/{actor_id}/tags:
     get:
       tags:
         - Actors
@@ -293,7 +293,7 @@ paths:
       description: Returns all tags attached to the actor
       operationId: getActorTags
       parameters:
-        - name: id
+        - name: actor_id
           in: path
           required: true
           description: Actor ID
@@ -334,7 +334,7 @@ paths:
       description: Replaces all tags on the actor with the provided tags (not merged)
       operationId: replaceActorTags
       parameters:
-        - name: id
+        - name: actor_id
           in: path
           required: true
           description: Actor ID
@@ -386,7 +386,7 @@ paths:
       description: Merges provided tags with existing tags (existing tags are preserved unless overridden)
       operationId: mergeActorTags
       parameters:
-        - name: id
+        - name: actor_id
           in: path
           required: true
           description: Actor ID

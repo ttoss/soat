@@ -55,7 +55,7 @@ const handleGenerateResult = (
 const conversationSubResourcesRouter = new Router<Context>();
 
 conversationSubResourcesRouter.get(
-  '/conversations/:id/messages',
+  '/conversations/:conversation_id/messages',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -63,7 +63,9 @@ conversationSubResourcesRouter.get(
       return;
     }
 
-    const conversation = await getConversation({ id: ctx.params.id });
+    const conversation = await getConversation({
+      id: ctx.params.conversation_id,
+    });
 
     if (!conversation) {
       ctx.status = 404;
@@ -91,7 +93,7 @@ conversationSubResourcesRouter.get(
       : undefined;
 
     const messages = await listConversationMessages({
-      conversationId: ctx.params.id,
+      conversationId: ctx.params.conversation_id,
       limit,
       offset,
     });
@@ -101,7 +103,7 @@ conversationSubResourcesRouter.get(
 );
 
 conversationSubResourcesRouter.post(
-  '/conversations/:id/messages',
+  '/conversations/:conversation_id/messages',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -128,7 +130,9 @@ conversationSubResourcesRouter.post(
       return;
     }
 
-    const conversation = await getConversation({ id: ctx.params.id });
+    const conversation = await getConversation({
+      id: ctx.params.conversation_id,
+    });
 
     if (!conversation) {
       ctx.status = 404;
@@ -149,7 +153,7 @@ conversationSubResourcesRouter.post(
     }
 
     const message = await addConversationMessage({
-      conversationId: ctx.params.id,
+      conversationId: ctx.params.conversation_id,
       message: body.message,
       actorId: body.actorId,
       position: body.position,
@@ -168,7 +172,7 @@ conversationSubResourcesRouter.post(
 );
 
 conversationSubResourcesRouter.delete(
-  '/conversations/:id/messages/:document_id',
+  '/conversations/:conversation_id/messages/:document_id',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -176,7 +180,9 @@ conversationSubResourcesRouter.delete(
       return;
     }
 
-    const conversation = await getConversation({ id: ctx.params.id });
+    const conversation = await getConversation({
+      id: ctx.params.conversation_id,
+    });
 
     if (!conversation) {
       ctx.status = 404;
@@ -197,7 +203,7 @@ conversationSubResourcesRouter.delete(
     }
 
     const result = await removeConversationMessage({
-      conversationId: ctx.params.id,
+      conversationId: ctx.params.conversation_id,
       documentId: ctx.params.document_id,
     });
 
@@ -212,7 +218,7 @@ conversationSubResourcesRouter.delete(
 );
 
 conversationSubResourcesRouter.get(
-  '/conversations/:id/actors',
+  '/conversations/:conversation_id/actors',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -220,7 +226,9 @@ conversationSubResourcesRouter.get(
       return;
     }
 
-    const conversation = await getConversation({ id: ctx.params.id });
+    const conversation = await getConversation({
+      id: ctx.params.conversation_id,
+    });
 
     if (!conversation) {
       ctx.status = 404;
@@ -241,14 +249,14 @@ conversationSubResourcesRouter.get(
     }
 
     const actors = await listConversationActors({
-      conversationId: ctx.params.id,
+      conversationId: ctx.params.conversation_id,
     });
     ctx.body = actors;
   }
 );
 
 conversationSubResourcesRouter.get(
-  '/conversations/:id/tags',
+  '/conversations/:conversation_id/tags',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -256,7 +264,9 @@ conversationSubResourcesRouter.get(
       return;
     }
 
-    const conversation = await getConversation({ id: ctx.params.id });
+    const conversation = await getConversation({
+      id: ctx.params.conversation_id,
+    });
 
     if (!conversation) {
       ctx.status = 404;
@@ -276,12 +286,12 @@ conversationSubResourcesRouter.get(
       return;
     }
 
-    ctx.body = await getConversationTags({ id: ctx.params.id });
+    ctx.body = await getConversationTags({ id: ctx.params.conversation_id });
   }
 );
 
 conversationSubResourcesRouter.put(
-  '/conversations/:id/tags',
+  '/conversations/:conversation_id/tags',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -289,7 +299,9 @@ conversationSubResourcesRouter.put(
       return;
     }
 
-    const conversation = await getConversation({ id: ctx.params.id });
+    const conversation = await getConversation({
+      id: ctx.params.conversation_id,
+    });
 
     if (!conversation) {
       ctx.status = 404;
@@ -311,7 +323,7 @@ conversationSubResourcesRouter.put(
 
     const tags = ctx.request.body as Record<string, string>;
     ctx.body = await updateConversationTags({
-      id: ctx.params.id,
+      id: ctx.params.conversation_id,
       tags,
       merge: false,
     });
@@ -319,7 +331,7 @@ conversationSubResourcesRouter.put(
 );
 
 conversationSubResourcesRouter.patch(
-  '/conversations/:id/tags',
+  '/conversations/:conversation_id/tags',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -327,7 +339,9 @@ conversationSubResourcesRouter.patch(
       return;
     }
 
-    const conversation = await getConversation({ id: ctx.params.id });
+    const conversation = await getConversation({
+      id: ctx.params.conversation_id,
+    });
 
     if (!conversation) {
       ctx.status = 404;
@@ -349,7 +363,7 @@ conversationSubResourcesRouter.patch(
 
     const tags = ctx.request.body as Record<string, string>;
     ctx.body = await updateConversationTags({
-      id: ctx.params.id,
+      id: ctx.params.conversation_id,
       tags,
       merge: true,
     });
@@ -357,7 +371,7 @@ conversationSubResourcesRouter.patch(
 );
 
 conversationSubResourcesRouter.post(
-  '/conversations/:id/generate',
+  '/conversations/:conversation_id/generate',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -386,7 +400,9 @@ conversationSubResourcesRouter.post(
       return;
     }
 
-    const conversation = await getConversation({ id: ctx.params.id });
+    const conversation = await getConversation({
+      id: ctx.params.conversation_id,
+    });
     if (!conversation) {
       ctx.status = 404;
       ctx.body = { error: 'Conversation not found' };
@@ -406,7 +422,7 @@ conversationSubResourcesRouter.post(
     }
 
     const result = await generateConversationMessage({
-      conversationId: ctx.params.id,
+      conversationId: ctx.params.conversation_id,
       actorId: body.actorId,
       model: body.model,
       toolContext: body.toolContext,

@@ -46,13 +46,17 @@ Parameters are passed as named fields on the options object:
 
 | Field   | When to use                   | Example                             |
 | ------- | ----------------------------- | ----------------------------------- |
-| `path`  | URL path parameters           | `path: { id: 'act_...' }`           |
+| `path`  | URL path parameters           | `path: { actor_id: 'act_...' }`     |
 | `query` | Query string parameters       | `query: { limit: 10 }`              |
 | `body`  | Request body (POST/PUT/PATCH) | `body: { name: 'Bot', type: 'ai' }` |
 
+Body and query fields use the REST field names. Path parameters also use the exact resource-specific names from the URL template, such as `actor_id`, `project_id`, `file_id`, and `conversation_id`.
+
 ```ts
 // Path param
-const { data } = await soat.actors.getActor({ path: { id: 'act_...' } });
+const { data } = await soat.actors.getActor({
+  path: { actor_id: 'act_...' },
+});
 
 // POST with body (fields use snake_case)
 const { data } = await soat.actors.createActor({

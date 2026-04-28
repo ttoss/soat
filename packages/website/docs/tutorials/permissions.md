@@ -34,6 +34,8 @@ Export your server URL (used in subsequent steps):
 export SOAT_BASE_URL=http://localhost:5047/api/v1
 ```
 
+CLI path flags in this tutorial are resource-specific and kebab-cased, for example `--user-id` and `--project-id`.
+
 </TabItem>
 <TabItem value="sdk" label="SDK">
 

@@ -44,6 +44,12 @@ Every [conversation](/docs/modules/conversations) is tied to an agent. The agent
 
 See the [Agents module](/docs/modules/agents) for the full configuration reference.
 
+## CLI Flag Mapping
+
+The CLI exposes REST fields as kebab-case flags. Body and query fields mirror the REST contract, while path parameters keep resource-specific names. In practice that means commands use flags such as `--project-id`, `--agent-id`, `--conversation-id`, and `--file-id` instead of a generic `--id`.
+
+See the [CLI commands reference](/docs/cli/commands) for the current command surface and exact flag names.
+
 ## Resource Hierarchy
 
 ```

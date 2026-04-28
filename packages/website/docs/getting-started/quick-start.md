@@ -173,9 +173,12 @@ You should see a short answer from `qwen2.5:0.5b` running locally via Ollama.
 
 ## 6. What's next?
 
+If you continue with the CLI docs and tutorials, path parameters use resource-specific kebab-case flags such as `--project-id`, `--agent-id`, and `--session-id` rather than a generic `--id`.
+
 | Goal                                           | Where to go                                                     |
 | ---------------------------------------------- | --------------------------------------------------------------- |
 | Understand the permission model                | [IAM module](/docs/modules/iam)                                 |
+| Browse the current CLI command surface         | [CLI Commands Reference](/docs/cli/commands)                    |
 | Connect an LLM provider (OpenAI, Anthropic, …) | [AI Providers module](/docs/modules/ai-providers)               |
 | Save a reusable chat configuration             | [Chats module](/docs/modules/chats)                             |
 | Define and run an agent                        | [Agents module](/docs/modules/agents)                           |

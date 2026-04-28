@@ -29,7 +29,7 @@ usersRouter.get('/users', async (ctx: Context) => {
   ctx.body = await listUsers();
 });
 
-usersRouter.get('/users/:id', async (ctx: Context) => {
+usersRouter.get('/users/:user_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -42,7 +42,7 @@ usersRouter.get('/users/:id', async (ctx: Context) => {
     return;
   }
 
-  const user = await getUser({ id: ctx.params.id });
+  const user = await getUser({ id: ctx.params.user_id });
 
   if (!user) {
     ctx.status = 404;
@@ -112,7 +112,7 @@ usersRouter.post('/users/login', async (ctx: Context) => {
   ctx.body = result;
 });
 
-usersRouter.delete('/users/:id', async (ctx: Context) => {
+usersRouter.delete('/users/:user_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -125,7 +125,7 @@ usersRouter.delete('/users/:id', async (ctx: Context) => {
     return;
   }
 
-  const deleted = await deleteUser({ id: ctx.params.id });
+  const deleted = await deleteUser({ id: ctx.params.user_id });
 
   if (!deleted) {
     ctx.status = 404;

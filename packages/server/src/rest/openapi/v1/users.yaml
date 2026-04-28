@@ -87,7 +87,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /users/{id}:
+  /users/{user_id}:
     get:
       tags:
         - Users
@@ -95,7 +95,7 @@ paths:
       description: Returns the data of a specific user
       operationId: getUser
       parameters:
-        - name: id
+        - name: user_id
           in: path
           required: true
           description: User ID
@@ -128,7 +128,7 @@ paths:
       description: Deletes a specific user
       operationId: deleteUser
       parameters:
-        - name: id
+        - name: user_id
           in: path
           required: true
           description: User ID

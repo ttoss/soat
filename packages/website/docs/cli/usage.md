@@ -51,7 +51,7 @@ soat create-project --name "My Project"
 soat list-projects
 
 # Get a specific project
-soat get-project --id prj_01
+soat get-project --project-id prj_01
 ```
 
 ## Actors
@@ -64,10 +64,10 @@ soat list-actors --project-id prj_01
 soat create-actor --name "Support Bot" --type ai --project-id prj_01
 
 # Get a specific actor
-soat get-actor --id act_01
+soat get-actor --actor-id act_01
 
 # Delete an actor
-soat delete-actor --id act_01
+soat delete-actor --actor-id act_01
 ```
 
 ## Files
@@ -77,19 +77,19 @@ soat delete-actor --id act_01
 soat list-files --project-id prj_01
 
 # Get a specific file
-soat get-file --id file_01
+soat get-file --file-id file_01
 
 # Delete a file
-soat delete-file --id file_01
+soat delete-file --file-id file_01
 ```
 
 ## Passing Body Fields
 
-All request body fields are passed as `--flag value` arguments. Field names match the snake_case REST API contract:
+All request body fields are passed as `--flag value` arguments. Field names follow the REST API contract but are exposed in kebab-case, and path parameters keep their resource-specific names:
 
 ```bash
 soat create-actor --name "My Bot" --type ai --project-id prj_01
-soat update-actor --id act_01 --name "Renamed Bot"
+soat update-actor --actor-id act_01 --name "Renamed Bot"
 ```
 
 ## JSON Output
@@ -97,7 +97,7 @@ soat update-actor --id act_01 --name "Renamed Bot"
 Every command prints the API response as formatted JSON:
 
 ```bash
-soat get-actor --id act_01
+soat get-actor --actor-id act_01
 # {
 #   "id": "act_01",
 #   "name": "Support Bot",
