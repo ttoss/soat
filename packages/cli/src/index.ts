@@ -1,4 +1,7 @@
 /* eslint-disable no-console */
+import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createServer } from 'node:http';
+
 import input from '@inquirer/input';
 import password from '@inquirer/password';
 import * as sdk from '@soat/sdk';
@@ -8,11 +11,19 @@ import pkg from '../package.json' with { type: 'json' };
 import { resolveClient, writeProfile } from './config.js';
 import { routes } from './generated/routes.js';
 
-/** Convert kebab-case flag name to camelCase key (e.g. actor-id → actorId). */
-const kebabToCamel = (s: string) => {
-  return s.replace(/-([a-z])/g, (_, c: string) => {
+/**
+ * Normalize kebab-case, snake_case, or camelCase to camelCase for param matching.
+ * e.g. agent-id → agentId, actor_id → actorId, agentId → agentId
+ */
+const toCanonical = (s: string) => {
+  return s.replace(/[-_]([a-z0-9])/g, (_, c: string) => {
     return c.toUpperCase();
   });
+};
+
+/** Convert kebab-case to snake_case for body/query keys (e.g. project-id → project_id). */
+const kebabToSnake = (s: string) => {
+  return s.replace(/-/g, '_');
 };
 
 /** Parse unknown args like --foo bar --baz 1 into a flat Record. */
@@ -116,8 +127,161 @@ program
       })
     );
     for (const [cmd, r] of Object.entries(routes).sort()) {
-      console.log(`  ${cmd.padEnd(pad)}  ${r.serviceClass}.${r.operationId}`);
+      console.log(`  ${cmd.padEnd(pad)}  ${r.description}`);
     }
+  });
+
+const matchesFilter = (eventType: string, filter: string) => {
+  const patterns = filter
+    .split(',')
+    .map((part) => {
+      return part.trim();
+    })
+    .filter(Boolean);
+
+  if (patterns.length === 0) return true;
+
+  return patterns.some((pattern) => {
+    if (pattern === '*') return true;
+    if (pattern.endsWith('*')) {
+      return eventType.startsWith(pattern.slice(0, -1));
+    }
+    return eventType === pattern;
+  });
+};
+
+const verifySignature = (
+  secret: string,
+  payload: string,
+  signatureHeader: string
+) => {
+  const expected = createHmac('sha256', secret).update(payload).digest('hex');
+  const expectedBuffer = Buffer.from(expected, 'utf8');
+  const actualBuffer = Buffer.from(signatureHeader, 'utf8');
+
+  if (expectedBuffer.length !== actualBuffer.length) return false;
+
+  return timingSafeEqual(expectedBuffer, actualBuffer);
+};
+
+// ── listen ──────────────────────────────────────────────────────────────────
+
+program
+  .command('listen')
+  .description('Start a local webhook listener for testing deliveries')
+  .option('--port <number>', 'port to listen on', '8787')
+  .option('--path <path>', 'request path to accept', '/webhook')
+  .option(
+    '--secret <secret>',
+    'verify X-Soat-Signature with this webhook secret'
+  )
+  .option(
+    '--filter <pattern>',
+    'filter event type(s), supports prefix wildcard and comma separation (e.g. sessions.generation.*,files.*)'
+  )
+  .option('--json', 'print one JSON object per line')
+  // eslint-disable-next-line max-lines-per-function
+  .action((opts) => {
+    const port = Number(opts.port);
+    const path = opts.path as string;
+    const secret = opts.secret as string | undefined;
+    const filter = opts.filter as string | undefined;
+    const asJson = Boolean(opts.json);
+
+    if (!Number.isInteger(port) || port <= 0) {
+      console.error('Invalid port. Use a positive integer.');
+      process.exit(1);
+    }
+
+    const server = createServer((req, res) => {
+      if (req.method !== 'POST' || req.url !== path) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'not found' }));
+        return;
+      }
+
+      const chunks: Buffer[] = [];
+
+      req.on('data', (chunk: Buffer) => {
+        chunks.push(chunk);
+      });
+
+      // eslint-disable-next-line complexity
+      req.on('end', () => {
+        const rawBody = Buffer.concat(chunks).toString('utf8');
+        const eventType = String(req.headers['x-soat-event'] ?? 'unknown');
+        const deliveryId = String(req.headers['x-soat-delivery'] ?? 'unknown');
+        const signature = String(req.headers['x-soat-signature'] ?? '');
+
+        if (filter && !matchesFilter(eventType, filter)) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, skipped: true }));
+          return;
+        }
+
+        let parsedPayload: unknown = rawBody;
+        try {
+          parsedPayload = JSON.parse(rawBody);
+        } catch {
+          // Keep raw body when payload is not valid JSON.
+        }
+
+        let isSignatureValid: boolean | null = null;
+        if (secret) {
+          isSignatureValid = verifySignature(secret, rawBody, signature);
+        }
+
+        const record = {
+          timestamp: new Date().toISOString(),
+          event_type: eventType,
+          delivery_id: deliveryId,
+          signature,
+          signature_valid: isSignatureValid,
+          payload: parsedPayload,
+        };
+
+        if (asJson) {
+          console.log(JSON.stringify(record));
+        } else {
+          console.log('--- webhook received ---');
+          console.log('event_type:', eventType);
+          console.log('delivery_id:', deliveryId);
+          if (secret) {
+            console.log('signature_valid:', isSignatureValid);
+          }
+          console.log('payload:', JSON.stringify(parsedPayload, null, 2));
+        }
+
+        const responseStatus = secret && isSignatureValid === false ? 401 : 200;
+        res.writeHead(responseStatus, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            ok: responseStatus === 200,
+            event_type: eventType,
+            delivery_id: deliveryId,
+            signature_valid: isSignatureValid,
+          })
+        );
+      });
+    });
+
+    server.listen(port, () => {
+      console.log(
+        `Listening for SOAT webhooks on http://localhost:${port}${path}`
+      );
+      if (filter) {
+        console.log(`Filter: ${filter}`);
+      }
+      if (secret) {
+        console.log('Signature verification: enabled');
+      }
+    });
+
+    process.on('SIGINT', () => {
+      server.close(() => {
+        process.exit(0);
+      });
+    });
   });
 
 // ── dynamic dispatch ──────────────────────────────────────────────────────────
@@ -152,14 +316,21 @@ program
 
     for (const [flagKey, val] of Object.entries(flags)) {
       if (flagKey === 'profile') continue;
-      const camel = kebabToCamel(flagKey);
+      const canonical = toCanonical(flagKey);
       const parsedValue = parseFlagValue(val);
-      if (route.pathParams.includes(flagKey)) {
-        pathArgs[camel] = parsedValue;
-      } else if (route.queryParams.includes(flagKey)) {
-        queryArgs[camel] = parsedValue;
+      const pathParam = route.pathParams.find((p) => {
+        return toCanonical(p) === canonical;
+      });
+      const queryParam = route.queryParams.find((p) => {
+        return toCanonical(p) === canonical;
+      });
+
+      if (pathParam) {
+        pathArgs[pathParam] = parsedValue;
+      } else if (queryParam) {
+        queryArgs[queryParam] = parsedValue;
       } else {
-        bodyArgs[camel] = parsedValue;
+        bodyArgs[kebabToSnake(flagKey)] = parsedValue;
       }
     }
 

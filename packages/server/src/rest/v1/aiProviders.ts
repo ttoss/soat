@@ -69,14 +69,14 @@ aiProvidersRouter.get('/ai-providers', async (ctx: Context) => {
   ctx.body = await listAiProviders({ projectIds: projectIds ?? [] });
 });
 
-aiProvidersRouter.get('/ai-providers/:aiProviderId', async (ctx: Context) => {
+aiProvidersRouter.get('/ai-providers/:ai_provider_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const provider = await getAiProvider({ id: ctx.params.aiProviderId });
+  const provider = await getAiProvider({ id: ctx.params.ai_provider_id });
   if (!provider) {
     ctx.status = 404;
     ctx.body = { error: 'AI provider not found' };
@@ -168,70 +168,8 @@ aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
   ctx.body = provider;
 });
 
-aiProvidersRouter.patch('/ai-providers/:aiProviderId', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  const existing = await getAiProvider({ id: ctx.params.aiProviderId });
-  if (!existing) {
-    ctx.status = 404;
-    ctx.body = { error: 'AI provider not found' };
-    return;
-  }
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: existing.projectId!,
-    action: 'aiProviders:UpdateAiProvider',
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const body = ctx.request.body as {
-    secretId?: string;
-    name?: string;
-    provider?: string;
-    defaultModel?: string;
-    baseUrl?: string | null;
-    config?: Record<string, unknown> | null;
-  };
-
-  let resolvedSecretId: number | undefined;
-  if (body.secretId !== undefined) {
-    const project = await db.Project.findOne({
-      where: { publicId: existing.projectId! },
-    });
-    const secret = await db.Secret.findOne({
-      where: { publicId: body.secretId, projectId: project!.id },
-    });
-    if (!secret) {
-      ctx.status = 400;
-      ctx.body = { error: 'Invalid secret ID' };
-      return;
-    }
-    resolvedSecretId = secret.id;
-  }
-
-  const updated = await updateAiProvider({
-    id: ctx.params.aiProviderId,
-    secretId: resolvedSecretId,
-    name: body.name,
-    provider: body.provider as AiProviderSlug | undefined,
-    defaultModel: body.defaultModel,
-    baseUrl: body.baseUrl,
-    config: body.config,
-  });
-
-  ctx.body = updated;
-});
-
-aiProvidersRouter.delete(
-  '/ai-providers/:aiProviderId',
+aiProvidersRouter.patch(
+  '/ai-providers/:ai_provider_id',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -239,7 +177,72 @@ aiProvidersRouter.delete(
       return;
     }
 
-    const existing = await getAiProvider({ id: ctx.params.aiProviderId });
+    const existing = await getAiProvider({ id: ctx.params.ai_provider_id });
+    if (!existing) {
+      ctx.status = 404;
+      ctx.body = { error: 'AI provider not found' };
+      return;
+    }
+
+    const allowed = await ctx.authUser.isAllowed({
+      projectPublicId: existing.projectId!,
+      action: 'aiProviders:UpdateAiProvider',
+    });
+    if (!allowed) {
+      ctx.status = 403;
+      ctx.body = { error: 'Forbidden' };
+      return;
+    }
+
+    const body = ctx.request.body as {
+      secretId?: string;
+      name?: string;
+      provider?: string;
+      defaultModel?: string;
+      baseUrl?: string | null;
+      config?: Record<string, unknown> | null;
+    };
+
+    let resolvedSecretId: number | undefined;
+    if (body.secretId !== undefined) {
+      const project = await db.Project.findOne({
+        where: { publicId: existing.projectId! },
+      });
+      const secret = await db.Secret.findOne({
+        where: { publicId: body.secretId, projectId: project!.id },
+      });
+      if (!secret) {
+        ctx.status = 400;
+        ctx.body = { error: 'Invalid secret ID' };
+        return;
+      }
+      resolvedSecretId = secret.id;
+    }
+
+    const updated = await updateAiProvider({
+      id: ctx.params.ai_provider_id,
+      secretId: resolvedSecretId,
+      name: body.name,
+      provider: body.provider as AiProviderSlug | undefined,
+      defaultModel: body.defaultModel,
+      baseUrl: body.baseUrl,
+      config: body.config,
+    });
+
+    ctx.body = updated;
+  }
+);
+
+aiProvidersRouter.delete(
+  '/ai-providers/:ai_provider_id',
+  async (ctx: Context) => {
+    if (!ctx.authUser) {
+      ctx.status = 401;
+      ctx.body = { error: 'Unauthorized' };
+      return;
+    }
+
+    const existing = await getAiProvider({ id: ctx.params.ai_provider_id });
     if (!existing) {
       ctx.status = 404;
       ctx.body = { error: 'AI provider not found' };
@@ -256,7 +259,7 @@ aiProvidersRouter.delete(
       return;
     }
 
-    await deleteAiProvider({ id: ctx.params.aiProviderId });
+    await deleteAiProvider({ id: ctx.params.ai_provider_id });
     ctx.status = 204;
   }
 );

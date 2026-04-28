@@ -15,34 +15,31 @@ npm install @soat/sdk
 pnpm add @soat/sdk
 ```
 
-## Setup
+## Setup — `SoatClient` (recommended)
 
-Import `createClient` and `createConfig` to configure the HTTP client:
+Create a `SoatClient` instance once and reuse it throughout your application. Resources are exposed as properties on the instance — no need to pass a `client` on every call:
 
 ```ts
-import { createClient, createConfig } from '@soat/sdk';
+import { SoatClient } from '@soat/sdk';
 
-const client = createClient(
-  createConfig({
-    baseUrl: 'https://your-soat-server.com',
-    auth: 'your-bearer-token',
-  })
-);
+const soat = new SoatClient({
+  baseUrl: 'https://your-soat-server.com/api/v1',
+  token: 'your-bearer-token',
+});
 ```
 
-| Option    | Type     | Required | Description                                     |
-| --------- | -------- | -------- | ----------------------------------------------- |
-| `baseUrl` | `string` | Yes      | Base URL of the SOAT server                     |
-| `auth`    | `string` | No       | Bearer token — JWT session token or project key |
+| Option    | Type                     | Required | Description                                                        |
+| --------- | ------------------------ | -------- | ------------------------------------------------------------------ |
+| `baseUrl` | `string`                 | No       | Base URL including `/api/v1`. Defaults to `/api/v1` (same-origin). |
+| `token`   | `string`                 | No       | Bearer token — JWT session token or `sk_`-prefixed project key.    |
+| `headers` | `Record<string, string>` | No       | Additional headers merged into every request.                      |
 
-## Calling Service Methods
+## Calling Methods
 
-Each SOAT resource has a corresponding service class (e.g., `Actors`, `Users`, `Files`). Pass your `client` instance to every call:
+Each SOAT resource has a corresponding property on `SoatClient` (e.g., `soat.actors`, `soat.users`, `soat.files`). Call methods directly — they have the same signatures as the static service classes:
 
 ```ts
-import { Actors } from '@soat/sdk';
-
-const { data, error } = await Actors.listActors({ client });
+const { data, error } = await soat.actors.listActors();
 ```
 
 Parameters are passed as named fields on the options object:
@@ -55,11 +52,10 @@ Parameters are passed as named fields on the options object:
 
 ```ts
 // Path param
-const { data } = await Actors.getActor({ client, path: { id: 'act_...' } });
+const { data } = await soat.actors.getActor({ path: { id: 'act_...' } });
 
 // POST with body (fields use snake_case)
-const { data } = await Actors.createActor({
-  client,
+const { data } = await soat.actors.createActor({
   body: { name: 'Support Bot', type: 'ai' },
 });
 ```
@@ -69,7 +65,7 @@ const { data } = await Actors.createActor({
 Every call returns `{ data, error, response }`. Always check `error` before using `data`:
 
 ```ts
-const { data, error } = await Users.listUsers({ client });
+const { data, error } = await soat.users.listUsers();
 
 if (error) {
   throw new Error(`API error: ${JSON.stringify(error)}`);
@@ -82,15 +78,34 @@ When `error` is set, `data` is `undefined`. Use early returns or throws to guard
 
 ## Authentication
 
-SOAT accepts two token types as the `auth` value in `createConfig`:
+SOAT accepts two token types as the `token` option:
 
 - **JWT session token** — obtained from `POST /api/v1/users/login`
-- **Project-scoped API key** — obtained from `POST /api/v1/project-keys` (prefixed `sk_`)
+- **Project-scoped API key** — prefixed `sk_`, obtained from `POST /api/v1/project-keys`
 
 ```ts
 // JWT token
-const client = createClient(createConfig({ baseUrl, auth: sessionToken }));
+const soat = new SoatClient({ baseUrl, token: sessionToken });
 
 // Project key
-const client = createClient(createConfig({ baseUrl, auth: 'sk_...' }));
+const soat = new SoatClient({ baseUrl, token: 'sk_...' });
 ```
+
+## Low-level API — Static Service Classes
+
+The underlying generated static classes (`Actors`, `Users`, `Files`, etc.) are also exported. These require you to pass a `client` instance on every call and are useful for advanced use cases such as per-request auth overrides or custom fetch implementations:
+
+```ts
+import { Actors, createClient, createConfig } from '@soat/sdk';
+
+const client = createClient(
+  createConfig({
+    baseUrl: 'https://your-soat-server.com/api/v1',
+    headers: { Authorization: 'Bearer sk_...' },
+  })
+);
+
+const { data, error } = await Actors.listActors({ client });
+```
+
+See the [Services Reference](./services.md) for the full list of static class methods.

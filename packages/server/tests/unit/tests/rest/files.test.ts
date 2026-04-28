@@ -33,14 +33,21 @@ describe('Files', () => {
     const policyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: [
-          'files:UploadFile',
-          'files:GetFile',
-          'files:DownloadFile',
-          'files:UpdateFileMetadata',
-          'files:DeleteFile',
-          'files:CreateFile',
-        ],
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: [
+                'files:UploadFile',
+                'files:GetFile',
+                'files:DownloadFile',
+                'files:UpdateFileMetadata',
+                'files:DeleteFile',
+                'files:CreateFile',
+              ],
+            },
+          ],
+        },
       });
     policyId = policyRes.body.id;
 
@@ -410,7 +417,16 @@ describe('Files', () => {
 
       const policyRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
-        .send({ permissions: ['files:UploadFile', 'files:GetFile'] });
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['files:UploadFile', 'files:GetFile'],
+              },
+            ],
+          },
+        });
 
       await authenticatedTestClient(adminToken)
         .put(`/api/v1/users/${userId}/policies`)

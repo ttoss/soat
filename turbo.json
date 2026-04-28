@@ -3,18 +3,19 @@
   "concurrency": "4",
   "globalEnv": ["ENVIRONMENT"],
   "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "build/**"]
+    },
     "lint": {
+      "dependsOn": ["^build", "build"],
       "outputs": [],
       "cache": false
     },
     "typecheck": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "build"],
       "outputs": [],
       "cache": false
-    },
-    "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**", "build/**"]
     },
     "test": {
       "dependsOn": ["^build"],

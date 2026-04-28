@@ -30,21 +30,28 @@ describe('Conversations', () => {
     const policyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: [
-          'actors:CreateActor',
-          'actors:ListActors',
-          'actors:GetActor',
-          'documents:CreateDocument',
-          'documents:GetDocument',
-          'conversations:ListConversations',
-          'conversations:GetConversation',
-          'conversations:CreateConversation',
-          'conversations:UpdateConversation',
-          'conversations:DeleteConversation',
-          'conversations:GenerateConversationMessage',
-          'actors:UpdateActor',
-          'actors:DeleteActor',
-        ],
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: [
+                'actors:CreateActor',
+                'actors:ListActors',
+                'actors:GetActor',
+                'documents:CreateDocument',
+                'documents:GetDocument',
+                'conversations:ListConversations',
+                'conversations:GetConversation',
+                'conversations:CreateConversation',
+                'conversations:UpdateConversation',
+                'conversations:DeleteConversation',
+                'conversations:GenerateConversationMessage',
+                'actors:UpdateActor',
+                'actors:DeleteActor',
+              ],
+            },
+          ],
+        },
       });
     policyId = policyRes.body.id;
 

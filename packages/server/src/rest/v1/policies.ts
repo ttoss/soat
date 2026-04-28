@@ -40,32 +40,22 @@ policiesRouter.post('/policies', async (ctx: Context) => {
     return;
   }
 
-  const { name, description, permissions, notPermissions, document } = ctx
-    .request.body as {
+  const { name, description, document } = ctx.request.body as {
     name?: string;
     description?: string;
-    permissions?: string[];
-    notPermissions?: string[];
     document?: object;
   };
 
-  const policyDocument: PolicyDocument = document
-    ? (document as PolicyDocument)
-    : {
-        statement: [
-          ...(permissions?.length
-            ? [{ effect: 'Allow' as const, action: permissions }]
-            : []),
-          ...(notPermissions?.length
-            ? [{ effect: 'Deny' as const, action: notPermissions }]
-            : []),
-        ],
-      };
+  if (!document) {
+    ctx.status = 400;
+    ctx.body = { error: 'document is required' };
+    return;
+  }
 
   const result = await createPolicy({
     name,
     description,
-    document: policyDocument,
+    document: document as PolicyDocument,
   });
 
   if ('invalid' in result) {
@@ -78,7 +68,7 @@ policiesRouter.post('/policies', async (ctx: Context) => {
   ctx.body = result;
 });
 
-policiesRouter.get('/policies/:policyId', async (ctx: Context) => {
+policiesRouter.get('/policies/:policy_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -91,7 +81,7 @@ policiesRouter.get('/policies/:policyId', async (ctx: Context) => {
     return;
   }
 
-  const policy = await getPolicy({ policyId: ctx.params.policyId });
+  const policy = await getPolicy({ policyId: ctx.params.policy_id });
 
   if (!policy) {
     ctx.status = 404;
@@ -102,7 +92,7 @@ policiesRouter.get('/policies/:policyId', async (ctx: Context) => {
   ctx.body = policy;
 });
 
-policiesRouter.put('/policies/:policyId', async (ctx: Context) => {
+policiesRouter.put('/policies/:policy_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -128,7 +118,7 @@ policiesRouter.put('/policies/:policyId', async (ctx: Context) => {
   }
 
   const result = await updatePolicy({
-    policyId: ctx.params.policyId,
+    policyId: ctx.params.policy_id,
     name,
     description,
     document: document as PolicyDocument,
@@ -149,7 +139,7 @@ policiesRouter.put('/policies/:policyId', async (ctx: Context) => {
   ctx.body = result;
 });
 
-policiesRouter.delete('/policies/:policyId', async (ctx: Context) => {
+policiesRouter.delete('/policies/:policy_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -162,7 +152,7 @@ policiesRouter.delete('/policies/:policyId', async (ctx: Context) => {
     return;
   }
 
-  const result = await deletePolicy({ policyId: ctx.params.policyId });
+  const result = await deletePolicy({ policyId: ctx.params.policy_id });
 
   if (result === 'not_found') {
     ctx.status = 404;

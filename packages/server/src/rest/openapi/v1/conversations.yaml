@@ -538,7 +538,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /conversations/{id}/messages/{documentId}:
+  /conversations/{id}/messages/{document_id}:
     delete:
       tags:
         - Conversations
@@ -553,7 +553,7 @@ paths:
           schema:
             type: string
             example: 'conv_V1StGXR8Z5jdHi6B'
-        - name: documentId
+        - name: document_id
           in: path
           required: true
           description: Document ID

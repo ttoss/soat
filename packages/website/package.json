@@ -41,6 +41,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "camelcase": "^9.0.0",
     "docusaurus-plugin-llms": "^0.4.0",
     "js-yaml": "^4.1.1",
     "tsx": "^4.21.0",

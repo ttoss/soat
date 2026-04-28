@@ -136,7 +136,7 @@ usersRouter.delete('/users/:id', async (ctx: Context) => {
   ctx.status = 204;
 });
 
-usersRouter.put('/users/:userId/policies', async (ctx: Context) => {
+usersRouter.put('/users/:user_id/policies', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -158,7 +158,7 @@ usersRouter.put('/users/:userId/policies', async (ctx: Context) => {
   }
 
   const result = await attachUserPolicies({
-    userId: ctx.params.userId,
+    userId: ctx.params.user_id,
     policyIds,
   });
 
@@ -171,7 +171,7 @@ usersRouter.put('/users/:userId/policies', async (ctx: Context) => {
   ctx.status = 204;
 });
 
-usersRouter.get('/users/:userId/policies', async (ctx: Context) => {
+usersRouter.get('/users/:user_id/policies', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -184,7 +184,7 @@ usersRouter.get('/users/:userId/policies', async (ctx: Context) => {
     return;
   }
 
-  const policies = await getUserPolicies({ userId: ctx.params.userId });
+  const policies = await getUserPolicies({ userId: ctx.params.user_id });
 
   if (policies === null) {
     ctx.status = 404;

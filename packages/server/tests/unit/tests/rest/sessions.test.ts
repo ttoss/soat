@@ -32,17 +32,24 @@ describe('Sessions', () => {
     const policyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: [
-          'agents:CreateAgent',
-          'agents:CreateSession',
-          'agents:ListSessions',
-          'agents:GetSession',
-          'agents:UpdateSession',
-          'agents:DeleteSession',
-          'agents:SendSessionMessage',
-          'agents:SubmitSessionToolOutputs',
-          'agents:ListSessionMessages',
-        ],
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: [
+                'agents:CreateAgent',
+                'agents:CreateSession',
+                'agents:ListSessions',
+                'agents:GetSession',
+                'agents:UpdateSession',
+                'agents:DeleteSession',
+                'agents:SendSessionMessage',
+                'agents:SubmitSessionToolOutputs',
+                'agents:ListSessionMessages',
+              ],
+            },
+          ],
+        },
       });
     policyId = policyRes.body.id;
 

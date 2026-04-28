@@ -31,6 +31,13 @@ paths:
       description: Returns a list of all stored files
       operationId: listFiles
       parameters:
+        - name: project_id
+          in: query
+          required: false
+          description: Filter files by project ID
+          schema:
+            type: string
+            example: 'proj_V1StGXR8Z5jdHi6B'
         - name: limit
           in: query
           required: false

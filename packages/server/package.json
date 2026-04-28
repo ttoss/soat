@@ -4,6 +4,10 @@
   "main": "dist/server.js",
   "scripts": {
     "build": "tsup",
+    "db-dev:start": "docker compose -f docker-compose.dev.yml up -d",
+    "db-dev:stop": "docker compose -f docker-compose.dev.yml down",
+    "db-dev:rm": "docker compose -f docker-compose.dev.yml down -v",
+    "db-dev:logs": "docker compose -f docker-compose.dev.yml logs -f",
     "dev": "tsx watch src/server.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
     "lint": "pnpm run lint-openapi && eslint src",

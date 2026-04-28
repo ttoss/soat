@@ -29,13 +29,20 @@ describe('Actors', () => {
     const policyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: [
-          'actors:ListActors',
-          'actors:GetActor',
-          'actors:CreateActor',
-          'actors:DeleteActor',
-          'actors:UpdateActor',
-        ],
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: [
+                'actors:ListActors',
+                'actors:GetActor',
+                'actors:CreateActor',
+                'actors:DeleteActor',
+                'actors:UpdateActor',
+              ],
+            },
+          ],
+        },
       });
     policyId = policyRes.body.id;
 

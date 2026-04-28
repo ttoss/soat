@@ -36,7 +36,11 @@ describe('API Keys', () => {
 
     const policyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
-      .send({ permissions: ['files:GetFile'] });
+      .send({
+        document: {
+          statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+        },
+      });
 
     policyId = policyRes.body.id;
   });
@@ -357,7 +361,11 @@ describe('API Keys', () => {
       // Give alice a policy that allows listing projects
       const listPolicyRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
-        .send({ permissions: ['projects:ListProjects'] });
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['projects:ListProjects'] }],
+          },
+        });
 
       await authenticatedTestClient(adminToken)
         .put(`/api/v1/users/${aliceId}/policies`)

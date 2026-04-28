@@ -45,6 +45,11 @@ jobs:
       - name: Build SDK and CLI
         run: pnpm turbo run build --filter=@soat/sdk --filter=@soat/cli
 
+      - name: Create .npmrc
+        run: echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish SDK and CLI
         run: |
           pnpm --filter @soat/sdk publish --no-git-checks

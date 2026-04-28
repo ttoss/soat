@@ -33,14 +33,21 @@ describe('Documents', () => {
     const policyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: [
-          'documents:ListDocuments',
-          'documents:GetDocument',
-          'documents:CreateDocument',
-          'documents:DeleteDocument',
-          'documents:SearchDocuments',
-          'documents:UpdateDocument',
-        ],
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: [
+                'documents:ListDocuments',
+                'documents:GetDocument',
+                'documents:CreateDocument',
+                'documents:DeleteDocument',
+                'documents:SearchDocuments',
+                'documents:UpdateDocument',
+              ],
+            },
+          ],
+        },
       });
     policyId = policyRes.body.id;
 
@@ -414,7 +421,9 @@ describe('Documents', () => {
       const policyRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
         .send({
-          permissions: ['documents:GetDocument'],
+          document: {
+            statement: [{ effect: 'Allow', action: ['documents:GetDocument'] }],
+          },
         });
 
       await authenticatedTestClient(adminToken)
@@ -505,7 +514,11 @@ describe('Documents', () => {
 
       const policyRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
-        .send({ permissions: ['documents:GetDocument'] });
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['documents:GetDocument'] }],
+          },
+        });
 
       await authenticatedTestClient(adminToken)
         .put(`/api/v1/users/${noSearchUserId}/policies`)

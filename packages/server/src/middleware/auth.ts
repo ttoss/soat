@@ -25,9 +25,20 @@ export const signUserToken = (payload: { publicId: string; role: string }) => {
 
 type Next = () => Promise<void>;
 
+const USER_ATTRIBUTES = [
+  'id',
+  'publicId',
+  'username',
+  'role',
+  'policyIds',
+  'createdAt',
+  'updatedAt',
+];
+
 type IsAllowedFn = (args: {
   projectPublicId: string;
   action: string;
+  resource?: string;
 }) => Promise<boolean>;
 
 const filterAccessibleProjects = async (args: {
@@ -47,6 +58,7 @@ const filterAccessibleProjects = async (args: {
     const allowed = await args.isAllowed({
       projectPublicId: proj.publicId as string,
       action: args.action,
+      resource: `soat:${proj.publicId as string}:*:*`,
     });
     if (allowed) accessible.push(proj.id as number);
   }
@@ -64,6 +76,7 @@ const resolveProjectIdsByPublicIdAndPolicy = async (args: {
     const allowed = await args.isAllowed({
       projectPublicId: args.reqProjectPublicId,
       action: args.action,
+      resource: `soat:${args.reqProjectPublicId}:*:*`,
     });
     if (!allowed) return null;
     const proj = await args.db.Project.findOne({
@@ -102,6 +115,7 @@ const resolveApiKeyScopedProjectIds = async (args: {
   apiKeyIsAllowed: (a: {
     projectPublicId: string;
     action: string;
+    resource?: string;
   }) => Promise<boolean>;
   db: Context['db'];
 }): Promise<number[] | null> => {
@@ -114,6 +128,7 @@ const resolveApiKeyScopedProjectIds = async (args: {
   const allowed = await args.apiKeyIsAllowed({
     projectPublicId: targetId,
     action: args.action,
+    resource: `soat:${targetId}:*:*`,
   });
   if (!allowed) return null;
   const proj = await args.db.Project.findOne({ where: { publicId: targetId } });
@@ -175,12 +190,48 @@ const createApiKeyResolveProjectIds = (args: {
   };
 };
 
+const createApiKeyGetPolicies = (args: {
+  apiKeyProjectPublicId: string | undefined;
+  apiKeyPolicyIds: number[];
+  userPolicyIds: number[];
+  db: Context['db'];
+}) => {
+  return async (reqProjectPublicId: string): Promise<PolicyDocument[]> => {
+    if (
+      args.apiKeyProjectPublicId &&
+      reqProjectPublicId !== args.apiKeyProjectPublicId
+    ) {
+      return [];
+    }
+    if (args.apiKeyPolicyIds.length > 0) {
+      const keyPolicies = await args.db.Policy.findAll({
+        where: { id: args.apiKeyPolicyIds },
+      });
+      return keyPolicies.map((p: InstanceType<(typeof args.db)['Policy']>) => {
+        return p.document as PolicyDocument;
+      });
+    }
+    if (args.userPolicyIds.length === 0) return [];
+    const userPolicies = await args.db.Policy.findAll({
+      where: { id: args.userPolicyIds },
+    });
+    return userPolicies.map((p: InstanceType<(typeof args.db)['Policy']>) => {
+      return p.document as PolicyDocument;
+    });
+  };
+};
+
 const resolveProjectKey = async (ctx: Context, rawKey: string) => {
   const keyPrefix = rawKey.substring(0, 8);
 
   const candidates = await ctx.db.ApiKey.findAll({
     where: { keyPrefix },
-    include: [{ model: ctx.db.User }],
+    include: [
+      {
+        model: ctx.db.User,
+        attributes: USER_ATTRIBUTES,
+      },
+    ],
   });
 
   for (const row of candidates) {
@@ -223,35 +274,12 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
           userPolicyIds,
           db: ctx.db,
         }),
-        getPolicies: async (
-          reqProjectPublicId: string
-        ): Promise<PolicyDocument[]> => {
-          if (
-            apiKeyProjectPublicId &&
-            reqProjectPublicId !== apiKeyProjectPublicId
-          ) {
-            return [];
-          }
-          if (apiKeyPolicyIds.length > 0) {
-            const keyPolicies = await ctx.db.Policy.findAll({
-              where: { id: apiKeyPolicyIds },
-            });
-            return keyPolicies.map(
-              (p: InstanceType<(typeof ctx.db)['Policy']>) => {
-                return p.document as PolicyDocument;
-              }
-            );
-          }
-          if (userPolicyIds.length === 0) return [];
-          const userPolicies = await ctx.db.Policy.findAll({
-            where: { id: userPolicyIds },
-          });
-          return userPolicies.map(
-            (p: InstanceType<(typeof ctx.db)['Policy']>) => {
-              return p.document as PolicyDocument;
-            }
-          );
-        },
+        getPolicies: createApiKeyGetPolicies({
+          apiKeyProjectPublicId,
+          apiKeyPolicyIds,
+          userPolicyIds,
+          db: ctx.db,
+        }),
       };
       break;
     }
@@ -320,6 +348,7 @@ const resolveJwt = async (ctx: Context, token: string) => {
 
   const user = await ctx.db.User.findOne({
     where: { publicId: payload.publicId },
+    attributes: USER_ATTRIBUTES,
   });
 
   if (!user) {

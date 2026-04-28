@@ -23,7 +23,7 @@ tags:
   - name: Webhooks
     description: Manage webhooks
 paths:
-  /projects/{projectId}/webhooks:
+  /projects/{project_id}/webhooks:
     get:
       description: Lists all webhooks configured for the specified project
       tags:
@@ -31,7 +31,7 @@ paths:
       summary: List webhooks for a project
       operationId: listWebhooks
       parameters:
-        - name: projectId
+        - name: project_id
           in: path
           required: true
           schema:
@@ -56,7 +56,7 @@ paths:
       summary: Create a webhook
       operationId: createWebhook
       parameters:
-        - name: projectId
+        - name: project_id
           in: path
           required: true
           schema:
@@ -81,7 +81,7 @@ paths:
         '403':
           description: Forbidden
 
-  /projects/{projectId}/webhooks/{webhookId}:
+  /projects/{project_id}/webhooks/{webhook_id}:
     get:
       description: Retrieves the details of a specific webhook
       tags:
@@ -89,12 +89,12 @@ paths:
       summary: Get a webhook
       operationId: getWebhook
       parameters:
-        - name: projectId
+        - name: project_id
           in: path
           required: true
           schema:
             type: string
-        - name: webhookId
+        - name: webhook_id
           in: path
           required: true
           schema:
@@ -119,12 +119,12 @@ paths:
       summary: Update a webhook
       operationId: updateWebhook
       parameters:
-        - name: projectId
+        - name: project_id
           in: path
           required: true
           schema:
             type: string
-        - name: webhookId
+        - name: webhook_id
           in: path
           required: true
           schema:
@@ -157,12 +157,12 @@ paths:
       summary: Delete a webhook
       operationId: deleteWebhook
       parameters:
-        - name: projectId
+        - name: project_id
           in: path
           required: true
           schema:
             type: string
-        - name: webhookId
+        - name: webhook_id
           in: path
           required: true
           schema:
@@ -177,7 +177,7 @@ paths:
         '404':
           description: Webhook not found
 
-  /projects/{projectId}/webhooks/{webhookId}/deliveries:
+  /projects/{project_id}/webhooks/{webhook_id}/deliveries:
     get:
       description: Lists all event deliveries for a specific webhook
       tags:
@@ -185,12 +185,12 @@ paths:
       summary: List deliveries for a webhook
       operationId: listWebhookDeliveries
       parameters:
-        - name: projectId
+        - name: project_id
           in: path
           required: true
           schema:
             type: string
-        - name: webhookId
+        - name: webhook_id
           in: path
           required: true
           schema:
@@ -221,7 +221,7 @@ paths:
         '404':
           description: Webhook not found
 
-  /projects/{projectId}/webhooks/{webhookId}/deliveries/{deliveryId}:
+  /projects/{project_id}/webhooks/{webhook_id}/deliveries/{delivery_id}:
     get:
       description: Retrieves the details of a specific webhook delivery
       tags:
@@ -229,17 +229,17 @@ paths:
       summary: Get a delivery
       operationId: getWebhookDelivery
       parameters:
-        - name: projectId
+        - name: project_id
           in: path
           required: true
           schema:
             type: string
-        - name: webhookId
+        - name: webhook_id
           in: path
           required: true
           schema:
             type: string
-        - name: deliveryId
+        - name: delivery_id
           in: path
           required: true
           schema:
@@ -258,7 +258,7 @@ paths:
         '404':
           description: Delivery not found
 
-  /projects/{projectId}/webhooks/{webhookId}/rotate-secret:
+  /projects/{project_id}/webhooks/{webhook_id}/rotate-secret:
     post:
       description: Rotates the secret key for the specified webhook
       tags:
@@ -266,12 +266,12 @@ paths:
       summary: Rotate webhook secret
       operationId: rotateWebhookSecret
       parameters:
-        - name: projectId
+        - name: project_id
           in: path
           required: true
           schema:
             type: string
-        - name: webhookId
+        - name: webhook_id
           in: path
           required: true
           schema:

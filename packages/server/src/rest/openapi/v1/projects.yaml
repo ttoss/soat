@@ -64,7 +64,7 @@ paths:
           description: Forbidden (non-admin user)
         '500':
           description: Internal server error
-  /projects/{projectId}:
+  /projects/{project_id}:
     get:
       tags:
         - Projects
@@ -74,7 +74,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: projectId
+        - name: project_id
           in: path
           required: true
           description: Project public ID (proj_ prefix)
@@ -103,7 +103,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: projectId
+        - name: project_id
           in: path
           required: true
           description: Project public ID (proj_ prefix)

@@ -29,16 +29,23 @@ describe('Webhooks', () => {
     const policyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
-        permissions: [
-          'webhooks:ListWebhooks',
-          'webhooks:CreateWebhook',
-          'webhooks:GetWebhook',
-          'webhooks:UpdateWebhook',
-          'webhooks:DeleteWebhook',
-          'webhooks:RotateWebhookSecret',
-          'webhooks:ListWebhookDeliveries',
-          'webhooks:GetWebhookDelivery',
-        ],
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: [
+                'webhooks:ListWebhooks',
+                'webhooks:CreateWebhook',
+                'webhooks:GetWebhook',
+                'webhooks:UpdateWebhook',
+                'webhooks:DeleteWebhook',
+                'webhooks:RotateWebhookSecret',
+                'webhooks:ListWebhookDeliveries',
+                'webhooks:GetWebhookDelivery',
+              ],
+            },
+          ],
+        },
       });
     policyId = policyRes.body.id;
 
