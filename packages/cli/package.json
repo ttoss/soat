@@ -1,6 +1,6 @@
 {
   "name": "@soat/cli",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "type": "module",
   "scripts": {
     "generate": "tsx scripts/generate.ts",
@@ -32,7 +32,9 @@
     "type": "git",
     "url": "https://github.com/ttoss/soat"
   },
-  "bin": "./bin/soat",
+  "bin": {
+    "soat": "./bin/soat"
+  },
   "publishConfig": {
     "access": "public",
     "provenance": true
