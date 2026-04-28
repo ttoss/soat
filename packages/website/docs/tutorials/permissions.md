@@ -31,7 +31,7 @@ By the end you will understand how policies, users, and API keys compose togethe
 Export your server URL (used in subsequent steps):
 
 ```bash
-export SOAT_BASE_URL=http://localhost:5047/api/v1
+export SOAT_BASE_URL=http://localhost:5047
 ```
 
 CLI path flags in this tutorial are resource-specific and kebab-cased, for example `--user-id` and `--project-id`.
@@ -51,7 +51,7 @@ import { SoatClient } from '@soat/sdk';
 Export your server URL once:
 
 ```bash
-export SOAT_URL=http://localhost:5047
+export SOAT_BASE_URL=http://localhost:5047
 ```
 
 </TabItem>
@@ -81,7 +81,7 @@ soat configure
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const soat = new SoatClient({ baseUrl: 'http://localhost:5047/api/v1' });
+const soat = new SoatClient({ baseUrl: 'http://localhost:5047' });
 
 const { data: session, error } = await soat.users.loginUser({
   body: { username: 'admin', password: 'Admin1234!' },
@@ -91,7 +91,7 @@ if (error) throw new Error(JSON.stringify(error));
 
 // Rebuild with admin credentials
 const adminSoat = new SoatClient({
-  baseUrl: 'http://localhost:5047/api/v1',
+  baseUrl: 'http://localhost:5047',
   token: session.token,
 });
 ```
@@ -100,7 +100,7 @@ const adminSoat = new SoatClient({
 <TabItem value="curl" label="curl">
 
 ```bash
-ADMIN_TOKEN=$(curl -s -X POST "$SOAT_URL/api/v1/users/login" \
+ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"Admin1234!"}' | jq -r '.token')
 
@@ -150,12 +150,12 @@ console.log('bob id  :', bob.id); // usr_…
 <TabItem value="curl" label="curl">
 
 ```bash
-ALICE_ID=$(curl -s -X POST "$SOAT_URL/api/v1/users" \
+ALICE_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"Alice1234!"}' | jq -r '.id')
 
-BOB_ID=$(curl -s -X POST "$SOAT_URL/api/v1/users" \
+BOB_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"username":"bob","password":"Bob1234!"}' | jq -r '.id')
@@ -200,7 +200,7 @@ console.log('project id:', PROJECT_ID);
 <TabItem value="curl" label="curl">
 
 ```bash
-PROJECT_ID=$(curl -s -X POST "$SOAT_URL/api/v1/projects" \
+PROJECT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/projects" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"Analytics"}' | jq -r '.id')
@@ -271,7 +271,7 @@ const FULL_POLICY_ID = fullPolicy.id; // pol_…
 <TabItem value="curl" label="curl">
 
 ```bash
-FULL_POLICY_ID=$(curl -s -X POST "$SOAT_URL/api/v1/policies" \
+FULL_POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
@@ -350,7 +350,7 @@ const READ_POLICY_ID = readPolicy.id; // pol_…
 <TabItem value="curl" label="curl">
 
 ```bash
-READ_POLICY_ID=$(curl -s -X POST "$SOAT_URL/api/v1/policies" \
+READ_POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
@@ -426,13 +426,13 @@ if (attachBob) throw new Error(JSON.stringify(attachBob));
 
 ```bash
 # Alice — full access
-curl -s -X PUT "$SOAT_URL/api/v1/users/$ALICE_ID/policies" \
+curl -s -X PUT "$SOAT_BASE_URL/api/v1/users/$ALICE_ID/policies" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"policy_ids\":[\"$FULL_POLICY_ID\"]}" | jq .
 
 # Bob — read-only
-curl -s -X PUT "$SOAT_URL/api/v1/users/$BOB_ID/policies" \
+curl -s -X PUT "$SOAT_BASE_URL/api/v1/users/$BOB_ID/policies" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"policy_ids\":[\"$READ_POLICY_ID\"]}" | jq .
@@ -488,7 +488,7 @@ const { data: aliceSession } = await soat.users.loginUser({
 });
 
 const aliceSoat = new SoatClient({
-  baseUrl: 'http://localhost:5047/api/v1',
+  baseUrl: 'http://localhost:5047',
   token: aliceSession.token,
 });
 
@@ -498,7 +498,7 @@ const { data: bobSession } = await soat.users.loginUser({
 });
 
 const bobSoat = new SoatClient({
-  baseUrl: 'http://localhost:5047/api/v1',
+  baseUrl: 'http://localhost:5047',
   token: bobSession.token,
 });
 
@@ -534,24 +534,24 @@ const BOB_API_KEY = bobKey.key; // sk_…
 
 ```bash
 # Log in as Alice
-ALICE_TOKEN=$(curl -s -X POST "$SOAT_URL/api/v1/users/login" \
+ALICE_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"Alice1234!"}' | jq -r '.token')
 
 # Log in as Bob
-BOB_TOKEN=$(curl -s -X POST "$SOAT_URL/api/v1/users/login" \
+BOB_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
   -H "Content-Type: application/json" \
   -d '{"username":"bob","password":"Bob1234!"}' | jq -r '.token')
 
 # Alice's project key — inherits full-access
-ALICE_API_KEY=$(curl -s -X POST "$SOAT_URL/api/v1/api-keys" \
+ALICE_API_KEY=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/api-keys" \
   -H "Authorization: Bearer $ALICE_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"name\":\"alice-analytics-key\",\"project_id\":\"$PROJECT_ID\"}" \
   | jq -r '.key')
 
 # Bob's project key — further restricted to read-only
-BOB_API_KEY=$(curl -s -X POST "$SOAT_URL/api/v1/api-keys" \
+BOB_API_KEY=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/api-keys" \
   -H "Authorization: Bearer $BOB_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"name\":\"bob-analytics-key\",\"project_id\":\"$PROJECT_ID\",\"policy_ids\":[\"$READ_POLICY_ID\"]}" \
@@ -601,7 +601,7 @@ SOAT_TOKEN="$BOB_API_KEY" soat upload-file-base64 \
 
 ```ts
 const aliceKeySoat = new SoatClient({
-  baseUrl: 'http://localhost:5047/api/v1',
+  baseUrl: 'http://localhost:5047',
   token: ALICE_API_KEY,
 });
 
@@ -618,7 +618,7 @@ if (uploadErr) throw new Error(JSON.stringify(uploadErr)); // should not throw
 
 // Bob cannot upload — his policy allows only files:GetFile
 const bobKeySoat = new SoatClient({
-  baseUrl: 'http://localhost:5047/api/v1',
+  baseUrl: 'http://localhost:5047',
   token: BOB_API_KEY,
 });
 
@@ -640,14 +640,14 @@ echo "hello world" > sample.txt
 
 # Alice uploads — expect 201
 curl -s -o /dev/null -w "%{http_code}\n" \
-  -X POST "$SOAT_URL/api/v1/files/upload" \
+  -X POST "$SOAT_BASE_URL/api/v1/files/upload" \
   -H "Authorization: Bearer $ALICE_API_KEY" \
   -F "project_id=$PROJECT_ID" \
   -F "file=@sample.txt"
 
 # Bob tries to upload — expect 403
 curl -s -o /dev/null -w "%{http_code}\n" \
-  -X POST "$SOAT_URL/api/v1/files/upload" \
+  -X POST "$SOAT_BASE_URL/api/v1/files/upload" \
   -H "Authorization: Bearer $BOB_API_KEY" \
   -F "project_id=$PROJECT_ID" \
   -F "file=@sample.txt"
@@ -684,7 +684,7 @@ console.log('files visible to bob:', files.length);
 
 ```bash
 # Bob lists files — expect 200
-curl -s "$SOAT_URL/api/v1/files?project_id=$PROJECT_ID" \
+curl -s "$SOAT_BASE_URL/api/v1/files?project_id=$PROJECT_ID" \
   -H "Authorization: Bearer $BOB_API_KEY" | jq '.[] | .id'
 ```
 
@@ -722,7 +722,7 @@ const { data: escalatedKey } = await bobSoat.apiKeys.createApiKey({
 });
 
 const escalatedSoat = new SoatClient({
-  baseUrl: 'http://localhost:5047/api/v1',
+  baseUrl: 'http://localhost:5047',
   token: escalatedKey.key,
 });
 
@@ -741,7 +741,7 @@ console.log(error?.status); // 403
 <TabItem value="curl" label="curl">
 
 ```bash
-ESCALATED_KEY=$(curl -s -X POST "$SOAT_URL/api/v1/api-keys" \
+ESCALATED_KEY=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/api-keys" \
   -H "Authorization: Bearer $BOB_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"name\":\"bob-escalation-attempt\",\"project_id\":\"$PROJECT_ID\",\"policy_ids\":[\"$FULL_POLICY_ID\"]}" \
@@ -749,7 +749,7 @@ ESCALATED_KEY=$(curl -s -X POST "$SOAT_URL/api/v1/api-keys" \
 
 # Still 403 — Bob's user policies are the ceiling
 curl -s -o /dev/null -w "%{http_code}\n" \
-  -X POST "$SOAT_URL/api/v1/files/upload" \
+  -X POST "$SOAT_BASE_URL/api/v1/files/upload" \
   -H "Authorization: Bearer $ESCALATED_KEY" \
   -F "project_id=$PROJECT_ID" \
   -F "file=@sample.txt"

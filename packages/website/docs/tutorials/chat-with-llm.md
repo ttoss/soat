@@ -33,7 +33,7 @@ By the end you will understand how [Secrets](/docs/modules/secrets), [AI Provide
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-export SOAT_BASE_URL=http://localhost:5047/api/v1
+export SOAT_BASE_URL=http://localhost:5047
 ```
 
 CLI path flags in this tutorial are resource-specific and kebab-cased, for example `--agent-id`, `--session-id`, and `--webhook-id`.
@@ -51,7 +51,7 @@ import { SoatClient } from '@soat/sdk';
 <TabItem value="curl" label="curl">
 
 ```bash
-export SOAT_URL=http://localhost:5047
+export SOAT_BASE_URL=http://localhost:5047
 ```
 
 </TabItem>
@@ -73,7 +73,7 @@ export SOAT_TOKEN=$ADMIN_TOKEN
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const soat = new SoatClient({ baseUrl: 'http://localhost:5047/api/v1' });
+const soat = new SoatClient({ baseUrl: 'http://localhost:5047' });
 
 const { data: session, error } = await soat.users.loginUser({
   body: { username: 'admin', password: 'Admin1234!' },
@@ -83,7 +83,7 @@ if (error) throw new Error(JSON.stringify(error));
 
 // Rebuild with the admin token
 const adminSoat = new SoatClient({
-  baseUrl: 'http://localhost:5047/api/v1',
+  baseUrl: 'http://localhost:5047',
   token: session.token,
 });
 ```
@@ -92,7 +92,7 @@ const adminSoat = new SoatClient({
 <TabItem value="curl" label="curl">
 
 ```bash
-ADMIN_TOKEN=$(curl -s -X POST "$SOAT_URL/api/v1/users/login" \
+ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"Admin1234!"}' | jq -r '.token')
 ```
@@ -132,7 +132,7 @@ const PROJECT_ID = project.id; // proj_…
 <TabItem value="curl" label="curl">
 
 ```bash
-PROJECT_ID=$(curl -s -X POST "$SOAT_URL/api/v1/projects" \
+PROJECT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/projects" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"LLM Chat Demo"}' | jq -r '.id')
@@ -181,7 +181,7 @@ const SECRET_ID = secret.id; // sec_…
 <TabItem value="curl" label="curl">
 
 ```bash
-SECRET_ID=$(curl -s -X POST "$SOAT_URL/api/v1/secrets" \
+SECRET_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/secrets" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"xai-api-key\",\"value\":\"xai-<your-key-here>\"}" \
@@ -236,7 +236,7 @@ const AI_PROVIDER_ID = aiProvider.id; // aip_…
 <TabItem value="curl" label="curl">
 
 ```bash
-AI_PROVIDER_ID=$(curl -s -X POST "$SOAT_URL/api/v1/ai-providers" \
+AI_PROVIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/ai-providers" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"xAI Grok\",\"provider\":\"xai\",\"default_model\":\"grok-3-mini\",\"secret_id\":\"$SECRET_ID\"}" \
@@ -290,7 +290,7 @@ const AGENT_ID = agent.id; // agt_…
 <TabItem value="curl" label="curl">
 
 ```bash
-AGENT_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents" \
+AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Grok Assistant\",\"instructions\":\"You are a helpful assistant powered by xAI Grok. Answer clearly and concisely.\"}" \
@@ -337,7 +337,7 @@ const SESSION_ID = session2.id; // sess_…
 <TabItem value="curl" label="curl">
 
 ```bash
-SESSION_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/sessions" \
+SESSION_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"My first chat","auto_generate":true}' | jq -r '.id')
@@ -400,7 +400,7 @@ console.log(reply1.message?.content);
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"message":"What is the capital of France?"}'
@@ -458,7 +458,7 @@ console.log(reply2.message?.content);
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"message":"What is the population of that city?"}'
@@ -511,7 +511,7 @@ for (const msg of messages.data ?? []) {
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
+curl -s "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data[] | {role, content}'
 ```
 
@@ -571,7 +571,7 @@ const WEBHOOK_ID = webhook.id; // whk_...
 <TabItem value="curl" label="curl">
 
 ```bash
-WEBHOOK_ID=$(curl -s -X POST "$SOAT_URL/api/v1/projects/$PROJECT_ID/webhooks" \
+WEBHOOK_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/projects/$PROJECT_ID/webhooks" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"session-events","url":"http://localhost:8787/webhook","events":["sessions.generation.*"]}' \
@@ -650,17 +650,17 @@ console.log(accepted.status); // "accepted"
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X PATCH "$SOAT_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID" \
+curl -s -X PATCH "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"auto_generate":false}'
 
-curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"message":"Give me 3 concise facts about Sao Paulo."}'
 
-curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/generate?async=true" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/generate?async=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json"
 ```
@@ -723,11 +723,11 @@ for (const msg of messages2.data ?? []) {
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_URL/api/v1/projects/$PROJECT_ID/webhooks/$WEBHOOK_ID/deliveries" \
+curl -s "$SOAT_BASE_URL/api/v1/projects/$PROJECT_ID/webhooks/$WEBHOOK_ID/deliveries" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   | jq '.data[] | {event_type, status, status_code}'
 
-curl -s "$SOAT_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
+curl -s "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   | jq '.data[] | {role, content}'
 ```

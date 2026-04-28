@@ -23,7 +23,7 @@ Create a `SoatClient` instance once and reuse it throughout your application. Re
 import { SoatClient } from '@soat/sdk';
 
 const soat = new SoatClient({
-  baseUrl: 'https://your-soat-server.com/api/v1',
+  baseUrl: 'https://your-soat-server.com',
   token: 'your-bearer-token',
 });
 ```
