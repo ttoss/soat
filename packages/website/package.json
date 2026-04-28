@@ -4,10 +4,8 @@
   "private": true,
   "scripts": {
     "docusaurus": "docusaurus",
-    "copy-openapi-specs": "node -e \"const fs=require('fs');const path=require('path');const src=path.resolve(__dirname,'../../packages/server/src/rest/openapi/v1');const dest=path.resolve(__dirname,'static/openapi');fs.mkdirSync(dest,{recursive:true});fs.readdirSync(src).filter(f=>f.endsWith('.yaml')).forEach(f=>fs.copyFileSync(path.join(src,f),path.join(dest,f)));console.log('OpenAPI specs copied to static/openapi/')\"",
-    "generate-openapi-specs-page": "tsx scripts/generateOpenApiSpecsPage.ts",
-    "dev": "pnpm copy-openapi-specs && pnpm generate-openapi-specs-page && docusaurus start",
-    "build": "pnpm copy-openapi-specs && pnpm generate-openapi-specs-page && docusaurus gen-api-docs all && pnpm generate-mcp-tools-docs && pnpm generate-sdk-services-docs && pnpm generate-cli-commands-docs && docusaurus build",
+    "dev": "pnpm generate-all && docusaurus start",
+    "build": "pnpm generate-all && docusaurus build",
     "swizzle": "docusaurus swizzle",
     "deploy": "carlin deploy static-app",
     "deploy-report": "carlin deploy report --channel=github-pr",
@@ -16,11 +14,13 @@
     "write-translations": "docusaurus write-translations",
     "write-heading-ids": "docusaurus write-heading-ids",
     "typecheck": "tsc",
-    "gen-api-docs": "docusaurus gen-api-docs all",
     "clean-api-docs": "docusaurus clean-api-docs all",
+    "generate-api-docs": "docusaurus gen-api-docs all",
+    "generate-all": "pnpm generate-openapi-specs-page && pnpm generate-api-docs && pnpm generate-mcp-tools-docs && pnpm generate-sdk-services-docs && pnpm generate-cli-commands-docs",
     "generate-mcp-tools-docs": "tsx scripts/generateMcpToolsDocs.ts",
     "generate-sdk-services-docs": "tsx scripts/generateSdkServicesDocs.ts",
-    "generate-cli-commands-docs": "tsx scripts/generateCliCommandsDocs.ts"
+    "generate-cli-commands-docs": "tsx scripts/generateCliCommandsDocs.ts",
+    "generate-openapi-specs-page": "tsx scripts/generateOpenApiSpecsPage.ts"
   },
   "dependencies": {
     "@docusaurus/core": "3.10.0",

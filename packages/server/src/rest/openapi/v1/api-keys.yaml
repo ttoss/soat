@@ -7,13 +7,13 @@ info:
     name: SOAT Team
     url: https://github.com/ttoss/soat
 servers:
-  - url: https://{host}/api/v1
+  - url: https://{host}
     description: Production (HTTPS)
     variables:
       host:
         description: The hostname of your SOAT deployment
         default: your-soat.com
-  - url: http://{host}/api/v1
+  - url: http://{host}
     description: Development (HTTP)
     variables:
       host:
@@ -23,7 +23,7 @@ tags:
   - name: API Keys
     description: Manage API keys
 paths:
-  /api-keys:
+  /api/v1/api-keys:
     post:
       tags:
         - API Keys
@@ -74,7 +74,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
-  /api-keys/{api_key_id}:
+  /api/v1/api-keys/{api_key_id}:
     get:
       tags:
         - API Keys
@@ -190,7 +190,7 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: JWT
+      description: JWT token or sk_ api key
   schemas:
     ApiKeyRecord:
       type: object

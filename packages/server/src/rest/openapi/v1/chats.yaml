@@ -10,25 +10,19 @@ info:
     name: SOAT API Support
 
 servers:
-  - url: https://{host}/api/v1
-    description: Production (HTTPS)
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
     variables:
-      host:
-        description: The hostname of your SOAT deployment
-        default: your-soat.com
-  - url: http://{host}/api/v1
-    description: Development (HTTP)
-    variables:
-      host:
-        description: The hostname of your SOAT deployment
-        default: localhost:5047
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
 
 tags:
   - name: Chats
     description: Manage chats
 
 paths:
-  /chats:
+  /api/v1/chats:
     post:
       tags:
         - Chats
@@ -123,7 +117,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /chats/{chat_id}:
+  /api/v1/chats/{chat_id}:
     get:
       tags:
         - Chats
@@ -187,7 +181,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /chats/{chat_id}/completions:
+  /api/v1/chats/{chat_id}/completions:
     post:
       tags:
         - Chats
@@ -263,7 +257,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /chats/completions:
+  /api/v1/chats/completions:
     post:
       tags:
         - Chats
@@ -331,7 +325,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /chats/{chat_id}/actors:
+  /api/v1/chats/{chat_id}/actors:
     post:
       tags:
         - Chats
@@ -410,8 +404,7 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: JWT
-
+      description: JWT token or sk_ api key
   schemas:
     Chat:
       type: object

@@ -44,7 +44,7 @@ const main = async () => {
       version: '1.0.0',
       description: 'SOAT unified API',
     },
-    servers: [{ url: '/api/v1', description: 'API v1' }],
+    servers: [],
     paths: {},
     components: {
       schemas: {},
@@ -57,6 +57,10 @@ const main = async () => {
   for (const file of specFiles) {
     const content = fs.readFileSync(file, 'utf-8');
     const spec = yaml.load(content) as OpenApiSpec;
+
+    if (merged.servers?.length === 0 && spec.servers?.length) {
+      merged.servers = spec.servers;
+    }
 
     if (spec.paths) {
       Object.assign(merged.paths!, spec.paths);

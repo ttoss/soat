@@ -47,10 +47,10 @@ const bindResource = <T>(SdkClass: T, client: Client): T => {
 
 export interface SoatClientOptions {
   /**
-   * Base URL of the SOAT API (without the `/api/v1` prefix).
-   * Defaults to `/api/v1` when not provided.
+   * Base URL of the SOAT API host.
+   * Defaults to the current origin when not provided.
    *
-   * @example 'https://api.example.com/api/v1'
+   * @example 'https://api.example.com'
    */
   baseUrl?: string;
   /**
@@ -73,7 +73,7 @@ export interface SoatClientOptions {
  * ```ts
  * import { SoatClient } from '@soat/sdk';
  *
- * const soat = new SoatClient({ baseUrl: 'https://api.example.com/api/v1', token: 'sk_...' });
+ * const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
  *
  * const { data, error } = await soat.sessions.addSessionMessage({
  *   path: { agent_id: AGENT_ID, session_id: SESSION_ID },
@@ -111,7 +111,7 @@ export class SoatClient {
 
     const httpClient = createClient(
       createConfig({
-        baseUrl: baseUrl ?? '/api/v1',
+        baseUrl: baseUrl ?? '',
         headers: { ...authHeaders, ...headers },
       })
     );

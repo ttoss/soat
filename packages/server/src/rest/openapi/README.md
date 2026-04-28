@@ -96,10 +96,10 @@ info:
   version: 1.0.0
   description: Description of the API
 servers:
-  - url: http://0.0.0.0:5047/api/v1
+  - url: http://0.0.0.0:5047
     description: Development server
 paths:
-  /resource:
+  /api/v1/resource:
     get:
       tags:
         - Resource

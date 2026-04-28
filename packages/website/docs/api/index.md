@@ -10,10 +10,10 @@ The SOAT REST API provides standard HTTP endpoints for all platform operations. 
 ## Base URL
 
 ```
-https://your-soat-server.com/api/v1
+https://your-soat-server.com
 ```
 
-Replace `your-soat-server.com` with your SOAT instance URL. For development, use `http://localhost:3000/api/v1`.
+Replace `your-soat-server.com` with your SOAT instance URL. For development, use `http://localhost:3000`.
 
 ## Authentication
 

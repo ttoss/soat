@@ -10,7 +10,7 @@ Examples for common operations across all SOAT modules. All examples assume a `S
 import { SoatClient } from '@soat/sdk';
 
 const soat = new SoatClient({
-  baseUrl: 'https://your-soat-server.com/api/v1',
+  baseUrl: 'https://your-soat-server.com',
   token: 'sk_...',
 });
 ```
