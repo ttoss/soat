@@ -23,7 +23,7 @@ soat configure
 # Base URL: https://api.example.com
 # Token: sk_...
 
-soat --profile prod list-actors --project_id prj_01
+soat --profile prod list-actors --project-id prj_01
 ```
 
 ## List All Commands
@@ -58,10 +58,10 @@ soat get-project --id prj_01
 
 ```bash
 # List actors for a project
-soat list-actors --project_id prj_01
+soat list-actors --project-id prj_01
 
 # Create an actor
-soat create-actor --name "Support Bot" --type ai --project_id prj_01
+soat create-actor --name "Support Bot" --type ai --project-id prj_01
 
 # Get a specific actor
 soat get-actor --id act_01
@@ -74,7 +74,7 @@ soat delete-actor --id act_01
 
 ```bash
 # List files in a project
-soat list-files --project_id prj_01
+soat list-files --project-id prj_01
 
 # Get a specific file
 soat get-file --id file_01
@@ -88,7 +88,7 @@ soat delete-file --id file_01
 All request body fields are passed as `--flag value` arguments. Field names match the snake_case REST API contract:
 
 ```bash
-soat create-actor --name "My Bot" --type ai --project_id prj_01
+soat create-actor --name "My Bot" --type ai --project-id prj_01
 soat update-actor --id act_01 --name "Renamed Bot"
 ```
 
@@ -109,5 +109,5 @@ soat get-actor --id act_01
 Pipe to `jq` for filtering:
 
 ```bash
-soat list-actors --project_id prj_01 | jq '.[].name'
+soat list-actors --project-id prj_01 | jq '.[].name'
 ```

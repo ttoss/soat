@@ -123,7 +123,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /chats/{chatId}:
+  /chats/{chat_id}:
     get:
       tags:
         - Chats
@@ -133,7 +133,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: chatId
+        - name: chat_id
           in: path
           required: true
           schema:
@@ -166,7 +166,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: chatId
+        - name: chat_id
           in: path
           required: true
           schema:
@@ -187,7 +187,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /chats/{chatId}/completions:
+  /chats/{chat_id}/completions:
     post:
       tags:
         - Chats
@@ -201,7 +201,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: chatId
+        - name: chat_id
           in: path
           required: true
           schema:
@@ -331,7 +331,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /chats/{chatId}/actors:
+  /chats/{chat_id}/actors:
     post:
       tags:
         - Chats
@@ -339,7 +339,7 @@ paths:
       description: Creates a new actor associated with the specified chat
       operationId: createChatActor
       parameters:
-        - name: chatId
+        - name: chat_id
           in: path
           required: true
           description: Chat ID

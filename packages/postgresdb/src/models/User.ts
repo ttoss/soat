@@ -44,7 +44,7 @@ export class User extends Model {
     type: DataType.ARRAY(DataType.INTEGER),
     allowNull: false,
     defaultValue: [],
-    columnName: 'policy_ids',
+    field: 'policy_ids',
   })
   declare policyIds: number[];
 

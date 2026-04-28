@@ -87,7 +87,7 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden (non-admin user)
-  /policies/{policyId}:
+  /policies/{policy_id}:
     get:
       tags:
         - Policies
@@ -97,7 +97,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: policyId
+        - name: policy_id
           in: path
           required: true
           description: Policy public ID (pol_ prefix)
@@ -126,7 +126,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: policyId
+        - name: policy_id
           in: path
           required: true
           description: Policy public ID (pol_ prefix)
@@ -176,7 +176,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: policyId
+        - name: policy_id
           in: path
           required: true
           description: Policy public ID (pol_ prefix)

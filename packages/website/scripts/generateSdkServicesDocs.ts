@@ -7,6 +7,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as url from 'node:url';
 
+import camelCase from 'camelcase';
 import yaml from 'js-yaml';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
@@ -35,15 +36,6 @@ interface ServiceMethod {
 
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);
 
-const toTitleCase = (kebab: string): string => {
-  return kebab
-    .split('-')
-    .map((w) => {
-      return w.charAt(0).toUpperCase() + w.slice(1);
-    })
-    .join('');
-};
-
 interface ModuleConfig {
   file: string;
   className: string;
@@ -62,7 +54,7 @@ const loadModules = (): ModuleConfig[] => {
       const spec = yaml.load(
         fs.readFileSync(path.join(SPECS_DIR, f), 'utf-8')
       ) as OpenApiSpec;
-      const label = spec.tags?.[0]?.name ?? toTitleCase(file);
+      const label = camelCase(spec.tags?.[0]?.name ?? file);
       // HeyAPI generates the class name from the tag, which is already PascalCase
       const className = label.replace(/\s+/g, '');
       return { file, className, label };
@@ -135,6 +127,7 @@ const main = () => {
   sections.push('');
 
   fs.writeFileSync(OUTPUT_FILE, sections.join('\n'), 'utf-8');
+  // eslint-disable-next-line no-console
   console.log(`SDK services docs written to: ${OUTPUT_FILE}`);
 };
 

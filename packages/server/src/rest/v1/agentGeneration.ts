@@ -68,10 +68,10 @@ const handleGenerationResult = async (
 export const agentGenerationRouter = new Router<Context>();
 
 /**
- * @openapi POST /agents/:agentId/generate
+ * @openapi POST /agents/:agent_id/generate
  */
 agentGenerationRouter.post(
-  '/agents/:agentId/generate',
+  '/agents/:agent_id/generate',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -110,7 +110,7 @@ agentGenerationRouter.post(
     try {
       result = await createGeneration({
         projectIds,
-        agentId: ctx.params.agentId,
+        agentId: ctx.params.agent_id,
         messages: messages as Array<{ role: string; content: string }>,
         stream: stream === true,
         traceId,
@@ -132,10 +132,10 @@ agentGenerationRouter.post(
 );
 
 /**
- * @openapi POST /agents/:agentId/generate/:generationId/tool-outputs
+ * @openapi POST /agents/:agent_id/generate/:generation_id/tool-outputs
  */
 agentGenerationRouter.post(
-  '/agents/:agentId/generate/:generationId/tool-outputs',
+  '/agents/:agent_id/generate/:generation_id/tool-outputs',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -167,8 +167,8 @@ agentGenerationRouter.post(
 
     const result = await submitToolOutputs({
       projectIds,
-      agentId: ctx.params.agentId,
-      generationId: ctx.params.generationId,
+      agentId: ctx.params.agent_id,
+      generationId: ctx.params.generation_id,
       toolOutputs: toolOutputs as Array<{
         toolCallId: string;
         output: unknown;

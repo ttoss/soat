@@ -8,11 +8,19 @@ import pkg from '../package.json' with { type: 'json' };
 import { resolveClient, writeProfile } from './config.js';
 import { routes } from './generated/routes.js';
 
-/** Convert kebab-case flag name to camelCase key (e.g. actor-id → actorId). */
-const kebabToCamel = (s: string) => {
-  return s.replace(/-([a-z])/g, (_, c: string) => {
+/**
+ * Normalize kebab-case, snake_case, or camelCase to camelCase for param matching.
+ * e.g. agent-id → agentId, actor_id → actorId, agentId → agentId
+ */
+const toCanonical = (s: string) => {
+  return s.replace(/[-_]([a-z0-9])/g, (_, c: string) => {
     return c.toUpperCase();
   });
+};
+
+/** Convert kebab-case to snake_case for body/query keys (e.g. project-id → project_id). */
+const kebabToSnake = (s: string) => {
+  return s.replace(/-/g, '_');
 };
 
 /** Parse unknown args like --foo bar --baz 1 into a flat Record. */
@@ -152,14 +160,22 @@ program
 
     for (const [flagKey, val] of Object.entries(flags)) {
       if (flagKey === 'profile') continue;
-      const camel = kebabToCamel(flagKey);
+      const canonical = toCanonical(flagKey);
       const parsedValue = parseFlagValue(val);
-      if (route.pathParams.includes(flagKey)) {
-        pathArgs[camel] = parsedValue;
-      } else if (route.queryParams.includes(flagKey)) {
-        queryArgs[camel] = parsedValue;
+      if (
+        route.pathParams.some((p) => {
+          return toCanonical(p) === canonical;
+        })
+      ) {
+        pathArgs[canonical] = parsedValue;
+      } else if (
+        route.queryParams.some((p) => {
+          return toCanonical(p) === canonical;
+        })
+      ) {
+        queryArgs[kebabToSnake(flagKey)] = parsedValue;
       } else {
-        bodyArgs[camel] = parsedValue;
+        bodyArgs[kebabToSnake(flagKey)] = parsedValue;
       }
     }
 

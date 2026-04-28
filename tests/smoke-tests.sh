@@ -110,7 +110,7 @@ if ! printf '%s\n' "$POLICY_LIST_RESP" | jq -e 'type == "array"' >/dev/null 2>&1
 fi
 
 # Get policy
-POLICY_GET_RESP=$($SOAT_CLI get-policy --policyId "$POLICY_READ_ID")
+POLICY_GET_RESP=$($SOAT_CLI get-policy --policy-id "$POLICY_READ_ID")
 POLICY_GET_ID=$(printf '%s\n' "$POLICY_GET_RESP" | jq -r '.id')
 if [ "$POLICY_GET_ID" != "$POLICY_READ_ID" ]; then
   echo "ERROR: GET policy returned mismatched id '$POLICY_GET_ID'" >&2
@@ -118,7 +118,7 @@ if [ "$POLICY_GET_ID" != "$POLICY_READ_ID" ]; then
 fi
 
 # Update policy
-POLICY_UPDATE_RESP=$($SOAT_CLI update-policy --policyId "$POLICY_READ_ID" \
+POLICY_UPDATE_RESP=$($SOAT_CLI update-policy --policy-id "$POLICY_READ_ID" \
   --document '{"statement":[{"effect":"Allow","action":["files:GetFile","files:ListFiles"]}]}' \
   --name smoke-read-policy-updated)
 if ! printf '%s\n' "$POLICY_UPDATE_RESP" | jq -e --arg id "$POLICY_READ_ID" '.id == $id' >/dev/null 2>&1; then
@@ -128,10 +128,10 @@ if ! printf '%s\n' "$POLICY_UPDATE_RESP" | jq -e --arg id "$POLICY_READ_ID" '.id
 fi
 
 # Attach policy to admin user
-$SOAT_CLI attach-user-policies --userId "$ADMIN_USER_ID" --policy_ids "[\"$POLICY_READ_ID\",\"$POLICY_WRITE_ID\"]"
+$SOAT_CLI attach-user-policies --user-id "$ADMIN_USER_ID" --policy_ids "[\"$POLICY_READ_ID\",\"$POLICY_WRITE_ID\"]"
 
 # Get user policies
-USER_POLICIES_RESP=$($SOAT_CLI get-user-policies --userId "$ADMIN_USER_ID")
+USER_POLICIES_RESP=$($SOAT_CLI get-user-policies --user-id "$ADMIN_USER_ID")
 if ! printf '%s\n' "$USER_POLICIES_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
   echo "ERROR: GET user policies did not return an array" >&2
   echo "$USER_POLICIES_RESP" >&2
@@ -192,8 +192,8 @@ expect_cli_error_status 404 get-api-key --id "$API_KEY_ID"
 echo "API keys coverage: OK"
 
 # Delete policies (cleanup + CRUD coverage)
-$SOAT_CLI delete-policy --policyId "$POLICY_READ_ID"
-expect_cli_error_status 404 get-policy --policyId "$POLICY_READ_ID"
+$SOAT_CLI delete-policy --policy-id "$POLICY_READ_ID"
+expect_cli_error_status 404 get-policy --policy-id "$POLICY_READ_ID"
 echo "Policy DELETE coverage: OK"
 
 # 3d. Secrets module coverage
@@ -207,18 +207,18 @@ if [ -z "$SECRET_ID" ] || [ "$SECRET_ID" = "null" ]; then
   exit 1
 fi
 
-SECRET_GET_RESP=$($SOAT_CLI get-secret --secretId "$SECRET_ID")
+SECRET_GET_RESP=$($SOAT_CLI get-secret --secret-id "$SECRET_ID")
 if echo "$SECRET_GET_RESP" | jq -e '.value' >/dev/null 2>&1; then
   echo "ERROR: Secret value must not be returned" >&2
   echo "$SECRET_GET_RESP" >&2
   exit 1
 fi
 
-$SOAT_CLI update-secret --secretId "$SECRET_ID" --name smoke-secret-updated --value updatedvalue
+$SOAT_CLI update-secret --secret-id "$SECRET_ID" --name smoke-secret-updated --value updatedvalue
 
-$SOAT_CLI delete-secret --secretId "$SECRET_ID"
+$SOAT_CLI delete-secret --secret-id "$SECRET_ID"
 
-expect_cli_error_status 404 get-secret --secretId "$SECRET_ID"
+expect_cli_error_status 404 get-secret --secret-id "$SECRET_ID"
 echo "Secrets coverage: OK"
 
 # 3e. Actors module coverage
@@ -488,7 +488,7 @@ echo "Agent id: $AGENT_ID"
 
 # 21. Run the agent — ask it to list projects (non-streaming)
 echo "--- Running agent generation ---"
-GEN_RESP=$($SOAT_CLI create-agent-generation --agentId "$AGENT_ID" \
+GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$AGENT_ID" \
   --messages '[{"role":"user","content":"List all the projects. Use the list-projects tool."}]' | sanitize_json)
 echo "Generation response:"
 printf '%s\n' "$GEN_RESP" | jq .
@@ -511,7 +511,7 @@ fi
 
 # 22b. Run the same agent generation with SSE streaming
 echo "--- Running agent generation (SSE stream) ---"
-AGENT_STREAM_RESP=$($SOAT_CLI create-agent-generation --agentId "$AGENT_ID" \
+AGENT_STREAM_RESP=$($SOAT_CLI create-agent-generation --agent-id "$AGENT_ID" \
   --messages '[{"role":"user","content":"List all the projects. Use the list-projects tool."}]' \
   --stream true)
 if ! printf '%s\n' "$AGENT_STREAM_RESP" | grep -q "data: \[DONE\]"; then
@@ -523,12 +523,12 @@ echo "Agent SSE stream OK."
 
 # 23. Cleanup — delete agent
 echo "--- Deleting agent ---"
-$SOAT_CLI delete-agent --agentId "$AGENT_ID"
+$SOAT_CLI delete-agent --agent-id "$AGENT_ID"
 echo "Agent deleted."
 
 # 24. Cleanup — delete agent tool
 echo "--- Deleting agent tool ---"
-$SOAT_CLI delete-agent-tool --toolId "$TOOL_ID"
+$SOAT_CLI delete-agent-tool --tool-id "$TOOL_ID"
 echo "Agent tool deleted."
 
 # 25. Create an MCP agent tool pointing at the SOAT MCP server
@@ -556,7 +556,7 @@ echo "MCP Agent id: $MCP_AGENT_ID"
 
 # 27. Ask the agent to list agents via MCP
 echo "--- Running MCP agent generation ---"
-MCP_GEN_RESP=$($SOAT_CLI create-agent-generation --agentId "$MCP_AGENT_ID" \
+MCP_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$MCP_AGENT_ID" \
   --messages '[{"role":"user","content":"List all agents. Use the list-agents tool."}]' | sanitize_json)
 echo "MCP Generation response:"
 printf '%s\n' "$MCP_GEN_RESP" | jq .
@@ -579,12 +579,12 @@ fi
 
 # 29. Cleanup — delete MCP agent
 echo "--- Deleting MCP agent ---"
-$SOAT_CLI delete-agent --agentId "$MCP_AGENT_ID"
+$SOAT_CLI delete-agent --agent-id "$MCP_AGENT_ID"
 echo "MCP Agent deleted."
 
 # 30. Cleanup — delete MCP agent tool
 echo "--- Deleting MCP agent tool ---"
-$SOAT_CLI delete-agent-tool --toolId "$MCP_TOOL_ID"
+$SOAT_CLI delete-agent-tool --tool-id "$MCP_TOOL_ID"
 echo "MCP Agent tool deleted."
 
 # ── Client Tool Tests ────────────────────────────────────────────────────────
@@ -629,7 +629,7 @@ CLIENT_GEN_RESP=''
 CLIENT_GEN_STATUS=''
 CLIENT_ATTEMPT=1
 while [ "$CLIENT_ATTEMPT" -le 3 ]; do
-  CLIENT_GEN_RESP=$($SOAT_CLI create-agent-generation --agentId "$CLIENT_AGENT_ID" \
+  CLIENT_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$CLIENT_AGENT_ID" \
     --messages '[{"role":"user","content":"Call get_weather with city Paris and wait for tool output. Do not answer directly."}]' | sanitize_json)
   CLIENT_GEN_STATUS=$(printf '%s\n' "$CLIENT_GEN_RESP" | jq -r '.status')
   if [ "$CLIENT_GEN_STATUS" = "requires_action" ]; then
@@ -673,8 +673,8 @@ echo "Tool call id: $CLIENT_TOOL_CALL_ID"
 # 34. Submit tool output (simulate client executing get_weather)
 echo "--- Submitting client tool output ---"
 SUBMIT_RESP=$($SOAT_CLI submit-agent-tool-outputs \
-  --agentId "$CLIENT_AGENT_ID" \
-  --generationId "$CLIENT_GEN_ID" \
+  --agent-id "$CLIENT_AGENT_ID" \
+  --generation-id "$CLIENT_GEN_ID" \
   --tool_outputs "[{\"tool_call_id\":\"$CLIENT_TOOL_CALL_ID\",\"output\":{\"city\":\"Paris\",\"temperature\":\"18C\",\"condition\":\"Partly cloudy\"}}]" | sanitize_json)
 echo "Submit tool output response:"
 echo "$SUBMIT_RESP" | jq .
@@ -697,7 +697,7 @@ fi
 echo "Trace listing endpoint: OK"
 
 if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
-  TRACE_GET_RESP=$($SOAT_CLI get-agent-trace --traceId "$CLIENT_TRACE_ID")
+  TRACE_GET_RESP=$($SOAT_CLI get-agent-trace --trace-id "$CLIENT_TRACE_ID")
   TRACE_RETURNED_ID=$(printf '%s\n' "$TRACE_GET_RESP" | jq -r '.id // empty')
   if [ "$TRACE_RETURNED_ID" != "$CLIENT_TRACE_ID" ]; then
     echo "ERROR: Trace endpoint returned mismatched id '$TRACE_RETURNED_ID' for '$CLIENT_TRACE_ID'" >&2
@@ -712,12 +712,12 @@ fi
 
 # 35. Cleanup — delete client-tool agent
 echo "--- Deleting client-tool agent ---"
-$SOAT_CLI delete-agent --agentId "$CLIENT_AGENT_ID"
+$SOAT_CLI delete-agent --agent-id "$CLIENT_AGENT_ID"
 echo "Client-tool agent deleted."
 
 # 36. Cleanup — delete client agent tool
 echo "--- Deleting client agent tool ---"
-$SOAT_CLI delete-agent-tool --toolId "$CLIENT_TOOL_ID"
+$SOAT_CLI delete-agent-tool --tool-id "$CLIENT_TOOL_ID"
 echo "Client agent tool deleted."
 
 # ── SOAT Tool Tests ─────────────────────────────────────────────────────────
@@ -757,7 +757,7 @@ echo "SOAT Agent id: $SOAT_AGENT_ID"
 
 # 39. Run generation with the SOAT-backed agent
 echo "--- Running SOAT agent generation ---"
-SOAT_GEN_RESP=$($SOAT_CLI create-agent-generation --agentId "$SOAT_AGENT_ID" \
+SOAT_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$SOAT_AGENT_ID" \
   --messages '[{"role":"user","content":"List all projects. Use the soat-platform tool."}]' | sanitize_json)
 echo "SOAT generation response:"
 printf '%s\n' "$SOAT_GEN_RESP" | jq .
@@ -780,12 +780,12 @@ fi
 
 # 41. Cleanup — delete SOAT agent
 echo "--- Deleting SOAT agent ---"
-$SOAT_CLI delete-agent --agentId "$SOAT_AGENT_ID"
+$SOAT_CLI delete-agent --agent-id "$SOAT_AGENT_ID"
 echo "SOAT agent deleted."
 
 # 42. Cleanup — delete SOAT agent tool
 echo "--- Deleting SOAT agent tool ---"
-$SOAT_CLI delete-agent-tool --toolId "$SOAT_TOOL_ID"
+$SOAT_CLI delete-agent-tool --tool-id "$SOAT_TOOL_ID"
 echo "SOAT agent tool deleted."
 
 # ── Conversations Generate Tests ─────────────────────────────────────────────
@@ -834,7 +834,7 @@ echo "Conversation rename: OK"
 
 # 45. Create an agent-backed actor using the convenience endpoint POST /agents/:id/actors
 echo "--- Creating agent-backed actor via convenience endpoint ---"
-AGENT_ACTOR_RESP=$($SOAT_CLI create-agent-actor --agentId "$CONVO_GEN_AGENT_ID" \
+AGENT_ACTOR_RESP=$($SOAT_CLI create-agent-actor --agent-id "$CONVO_GEN_AGENT_ID" \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name convo-agent-actor \
   --instructions "Reply as a friendly assistant.")
@@ -971,7 +971,7 @@ echo "User actor deleted."
 
 # 54. Cleanup — delete conversation-generate agent
 echo "--- Deleting conversation-generate agent ---"
-$SOAT_CLI delete-agent --agentId "$CONVO_GEN_AGENT_ID"
+$SOAT_CLI delete-agent --agent-id "$CONVO_GEN_AGENT_ID"
 echo "Conversation-generate agent deleted."
 echo "Conversations generate coverage: OK"
 
@@ -982,7 +982,7 @@ echo "=== Webhooks ==="
 
 # Create webhook
 echo "--- Creating webhook ---"
-WEBHOOK_CREATE_RESP=$($SOAT_CLI create-webhook --projectId "$PROJECT_PUBLIC_ID" \
+WEBHOOK_CREATE_RESP=$($SOAT_CLI create-webhook --project-id "$PROJECT_PUBLIC_ID" \
   --name "Smoke Webhook" \
   --url "https://example.com/smoke-hook" \
   --events '["file.*"]')
@@ -996,7 +996,7 @@ echo "Webhook created: $WEBHOOK_ID"
 
 # List webhooks
 echo "--- Listing webhooks ---"
-WEBHOOK_LIST_RESP=$($SOAT_CLI list-webhooks --projectId "$PROJECT_PUBLIC_ID")
+WEBHOOK_LIST_RESP=$($SOAT_CLI list-webhooks --project-id "$PROJECT_PUBLIC_ID")
 if ! printf '%s\n' "$WEBHOOK_LIST_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
   echo "ERROR: LIST webhooks did not return an array" >&2
   echo "$WEBHOOK_LIST_RESP" >&2
@@ -1006,7 +1006,7 @@ echo "Webhooks listed."
 
 # Get webhook
 echo "--- Getting webhook ---"
-WEBHOOK_GET_RESP=$($SOAT_CLI get-webhook --projectId "$PROJECT_PUBLIC_ID" --webhookId "$WEBHOOK_ID")
+WEBHOOK_GET_RESP=$($SOAT_CLI get-webhook --project-id "$PROJECT_PUBLIC_ID" --webhook-id "$WEBHOOK_ID")
 if ! printf '%s\n' "$WEBHOOK_GET_RESP" | jq -e --arg id "$WEBHOOK_ID" '.id == $id' >/dev/null 2>&1; then
   echo "ERROR: GET webhook returned unexpected payload" >&2
   echo "$WEBHOOK_GET_RESP" >&2
@@ -1016,7 +1016,7 @@ echo "Webhook retrieved."
 
 # Update webhook
 echo "--- Updating webhook ---"
-WEBHOOK_UPDATE_RESP=$($SOAT_CLI update-webhook --projectId "$PROJECT_PUBLIC_ID" --webhookId "$WEBHOOK_ID" \
+WEBHOOK_UPDATE_RESP=$($SOAT_CLI update-webhook --project-id "$PROJECT_PUBLIC_ID" --webhook-id "$WEBHOOK_ID" \
   --name "Updated Smoke Webhook" --active false)
 if ! printf '%s\n' "$WEBHOOK_UPDATE_RESP" | jq -e '.active == false' >/dev/null 2>&1; then
   echo "ERROR: UPDATE webhook did not return active=false" >&2
@@ -1027,12 +1027,12 @@ echo "Webhook updated."
 
 # Rotate secret
 echo "--- Rotating webhook secret ---"
-$SOAT_CLI rotate-webhook-secret --projectId "$PROJECT_PUBLIC_ID" --webhookId "$WEBHOOK_ID" >/dev/null
+$SOAT_CLI rotate-webhook-secret --project-id "$PROJECT_PUBLIC_ID" --webhook-id "$WEBHOOK_ID" >/dev/null
 echo "Webhook secret rotated."
 
 # List deliveries
 echo "--- Listing webhook deliveries ---"
-WEBHOOK_DELIVERIES_RESP=$($SOAT_CLI list-webhook-deliveries --projectId "$PROJECT_PUBLIC_ID" --webhookId "$WEBHOOK_ID")
+WEBHOOK_DELIVERIES_RESP=$($SOAT_CLI list-webhook-deliveries --project-id "$PROJECT_PUBLIC_ID" --webhook-id "$WEBHOOK_ID")
 if ! printf '%s\n' "$WEBHOOK_DELIVERIES_RESP" | jq -e '((type == "array") or (type == "object" and (.data | type == "array")))' >/dev/null 2>&1; then
   echo "ERROR: LIST webhook deliveries did not return an array" >&2
   echo "$WEBHOOK_DELIVERIES_RESP" >&2
@@ -1042,7 +1042,7 @@ echo "Webhook deliveries listed."
 
 # Delete webhook
 echo "--- Deleting webhook ---"
-$SOAT_CLI delete-webhook --projectId "$PROJECT_PUBLIC_ID" --webhookId "$WEBHOOK_ID"
+$SOAT_CLI delete-webhook --project-id "$PROJECT_PUBLIC_ID" --webhook-id "$WEBHOOK_ID"
 echo "Webhook deleted."
 echo "Webhooks coverage: OK"
 

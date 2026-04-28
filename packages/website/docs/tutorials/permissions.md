@@ -395,7 +395,7 @@ echo "read-only policy: $READ_POLICY_ID"
 Attach the full-access policy to Alice and the read-only policy to Bob. See [Policies — Attaching Policies to Users](/docs/modules/policies#attaching-policies-to-users) for more details.
 
 :::note
-`PUT /users/:userId/policies` **replaces** the user's entire policy list with the provided array.
+`PUT /users/:user_id/policies` **replaces** the user's entire policy list with the provided array.
 :::
 
 <Tabs groupId="client">
@@ -419,7 +419,7 @@ soat attach-user-policies \
 ```ts
 const { error: attachAlice } = await Users.attachUserPolicies({
   client: adminClient,
-  path: { userId: alice.id },
+  path: { user_id: alice.id },
   body: { policy_ids: [FULL_POLICY_ID] },
 });
 
@@ -427,7 +427,7 @@ if (attachAlice) throw new Error(JSON.stringify(attachAlice));
 
 const { error: attachBob } = await Users.attachUserPolicies({
   client: adminClient,
-  path: { userId: bob.id },
+  path: { user_id: bob.id },
   body: { policy_ids: [READ_POLICY_ID] },
 });
 
@@ -482,13 +482,13 @@ soat configure --profile bob
 # Create Alice's project key (using her profile)
 soat --profile alice create-api-key \
   --name "alice-analytics-key" \
-  --project_id "$PROJECT_ID"
+  --project-id "$PROJECT_ID"
 
 # Create Bob's project key, explicitly restricting it to the read-only policy
 soat --profile bob create-api-key \
   --name "bob-analytics-key" \
-  --project_id "$PROJECT_ID" \
-  --policy_ids '["'"$READ_POLICY_ID"'"]'
+  --project-id "$PROJECT_ID" \
+  --policy-ids '["'"$READ_POLICY_ID"'"]'
 ```
 
 </TabItem>
@@ -605,12 +605,12 @@ Confirm that each key behaves as expected.
 echo "hello world" > sample.txt
 
 soat --profile alice upload-file \
-  --project_id "$PROJECT_ID" \
+  --project-id "$PROJECT_ID" \
   --file sample.txt
 # → 201, file created
 
 soat --profile bob upload-file \
-  --project_id "$PROJECT_ID" \
+  --project-id "$PROJECT_ID" \
   --file sample.txt
 # → 403, Bob's policy does not allow files:UploadFile
 ```
@@ -675,7 +675,7 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 
 ```bash
 # Bob can list files — read is allowed
-soat --profile bob list-files --project_id "$PROJECT_ID"
+soat --profile bob list-files --project-id "$PROJECT_ID"
 # → 200, file list
 ```
 
@@ -715,8 +715,8 @@ Even if you tried to assign `FULL_POLICY_ID` to Bob's API key, it would not gran
 # Attempt to create a key for Bob with the full-access policy
 soat --profile bob create-api-key \
   --name "bob-escalation-attempt" \
-  --project_id "$PROJECT_ID" \
-  --policy_ids '["'"$FULL_POLICY_ID"'"]'
+  --project-id "$PROJECT_ID" \
+  --policy-ids '["'"$FULL_POLICY_ID"'"]'
 # Key is created, but when used it is still limited to Bob's read-only permissions
 # because Bob's user policies are the ceiling.
 ```

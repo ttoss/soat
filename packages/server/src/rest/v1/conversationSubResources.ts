@@ -168,7 +168,7 @@ conversationSubResourcesRouter.post(
 );
 
 conversationSubResourcesRouter.delete(
-  '/conversations/:id/messages/:documentId',
+  '/conversations/:id/messages/:document_id',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -198,7 +198,7 @@ conversationSubResourcesRouter.delete(
 
     const result = await removeConversationMessage({
       conversationId: ctx.params.id,
-      documentId: ctx.params.documentId,
+      documentId: ctx.params.document_id,
     });
 
     if (!result) {

@@ -43,7 +43,7 @@ const checkAgentAccess = async (
     ctx.body = { error: 'Forbidden' };
     return null;
   }
-  const agent = await resolveAgent(ctx.params.agentId);
+  const agent = await resolveAgent(ctx.params.agent_id);
   if (!agent) {
     ctx.status = 404;
     ctx.body = { error: 'Agent not found' };
@@ -66,7 +66,7 @@ sessionsRouter.post('/', async (ctx: Context) => {
     return;
   }
 
-  const agentPublicId = ctx.params.agentId;
+  const agentPublicId = ctx.params.agent_id;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'agents:CreateSession',
@@ -136,7 +136,7 @@ sessionsRouter.get('/', async (ctx: Context) => {
     return;
   }
 
-  const agentPublicId = ctx.params.agentId;
+  const agentPublicId = ctx.params.agent_id;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'agents:ListSessions',
@@ -181,14 +181,14 @@ sessionsRouter.get('/', async (ctx: Context) => {
 
 // ── Get Session ──────────────────────────────────────────────────────────
 
-sessionsRouter.get('/:sessionId', async (ctx: Context) => {
+sessionsRouter.get('/:session_id', async (ctx: Context) => {
   const agentAccess = await checkAgentAccess(ctx, 'agents:GetSession');
   if (!agentAccess) return;
   const { agent } = agentAccess;
 
   const result = await getSession({
     agentId: agent.id as number,
-    sessionId: ctx.params.sessionId,
+    sessionId: ctx.params.session_id,
   });
 
   if (!result) {
@@ -202,7 +202,7 @@ sessionsRouter.get('/:sessionId', async (ctx: Context) => {
 
 // ── Update Session ───────────────────────────────────────────────────────
 
-sessionsRouter.patch('/:sessionId', async (ctx: Context) => {
+sessionsRouter.patch('/:session_id', async (ctx: Context) => {
   const agentAccess = await checkAgentAccess(ctx, 'agents:UpdateSession');
   if (!agentAccess) return;
   const { agent } = agentAccess;
@@ -216,7 +216,7 @@ sessionsRouter.patch('/:sessionId', async (ctx: Context) => {
 
   const result = await updateSession({
     agentId: agent.id as number,
-    sessionId: ctx.params.sessionId,
+    sessionId: ctx.params.session_id,
     name: body.name,
     status: body.status,
     autoGenerate: body.autoGenerate,
@@ -234,14 +234,14 @@ sessionsRouter.patch('/:sessionId', async (ctx: Context) => {
 
 // ── Delete Session ───────────────────────────────────────────────────────
 
-sessionsRouter.delete('/:sessionId', async (ctx: Context) => {
+sessionsRouter.delete('/:session_id', async (ctx: Context) => {
   const agentAccess = await checkAgentAccess(ctx, 'agents:DeleteSession');
   if (!agentAccess) return;
   const { agent } = agentAccess;
 
   const result = await deleteSession({
     agentId: agent.id as number,
-    sessionId: ctx.params.sessionId,
+    sessionId: ctx.params.session_id,
   });
 
   if (!result) {

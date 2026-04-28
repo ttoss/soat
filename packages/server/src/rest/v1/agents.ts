@@ -20,17 +20,17 @@ export const agentsRouter = new Router<Context>();
 // ── Sessions (sub-resource) ──────────────────────────────────────────────
 
 agentsRouter.use(
-  '/agents/:agentId/sessions',
+  '/agents/:agent_id/sessions',
   sessionsRouter.routes(),
   sessionsRouter.allowedMethods()
 );
 
-// ── Agent Tools (must be mounted before /agents/:agentId) ────────────────
+// ── Agent Tools (must be mounted before /agents/:agent_id) ────────────────
 
 agentsRouter.use(agentToolsRouter.routes());
 agentsRouter.use(agentToolsRouter.allowedMethods());
 
-// ── Traces (must be mounted before /agents/:agentId) ─────────────────────
+// ── Traces (must be mounted before /agents/:agent_id) ─────────────────────
 
 agentsRouter.use(agentTracesRouter.routes());
 agentsRouter.use(agentTracesRouter.allowedMethods());
@@ -197,7 +197,7 @@ agentsRouter.get('/agents', async (ctx: Context) => {
   ctx.body = await listAgents({ projectIds });
 });
 
-agentsRouter.get('/agents/:agentId', async (ctx: Context) => {
+agentsRouter.get('/agents/:agent_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -216,7 +216,7 @@ agentsRouter.get('/agents/:agentId', async (ctx: Context) => {
 
   const result = await getAgent({
     projectIds,
-    id: ctx.params.agentId,
+    id: ctx.params.agent_id,
   });
 
   if (result === 'not_found') {
@@ -228,7 +228,7 @@ agentsRouter.get('/agents/:agentId', async (ctx: Context) => {
   ctx.body = result;
 });
 
-agentsRouter.put('/agents/:agentId', async (ctx: Context) => {
+agentsRouter.put('/agents/:agent_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -249,7 +249,7 @@ agentsRouter.put('/agents/:agentId', async (ctx: Context) => {
 
   const result = await updateAgent({
     projectIds,
-    id: ctx.params.agentId,
+    id: ctx.params.agent_id,
     ...parseUpdateAgentBody(body),
   });
 
@@ -268,7 +268,7 @@ agentsRouter.put('/agents/:agentId', async (ctx: Context) => {
   ctx.body = result;
 });
 
-agentsRouter.delete('/agents/:agentId', async (ctx: Context) => {
+agentsRouter.delete('/agents/:agent_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -287,7 +287,7 @@ agentsRouter.delete('/agents/:agentId', async (ctx: Context) => {
 
   const result = await deleteAgent({
     projectIds,
-    id: ctx.params.agentId,
+    id: ctx.params.agent_id,
   });
 
   if (result === 'not_found') {
@@ -304,7 +304,7 @@ agentsRouter.delete('/agents/:agentId', async (ctx: Context) => {
 agentsRouter.use(agentGenerationRouter.routes());
 agentsRouter.use(agentGenerationRouter.allowedMethods());
 
-agentsRouter.post('/agents/:agentId/actors', async (ctx: Context) => {
+agentsRouter.post('/agents/:agent_id/actors', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -312,7 +312,7 @@ agentsRouter.post('/agents/:agentId/actors', async (ctx: Context) => {
   }
 
   const agent = await db.Agent.findOne({
-    where: { publicId: ctx.params.agentId },
+    where: { publicId: ctx.params.agent_id },
     include: [{ model: db.Project, as: 'project' }],
   });
 

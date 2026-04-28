@@ -31,9 +31,9 @@ agentTracesRouter.get('/agents/traces', async (ctx: Context) => {
 });
 
 /**
- * @openapi GET /agents/traces/:traceId
+ * @openapi GET /agents/traces/:trace_id
  */
-agentTracesRouter.get('/agents/traces/:traceId', async (ctx: Context) => {
+agentTracesRouter.get('/agents/traces/:trace_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -52,7 +52,7 @@ agentTracesRouter.get('/agents/traces/:traceId', async (ctx: Context) => {
 
   const result = await getTrace({
     projectIds,
-    traceId: ctx.params.traceId,
+    traceId: ctx.params.trace_id,
   });
 
   if (result === 'not_found') {

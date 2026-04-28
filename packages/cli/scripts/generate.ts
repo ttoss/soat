@@ -19,6 +19,7 @@ const OUT_FILE = path.resolve(__dirname, '../src/generated/routes.ts');
 interface OpenApiParameter {
   name: string;
   in: 'path' | 'query' | 'header' | 'cookie';
+  $ref?: string;
 }
 
 interface OpenApiOperation {
@@ -33,11 +34,17 @@ interface OpenApiPathItem {
   put?: OpenApiOperation;
   patch?: OpenApiOperation;
   delete?: OpenApiOperation;
+  parameters?: OpenApiParameter[];
+}
+
+interface OpenApiComponents {
+  parameters?: Record<string, OpenApiParameter>;
 }
 
 interface OpenApiSpec {
   tags?: Array<{ name: string }>;
   paths?: Record<string, OpenApiPathItem>;
+  components?: OpenApiComponents;
 }
 
 /** Convert camelCase operationId to kebab-case CLI command name. */
@@ -84,19 +91,42 @@ for (const file of files) {
 
   const moduleTag = spec.tags?.[0]?.name;
 
+  /** Resolve a parameter that may be a $ref to components/parameters. */
+  const resolveParam = (p: OpenApiParameter): OpenApiParameter => {
+    if (p.$ref) {
+      const refKey = p.$ref.replace('#/components/parameters/', '');
+      return spec.components?.parameters?.[refKey] ?? p;
+    }
+    return p;
+  };
+
   for (const [, pathItem] of Object.entries(spec.paths ?? {})) {
+    // Collect path-level parameters (inherited by all operations)
+    const pathLevelParams = (pathItem.parameters ?? []).map(resolveParam);
+
     for (const method of HTTP_METHODS) {
       const op = (pathItem as Record<string, OpenApiOperation>)[method];
       if (!op?.operationId) continue;
 
       const tag = op.tags?.[0] ?? moduleTag;
       if (!tag) {
-        console.warn(`No tag for ${op.operationId} in ${file}, skipping`);
         continue;
       }
 
       const kebab = toKebab(op.operationId);
-      const params = op.parameters ?? [];
+      // Merge path-level params with operation-level params (operation takes precedence)
+      const opParams = (op.parameters ?? []).map(resolveParam);
+      const opParamNames = new Set(
+        opParams.map((p) => {
+          return p.name;
+        })
+      );
+      const params = [
+        ...pathLevelParams.filter((p) => {
+          return !opParamNames.has(p.name);
+        }),
+        ...opParams,
+      ];
 
       routes[kebab] = {
         serviceClass: toClassName(tag),
@@ -141,4 +171,5 @@ const lines = [
 ];
 
 fs.writeFileSync(OUT_FILE, lines.join('\n'));
+// eslint-disable-next-line no-console
 console.log(`Generated ${Object.keys(routes).length} routes → ${OUT_FILE}`);

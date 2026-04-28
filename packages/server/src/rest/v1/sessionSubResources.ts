@@ -34,7 +34,7 @@ const checkAgentAccess = async (
     ctx.body = { error: 'Forbidden' };
     return null;
   }
-  const agent = await resolveAgent(ctx.params.agentId);
+  const agent = await resolveAgent(ctx.params.agent_id);
   if (!agent) {
     ctx.status = 404;
     ctx.body = { error: 'Agent not found' };
@@ -50,7 +50,7 @@ const checkAgentAccess = async (
 
 const sessionSubResourcesRouter = new Router<Context>();
 
-sessionSubResourcesRouter.get('/:sessionId/messages', async (ctx: Context) => {
+sessionSubResourcesRouter.get('/:session_id/messages', async (ctx: Context) => {
   const agentAccess = await checkAgentAccess(ctx, 'agents:GetSession');
   if (!agentAccess) return;
   const { agent } = agentAccess;
@@ -59,7 +59,7 @@ sessionSubResourcesRouter.get('/:sessionId/messages', async (ctx: Context) => {
 
   const result = await listSessionMessages({
     agentId: agent.id as number,
-    sessionId: ctx.params.sessionId,
+    sessionId: ctx.params.session_id,
     limit: limit ? Number(limit) : undefined,
     offset: offset ? Number(offset) : undefined,
   });
@@ -75,7 +75,7 @@ sessionSubResourcesRouter.get('/:sessionId/messages', async (ctx: Context) => {
 
 // ── Add Message ──────────────────────────────────────────────────────────
 
-sessionSubResourcesRouter.post('/:sessionId/messages', async (ctx: Context) => {
+sessionSubResourcesRouter.post('/:session_id/messages', async (ctx: Context) => {
   const agentAccess = await checkAgentAccess(ctx, 'agents:SendSessionMessage');
   if (!agentAccess) return;
   const { agent } = agentAccess;
@@ -93,7 +93,7 @@ sessionSubResourcesRouter.post('/:sessionId/messages', async (ctx: Context) => {
 
   const result = await addSessionMessage({
     agentId: agent.id as number,
-    sessionId: ctx.params.sessionId,
+    sessionId: ctx.params.session_id,
     message: body.message,
     toolContext: body.toolContext,
   });
@@ -110,7 +110,7 @@ sessionSubResourcesRouter.post('/:sessionId/messages', async (ctx: Context) => {
 
 // ── Generate Response ────────────────────────────────────────────────────
 
-sessionSubResourcesRouter.post('/:sessionId/generate', async (ctx: Context) => {
+sessionSubResourcesRouter.post('/:session_id/generate', async (ctx: Context) => {
   const agentAccess = await checkAgentAccess(ctx, 'agents:SendSessionMessage');
   if (!agentAccess) return;
   const { agent } = agentAccess;
@@ -125,20 +125,20 @@ sessionSubResourcesRouter.post('/:sessionId/generate', async (ctx: Context) => {
   if (isAsync) {
     generateSessionResponse({
       agentId: agent.id as number,
-      sessionId: ctx.params.sessionId,
+      sessionId: ctx.params.session_id,
       model: body.model,
       toolContext: body.toolContext,
     }).catch(() => {
       // Fire-and-forget: errors are emitted via event bus
     });
     ctx.status = 202;
-    ctx.body = { status: 'accepted', sessionId: ctx.params.sessionId };
+    ctx.body = { status: 'accepted', sessionId: ctx.params.session_id };
     return;
   }
 
   const result = await generateSessionResponse({
     agentId: agent.id as number,
-    sessionId: ctx.params.sessionId,
+    sessionId: ctx.params.session_id,
     model: body.model,
     toolContext: body.toolContext,
   });
@@ -167,7 +167,7 @@ sessionSubResourcesRouter.post('/:sessionId/generate', async (ctx: Context) => {
 // ── Submit Tool Outputs ──────────────────────────────────────────────────
 
 sessionSubResourcesRouter.post(
-  '/:sessionId/tool-outputs',
+  '/:session_id/tool-outputs',
   async (ctx: Context) => {
     const agentAccess = await checkAgentAccess(
       ctx,
@@ -197,8 +197,8 @@ sessionSubResourcesRouter.post(
 
     const result = await submitSessionToolOutputs({
       agentId: agent.id as number,
-      agentPublicId: ctx.params.agentId,
-      sessionId: ctx.params.sessionId,
+      agentPublicId: ctx.params.agent_id,
+      sessionId: ctx.params.session_id,
       generationId: body.generationId,
       toolOutputs: body.toolOutputs,
     });
@@ -227,14 +227,14 @@ sessionSubResourcesRouter.post(
 
 // ── Tags ─────────────────────────────────────────────────────────────────
 
-sessionSubResourcesRouter.get('/:sessionId/tags', async (ctx: Context) => {
+sessionSubResourcesRouter.get('/:session_id/tags', async (ctx: Context) => {
   const agentAccess = await checkAgentAccess(ctx, 'agents:GetSession');
   if (!agentAccess) return;
   const { agent } = agentAccess;
 
   const result = await getSessionTags({
     agentId: agent.id as number,
-    sessionId: ctx.params.sessionId,
+    sessionId: ctx.params.session_id,
   });
 
   if (result === null) {
@@ -246,7 +246,7 @@ sessionSubResourcesRouter.get('/:sessionId/tags', async (ctx: Context) => {
   ctx.body = result;
 });
 
-sessionSubResourcesRouter.put('/:sessionId/tags', async (ctx: Context) => {
+sessionSubResourcesRouter.put('/:session_id/tags', async (ctx: Context) => {
   const agentAccess = await checkAgentAccess(ctx, 'agents:UpdateSession');
   if (!agentAccess) return;
   const { agent } = agentAccess;
@@ -255,7 +255,7 @@ sessionSubResourcesRouter.put('/:sessionId/tags', async (ctx: Context) => {
 
   const result = await updateSessionTags({
     agentId: agent.id as number,
-    sessionId: ctx.params.sessionId,
+    sessionId: ctx.params.session_id,
     tags,
     merge: false,
   });
@@ -269,7 +269,7 @@ sessionSubResourcesRouter.put('/:sessionId/tags', async (ctx: Context) => {
   ctx.body = result;
 });
 
-sessionSubResourcesRouter.patch('/:sessionId/tags', async (ctx: Context) => {
+sessionSubResourcesRouter.patch('/:session_id/tags', async (ctx: Context) => {
   const agentAccess = await checkAgentAccess(ctx, 'agents:UpdateSession');
   if (!agentAccess) return;
   const { agent } = agentAccess;
@@ -278,7 +278,7 @@ sessionSubResourcesRouter.patch('/:sessionId/tags', async (ctx: Context) => {
 
   const result = await updateSessionTags({
     agentId: agent.id as number,
-    sessionId: ctx.params.sessionId,
+    sessionId: ctx.params.session_id,
     tags,
     merge: true,
   });

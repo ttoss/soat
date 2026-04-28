@@ -146,7 +146,7 @@ agentToolsRouter.get('/agents/tools', async (ctx: Context) => {
   ctx.body = await listAgentTools({ projectIds });
 });
 
-agentToolsRouter.get('/agents/tools/:toolId', async (ctx: Context) => {
+agentToolsRouter.get('/agents/tools/:tool_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -165,7 +165,7 @@ agentToolsRouter.get('/agents/tools/:toolId', async (ctx: Context) => {
 
   const result = await getAgentTool({
     projectIds,
-    id: ctx.params.toolId,
+    id: ctx.params.tool_id,
   });
 
   if (result === 'not_found') {
@@ -177,7 +177,7 @@ agentToolsRouter.get('/agents/tools/:toolId', async (ctx: Context) => {
   ctx.body = result;
 });
 
-agentToolsRouter.put('/agents/tools/:toolId', async (ctx: Context) => {
+agentToolsRouter.put('/agents/tools/:tool_id', async (ctx: Context) => {
   const projectIds = await checkToolsAccess(ctx, 'agents:UpdateAgentTool');
   if (projectIds === null) return;
 
@@ -186,7 +186,7 @@ agentToolsRouter.put('/agents/tools/:toolId', async (ctx: Context) => {
 
   const result = await updateAgentTool({
     projectIds,
-    id: ctx.params.toolId,
+    id: ctx.params.tool_id,
     name: parseStringOrUndefined(name),
     type: parseStringOrUndefined(type),
     description: parseNullableString(description),
@@ -205,7 +205,7 @@ agentToolsRouter.put('/agents/tools/:toolId', async (ctx: Context) => {
   ctx.body = result;
 });
 
-agentToolsRouter.delete('/agents/tools/:toolId', async (ctx: Context) => {
+agentToolsRouter.delete('/agents/tools/:tool_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -224,7 +224,7 @@ agentToolsRouter.delete('/agents/tools/:toolId', async (ctx: Context) => {
 
   const result = await deleteAgentTool({
     projectIds,
-    id: ctx.params.toolId,
+    id: ctx.params.tool_id,
   });
 
   if (result === 'not_found') {

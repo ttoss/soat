@@ -114,14 +114,14 @@ chatsRouter.get('/chats', async (ctx: Context) => {
   ctx.body = await listChats({ projectIds: projectIds ?? [] });
 });
 
-chatsRouter.get('/chats/:chatId', async (ctx: Context) => {
+chatsRouter.get('/chats/:chat_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const { chatId } = ctx.params;
+  const { chat_id: chatId } = ctx.params;
 
   const chat = await getChat({ id: chatId });
 
@@ -134,14 +134,14 @@ chatsRouter.get('/chats/:chatId', async (ctx: Context) => {
   ctx.body = chat;
 });
 
-chatsRouter.delete('/chats/:chatId', async (ctx: Context) => {
+chatsRouter.delete('/chats/:chat_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const { chatId } = ctx.params;
+  const { chat_id: chatId } = ctx.params;
 
   const result = await deleteChat({ id: chatId });
 
@@ -199,10 +199,10 @@ const handleStreamingCompletion = async (args: {
   }
 };
 
-chatsRouter.post('/chats/:chatId/completions', async (ctx: Context) => {
+chatsRouter.post('/chats/:chat_id/completions', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
-  const { chatId } = ctx.params;
+  const { chat_id: chatId } = ctx.params;
 
   const { messages, model, stream } = ctx.request.body as {
     messages?: unknown;
@@ -348,7 +348,7 @@ chatsRouter.post('/chats/completions', async (ctx: Context) => {
   }
 });
 
-chatsRouter.post('/chats/:chatId/actors', async (ctx: Context) => {
+chatsRouter.post('/chats/:chat_id/actors', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -356,7 +356,7 @@ chatsRouter.post('/chats/:chatId/actors', async (ctx: Context) => {
   }
 
   const chat = await db.Chat.findOne({
-    where: { publicId: ctx.params.chatId },
+    where: { publicId: ctx.params.chat_id },
     include: [{ model: db.Project, as: 'project' }],
   });
 

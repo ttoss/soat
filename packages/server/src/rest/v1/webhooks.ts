@@ -14,7 +14,7 @@ import {
 
 const webhooksRouter = new Router<Context>();
 
-webhooksRouter.get('/projects/:projectId/webhooks', async (ctx: Context) => {
+webhooksRouter.get('/projects/:project_id/webhooks', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -22,7 +22,7 @@ webhooksRouter.get('/projects/:projectId/webhooks', async (ctx: Context) => {
   }
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: ctx.params.projectId,
+    projectPublicId: ctx.params.project_id,
     action: 'webhooks:ListWebhooks',
   });
   if (!allowed) {
@@ -32,7 +32,7 @@ webhooksRouter.get('/projects/:projectId/webhooks', async (ctx: Context) => {
   }
 
   const project = await db.Project.findOne({
-    where: { publicId: ctx.params.projectId },
+    where: { publicId: ctx.params.project_id },
   });
   if (!project) {
     ctx.status = 404;
@@ -43,7 +43,7 @@ webhooksRouter.get('/projects/:projectId/webhooks', async (ctx: Context) => {
   ctx.body = await listWebhooks({ projectIds: [project.id] });
 });
 
-webhooksRouter.post('/projects/:projectId/webhooks', async (ctx: Context) => {
+webhooksRouter.post('/projects/:project_id/webhooks', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -51,7 +51,7 @@ webhooksRouter.post('/projects/:projectId/webhooks', async (ctx: Context) => {
   }
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: ctx.params.projectId,
+    projectPublicId: ctx.params.project_id,
     action: 'webhooks:CreateWebhook',
   });
   if (!allowed) {
@@ -61,7 +61,7 @@ webhooksRouter.post('/projects/:projectId/webhooks', async (ctx: Context) => {
   }
 
   const project = await db.Project.findOne({
-    where: { publicId: ctx.params.projectId },
+    where: { publicId: ctx.params.project_id },
   });
   if (!project) {
     ctx.status = 404;
@@ -112,7 +112,7 @@ webhooksRouter.post('/projects/:projectId/webhooks', async (ctx: Context) => {
 });
 
 webhooksRouter.get(
-  '/projects/:projectId/webhooks/:webhookId',
+  '/projects/:project_id/webhooks/:webhook_id',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -121,7 +121,7 @@ webhooksRouter.get(
     }
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: ctx.params.projectId,
+      projectPublicId: ctx.params.project_id,
       action: 'webhooks:GetWebhook',
     });
     if (!allowed) {
@@ -130,8 +130,8 @@ webhooksRouter.get(
       return;
     }
 
-    const webhook = await getWebhook({ id: ctx.params.webhookId });
-    if (!webhook || webhook.projectId !== ctx.params.projectId) {
+    const webhook = await getWebhook({ id: ctx.params.webhook_id });
+    if (!webhook || webhook.projectId !== ctx.params.project_id) {
       ctx.status = 404;
       ctx.body = { error: 'Webhook not found' };
       return;
@@ -142,7 +142,7 @@ webhooksRouter.get(
 );
 
 webhooksRouter.put(
-  '/projects/:projectId/webhooks/:webhookId',
+  '/projects/:project_id/webhooks/:webhook_id',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -151,7 +151,7 @@ webhooksRouter.put(
     }
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: ctx.params.projectId,
+      projectPublicId: ctx.params.project_id,
       action: 'webhooks:UpdateWebhook',
     });
     if (!allowed) {
@@ -160,8 +160,8 @@ webhooksRouter.put(
       return;
     }
 
-    const webhook = await getWebhook({ id: ctx.params.webhookId });
-    if (!webhook || webhook.projectId !== ctx.params.projectId) {
+    const webhook = await getWebhook({ id: ctx.params.webhook_id });
+    if (!webhook || webhook.projectId !== ctx.params.project_id) {
       ctx.status = 404;
       ctx.body = { error: 'Webhook not found' };
       return;
@@ -194,7 +194,7 @@ webhooksRouter.put(
     }
 
     const updated = await updateWebhook({
-      id: ctx.params.webhookId,
+      id: ctx.params.webhook_id,
       name: body.name,
       description: body.description,
       url: body.url,
@@ -208,7 +208,7 @@ webhooksRouter.put(
 );
 
 webhooksRouter.delete(
-  '/projects/:projectId/webhooks/:webhookId',
+  '/projects/:project_id/webhooks/:webhook_id',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -217,7 +217,7 @@ webhooksRouter.delete(
     }
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: ctx.params.projectId,
+      projectPublicId: ctx.params.project_id,
       action: 'webhooks:DeleteWebhook',
     });
     if (!allowed) {
@@ -226,20 +226,20 @@ webhooksRouter.delete(
       return;
     }
 
-    const webhook = await getWebhook({ id: ctx.params.webhookId });
-    if (!webhook || webhook.projectId !== ctx.params.projectId) {
+    const webhook = await getWebhook({ id: ctx.params.webhook_id });
+    if (!webhook || webhook.projectId !== ctx.params.project_id) {
       ctx.status = 404;
       ctx.body = { error: 'Webhook not found' };
       return;
     }
 
-    await deleteWebhook({ id: ctx.params.webhookId });
+    await deleteWebhook({ id: ctx.params.webhook_id });
     ctx.status = 204;
   }
 );
 
 webhooksRouter.get(
-  '/projects/:projectId/webhooks/:webhookId/deliveries',
+  '/projects/:project_id/webhooks/:webhook_id/deliveries',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -248,7 +248,7 @@ webhooksRouter.get(
     }
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: ctx.params.projectId,
+      projectPublicId: ctx.params.project_id,
       action: 'webhooks:ListWebhookDeliveries',
     });
     if (!allowed) {
@@ -258,14 +258,14 @@ webhooksRouter.get(
     }
 
     const webhookRecord = await db.Webhook.findOne({
-      where: { publicId: ctx.params.webhookId },
+      where: { publicId: ctx.params.webhook_id },
       include: [{ model: db.Project, as: 'project' }],
     });
 
     if (
       !webhookRecord ||
       (webhookRecord as unknown as { project: { publicId: string } }).project
-        .publicId !== ctx.params.projectId
+        .publicId !== ctx.params.project_id
     ) {
       ctx.status = 404;
       ctx.body = { error: 'Webhook not found' };
@@ -288,7 +288,7 @@ webhooksRouter.get(
 );
 
 webhooksRouter.get(
-  '/projects/:projectId/webhooks/:webhookId/deliveries/:deliveryId',
+  '/projects/:project_id/webhooks/:webhook_id/deliveries/:delivery_id',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -297,7 +297,7 @@ webhooksRouter.get(
     }
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: ctx.params.projectId,
+      projectPublicId: ctx.params.project_id,
       action: 'webhooks:GetWebhookDelivery',
     });
     if (!allowed) {
@@ -307,7 +307,7 @@ webhooksRouter.get(
     }
 
     const delivery = await getWebhookDelivery({
-      id: ctx.params.deliveryId,
+      id: ctx.params.delivery_id,
     });
     if (!delivery) {
       ctx.status = 404;
@@ -320,7 +320,7 @@ webhooksRouter.get(
 );
 
 webhooksRouter.post(
-  '/projects/:projectId/webhooks/:webhookId/rotate-secret',
+  '/projects/:project_id/webhooks/:webhook_id/rotate-secret',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -329,7 +329,7 @@ webhooksRouter.post(
     }
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: ctx.params.projectId,
+      projectPublicId: ctx.params.project_id,
       action: 'webhooks:RotateWebhookSecret',
     });
     if (!allowed) {
@@ -338,15 +338,15 @@ webhooksRouter.post(
       return;
     }
 
-    const webhook = await getWebhook({ id: ctx.params.webhookId });
-    if (!webhook || webhook.projectId !== ctx.params.projectId) {
+    const webhook = await getWebhook({ id: ctx.params.webhook_id });
+    if (!webhook || webhook.projectId !== ctx.params.project_id) {
       ctx.status = 404;
       ctx.body = { error: 'Webhook not found' };
       return;
     }
 
     const rotated = await rotateWebhookSecret({
-      id: ctx.params.webhookId,
+      id: ctx.params.webhook_id,
     });
 
     ctx.body = rotated;

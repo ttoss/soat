@@ -34,14 +34,14 @@ secretsRouter.get('/secrets', async (ctx: Context) => {
   ctx.body = await listSecrets({ projectIds: projectIds ?? [] });
 });
 
-secretsRouter.get('/secrets/:secretId', async (ctx: Context) => {
+secretsRouter.get('/secrets/:secret_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const secret = await getSecret({ id: ctx.params.secretId });
+  const secret = await getSecret({ id: ctx.params.secret_id });
 
   if (!secret) {
     ctx.status = 404;
@@ -121,14 +121,14 @@ secretsRouter.post('/secrets', async (ctx: Context) => {
   ctx.body = secret;
 });
 
-secretsRouter.patch('/secrets/:secretId', async (ctx: Context) => {
+secretsRouter.patch('/secrets/:secret_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const secret = await getSecret({ id: ctx.params.secretId });
+  const secret = await getSecret({ id: ctx.params.secret_id });
   if (!secret) {
     ctx.status = 404;
     ctx.body = { error: 'Secret not found' };
@@ -148,7 +148,7 @@ secretsRouter.patch('/secrets/:secretId', async (ctx: Context) => {
   const body = ctx.request.body as { name?: string; value?: string };
 
   const updated = await updateSecret({
-    id: ctx.params.secretId,
+    id: ctx.params.secret_id,
     name: body.name,
     value: body.value,
   });
@@ -156,14 +156,14 @@ secretsRouter.patch('/secrets/:secretId', async (ctx: Context) => {
   ctx.body = updated;
 });
 
-secretsRouter.delete('/secrets/:secretId', async (ctx: Context) => {
+secretsRouter.delete('/secrets/:secret_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const secret = await getSecret({ id: ctx.params.secretId });
+  const secret = await getSecret({ id: ctx.params.secret_id });
   if (!secret) {
     ctx.status = 404;
     ctx.body = { error: 'Secret not found' };
@@ -181,7 +181,7 @@ secretsRouter.delete('/secrets/:secretId', async (ctx: Context) => {
   }
 
   const force = ctx.query.force === 'true';
-  const result = await deleteSecret({ id: ctx.params.secretId, force });
+  const result = await deleteSecret({ id: ctx.params.secret_id, force });
 
   if (result === 'conflict') {
     ctx.status = 409;

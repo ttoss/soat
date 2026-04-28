@@ -46,16 +46,16 @@ The middleware at `packages/server/src/middleware/caseTransform.ts` handles auto
 
 ## Path Parameters
 
-Path parameters in URL templates remain **camelCase** because they are part of the URL path definition, not JSON bodies:
+Path parameters in URL templates use **snake_case**, consistent with the rest of the external REST API contract:
 
 ```
-/api/v1/agents/{agentId}/generate/{generationId}/tool-outputs
+/api/v1/agents/{agent_id}/generate/{generation_id}/tool-outputs
 ```
 
-In the SDK, `params.path` objects also use camelCase to match the URL templates:
+In the SDK, `params.path` objects also use snake_case to match the URL templates:
 
 ```ts
-params: { path: { agentId: agent.id, generationId: gen.id } }
+params: { path: { agent_id: agent.id, generation_id: gen.id } }
 ```
 
 ## OpenAPI Specs
@@ -75,17 +75,17 @@ SOAT tool input schemas use **camelCase**. These are internal tool definitions c
 The generated SDK (`packages/sdk/src/generated/openapi.ts`) reflects the OpenAPI specs:
 
 - Body and response fields are **snake_case** (e.g., `body: { project_id: '...' }`)
-- Path parameters are **camelCase** (e.g., `params: { path: { agentId: '...' } }`)
+- Path parameters are **snake_case** (e.g., `params: { path: { agent_id: '...' } }`)
 
 ## Summary Table
 
-| Context                             | Convention | Example                                |
-| ----------------------------------- | ---------- | -------------------------------------- |
-| REST body fields (request/response) | snake_case | `project_id`, `default_model`          |
-| URL path parameters                 | camelCase  | `{agentId}`, `{generationId}`          |
-| OpenAPI spec properties             | snake_case | `project_id`                           |
-| Internal TS code                    | camelCase  | `projectId`, `defaultModel`            |
-| MCP tool schemas & responses        | camelCase  | `projectId`, `defaultModel`            |
-| soat-tool input schemas             | camelCase  | `projectId`                            |
-| SDK body fields                     | snake_case | `body: { project_id: '...' }`          |
-| SDK path params                     | camelCase  | `params: { path: { agentId: '...' } }` |
+| Context                             | Convention | Example                                 |
+| ----------------------------------- | ---------- | --------------------------------------- |
+| REST body fields (request/response) | snake_case | `project_id`, `default_model`           |
+| URL path parameters                 | snake_case | `{agent_id}`, `{generation_id}`         |
+| OpenAPI spec properties             | snake_case | `project_id`                            |
+| Internal TS code                    | camelCase  | `projectId`, `defaultModel`             |
+| MCP tool schemas & responses        | camelCase  | `projectId`, `defaultModel`             |
+| soat-tool input schemas             | camelCase  | `projectId`                             |
+| SDK body fields                     | snake_case | `body: { project_id: '...' }`           |
+| SDK path params                     | snake_case | `params: { path: { agent_id: '...' } }` |

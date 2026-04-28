@@ -152,7 +152,7 @@ paths:
           description: Forbidden
         '500':
           description: Internal server error
-  /ai-providers/{aiProviderId}:
+  /ai-providers/{ai_provider_id}:
     get:
       tags:
         - AI Providers
@@ -160,7 +160,7 @@ paths:
       description: Returns a specific AI provider configuration
       operationId: getAiProvider
       parameters:
-        - name: aiProviderId
+        - name: ai_provider_id
           in: path
           required: true
           description: AI Provider ID
@@ -207,7 +207,7 @@ paths:
       description: Updates an AI provider configuration
       operationId: updateAiProvider
       parameters:
-        - name: aiProviderId
+        - name: ai_provider_id
           in: path
           required: true
           description: AI Provider ID
@@ -248,7 +248,7 @@ paths:
       description: Deletes an AI provider configuration
       operationId: deleteAiProvider
       parameters:
-        - name: aiProviderId
+        - name: ai_provider_id
           in: path
           required: true
           description: AI Provider ID

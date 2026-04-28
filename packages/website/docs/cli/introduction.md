@@ -5,7 +5,7 @@ slug: /cli
 
 # SOAT CLI
 
-The `@soat/cli` package is a command-line interface for the SOAT REST API. Every API operation is available as a sub-command, auto-generated from the same OpenAPI specs used to build the SDK.
+The `@soat/cli` package is a command-line interface for the SOAT REST API. Every API operation is available as a sub-command, auto-generated from the same OpenAPI specs.
 
 ## Installation
 
