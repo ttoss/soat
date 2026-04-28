@@ -1,6 +1,6 @@
 {
   "name": "@soat/server",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsup",
