@@ -162,18 +162,17 @@ program
       if (flagKey === 'profile') continue;
       const canonical = toCanonical(flagKey);
       const parsedValue = parseFlagValue(val);
-      if (
-        route.pathParams.some((p) => {
-          return toCanonical(p) === canonical;
-        })
-      ) {
-        pathArgs[canonical] = parsedValue;
-      } else if (
-        route.queryParams.some((p) => {
-          return toCanonical(p) === canonical;
-        })
-      ) {
-        queryArgs[kebabToSnake(flagKey)] = parsedValue;
+      const pathParam = route.pathParams.find((p) => {
+        return toCanonical(p) === canonical;
+      });
+      const queryParam = route.queryParams.find((p) => {
+        return toCanonical(p) === canonical;
+      });
+
+      if (pathParam) {
+        pathArgs[pathParam] = parsedValue;
+      } else if (queryParam) {
+        queryArgs[queryParam] = parsedValue;
       } else {
         bodyArgs[kebabToSnake(flagKey)] = parsedValue;
       }

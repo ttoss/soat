@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { generatePublicId, PUBLIC_ID_PREFIXES } from "@soat/postgresdb";
+import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import type { PolicyDocument } from './iam';
 import { validatePolicyDocument } from './iam';
 
