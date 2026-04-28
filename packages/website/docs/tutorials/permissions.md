@@ -319,7 +319,6 @@ soat create-policy \
       {
         "effect": "Allow",
         "action": [
-          "files:ListFiles",
           "files:GetFile",
           "documents:ListDocuments",
           "documents:GetDocument"
@@ -371,7 +370,6 @@ READ_POLICY_ID=$(curl -s -X POST "$SOAT_URL/api/v1/policies" \
         {
           \"effect\": \"Allow\",
           \"action\": [
-            \"files:ListFiles\",
             \"files:GetFile\",
             \"documents:ListDocuments\",
             \"documents:GetDocument\"
@@ -604,14 +602,17 @@ Confirm that each key behaves as expected.
 ```bash
 echo "hello world" > sample.txt
 
-soat --profile alice upload-file \
+soat upload-file-base64 \
   --project-id "$PROJECT_ID" \
-  --file sample.txt
+  --content "$(base64 -w 0 sample.txt)" \
+  --filename "sample.txt"
 # → 201, file created
 
-soat --profile bob upload-file \
+# Switch to Bob's profile to test his permissions
+SOAT_TOKEN="$BOB_API_KEY" soat upload-file-base64 \
   --project-id "$PROJECT_ID" \
-  --file sample.txt
+  --content "$(base64 -w 0 sample.txt)" \
+  --filename "sample.txt"
 # → 403, Bob's policy does not allow files:UploadFile
 ```
 
@@ -619,30 +620,34 @@ soat --profile bob upload-file \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-// Alice can upload
-const fileBlob = new Blob(['hello world'], { type: 'text/plain' });
-const form = new FormData();
-form.append('file', fileBlob, 'sample.txt');
+import { Files } from '@soat/sdk';
 
 const aliceKeyClient = createClient(
   createConfig({ baseUrl: 'http://localhost:5047/api/v1', auth: ALICE_API_KEY })
 );
 
+// Alice can upload
 const { data: uploadedFile, error: uploadErr } = await Files.uploadFile({
   client: aliceKeyClient,
-  body: form,
+  body: {
+    file: new Blob(['hello world'], { type: 'text/plain' }),
+    project_id: PROJECT_ID,
+  },
 });
 
 if (uploadErr) throw new Error(JSON.stringify(uploadErr)); // should not throw
 
-// Bob cannot upload — his policy allows only List/Get
+// Bob cannot upload — his policy allows only files:GetFile
 const bobKeyClient = createClient(
   createConfig({ baseUrl: 'http://localhost:5047/api/v1', auth: BOB_API_KEY })
 );
 
 const { error: bobUploadErr } = await Files.uploadFile({
   client: bobKeyClient,
-  body: form,
+  body: {
+    file: new Blob(['hello world'], { type: 'text/plain' }),
+    project_id: PROJECT_ID,
+  },
 });
 
 console.log(bobUploadErr?.status); // 403
@@ -652,16 +657,20 @@ console.log(bobUploadErr?.status); // 403
 <TabItem value="curl" label="curl">
 
 ```bash
+echo "hello world" > sample.txt
+
 # Alice uploads — expect 201
 curl -s -o /dev/null -w "%{http_code}\n" \
-  -X POST "$SOAT_URL/api/v1/files" \
+  -X POST "$SOAT_URL/api/v1/files/upload" \
   -H "Authorization: Bearer $ALICE_API_KEY" \
+  -F "project_id=$PROJECT_ID" \
   -F "file=@sample.txt"
 
 # Bob tries to upload — expect 403
 curl -s -o /dev/null -w "%{http_code}\n" \
-  -X POST "$SOAT_URL/api/v1/files" \
+  -X POST "$SOAT_URL/api/v1/files/upload" \
   -H "Authorization: Bearer $BOB_API_KEY" \
+  -F "project_id=$PROJECT_ID" \
   -F "file=@sample.txt"
 ```
 
@@ -745,7 +754,10 @@ const escalatedClient = createClient(
 // Still gets 403 — the intersection with Bob's read-only user policy wins
 const { error } = await Files.uploadFile({
   client: escalatedClient,
-  body: form,
+  body: {
+    file: new Blob(['hello world'], { type: 'text/plain' }),
+    project_id: PROJECT_ID,
+  },
 });
 
 console.log(error?.status); // 403
@@ -763,8 +775,9 @@ ESCALATED_KEY=$(curl -s -X POST "$SOAT_URL/api/v1/api-keys" \
 
 # Still 403 — Bob's user policies are the ceiling
 curl -s -o /dev/null -w "%{http_code}\n" \
-  -X POST "$SOAT_URL/api/v1/files" \
+  -X POST "$SOAT_URL/api/v1/files/upload" \
   -H "Authorization: Bearer $ESCALATED_KEY" \
+  -F "project_id=$PROJECT_ID" \
   -F "file=@sample.txt"
 ```
 
