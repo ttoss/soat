@@ -1,5 +1,6 @@
 /**
- * Generates packages/website/docs/openapi-specs.md listing all OpenAPI spec URLs.
+ * Generates packages/website/docs/openapi-specs.md and copies OpenAPI specs to
+ * packages/website/static/openapi.
  * Run with: pnpm tsx scripts/generateOpenApiSpecsPage.ts
  */
 
@@ -12,6 +13,8 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const SPECS_DIR = path.resolve(__dirname, '../../server/src/rest/openapi/v1');
 
 const OUTPUT_FILE = path.resolve(__dirname, '../docs/openapi-specs.md');
+
+const STATIC_OPENAPI_DIR = path.resolve(__dirname, '../static/openapi');
 
 const BASE_URL = '/openapi';
 
@@ -31,6 +34,15 @@ const generate = () => {
       return f.endsWith('.yaml');
     })
     .sort();
+
+  fs.mkdirSync(STATIC_OPENAPI_DIR, { recursive: true });
+
+  for (const file of files) {
+    fs.copyFileSync(
+      path.join(SPECS_DIR, file),
+      path.join(STATIC_OPENAPI_DIR, file)
+    );
+  }
 
   const rows = files
     .map((file) => {
