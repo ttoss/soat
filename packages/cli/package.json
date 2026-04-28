@@ -32,7 +32,9 @@
     "type": "git",
     "url": "https://github.com/ttoss/soat"
   },
-  "bin": "./bin/soat",
+  "bin": {
+    "soat": "./bin/soat"
+  },
   "publishConfig": {
     "access": "public",
     "provenance": true
