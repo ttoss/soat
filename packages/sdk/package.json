@@ -1,6 +1,6 @@
 {
   "name": "@soat/sdk",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "TypeScript SDK for the SOAT API",
   "type": "module",
   "main": "dist/index.js",
@@ -34,7 +34,6 @@
     "access": "public",
     "provenance": true
   },
-  "dependencies": {},
   "devDependencies": {
     "@hey-api/client-fetch": "^0.13.1",
     "@hey-api/openapi-ts": "^0.96.1",

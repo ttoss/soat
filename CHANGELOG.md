@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.4.6](https://github.com/ttoss/soat/compare/v0.4.5...v0.4.6) (2026-04-28)
+
+### Bug Fixes
+
+* register `soat` command on global install ([#47](https://github.com/ttoss/soat/issues/47)) ([f6f5657](https://github.com/ttoss/soat/commit/f6f56575dd4340016524d88589b0e9a745f80e5c))
+
 ## [0.4.5](https://github.com/ttoss/soat/compare/v0.4.4...v0.4.5) (2026-04-28)
 
 ### Bug Fixes
