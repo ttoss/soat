@@ -50,7 +50,7 @@ Every implementation — whether adding a new feature or changing existing behav
 
 3. **Module docs** — Update the module documentation page at `packages/website/docs/modules/<module>.md`, including any changes to the data model, key concepts, or the `## Permissions` table.
 
-4. **MCP tool** (project-scoped changes only) — If the change affects a resource that is exposed through the MCP server, add or update the tool in `packages/server/src/mcp/tools/<module>.ts` and ensure it is registered in `packages/server/src/mcp/tools/index.ts`.
+4. **MCP tool** — If the change affects a resource that is exposed through the MCP server, add or update the tool in `packages/server/src/mcp/tools/<module>.ts` and ensure it is registered in `packages/server/src/mcp/tools/index.ts`.
 
 5. **Tests** — Add or update tests in `packages/server/tests/unit/tests/<module>.test.ts`. Every new route and every changed lib function must have coverage (happy path, `401`, `403`, and relevant edge cases).
 

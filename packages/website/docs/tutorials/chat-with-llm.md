@@ -37,14 +37,10 @@ export SOAT_BASE_URL=http://localhost:5047/api/v1
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
-All code snippets below share a single `client`. Swap the `auth` token as you progress:
+All code snippets below use a `SoatClient` instance. The authenticated instance is created in Step 1 after login.
 
 ```ts
-import { createClient, createConfig } from '@soat/sdk';
-
-const client = createClient(
-  createConfig({ baseUrl: 'http://localhost:5047/api/v1', auth: '' })
-);
+import { SoatClient } from '@soat/sdk';
 ```
 
 </TabItem>
@@ -73,20 +69,19 @@ export SOAT_TOKEN=$ADMIN_TOKEN
 <TabItem value="sdk" label="SDK">
 
 ```ts
-import { Users } from '@soat/sdk';
+const soat = new SoatClient({ baseUrl: 'http://localhost:5047/api/v1' });
 
-const { data: session, error } = await Users.loginUser({
-  client,
+const { data: session, error } = await soat.users.loginUser({
   body: { username: 'admin', password: 'Admin1234!' },
 });
 
 if (error) throw new Error(JSON.stringify(error));
 
-const ADMIN_TOKEN = session.token;
-
-const adminClient = createClient(
-  createConfig({ baseUrl: 'http://localhost:5047/api/v1', auth: ADMIN_TOKEN })
-);
+// Rebuild with the admin token
+const adminSoat = new SoatClient({
+  baseUrl: 'http://localhost:5047/api/v1',
+  token: session.token,
+});
 ```
 
 </TabItem>
@@ -120,10 +115,7 @@ echo "PROJECT_ID: $PROJECT_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-import { Projects } from '@soat/sdk';
-
-const { data: project, error } = await Projects.createProject({
-  client: adminClient,
+const { data: project, error } = await adminSoat.projects.createProject({
   body: { name: 'LLM Chat Demo' },
 });
 
@@ -168,10 +160,7 @@ echo "SECRET_ID: $SECRET_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-import { Secrets } from '@soat/sdk';
-
-const { data: secret, error } = await Secrets.createSecret({
-  client: adminClient,
+const { data: secret, error } = await adminSoat.secrets.createSecret({
   body: {
     project_id: PROJECT_ID,
     name: 'xai-api-key',
@@ -223,18 +212,16 @@ echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-import { AIProviders } from '@soat/sdk';
-
-const { data: aiProvider, error } = await AIProviders.createAiProvider({
-  client: adminClient,
-  body: {
-    project_id: PROJECT_ID,
-    name: 'xAI Grok',
-    provider: 'xai',
-    default_model: 'grok-3-mini',
-    secret_id: SECRET_ID,
-  },
-});
+const { data: aiProvider, error } =
+  await adminSoat.aiProviders.createAiProvider({
+    body: {
+      project_id: PROJECT_ID,
+      name: 'xAI Grok',
+      provider: 'xai',
+      default_model: 'grok-3-mini',
+      secret_id: SECRET_ID,
+    },
+  });
 
 if (error) throw new Error(JSON.stringify(error));
 
@@ -280,10 +267,7 @@ echo "AGENT_ID: $AGENT_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-import { Agents } from '@soat/sdk';
-
-const { data: agent, error } = await Agents.createAgent({
-  client: adminClient,
+const { data: agent, error } = await adminSoat.agents.createAgent({
   body: {
     project_id: PROJECT_ID,
     ai_provider_id: AI_PROVIDER_ID,
@@ -335,10 +319,7 @@ echo "SESSION_ID: $SESSION_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-import { Sessions } from '@soat/sdk';
-
-const { data: session2, error } = await Sessions.createAgentSession({
-  client: adminClient,
+const { data: session2, error } = await adminSoat.sessions.createAgentSession({
   path: { agent_id: AGENT_ID },
   body: { name: 'My first chat', auto_generate: true },
 });
@@ -399,11 +380,11 @@ Example output:
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: reply1, error: err1 } = await Sessions.addSessionMessage({
-  client: adminClient,
-  path: { agent_id: AGENT_ID, session_id: SESSION_ID },
-  body: { message: 'What is the capital of France?' },
-});
+const { data: reply1, error: err1 } =
+  await adminSoat.sessions.addSessionMessage({
+    path: { agent_id: AGENT_ID, session_id: SESSION_ID },
+    body: { message: 'What is the capital of France?' },
+  });
 
 if (err1) throw new Error(JSON.stringify(err1));
 
@@ -457,11 +438,11 @@ Example output:
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: reply2, error: err2 } = await Sessions.addSessionMessage({
-  client: adminClient,
-  path: { agent_id: AGENT_ID, session_id: SESSION_ID },
-  body: { message: 'What is the population of that city?' },
-});
+const { data: reply2, error: err2 } =
+  await adminSoat.sessions.addSessionMessage({
+    path: { agent_id: AGENT_ID, session_id: SESSION_ID },
+    body: { message: 'What is the population of that city?' },
+  });
 
 if (err2) throw new Error(JSON.stringify(err2));
 
@@ -510,10 +491,10 @@ Example output:
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: messages, error } = await Sessions.listAgentSessionMessages({
-  client: adminClient,
-  path: { agent_id: AGENT_ID, session_id: SESSION_ID },
-});
+const { data: messages, error } =
+  await adminSoat.sessions.listAgentSessionMessages({
+    path: { agent_id: AGENT_ID, session_id: SESSION_ID },
+  });
 
 if (error) throw new Error(JSON.stringify(error));
 

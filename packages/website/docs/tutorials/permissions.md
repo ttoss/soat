@@ -37,14 +37,10 @@ export SOAT_BASE_URL=http://localhost:5047/api/v1
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
-All code snippets below share a single `client`. Swap the `auth` token as you progress through the tutorial:
+All code snippets below use `SoatClient` instances. The authenticated instance is created in Step 1 after login.
 
 ```ts
-import { createClient, createConfig } from '@soat/sdk';
-
-const client = createClient(
-  createConfig({ baseUrl: 'http://localhost:5047/api/v1', auth: '' })
-);
+import { SoatClient } from '@soat/sdk';
 ```
 
 </TabItem>
@@ -83,19 +79,19 @@ soat configure
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: session, error } = await Users.loginUser({
-  client,
+const soat = new SoatClient({ baseUrl: 'http://localhost:5047/api/v1' });
+
+const { data: session, error } = await soat.users.loginUser({
   body: { username: 'admin', password: 'Admin1234!' },
 });
 
 if (error) throw new Error(JSON.stringify(error));
 
-const ADMIN_TOKEN = session.token;
-
-// Rebuild the client with admin credentials
-const adminClient = createClient(
-  createConfig({ baseUrl: 'http://localhost:5047/api/v1', auth: ADMIN_TOKEN })
-);
+// Rebuild with admin credentials
+const adminSoat = new SoatClient({
+  baseUrl: 'http://localhost:5047/api/v1',
+  token: session.token,
+});
 ```
 
 </TabItem>
@@ -132,15 +128,13 @@ Note the `id` field (`usr_…`) for each user — you will need them when attach
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: alice, error: aliceErr } = await Users.createUser({
-  client: adminClient,
+const { data: alice, error: aliceErr } = await adminSoat.users.createUser({
   body: { username: 'alice', password: 'Alice1234!' },
 });
 
 if (aliceErr) throw new Error(JSON.stringify(aliceErr));
 
-const { data: bob, error: bobErr } = await Users.createUser({
-  client: adminClient,
+const { data: bob, error: bobErr } = await adminSoat.users.createUser({
   body: { username: 'bob', password: 'Bob1234!' },
 });
 
@@ -190,10 +184,7 @@ Copy the returned `id` (e.g. `proj_…`).
 <TabItem value="sdk" label="SDK">
 
 ```ts
-import { Projects } from '@soat/sdk';
-
-const { data: project, error } = await Projects.createProject({
-  client: adminClient,
+const { data: project, error } = await adminSoat.projects.createProject({
   body: { name: 'Analytics' },
 });
 
@@ -252,24 +243,22 @@ soat create-policy \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-import { Policies } from '@soat/sdk';
-
-const { data: fullPolicy, error: fullErr } = await Policies.createPolicy({
-  client: adminClient,
-  body: {
-    name: 'analytics-full-access',
-    description: 'Full access to the Analytics project',
-    document: {
-      statement: [
-        {
-          effect: 'Allow',
-          action: ['*'],
-          resource: [`soat:${PROJECT_ID}:*:*`],
-        },
-      ],
+const { data: fullPolicy, error: fullErr } =
+  await adminSoat.policies.createPolicy({
+    body: {
+      name: 'analytics-full-access',
+      description: 'Full access to the Analytics project',
+      document: {
+        statement: [
+          {
+            effect: 'Allow',
+            action: ['*'],
+            resource: [`soat:${PROJECT_ID}:*:*`],
+          },
+        ],
+      },
     },
-  },
-});
+  });
 
 if (fullErr) throw new Error(JSON.stringify(fullErr));
 
@@ -333,22 +322,22 @@ soat create-policy \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: readPolicy, error: readErr } = await Policies.createPolicy({
-  client: adminClient,
-  body: {
-    name: 'analytics-read-only',
-    description: 'Read-only access to files and documents in Analytics',
-    document: {
-      statement: [
-        {
-          effect: 'Allow',
-          action: ['files:GetFile'],
-          resource: [`soat:${PROJECT_ID}:*:*`],
-        },
-      ],
+const { data: readPolicy, error: readErr } =
+  await adminSoat.policies.createPolicy({
+    body: {
+      name: 'analytics-read-only',
+      description: 'Read-only access to files and documents in Analytics',
+      document: {
+        statement: [
+          {
+            effect: 'Allow',
+            action: ['files:GetFile'],
+            resource: [`soat:${PROJECT_ID}:*:*`],
+          },
+        ],
+      },
     },
-  },
-});
+  });
 
 if (readErr) throw new Error(JSON.stringify(readErr));
 
@@ -415,16 +404,14 @@ soat attach-user-policies \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { error: attachAlice } = await Users.attachUserPolicies({
-  client: adminClient,
+const { error: attachAlice } = await adminSoat.users.attachUserPolicies({
   path: { user_id: alice.id },
   body: { policy_ids: [FULL_POLICY_ID] },
 });
 
 if (attachAlice) throw new Error(JSON.stringify(attachAlice));
 
-const { error: attachBob } = await Users.attachUserPolicies({
-  client: adminClient,
+const { error: attachBob } = await adminSoat.users.attachUserPolicies({
   path: { user_id: bob.id },
   body: { policy_ids: [READ_POLICY_ID] },
 });
@@ -493,48 +480,39 @@ soat --profile bob create-api-key \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-import { ApiKeys } from '@soat/sdk';
-
 // Log in as Alice
-const { data: aliceSession } = await Users.loginUser({
-  client,
+const { data: aliceSession } = await soat.users.loginUser({
   body: { username: 'alice', password: 'Alice1234!' },
 });
 
-const aliceClient = createClient(
-  createConfig({
-    baseUrl: 'http://localhost:5047/api/v1',
-    auth: aliceSession.token,
-  })
-);
+const aliceSoat = new SoatClient({
+  baseUrl: 'http://localhost:5047/api/v1',
+  token: aliceSession.token,
+});
 
 // Log in as Bob
-const { data: bobSession } = await Users.loginUser({
-  client,
+const { data: bobSession } = await soat.users.loginUser({
   body: { username: 'bob', password: 'Bob1234!' },
 });
 
-const bobClient = createClient(
-  createConfig({
-    baseUrl: 'http://localhost:5047/api/v1',
-    auth: bobSession.token,
-  })
-);
+const bobSoat = new SoatClient({
+  baseUrl: 'http://localhost:5047/api/v1',
+  token: bobSession.token,
+});
 
 // Alice creates her key — inherits full-access policy via user policies
-const { data: aliceKey, error: aliceKeyErr } = await ApiKeys.createApiKey({
-  client: aliceClient,
-  body: {
-    name: 'alice-analytics-key',
-    project_id: PROJECT_ID,
-  },
-});
+const { data: aliceKey, error: aliceKeyErr } =
+  await aliceSoat.apiKeys.createApiKey({
+    body: {
+      name: 'alice-analytics-key',
+      project_id: PROJECT_ID,
+    },
+  });
 
 if (aliceKeyErr) throw new Error(JSON.stringify(aliceKeyErr));
 
 // Bob creates his key — further restricted to read-only policy
-const { data: bobKey, error: bobKeyErr } = await ApiKeys.createApiKey({
-  client: bobClient,
+const { data: bobKey, error: bobKeyErr } = await bobSoat.apiKeys.createApiKey({
   body: {
     name: 'bob-analytics-key',
     project_id: PROJECT_ID,
@@ -620,30 +598,29 @@ SOAT_TOKEN="$BOB_API_KEY" soat upload-file-base64 \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-import { Files } from '@soat/sdk';
-
-const aliceKeyClient = createClient(
-  createConfig({ baseUrl: 'http://localhost:5047/api/v1', auth: ALICE_API_KEY })
-);
+const aliceKeySoat = new SoatClient({
+  baseUrl: 'http://localhost:5047/api/v1',
+  token: ALICE_API_KEY,
+});
 
 // Alice can upload
-const { data: uploadedFile, error: uploadErr } = await Files.uploadFile({
-  client: aliceKeyClient,
-  body: {
-    file: new Blob(['hello world'], { type: 'text/plain' }),
-    project_id: PROJECT_ID,
-  },
-});
+const { data: uploadedFile, error: uploadErr } =
+  await aliceKeySoat.files.uploadFile({
+    body: {
+      file: new Blob(['hello world'], { type: 'text/plain' }),
+      project_id: PROJECT_ID,
+    },
+  });
 
 if (uploadErr) throw new Error(JSON.stringify(uploadErr)); // should not throw
 
 // Bob cannot upload — his policy allows only files:GetFile
-const bobKeyClient = createClient(
-  createConfig({ baseUrl: 'http://localhost:5047/api/v1', auth: BOB_API_KEY })
-);
+const bobKeySoat = new SoatClient({
+  baseUrl: 'http://localhost:5047/api/v1',
+  token: BOB_API_KEY,
+});
 
-const { error: bobUploadErr } = await Files.uploadFile({
-  client: bobKeyClient,
+const { error: bobUploadErr } = await bobKeySoat.files.uploadFile({
   body: {
     file: new Blob(['hello world'], { type: 'text/plain' }),
     project_id: PROJECT_ID,
@@ -692,8 +669,7 @@ soat --profile bob list-files --project-id "$PROJECT_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: files, error: listErr } = await Files.listFiles({
-  client: bobKeyClient,
+const { data: files, error: listErr } = await bobKeySoat.files.listFiles({
   query: { project_id: PROJECT_ID },
 });
 
@@ -735,8 +711,7 @@ soat --profile bob create-api-key \
 
 ```ts
 // Bob creates a key referencing the full-access policy
-const { data: escalatedKey } = await ApiKeys.createApiKey({
-  client: bobClient,
+const { data: escalatedKey } = await bobSoat.apiKeys.createApiKey({
   body: {
     name: 'bob-escalation-attempt',
     project_id: PROJECT_ID,
@@ -744,16 +719,13 @@ const { data: escalatedKey } = await ApiKeys.createApiKey({
   },
 });
 
-const escalatedClient = createClient(
-  createConfig({
-    baseUrl: 'http://localhost:5047/api/v1',
-    auth: escalatedKey.key,
-  })
-);
+const escalatedSoat = new SoatClient({
+  baseUrl: 'http://localhost:5047/api/v1',
+  token: escalatedKey.key,
+});
 
 // Still gets 403 — the intersection with Bob's read-only user policy wins
-const { error } = await Files.uploadFile({
-  client: escalatedClient,
+const { error } = await escalatedSoat.files.uploadFile({
   body: {
     file: new Blob(['hello world'], { type: 'text/plain' }),
     project_id: PROJECT_ID,
