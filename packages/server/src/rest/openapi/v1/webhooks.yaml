@@ -7,23 +7,17 @@ info:
     name: SOAT Team
     url: https://github.com/ttoss/soat
 servers:
-  - url: https://{host}/api/v1
-    description: Production (HTTPS)
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
     variables:
-      host:
-        description: The hostname of your SOAT deployment
-        default: your-soat.com
-  - url: http://{host}/api/v1
-    description: Development (HTTP)
-    variables:
-      host:
-        description: The hostname of your SOAT deployment
-        default: localhost:5047
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
 tags:
   - name: Webhooks
     description: Manage webhooks
 paths:
-  /projects/{project_id}/webhooks:
+  /api/v1/projects/{project_id}/webhooks:
     get:
       description: Lists all webhooks configured for the specified project
       tags:
@@ -81,7 +75,7 @@ paths:
         '403':
           description: Forbidden
 
-  /projects/{project_id}/webhooks/{webhook_id}:
+  /api/v1/projects/{project_id}/webhooks/{webhook_id}:
     get:
       description: Retrieves the details of a specific webhook
       tags:
@@ -177,7 +171,7 @@ paths:
         '404':
           description: Webhook not found
 
-  /projects/{project_id}/webhooks/{webhook_id}/deliveries:
+  /api/v1/projects/{project_id}/webhooks/{webhook_id}/deliveries:
     get:
       description: Lists all event deliveries for a specific webhook
       tags:
@@ -221,7 +215,7 @@ paths:
         '404':
           description: Webhook not found
 
-  /projects/{project_id}/webhooks/{webhook_id}/deliveries/{delivery_id}:
+  /api/v1/projects/{project_id}/webhooks/{webhook_id}/deliveries/{delivery_id}:
     get:
       description: Retrieves the details of a specific webhook delivery
       tags:
@@ -258,7 +252,7 @@ paths:
         '404':
           description: Delivery not found
 
-  /projects/{project_id}/webhooks/{webhook_id}/rotate-secret:
+  /api/v1/projects/{project_id}/webhooks/{webhook_id}/rotate-secret:
     post:
       description: Rotates the secret key for the specified webhook
       tags:
@@ -291,6 +285,11 @@ paths:
           description: Webhook not found
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT token or sk_ api key
   schemas:
     Webhook:
       type: object

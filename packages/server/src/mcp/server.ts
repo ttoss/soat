@@ -42,7 +42,7 @@ for (const tool of soatTools) {
 }
 
 const mcpRouter = createMcpRouter(mcpServer, {
-  apiBaseUrl: `http://localhost:${process.env.PORT || 5047}/api/v1`,
+  apiBaseUrl: `http://localhost:${process.env.PORT || 5047}`,
   getApiHeaders: (ctx) => {
     return {
       authorization: (ctx.headers.authorization as string) ?? '',

@@ -7,23 +7,17 @@ info:
     name: SOAT Team
     url: https://github.com/ttoss/soat
 servers:
-  - url: https://{host}/api/v1
-    description: Production (HTTPS)
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
     variables:
-      host:
-        description: The hostname of your SOAT deployment
-        default: your-soat.com
-  - url: http://{host}/api/v1
-    description: Development (HTTP)
-    variables:
-      host:
-        description: The hostname of your SOAT deployment
-        default: localhost:5047
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
 tags:
   - name: Projects
     description: Manage projects
 paths:
-  /projects:
+  /api/v1/projects:
     post:
       tags:
         - Projects
@@ -64,7 +58,7 @@ paths:
           description: Forbidden (non-admin user)
         '500':
           description: Internal server error
-  /projects/{project_id}:
+  /api/v1/projects/{project_id}:
     get:
       tags:
         - Projects
@@ -124,7 +118,7 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: JWT
+      description: JWT token or sk_ api key
   schemas:
     ProjectRecord:
       type: object

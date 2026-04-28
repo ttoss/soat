@@ -7,23 +7,17 @@ info:
     name: SOAT Team
     url: https://github.com/ttoss/soat
 servers:
-  - url: https://{host}/api/v1
-    description: Production (HTTPS)
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
     variables:
-      host:
-        description: The hostname of your SOAT deployment
-        default: your-soat.com
-  - url: http://{host}/api/v1
-    description: Development (HTTP)
-    variables:
-      host:
-        description: The hostname of your SOAT deployment
-        default: localhost:5047
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
 tags:
   - name: Policies
     description: Manage policies
 paths:
-  /policies:
+  /api/v1/policies:
     get:
       tags:
         - Policies
@@ -87,7 +81,7 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden (non-admin user)
-  /policies/{policy_id}:
+  /api/v1/policies/{policy_id}:
     get:
       tags:
         - Policies
@@ -197,7 +191,7 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: JWT
+      description: JWT token or sk_ api key
   schemas:
     PolicyStatement:
       type: object

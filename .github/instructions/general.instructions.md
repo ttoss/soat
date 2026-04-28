@@ -48,9 +48,11 @@ Every implementation — whether adding a new feature or changing existing behav
 
 2. **REST API** — Add or update route handlers in `packages/server/src/rest/v1/<module>.ts`. Every handler must have an `@openapi` JSDoc block and the corresponding OpenAPI spec in `packages/server/src/rest/openapi/v1/<module>.yaml` must be kept in sync.
 
+   The OpenAPI spec is also the source of truth for the generated SDK, generated CLI route manifest, and MCP tool surface. After changing any file in `packages/server/src/rest/openapi/v1/`, regenerate the clients with `pnpm --filter @soat/sdk generate` and `pnpm --filter @soat/cli generate`. MCP tools are derived automatically from the OpenAPI specs at runtime via `packages/server/src/lib/soatTools.ts`.
+
 3. **Module docs** — Update the module documentation page at `packages/website/docs/modules/<module>.md`, including any changes to the data model, key concepts, or the `## Permissions` table.
 
-4. **MCP tool** — If the change affects a resource that is exposed through the MCP server, add or update the tool in `packages/server/src/mcp/tools/<module>.ts` and ensure it is registered in `packages/server/src/mcp/tools/index.ts`.
+4. **MCP tool surface** — If the change affects a resource that is exposed through the MCP server, update the OpenAPI spec so the generated MCP tool surface stays correct. Do not add per-module MCP tool files for REST-backed resources in this repo; the MCP server derives them automatically from `packages/server/src/rest/openapi/v1/*.yaml` via `packages/server/src/lib/soatTools.ts`.
 
 5. **Tests** — Add or update tests in `packages/server/tests/unit/tests/<module>.test.ts`. Every new route and every changed lib function must have coverage (happy path, `401`, `403`, and relevant edge cases).
 

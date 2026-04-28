@@ -67,6 +67,12 @@ This structure ensures scalability and keeps the main entry point uncluttered as
 
 When modifying or adding REST API endpoints, **always update** the corresponding OpenAPI specification in `src/rest/openapi/v1/<resource>.yaml`. The YAML files are the sole source of truth for the SDK generator and documentation.
 
+They also drive the CLI command manifest and the REST-backed MCP tool surface. In this repo, changes under `src/rest/openapi/v1/` automatically flow into:
+
+- the SDK after `pnpm --filter @soat/sdk generate`
+- the CLI route manifest after `pnpm --filter @soat/cli generate`
+- the MCP tool registry at runtime via `src/lib/soatTools.ts`
+
 Follow the guidelines in `src/rest/openapi/README.md`. This includes:
 
 - Updating paths, schemas, request/response bodies, and error responses
@@ -80,14 +86,10 @@ The MCP (Model Context Protocol) folder is organized to separate concerns and ma
 
 - `src/mcp/index.ts` - Main entry point that exports the MCP router
 - `src/mcp/server.ts` - MCP server initialization and configuration
-- `src/mcp/tools/` - Directory containing tool definitions and handlers
-  - `src/mcp/tools/index.ts` - Exports all tools
-  - `src/mcp/tools/memory.ts` - Memory-related tools (record, recall)
-  - Additional tool files as needed (e.g., `documents.ts`, `files.ts`)
-- `src/mcp/resources/` - Directory for resource definitions (if any)
-- `src/mcp/prompts/` - Directory for prompt templates (if any)
+- `src/lib/soatTools.ts` - Builds REST-backed MCP tool definitions directly from the OpenAPI specs in `src/rest/openapi/v1/`
+- `src/mcp/toMcpText.ts` - Converts REST responses to MCP text payloads
 
-This structure allows for easy addition of new tools and resources while keeping the code organized and maintainable.
+This means most MCP changes for REST resources happen by updating the REST route plus the OpenAPI spec; there is no per-module `src/mcp/tools/<module>.ts` layer in this repository.
 
 ## Development
 

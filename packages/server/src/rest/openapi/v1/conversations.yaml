@@ -7,23 +7,17 @@ info:
     name: SOAT Team
     url: https://github.com/ttoss/soat
 servers:
-  - url: https://{host}/api/v1
-    description: Production (HTTPS)
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
     variables:
-      host:
-        description: The hostname of your SOAT deployment
-        default: your-soat.com
-  - url: http://{host}/api/v1
-    description: Development (HTTP)
-    variables:
-      host:
-        description: The hostname of your SOAT deployment
-        default: localhost:5047
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
 tags:
   - name: Conversations
     description: Manage conversations
 paths:
-  /conversations:
+  /api/v1/conversations:
     get:
       tags:
         - Conversations
@@ -145,7 +139,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /conversations/{conversation_id}:
+  /api/v1/conversations/{conversation_id}:
     get:
       tags:
         - Conversations
@@ -278,7 +272,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /conversations/{conversation_id}/messages:
+  /api/v1/conversations/{conversation_id}/messages:
     get:
       tags:
         - Conversations
@@ -418,7 +412,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /conversations/{conversation_id}/generate:
+  /api/v1/conversations/{conversation_id}/generate:
     post:
       tags:
         - Conversations
@@ -496,7 +490,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /conversations/{conversation_id}/actors:
+  /api/v1/conversations/{conversation_id}/actors:
     get:
       tags:
         - Conversations
@@ -538,7 +532,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /conversations/{conversation_id}/messages/{document_id}:
+  /api/v1/conversations/{conversation_id}/messages/{document_id}:
     delete:
       tags:
         - Conversations
@@ -581,7 +575,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /conversations/{conversation_id}/tags:
+  /api/v1/conversations/{conversation_id}/tags:
     get:
       tags:
         - Conversations
@@ -722,6 +716,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT token or sk_ api key
   schemas:
     ConversationRecord:
       type: object

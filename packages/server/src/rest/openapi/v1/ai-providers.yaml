@@ -7,23 +7,17 @@ info:
     name: SOAT Team
     url: https://github.com/ttoss/soat
 servers:
-  - url: https://{host}/api/v1
-    description: Production (HTTPS)
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
     variables:
-      host:
-        description: The hostname of your SOAT deployment
-        default: your-soat.com
-  - url: http://{host}/api/v1
-    description: Development (HTTP)
-    variables:
-      host:
-        description: The hostname of your SOAT deployment
-        default: localhost:5047
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
 tags:
   - name: AI Providers
     description: Manage AI providers
 paths:
-  /ai-providers:
+  /api/v1/ai-providers:
     get:
       tags:
         - AI Providers
@@ -152,7 +146,7 @@ paths:
           description: Forbidden
         '500':
           description: Internal server error
-  /ai-providers/{ai_provider_id}:
+  /api/v1/ai-providers/{ai_provider_id}:
     get:
       tags:
         - AI Providers
@@ -263,3 +257,9 @@ paths:
           description: Forbidden
         '404':
           description: AI provider not found
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT token or sk_ api key
