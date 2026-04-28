@@ -159,14 +159,14 @@ if [ -z "$API_KEY_RAW" ] || [ "$API_KEY_RAW" = "null" ]; then
 fi
 
 # GET api-key (key field must not appear)
-API_KEY_GET_RESP=$($SOAT_CLI get-api-key --id "$API_KEY_ID")
+API_KEY_GET_RESP=$($SOAT_CLI get-api-key --api-key-id "$API_KEY_ID")
 if printf '%s\n' "$API_KEY_GET_RESP" | jq -e '.key' >/dev/null 2>&1; then
   echo "ERROR: key field must not appear in GET api-key response" >&2
   exit 1
 fi
 
 # UPDATE api-key
-API_KEY_PUT_RESP=$($SOAT_CLI update-api-key --id "$API_KEY_ID" \
+API_KEY_PUT_RESP=$($SOAT_CLI update-api-key --api-key-id "$API_KEY_ID" \
   --name smoke-api-key-updated \
   --policy_ids "[\"$POLICY_READ_ID\",\"$POLICY_WRITE_ID\"]")
 API_KEY_UPDATED_NAME=$(printf '%s\n' "$API_KEY_PUT_RESP" | jq -r '.name')
@@ -187,8 +187,8 @@ if [ "$API_KEY_AUTH_STATUS" != "0" ]; then
 fi
 
 # DELETE api-key
-$SOAT_CLI delete-api-key --id "$API_KEY_ID"
-expect_cli_error_status 404 get-api-key --id "$API_KEY_ID"
+$SOAT_CLI delete-api-key --api-key-id "$API_KEY_ID"
+expect_cli_error_status 404 get-api-key --api-key-id "$API_KEY_ID"
 echo "API keys coverage: OK"
 
 # Delete policies (cleanup + CRUD coverage)
@@ -234,13 +234,13 @@ fi
 
 $SOAT_CLI list-actors --project_id "$PROJECT_PUBLIC_ID"
 
-$SOAT_CLI get-actor --id "$ACTOR_ID"
+$SOAT_CLI get-actor --actor-id "$ACTOR_ID"
 
-$SOAT_CLI update-actor --id "$ACTOR_ID" --name smoke-actor-updated
+$SOAT_CLI update-actor --actor-id "$ACTOR_ID" --name smoke-actor-updated
 
-$SOAT_CLI delete-actor --id "$ACTOR_ID"
+$SOAT_CLI delete-actor --actor-id "$ACTOR_ID"
 
-expect_cli_error_status 404 get-actor --id "$ACTOR_ID"
+expect_cli_error_status 404 get-actor --actor-id "$ACTOR_ID"
 echo "Actors coverage: OK"
 
 # 3f. Conversations module coverage
@@ -264,7 +264,7 @@ fi
 
 $SOAT_CLI list-conversations --project_id "$PROJECT_PUBLIC_ID"
 
-CONVO_MSG_LIST_RESP=$($SOAT_CLI list-conversation-messages --id "$CONVO_ID")
+CONVO_MSG_LIST_RESP=$($SOAT_CLI list-conversation-messages --conversation-id "$CONVO_ID")
 if ! printf '%s\n' "$CONVO_MSG_LIST_RESP" | jq -e '((type == "array") or (type == "object" and (.data | type == "array")))' >/dev/null 2>&1; then
   echo "ERROR: LIST conversation messages did not return an array" >&2
   echo "$CONVO_MSG_LIST_RESP" >&2
@@ -272,7 +272,7 @@ if ! printf '%s\n' "$CONVO_MSG_LIST_RESP" | jq -e '((type == "array") or (type =
 fi
 
 CONVO_ADD_MSG_RESP=$($SOAT_CLI add-conversation-message \
-  --id "$CONVO_ID" --message "smoke conversation message" --actor_id "$CONVO_ACTOR_ID")
+  --conversation-id "$CONVO_ID" --message "smoke conversation message" --actor_id "$CONVO_ACTOR_ID")
 CONVO_DOC_ID=$(echo "$CONVO_ADD_MSG_RESP" | jq -r '.document_id')
 if [ -z "$CONVO_DOC_ID" ] || [ "$CONVO_DOC_ID" = "null" ]; then
   echo "ERROR: Failed to add conversation message" >&2
@@ -280,15 +280,15 @@ if [ -z "$CONVO_DOC_ID" ] || [ "$CONVO_DOC_ID" = "null" ]; then
   exit 1
 fi
 
-$SOAT_CLI remove-conversation-message --id "$CONVO_ID" --documentId "$CONVO_DOC_ID"
+$SOAT_CLI remove-conversation-message --conversation-id "$CONVO_ID" --document-id "$CONVO_DOC_ID"
 
-$SOAT_CLI update-conversation --id "$CONVO_ID" --status closed
+$SOAT_CLI update-conversation --conversation-id "$CONVO_ID" --status closed
 
-$SOAT_CLI delete-conversation --id "$CONVO_ID"
+$SOAT_CLI delete-conversation --conversation-id "$CONVO_ID"
 
-expect_cli_error_status 404 get-conversation --id "$CONVO_ID"
+expect_cli_error_status 404 get-conversation --conversation-id "$CONVO_ID"
 
-$SOAT_CLI delete-actor --id "$CONVO_ACTOR_ID"
+$SOAT_CLI delete-actor --actor-id "$CONVO_ACTOR_ID"
 echo "Conversations coverage: OK"
 
 # 4. Upload a file via base64 (with path field)
@@ -312,7 +312,7 @@ echo "File path: $FILE_PATH"
 
 # 5. Get file metadata
 echo "--- Getting file metadata ---"
-GET_FILE_RESP=$($SOAT_CLI get-file --id "$FILE_ID")
+GET_FILE_RESP=$($SOAT_CLI get-file --file-id "$FILE_ID")
 GET_FILE_ID=$(printf '%s\n' "$GET_FILE_RESP" | jq -r '.id')
 if [ "$GET_FILE_ID" != "$FILE_ID" ]; then
   echo "ERROR: GET file returned mismatched id '$GET_FILE_ID'" >&2
@@ -322,7 +322,7 @@ echo "GET status: 200"
 
 # 6. Download file and verify content
 echo "--- Downloading file ---"
-DOWNLOAD_RESP=$($SOAT_CLI download-file-base64 --id "$FILE_ID")
+DOWNLOAD_RESP=$($SOAT_CLI download-file-base64 --file-id "$FILE_ID")
 CONTENT=$(printf '%s\n' "$DOWNLOAD_RESP" | jq -r '.content' | base64 -d)
 EXPECTED="Hello, smoke test!"
 if [ "$CONTENT" != "$EXPECTED" ]; then
@@ -333,7 +333,7 @@ echo "Content matches."
 
 # 7. Update metadata
 echo "--- Updating metadata ---"
-PATCH_RESP=$($SOAT_CLI update-file-metadata --id "$FILE_ID" --metadata smoke-tested)
+PATCH_RESP=$($SOAT_CLI update-file-metadata --file-id "$FILE_ID" --metadata smoke-tested)
 PATCH_ID=$(printf '%s\n' "$PATCH_RESP" | jq -r '.id')
 if [ "$PATCH_ID" != "$FILE_ID" ]; then
   echo "ERROR: PATCH metadata did not update expected file" >&2
@@ -343,12 +343,12 @@ echo "PATCH status: 200"
 
 # 8. Delete file
 echo "--- Deleting file ---"
-$SOAT_CLI delete-file --id "$FILE_ID"
+$SOAT_CLI delete-file --file-id "$FILE_ID"
 echo "DELETE status: 204"
 
 # 9. Verify file is gone (404)
 echo "--- Verifying deletion ---"
-expect_cli_error_status 404 get-file --id "$FILE_ID"
+expect_cli_error_status 404 get-file --file-id "$FILE_ID"
 echo "File correctly returns 404 after deletion."
 
 # 10. Create first document (with path field)
@@ -379,7 +379,7 @@ echo "Document 2 id: $DOC2_ID"
 
 # 11b. Verify path persists on GET /documents/:id
 echo "--- Verifying document path field on GET ---"
-GET_DOC1_RESP=$($SOAT_CLI get-document --id "$DOC1_ID")
+GET_DOC1_RESP=$($SOAT_CLI get-document --document-id "$DOC1_ID")
 GET_DOC1_PATH=$(echo "$GET_DOC1_RESP" | jq -r '.path')
 if [ "$GET_DOC1_PATH" != "/animals/fox.txt" ]; then
   echo "ERROR: GET document path expected '/animals/fox.txt', got '$GET_DOC1_PATH'" >&2
@@ -414,8 +414,8 @@ echo "Search returned $SEARCH_COUNT result(s)."
 
 # 13. Delete documents
 echo "--- Deleting documents ---"
-$SOAT_CLI delete-document --id "$DOC1_ID"
-$SOAT_CLI delete-document --id "$DOC2_ID"
+$SOAT_CLI delete-document --document-id "$DOC1_ID"
+$SOAT_CLI delete-document --document-id "$DOC2_ID"
 echo "Documents deleted."
 
 # 14. Chat completion — 401 without auth
@@ -824,7 +824,7 @@ echo "Named conversation id: $NAMED_CONVO_ID, name: $NAMED_CONVO_NAME"
 
 # 44b. PATCH the conversation name
 echo "--- Patching conversation name ---"
-NAME_PATCH_RESP=$($SOAT_CLI update-conversation --id "$NAMED_CONVO_ID" --name smoke-renamed-conversation)
+NAME_PATCH_RESP=$($SOAT_CLI update-conversation --conversation-id "$NAMED_CONVO_ID" --name smoke-renamed-conversation)
 NAME_PATCH_NAME=$(echo "$NAME_PATCH_RESP" | jq -r '.name')
 if [ "$NAME_PATCH_NAME" != "smoke-renamed-conversation" ]; then
   echo "ERROR: Expected patched name 'smoke-renamed-conversation', got '$NAME_PATCH_NAME'" >&2
@@ -858,7 +858,7 @@ echo "Agent-backed actor id: $AGENT_ACTOR_ID, agent_id: $AGENT_ACTOR_AGENT_ID, i
 
 # 45b. Verify actor fields on GET /actors/:id
 echo "--- Verifying actor shape on GET ---"
-ACTOR_GET_RESP=$($SOAT_CLI get-actor --id "$AGENT_ACTOR_ID")
+ACTOR_GET_RESP=$($SOAT_CLI get-actor --actor-id "$AGENT_ACTOR_ID")
 ACTOR_GET_AGENT_ID=$(echo "$ACTOR_GET_RESP" | jq -r '.agent_id')
 ACTOR_GET_INSTRUCTIONS=$(echo "$ACTOR_GET_RESP" | jq -r '.instructions')
 if [ "$ACTOR_GET_AGENT_ID" != "$CONVO_GEN_AGENT_ID" ]; then
@@ -894,7 +894,7 @@ echo "User actor id: $USER_ACTOR_ID"
 # 47. Add a user message to the conversation
 echo "--- Adding user message to conversation ---"
 USER_MSG_RESP=$($SOAT_CLI add-conversation-message \
-  --id "$NAMED_CONVO_ID" --message "Hello, how are you?" --actor_id "$USER_ACTOR_ID")
+  --conversation-id "$NAMED_CONVO_ID" --message "Hello, how are you?" --actor_id "$USER_ACTOR_ID")
 USER_MSG_DOC_ID=$(echo "$USER_MSG_RESP" | jq -r '.document_id')
 if [ -z "$USER_MSG_DOC_ID" ] || [ "$USER_MSG_DOC_ID" = "null" ]; then
   echo "ERROR: Failed to add user message" >&2
@@ -909,7 +909,7 @@ echo "--- Generating conversation message ---"
 CONVO_GEN_STATUS="in_progress"
 CONVO_GEN_ATTEMPTS=0
 while [ "$CONVO_GEN_STATUS" = "in_progress" ] && [ "$CONVO_GEN_ATTEMPTS" -lt "30" ]; do
-  CONVO_GEN_RESP=$($SOAT_CLI generate-conversation-message --id "$NAMED_CONVO_ID" --actor_id "$AGENT_ACTOR_ID" | sanitize_json)
+  CONVO_GEN_RESP=$($SOAT_CLI generate-conversation-message --conversation-id "$NAMED_CONVO_ID" --actor_id "$AGENT_ACTOR_ID" | sanitize_json)
   CONVO_GEN_STATUS=$(printf '%s\n' "$CONVO_GEN_RESP" | jq -r '.status')
   CONVO_GEN_ATTEMPTS=$((CONVO_GEN_ATTEMPTS + 1))
   if [ "$CONVO_GEN_STATUS" = "in_progress" ]; then
@@ -931,7 +931,7 @@ echo "Conversation generate: OK (message document_id: $CONVO_GEN_MSG_ID)"
 
 # 48b. Verify the generated message is listed in conversation messages
 echo "--- Verifying generated message persisted ---"
-CONVO_MSGS_RESP=$($SOAT_CLI list-conversation-messages --id "$NAMED_CONVO_ID")
+CONVO_MSGS_RESP=$($SOAT_CLI list-conversation-messages --conversation-id "$NAMED_CONVO_ID")
 MSG_COUNT=$(echo "$CONVO_MSGS_RESP" | jq 'if type=="array" then length else (.data | length) end')
 if [ "$MSG_COUNT" -lt "2" ]; then
   echo "ERROR: Expected at least 2 conversation messages (user + generated), got $MSG_COUNT" >&2
@@ -941,7 +941,7 @@ echo "Conversation messages count: $MSG_COUNT (OK)"
 
 # 49. Verify GET /conversations/:id/actors lists both actors
 echo "--- Verifying GET /conversations/:id/actors ---"
-CONVO_ACTORS_RESP=$($SOAT_CLI list-conversation-actors --id "$NAMED_CONVO_ID")
+CONVO_ACTORS_RESP=$($SOAT_CLI list-conversation-actors --conversation-id "$NAMED_CONVO_ID")
 CONVO_ACTORS_COUNT=$(echo "$CONVO_ACTORS_RESP" | jq 'if type=="array" then length else (.data | length) end')
 if [ "$CONVO_ACTORS_COUNT" -lt "2" ]; then
   echo "ERROR: Expected at least 2 actors in conversation, got $CONVO_ACTORS_COUNT" >&2
@@ -951,22 +951,22 @@ echo "GET /conversations/:id/actors count: $CONVO_ACTORS_COUNT (OK)"
 
 # 50. Verify delete-block: agent-backed actor with messages cannot be deleted (409)
 echo "--- Verifying actor delete-block (409 when actor has messages) ---"
-expect_cli_error_status 409 delete-actor --id "$AGENT_ACTOR_ID"
+expect_cli_error_status 409 delete-actor --actor-id "$AGENT_ACTOR_ID"
 echo "Actor delete-block: OK (409 as expected)"
 
 # 51. Cleanup — delete the conversation (cascades messages)
 echo "--- Deleting named conversation ---"
-$SOAT_CLI delete-conversation --id "$NAMED_CONVO_ID"
+$SOAT_CLI delete-conversation --conversation-id "$NAMED_CONVO_ID"
 echo "Named conversation deleted."
 
 # 52. Cleanup — now that messages are gone, delete agent-backed actor
 echo "--- Deleting agent-backed actor ---"
-$SOAT_CLI delete-actor --id "$AGENT_ACTOR_ID"
+$SOAT_CLI delete-actor --actor-id "$AGENT_ACTOR_ID"
 echo "Agent-backed actor deleted."
 
 # 53. Cleanup — delete user actor
 echo "--- Deleting user actor ---"
-$SOAT_CLI delete-actor --id "$USER_ACTOR_ID"
+$SOAT_CLI delete-actor --actor-id "$USER_ACTOR_ID"
 echo "User actor deleted."
 
 # 54. Cleanup — delete conversation-generate agent

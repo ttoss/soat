@@ -118,14 +118,14 @@ actorsRouter.get('/actors', async (ctx: Context) => {
   });
 });
 
-actorsRouter.get('/actors/:id', async (ctx: Context) => {
+actorsRouter.get('/actors/:actor_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const actor = await getActor({ id: ctx.params.id });
+  const actor = await getActor({ id: ctx.params.actor_id });
 
   if (!actor) {
     ctx.status = 404;
@@ -286,14 +286,14 @@ actorsRouter.post('/actors', async (ctx: Context) => {
   ctx.body = result.actor;
 });
 
-actorsRouter.delete('/actors/:id', async (ctx: Context) => {
+actorsRouter.delete('/actors/:actor_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const actor = await getActor({ id: ctx.params.id });
+  const actor = await getActor({ id: ctx.params.actor_id });
 
   if (!actor) {
     ctx.status = 404;
@@ -324,7 +324,7 @@ actorsRouter.delete('/actors/:id', async (ctx: Context) => {
     return;
   }
 
-  const result = await deleteActor({ id: ctx.params.id });
+  const result = await deleteActor({ id: ctx.params.actor_id });
   if (result === 'has_messages') {
     ctx.status = 409;
     ctx.body = {
@@ -336,14 +336,14 @@ actorsRouter.delete('/actors/:id', async (ctx: Context) => {
   ctx.status = 204;
 });
 
-actorsRouter.patch('/actors/:id', async (ctx: Context) => {
+actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const actor = await getActor({ id: ctx.params.id });
+  const actor = await getActor({ id: ctx.params.actor_id });
 
   if (!actor) {
     ctx.status = 404;
@@ -384,7 +384,7 @@ actorsRouter.patch('/actors/:id', async (ctx: Context) => {
   };
 
   const updated = await updateActor({
-    id: ctx.params.id,
+    id: ctx.params.actor_id,
     name: body.name,
     type: body.type,
     externalId: body.externalId,

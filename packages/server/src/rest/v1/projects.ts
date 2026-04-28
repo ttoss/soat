@@ -47,7 +47,7 @@ projectsRouter.get('/projects', async (ctx: Context) => {
   ctx.body = projects;
 });
 
-projectsRouter.get('/projects/:id', async (ctx: Context) => {
+projectsRouter.get('/projects/:project_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -55,7 +55,7 @@ projectsRouter.get('/projects/:id', async (ctx: Context) => {
   }
 
   const result = await getProject({
-    id: ctx.params.id,
+    id: ctx.params.project_id,
     authUser: ctx.authUser,
   });
 
@@ -74,7 +74,7 @@ projectsRouter.get('/projects/:id', async (ctx: Context) => {
   ctx.body = result;
 });
 
-projectsRouter.delete('/projects/:id', async (ctx: Context) => {
+projectsRouter.delete('/projects/:project_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -87,7 +87,7 @@ projectsRouter.delete('/projects/:id', async (ctx: Context) => {
     return;
   }
 
-  const result = await deleteProject({ id: ctx.params.id });
+  const result = await deleteProject({ id: ctx.params.project_id });
 
   if (!result) {
     ctx.status = 404;

@@ -36,6 +36,8 @@ By the end you will understand how [Secrets](/docs/modules/secrets), [AI Provide
 export SOAT_BASE_URL=http://localhost:5047/api/v1
 ```
 
+CLI path flags in this tutorial are resource-specific and kebab-cased, for example `--agent-id`, `--session-id`, and `--webhook-id`.
+
 </TabItem>
 <TabItem value="sdk" label="SDK">
 

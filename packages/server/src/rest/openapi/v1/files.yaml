@@ -215,7 +215,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-  /files/{id}:
+  /files/{file_id}:
     get:
       tags:
         - Files
@@ -223,7 +223,7 @@ paths:
       description: Returns the data and metadata of a specific file
       operationId: getFile
       parameters:
-        - name: id
+        - name: file_id
           in: path
           required: true
           description: File ID
@@ -256,7 +256,7 @@ paths:
       description: Removes a file from the system by ID
       operationId: deleteFile
       parameters:
-        - name: id
+        - name: file_id
           in: path
           required: true
           description: ID of the file to delete
@@ -278,7 +278,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /files/{id}/download:
+  /files/{file_id}/download:
     get:
       tags:
         - Files
@@ -286,7 +286,7 @@ paths:
       description: Streams the file content to the client
       operationId: downloadFile
       parameters:
-        - name: id
+        - name: file_id
           in: path
           required: true
           description: File ID
@@ -311,7 +311,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /files/{id}/metadata:
+  /files/{file_id}/metadata:
     patch:
       tags:
         - Files
@@ -319,7 +319,7 @@ paths:
       description: Updates the metadata field of a file
       operationId: updateFileMetadata
       parameters:
-        - name: id
+        - name: file_id
           in: path
           required: true
           description: File ID
@@ -358,7 +358,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /files/{id}/download/base64:
+  /files/{file_id}/download/base64:
     get:
       tags:
         - Files
@@ -366,7 +366,7 @@ paths:
       description: Returns the file content encoded as base64
       operationId: downloadFileBase64
       parameters:
-        - name: id
+        - name: file_id
           in: path
           required: true
           description: File ID
@@ -402,7 +402,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /files/{id}/tags:
+  /files/{file_id}/tags:
     get:
       tags:
         - Files
@@ -410,7 +410,7 @@ paths:
       description: Returns all tags attached to the file
       operationId: getFileTags
       parameters:
-        - name: id
+        - name: file_id
           in: path
           required: true
           description: File ID
@@ -442,7 +442,7 @@ paths:
       description: Replaces all tags on the file with the provided tags
       operationId: replaceFileTags
       parameters:
-        - name: id
+        - name: file_id
           in: path
           required: true
           description: File ID
@@ -482,7 +482,7 @@ paths:
       description: Merges provided tags with existing tags
       operationId: mergeFileTags
       parameters:
-        - name: id
+        - name: file_id
           in: path
           required: true
           description: File ID

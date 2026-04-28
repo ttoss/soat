@@ -51,6 +51,10 @@ const toKebab = (s: string): string => {
     .replace(/^-/, '');
 };
 
+const toFlag = (s: string): string => {
+  return `--${toKebab(s.replace(/_/g, '-'))}`;
+};
+
 const toTitleCase = (kebab: string): string => {
   return kebab
     .split('-')
@@ -135,10 +139,10 @@ const renderTable = (commands: CommandEntry[]): string => {
   const rows = commands.map((c) => {
     const allFlags = [
       ...c.pathParams.map((p) => {
-        return `\`--${p}\``;
+        return `\`${toFlag(p)}\``;
       }),
       ...c.queryParams.map((p) => {
-        return `\`--${p}\``;
+        return `\`${toFlag(p)}\``;
       }),
       ...(c.hasBody ? ['`--<body fields>`'] : []),
     ].join(', ');
@@ -157,10 +161,6 @@ const main = () => {
     '# Commands Reference',
     '',
     'Complete list of all CLI commands, grouped by module. Each command maps to one REST API operation.',
-    '',
-    ':::note',
-    'This file is auto-generated. Run `pnpm generate-cli-commands-docs` to update it.',
-    ':::',
     '',
     '## Special Commands',
     '',

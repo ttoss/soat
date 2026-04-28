@@ -48,7 +48,7 @@ const { data: file, error: uploadError } = await soat.files.uploadFile({
 if (uploadError) throw new Error(JSON.stringify(uploadError));
 
 const { data: content, error: downloadError } = await soat.files.downloadFile({
-  path: { id: file.id },
+  path: { file_id: file.id },
 });
 
 if (downloadError) throw new Error(JSON.stringify(downloadError));
@@ -86,7 +86,7 @@ const { data: conv, error: convError } =
 if (convError) throw new Error(JSON.stringify(convError));
 
 const { error: msgError } = await soat.conversations.addConversationMessage({
-  path: { id: conv.id },
+  path: { conversation_id: conv.id },
   body: { role: 'user', content: 'How do I reset my password?' },
 });
 
@@ -94,7 +94,7 @@ if (msgError) throw new Error(JSON.stringify(msgError));
 
 const { data: reply, error: genError } =
   await soat.conversations.generateConversationMessage({
-    path: { id: conv.id },
+    path: { conversation_id: conv.id },
     body: { actor_id: 'act_...' },
   });
 

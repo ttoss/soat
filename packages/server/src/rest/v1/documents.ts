@@ -140,14 +140,14 @@ documentsRouter.get('/documents', async (ctx: Context) => {
   ctx.body = await listDocuments({ projectIds, limit, offset });
 });
 
-documentsRouter.get('/documents/:id', async (ctx: Context) => {
+documentsRouter.get('/documents/:document_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const doc = await getDocument({ id: ctx.params.id });
+  const doc = await getDocument({ id: ctx.params.document_id });
   if (!doc) {
     ctx.status = 404;
     ctx.body = { error: 'Document not found' };
@@ -229,14 +229,14 @@ documentsRouter.post('/documents', async (ctx: Context) => {
   ctx.body = doc;
 });
 
-documentsRouter.delete('/documents/:id', async (ctx: Context) => {
+documentsRouter.delete('/documents/:document_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const doc = await getDocument({ id: ctx.params.id });
+  const doc = await getDocument({ id: ctx.params.document_id });
   if (!doc) {
     ctx.status = 404;
     ctx.body = { error: 'Document not found' };
@@ -247,7 +247,7 @@ documentsRouter.delete('/documents/:id', async (ctx: Context) => {
     return;
   }
 
-  const result = await deleteDocument({ id: ctx.params.id });
+  const result = await deleteDocument({ id: ctx.params.document_id });
   if (result === null) {
     ctx.status = 404;
     ctx.body = { error: 'Document not found' };
@@ -257,14 +257,14 @@ documentsRouter.delete('/documents/:id', async (ctx: Context) => {
   ctx.status = 204;
 });
 
-documentsRouter.patch('/documents/:id', async (ctx: Context) => {
+documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const doc = await getDocument({ id: ctx.params.id });
+  const doc = await getDocument({ id: ctx.params.document_id });
   if (!doc) {
     ctx.status = 404;
     ctx.body = { error: 'Document not found' };
@@ -284,7 +284,7 @@ documentsRouter.patch('/documents/:id', async (ctx: Context) => {
   };
 
   const updated = await updateDocument({
-    id: ctx.params.id,
+    id: ctx.params.document_id,
     content: body.content,
     title: body.title,
     path: body.path,
@@ -362,14 +362,14 @@ documentsRouter.post('/documents/search', async (ctx: Context) => {
   ctx.body = { documents: results };
 });
 
-documentsRouter.get('/documents/:id/tags', async (ctx: Context) => {
+documentsRouter.get('/documents/:document_id/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const doc = await getDocument({ id: ctx.params.id });
+  const doc = await getDocument({ id: ctx.params.document_id });
   if (!doc) {
     ctx.status = 404;
     ctx.body = { error: 'Document not found' };
@@ -380,17 +380,17 @@ documentsRouter.get('/documents/:id/tags', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await getDocumentTags({ id: ctx.params.id });
+  ctx.body = await getDocumentTags({ id: ctx.params.document_id });
 });
 
-documentsRouter.put('/documents/:id/tags', async (ctx: Context) => {
+documentsRouter.put('/documents/:document_id/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const doc = await getDocument({ id: ctx.params.id });
+  const doc = await getDocument({ id: ctx.params.document_id });
   if (!doc) {
     ctx.status = 404;
     ctx.body = { error: 'Document not found' };
@@ -403,20 +403,20 @@ documentsRouter.put('/documents/:id/tags', async (ctx: Context) => {
 
   const tags = ctx.request.body as Record<string, string>;
   ctx.body = await updateDocumentTags({
-    id: ctx.params.id,
+    id: ctx.params.document_id,
     tags,
     merge: false,
   });
 });
 
-documentsRouter.patch('/documents/:id/tags', async (ctx: Context) => {
+documentsRouter.patch('/documents/:document_id/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const doc = await getDocument({ id: ctx.params.id });
+  const doc = await getDocument({ id: ctx.params.document_id });
   if (!doc) {
     ctx.status = 404;
     ctx.body = { error: 'Document not found' };
@@ -428,7 +428,11 @@ documentsRouter.patch('/documents/:id/tags', async (ctx: Context) => {
   }
 
   const tags = ctx.request.body as Record<string, string>;
-  ctx.body = await updateDocumentTags({ id: ctx.params.id, tags, merge: true });
+  ctx.body = await updateDocumentTags({
+    id: ctx.params.document_id,
+    tags,
+    merge: true,
+  });
 });
 
 export { documentsRouter };

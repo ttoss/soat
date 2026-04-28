@@ -107,14 +107,14 @@ describe('MCP tools - happy path', () => {
   });
 
   test('get-file returns the file', async () => {
-    const res = await mcpCall('get-file', { id: fileId });
+    const res = await mcpCall('get-file', { fileId });
     expect(res.status).toBe(200);
     const result = parseResult(res);
     expect(result.id).toBe(fileId);
   });
 
   test('download-file returns base64 content', async () => {
-    const res = await mcpCall('download-file-base64', { id: fileId });
+    const res = await mcpCall('download-file-base64', { fileId });
     expect(res.status).toBe(200);
     const result = parseResult(res);
     expect(result.content).toBeDefined();
@@ -122,7 +122,7 @@ describe('MCP tools - happy path', () => {
 
   test('update-file-metadata renames the file', async () => {
     const res = await mcpCall('update-file-metadata', {
-      id: fileId,
+      fileId,
       filename: 'mcp-renamed.txt',
     });
     expect(res.status).toBe(200);
@@ -143,7 +143,7 @@ describe('MCP tools - happy path', () => {
   });
 
   test('delete-file deletes the file', async () => {
-    const res = await mcpCall('delete-file', { id: fileId });
+    const res = await mcpCall('delete-file', { fileId });
     expect(res.status).toBe(200);
   });
 
@@ -169,7 +169,7 @@ describe('MCP tools - happy path', () => {
 
   test('update-actor updates the name', async () => {
     const res = await mcpCall('update-actor', {
-      id: actorId,
+      actorId,
       name: 'MCP Actor Updated',
     });
     expect(res.status).toBe(200);
@@ -178,14 +178,14 @@ describe('MCP tools - happy path', () => {
   });
 
   test('get-actor returns the actor', async () => {
-    const res = await mcpCall('get-actor', { id: actorId });
+    const res = await mcpCall('get-actor', { actorId });
     expect(res.status).toBe(200);
     const result = parseResult(res);
     expect(result.id).toBe(actorId);
   });
 
   test('delete-actor deletes the actor', async () => {
-    const res = await mcpCall('delete-actor', { id: actorId });
+    const res = await mcpCall('delete-actor', { actorId });
     expect(res.status).toBe(200);
   });
 
@@ -208,7 +208,7 @@ describe('MCP tools - happy path', () => {
 
   test('add-conversation-message adds a message', async () => {
     const res = await mcpCall('add-conversation-message', {
-      id: conversationId,
+      conversationId,
       message: 'hello from mcp',
       actorId: setupActorId,
     });
@@ -220,7 +220,7 @@ describe('MCP tools - happy path', () => {
 
   test('list-conversation-messages returns data array', async () => {
     const res = await mcpCall('list-conversation-messages', {
-      id: conversationId,
+      conversationId,
     });
     expect(res.status).toBe(200);
     const result = parseResult(res);
@@ -229,13 +229,13 @@ describe('MCP tools - happy path', () => {
 
   test('list-conversation-actors returns results', async () => {
     const res = await mcpCall('list-conversation-actors', {
-      id: conversationId,
+      conversationId,
     });
     expect(res.status).toBe(200);
   });
 
   test('get-conversation returns the conversation', async () => {
-    const res = await mcpCall('get-conversation', { id: conversationId });
+    const res = await mcpCall('get-conversation', { conversationId });
     expect(res.status).toBe(200);
     const result = parseResult(res);
     expect(result.id).toBe(conversationId);
@@ -243,7 +243,7 @@ describe('MCP tools - happy path', () => {
 
   test('remove-conversation-message removes the message', async () => {
     const res = await mcpCall('remove-conversation-message', {
-      id: conversationId,
+      conversationId,
       documentId: messageDocumentId,
     });
     expect(res.status).toBe(200);
@@ -251,7 +251,7 @@ describe('MCP tools - happy path', () => {
 
   test('update-conversation updates the status', async () => {
     const res = await mcpCall('update-conversation', {
-      id: conversationId,
+      conversationId,
       status: 'closed',
     });
     expect(res.status).toBe(200);
@@ -260,7 +260,7 @@ describe('MCP tools - happy path', () => {
   });
 
   test('delete-conversation deletes the conversation', async () => {
-    const res = await mcpCall('delete-conversation', { id: conversationId });
+    const res = await mcpCall('delete-conversation', { conversationId });
     expect(res.status).toBe(200);
   });
 
@@ -286,7 +286,7 @@ describe('MCP tools - happy path', () => {
 
   test('update-document updates content', async () => {
     const res = await mcpCall('update-document', {
-      id: documentId,
+      documentId,
       content: 'MCP updated content',
     });
     expect(res.status).toBe(200);
@@ -295,7 +295,7 @@ describe('MCP tools - happy path', () => {
   });
 
   test('get-document returns the document', async () => {
-    const res = await mcpCall('get-document', { id: documentId });
+    const res = await mcpCall('get-document', { documentId });
     expect(res.status).toBe(200);
     const result = parseResult(res);
     expect(result.id).toBe(documentId);
@@ -307,7 +307,7 @@ describe('MCP tools - happy path', () => {
   });
 
   test('delete-document deletes the document', async () => {
-    const res = await mcpCall('delete-document', { id: documentId });
+    const res = await mcpCall('delete-document', { documentId });
     expect(res.status).toBe(200);
   });
 
@@ -775,7 +775,7 @@ describe('MCP tools - happy path', () => {
   });
 
   test('get-api-key returns the key', async () => {
-    const res = await mcpCall('get-api-key', { id: mcpApiKeyId });
+    const res = await mcpCall('get-api-key', { apiKeyId: mcpApiKeyId });
 
     expect(res.status).toBe(200);
     const result = parseResult(res);
@@ -788,7 +788,7 @@ describe('MCP tools - happy path', () => {
 
   test('update-api-key updates the key', async () => {
     const res = await mcpCall('update-api-key', {
-      id: mcpApiKeyId,
+      apiKeyId: mcpApiKeyId,
       name: 'MCP Updated Key',
     });
 
@@ -799,7 +799,7 @@ describe('MCP tools - happy path', () => {
   });
 
   test('delete-api-key deletes the key', async () => {
-    const res = await mcpCall('delete-api-key', { id: mcpApiKeyId });
+    const res = await mcpCall('delete-api-key', { apiKeyId: mcpApiKeyId });
 
     expect(res.status).toBe(200);
   });

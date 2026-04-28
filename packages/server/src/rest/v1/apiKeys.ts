@@ -103,15 +103,14 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
   ctx.body = apiKey;
 });
 
-apiKeysRouter.get('/api-keys/:id', async (ctx: Context) => {
+apiKeysRouter.get('/api-keys/:api_key_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const apiKey = await getApiKey({ id: ctx.params.id });
-
+  const apiKey = await getApiKey({ id: ctx.params.api_key_id });
   if (!apiKey) {
     ctx.status = 404;
     ctx.body = { error: 'API key not found' };
@@ -130,7 +129,7 @@ apiKeysRouter.get('/api-keys/:id', async (ctx: Context) => {
   ctx.body = apiKey;
 });
 
-apiKeysRouter.put('/api-keys/:id', async (ctx: Context) => {
+apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -143,7 +142,7 @@ apiKeysRouter.put('/api-keys/:id', async (ctx: Context) => {
     policyIds?: string[];
   };
 
-  const existing = await getApiKey({ id: ctx.params.id });
+  const existing = await getApiKey({ id: ctx.params.api_key_id });
   if (!existing) {
     ctx.status = 404;
     ctx.body = { error: 'API key not found' };
@@ -174,7 +173,7 @@ apiKeysRouter.put('/api-keys/:id', async (ctx: Context) => {
   }
 
   const updated = await updateApiKey({
-    id: ctx.params.id,
+    id: ctx.params.api_key_id,
     name,
     projectId: projectResult.id,
     policyIds: policyResult.ids,
@@ -183,14 +182,14 @@ apiKeysRouter.put('/api-keys/:id', async (ctx: Context) => {
   ctx.body = updated;
 });
 
-apiKeysRouter.delete('/api-keys/:id', async (ctx: Context) => {
+apiKeysRouter.delete('/api-keys/:api_key_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const existing = await getApiKey({ id: ctx.params.id });
+  const existing = await getApiKey({ id: ctx.params.api_key_id });
   if (!existing) {
     ctx.status = 404;
     ctx.body = { error: 'API key not found' };
@@ -206,7 +205,7 @@ apiKeysRouter.delete('/api-keys/:id', async (ctx: Context) => {
     return;
   }
 
-  await deleteApiKey({ id: ctx.params.id });
+  await deleteApiKey({ id: ctx.params.api_key_id });
   ctx.status = 204;
 });
 

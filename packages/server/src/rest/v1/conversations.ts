@@ -72,35 +72,39 @@ conversationsRouter.get('/conversations', async (ctx: Context) => {
   });
 });
 
-conversationsRouter.get('/conversations/:id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
+conversationsRouter.get(
+  '/conversations/:conversation_id',
+  async (ctx: Context) => {
+    if (!ctx.authUser) {
+      ctx.status = 401;
+      ctx.body = { error: 'Unauthorized' };
+      return;
+    }
+
+    const conversation = await getConversation({
+      id: ctx.params.conversation_id,
+    });
+    if (!conversation) {
+      ctx.status = 404;
+      ctx.body = { error: 'Conversation not found' };
+      return;
+    }
+
+    if (
+      !(await checkConversationAccess(
+        ctx.authUser!,
+        conversation,
+        'conversations:GetConversation'
+      ))
+    ) {
+      ctx.status = 403;
+      ctx.body = { error: 'Forbidden' };
+      return;
+    }
+
+    ctx.body = conversation;
   }
-
-  const conversation = await getConversation({ id: ctx.params.id });
-
-  if (!conversation) {
-    ctx.status = 404;
-    ctx.body = { error: 'Conversation not found' };
-    return;
-  }
-
-  if (
-    !(await checkConversationAccess(
-      ctx.authUser!,
-      conversation,
-      'conversations:GetConversation'
-    ))
-  ) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  ctx.body = conversation;
-});
+);
 
 conversationsRouter.post('/conversations', async (ctx: Context) => {
   if (!ctx.authUser) {
@@ -170,81 +174,91 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
   ctx.body = conversation;
 });
 
-conversationsRouter.patch('/conversations/:id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
+conversationsRouter.patch(
+  '/conversations/:conversation_id',
+  async (ctx: Context) => {
+    if (!ctx.authUser) {
+      ctx.status = 401;
+      ctx.body = { error: 'Unauthorized' };
+      return;
+    }
+
+    const body = ctx.request.body as { status?: string; name?: string | null };
+
+    if (body.status === undefined && body.name === undefined) {
+      ctx.status = 400;
+      ctx.body = { error: 'At least one of status or name is required' };
+      return;
+    }
+
+    const conversation = await getConversation({
+      id: ctx.params.conversation_id,
+    });
+
+    if (!conversation) {
+      ctx.status = 404;
+      ctx.body = { error: 'Conversation not found' };
+      return;
+    }
+
+    if (
+      !(await checkConversationAccess(
+        ctx.authUser!,
+        conversation,
+        'conversations:UpdateConversation'
+      ))
+    ) {
+      ctx.status = 403;
+      ctx.body = { error: 'Forbidden' };
+      return;
+    }
+
+    const updated = await updateConversation({
+      id: ctx.params.conversation_id,
+      status: body.status,
+      name: body.name,
+    });
+
+    ctx.body = updated;
   }
+);
 
-  const body = ctx.request.body as { status?: string; name?: string | null };
+conversationsRouter.delete(
+  '/conversations/:conversation_id',
+  async (ctx: Context) => {
+    if (!ctx.authUser) {
+      ctx.status = 401;
+      ctx.body = { error: 'Unauthorized' };
+      return;
+    }
 
-  if (body.status === undefined && body.name === undefined) {
-    ctx.status = 400;
-    ctx.body = { error: 'At least one of status or name is required' };
-    return;
+    const conversation = await getConversation({
+      id: ctx.params.conversation_id,
+    });
+
+    if (!conversation) {
+      ctx.status = 404;
+      ctx.body = { error: 'Conversation not found' };
+      return;
+    }
+
+    if (
+      !(await checkConversationAccess(
+        ctx.authUser!,
+        conversation,
+        'conversations:DeleteConversation'
+      ))
+    ) {
+      ctx.status = 403;
+      ctx.body = { error: 'Forbidden' };
+      return;
+    }
+
+    await deleteConversation({ id: ctx.params.conversation_id });
+
+    ctx.status = 204;
   }
-
-  const conversation = await getConversation({ id: ctx.params.id });
-
-  if (!conversation) {
-    ctx.status = 404;
-    ctx.body = { error: 'Conversation not found' };
-    return;
-  }
-
-  if (
-    !(await checkConversationAccess(
-      ctx.authUser!,
-      conversation,
-      'conversations:UpdateConversation'
-    ))
-  ) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const updated = await updateConversation({
-    id: ctx.params.id,
-    status: body.status,
-    name: body.name,
-  });
-
-  ctx.body = updated;
-});
-
-conversationsRouter.delete('/conversations/:id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  const conversation = await getConversation({ id: ctx.params.id });
-
-  if (!conversation) {
-    ctx.status = 404;
-    ctx.body = { error: 'Conversation not found' };
-    return;
-  }
-
-  if (
-    !(await checkConversationAccess(
-      ctx.authUser!,
-      conversation,
-      'conversations:DeleteConversation'
-    ))
-  ) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  await deleteConversation({ id: ctx.params.id });
-
-  ctx.status = 204;
-});
+);
 
 conversationsRouter.use(conversationSubResourcesRouter.routes());
 conversationsRouter.use(conversationSubResourcesRouter.allowedMethods());

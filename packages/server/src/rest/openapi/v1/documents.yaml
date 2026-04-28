@@ -113,7 +113,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /documents/{id}:
+  /documents/{document_id}:
     get:
       tags:
         - Documents
@@ -121,7 +121,7 @@ paths:
       description: Returns a document with its text content
       operationId: getDocument
       parameters:
-        - name: id
+        - name: document_id
           in: path
           required: true
           description: Document ID
@@ -160,7 +160,7 @@ paths:
       description: Deletes a document and its underlying file
       operationId: deleteDocument
       parameters:
-        - name: id
+        - name: document_id
           in: path
           required: true
           description: Document ID
@@ -195,7 +195,7 @@ paths:
       description: Updates document content, title, path, metadata, or tags. Supplying `path` moves the document to a new logical path within the project.
       operationId: updateDocument
       parameters:
-        - name: id
+        - name: document_id
           in: path
           required: true
           description: Document ID
@@ -253,7 +253,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /documents/{id}/tags:
+  /documents/{document_id}/tags:
     get:
       tags:
         - Documents
@@ -261,7 +261,7 @@ paths:
       description: Returns all tags attached to the document
       operationId: getDocumentTags
       parameters:
-        - name: id
+        - name: document_id
           in: path
           required: true
           description: Document ID
@@ -302,7 +302,7 @@ paths:
       description: Replaces all tags on the document with the provided tags (not merged)
       operationId: replaceDocumentTags
       parameters:
-        - name: id
+        - name: document_id
           in: path
           required: true
           description: Document ID
@@ -354,7 +354,7 @@ paths:
       description: Merges provided tags with existing tags (existing tags are preserved unless overridden)
       operationId: mergeDocumentTags
       parameters:
-        - name: id
+        - name: document_id
           in: path
           required: true
           description: Document ID
