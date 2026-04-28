@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "generate": "tsx scripts/generate.ts",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
     "build": "pnpm generate && tsup"
   },
   "dependencies": {

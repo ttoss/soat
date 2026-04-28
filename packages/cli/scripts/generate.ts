@@ -25,6 +25,8 @@ interface OpenApiParameter {
 interface OpenApiOperation {
   operationId?: string;
   tags?: string[];
+  summary?: string;
+  description?: string;
   parameters?: OpenApiParameter[];
 }
 
@@ -71,6 +73,7 @@ const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const;
 interface Route {
   serviceClass: string;
   operationId: string;
+  description: string;
   pathParams: string[];
   queryParams: string[];
 }
@@ -131,6 +134,9 @@ for (const file of files) {
       routes[kebab] = {
         serviceClass: toClassName(tag),
         operationId: op.operationId,
+        description: (op.summary ?? op.description ?? op.operationId)
+          .replace(/\s+/g, ' ')
+          .trim(),
         pathParams: params
           .filter((p) => {
             return p.in === 'path';
@@ -156,6 +162,8 @@ const lines = [
   'export interface Route {',
   '  serviceClass: string;',
   '  operationId: string;',
+  '  /** operation summary/description */',
+  '  description: string;',
   '  /** snake_case path parameter names */',
   '  pathParams: string[];',
   '  /** snake_case query parameter names */',
@@ -164,7 +172,7 @@ const lines = [
   '',
   'export const routes: Record<string, Route> = {',
   ...Object.entries(routes).map(([cmd, r]) => {
-    return `  '${cmd}': { serviceClass: '${r.serviceClass}', operationId: '${r.operationId}', pathParams: ${JSON.stringify(r.pathParams)}, queryParams: ${JSON.stringify(r.queryParams)} },`;
+    return `  '${cmd}': { serviceClass: '${r.serviceClass}', operationId: '${r.operationId}', description: ${JSON.stringify(r.description)}, pathParams: ${JSON.stringify(r.pathParams)}, queryParams: ${JSON.stringify(r.queryParams)} },`;
   }),
   '};',
   '',

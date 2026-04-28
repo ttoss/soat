@@ -4,6 +4,13 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 
 @Table({
   tableName: 'policies',
+  hooks: {
+    beforeValidate: (instance: Policy) => {
+      if (!instance.publicId) {
+        instance.publicId = generatePublicId(PUBLIC_ID_PREFIXES.policy);
+      }
+    },
+  },
 })
 export class Policy extends Model {
   @Column({

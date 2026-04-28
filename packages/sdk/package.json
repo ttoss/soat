@@ -19,6 +19,8 @@
   },
   "scripts": {
     "build": "pnpm generate && tsup",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
     "generate": "tsx scripts/generate.ts"
   },
   "files": [

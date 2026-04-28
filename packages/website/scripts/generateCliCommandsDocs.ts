@@ -82,6 +82,7 @@ const loadModules = (): ModuleConfig[] => {
     });
 };
 
+// eslint-disable-next-line complexity
 const loadCommands = (moduleName: string): CommandEntry[] => {
   const specPath = path.join(SPECS_DIR, `${moduleName}.yaml`);
   if (!fs.existsSync(specPath)) return [];
@@ -167,6 +168,20 @@ const main = () => {
     '| ------- | ----------- |',
     '| `soat configure` | Add or update a profile in `~/.soat/config.json` |',
     '| `soat list-commands` | Print all available API commands |',
+    '| `soat listen` | Start a local webhook listener for testing deliveries |',
+    '',
+    '### Listener Examples',
+    '',
+    '```bash',
+    '# Basic webhook listener',
+    'soat listen --port 8787 --path /webhook',
+    '',
+    '# Filter only session generation lifecycle events',
+    'soat listen --port 8787 --path /webhook --filter sessions.generation.*',
+    '',
+    '# Verify webhook signatures and output JSON lines',
+    'soat listen --port 8787 --path /webhook --secret "<webhook-secret>" --json',
+    '```',
   ];
 
   for (const mod of loadModules()) {
@@ -186,6 +201,7 @@ const main = () => {
   sections.push('');
 
   fs.writeFileSync(OUTPUT_FILE, sections.join('\n'), 'utf-8');
+  // eslint-disable-next-line no-console
   console.log(`CLI commands docs written to: ${OUTPUT_FILE}`);
 };
 
