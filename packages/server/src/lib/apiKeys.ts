@@ -5,6 +5,11 @@ import bcrypt from 'bcryptjs';
 
 import { db } from '../db';
 
+type ApiKeyWithAssociations = InstanceType<(typeof db)['ApiKey']> & {
+  user: InstanceType<(typeof db)['User']> | null;
+  project: InstanceType<(typeof db)['Project']> | null;
+};
+
 const mapApiKey = (apiKey: InstanceType<(typeof db)['ApiKey']>) => {
   return {
     id: apiKey.publicId,
@@ -12,6 +17,39 @@ const mapApiKey = (apiKey: InstanceType<(typeof db)['ApiKey']>) => {
     keyPrefix: apiKey.keyPrefix,
     createdAt: apiKey.createdAt,
     updatedAt: apiKey.updatedAt,
+  };
+};
+
+const mapApiKeyWithAssociations = async (
+  apiKey: ApiKeyWithAssociations
+): Promise<{
+  id: string;
+  name: string;
+  keyPrefix: string;
+  createdAt: Date;
+  updatedAt: Date;
+  userId: string | null;
+  projectId: string | null;
+  policyIds: string[];
+}> => {
+  const policyPublicIds: string[] = [];
+  const storedPolicyIds = apiKey.policyIds as number[];
+  if (storedPolicyIds && storedPolicyIds.length > 0) {
+    const policies = await db.Policy.findAll({
+      where: { id: storedPolicyIds },
+    });
+    policyPublicIds.push(
+      ...policies.map((p: InstanceType<(typeof db)['Policy']>) => {
+        return p.publicId as string;
+      })
+    );
+  }
+
+  return {
+    ...mapApiKey(apiKey),
+    userId: apiKey.user?.publicId ?? null,
+    projectId: apiKey.project?.publicId ?? null,
+    policyIds: policyPublicIds,
   };
 };
 
@@ -54,30 +92,7 @@ export const getApiKey = async (args: { id: string }) => {
     return null;
   }
 
-  const policyPublicIds: string[] = [];
-  const storedPolicyIds = apiKey.policyIds as number[];
-  if (storedPolicyIds && storedPolicyIds.length > 0) {
-    const policies = await db.Policy.findAll({
-      where: { id: storedPolicyIds },
-    });
-    policyPublicIds.push(
-      ...policies.map((p: InstanceType<(typeof db)['Policy']>) => {
-        return p.publicId as string;
-      })
-    );
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const keyUser = (apiKey as any).user;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const keyProject = (apiKey as any).project;
-
-  return {
-    ...mapApiKey(apiKey),
-    userId: keyUser?.publicId ?? null,
-    projectId: keyProject?.publicId ?? null,
-    policyIds: policyPublicIds,
-  };
+  return mapApiKeyWithAssociations(apiKey as ApiKeyWithAssociations);
 };
 
 export const updateApiKey = async (args: {
@@ -128,32 +143,7 @@ export const listApiKeys = async (args: {
   });
 
   return Promise.all(
-    apiKeys.map(async (apiKey) => {
-      const policyPublicIds: string[] = [];
-      const storedPolicyIds = apiKey.policyIds as number[];
-      if (storedPolicyIds && storedPolicyIds.length > 0) {
-        const policies = await db.Policy.findAll({
-          where: { id: storedPolicyIds },
-        });
-        policyPublicIds.push(
-          ...policies.map((p: InstanceType<(typeof db)['Policy']>) => {
-            return p.publicId as string;
-          })
-        );
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const keyUser = (apiKey as any).user;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const keyProject = (apiKey as any).project;
-
-      return {
-        ...mapApiKey(apiKey),
-        userId: keyUser?.publicId ?? null,
-        projectId: keyProject?.publicId ?? null,
-        policyIds: policyPublicIds,
-      };
-    })
+    (apiKeys as ApiKeyWithAssociations[]).map(mapApiKeyWithAssociations)
   );
 };
 
