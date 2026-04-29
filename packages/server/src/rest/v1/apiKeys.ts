@@ -5,6 +5,7 @@ import {
   createApiKey,
   deleteApiKey,
   getApiKey,
+  listApiKeys,
   updateApiKey,
 } from 'src/lib/apiKeys';
 
@@ -58,6 +59,32 @@ const resolvePolicyIds = async (args: {
     }),
   };
 };
+
+apiKeysRouter.get('/api-keys', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  // When authenticated with an API key scoped to a project,
+  // only show API keys scoped to that project
+  if (ctx.authUser.apiKeyProjectId !== undefined) {
+    ctx.body = await listApiKeys({
+      projectId: ctx.authUser.apiKeyProjectId,
+    });
+    return;
+  }
+
+  // JWT admin sees all API keys
+  if (ctx.authUser.role === 'admin') {
+    ctx.body = await listApiKeys({});
+    return;
+  }
+
+  // JWT regular user sees only their own API keys
+  ctx.body = await listApiKeys({ userId: ctx.authUser.id });
+});
 
 apiKeysRouter.post('/api-keys', async (ctx: Context) => {
   if (!ctx.authUser) {

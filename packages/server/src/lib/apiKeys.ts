@@ -104,6 +104,59 @@ export const updateApiKey = async (args: {
   return getApiKey({ id: args.id });
 };
 
+export const listApiKeys = async (args: {
+  userId?: number;
+  projectId?: number;
+}) => {
+  const where: Record<string, unknown> = {};
+
+  if (args.userId !== undefined) {
+    where.userId = args.userId;
+  }
+
+  if (args.projectId !== undefined) {
+    where.projectId = args.projectId;
+  }
+
+  const apiKeys = await db.ApiKey.findAll({
+    where: Object.keys(where).length > 0 ? where : undefined,
+    include: [
+      { model: db.User, as: 'user' },
+      { model: db.Project, as: 'project' },
+    ],
+    order: [['createdAt', 'DESC']],
+  });
+
+  return Promise.all(
+    apiKeys.map(async (apiKey) => {
+      const policyPublicIds: string[] = [];
+      const storedPolicyIds = apiKey.policyIds as number[];
+      if (storedPolicyIds && storedPolicyIds.length > 0) {
+        const policies = await db.Policy.findAll({
+          where: { id: storedPolicyIds },
+        });
+        policyPublicIds.push(
+          ...policies.map((p: InstanceType<(typeof db)['Policy']>) => {
+            return p.publicId as string;
+          })
+        );
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const keyUser = (apiKey as any).user;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const keyProject = (apiKey as any).project;
+
+      return {
+        ...mapApiKey(apiKey),
+        userId: keyUser?.publicId ?? null,
+        projectId: keyProject?.publicId ?? null,
+        policyIds: policyPublicIds,
+      };
+    })
+  );
+};
+
 export const deleteApiKey = async (args: { id: string }) => {
   const apiKey = await db.ApiKey.findOne({
     where: { publicId: args.id },
