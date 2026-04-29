@@ -254,6 +254,7 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
 
       const apiKeyIsAllowed = createApiKeyIsAllowed({
         apiKeyProjectPublicId,
+        userRole: keyUser.role as 'admin' | 'user',
         userPolicyIds,
         apiKeyPolicyIds,
         db: ctx.db,
