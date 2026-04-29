@@ -7,21 +7,17 @@ info:
     name: SOAT Team
     url: https://github.com/ttoss/soat
 servers:
-  - url: https://{host}
-    description: Production (HTTPS)
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
     variables:
-      host:
-        description: The hostname of your SOAT deployment
-        default: your-soat.com
-  - url: http://{host}
-    description: Development (HTTP)
-    variables:
-      host:
-        description: The hostname of your SOAT deployment
-        default: localhost:5047
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
 tags:
   - name: API Keys
     description: Manage API keys
+security:
+  - bearerAuth: []
 paths:
   /api/v1/api-keys:
     post:
@@ -34,8 +30,6 @@ paths:
         - If `policy_ids` is provided, the key's effective permissions are the intersection of the user's policies and the key's policies.
         - If neither is provided, the key inherits the user's full permissions.
       operationId: createApiKey
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -81,8 +75,6 @@ paths:
       summary: Get an API key
       description: Returns details of an API key. Only the owner or an admin can access it.
       operationId: getApiKey
-      security:
-        - bearerAuth: []
       parameters:
         - name: api_key_id
           in: path
@@ -110,8 +102,6 @@ paths:
       summary: Update an API key
       description: Updates an API key's name, project scope, or policies. Only the owner or an admin can update it.
       operationId: updateApiKey
-      security:
-        - bearerAuth: []
       parameters:
         - name: api_key_id
           in: path
@@ -166,8 +156,6 @@ paths:
       summary: Delete an API key
       description: Deletes an API key. Only the owner or an admin can delete it.
       operationId: deleteApiKey
-      security:
-        - bearerAuth: []
       parameters:
         - name: api_key_id
           in: path

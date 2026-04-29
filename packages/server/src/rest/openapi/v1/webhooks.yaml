@@ -16,6 +16,8 @@ servers:
 tags:
   - name: Webhooks
     description: Manage webhooks
+security:
+  - bearerAuth: []
 paths:
   /api/v1/projects/{project_id}/webhooks:
     get:

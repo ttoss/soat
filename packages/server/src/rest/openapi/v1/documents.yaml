@@ -16,6 +16,8 @@ servers:
 tags:
   - name: Documents
     description: Manage documents
+security:
+  - bearerAuth: []
 paths:
   /api/v1/documents:
     get:

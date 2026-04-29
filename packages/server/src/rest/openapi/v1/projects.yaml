@@ -16,6 +16,8 @@ servers:
 tags:
   - name: Projects
     description: Manage projects
+security:
+  - bearerAuth: []
 paths:
   /api/v1/projects:
     post:
@@ -65,8 +67,6 @@ paths:
       summary: Get a project
       description: Returns details of a specific project.
       operationId: getProject
-      security:
-        - bearerAuth: []
       parameters:
         - name: project_id
           in: path
@@ -94,8 +94,6 @@ paths:
       summary: Delete a project
       description: Deletes a project. Requires admin role.
       operationId: deleteProject
-      security:
-        - bearerAuth: []
       parameters:
         - name: project_id
           in: path
