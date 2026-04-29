@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.4.8](https://github.com/ttoss/soat/compare/v0.4.7...v0.4.8) (2026-04-29)
+
+### Bug Fixes
+
+* openapi ([#52](https://github.com/ttoss/soat/issues/52)) ([f7a57c3](https://github.com/ttoss/soat/commit/f7a57c35076341e9c416e3f0a43d6d6ed135f0ce))
+
+### Features
+
+* add GET /api/v1/api-keys list endpoint with JWT/API key scoping ([#51](https://github.com/ttoss/soat/issues/51)) ([f60338a](https://github.com/ttoss/soat/commit/f60338af87b33295c142ce53fb9d2fcad53a5d03))
+
 ## [0.4.7](https://github.com/ttoss/soat/compare/v0.4.6...v0.4.7) (2026-04-28)
 
 ### Bug Fixes
