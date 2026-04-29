@@ -7,6 +7,7 @@ import {
 
 export const createApiKeyIsAllowed = (args: {
   apiKeyProjectPublicId?: string;
+  userRole: 'admin' | 'user';
   userPolicyIds: number[];
   apiKeyPolicyIds: number[];
   db: DB;
@@ -26,8 +27,11 @@ export const createApiKeyIsAllowed = (args: {
       return false;
     }
 
+    // Admin users bypass policy evaluation — their user boundary is always satisfied
+    const userIsAdmin = args.userRole === 'admin';
+
     const userPolicies =
-      args.userPolicyIds.length > 0
+      !userIsAdmin && args.userPolicyIds.length > 0
         ? await args.db.Policy.findAll({ where: { id: args.userPolicyIds } })
         : [];
 
@@ -36,6 +40,8 @@ export const createApiKeyIsAllowed = (args: {
     });
 
     const evalUser = (resources?: string[], resource?: string) => {
+      // Admin role always satisfies the user boundary
+      if (userIsAdmin) return true;
       if (resources && resources.length > 0) {
         return evaluatePoliciesMultiResource({
           policies: userDocs,

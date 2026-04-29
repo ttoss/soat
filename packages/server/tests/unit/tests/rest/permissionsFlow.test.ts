@@ -1092,3 +1092,93 @@ describe('Group 11: API key — scoped key with project-resource SRN in key poli
     expect(response.body.id).toBe(fileInProjectA);
   });
 });
+
+// ─── Group 12: Regression — admin API key with full-access policy ─────────
+//
+// An API key owned by an admin user with a full-access policy (action: ["*"],
+// resource: ["*"]) was returning 403 on every endpoint. The root cause was
+// that createApiKeyIsAllowed evaluated the user's explicit policyIds without
+// checking the admin role bypass, causing evalUser to return false for admins
+// who carry no policyIds.
+
+describe('Group 12: Admin API key with full-access policy is not 403', () => {
+  let adminToken: string;
+  let projectId: string;
+  let adminApiKey: string;
+  let fileId: string;
+
+  beforeAll(async () => {
+    await testClient
+      .post('/api/v1/users/bootstrap')
+      .send({ username: 'admin', password: 'supersecret' });
+
+    adminToken = await loginAs('admin', 'supersecret');
+
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'Admin Full-Access Key Project' });
+
+    projectId = projectRes.body.id;
+
+    // Full-access policy: action: ["*"], resource: ["*"]
+    const fullAccessPolicyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['*'],
+              resource: ['*'],
+            },
+          ],
+        },
+      });
+
+    const keyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/api-keys')
+      .send({
+        name: 'admin-full-access',
+        project_id: projectId,
+        policy_ids: [fullAccessPolicyRes.body.id],
+      });
+
+    adminApiKey = keyRes.body.key;
+
+    const fileRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/files')
+      .send({
+        project_id: projectId,
+        filename: 'admin-key.txt',
+        storage_type: 'local',
+        storage_path: '/tmp/admin-key.txt',
+      });
+
+    fileId = fileRes.body.id;
+  });
+
+  test('admin API key with full-access policy can list files', async () => {
+    const response = await testClient
+      .get(`/api/v1/files?project_id=${projectId}`)
+      .set('Authorization', `Bearer ${adminApiKey}`);
+
+    expect(response.status).toBe(200);
+  });
+
+  test('admin API key with full-access policy can get a file', async () => {
+    const response = await testClient
+      .get(`/api/v1/files/${fileId}`)
+      .set('Authorization', `Bearer ${adminApiKey}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.id).toBe(fileId);
+  });
+
+  test('admin API key with full-access policy can delete a file', async () => {
+    const response = await testClient
+      .delete(`/api/v1/files/${fileId}`)
+      .set('Authorization', `Bearer ${adminApiKey}`);
+
+    expect(response.status).toBe(204);
+  });
+});
