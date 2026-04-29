@@ -19,6 +19,8 @@ servers:
 tags:
   - name: Sessions
     description: Manage agent sessions
+security:
+  - bearerAuth: []
 paths:
   /api/v1/agents/{agent_id}/sessions:
     post:
@@ -30,8 +32,6 @@ paths:
         conversation and two actors (agent + user) so the caller only needs
         this single call to start interacting with the agent.
       operationId: createAgentSession
-      security:
-        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/AgentId'
       requestBody:
@@ -58,8 +58,6 @@ paths:
       summary: List sessions
       description: Returns sessions for the specified agent, optionally filtered by actorId and status.
       operationId: listAgentSessions
-      security:
-        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - name: actor_id
@@ -119,8 +117,6 @@ paths:
       summary: Get a session
       description: Returns details of a single session.
       operationId: getAgentSession
-      security:
-        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'
@@ -143,8 +139,6 @@ paths:
       summary: Update a session
       description: Updates the session name and/or status.
       operationId: updateSession
-      security:
-        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'
@@ -172,8 +166,6 @@ paths:
       summary: Delete a session
       description: Deletes the session and its underlying conversation and actors.
       operationId: deleteAgentSession
-      security:
-        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'
@@ -196,8 +188,6 @@ paths:
         Returns messages in the session with simplified roles (user/assistant)
         instead of raw actor IDs.
       operationId: listAgentSessionMessages
-      security:
-        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'
@@ -247,8 +237,6 @@ paths:
         automatically and the response mirrors GenerateSessionResponse. Otherwise
         returns the saved user message.
       operationId: addSessionMessage
-      security:
-        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'
@@ -283,8 +271,6 @@ paths:
         if the agent needs client tool outputs. Pass ?async=true for a
         202 accepted response when you do not need to wait for the result.
       operationId: generateSessionResponse
-      security:
-        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'
@@ -342,8 +328,6 @@ paths:
         requires_action. The agent continues its loop and returns the
         final or next requires_action result.
       operationId: submitSessionToolOutputs
-      security:
-        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'
@@ -374,8 +358,6 @@ paths:
       summary: Get session tags
       description: Returns the session's tags object.
       operationId: getSessionTags
-      security:
-        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'
@@ -400,8 +382,6 @@ paths:
       summary: Replace session tags
       description: Replaces all tags on the session.
       operationId: replaceSessionTags
-      security:
-        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'
@@ -434,8 +414,6 @@ paths:
       summary: Merge session tags
       description: Merges the provided tags into the session's existing tags.
       operationId: mergeSessionTags
-      security:
-        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'

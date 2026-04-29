@@ -18,6 +18,8 @@ tags:
     description: Manage users
   - name: User Policies
     description: Manage user policies
+security:
+  - bearerAuth: []
 paths:
   /api/v1/users:
     get:
@@ -151,6 +153,7 @@ paths:
       summary: Create the first admin user
       description: Creates the first admin user. Returns 409 if any user already exists.
       operationId: bootstrapUser
+      security: []
       requestBody:
         required: true
         content:
@@ -194,6 +197,7 @@ paths:
       summary: Login user
       description: Authenticates a user and returns a JWT token
       operationId: loginUser
+      security: []
       requestBody:
         required: true
         content:
@@ -237,8 +241,6 @@ paths:
       summary: Get policies attached to a user
       description: Returns the list of policies attached to a user. Requires admin role.
       operationId: getUserPolicies
-      security:
-        - bearerAuth: []
       parameters:
         - name: user_id
           in: path
@@ -276,8 +278,6 @@ paths:
       summary: Attach policies to a user
       description: Replaces the user's policy list with the provided policy IDs. Requires admin role.
       operationId: attachUserPolicies
-      security:
-        - bearerAuth: []
       parameters:
         - name: user_id
           in: path

@@ -16,6 +16,8 @@ servers:
 tags:
   - name: Policies
     description: Manage policies
+security:
+  - bearerAuth: []
 paths:
   /api/v1/policies:
     get:
@@ -24,8 +26,6 @@ paths:
       summary: List all policies
       description: Returns a list of all global policies. Requires admin role.
       operationId: listPolicies
-      security:
-        - bearerAuth: []
       responses:
         '200':
           description: List of policies
@@ -45,8 +45,6 @@ paths:
       summary: Create a policy
       description: Creates a new global policy. Requires admin role.
       operationId: createPolicy
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -88,8 +86,6 @@ paths:
       summary: Get a policy
       description: Returns details of a specific policy. Requires admin role.
       operationId: getPolicy
-      security:
-        - bearerAuth: []
       parameters:
         - name: policy_id
           in: path
@@ -117,8 +113,6 @@ paths:
       summary: Update a policy
       description: Updates an existing global policy. Requires admin role.
       operationId: updatePolicy
-      security:
-        - bearerAuth: []
       parameters:
         - name: policy_id
           in: path
@@ -167,8 +161,6 @@ paths:
       summary: Delete a policy
       description: Deletes a global policy. Requires admin role.
       operationId: deletePolicy
-      security:
-        - bearerAuth: []
       parameters:
         - name: policy_id
           in: path

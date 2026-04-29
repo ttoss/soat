@@ -16,6 +16,8 @@ servers:
 tags:
   - name: Conversations
     description: Manage conversations
+security:
+  - bearerAuth: []
 paths:
   /api/v1/conversations:
     get:

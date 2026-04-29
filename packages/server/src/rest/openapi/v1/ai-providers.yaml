@@ -16,6 +16,8 @@ servers:
 tags:
   - name: AI Providers
     description: Manage AI providers
+security:
+  - bearerAuth: []
 paths:
   /api/v1/ai-providers:
     get:
