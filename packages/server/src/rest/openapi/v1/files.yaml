@@ -16,6 +16,8 @@ servers:
 tags:
   - name: Files
     description: Manage files
+security:
+  - bearerAuth: []
 paths:
   /api/v1/files:
     get:

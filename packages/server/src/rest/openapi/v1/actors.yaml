@@ -16,6 +16,8 @@ servers:
 tags:
   - name: Actors
     description: Manage actors associated with projects
+security:
+  - bearerAuth: []
 paths:
   /api/v1/actors:
     get:
@@ -24,8 +26,6 @@ paths:
       summary: List actors
       description: Returns all actors the caller has access to. If projectId is provided, returns only actors in that project. project keys are scoped to a single project automatically. JWT users without projectId receive actors across all their accessible projects.
       operationId: listActors
-      security:
-        - bearerAuth: []
       parameters:
         - name: project_id
           in: query
@@ -91,8 +91,6 @@ paths:
       summary: Create an actor
       description: Creates a new actor. project keys automatically infer the project from the key's scope; JWT callers must supply projectId.
       operationId: createActor
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -155,8 +153,6 @@ paths:
       summary: Get an actor by ID
       description: Returns an actor by its ID
       operationId: getActor
-      security:
-        - bearerAuth: []
       parameters:
         - name: actor_id
           in: path
@@ -196,8 +192,6 @@ paths:
       summary: Delete an actor
       description: Deletes an actor by its ID
       operationId: deleteActor
-      security:
-        - bearerAuth: []
       parameters:
         - name: actor_id
           in: path
@@ -233,8 +227,6 @@ paths:
       summary: Update an actor
       description: Updates an actor's properties
       operationId: updateActor
-      security:
-        - bearerAuth: []
       parameters:
         - name: actor_id
           in: path
@@ -296,8 +288,6 @@ paths:
       summary: Get actor tags
       description: Returns all tags attached to the actor
       operationId: getActorTags
-      security:
-        - bearerAuth: []
       parameters:
         - name: actor_id
           in: path
@@ -339,8 +329,6 @@ paths:
       summary: Replace actor tags
       description: Replaces all tags on the actor with the provided tags (not merged)
       operationId: replaceActorTags
-      security:
-        - bearerAuth: []
       parameters:
         - name: actor_id
           in: path
@@ -393,8 +381,6 @@ paths:
       summary: Merge actor tags
       description: Merges provided tags with existing tags (existing tags are preserved unless overridden)
       operationId: mergeActorTags
-      security:
-        - bearerAuth: []
       parameters:
         - name: actor_id
           in: path

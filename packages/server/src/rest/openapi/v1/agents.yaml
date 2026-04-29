@@ -23,6 +23,8 @@ tags:
     description: Manage agent tools
   - name: Agent Traces
     description: View agent traces
+security:
+  - bearerAuth: []
 
 paths:
   /api/v1/agents/tools:
@@ -32,8 +34,6 @@ paths:
       summary: Create an agent tool
       description: Creates a new agent tool in the project.
       operationId: createAgentTool
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -106,8 +106,6 @@ paths:
       summary: List agent tools
       description: Returns all agent tools in the project.
       operationId: listAgentTools
-      security:
-        - bearerAuth: []
       parameters:
         - name: project_id
           in: query
@@ -144,8 +142,6 @@ paths:
       summary: Get an agent tool
       description: Returns a single agent tool by ID.
       operationId: getAgentTool
-      security:
-        - bearerAuth: []
       parameters:
         - name: tool_id
           in: path
@@ -183,8 +179,6 @@ paths:
       summary: Update an agent tool
       description: Updates an existing agent tool.
       operationId: updateAgentTool
-      security:
-        - bearerAuth: []
       parameters:
         - name: tool_id
           in: path
@@ -228,8 +222,6 @@ paths:
       summary: Delete an agent tool
       description: Deletes an agent tool by ID.
       operationId: deleteAgentTool
-      security:
-        - bearerAuth: []
       parameters:
         - name: tool_id
           in: path
@@ -265,8 +257,6 @@ paths:
       summary: List agent traces
       description: Returns all traces for the project.
       operationId: listAgentTraces
-      security:
-        - bearerAuth: []
       parameters:
         - name: project_id
           in: query
@@ -326,8 +316,6 @@ paths:
       summary: Get a trace
       description: Returns a single trace by ID.
       operationId: getAgentTrace
-      security:
-        - bearerAuth: []
       parameters:
         - name: trace_id
           in: path
@@ -367,8 +355,6 @@ paths:
       summary: Create an agent
       description: Creates a new agent bound to an AI provider.
       operationId: createAgent
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -428,8 +414,6 @@ paths:
       summary: List agents
       description: Returns all agents in the project.
       operationId: listAgents
-      security:
-        - bearerAuth: []
       parameters:
         - name: project_id
           in: query
@@ -466,8 +450,6 @@ paths:
       summary: Get an agent
       description: Returns a single agent by ID.
       operationId: getAgent
-      security:
-        - bearerAuth: []
       parameters:
         - name: agent_id
           in: path
@@ -505,8 +487,6 @@ paths:
       summary: Update an agent
       description: Updates an existing agent.
       operationId: updateAgent
-      security:
-        - bearerAuth: []
       parameters:
         - name: agent_id
           in: path
@@ -550,8 +530,6 @@ paths:
       summary: Delete an agent
       description: Deletes an agent by ID.
       operationId: deleteAgent
-      security:
-        - bearerAuth: []
       parameters:
         - name: agent_id
           in: path
@@ -590,8 +568,6 @@ paths:
         loop. Supports streaming via `stream: true`. Client tools pause the
         generation and return `requires_action`.
       operationId: createAgentGeneration
-      security:
-        - bearerAuth: []
       parameters:
         - name: agent_id
           in: path
@@ -663,8 +639,6 @@ paths:
         Resumes a generation that was paused due to client tool calls.
         Provide tool outputs for each pending tool call.
       operationId: submitAgentToolOutputs
-      security:
-        - bearerAuth: []
       parameters:
         - name: agent_id
           in: path

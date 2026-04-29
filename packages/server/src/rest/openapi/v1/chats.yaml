@@ -21,6 +21,9 @@ tags:
   - name: Chats
     description: Manage chats
 
+security:
+  - bearerAuth: []
+
 paths:
   /api/v1/chats:
     post:
@@ -29,8 +32,6 @@ paths:
       summary: Create a chat
       description: Creates a new chat resource bound to an AI provider.
       operationId: createChat
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -86,8 +87,6 @@ paths:
       summary: List chats
       description: Returns all chats in the project.
       operationId: listChats
-      security:
-        - bearerAuth: []
       parameters:
         - name: project_id
           in: query
@@ -124,8 +123,6 @@ paths:
       summary: Get a chat
       description: Returns a single chat by ID.
       operationId: getChat
-      security:
-        - bearerAuth: []
       parameters:
         - name: chat_id
           in: path
@@ -157,8 +154,6 @@ paths:
       summary: Delete a chat
       description: Deletes a chat by ID.
       operationId: deleteChat
-      security:
-        - bearerAuth: []
       parameters:
         - name: chat_id
           in: path
@@ -192,8 +187,6 @@ paths:
         overrides the chat's stored system message for this call only.
         Messages may use `documentId` instead of `content`.
       operationId: createChatCompletionForChat
-      security:
-        - bearerAuth: []
       parameters:
         - name: chat_id
           in: path
@@ -268,8 +261,6 @@ paths:
         Vercel AI SDK provider. Falls back to Ollama when `aiProviderId` is
         omitted.
       operationId: createChatCompletion
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
