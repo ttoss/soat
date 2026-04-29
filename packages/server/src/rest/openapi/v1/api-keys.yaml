@@ -20,6 +20,29 @@ security:
   - bearerAuth: []
 paths:
   /api/v1/api-keys:
+    get:
+      tags:
+        - API Keys
+      summary: List API keys
+      description: >
+        Lists API keys accessible to the caller.
+        - JWT admin: returns all API keys.
+        - JWT regular user: returns only the user's own API keys.
+        - API key scoped to a project: returns only API keys scoped to that project.
+      operationId: listApiKeys
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApiKeyRecord'
+        '401':
+          description: Unauthorized
     post:
       tags:
         - API Keys

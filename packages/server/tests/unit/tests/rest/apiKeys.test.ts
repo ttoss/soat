@@ -343,6 +343,110 @@ describe('API Keys', () => {
     });
   });
 
+  describe('GET /api/v1/api-keys', () => {
+    let aliceKeyId: string;
+    let bobKeyId: string;
+    let scopedProjectId: string;
+    let scopedKeyId: string;
+    let rawScopedKey: string;
+
+    beforeAll(async () => {
+      const aliceKeyRes = await authenticatedTestClient(aliceToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Alice List Key' });
+
+      aliceKeyId = aliceKeyRes.body.id;
+
+      const bobKeyRes = await authenticatedTestClient(bobToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Bob List Key' });
+
+      bobKeyId = bobKeyRes.body.id;
+
+      const projRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'List Keys Project' });
+
+      scopedProjectId = projRes.body.id;
+
+      const scopedKeyRes = await authenticatedTestClient(aliceToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Scoped List Key', project_id: scopedProjectId });
+
+      scopedKeyId = scopedKeyRes.body.id;
+      rawScopedKey = scopedKeyRes.body.key;
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient.get('/api/v1/api-keys');
+
+      expect(response.status).toBe(401);
+    });
+
+    test('admin can list all API keys', async () => {
+      const response =
+        await authenticatedTestClient(adminToken).get('/api/v1/api-keys');
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      const ids = response.body.map((k: { id: string }) => {
+        return k.id;
+      });
+      expect(ids).toContain(aliceKeyId);
+      expect(ids).toContain(bobKeyId);
+      expect(ids).toContain(scopedKeyId);
+    });
+
+    test('regular user sees only their own API keys', async () => {
+      const response =
+        await authenticatedTestClient(aliceToken).get('/api/v1/api-keys');
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      const ids = response.body.map((k: { id: string }) => {
+        return k.id;
+      });
+      expect(ids).toContain(aliceKeyId);
+      expect(ids).toContain(scopedKeyId);
+      expect(ids).not.toContain(bobKeyId);
+    });
+
+    test('API key scoped to a project only sees keys scoped to that project', async () => {
+      const response = await authenticatedTestClient(rawScopedKey).get(
+        '/api/v1/api-keys'
+      );
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      const ids = response.body.map((k: { id: string }) => {
+        return k.id;
+      });
+      expect(ids).toContain(scopedKeyId);
+      expect(ids).not.toContain(aliceKeyId);
+      expect(ids).not.toContain(bobKeyId);
+    });
+
+    test('response includes expected fields', async () => {
+      const response =
+        await authenticatedTestClient(aliceToken).get('/api/v1/api-keys');
+
+      expect(response.status).toBe(200);
+      const key = response.body.find((k: { id: string }) => {
+        return k.id === scopedKeyId;
+      });
+      expect(key).toBeDefined();
+      expect(key.id).toMatch(/^key_/);
+      expect(key.name).toBe('Scoped List Key');
+      expect(key.key_prefix).toBeDefined();
+      expect(key.user_id).toBeDefined();
+      expect(key.project_id).toBe(scopedProjectId);
+      expect(Array.isArray(key.policy_ids)).toBe(true);
+      expect(key.created_at).toBeDefined();
+      expect(key.updated_at).toBeDefined();
+      expect(key.key).toBeUndefined();
+    });
+  });
+
   describe('API key project scoping', () => {
     let projectAId: string;
     let rawKey: string;

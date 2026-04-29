@@ -84,6 +84,7 @@ Store the `key` value securely — it is never returned again.
 
 | Action         | Permission     | REST Endpoint                 | MCP Tool         |
 | -------------- | -------------- | ----------------------------- | ---------------- |
+| List API keys  | Authenticated  | `GET /api/v1/api-keys`        | `list-api-keys`  |
 | Create API key | Authenticated  | `POST /api/v1/api-keys`       | `create-api-key` |
 | Get API key    | Owner or admin | `GET /api/v1/api-keys/:id`    | `get-api-key`    |
 | Update API key | Owner or admin | `PUT /api/v1/api-keys/:id`    | `update-api-key` |
