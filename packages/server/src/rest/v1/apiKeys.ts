@@ -5,6 +5,7 @@ import {
   createApiKey,
   deleteApiKey,
   getApiKey,
+  listApiKeys,
   updateApiKey,
 } from 'src/lib/apiKeys';
 
@@ -58,6 +59,29 @@ const resolvePolicyIds = async (args: {
     }),
   };
 };
+
+apiKeysRouter.get('/api-keys', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  if (ctx.authUser.role === 'admin') {
+    ctx.body = await listApiKeys({});
+    return;
+  }
+
+  if (ctx.authUser.apiKeyProjectId !== undefined) {
+    ctx.body = await listApiKeys({
+      userId: ctx.authUser.id,
+      projectId: ctx.authUser.apiKeyProjectId,
+    });
+    return;
+  }
+
+  ctx.body = await listApiKeys({ userId: ctx.authUser.id });
+});
 
 apiKeysRouter.post('/api-keys', async (ctx: Context) => {
   if (!ctx.authUser) {
