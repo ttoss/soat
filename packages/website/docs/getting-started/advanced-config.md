@@ -22,9 +22,12 @@ The database must have the [pgvector](https://github.com/pgvector/pgvector) exte
 
 ### Server
 
-| Variable | Default | Description                     |
-| -------- | ------- | ------------------------------- |
-| `PORT`   | `5047`  | HTTP port the server listens on |
+| Variable                  | Default | Description                                                                |
+| ------------------------- | ------- | -------------------------------------------------------------------------- |
+| `PORT`                    | `5047`  | HTTP port the server listens on                                            |
+| `SOAT_ERROR_LOGS_ENABLED` | `true`  | Enables request error logs from the global error middleware (`true/false`) |
+
+Set `SOAT_ERROR_LOGS_ENABLED=false` if you want to suppress request error logs (for example, when log collection is handled externally).
 
 ### Admin Bootstrap
 
@@ -87,6 +90,7 @@ services:
     environment:
       SOAT_ADMIN_USERNAME: admin
       SOAT_ADMIN_PASSWORD: change-me
+      SOAT_ERROR_LOGS_ENABLED: 'true'
       DATABASE_HOST: <postgres-host>
       DATABASE_PORT: '5432'
       DATABASE_NAME: soat_prod

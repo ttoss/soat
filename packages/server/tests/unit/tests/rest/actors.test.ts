@@ -1,3 +1,5 @@
+import * as actorsLib from 'src/lib/actors';
+
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Actors', () => {
@@ -199,6 +201,38 @@ describe('Actors', () => {
       );
 
       expect(response.status).toBe(401);
+    });
+
+    test('logs and returns 500 when router has an unhandled error', async () => {
+      const loggerSpy = jest.spyOn(console, 'error').mockImplementation(() => {
+        return undefined;
+      });
+
+      const listActorsSpy = jest
+        .spyOn(actorsLib, 'listActors')
+        .mockRejectedValueOnce(new Error('forced actors list failure'));
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/actors?project_id=${projectId}`
+      );
+
+      expect(response.status).toBe(500);
+
+      const requestFailedCall = loggerSpy.mock.calls.find((call) => {
+        return call[0] === 'Request failed:';
+      }) as [string, Record<string, unknown>] | undefined;
+
+      expect(requestFailedCall).toBeDefined();
+      expect(requestFailedCall?.[1]).toEqual(
+        expect.objectContaining({
+          method: 'GET',
+          path: '/api/v1/actors',
+          status: 500,
+        })
+      );
+
+      listActorsSpy.mockRestore();
+      loggerSpy.mockRestore();
     });
   });
 
