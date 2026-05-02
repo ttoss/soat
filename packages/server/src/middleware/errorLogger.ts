@@ -1,3 +1,4 @@
+import { AppError } from '../AppError';
 import type { Context } from '../Context';
 
 type Next = () => Promise<void>;
@@ -37,18 +38,26 @@ const errorLoggerMiddleware = async (ctx: Context, next: Next) => {
   try {
     await next();
   } catch (error) {
+    const status = getErrorStatus({ error });
+
     if (isErrorLoggingEnabled()) {
+      const causeToLog =
+        error instanceof AppError ? (error.cause ?? error) : error;
       // eslint-disable-next-line no-console
       console.error('Request failed:', {
         method: ctx.method,
         path: ctx.path,
-        status: getErrorStatus({ error }),
+        status,
         userAgent: ctx.get('user-agent') || undefined,
-        error: toErrorText({ error }),
+        error: toErrorText({ error: causeToLog }),
       });
     }
 
-    throw error;
+    ctx.status = status;
+    ctx.body = {
+      error:
+        error instanceof AppError ? error.message : 'Internal Server Error',
+    };
   }
 };
 

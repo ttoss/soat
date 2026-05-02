@@ -1,4 +1,5 @@
 import { Router } from '@ttoss/http-server';
+import { AppError } from 'src/AppError';
 import type { Context } from 'src/Context';
 import { generateConversationMessage } from 'src/lib/conversationGeneration';
 import {
@@ -145,23 +146,30 @@ conversationSubResourcesRouter.post(
       return;
     }
 
-    const message = await addConversationMessage({
-      conversationId: ctx.params.conversation_id,
-      message: body.message,
-      role: body.role,
-      actorId: body.actorId ?? null,
-      position: body.position,
-      metadata: body.metadata,
-    });
+    try {
+      const message = await addConversationMessage({
+        conversationId: ctx.params.conversation_id,
+        message: body.message,
+        role: body.role,
+        actorId: body.actorId ?? null,
+        position: body.position,
+        metadata: body.metadata,
+      });
 
-    if (!message) {
-      ctx.status = 404;
-      ctx.body = { error: 'Conversation or actor not found' };
-      return;
+      if (!message) {
+        ctx.status = 404;
+        ctx.body = { error: 'Conversation or actor not found' };
+        return;
+      }
+
+      ctx.status = 201;
+      ctx.body = message;
+    } catch (error) {
+      throw new AppError({
+        message: 'Error adding conversation message',
+        cause: error,
+      });
     }
-
-    ctx.status = 201;
-    ctx.body = message;
   }
 );
 
@@ -415,19 +423,26 @@ conversationSubResourcesRouter.post(
       return;
     }
 
-    const result = await generateConversationMessage({
-      conversationId: ctx.params.conversation_id,
-      agentId: body.agentId,
-      model: body.model,
-      toolContext: body.toolContext,
-    });
+    try {
+      const result = await generateConversationMessage({
+        conversationId: ctx.params.conversation_id,
+        agentId: body.agentId,
+        model: body.model,
+        toolContext: body.toolContext,
+      });
 
-    if (!handleGenerateResult(ctx, result)) {
-      return;
+      if (!handleGenerateResult(ctx, result)) {
+        return;
+      }
+
+      ctx.status = 200;
+      ctx.body = result;
+    } catch (error) {
+      throw new AppError({
+        message: 'Error generating conversation response',
+        cause: error,
+      });
     }
-
-    ctx.status = 200;
-    ctx.body = result;
   }
 );
 

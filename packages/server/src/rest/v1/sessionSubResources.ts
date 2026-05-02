@@ -1,4 +1,5 @@
 import { Router } from '@ttoss/http-server';
+import { AppError } from 'src/AppError';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import {
@@ -96,21 +97,28 @@ sessionSubResourcesRouter.post(
       return;
     }
 
-    const result = await addSessionMessage({
-      agentId: agent.id as number,
-      sessionId: ctx.params.session_id,
-      message: body.message,
-      toolContext: body.toolContext,
-    });
+    try {
+      const result = await addSessionMessage({
+        agentId: agent.id as number,
+        sessionId: ctx.params.session_id,
+        message: body.message,
+        toolContext: body.toolContext,
+      });
 
-    if (result === 'session_not_found') {
-      ctx.status = 404;
-      ctx.body = { error: 'Session not found' };
-      return;
+      if (result === 'session_not_found') {
+        ctx.status = 404;
+        ctx.body = { error: 'Session not found' };
+        return;
+      }
+
+      ctx.status = 201;
+      ctx.body = result;
+    } catch (error) {
+      throw new AppError({
+        message: 'Error adding session message',
+        cause: error,
+      });
     }
-
-    ctx.status = 201;
-    ctx.body = result;
   }
 );
 
@@ -147,32 +155,41 @@ sessionSubResourcesRouter.post(
       return;
     }
 
-    const result = await generateSessionResponse({
-      agentId: agent.id as number,
-      sessionId: ctx.params.session_id,
-      model: body.model,
-      toolContext: body.toolContext,
-    });
+    try {
+      const result = await generateSessionResponse({
+        agentId: agent.id as number,
+        sessionId: ctx.params.session_id,
+        model: body.model,
+        toolContext: body.toolContext,
+      });
 
-    if (result === 'session_not_found') {
-      ctx.status = 404;
-      ctx.body = { error: 'Session not found' };
-      return;
+      if (result === 'session_not_found') {
+        ctx.status = 404;
+        ctx.body = { error: 'Session not found' };
+        return;
+      }
+
+      if (result === 'already_generating') {
+        ctx.status = 409;
+        ctx.body = { error: 'Generation already in progress' };
+        return;
+      }
+
+      if (typeof result === 'string') {
+        throw new AppError({
+          message: 'Error generating session response',
+          cause: new Error(`Unexpected generation result: ${result}`),
+        });
+      }
+
+      ctx.body = result;
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError({
+        message: 'Error generating session response',
+        cause: error,
+      });
     }
-
-    if (result === 'already_generating') {
-      ctx.status = 409;
-      ctx.body = { error: 'Generation already in progress' };
-      return;
-    }
-
-    if (typeof result === 'string') {
-      ctx.status = 500;
-      ctx.body = { error: result };
-      return;
-    }
-
-    ctx.body = result;
   }
 );
 

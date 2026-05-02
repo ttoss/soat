@@ -1,4 +1,5 @@
 import { Router } from '@ttoss/http-server';
+import { AppError } from 'src/AppError';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import {
@@ -215,18 +216,21 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     return;
   }
 
-  const doc = await createDocument({
-    projectId: project.id,
-    content: body.content,
-    path: body.path,
-    filename: body.filename,
-    title: body.title,
-    metadata: body.metadata,
-    tags: body.tags,
-  });
-
-  ctx.status = 201;
-  ctx.body = doc;
+  try {
+    const doc = await createDocument({
+      projectId: project.id,
+      content: body.content,
+      path: body.path,
+      filename: body.filename,
+      title: body.title,
+      metadata: body.metadata,
+      tags: body.tags,
+    });
+    ctx.status = 201;
+    ctx.body = doc;
+  } catch (error) {
+    throw new AppError({ message: 'Error creating document', cause: error });
+  }
 });
 
 documentsRouter.delete('/documents/:document_id', async (ctx: Context) => {
@@ -283,16 +287,19 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     tags?: Record<string, string>;
   };
 
-  const updated = await updateDocument({
-    id: ctx.params.document_id,
-    content: body.content,
-    title: body.title,
-    path: body.path,
-    metadata: body.metadata,
-    tags: body.tags,
-  });
-
-  ctx.body = updated;
+  try {
+    const updated = await updateDocument({
+      id: ctx.params.document_id,
+      content: body.content,
+      title: body.title,
+      path: body.path,
+      metadata: body.metadata,
+      tags: body.tags,
+    });
+    ctx.body = updated;
+  } catch (error) {
+    throw new AppError({ message: 'Error updating document', cause: error });
+  }
 });
 
 documentsRouter.post('/documents/search', async (ctx: Context) => {
@@ -347,19 +354,22 @@ documentsRouter.post('/documents/search', async (ctx: Context) => {
     policyWhere = compiled.where;
   }
 
-  const results = await resolveDocumentSearch({
-    projectIds,
-    policyWhere,
-    config: {
-      search: body.search,
-      minScore: body.minScore,
-      limit: body.limit,
-      paths: body.paths,
-      documentIds: body.documentIds,
-    },
-  });
-
-  ctx.body = { documents: results };
+  try {
+    const results = await resolveDocumentSearch({
+      projectIds,
+      policyWhere,
+      config: {
+        search: body.search,
+        minScore: body.minScore,
+        limit: body.limit,
+        paths: body.paths,
+        documentIds: body.documentIds,
+      },
+    });
+    ctx.body = { documents: results };
+  } catch (error) {
+    throw new AppError({ message: 'Error searching documents', cause: error });
+  }
 });
 
 documentsRouter.get('/documents/:document_id/tags', async (ctx: Context) => {

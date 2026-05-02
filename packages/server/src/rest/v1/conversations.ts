@@ -1,4 +1,5 @@
 import { Router } from '@ttoss/http-server';
+import { AppError } from 'src/AppError';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import {
@@ -163,15 +164,21 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
     resolvedActorId = actor.id;
   }
 
-  const conversation = await createConversation({
-    projectId: project.id,
-    status: body.status,
-    name: body.name ?? null,
-    actorId: resolvedActorId,
-  });
-
-  ctx.status = 201;
-  ctx.body = conversation;
+  try {
+    const conversation = await createConversation({
+      projectId: project.id,
+      status: body.status,
+      name: body.name ?? null,
+      actorId: resolvedActorId,
+    });
+    ctx.status = 201;
+    ctx.body = conversation;
+  } catch (error) {
+    throw new AppError({
+      message: 'Error creating conversation',
+      cause: error,
+    });
+  }
 });
 
 conversationsRouter.patch(
