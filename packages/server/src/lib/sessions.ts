@@ -261,9 +261,15 @@ export const deleteSession = async (args: {
       where: { id: session.conversationId },
       transaction: t,
     });
-    // Delete both actors
+    // Always delete the agent actor (it is created exclusively for this session).
+    // Only delete the user actor when the session owns it (i.e. it was created
+    // by the session, not provided as a pre-existing actor by the caller).
+    const actorIdsToDelete: number[] = [session.agentActorId];
+    if (session.ownsUserActor) {
+      actorIdsToDelete.push(session.userActorId);
+    }
     await db.Actor.destroy({
-      where: { id: [session.agentActorId, session.userActorId] },
+      where: { id: actorIdsToDelete },
       transaction: t,
     });
   });

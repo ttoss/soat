@@ -50,6 +50,7 @@ export const createSessionTransaction = async (args: {
       conversationId: conversation.id,
       agentActorId: agentActor.id,
       userActorId,
+      ownsUserActor: !args.existingUserActorId,
       status: 'open',
       name: args.name ?? null,
       autoGenerate: args.autoGenerate ?? false,

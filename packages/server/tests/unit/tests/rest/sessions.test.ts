@@ -1023,4 +1023,70 @@ describe('Sessions', () => {
       expect(response.body.error).toBeDefined();
     });
   });
+
+  // ── Session with pre-existing actor (bug regression) ─────────────────────
+
+  describe('Session created with pre-existing actor_id', () => {
+    let preExistingActorId: string;
+    let sessionWithActorId: string;
+
+    beforeAll(async () => {
+      // Create a human actor explicitly (adminToken has all permissions)
+      const actorRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'Pedro', type: 'human' });
+      expect(actorRes.status).toBe(201);
+      preExistingActorId = actorRes.body.id;
+
+      // Create a session using the pre-existing actor
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ actor_id: preExistingActorId, auto_generate: false });
+      expect(sessionRes.status).toBe(201);
+      sessionWithActorId = sessionRes.body.id;
+      expect(sessionRes.body.actor_id).toBe(preExistingActorId);
+    });
+
+    test('adding a message to a session with pre-existing actor returns 201', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/sessions/${sessionWithActorId}/messages`
+        )
+        .send({ message: 'olá, tudo bem?' });
+
+      expect(response.status).toBe(201);
+      expect(response.body.role).toBe('user');
+      expect(response.body.content).toBe('olá, tudo bem?');
+    });
+
+    test('delete session with pre-existing actor does not delete the actor', async () => {
+      // Create a second session reusing the same actor to verify it is not
+      // deleted when the first session is deleted.
+      const secondSessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ actor_id: preExistingActorId });
+      expect(secondSessionRes.status).toBe(201);
+      const secondSessionId = secondSessionRes.body.id;
+
+      // Deleting the first session must not delete the pre-existing actor
+      // (which is still referenced by the second session).
+      const deleteRes = await authenticatedTestClient(userToken).delete(
+        `/api/v1/agents/${agentId}/sessions/${sessionWithActorId}`
+      );
+      expect(deleteRes.status).toBe(204);
+
+      // Second session must still be usable — the actor was not deleted.
+      const msgRes = await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/sessions/${secondSessionId}/messages`
+        )
+        .send({ message: 'still works?' });
+      expect(msgRes.status).toBe(201);
+
+      // Clean up the second session
+      await authenticatedTestClient(userToken).delete(
+        `/api/v1/agents/${agentId}/sessions/${secondSessionId}`
+      );
+    });
+  });
 });

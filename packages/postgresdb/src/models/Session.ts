@@ -92,6 +92,14 @@ export class Session extends Model {
   )
   declare userActor: Actor;
 
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: true,
+    field: 'owns_user_actor',
+  })
+  declare ownsUserActor: boolean;
+
   @Column({ defaultValue: 'open' })
   declare status: string;
 
