@@ -90,4 +90,4 @@ VOLUME ["/data/files"]
 
 EXPOSE 5047
 
-CMD ["node", "packages/server/dist/esm/server.js"]
+CMD ["node", "--enable-source-maps", "packages/server/dist/esm/server.js"]

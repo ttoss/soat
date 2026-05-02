@@ -1,4 +1,5 @@
 import { App, Router } from '@ttoss/http-server';
+import { APICallError } from 'ai';
 import { AppError } from 'src/AppError';
 import { errorLoggerMiddleware } from 'src/middleware/errorLogger';
 import request from 'supertest';
@@ -120,6 +121,54 @@ describe('errorLogger middleware', () => {
       'Request failed:',
       expect.objectContaining({
         error: expect.stringContaining('DB connection failed'),
+      })
+    );
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  test('logs APICallError fields (url, statusCode, responseBody) when cause is APICallError', async () => {
+    delete process.env.SOAT_ERROR_LOGS_ENABLED;
+
+    const app = new App();
+    const router = new Router();
+
+    app.use(errorLoggerMiddleware);
+
+    const apiCallError = new APICallError({
+      message: 'Upstream AI failure',
+      url: 'https://api.openai.com/v1/chat/completions',
+      statusCode: 429,
+      responseBody: '{"error":"rate_limit_exceeded"}',
+      requestBodyValues: {},
+      isRetryable: false,
+    });
+
+    router.get('/boom', async () => {
+      throw new AppError({
+        message: 'Error generating response',
+        cause: apiCallError,
+      });
+    });
+
+    app.use(router.routes());
+
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => {
+        return undefined;
+      });
+
+    const response = await request(app.callback()).get('/boom');
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ error: 'Error generating response' });
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Request failed:',
+      expect.objectContaining({
+        url: 'https://api.openai.com/v1/chat/completions',
+        statusCode: 429,
+        responseBody: '{"error":"rate_limit_exceeded"}',
       })
     );
 

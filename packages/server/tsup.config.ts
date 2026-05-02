@@ -26,5 +26,6 @@ export const tsup = {
     entry: ['src/server.ts'],
   }),
   format: ['esm'],
+  sourcemap: true,
   onSuccess: copyOpenApiFiles,
 };

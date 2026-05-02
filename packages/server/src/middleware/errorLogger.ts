@@ -1,3 +1,5 @@
+import { APICallError } from 'ai';
+
 import { AppError } from '../AppError';
 import type { Context } from '../Context';
 
@@ -19,6 +21,20 @@ const toErrorText = (args: { error: unknown }) => {
   }
 
   return String(args.error);
+};
+
+const toApiCallErrorDetails = (
+  error: unknown
+): Record<string, unknown> | undefined => {
+  if (error instanceof APICallError) {
+    return {
+      url: error.url,
+      statusCode: error.statusCode,
+      responseBody: error.responseBody,
+    };
+  }
+
+  return undefined;
 };
 
 const getErrorStatus = (args: { error: unknown }) => {
@@ -50,6 +66,7 @@ const errorLoggerMiddleware = async (ctx: Context, next: Next) => {
         status,
         userAgent: ctx.get('user-agent') || undefined,
         error: toErrorText({ error: causeToLog }),
+        ...toApiCallErrorDetails(causeToLog),
       });
     }
 
