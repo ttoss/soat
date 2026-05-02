@@ -22,6 +22,36 @@ registerResourceFieldMap({
   tagsColumn: { column: 'tags' },
 });
 
+/**
+ * Detects a pgvector dimension mismatch error, which occurs when the
+ * embedding vector size differs from the DB column's declared dimensions.
+ *
+ * Pattern matches the error message format used by pgvector (tested against
+ * pgvector 0.8.x): "expected N dimensions, not M"
+ * See: https://github.com/pgvector/pgvector
+ */
+const isEmbeddingDimensionError = (error: unknown): boolean => {
+  return (
+    error instanceof Error && /expected \d+ dimensions, not \d+/i.test(error.message)
+  );
+};
+
+/**
+ * Throws a safe 422 error with an actionable message for embedding dimension
+ * mismatches. The `expose: true` flag tells the error middleware that this
+ * message is safe to return to the client.
+ */
+const throwEmbeddingDimensionMismatch = (): never => {
+  const err = Object.assign(
+    new Error(
+      'Embedding dimension mismatch: EMBEDDING_DIMENSIONS does not match the ' +
+        'database column. See the documentation for migration steps.'
+    ),
+    { status: 422, expose: true }
+  );
+  throw err;
+};
+
 const getStorageDir = () => {
   const dir = process.env.FILES_STORAGE_DIR;
   if (!dir) {
@@ -209,7 +239,12 @@ const updateDocumentContent = async (args: {
       size: Buffer.byteLength(args.content, 'utf-8'),
     });
     const embedding = await getEmbedding({ text: args.content });
-    await args.doc.update({ embedding });
+    try {
+      await args.doc.update({ embedding });
+    } catch (error) {
+      if (isEmbeddingDimensionError(error)) throwEmbeddingDimensionMismatch();
+      throw error;
+    }
   }
 };
 
@@ -257,13 +292,20 @@ export const createDocument = async (args: {
 
   const embedding = await getEmbedding({ text: args.content });
 
-  const doc = await db.Document.create({
-    fileId: file.id,
-    embedding,
-    title: args.title ?? null,
-    metadata: args.metadata ? JSON.stringify(args.metadata) : null,
-    tags: args.tags ?? null,
-  });
+  const doc = await (async () => {
+    try {
+      return await db.Document.create({
+        fileId: file.id,
+        embedding,
+        title: args.title ?? null,
+        metadata: args.metadata ? JSON.stringify(args.metadata) : null,
+        tags: args.tags ?? null,
+      });
+    } catch (error) {
+      if (isEmbeddingDimensionError(error)) throwEmbeddingDimensionMismatch();
+      throw error;
+    }
+  })();
 
   const created = await fetchDocumentByIdWithContext(doc.id as number);
 

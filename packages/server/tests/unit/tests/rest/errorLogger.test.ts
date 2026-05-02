@@ -39,7 +39,7 @@ describe('errorLogger middleware', () => {
       .set('User-Agent', 'jest-test-agent');
 
     expect(response.status).toBe(500);
-    expect(response.body).toEqual({ error: 'boom' });
+    expect(response.body).toEqual({ error: 'Internal Server Error' });
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       'Request failed:',
       expect.objectContaining({
@@ -78,11 +78,43 @@ describe('errorLogger middleware', () => {
       .set('User-Agent', 'jest-test-agent');
 
     expect(response.status).toBe(500);
-    expect(response.body).toEqual({ error: 'boom' });
+    expect(response.body).toEqual({ error: 'Internal Server Error' });
     expect(consoleErrorSpy).not.toHaveBeenCalledWith(
       'Request failed:',
       expect.any(Object)
     );
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  test('surfaces message for errors marked with expose: true', async () => {
+    delete process.env.SOAT_ERROR_LOGS_ENABLED;
+
+    const app = new App();
+    const router = new Router();
+
+    app.use(errorLoggerMiddleware);
+
+    router.get('/safe-error', async () => {
+      const err = Object.assign(new Error('safe message for client'), {
+        status: 422,
+        expose: true,
+      });
+      throw err;
+    });
+
+    app.use(router.routes());
+
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => {
+        return undefined;
+      });
+
+    const response = await request(app.callback()).get('/safe-error');
+
+    expect(response.status).toBe(422);
+    expect(response.body).toEqual({ error: 'safe message for client' });
 
     consoleErrorSpy.mockRestore();
   });
