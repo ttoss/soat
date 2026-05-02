@@ -96,21 +96,28 @@ sessionSubResourcesRouter.post(
       return;
     }
 
-    const result = await addSessionMessage({
-      agentId: agent.id as number,
-      sessionId: ctx.params.session_id,
-      message: body.message,
-      toolContext: body.toolContext,
-    });
+    try {
+      const result = await addSessionMessage({
+        agentId: agent.id as number,
+        sessionId: ctx.params.session_id,
+        message: body.message,
+        toolContext: body.toolContext,
+      });
 
-    if (result === 'session_not_found') {
-      ctx.status = 404;
-      ctx.body = { error: 'Session not found' };
-      return;
+      if (result === 'session_not_found') {
+        ctx.status = 404;
+        ctx.body = { error: 'Session not found' };
+        return;
+      }
+
+      ctx.status = 201;
+      ctx.body = result;
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Error adding session message:', error);
+      ctx.status = 500;
+      ctx.body = { error: 'Error adding session message' };
     }
-
-    ctx.status = 201;
-    ctx.body = result;
   }
 );
 
@@ -147,32 +154,41 @@ sessionSubResourcesRouter.post(
       return;
     }
 
-    const result = await generateSessionResponse({
-      agentId: agent.id as number,
-      sessionId: ctx.params.session_id,
-      model: body.model,
-      toolContext: body.toolContext,
-    });
+    try {
+      const result = await generateSessionResponse({
+        agentId: agent.id as number,
+        sessionId: ctx.params.session_id,
+        model: body.model,
+        toolContext: body.toolContext,
+      });
 
-    if (result === 'session_not_found') {
-      ctx.status = 404;
-      ctx.body = { error: 'Session not found' };
-      return;
-    }
+      if (result === 'session_not_found') {
+        ctx.status = 404;
+        ctx.body = { error: 'Session not found' };
+        return;
+      }
 
-    if (result === 'already_generating') {
-      ctx.status = 409;
-      ctx.body = { error: 'Generation already in progress' };
-      return;
-    }
+      if (result === 'already_generating') {
+        ctx.status = 409;
+        ctx.body = { error: 'Generation already in progress' };
+        return;
+      }
 
-    if (typeof result === 'string') {
+      if (typeof result === 'string') {
+        // eslint-disable-next-line no-console
+        console.error('Error generating session response:', result);
+        ctx.status = 500;
+        ctx.body = { error: 'Error generating session response' };
+        return;
+      }
+
+      ctx.body = result;
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Error generating session response:', error);
       ctx.status = 500;
-      ctx.body = { error: result };
-      return;
+      ctx.body = { error: 'Error generating session response' };
     }
-
-    ctx.body = result;
   }
 );
 

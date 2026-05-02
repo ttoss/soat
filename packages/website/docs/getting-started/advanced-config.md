@@ -113,6 +113,61 @@ volumes:
 Replace every `change-me` placeholder and the `SECRETS_ENCRYPTION_KEY` before deploying. Use `openssl rand -hex 32` to generate a secure key.
 :::
 
+## Linux: Connecting to Host Services from Docker
+
+When running SOAT inside Docker on Linux and connecting to services on the host machine (such as Ollama or PostgreSQL), you need additional configuration. Unlike Docker Desktop on macOS and Windows, Docker on Linux does **not** automatically resolve `host.docker.internal`.
+
+### Step 1: Add `extra_hosts` to your Docker Compose file
+
+Add the following to the SOAT server service so that `host.docker.internal` resolves to the host machine's gateway IP:
+
+```yaml
+services:
+  server:
+    image: ttoss/soat:latest
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      # ... other environment variables
+```
+
+### Step 2: Configure Ollama to listen on all interfaces
+
+By default, Ollama binds only to `127.0.0.1`, which is unreachable from inside a Docker container even after resolving `host.docker.internal`. You must configure Ollama to listen on all interfaces:
+
+```bash
+# Create an override for the Ollama systemd service
+sudo systemctl edit ollama
+```
+
+In the editor that opens, add:
+
+```ini
+[Service]
+Environment="OLLAMA_HOST=0.0.0.0"
+```
+
+Then restart Ollama:
+
+```bash
+sudo systemctl restart ollama
+```
+
+:::warning
+Setting `OLLAMA_HOST=0.0.0.0` makes Ollama accessible on all network interfaces. Ensure your firewall restricts port `11434` to trusted sources if this machine is network-facing.
+:::
+
+### Verification
+
+After completing both steps, verify that SOAT can reach Ollama from within the container:
+
+```bash
+docker compose exec server wget -qO- http://host.docker.internal:11434/api/tags
+```
+
+You should see a JSON response listing available Ollama models. If you see a connection error, check that both steps above were completed and that `ollama` is running (`systemctl status ollama`).
+
 ## Production Checklist
 
 Before deploying SOAT in production:

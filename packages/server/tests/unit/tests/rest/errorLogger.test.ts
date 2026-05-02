@@ -39,6 +39,7 @@ describe('errorLogger middleware', () => {
       .set('User-Agent', 'jest-test-agent');
 
     expect(response.status).toBe(500);
+    expect(response.body).toEqual({ error: 'Internal Server Error' });
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       'Request failed:',
       expect.objectContaining({
@@ -77,6 +78,7 @@ describe('errorLogger middleware', () => {
       .set('User-Agent', 'jest-test-agent');
 
     expect(response.status).toBe(500);
+    expect(response.body).toEqual({ error: 'Internal Server Error' });
     expect(consoleErrorSpy).not.toHaveBeenCalledWith(
       'Request failed:',
       expect.any(Object)

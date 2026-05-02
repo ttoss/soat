@@ -145,23 +145,30 @@ conversationSubResourcesRouter.post(
       return;
     }
 
-    const message = await addConversationMessage({
-      conversationId: ctx.params.conversation_id,
-      message: body.message,
-      role: body.role,
-      actorId: body.actorId ?? null,
-      position: body.position,
-      metadata: body.metadata,
-    });
+    try {
+      const message = await addConversationMessage({
+        conversationId: ctx.params.conversation_id,
+        message: body.message,
+        role: body.role,
+        actorId: body.actorId ?? null,
+        position: body.position,
+        metadata: body.metadata,
+      });
 
-    if (!message) {
-      ctx.status = 404;
-      ctx.body = { error: 'Conversation or actor not found' };
-      return;
+      if (!message) {
+        ctx.status = 404;
+        ctx.body = { error: 'Conversation or actor not found' };
+        return;
+      }
+
+      ctx.status = 201;
+      ctx.body = message;
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Error adding conversation message:', error);
+      ctx.status = 500;
+      ctx.body = { error: 'Error adding conversation message' };
     }
-
-    ctx.status = 201;
-    ctx.body = message;
   }
 );
 
@@ -415,19 +422,26 @@ conversationSubResourcesRouter.post(
       return;
     }
 
-    const result = await generateConversationMessage({
-      conversationId: ctx.params.conversation_id,
-      agentId: body.agentId,
-      model: body.model,
-      toolContext: body.toolContext,
-    });
+    try {
+      const result = await generateConversationMessage({
+        conversationId: ctx.params.conversation_id,
+        agentId: body.agentId,
+        model: body.model,
+        toolContext: body.toolContext,
+      });
 
-    if (!handleGenerateResult(ctx, result)) {
-      return;
+      if (!handleGenerateResult(ctx, result)) {
+        return;
+      }
+
+      ctx.status = 200;
+      ctx.body = result;
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Error generating conversation response:', error);
+      ctx.status = 500;
+      ctx.body = { error: 'Error generating conversation response' };
     }
-
-    ctx.status = 200;
-    ctx.body = result;
   }
 );
 

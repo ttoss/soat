@@ -215,18 +215,24 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     return;
   }
 
-  const doc = await createDocument({
-    projectId: project.id,
-    content: body.content,
-    path: body.path,
-    filename: body.filename,
-    title: body.title,
-    metadata: body.metadata,
-    tags: body.tags,
-  });
-
-  ctx.status = 201;
-  ctx.body = doc;
+  try {
+    const doc = await createDocument({
+      projectId: project.id,
+      content: body.content,
+      path: body.path,
+      filename: body.filename,
+      title: body.title,
+      metadata: body.metadata,
+      tags: body.tags,
+    });
+    ctx.status = 201;
+    ctx.body = doc;
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Error creating document:', error);
+    ctx.status = 500;
+    ctx.body = { error: 'Error creating document' };
+  }
 });
 
 documentsRouter.delete('/documents/:document_id', async (ctx: Context) => {
@@ -283,16 +289,22 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     tags?: Record<string, string>;
   };
 
-  const updated = await updateDocument({
-    id: ctx.params.document_id,
-    content: body.content,
-    title: body.title,
-    path: body.path,
-    metadata: body.metadata,
-    tags: body.tags,
-  });
-
-  ctx.body = updated;
+  try {
+    const updated = await updateDocument({
+      id: ctx.params.document_id,
+      content: body.content,
+      title: body.title,
+      path: body.path,
+      metadata: body.metadata,
+      tags: body.tags,
+    });
+    ctx.body = updated;
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Error updating document:', error);
+    ctx.status = 500;
+    ctx.body = { error: 'Error updating document' };
+  }
 });
 
 documentsRouter.post('/documents/search', async (ctx: Context) => {
@@ -347,19 +359,25 @@ documentsRouter.post('/documents/search', async (ctx: Context) => {
     policyWhere = compiled.where;
   }
 
-  const results = await resolveDocumentSearch({
-    projectIds,
-    policyWhere,
-    config: {
-      search: body.search,
-      minScore: body.minScore,
-      limit: body.limit,
-      paths: body.paths,
-      documentIds: body.documentIds,
-    },
-  });
-
-  ctx.body = { documents: results };
+  try {
+    const results = await resolveDocumentSearch({
+      projectIds,
+      policyWhere,
+      config: {
+        search: body.search,
+        minScore: body.minScore,
+        limit: body.limit,
+        paths: body.paths,
+        documentIds: body.documentIds,
+      },
+    });
+    ctx.body = { documents: results };
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Error searching documents:', error);
+    ctx.status = 500;
+    ctx.body = { error: 'Error searching documents' };
+  }
 });
 
 documentsRouter.get('/documents/:document_id/tags', async (ctx: Context) => {

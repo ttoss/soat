@@ -163,15 +163,21 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
     resolvedActorId = actor.id;
   }
 
-  const conversation = await createConversation({
-    projectId: project.id,
-    status: body.status,
-    name: body.name ?? null,
-    actorId: resolvedActorId,
-  });
-
-  ctx.status = 201;
-  ctx.body = conversation;
+  try {
+    const conversation = await createConversation({
+      projectId: project.id,
+      status: body.status,
+      name: body.name ?? null,
+      actorId: resolvedActorId,
+    });
+    ctx.status = 201;
+    ctx.body = conversation;
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Error creating conversation:', error);
+    ctx.status = 500;
+    ctx.body = { error: 'Error creating conversation' };
+  }
 });
 
 conversationsRouter.patch(
