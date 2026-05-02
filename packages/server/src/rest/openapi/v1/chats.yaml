@@ -257,9 +257,9 @@ paths:
       summary: Create a chat completion (stateless)
       description: >
         OpenAI Chat Completions-compatible endpoint. Resolves the AI provider
-        from `aiProviderId`, decrypts its secret, and calls the appropriate
-        Vercel AI SDK provider. Falls back to Ollama when `aiProviderId` is
-        omitted.
+        from `ai_provider_id`, decrypts its secret, and calls the appropriate
+        Vercel AI SDK provider. `ai_provider_id` is required — there is no
+        server-side model fallback.
       operationId: createChatCompletion
       requestBody:
         required: true
@@ -271,6 +271,7 @@ paths:
               basic:
                 summary: Simple user message
                 value:
+                  ai_provider_id: aip_V1StGXR8Z5jdHi6B
                   messages:
                     - role: user
                       content: Hello, how are you?
@@ -299,7 +300,7 @@ paths:
                   SSE stream of JSON objects, one per line, prefixed with
                   `data: `. The stream ends with `data: [DONE]`.
         '400':
-          description: 'Bad Request — `messages` is missing or empty'
+          description: 'Bad Request — `messages` is missing or empty, or `ai_provider_id` is missing'
           content:
             application/json:
               schema:
@@ -526,18 +527,17 @@ components:
     ChatCompletionRequest:
       type: object
       required:
+        - ai_provider_id
         - messages
       properties:
         ai_provider_id:
           type: string
-          description: >
-            Public ID of the AI provider to use. When omitted the server falls
-            back to Ollama.
+          description: Public ID of the AI provider to use.
           example: aip_V1StGXR8Z5jdHi6B
         model:
           type: string
           description: >
-            Model identifier. Overrides the provider's `defaultModel` when
+            Model identifier. Overrides the provider's `default_model` when
             specified.
           example: gpt-4o
         messages:

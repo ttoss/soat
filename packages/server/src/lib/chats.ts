@@ -107,33 +107,24 @@ const buildModel = (args: {
 };
 
 const resolveModel = async (args: {
-  aiProviderId?: string;
+  aiProviderId: string;
   model?: string;
 }): Promise<LanguageModel> => {
-  if (args.aiProviderId) {
-    const resolved = await resolveAiProviderSecret({
-      aiProviderId: args.aiProviderId,
-    });
+  const resolved = await resolveAiProviderSecret({
+    aiProviderId: args.aiProviderId,
+  });
 
-    if (!resolved) {
-      throw new Error('AI provider not found');
-    }
-
-    return buildModel({
-      provider: resolved.provider,
-      secretValue: resolved.secretValue,
-      model: args.model ?? resolved.defaultModel,
-      baseUrl: resolved.baseUrl,
-      config: resolved.config as Record<string, unknown> | undefined,
-    });
+  if (!resolved) {
+    throw new Error('AI provider not found');
   }
 
-  const fallbackModel = args.model ?? process.env.CHAT_MODEL ?? 'qwen2.5:0.5b';
-  const ollamaBaseUrl = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
-
-  return createOpenAI({ apiKey: 'ollama', baseURL: `${ollamaBaseUrl}/v1` })(
-    fallbackModel
-  );
+  return buildModel({
+    provider: resolved.provider,
+    secretValue: resolved.secretValue,
+    model: args.model ?? resolved.defaultModel,
+    baseUrl: resolved.baseUrl,
+    config: resolved.config as Record<string, unknown> | undefined,
+  });
 };
 
 export type ChatMessage = {
@@ -287,7 +278,7 @@ const resolveMessages = async (
 };
 
 export const createChatCompletion = async (args: {
-  aiProviderId?: string;
+  aiProviderId: string;
   model?: string;
   messages: ChatMessage[];
 }) => {
@@ -309,7 +300,7 @@ export const createChatCompletion = async (args: {
 };
 
 export const streamChatCompletion = async (args: {
-  aiProviderId?: string;
+  aiProviderId: string;
   model?: string;
   messages: ChatMessage[];
 }) => {
