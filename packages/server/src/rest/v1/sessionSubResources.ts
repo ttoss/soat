@@ -1,6 +1,6 @@
 import { Router } from '@ttoss/http-server';
-import type { Context } from 'src/Context';
 import { AppError } from 'src/AppError';
+import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import {
   addSessionMessage,
