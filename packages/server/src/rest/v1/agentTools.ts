@@ -14,8 +14,31 @@ const parseStringOrUndefined = (v: unknown): string | undefined => {
   return typeof v === 'string' ? v : undefined;
 };
 
-const parseNullableObject = (v: unknown): object | null | undefined => {
-  return v !== undefined ? (v as object | null) : undefined;
+/**
+ * Coerces an input value to a plain JSON object, null, or undefined.
+ * Accepts already-parsed objects or JSON-encoded strings. Throws a TypeError
+ * when the value is present but cannot be coerced to a plain object, so the
+ * caller can return a 400 response.
+ */
+const coerceToJsonObject = (v: unknown): object | null | undefined => {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (typeof v === 'object' && !Array.isArray(v)) return v as object;
+  if (typeof v === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(v);
+      if (
+        parsed !== null &&
+        typeof parsed === 'object' &&
+        !Array.isArray(parsed)
+      ) {
+        return parsed as object;
+      }
+    } catch {
+      // invalid JSON string — fall through
+    }
+  }
+  throw new TypeError('must be a JSON object');
 };
 
 const parseNullableArray = (v: unknown): string[] | null | undefined => {
@@ -108,14 +131,27 @@ agentToolsRouter.post('/agents/tools', async (ctx: Context) => {
   );
   if (!targetProjectId) return;
 
+  let parsedParameters: object | undefined;
+  let parsedExecute: object | undefined;
+  let parsedMcp: object | undefined;
+  try {
+    parsedParameters = coerceToJsonObject(parameters) as object | undefined;
+    parsedExecute = coerceToJsonObject(execute) as object | undefined;
+    parsedMcp = coerceToJsonObject(mcp) as object | undefined;
+  } catch {
+    ctx.status = 400;
+    ctx.body = { error: 'parameters, execute, and mcp must be JSON objects' };
+    return;
+  }
+
   const result = await createAgentTool({
     projectId: Number(targetProjectId),
     name,
     type: parseStringOrUndefined(type),
     description: parseStringOrUndefined(description),
-    parameters: parameters as object | undefined,
-    execute: execute as object | undefined,
-    mcp: mcp as object | undefined,
+    parameters: parsedParameters,
+    execute: parsedExecute,
+    mcp: parsedMcp,
     actions: Array.isArray(actions) ? actions : undefined,
   });
 
@@ -184,15 +220,28 @@ agentToolsRouter.put('/agents/tools/:tool_id', async (ctx: Context) => {
   const { name, type, description, parameters, execute, mcp, actions } = (ctx
     .request.body ?? {}) as Record<string, unknown>;
 
+  let parsedParameters: object | null | undefined;
+  let parsedExecute: object | null | undefined;
+  let parsedMcp: object | null | undefined;
+  try {
+    parsedParameters = coerceToJsonObject(parameters);
+    parsedExecute = coerceToJsonObject(execute);
+    parsedMcp = coerceToJsonObject(mcp);
+  } catch {
+    ctx.status = 400;
+    ctx.body = { error: 'parameters, execute, and mcp must be JSON objects' };
+    return;
+  }
+
   const result = await updateAgentTool({
     projectIds,
     id: ctx.params.tool_id,
     name: parseStringOrUndefined(name),
     type: parseStringOrUndefined(type),
     description: parseNullableString(description),
-    parameters: parseNullableObject(parameters),
-    execute: parseNullableObject(execute),
-    mcp: parseNullableObject(mcp),
+    parameters: parsedParameters,
+    execute: parsedExecute,
+    mcp: parsedMcp,
     actions: parseNullableArray(actions),
   });
 

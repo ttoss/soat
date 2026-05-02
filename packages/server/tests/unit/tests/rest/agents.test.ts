@@ -111,6 +111,35 @@ describe('Agents', () => {
       expect(response.status).toBe(403);
     });
 
+    test('returns 400 when parameters is a non-object string', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents/tools')
+        .send({
+          name: 'bad-tool',
+          project_id: projectId,
+          parameters: 'not-json',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toMatch(/JSON object/);
+    });
+
+    test('coerces JSON-encoded string parameters to an object', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents/tools')
+        .send({
+          name: 'coerced-tool',
+          project_id: projectId,
+          parameters: JSON.stringify({ type: 'object', properties: {} }),
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.parameters).toEqual({
+        type: 'object',
+        properties: {},
+      });
+    });
+
     test('creates an agent tool with required fields', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/agents/tools')

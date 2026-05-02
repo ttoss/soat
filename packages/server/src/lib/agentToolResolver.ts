@@ -166,11 +166,13 @@ const resolveHttpTool = (
   typedTool: TypedHttpTool,
   toolContext?: Record<string, string>
 ): Tool => {
+  const parameters =
+    typeof typedTool.parameters === 'string'
+      ? (JSON.parse(typedTool.parameters) as Record<string, unknown>)
+      : typedTool.parameters;
   return tool({
     description: typedTool.description ?? undefined,
-    inputSchema: jsonSchema(
-      typedTool.parameters ?? { type: 'object', properties: {} }
-    ),
+    inputSchema: jsonSchema(parameters ?? { type: 'object', properties: {} }),
     execute: buildHttpToolExecute(typedTool, toolContext),
   });
 };
@@ -179,11 +181,13 @@ const resolveClientTool = (typedTool: {
   description: string | null;
   parameters: Record<string, unknown> | null;
 }): Tool => {
+  const parameters =
+    typeof typedTool.parameters === 'string'
+      ? (JSON.parse(typedTool.parameters) as Record<string, unknown>)
+      : typedTool.parameters;
   return tool({
     description: typedTool.description ?? undefined,
-    inputSchema: jsonSchema(
-      typedTool.parameters ?? { type: 'object', properties: {} }
-    ),
+    inputSchema: jsonSchema(parameters ?? { type: 'object', properties: {} }),
   });
 };
 

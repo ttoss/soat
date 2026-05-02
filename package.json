@@ -29,7 +29,7 @@
     "@ttoss/config": "^1.37.10",
     "@ttoss/eslint-config": "^1.26.16",
     "@ttoss/monorepo": "^1.29.10",
-    "@types/node": "^25.6.0",
+    "@types/node": "^24.12.2",
     "carlin": "^1.49.5",
     "eslint": "^9",
     "husky": "^9.1.7",
