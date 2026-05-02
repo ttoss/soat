@@ -426,7 +426,6 @@ chatsRouter.post('/chats/:chat_id/actors', async (ctx: Context) => {
   const actor = await createActor({
     projectId: chat.projectId,
     name: body.name,
-    type: body.type,
     externalId: body.externalId,
     instructions: body.instructions ?? null,
     chatId: chat.id as number,

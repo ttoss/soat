@@ -56,9 +56,6 @@ export class Actor extends Model {
   declare name: string;
 
   @Column({ type: DataType.STRING })
-  declare type?: string;
-
-  @Column({ type: DataType.STRING })
   declare externalId?: string;
 
   @Column({ type: DataType.TEXT, allowNull: true })

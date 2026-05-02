@@ -107,10 +107,6 @@ paths:
                 name:
                   type: string
                   example: 'Alice'
-                type:
-                  type: string
-                  description: Optional actor type (e.g. 'customer', 'agent')
-                  example: 'customer'
                 external_id:
                   type: string
                   description: Optional external identifier (e.g. WhatsApp phone number). If provided and an actor with this externalId already exists in the project, the existing actor is returned (idempotent — 200 OK).
@@ -245,10 +241,6 @@ paths:
                 name:
                   type: string
                   example: 'Alice Smith'
-                type:
-                  type: string
-                  description: Optional actor type (e.g. 'customer', 'agent')
-                  example: 'customer'
                 instructions:
                   type: string
                   description: Persona-specific instructions
@@ -447,11 +439,6 @@ components:
         name:
           type: string
           example: 'Alice'
-        type:
-          type: string
-          nullable: true
-          description: Actor type (e.g. 'customer', 'agent')
-          example: 'customer'
         external_id:
           type: string
           nullable: true

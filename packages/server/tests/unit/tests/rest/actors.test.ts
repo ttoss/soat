@@ -63,23 +63,20 @@ describe('Actors', () => {
       expect(response.body.id).toMatch(/^act_/);
       expect(response.body.name).toBe('Alice');
       expect(response.body.project_id).toBe(projectId);
-      expect(response.body.type).toBeUndefined();
       expect(response.body.external_id).toBeUndefined();
     });
 
-    test('can create an actor with type and externalId', async () => {
+    test('can create an actor with externalId', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
         .send({
           project_id: projectId,
           name: 'Bob',
-          type: 'customer',
           external_id: '+15550001111',
         });
 
       expect(response.status).toBe(201);
       expect(response.body.name).toBe('Bob');
-      expect(response.body.type).toBe('customer');
       expect(response.body.external_id).toBe('+15550001111');
     });
 
@@ -242,7 +239,7 @@ describe('Actors', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ project_id: projectId, name: 'FetchActor', type: 'agent' });
+        .send({ project_id: projectId, name: 'FetchActor' });
       actorId = res.body.id;
     });
 
@@ -254,7 +251,6 @@ describe('Actors', () => {
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(actorId);
       expect(response.body.name).toBe('FetchActor');
-      expect(response.body.type).toBe('agent');
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -318,7 +314,7 @@ describe('Actors', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ project_id: projectId, name: 'UpdateMe', type: 'customer' });
+        .send({ project_id: projectId, name: 'UpdateMe' });
       actorId = res.body.id;
     });
 
@@ -332,13 +328,12 @@ describe('Actors', () => {
       expect(response.body.name).toBe('UpdatedName');
     });
 
-    test('user can update type and externalId', async () => {
+    test('user can update externalId', async () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/actors/${actorId}`)
-        .send({ type: 'assistant', external_id: '+15551112222' });
+        .send({ external_id: '+15551112222' });
 
       expect(response.status).toBe(200);
-      expect(response.body.type).toBe('assistant');
       expect(response.body.external_id).toBe('+15551112222');
     });
 
@@ -356,123 +351,6 @@ describe('Actors', () => {
         .send({ name: 'Ghost' });
 
       expect(response.status).toBe(404);
-    });
-  });
-
-  describe('PATCH /api/v1/actors/:id', () => {
-    let actorId: string;
-
-    beforeAll(async () => {
-      const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/actors')
-        .send({ project_id: projectId, name: 'UpdateMe', type: 'customer' });
-      actorId = res.body.id;
-    });
-
-    test('user with permission can update an actor name', async () => {
-      const response = await authenticatedTestClient(userToken)
-        .patch(`/api/v1/actors/${actorId}`)
-        .send({ name: 'UpdatedName' });
-
-      expect(response.status).toBe(200);
-      expect(response.body.id).toBe(actorId);
-      expect(response.body.name).toBe('UpdatedName');
-    });
-
-    test('user can update type and externalId', async () => {
-      const response = await authenticatedTestClient(userToken)
-        .patch(`/api/v1/actors/${actorId}`)
-        .send({ type: 'assistant', external_id: '+15559998888' });
-
-      expect(response.status).toBe(200);
-      expect(response.body.type).toBe('assistant');
-      expect(response.body.external_id).toBe('+15559998888');
-    });
-
-    test('unauthenticated request returns 401', async () => {
-      const response = await testClient
-        .patch(`/api/v1/actors/${actorId}`)
-        .send({ name: 'Hacked' });
-
-      expect(response.status).toBe(401);
-    });
-
-    test('returns 404 for non-existent actor', async () => {
-      const response = await authenticatedTestClient(adminToken)
-        .patch('/api/v1/actors/act_nonexistent')
-        .send({ name: 'Ghost' });
-
-      expect(response.status).toBe(404);
-    });
-  });
-
-  describe('GET /api/v1/actors with name and type filters (FEAT-9)', () => {
-    beforeAll(async () => {
-      await authenticatedTestClient(userToken).post('/api/v1/actors').send({
-        project_id: projectId,
-        name: 'NameFilterAgent',
-        type: 'agent',
-      });
-      await authenticatedTestClient(userToken).post('/api/v1/actors').send({
-        project_id: projectId,
-        name: 'NameFilterCustomer',
-        type: 'customer',
-      });
-      await authenticatedTestClient(userToken)
-        .post('/api/v1/actors')
-        .send({ project_id: projectId, name: 'Unrelated', type: 'agent' });
-    });
-
-    test('filtering by name (partial, case-insensitive) returns matching actors', async () => {
-      const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/actors?project_id=${projectId}&name=namefilter`
-      );
-
-      expect(response.status).toBe(200);
-      const names = response.body.data.map((a: { name: string }) => {
-        return a.name;
-      });
-      expect(names).toContain('NameFilterAgent');
-      expect(names).toContain('NameFilterCustomer');
-      expect(names).not.toContain('Unrelated');
-    });
-
-    test('filtering by type returns only matching actors', async () => {
-      const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/actors?project_id=${projectId}&type=customer`
-      );
-
-      expect(response.status).toBe(200);
-      const types = response.body.data.map((a: { type: string }) => {
-        return a.type;
-      });
-      expect(
-        types.every((t: string) => {
-          return t === 'customer';
-        })
-      ).toBe(true);
-    });
-
-    test('filtering by name and type combined', async () => {
-      const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/actors?project_id=${projectId}&name=namefilter&type=agent`
-      );
-
-      expect(response.status).toBe(200);
-      const names = response.body.data.map((a: { name: string }) => {
-        return a.name;
-      });
-      expect(names).toContain('NameFilterAgent');
-      expect(names).not.toContain('NameFilterCustomer');
-    });
-
-    test('non-matching name filter returns empty array', async () => {
-      const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/actors?project_id=${projectId}&name=xyznonexistentxyz`
-      );
-
-      expect(response.status).toBe(200);
-      expect(response.body.data).toEqual([]);
     });
   });
 });

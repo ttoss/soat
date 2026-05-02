@@ -25,7 +25,6 @@ const mapActor = (
     id: actor.publicId,
     projectId: actor.project?.publicId,
     name: actor.name,
-    type: actor.type ?? undefined,
     externalId: actor.externalId ?? undefined,
     instructions: actor.instructions ?? null,
     agentId: actor.agent?.publicId ?? null,
@@ -48,7 +47,6 @@ const buildActorListWhere = (args: {
   projectIds?: number[];
   externalId?: string;
   name?: string;
-  type?: string;
 }): Record<string, unknown> => {
   const where: Record<string, unknown> = {};
   if (args.projectIds !== undefined) {
@@ -59,9 +57,6 @@ const buildActorListWhere = (args: {
   }
   if (args.name !== undefined) {
     where.name = { [Op.iLike]: `%${args.name}%` };
-  }
-  if (args.type !== undefined) {
-    where.type = args.type;
   }
   return where;
 };
@@ -100,16 +95,12 @@ const updateChatIdField = async (
 
 const buildActorUpdates = (args: {
   name?: string;
-  type?: string;
   externalId?: string;
   instructions?: string | null;
 }): Record<string, unknown> => {
   const updates: Record<string, unknown> = {};
   if (args.name !== undefined) {
     updates.name = args.name;
-  }
-  if (args.type !== undefined) {
-    updates.type = args.type;
   }
   if (args.externalId !== undefined) {
     updates.externalId = args.externalId;
@@ -124,7 +115,6 @@ export const listActors = async (args: {
   projectIds?: number[];
   externalId?: string;
   name?: string;
-  type?: string;
   policyWhere?: Record<string, unknown>;
   limit?: number;
   offset?: number;
@@ -140,7 +130,6 @@ export const listActors = async (args: {
     projectIds: args.projectIds,
     externalId: args.externalId,
     name: args.name,
-    type: args.type,
   });
 
   if (args.policyWhere) {
@@ -173,7 +162,6 @@ export const getActor = async (args: { id: string }) => {
 export const createActor = async (args: {
   projectId: number;
   name: string;
-  type?: string;
   externalId?: string;
   instructions?: string | null;
   agentId?: number | null;
@@ -186,7 +174,6 @@ export const createActor = async (args: {
   const actor = await db.Actor.create({
     projectId: args.projectId,
     name: args.name,
-    type: args.type,
     externalId: args.externalId,
     instructions: args.instructions ?? null,
     agentId: args.agentId ?? null,
@@ -205,7 +192,6 @@ export const findOrCreateActor = async (args: {
   projectId: number;
   externalId: string;
   name: string;
-  type?: string;
   instructions?: string | null;
   agentId?: number | null;
   chatId?: number | null;
@@ -218,7 +204,6 @@ export const findOrCreateActor = async (args: {
     where: { projectId: args.projectId, externalId: args.externalId },
     defaults: {
       name: args.name,
-      type: args.type,
       instructions: args.instructions ?? null,
       agentId: args.agentId ?? null,
       chatId: args.chatId ?? null,
@@ -256,7 +241,6 @@ export const deleteActor = async (args: { id: string }) => {
 export const updateActor = async (args: {
   id: string;
   name?: string;
-  type?: string;
   externalId?: string;
   instructions?: string | null;
   agentId?: string | null;
@@ -269,7 +253,6 @@ export const updateActor = async (args: {
 
   const updates = buildActorUpdates({
     name: args.name,
-    type: args.type,
     externalId: args.externalId,
     instructions: args.instructions,
   });

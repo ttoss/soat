@@ -1,3 +1,4 @@
+import { DatabaseError } from '@ttoss/postgresdb';
 import { APICallError } from 'ai';
 
 import { AppError } from '../AppError';
@@ -37,6 +38,34 @@ const toApiCallErrorDetails = (
   return undefined;
 };
 
+const toDatabaseErrorDetails = (
+  error: unknown
+): Record<string, unknown> | undefined => {
+  if (error instanceof DatabaseError) {
+    const original = error.original as
+      | (Error & {
+          detail?: string;
+          code?: string;
+          constraint?: string;
+          table?: string;
+        })
+      | undefined;
+    return {
+      sql: error.sql,
+      parameters: error.parameters,
+      dbError: {
+        message: original?.message,
+        detail: original?.detail,
+        code: original?.code,
+        constraint: original?.constraint,
+        table: original?.table,
+      },
+    };
+  }
+
+  return undefined;
+};
+
 const getErrorStatus = (args: { error: unknown }) => {
   if (
     typeof args.error === 'object' &&
@@ -67,6 +96,7 @@ const errorLoggerMiddleware = async (ctx: Context, next: Next) => {
         userAgent: ctx.get('user-agent') || undefined,
         error: toErrorText({ error: causeToLog }),
         ...toApiCallErrorDetails(causeToLog),
+        ...toDatabaseErrorDetails(causeToLog),
       });
     }
 

@@ -1,3 +1,4 @@
+import { models } from '@soat/postgresdb';
 import { App, Router } from '@ttoss/http-server';
 import { APICallError } from 'ai';
 import { AppError } from 'src/AppError';
@@ -169,6 +170,47 @@ describe('errorLogger middleware', () => {
         url: 'https://api.openai.com/v1/chat/completions',
         statusCode: 429,
         responseBody: '{"error":"rate_limit_exceeded"}',
+      })
+    );
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  test('logs DatabaseError fields (sql, dbError) when a real database error occurs', async () => {
+    delete process.env.SOAT_ERROR_LOGS_ENABLED;
+
+    const app = new App();
+    const router = new Router();
+
+    app.use(errorLoggerMiddleware);
+
+    router.get('/db-boom', async () => {
+      // Trigger a real PostgreSQL division-by-zero error so Sequelize wraps it
+      // in a DatabaseError with .sql and .original populated.
+      await models.Actor.sequelize?.query('SELECT 1::integer / 0');
+    });
+
+    app.use(router.routes());
+
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => {
+        return undefined;
+      });
+
+    const response = await request(app.callback()).get('/db-boom');
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ error: 'Internal Server Error' });
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Request failed:',
+      expect.objectContaining({
+        sql: expect.stringContaining('SELECT 1::integer / 0'),
+        dbError: expect.objectContaining({
+          // PostgreSQL error code for division_by_zero
+          code: '22012',
+        }),
       })
     );
 

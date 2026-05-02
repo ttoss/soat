@@ -360,7 +360,6 @@ agentsRouter.post('/agents/:agent_id/actors', async (ctx: Context) => {
   const actor = await createActor({
     projectId: agent.projectId,
     name: body.name,
-    type: body.type,
     externalId: body.externalId,
     instructions: body.instructions ?? null,
     agentId: agent.id as number,

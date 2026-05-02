@@ -7,13 +7,13 @@ The Actors module represents entities — people, bots, or other participants �
 
 ## Overview
 
-An Actor belongs to a project and has a display name, an optional type, an optional `external_id`, and optional links to an [Agent](./agents.md) or [Chat](./chats.md). Actors are identified by a public `id` prefixed with `act_`. The internal database primary key is never returned.
+An Actor belongs to a project and has a display name, an optional `external_id`, and optional links to an [Agent](./agents.md) or [Chat](./chats.md). Actors are identified by a public `id` prefixed with `act_`. The internal database primary key is never returned.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 The module covers:
 
-- **Identity** — display name, type, and external correlation via `external_id`
+- **Identity** — display name and external correlation via `external_id`
 - **Idempotent creation** — `POST /actors` with `external_id` uses find-or-create semantics
 - **Agent/Chat linking** — an Actor can be bound to an Agent or a Chat for AI interactions
 - **Instructions** — per-actor system prompt overrides composed into generate calls
@@ -26,7 +26,6 @@ The module covers:
 | `id`           | string         | —        | Public identifier prefixed with `act_`                                                          |
 | `project_id`   | string         | —        | Public ID of the owning project (`proj_` prefix)                                                |
 | `name`         | string         | Yes      | Display name of the actor                                                                       |
-| `type`         | string         | No       | Free-form actor type (e.g. `customer`, `agent`)                                                 |
 | `external_id`  | string         | No       | External identifier (e.g. WhatsApp phone number). Unique per project; `null` is never unique    |
 | `instructions` | string \| null | No       | Persona-specific instructions composed into the effective system prompt for generate calls      |
 | `agent_id`     | string \| null | No       | Public ID of the linked [Agent](./agents.md) (`agt_` prefix). Mutually exclusive with `chat_id` |
@@ -90,7 +89,6 @@ Pass `null` to `PATCH /actors/:id` to clear the instructions.
 | `project_id`  | Limit results to a specific project (required for JWT callers in most cases) |
 | `external_id` | Exact match — use to resolve an external identifier to an `act_` ID          |
 | `name`        | Partial, case-insensitive match against the actor's display name             |
-| `type`        | Exact match against the actor's type                                         |
 | `limit`       | Maximum number of results to return (default: `50`)                          |
 | `offset`      | Number of results to skip for pagination (default: `0`)                      |
 

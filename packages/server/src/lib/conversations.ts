@@ -367,7 +367,6 @@ export const listConversationActors = async (args: {
       id: actor.publicId,
       projectId: actor.project?.publicId,
       name: actor.name,
-      type: actor.type ?? undefined,
       externalId: actor.externalId ?? undefined,
       createdAt: actor.createdAt,
       updatedAt: actor.updatedAt,

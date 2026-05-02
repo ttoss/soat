@@ -17,7 +17,6 @@ const actorsRouter = new Router<Context>();
 type CreateActorBody = {
   projectId?: string;
   name: string;
-  type?: string;
   externalId?: string;
   instructions?: string | null;
   agentId?: string;
@@ -67,7 +66,6 @@ actorsRouter.get('/actors', async (ctx: Context) => {
   const projectPublicId = ctx.query.projectId as string | undefined;
   const externalId = ctx.query.externalId as string | undefined;
   const name = ctx.query.name as string | undefined;
-  const type = ctx.query.type as string | undefined;
   const limit = ctx.query.limit
     ? parseInt(ctx.query.limit as string, 10)
     : undefined;
@@ -111,7 +109,6 @@ actorsRouter.get('/actors', async (ctx: Context) => {
     projectIds,
     externalId,
     name,
-    type,
     policyWhere,
     limit,
     offset,
@@ -172,7 +169,6 @@ const performCreateActor = async (args: {
       projectId: args.project.id!,
       externalId: args.body.externalId,
       name: args.body.name,
-      type: args.body.type,
       instructions: args.body.instructions ?? null,
       agentId: args.agentDbId,
       chatId: args.chatDbId,
@@ -189,7 +185,6 @@ const performCreateActor = async (args: {
   const actor = await createActor({
     projectId: args.project.id!,
     name: args.body.name,
-    type: args.body.type,
     externalId: args.body.externalId,
     instructions: args.body.instructions ?? null,
     agentId: args.agentDbId,
@@ -376,7 +371,6 @@ actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
 
   const body = ctx.request.body as {
     name?: string;
-    type?: string;
     externalId?: string;
     instructions?: string | null;
     agentId?: string | null;
@@ -386,7 +380,6 @@ actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
   const updated = await updateActor({
     id: ctx.params.actor_id,
     name: body.name,
-    type: body.type,
     externalId: body.externalId,
     instructions: body.instructions,
     agentId: body.agentId,
