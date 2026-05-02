@@ -67,38 +67,16 @@ export class Session extends Model {
   @ForeignKey(() => {
     return Actor;
   })
-  @Column({ type: DataType.INTEGER, allowNull: false, field: 'agent_actor_id' })
-  declare agentActorId: number;
+  @Column({ type: DataType.INTEGER, allowNull: true, field: 'actor_id' })
+  declare actorId: number | null;
 
   @BelongsTo(
     () => {
       return Actor;
     },
-    { foreignKey: 'agentActorId', as: 'agentActor' }
+    { foreignKey: 'actorId', as: 'actor' }
   )
-  declare agentActor: Actor;
-
-  @ForeignKey(() => {
-    return Actor;
-  })
-  @Column({ type: DataType.INTEGER, allowNull: false, field: 'user_actor_id' })
-  declare userActorId: number;
-
-  @BelongsTo(
-    () => {
-      return Actor;
-    },
-    { foreignKey: 'userActorId', as: 'userActor' }
-  )
-  declare userActor: Actor;
-
-  @Column({
-    type: DataType.BOOLEAN,
-    allowNull: false,
-    defaultValue: true,
-    field: 'owns_user_actor',
-  })
-  declare ownsUserActor: boolean;
+  declare actor: Actor | null;
 
   @Column({ defaultValue: 'open' })
   declare status: string;

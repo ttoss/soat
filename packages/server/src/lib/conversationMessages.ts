@@ -9,7 +9,8 @@ export const mapMessage = (
     document?: InstanceType<(typeof db)['Document']> & {
       file?: InstanceType<(typeof db)['File']>;
     };
-    actor?: InstanceType<(typeof db)['Actor']>;
+    actor?: InstanceType<(typeof db)['Actor']> | null;
+    agent?: InstanceType<(typeof db)['Agent']> | null;
   }
 ) => {
   let content: string | null = null;
@@ -24,8 +25,10 @@ export const mapMessage = (
   }
 
   return {
+    role: message.role,
     documentId: message.document?.publicId,
-    actorId: message.actor?.publicId,
+    actorId: message.actor?.publicId ?? null,
+    agentId: message.agent?.publicId ?? null,
     position: message.position,
     content,
     metadata: message.metadata ?? null,
@@ -35,7 +38,9 @@ export const mapMessage = (
 const insertMessage = async (args: {
   conversationId: number;
   documentId: number;
-  actorId: number;
+  role: string;
+  actorId?: number | null;
+  agentId?: number | null;
   position?: number;
   metadata?: Record<string, unknown>;
 }) => {
@@ -72,7 +77,9 @@ const insertMessage = async (args: {
       {
         conversationId: args.conversationId,
         documentId: args.documentId,
-        actorId: args.actorId,
+        role: args.role,
+        actorId: args.actorId ?? null,
+        agentId: args.agentId ?? null,
         position,
         metadata: args.metadata ?? null,
       },
@@ -84,7 +91,9 @@ const insertMessage = async (args: {
 export const addConversationMessage = async (args: {
   conversationId: string;
   message: string;
-  actorId: string;
+  role: string;
+  actorId?: string | null;
+  agentId?: string | null;
   position?: number;
   metadata?: Record<string, unknown>;
 }) => {
@@ -96,10 +105,22 @@ export const addConversationMessage = async (args: {
     return null;
   }
 
-  const actor = await db.Actor.findOne({ where: { publicId: args.actorId } });
+  let actorDbId: number | null = null;
+  if (args.actorId) {
+    const actor = await db.Actor.findOne({ where: { publicId: args.actorId } });
+    if (!actor) {
+      return null;
+    }
+    actorDbId = actor.id;
+  }
 
-  if (!actor) {
-    return null;
+  let agentDbId: number | null = null;
+  if (args.agentId) {
+    const agent = await db.Agent.findOne({ where: { publicId: args.agentId } });
+    if (!agent) {
+      return null;
+    }
+    agentDbId = agent.id;
   }
 
   const createdDoc = await createDocument({
@@ -118,7 +139,9 @@ export const addConversationMessage = async (args: {
   const result = await insertMessage({
     conversationId: conversation.id,
     documentId: document.id,
-    actorId: actor.id,
+    role: args.role,
+    actorId: actorDbId,
+    agentId: agentDbId,
     position: args.position,
     metadata: args.metadata,
   });
@@ -132,6 +155,7 @@ export const addConversationMessage = async (args: {
         include: [{ model: db.File, as: 'file' }],
       },
       { model: db.Actor, as: 'actor' },
+      { model: db.Agent, as: 'agent' },
     ],
   });
 

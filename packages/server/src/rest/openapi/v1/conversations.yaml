@@ -361,15 +361,21 @@ paths:
               type: object
               required:
                 - message
-                - actor_id
+                - role
               properties:
                 message:
                   type: string
                   description: Message text content to add to the conversation
                   example: 'Hello, how can I help you?'
+                role:
+                  type: string
+                  enum: [user, assistant, system]
+                  description: Role of the message sender
+                  example: 'user'
                 actor_id:
                   type: string
-                  description: Actor ID who is sending this message
+                  nullable: true
+                  description: Optional actor ID to associate with this message (user identity)
                   example: 'act_V1StGXR8Z5jdHi6B'
                 position:
                   type: integer
@@ -438,14 +444,14 @@ paths:
             schema:
               type: object
               required:
-                - actor_id
+                - agent_id
               properties:
-                actor_id:
+                agent_id:
                   type: string
-                  description: ID of the actor that will produce the next message. Must have `agentId` or `chatId` set.
+                  description: ID of the agent that will produce the next message.
                 model:
                   type: string
-                  description: Optional model override. Only honored for chat-backed actors.
+                  description: Optional model override.
                 stream:
                   type: boolean
                   description: If true, stream tokens via SSE. NOT IMPLEMENTED in v1 — returns 501.
@@ -764,10 +770,21 @@ components:
           type: string
           description: Document ID
           example: 'doc_V1StGXR8Z5jdHi6B'
+        role:
+          type: string
+          enum: [user, assistant, system]
+          description: Role of the message sender
+          example: 'user'
         actor_id:
           type: string
-          description: Actor ID who sent this message
+          nullable: true
+          description: Optional actor ID associated with this message
           example: 'act_V1StGXR8Z5jdHi6B'
+        agent_id:
+          type: string
+          nullable: true
+          description: Optional agent ID that generated this message (set for assistant messages produced by generate)
+          example: 'agt_V1StGXR8Z5jdHi6B'
         position:
           type: integer
           description: Zero-based position in the conversation

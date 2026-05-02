@@ -12,7 +12,7 @@ By default, interacting with an agent requires three API calls:
 
 When `auto_generate` is enabled on the session, step 3 is handled automatically — `POST .../messages` saves the message and returns the assistant reply in one call, reducing the flow to two API calls.
 
-The session automatically creates and manages the underlying conversation, agent actor, and user actor.
+The session automatically creates and manages the underlying conversation. An optional `actor_id` can be supplied to associate an existing Actor as the session owner; if omitted the session is created with no actor.
 
 ## Key Concepts
 
@@ -26,11 +26,11 @@ The session automatically creates and manages the underlying conversation, agent
 
 ### Lifecycle
 
-A session starts in `open` status. It can be updated to `closed` when the interaction is complete. Deleting a session cascades to the underlying conversation and actors.
+A session starts in `open` status. It can be updated to `closed` when the interaction is complete. Deleting a session cascades to the underlying conversation.
 
 ### Actor ID
 
-The optional `actor_id` field allows callers to reuse an existing Actor as the user for the session. When omitted, a new user actor is created automatically. Sessions can be filtered by this field.
+The optional `actor_id` field associates an existing [Actor](./actors.md) as the owner of the session. When omitted, `actor_id` is `null` and no actor is created automatically. Sessions can be filtered by this field.
 
 ### Tags
 
@@ -65,11 +65,11 @@ Sessions support the same `tool_context` mechanism as direct agent generations �
 
 When a generation is triggered through a session (either via `POST .../generate` or auto-generate), the server automatically injects the following keys into `tool_context` before forwarding to tool calls:
 
-| Header                             | Value                                              |
-| ---------------------------------- | -------------------------------------------------- |
-| `X-Soat-Context-actor_id`          | Public ID of the session's user actor (`actr_...`) |
-| `X-Soat-Context-actor_external_id` | External ID of the session's user actor            |
-| `X-Soat-Context-session_id`        | Public ID of the session (`sess_...`)              |
+| Header                             | Value                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------ |
+| `X-Soat-Context-actor_id`          | Public ID of the session's actor (`actr_...`), if set; omitted otherwise |
+| `X-Soat-Context-actor_external_id` | External ID of the session's actor, if set; omitted otherwise            |
+| `X-Soat-Context-session_id`        | Public ID of the session (`sess_...`)                                    |
 
 Any values provided by the caller in `tool_context` are merged on top and take precedence over the auto-populated values.
 
@@ -91,29 +91,29 @@ The tool will receive all four headers: `X-Soat-Context-actor_id`, `X-Soat-Conte
 
 ### Session
 
-| Field             | Type    | Description                                                                                                    |
-| ----------------- | ------- | -------------------------------------------------------------------------------------------------------------- |
-| `id`              | string  | Public identifier prefixed with `sess_`                                                                        |
-| `agent_id`        | string  | Public ID of the agent this session belongs to                                                                 |
-| `conversation_id` | string  | Public ID of the underlying conversation                                                                       |
-| `status`          | string  | `open` (default) or `closed`                                                                                   |
-| `name`            | string  | Optional display name                                                                                          |
-| `actor_id`        | string  | Public ID of the user actor (`actr_` prefix)                                                                   |
-| `tags`            | object  | Free-form key-value metadata                                                                                   |
-| `auto_generate`   | boolean | When `true`, saving a message via `POST .../messages` automatically triggers LLM generation (default: `false`) |
-| `created_at`      | string  | ISO 8601 creation timestamp                                                                                    |
-| `updated_at`      | string  | ISO 8601 last-updated timestamp                                                                                |
+| Field             | Type           | Description                                                                                                    |
+| ----------------- | -------------- | -------------------------------------------------------------------------------------------------------------- |
+| `id`              | string         | Public identifier prefixed with `sess_`                                                                        |
+| `agent_id`        | string         | Public ID of the agent this session belongs to                                                                 |
+| `conversation_id` | string         | Public ID of the underlying conversation                                                                       |
+| `status`          | string         | `open` (default) or `closed`                                                                                   |
+| `name`            | string         | Optional display name                                                                                          |
+| `actor_id`        | string \| null | Optional public ID of the Actor associated with this session (`actr_` prefix); `null` when no actor is set     |
+| `tags`            | object         | Free-form key-value metadata                                                                                   |
+| `auto_generate`   | boolean        | When `true`, saving a message via `POST .../messages` automatically triggers LLM generation (default: `false`) |
+| `created_at`      | string         | ISO 8601 creation timestamp                                                                                    |
+| `updated_at`      | string         | ISO 8601 last-updated timestamp                                                                                |
 
 ### Message (within a session)
 
 Messages are returned with simplified roles:
 
-| Field        | Type   | Description                                         |
-| ------------ | ------ | --------------------------------------------------- |
-| `role`       | string | `user` or `assistant` (mapped from actor ownership) |
-| `content`    | string | Message text                                        |
-| `model`      | string | Model used for assistant messages                   |
-| `created_at` | string | ISO 8601 timestamp                                  |
+| Field        | Type   | Description                                                 |
+| ------------ | ------ | ----------------------------------------------------------- |
+| `role`       | string | `user` or `assistant` — stored on the message record itself |
+| `content`    | string | Message text                                                |
+| `model`      | string | Model used for assistant messages                           |
+| `created_at` | string | ISO 8601 timestamp                                          |
 
 ## Permissions
 

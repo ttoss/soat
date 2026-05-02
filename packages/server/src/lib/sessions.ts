@@ -7,8 +7,7 @@ const sessionIncludes = () => {
     { model: db.Project, as: 'project' },
     { model: db.Agent, as: 'agent' },
     { model: db.Conversation, as: 'conversation' },
-    { model: db.Actor, as: 'agentActor' },
-    { model: db.Actor, as: 'userActor' },
+    { model: db.Actor, as: 'actor' },
   ];
 };
 
@@ -16,7 +15,7 @@ const extractSessionIds = (session: Parameters<typeof mapSession>[0]) => {
   return {
     agentId: session.agent?.publicId ?? null,
     conversationId: session.conversation?.publicId ?? null,
-    actorId: session.userActor?.publicId ?? null,
+    actorId: session.actor?.publicId ?? null,
   };
 };
 
@@ -39,8 +38,7 @@ const mapSession = (
     project?: InstanceType<(typeof db)['Project']>;
     agent?: InstanceType<(typeof db)['Agent']>;
     conversation?: InstanceType<(typeof db)['Conversation']>;
-    agentActor?: InstanceType<(typeof db)['Actor']>;
-    userActor?: InstanceType<(typeof db)['Actor']>;
+    actor?: InstanceType<(typeof db)['Actor']> | null;
   }
 ) => {
   return {
@@ -69,24 +67,23 @@ export const createSession = async (args: {
   }
 
   // If actorId provided, verify the actor exists in the project
-  let existingUserActorId: number | null = null;
+  let existingActorId: number | null = null;
   if (args.actorId) {
-    const existingUserActor = await db.Actor.findOne({
+    const existingActor = await db.Actor.findOne({
       where: { publicId: args.actorId, projectId: args.projectId },
     });
-    if (!existingUserActor) {
+    if (!existingActor) {
       return 'actor_not_found' as const;
     }
-    existingUserActorId = existingUserActor.id;
+    existingActorId = existingActor.id;
   }
 
   const session = await db.sequelize.transaction((t) => {
     return createSessionTransaction({
       projectId: args.projectId,
       agentId: agent.id,
-      agentName: agent.name,
       name: args.name,
-      existingUserActorId,
+      existingActorId,
       autoGenerate: args.autoGenerate,
       toolContext: args.toolContext,
       transaction: t,
@@ -147,7 +144,7 @@ export const listSessions = async (args: {
     if (!actor) {
       return { data: [], total: 0, limit, offset };
     }
-    where.userActorId = actor.id;
+    where.actorId = actor.id;
   }
 
   if (args.status !== undefined) {
@@ -259,17 +256,6 @@ export const deleteSession = async (args: {
     // Delete underlying conversation (cascades messages)
     await db.Conversation.destroy({
       where: { id: session.conversationId },
-      transaction: t,
-    });
-    // Always delete the agent actor (it is created exclusively for this session).
-    // Only delete the user actor when the session owns it (i.e. it was created
-    // by the session, not provided as a pre-existing actor by the caller).
-    const actorIdsToDelete: number[] = [session.agentActorId];
-    if (session.ownsUserActor) {
-      actorIdsToDelete.push(session.userActorId);
-    }
-    await db.Actor.destroy({
-      where: { id: actorIdsToDelete },
       transaction: t,
     });
   });

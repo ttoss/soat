@@ -210,6 +210,7 @@ describe('MCP tools - happy path', () => {
     const res = await mcpCall('add-conversation-message', {
       conversationId,
       message: 'hello from mcp',
+      role: 'user',
       actorId: setupActorId,
     });
     expect(res.status).toBe(200);

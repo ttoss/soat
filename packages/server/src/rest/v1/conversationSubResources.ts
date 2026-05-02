@@ -26,17 +26,9 @@ const handleGenerateResult = (
     ctx.body = { error: 'Conversation not found' };
     return false;
   }
-  if (result === 'actor_not_found') {
+  if (result === 'agent_not_found') {
     ctx.status = 404;
-    ctx.body = { error: 'Actor not found in this project' };
-    return false;
-  }
-  if (result === 'actor_missing_agent_or_chat') {
-    ctx.status = 400;
-    ctx.body = {
-      error:
-        'The generating actor must have either agentId or chatId set to produce messages.',
-    };
+    ctx.body = { error: 'Agent not found in this project' };
     return false;
   }
   if (result === 'ai_provider_not_found') {
@@ -113,7 +105,8 @@ conversationSubResourcesRouter.post(
 
     const body = ctx.request.body as {
       message: string;
-      actorId: string;
+      role: string;
+      actorId?: string | null;
       position?: number;
       metadata?: Record<string, unknown>;
     };
@@ -124,9 +117,9 @@ conversationSubResourcesRouter.post(
       return;
     }
 
-    if (!body.actorId) {
+    if (!body.role) {
       ctx.status = 400;
-      ctx.body = { error: 'actorId is required' };
+      ctx.body = { error: 'role is required' };
       return;
     }
 
@@ -155,7 +148,8 @@ conversationSubResourcesRouter.post(
     const message = await addConversationMessage({
       conversationId: ctx.params.conversation_id,
       message: body.message,
-      actorId: body.actorId,
+      role: body.role,
+      actorId: body.actorId ?? null,
       position: body.position,
       metadata: body.metadata,
     });
@@ -380,15 +374,15 @@ conversationSubResourcesRouter.post(
     }
 
     const body = ctx.request.body as {
-      actorId: string;
+      agentId: string;
       model?: string;
       stream?: boolean;
       toolContext?: Record<string, string>;
     };
 
-    if (!body.actorId) {
+    if (!body.agentId) {
       ctx.status = 400;
-      ctx.body = { error: 'actorId is required' };
+      ctx.body = { error: 'agentId is required' };
       return;
     }
 
@@ -423,7 +417,7 @@ conversationSubResourcesRouter.post(
 
     const result = await generateConversationMessage({
       conversationId: ctx.params.conversation_id,
-      actorId: body.actorId,
+      agentId: body.agentId,
       model: body.model,
       toolContext: body.toolContext,
     });

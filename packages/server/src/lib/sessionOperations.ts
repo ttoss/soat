@@ -12,8 +12,7 @@ const sessionIncludes = () => {
     { model: db.Project, as: 'project' },
     { model: db.Agent, as: 'agent' },
     { model: db.Conversation, as: 'conversation' },
-    { model: db.Actor, as: 'agentActor' },
-    { model: db.Actor, as: 'userActor' },
+    { model: db.Actor, as: 'actor' },
   ];
 };
 
@@ -31,15 +30,15 @@ export const findSessionRecord = async (args: {
 };
 
 const buildToolContext = (session: InstanceType<(typeof db)['Session']>) => {
-  const userActor = (
+  const actor = (
     session as unknown as {
-      userActor?: InstanceType<(typeof db)['Actor']>;
+      actor?: InstanceType<(typeof db)['Actor']> | null;
     }
-  ).userActor;
+  ).actor;
 
   return {
-    actorId: userActor?.publicId ?? '',
-    actorExternalId: userActor?.externalId ?? '',
+    actorId: actor?.publicId ?? '',
+    actorExternalId: actor?.externalId ?? '',
     sessionId: session.publicId,
   };
 };
@@ -136,13 +135,13 @@ export const generateSessionResponse = async (args: {
   const conversation = session.conversation as InstanceType<
     (typeof db)['Conversation']
   >;
-  const agentActor = (
+  const agent = (
     session as unknown as {
-      agentActor?: InstanceType<(typeof db)['Actor']>;
+      agent?: InstanceType<(typeof db)['Agent']>;
     }
-  ).agentActor;
+  ).agent;
 
-  if (!agentActor) {
+  if (!agent) {
     return 'session_not_found' as const;
   }
 
@@ -162,7 +161,7 @@ export const generateSessionResponse = async (args: {
   try {
     result = await generateConversationMessage({
       conversationId: conversation.publicId,
-      actorId: agentActor.publicId,
+      agentId: agent.publicId,
       model: args.model,
       toolContext: mergedToolContext,
     });
@@ -224,30 +223,9 @@ export const listSessionMessages = async (args: {
     offset: args.offset,
   });
 
-  // Map actor IDs to simple roles
-  const agentActorPublicId = (
-    session as unknown as {
-      agentActor?: InstanceType<(typeof db)['Actor']>;
-    }
-  ).agentActor?.publicId;
-  const userActorPublicId = (
-    session as unknown as {
-      userActor?: InstanceType<(typeof db)['Actor']>;
-    }
-  ).userActor?.publicId;
-
   const mappedData = result?.data.map((msg) => {
-    let role: string;
-    if (msg.actorId === userActorPublicId) {
-      role = 'user';
-    } else if (msg.actorId === agentActorPublicId) {
-      role = 'assistant';
-    } else {
-      role = 'unknown';
-    }
-
     return {
-      role,
+      role: msg.role,
       content: msg.content,
       documentId: msg.documentId,
       position: msg.position,
@@ -281,20 +259,17 @@ export const addSessionMessage = async (args: {
   const conversation = session.conversation as InstanceType<
     (typeof db)['Conversation']
   >;
-  const userActor = (
+  const actor = (
     session as unknown as {
-      userActor?: InstanceType<(typeof db)['Actor']>;
+      actor?: InstanceType<(typeof db)['Actor']> | null;
     }
-  ).userActor;
-
-  if (!userActor) {
-    return 'session_not_found' as const;
-  }
+  ).actor;
 
   const userMsg = await addConversationMessage({
     conversationId: conversation.publicId,
     message: args.message,
-    actorId: userActor.publicId,
+    role: 'user',
+    actorId: actor?.publicId ?? null,
   });
 
   if (!userMsg) {
@@ -338,7 +313,7 @@ export const sendSessionMessage = async (args: {
   });
 };
 
-const fetchSessionAndConversationActors = async (args: {
+const fetchSessionAndConversation = async (args: {
   agentId: number;
   sessionId: string;
 }) => {
@@ -354,30 +329,31 @@ const fetchSessionAndConversationActors = async (args: {
   const conversation = session.conversation as InstanceType<
     (typeof db)['Conversation']
   >;
-  const agentActor = (
+  const agent = (
     session as unknown as {
-      agentActor?: InstanceType<(typeof db)['Actor']>;
+      agent?: InstanceType<(typeof db)['Agent']>;
     }
-  ).agentActor;
+  ).agent;
 
-  if (!agentActor) {
+  if (!agent) {
     return null;
   }
 
-  return { session, conversation, agentActor };
+  return { session, conversation, agent };
 };
 
 const processToolOutputResult = async (args: {
   result: GenerationResult;
   conversation: InstanceType<(typeof db)['Conversation']>;
-  agentActor: InstanceType<(typeof db)['Actor']>;
+  agentPublicId: string;
 }) => {
   // Persist the assistant reply as a conversation message
   if (args.result.status === 'completed' && args.result.output?.content) {
     await addConversationMessage({
       conversationId: args.conversation.publicId,
       message: args.result.output.content,
-      actorId: args.agentActor.publicId,
+      role: 'assistant',
+      agentId: args.agentPublicId,
     });
   }
 
@@ -409,7 +385,7 @@ export const submitSessionToolOutputs = async (args: {
   generationId: string;
   toolOutputs: Array<{ toolCallId: string; output: unknown }>;
 }) => {
-  const sessionData = await fetchSessionAndConversationActors({
+  const sessionData = await fetchSessionAndConversation({
     agentId: args.agentId,
     sessionId: args.sessionId,
   });
@@ -431,7 +407,7 @@ export const submitSessionToolOutputs = async (args: {
   return processToolOutputResult({
     result,
     conversation: sessionData.conversation,
-    agentActor: sessionData.agentActor,
+    agentPublicId: args.agentPublicId,
   });
 };
 
