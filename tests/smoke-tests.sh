@@ -272,7 +272,7 @@ if ! printf '%s\n' "$CONVO_MSG_LIST_RESP" | jq -e '((type == "array") or (type =
 fi
 
 CONVO_ADD_MSG_RESP=$($SOAT_CLI add-conversation-message \
-  --conversation-id "$CONVO_ID" --message "smoke conversation message" --actor_id "$CONVO_ACTOR_ID")
+  --conversation-id "$CONVO_ID" --message "smoke conversation message" --role user --actor_id "$CONVO_ACTOR_ID")
 CONVO_DOC_ID=$(echo "$CONVO_ADD_MSG_RESP" | jq -r '.document_id')
 if [ -z "$CONVO_DOC_ID" ] || [ "$CONVO_DOC_ID" = "null" ]; then
   echo "ERROR: Failed to add conversation message" >&2
@@ -894,7 +894,7 @@ echo "User actor id: $USER_ACTOR_ID"
 # 47. Add a user message to the conversation
 echo "--- Adding user message to conversation ---"
 USER_MSG_RESP=$($SOAT_CLI add-conversation-message \
-  --conversation-id "$NAMED_CONVO_ID" --message "Hello, how are you?" --actor_id "$USER_ACTOR_ID")
+  --conversation-id "$NAMED_CONVO_ID" --message "Hello, how are you?" --role user --actor_id "$USER_ACTOR_ID")
 USER_MSG_DOC_ID=$(echo "$USER_MSG_RESP" | jq -r '.document_id')
 if [ -z "$USER_MSG_DOC_ID" ] || [ "$USER_MSG_DOC_ID" = "null" ]; then
   echo "ERROR: Failed to add user message" >&2
@@ -909,7 +909,7 @@ echo "--- Generating conversation message ---"
 CONVO_GEN_STATUS="in_progress"
 CONVO_GEN_ATTEMPTS=0
 while [ "$CONVO_GEN_STATUS" = "in_progress" ] && [ "$CONVO_GEN_ATTEMPTS" -lt "30" ]; do
-  CONVO_GEN_RESP=$($SOAT_CLI generate-conversation-message --conversation-id "$NAMED_CONVO_ID" --actor_id "$AGENT_ACTOR_ID" | sanitize_json)
+  CONVO_GEN_RESP=$($SOAT_CLI generate-conversation-message --conversation-id "$NAMED_CONVO_ID" --agent_id "$CONVO_GEN_AGENT_ID" | sanitize_json)
   CONVO_GEN_STATUS=$(printf '%s\n' "$CONVO_GEN_RESP" | jq -r '.status')
   CONVO_GEN_ATTEMPTS=$((CONVO_GEN_ATTEMPTS + 1))
   if [ "$CONVO_GEN_STATUS" = "in_progress" ]; then
@@ -939,19 +939,19 @@ if [ "$MSG_COUNT" -lt "2" ]; then
 fi
 echo "Conversation messages count: $MSG_COUNT (OK)"
 
-# 49. Verify GET /conversations/:id/actors lists both actors
+# 49. Verify GET /conversations/:id/actors lists the user actor
 echo "--- Verifying GET /conversations/:id/actors ---"
 CONVO_ACTORS_RESP=$($SOAT_CLI list-conversation-actors --conversation-id "$NAMED_CONVO_ID")
 CONVO_ACTORS_COUNT=$(echo "$CONVO_ACTORS_RESP" | jq 'if type=="array" then length else (.data | length) end')
-if [ "$CONVO_ACTORS_COUNT" -lt "2" ]; then
-  echo "ERROR: Expected at least 2 actors in conversation, got $CONVO_ACTORS_COUNT" >&2
+if [ "$CONVO_ACTORS_COUNT" -lt "1" ]; then
+  echo "ERROR: Expected at least 1 actor in conversation, got $CONVO_ACTORS_COUNT" >&2
   exit 1
 fi
 echo "GET /conversations/:id/actors count: $CONVO_ACTORS_COUNT (OK)"
 
-# 50. Verify delete-block: agent-backed actor with messages cannot be deleted (409)
+# 50. Verify delete-block: user actor with messages cannot be deleted (409)
 echo "--- Verifying actor delete-block (409 when actor has messages) ---"
-expect_cli_error_status 409 delete-actor --actor-id "$AGENT_ACTOR_ID"
+expect_cli_error_status 409 delete-actor --actor-id "$USER_ACTOR_ID"
 echo "Actor delete-block: OK (409 as expected)"
 
 # 51. Cleanup — delete the conversation (cascades messages)
