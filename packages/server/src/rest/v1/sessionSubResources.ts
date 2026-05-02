@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { AppError } from 'src/AppError';
 import { db } from 'src/db';
 import {
   addSessionMessage,
@@ -113,10 +114,10 @@ sessionSubResourcesRouter.post(
       ctx.status = 201;
       ctx.body = result;
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Error adding session message:', error);
-      ctx.status = 500;
-      ctx.body = { error: 'Error adding session message' };
+      throw new AppError({
+        message: 'Error adding session message',
+        cause: error,
+      });
     }
   }
 );
@@ -175,19 +176,19 @@ sessionSubResourcesRouter.post(
       }
 
       if (typeof result === 'string') {
-        // eslint-disable-next-line no-console
-        console.error('Error generating session response:', result);
-        ctx.status = 500;
-        ctx.body = { error: 'Error generating session response' };
-        return;
+        throw new AppError({
+          message: 'Error generating session response',
+          cause: new Error(`Unexpected generation result: ${result}`),
+        });
       }
 
       ctx.body = result;
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Error generating session response:', error);
-      ctx.status = 500;
-      ctx.body = { error: 'Error generating session response' };
+      if (error instanceof AppError) throw error;
+      throw new AppError({
+        message: 'Error generating session response',
+        cause: error,
+      });
     }
   }
 );

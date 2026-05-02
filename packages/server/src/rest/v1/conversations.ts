@@ -1,4 +1,5 @@
 import { Router } from '@ttoss/http-server';
+import { AppError } from 'src/AppError';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import {
@@ -173,10 +174,10 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
     ctx.status = 201;
     ctx.body = conversation;
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Error creating conversation:', error);
-    ctx.status = 500;
-    ctx.body = { error: 'Error creating conversation' };
+    throw new AppError({
+      message: 'Error creating conversation',
+      cause: error,
+    });
   }
 });
 

@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { AppError } from 'src/AppError';
 import { db } from 'src/db';
 import {
   createDocument,
@@ -228,10 +229,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     ctx.status = 201;
     ctx.body = doc;
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Error creating document:', error);
-    ctx.status = 500;
-    ctx.body = { error: 'Error creating document' };
+    throw new AppError({ message: 'Error creating document', cause: error });
   }
 });
 
@@ -300,10 +298,7 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     });
     ctx.body = updated;
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Error updating document:', error);
-    ctx.status = 500;
-    ctx.body = { error: 'Error updating document' };
+    throw new AppError({ message: 'Error updating document', cause: error });
   }
 });
 
@@ -373,10 +368,7 @@ documentsRouter.post('/documents/search', async (ctx: Context) => {
     });
     ctx.body = { documents: results };
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Error searching documents:', error);
-    ctx.status = 500;
-    ctx.body = { error: 'Error searching documents' };
+    throw new AppError({ message: 'Error searching documents', cause: error });
   }
 });
 

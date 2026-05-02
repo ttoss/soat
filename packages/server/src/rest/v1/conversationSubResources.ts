@@ -1,4 +1,5 @@
 import { Router } from '@ttoss/http-server';
+import { AppError } from 'src/AppError';
 import type { Context } from 'src/Context';
 import { generateConversationMessage } from 'src/lib/conversationGeneration';
 import {
@@ -164,10 +165,10 @@ conversationSubResourcesRouter.post(
       ctx.status = 201;
       ctx.body = message;
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Error adding conversation message:', error);
-      ctx.status = 500;
-      ctx.body = { error: 'Error adding conversation message' };
+      throw new AppError({
+        message: 'Error adding conversation message',
+        cause: error,
+      });
     }
   }
 );
@@ -437,10 +438,10 @@ conversationSubResourcesRouter.post(
       ctx.status = 200;
       ctx.body = result;
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Error generating conversation response:', error);
-      ctx.status = 500;
-      ctx.body = { error: 'Error generating conversation response' };
+      throw new AppError({
+        message: 'Error generating conversation response',
+        cause: error,
+      });
     }
   }
 );
