@@ -113,6 +113,63 @@ volumes:
 Replace every `change-me` placeholder and the `SECRETS_ENCRYPTION_KEY` before deploying. Use `openssl rand -hex 32` to generate a secure key.
 :::
 
+## Linux: Connecting to a Host-Machine Ollama
+
+On **Docker Desktop** (macOS and Windows), `host.docker.internal` resolves automatically to the host machine. On **Linux**, this hostname is not available by default, so containers cannot reach services bound to `127.0.0.1` on the host.
+
+If you run Ollama on the Linux host and reference it as `http://host.docker.internal:11434` inside a container, you will get errors similar to:
+
+```
+AI_RetryError: Failed after 3 attempts. Last error: Cannot connect to API: getaddrinfo ENOTFOUND host.docker.internal
+```
+
+Two steps are required to fix this:
+
+### Step 1 — Add `extra_hosts` to Docker Compose
+
+In your `docker-compose.yml`, add `extra_hosts` to the `server` service so the container can resolve `host.docker.internal`:
+
+```yaml
+services:
+  server:
+    image: ttoss/soat:latest
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      # ... other variables
+```
+
+### Step 2 — Bind Ollama to all interfaces
+
+By default, Ollama binds to `127.0.0.1`, which is unreachable from inside a Docker container even with `host-gateway`. Configure Ollama to listen on all interfaces:
+
+```bash
+sudo systemctl edit ollama
+```
+
+Add the following, then save and close:
+
+```ini
+[Service]
+Environment="OLLAMA_HOST=0.0.0.0"
+```
+
+Restart Ollama:
+
+```bash
+sudo systemctl restart ollama
+```
+
+Verify it is listening on all interfaces:
+
+```bash
+ss -tlnp | grep 11434
+# Should show 0.0.0.0:11434
+```
+
+Both steps are required. `extra_hosts` maps the hostname, and `OLLAMA_HOST=0.0.0.0` makes the Ollama process reachable at that address from within the container network.
+
 ## Production Checklist
 
 Before deploying SOAT in production:

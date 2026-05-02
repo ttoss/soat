@@ -103,6 +103,31 @@ EMBEDDING_DIMENSIONS=1024
 OLLAMA_BASE_URL=http://localhost:11434
 ```
 
+### Changing the embedding model after first run
+
+`EMBEDDING_DIMENSIONS` must match the vector width of the `documents.embedding` column that was created when the database was first initialised. If you change the model to one that produces a different number of dimensions (for example, switching from `qwen3-embedding:0.6b` with 1024 dimensions to `nomic-embed-text` with 768 dimensions), all writes that involve an embedding will fail with a database error such as:
+
+```
+ERROR: expected 768 dimensions, not 1024
+```
+
+This error surfaces as a `500 Internal Server Error` on any endpoint that creates or updates documents or conversation messages.
+
+#### How to migrate
+
+Stop the server, then run the following SQL against your database (replace `768` with the actual dimensions of the new model):
+
+```sql
+ALTER TABLE documents DROP COLUMN embedding;
+ALTER TABLE documents ADD COLUMN embedding vector(768);
+```
+
+Restart the server with the updated `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` values. Existing documents will no longer have embeddings — re-create them or re-upload the content so embeddings are generated with the new model.
+
+:::warning
+Dropping the `embedding` column removes all stored vectors. Semantic search results will be empty until documents have been re-embedded with the new model.
+:::
+
 ## Examples
 
 ### Create a document

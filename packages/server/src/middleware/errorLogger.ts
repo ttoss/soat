@@ -33,22 +33,33 @@ const getErrorStatus = (args: { error: unknown }) => {
   return 500;
 };
 
+const toErrorMessage = (args: { error: unknown }) => {
+  if (args.error instanceof Error) {
+    return args.error.message;
+  }
+
+  return 'Internal Server Error';
+};
+
 const errorLoggerMiddleware = async (ctx: Context, next: Next) => {
   try {
     await next();
   } catch (error) {
+    const status = getErrorStatus({ error });
+
     if (isErrorLoggingEnabled()) {
       // eslint-disable-next-line no-console
       console.error('Request failed:', {
         method: ctx.method,
         path: ctx.path,
-        status: getErrorStatus({ error }),
+        status,
         userAgent: ctx.get('user-agent') || undefined,
         error: toErrorText({ error }),
       });
     }
 
-    throw error;
+    ctx.status = status;
+    ctx.body = { error: toErrorMessage({ error }) };
   }
 };
 
