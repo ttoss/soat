@@ -4,7 +4,7 @@ sidebar_position: 2
 
 # Usage Examples
 
-Examples for common operations across all SOAT modules. All examples assume a `SoatClient` instance — see [Introduction](./introduction.md) for setup.
+Examples for common operations across all SOAT modules. All examples assume a `SoatClient` instance — see [introduction](./introduction.md) for setup.
 
 ```ts
 import { SoatClient } from '@soat/sdk';
