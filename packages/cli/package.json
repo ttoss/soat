@@ -19,6 +19,7 @@
     "@ttoss/config": "^1.37.10",
     "@types/jest": "^30.0.0",
     "@types/js-yaml": "^4.0.9",
+    "@types/node": "^24",
     "jest": "^30.3.0",
     "js-yaml": "^4.1.1",
     "tsup": "^8.5.1",
