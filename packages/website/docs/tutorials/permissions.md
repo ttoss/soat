@@ -296,7 +296,7 @@ echo "full-access policy: $FULL_POLICY_ID"
 
 ### 4b — Read-only policy (for Bob)
 
-This policy only allows read actions on files inside the project. For the full list of `files:*` and `documents:*` actions, see [Files — Permissions](/docs/modules/files#permissions) and [Documents — Permissions](/docs/modules/documents#permissions).
+This policy only allows read actions on files inside the project. For the full list of `files:*` and `documents:*` actions, see the [Permissions Reference](/docs/permissions).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

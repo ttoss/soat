@@ -1,3 +1,6 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Chats
 
 The Chats module provides both a stateless completions endpoint and a stateful Chat resource. A Chat stores the AI provider, an optional default system message, and an optional model override so callers only need to pass the conversation history per request.
@@ -5,6 +8,8 @@ The Chats module provides both a stateless completions endpoint and a stateful C
 ## Overview
 
 There are two ways to call the completions API:
+
+> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ### Stateless — `POST /chats/completions`
 
@@ -91,13 +96,101 @@ See the [AI Providers](./ai-providers.md) module for the full list of supported 
 
 Set `stream: true` in the request body to receive an SSE stream. Each event contains a JSON object with a `choices[0].delta.content` chunk. The stream ends with `data: [DONE]`.
 
-## Permissions
+## Examples
 
-| Action                   | Permission                     | REST Endpoint                       | MCP Tool                          |
-| ------------------------ | ------------------------------ | ----------------------------------- | --------------------------------- |
-| Create a chat            | `chats:CreateChat`             | `POST /chats`                       | `create-chat`                     |
-| List chats               | `chats:ListChats`              | `GET /chats`                        | `list-chats`                      |
-| Get a chat               | `chats:GetChat`                | `GET /chats/{chat_id}`              | `get-chat`                        |
-| Delete a chat            | `chats:DeleteChat`             | `DELETE /chats/{chat_id}`           | `delete-chat`                     |
-| Run per-chat completion  | `chats:CreateChatCompletion`   | `POST /chats/{chat_id}/completions` | `create-chat-completion-for-chat` |
-| Run stateless completion | Authenticated user (no policy) | `POST /chats/completions`           | `create-chat-completion`          |
+### Create a chat
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-chat \
+  --project-id proj_ABC \
+  --ai-provider-id aip_abc123 \
+  --name "Support Assistant" \
+  --system-message "You are a helpful support assistant."
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
+
+const { data, error } = await soat.chats.createChat({
+  body: {
+    project_id: 'proj_ABC',
+    ai_provider_id: 'aip_abc123',
+    name: 'Support Assistant',
+    system_message: 'You are a helpful support assistant.',
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/chats \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "ai_provider_id": "aip_abc123",
+    "name": "Support Assistant",
+    "system_message": "You are a helpful support assistant."
+  }'
+```
+
+</TabItem>
+</Tabs>
+
+### Run a stateless completion
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-chat-completion \
+  --ai-provider-id aip_abc123 \
+  --system-message "You are a helpful assistant." \
+  --messages '[{"role":"user","content":"Hello!"}]'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+const { data, error } = await soat.chats.createChatCompletion({
+  body: {
+    ai_provider_id: 'aip_abc123',
+    system_message: 'You are a helpful assistant.',
+    messages: [{ role: 'user', content: 'Hello!' }],
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/chats/completions \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ai_provider_id": "aip_abc123",
+    "system_message": "You are a helpful assistant.",
+    "messages": [{ "role": "user", "content": "Hello!" }]
+  }'
+```
+
+</TabItem>
+</Tabs>

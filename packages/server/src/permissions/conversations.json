@@ -1,0 +1,55 @@
+{
+  "module": "conversations",
+  "operations": [
+    {
+      "operationId": "listConversations",
+      "action": "conversations:ListConversations",
+      "description": "List conversations in a project"
+    },
+    {
+      "operationId": "createConversation",
+      "action": "conversations:CreateConversation",
+      "description": "Create a new conversation"
+    },
+    {
+      "operationId": "getConversation",
+      "action": "conversations:GetConversation",
+      "description": "Get a conversation by ID"
+    },
+    {
+      "operationId": "updateConversation",
+      "action": "conversations:UpdateConversation",
+      "description": "Update a conversation's status"
+    },
+    {
+      "operationId": "deleteConversation",
+      "action": "conversations:DeleteConversation",
+      "description": "Delete a conversation"
+    },
+    {
+      "operationId": "listConversationMessages",
+      "action": "conversations:GetConversation",
+      "description": "List messages in a conversation"
+    },
+    {
+      "operationId": "addConversationMessage",
+      "action": "conversations:UpdateConversation",
+      "description": "Add a message to a conversation"
+    },
+    {
+      "operationId": "removeConversationMessage",
+      "action": "conversations:UpdateConversation",
+      "description": "Remove a message from a conversation"
+    },
+    {
+      "operationId": "generateConversationMessage",
+      "action": "conversations:GenerateConversationMessage",
+      "description": "Generate the next message in a conversation"
+    },
+    {
+      "operationId": "listConversationActors",
+      "action": "conversations:GetConversation",
+      "description": "List actors in a conversation"
+    }
+  ]
+}

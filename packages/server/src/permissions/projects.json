@@ -1,0 +1,20 @@
+{
+  "module": "projects",
+  "operations": [
+    {
+      "operationId": "createProject",
+      "action": "projects:CreateProject",
+      "description": "Create a new project (admin only)"
+    },
+    {
+      "operationId": "getProject",
+      "action": "projects:GetProject",
+      "description": "Get a project by ID"
+    },
+    {
+      "operationId": "deleteProject",
+      "action": "projects:DeleteProject",
+      "description": "Delete a project (admin only)"
+    }
+  ]
+}

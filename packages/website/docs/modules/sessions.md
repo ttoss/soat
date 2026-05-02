@@ -1,3 +1,6 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Sessions
 
 ## Overview
@@ -13,6 +16,8 @@ By default, interacting with an agent requires three API calls:
 When `auto_generate` is enabled on the session, step 3 is handled automatically — `POST .../messages` saves the message and returns the assistant reply in one call, reducing the flow to two API calls.
 
 The session automatically creates and manages the underlying conversation. An optional `actor_id` can be supplied to associate an existing Actor as the session owner; if omitted the session is created with no actor.
+
+> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Key Concepts
 
@@ -115,18 +120,65 @@ Messages are returned with simplified roles:
 | `model`      | string | Model used for assistant messages                           |
 | `created_at` | string | ISO 8601 timestamp                                          |
 
-## Permissions
+## Examples
 
-| Action                            | Description                               |
-| --------------------------------- | ----------------------------------------- |
-| `agents:CreateSession`            | Create a new session for an agent         |
-| `agents:ListSessions`             | List sessions for an agent                |
-| `agents:GetSession`               | View a session and its messages           |
-| `agents:UpdateSession`            | Update session name, status, or tags      |
-| `agents:DeleteSession`            | Delete a session                          |
-| `agents:SendSessionMessage`       | Save a user message or trigger generation |
-| `agents:SubmitSessionToolOutputs` | Submit tool outputs for client tools      |
-| `agents:ListSessionMessages`      | List messages in a session                |
+### Basic session flow
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-agent-session --agent-id agt_01 --name "My Session"
+soat add-session-message --agent-id agt_01 --session-id sess_01 --message "Hello!"
+soat generate-session-response --agent-id agt_01 --session-id sess_01
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
+
+const { data: session } = await soat.sessions.createAgentSession({
+  path: { agent_id: 'agt_01' },
+  body: { name: 'My Session' },
+});
+
+await soat.sessions.addSessionMessage({
+  path: { agent_id: 'agt_01', session_id: session.id },
+  body: { message: 'Hello!' },
+});
+
+const { data: reply } = await soat.sessions.generateSessionResponse({
+  path: { agent_id: 'agt_01', session_id: session.id },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/agents/agt_01/sessions \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "My Session"}'
+
+curl -X POST https://api.example.com/api/v1/agents/agt_01/sessions/sess_01/messages \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello!"}'
+
+curl -X POST https://api.example.com/api/v1/agents/agt_01/sessions/sess_01/generate \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
 
 ## Async Generation
 

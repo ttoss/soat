@@ -103,15 +103,21 @@ To give a user or API key access to a specific project without scoping the key v
 
 ## Actions
 
-Actions follow the `module:Operation` pattern. Each module defines its own set of actions documented in the **Permissions** section of the respective module page:
+Actions follow the `module:Operation` pattern. The full list of all action strings per module is in the [Permissions Reference](../permissions.md).
 
-- [Actors Permissions](actors.md#permissions)
-- [Conversations Permissions](conversations.md#permissions)
-- [Documents Permissions](documents.md#permissions)
-- [Files Permissions](files.md#permissions)
-- [Projects Permissions](projects.md#permissions)
-- [API Keys Permissions](api-keys.md#permissions)
-- [Users Permissions](#user-permissions)
+### Action Surface Mapping
+
+Every permission action corresponds to a single operation that is reachable through all four client surfaces. Given `actors:CreateActor` as an example:
+
+| Surface           | Convention                    | Example                     |
+| ----------------- | ----------------------------- | --------------------------- |
+| **Permission**    | `module:OperationName`        | `actors:CreateActor`        |
+| **REST endpoint** | `METHOD /api/v1/...`          | `POST /api/v1/actors`       |
+| **MCP tool**      | kebab-case operation name     | `create-actor`              |
+| **CLI command**   | `soat <kebab-case>`           | `soat create-actor`         |
+| **SDK method**    | `soat.<module>.<camelCase>()` | `soat.actors.createActor()` |
+
+A caller is authorised to invoke an operation if — and only if — the resolved policy grants the corresponding permission action. The same check applies regardless of which surface the caller uses.
 
 ### Wildcards
 
@@ -382,15 +388,6 @@ Users authenticate with `POST /api/v1/users/login`, providing `username` and `pa
 
 ### User Permissions
 
-User management is restricted to admin users. These operations are not governed by the policy engine — they require the `admin` role directly.
-
-| Action         | Permission      | REST Endpoint                  | MCP Tool |
-| -------------- | --------------- | ------------------------------ | -------- |
-| List users     | Admin only      | `GET /api/v1/users`            | —        |
-| Get user by ID | Admin only      | `GET /api/v1/users/:id`        | —        |
-| Create user    | Admin only      | `POST /api/v1/users`           | —        |
-| Delete user    | Admin only      | `DELETE /api/v1/users/:id`     | —        |
-| Bootstrap      | Unauthenticated | `POST /api/v1/users/bootstrap` | —        |
-| Login          | Unauthenticated | `POST /api/v1/users/login`     | —        |
+User management is restricted to admin users. These operations are not governed by the policy engine — they require the `admin` role directly. See the [Users module](./users.md) for details.
 
 See the [API Reference](../api/users/list-users) for full endpoint details, request/response schemas, and status codes.

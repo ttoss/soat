@@ -1,0 +1,30 @@
+{
+  "module": "api-keys",
+  "operations": [
+    {
+      "operationId": "listApiKeys",
+      "action": "api-keys:ListApiKeys",
+      "description": "List API keys owned by the caller"
+    },
+    {
+      "operationId": "createApiKey",
+      "action": "api-keys:CreateApiKey",
+      "description": "Create a new API key"
+    },
+    {
+      "operationId": "getApiKey",
+      "action": "api-keys:GetApiKey",
+      "description": "Get an API key by ID (owner only)"
+    },
+    {
+      "operationId": "updateApiKey",
+      "action": "api-keys:UpdateApiKey",
+      "description": "Update an API key's policy (owner only)"
+    },
+    {
+      "operationId": "deleteApiKey",
+      "action": "api-keys:DeleteApiKey",
+      "description": "Delete an API key (owner only)"
+    }
+  ]
+}

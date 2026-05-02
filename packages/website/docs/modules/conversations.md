@@ -1,3 +1,6 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Conversations
 
 The Conversations module represents a multi-party dialogue within a project. A Conversation groups ordered messages, each carrying an explicit `role` (`user`, `assistant`, or `system`) and an optional reference to an [Actor](./actors.md) for authorship tracking.
@@ -7,6 +10,8 @@ The Conversations module represents a multi-party dialogue within a project. A C
 A Conversation belongs to a project and contains an ordered list of messages. Each message references a [Document](./documents.md), has a `role`, and optionally references an [Actor](./actors.md) as its author.
 
 Conversations are identified by an `id` prefixed with `conv_`. The internal database primary key is never returned.
+
+> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Data Model
 
@@ -148,19 +153,91 @@ The following are not implemented in v1 but the data model leaves room for them:
 
 A conversation transitions between `open` and `closed`. Use `PATCH /conversations/:id` to update the status. New conversations default to `open`.
 
-## Permissions
+## Examples
 
-Conversation operations are governed by per-project policies. Grant the following permissions:
+### Create a conversation and add a message
 
-| Action                           | Permission                                  | REST Endpoint                               | MCP Tool                        |
-| -------------------------------- | ------------------------------------------- | ------------------------------------------- | ------------------------------- |
-| List conversations               | `conversations:ListConversations`           | `GET /api/v1/conversations`                 | `list-conversations`            |
-| Get conversation by ID           | `conversations:GetConversation`             | `GET /api/v1/conversations/:id`             | `get-conversation`              |
-| List conversation messages       | `conversations:GetConversation`             | `GET /api/v1/conversations/:id/messages`    | `list-conversation-messages`    |
-| List conversation actors         | `conversations:GetConversation`             | `GET /api/v1/conversations/:id/actors`      | `list-conversation-actors`      |
-| Create conversation              | `conversations:CreateConversation`          | `POST /api/v1/conversations`                | `create-conversation`           |
-| Update conversation status       | `conversations:UpdateConversation`          | `PATCH /api/v1/conversations/:id`           | `update-conversation`           |
-| Add message to conversation      | `conversations:UpdateConversation`          | `POST /api/v1/conversations/:id/messages`   | `add-conversation-message`      |
-| Remove message from conversation | `conversations:UpdateConversation`          | `DELETE /api/v1/conversations/:id/messages` | `remove-conversation-message`   |
-| Generate next message            | `conversations:GenerateConversationMessage` | `POST /api/v1/conversations/:id/generate`   | `generate-conversation-message` |
-| Delete conversation              | `conversations:DeleteConversation`          | `DELETE /api/v1/conversations/:id`          | `delete-conversation`           |
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-conversation --project-id proj_ABC --name "Support Thread"
+soat add-conversation-message \
+  --conversation-id conv_01 \
+  --content "Hello, I need help." \
+  --role user
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
+
+const { data: conv } = await soat.conversations.createConversation({
+  body: { project_id: 'proj_ABC', name: 'Support Thread' },
+});
+
+const { data: msg } = await soat.conversations.addConversationMessage({
+  path: { conversation_id: conv.id },
+  body: { content: 'Hello, I need help.', role: 'user' },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/conversations \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"project_id": "proj_ABC", "name": "Support Thread"}'
+
+curl -X POST https://api.example.com/api/v1/conversations/conv_01/messages \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Hello, I need help.", "role": "user"}'
+```
+
+</TabItem>
+</Tabs>
+
+### Generate the next message
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat generate-conversation-message \
+  --conversation-id conv_01 \
+  --agent-id agt_01
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+const { data: reply } = await soat.conversations.generateConversationMessage({
+  path: { conversation_id: 'conv_01' },
+  body: { agent_id: 'agt_01' },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/conversations/conv_01/generate \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id": "agt_01"}'
+```
+
+</TabItem>
+</Tabs>

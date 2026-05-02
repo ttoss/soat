@@ -1,3 +1,6 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # AI Providers
 
 The AI Providers module lets you register and manage LLM provider configurations for a project. Each provider record stores the model slug, optional base URL, optional configuration, and an optional link to a [Secret](./secrets.md) that supplies the API key.
@@ -7,6 +10,8 @@ The AI Providers module lets you register and manage LLM provider configurations
 An AI provider is a named configuration that tells the system how to reach a specific LLM endpoint. A project can have multiple providers — for example, one for GPT-4o and another for Claude 3.5.
 
 When a provider is linked to a secret the secret's encrypted value is retrieved and passed as the API key when calling the LLM. The key is never exposed through the API.
+
+> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Data Model
 
@@ -40,12 +45,91 @@ Valid values for the `provider` field:
 | `gateway`   | Generic API gateway        |
 | `custom`    | Custom / self-hosted model |
 
-## Permissions
+## Examples
 
-| Action          | Permission                     | REST Endpoint                                 | MCP Tool             |
-| --------------- | ------------------------------ | --------------------------------------------- | -------------------- |
-| List providers  | `aiProviders:ListAiProviders`  | `GET /api/v1/ai-providers`                    | `list-ai-providers`  |
-| Get a provider  | `aiProviders:GetAiProvider`    | `GET /api/v1/ai-providers/:ai_provider_id`    | `get-ai-provider`    |
-| Create provider | `aiProviders:CreateAiProvider` | `POST /api/v1/ai-providers`                   | `create-ai-provider` |
-| Update provider | `aiProviders:UpdateAiProvider` | `PATCH /api/v1/ai-providers/:ai_provider_id`  | `update-ai-provider` |
-| Delete provider | `aiProviders:DeleteAiProvider` | `DELETE /api/v1/ai-providers/:ai_provider_id` | `delete-ai-provider` |
+### Create an AI provider
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-ai-provider \
+  --project-id proj_ABC \
+  --name "OpenAI GPT-4o" \
+  --provider openai \
+  --default-model gpt-4o \
+  --secret-id sec_01
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
+
+const { data, error } = await soat.aiProviders.createAiProvider({
+  body: {
+    project_id: 'proj_ABC',
+    name: 'OpenAI GPT-4o',
+    provider: 'openai',
+    default_model: 'gpt-4o',
+    secret_id: 'sec_01',
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/ai-providers \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "name": "OpenAI GPT-4o",
+    "provider": "openai",
+    "default_model": "gpt-4o",
+    "secret_id": "sec_01"
+  }'
+```
+
+</TabItem>
+</Tabs>
+
+### List providers in a project
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-ai-providers --project-id proj_ABC
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+const { data, error } = await soat.aiProviders.listAiProviders({
+  query: { project_id: 'proj_ABC' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl https://api.example.com/api/v1/ai-providers?project_id=proj_ABC \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>

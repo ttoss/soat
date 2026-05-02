@@ -1,3 +1,6 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Actors
 
 The Actors module represents entities — people, bots, or other participants — that interact within a project. A common use case is storing external contacts such as WhatsApp numbers, where `external_id` holds the phone number and correlates the actor with a record in the external system.
@@ -5,6 +8,8 @@ The Actors module represents entities — people, bots, or other participants �
 ## Overview
 
 An Actor belongs to a project and has a display name, an optional type, an optional `external_id`, and optional links to an [Agent](./agents.md) or [Chat](./chats.md). Actors are identified by a public `id` prefixed with `act_`. The internal database primary key is never returned.
+
+> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 The module covers:
 
@@ -149,35 +154,99 @@ Use SRN patterns in policy `resource` fields to scope permissions to specific ac
 }
 ```
 
-## Permissions
-
-Actor operations are governed by per-project policies. Grant the following permissions:
-
-| Action          | Permission           | REST Endpoint               | MCP Tool       |
-| --------------- | -------------------- | --------------------------- | -------------- |
-| List actors     | `actors:ListActors`  | `GET /api/v1/actors`        | `list-actors`  |
-| Get actor by ID | `actors:GetActor`    | `GET /api/v1/actors/:id`    | `get-actor`    |
-| Create actor    | `actors:CreateActor` | `POST /api/v1/actors`       | `create-actor` |
-| Update actor    | `actors:UpdateActor` | `PATCH /api/v1/actors/:id`  | `update-actor` |
-| Delete actor    | `actors:DeleteActor` | `DELETE /api/v1/actors/:id` | `delete-actor` |
-
 ## Examples
+
+### Create an actor
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-actor \
+  --project-id proj_ABC \
+  --name Alice \
+  --external-id +15551234567 \
+  --type customer
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
+
+const { data, error } = await soat.actors.createActor({
+  body: {
+    project_id: 'proj_ABC',
+    name: 'Alice',
+    external_id: '+15551234567',
+    type: 'customer',
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/actors \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "name": "Alice",
+    "external_id": "+15551234567",
+    "type": "customer"
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 ### Idempotent actor upsert
 
 Safe to call on every inbound message — creates the actor on first contact, returns the existing record thereafter:
 
-```http
-POST /api/v1/actors
-Authorization: Bearer <project-key>
-Content-Type: application/json
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
 
-{
-  "name": "Bob",
-  "external_id": "+15559876543",
-  "type": "customer"
-}
+```bash
+soat create-actor --name Bob --external-id +15559876543 --type customer
 ```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK — identical call; 201 on create, 200 when the actor already exists
+const { data, error } = await soat.actors.createActor({
+  body: { name: 'Bob', external_id: '+15559876543', type: 'customer' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/actors \
+  -H "Authorization: Bearer <project-key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Bob",
+    "external_id": "+15559876543",
+    "type": "customer"
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 ### Allow a user to manage all actors in a project
 

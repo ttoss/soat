@@ -1,3 +1,6 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Webhooks
 
 The Webhooks module lets you subscribe to events that occur within a project and receive HTTP POST callbacks when those events fire. Every delivery is signed with HMAC-SHA256 so you can verify authenticity on the receiving end.
@@ -5,6 +8,8 @@ The Webhooks module lets you subscribe to events that occur within a project and
 ## Overview
 
 A webhook is scoped to a project. When you create a webhook you specify a URL, a list of event patterns to subscribe to, and optionally a project policy that gates delivery. The server automatically dispatches matching events, retrying up to three times for failed deliveries.
+
+> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Key Concepts
 
@@ -83,17 +88,57 @@ You can optionally attach a project policy to a webhook. When a policy is set, t
 | `created_at`      | string                             | ISO 8601 creation timestamp                |
 | `updated_at`      | string                             | ISO 8601 last-updated timestamp            |
 
-## Permissions
+## Examples
 
-Webhook operations are governed by per-project policies. Grant the following permissions to allow a user to perform each action:
+### Create a webhook
 
-| Action           | Permission                       | REST Endpoint                                                           | MCP Tool                  |
-| ---------------- | -------------------------------- | ----------------------------------------------------------------------- | ------------------------- |
-| List webhooks    | `webhooks:ListWebhooks`          | `GET /api/v1/projects/:project_id/webhooks`                             | `list-webhooks`           |
-| Create a webhook | `webhooks:CreateWebhook`         | `POST /api/v1/projects/:project_id/webhooks`                            | `create-webhook`          |
-| Get a webhook    | `webhooks:GetWebhook`            | `GET /api/v1/projects/:project_id/webhooks/:id`                         | `get-webhook`             |
-| Update a webhook | `webhooks:UpdateWebhook`         | `PUT /api/v1/projects/:project_id/webhooks/:id`                         | `update-webhook`          |
-| Delete a webhook | `webhooks:DeleteWebhook`         | `DELETE /api/v1/projects/:project_id/webhooks/:id`                      | `delete-webhook`          |
-| Rotate secret    | `webhooks:RotateWebhookSecret`   | `POST /api/v1/projects/:project_id/webhooks/:id/rotate-secret`          | `rotate-webhook-secret`   |
-| List deliveries  | `webhooks:ListWebhookDeliveries` | `GET /api/v1/projects/:project_id/webhooks/:id/deliveries`              | `list-webhook-deliveries` |
-| Get a delivery   | `webhooks:GetWebhookDelivery`    | `GET /api/v1/projects/:project_id/webhooks/:id/deliveries/:delivery_id` | `get-webhook-delivery`    |
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-webhook \
+  --project-id proj_ABC \
+  --name "My Webhook" \
+  --url https://example.com/hook \
+  --events "sessions.*"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
+
+const { data, error } = await soat.webhooks.createWebhook({
+  path: { project_id: 'proj_ABC' },
+  body: {
+    name: 'My Webhook',
+    url: 'https://example.com/hook',
+    events: ['sessions.*'],
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+// data.secret is returned only at creation — store it securely
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/projects/proj_ABC/webhooks \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My Webhook",
+    "url": "https://example.com/hook",
+    "events": ["sessions.*"]
+  }'
+```
+
+</TabItem>
+</Tabs>

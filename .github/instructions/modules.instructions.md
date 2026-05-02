@@ -20,6 +20,8 @@ A module is a named resource (e.g., `files`, `users`) that is exposed through th
 - [ ] OpenAPI spec updated so the generated MCP tool surface stays correct
 - [ ] `pnpm --filter @soat/sdk generate` run after OpenAPI changes
 - [ ] `pnpm --filter @soat/cli generate` run after OpenAPI changes
+- [ ] Permission actions updated in `packages/server/src/permissions/<module>.json`
+- [ ] Permissions Reference page regenerated: `pnpm --filter @soat/website generate-permissions-page`
 - [ ] Module docs updated in `packages/website/docs/modules/<module>.md`
 - [ ] Tests updated in `packages/server/tests/unit/tests/<module>.test.ts`
 

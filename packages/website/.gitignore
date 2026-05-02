@@ -9,6 +9,7 @@
 .cache-loader
 /static/openapi
 /docs/openapi-specs.md
+/docs/permissions.md
 
 # Misc
 .DS_Store

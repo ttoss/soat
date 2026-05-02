@@ -1,0 +1,30 @@
+{
+  "module": "actors",
+  "operations": [
+    {
+      "operationId": "listActors",
+      "action": "actors:ListActors",
+      "description": "List actors in a project"
+    },
+    {
+      "operationId": "createActor",
+      "action": "actors:CreateActor",
+      "description": "Create a new actor"
+    },
+    {
+      "operationId": "getActor",
+      "action": "actors:GetActor",
+      "description": "Get an actor by ID"
+    },
+    {
+      "operationId": "updateActor",
+      "action": "actors:UpdateActor",
+      "description": "Update an actor"
+    },
+    {
+      "operationId": "deleteActor",
+      "action": "actors:DeleteActor",
+      "description": "Delete an actor"
+    }
+  ]
+}
