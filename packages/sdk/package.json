@@ -39,6 +39,7 @@
     "@hey-api/openapi-ts": "^0.96.1",
     "@ttoss/config": "^1.37.10",
     "@types/js-yaml": "^4.0.9",
+    "@types/node": "^24",
     "js-yaml": "^4.1.1",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0"
