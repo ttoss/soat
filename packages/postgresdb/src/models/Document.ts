@@ -58,7 +58,7 @@ export class Document extends Model {
   declare tags: Record<string, string> | null;
 
   @Column({
-    type: DataType.VECTOR(1024),
+    type: DataType.VECTOR(Number(process.env.EMBEDDING_DIMENSIONS) || 1024),
     allowNull: true,
   })
   declare embedding: number[] | null;
