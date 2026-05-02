@@ -428,30 +428,12 @@ echo "--- Chat completion: 400 without messages ---"
 expect_cli_error_status 400 create-chat-completion
 echo "400 without messages: OK"
 
-# 16. Chat completion — valid non-streaming request (Ollama fallback)
-echo "--- Chat completion: valid request ---"
-CHAT_RESP=$($SOAT_CLI create-chat-completion --messages '[{"role":"user","content":"say hello"}]')
-CHAT_OBJECT=$(echo "$CHAT_RESP" | jq -r '.object')
-if [ "$CHAT_OBJECT" != "chat.completion" ]; then
-  echo "ERROR: Expected object=chat.completion, got $CHAT_OBJECT" >&2
-  echo "$CHAT_RESP" >&2
-  exit 1
-fi
-echo "Chat completion OK. Response: $(echo "$CHAT_RESP" | jq -r '.choices[0].message.content' | cut -c1-60)"
+# 15b. Chat completion — 400 without ai_provider_id
+echo "--- Chat completion: 400 without ai_provider_id ---"
+expect_cli_error_status 400 create-chat-completion --messages '[{"role":"user","content":"hello"}]'
+echo "400 without ai_provider_id: OK"
 
-# 17. Chat completion — SSE streaming request
-echo "--- Chat completion: SSE streaming ---"
-CHAT_SSE_RESP=$($SOAT_CLI create-chat-completion --messages '[{"role":"user","content":"say hello"}]' --stream true)
-if ! printf '%s\n' "$CHAT_SSE_RESP" | grep -q "data: \[DONE\]"; then
-  echo "ERROR: Chat SSE stream missing 'data: [DONE]'" >&2
-  echo "$CHAT_SSE_RESP" >&2
-  exit 1
-fi
-echo "Chat SSE stream OK."
-echo "--- Chat SSE stream output ---"
-echo "$CHAT_SSE_RESP"
-
-# 18. Create AI provider (Ollama with qwen2.5:0.5b available in test env)
+# 16. Create AI provider (Ollama with qwen2.5:0.5b available in test env)
 echo "--- Creating AI provider ---"
 AI_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
   --project_id "$PROJECT_PUBLIC_ID" \
@@ -461,6 +443,29 @@ AI_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
   --base_url "http://ollama:11434")
 AI_PROVIDER_ID=$(echo "$AI_PROVIDER_RESP" | jq -r '.id')
 echo "AI Provider id: $AI_PROVIDER_ID"
+
+# 17. Chat completion — valid non-streaming request
+echo "--- Chat completion: valid request ---"
+CHAT_RESP=$($SOAT_CLI create-chat-completion --ai_provider_id "$AI_PROVIDER_ID" --messages '[{"role":"user","content":"say hello"}]')
+CHAT_OBJECT=$(echo "$CHAT_RESP" | jq -r '.object')
+if [ "$CHAT_OBJECT" != "chat.completion" ]; then
+  echo "ERROR: Expected object=chat.completion, got $CHAT_OBJECT" >&2
+  echo "$CHAT_RESP" >&2
+  exit 1
+fi
+echo "Chat completion OK. Response: $(echo "$CHAT_RESP" | jq -r '.choices[0].message.content' | cut -c1-60)"
+
+# 18. Chat completion — SSE streaming request
+echo "--- Chat completion: SSE streaming ---"
+CHAT_SSE_RESP=$($SOAT_CLI create-chat-completion --ai_provider_id "$AI_PROVIDER_ID" --messages '[{"role":"user","content":"say hello"}]' --stream true)
+if ! printf '%s\n' "$CHAT_SSE_RESP" | grep -q "data: \[DONE\]"; then
+  echo "ERROR: Chat SSE stream missing 'data: [DONE]'" >&2
+  echo "$CHAT_SSE_RESP" >&2
+  exit 1
+fi
+echo "Chat SSE stream OK."
+echo "--- Chat SSE stream output ---"
+echo "$CHAT_SSE_RESP"
 
 # 19. Create an HTTP agent tool that calls GET /api/v1/projects on the SOAT server
 echo "--- Creating HTTP agent tool (list-projects) ---"

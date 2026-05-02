@@ -17,7 +17,9 @@ jest.mock('ollama', () => {
     Ollama: jest.fn().mockImplementation(() => {
       return {
         embed: jest.fn().mockResolvedValue({
-          embeddings: [Array(1024).fill(0.1)],
+          embeddings: [
+            Array(Number(process.env.EMBEDDING_DIMENSIONS)).fill(0.1),
+          ],
         }),
         chat: jest.fn().mockResolvedValue(
           (async function* () {
