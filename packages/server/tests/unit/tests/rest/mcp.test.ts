@@ -687,6 +687,18 @@ describe('MCP tools - happy path', () => {
     expect(Array.isArray(result.data)).toBe(true);
   });
 
+  test('add-session-message adds a user message and returns 201 body', async () => {
+    const res = await mcpCall('add-session-message', {
+      agentId: sessionAgentId,
+      sessionId,
+      message: 'hello from mcp session',
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.role).toBe('user');
+    expect(result.content).toBe('hello from mcp session');
+  });
+
   test('delete-agent-session deletes the session', async () => {
     const res = await mcpCall('delete-agent-session', {
       agentId: sessionAgentId,
