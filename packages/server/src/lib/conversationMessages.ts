@@ -4,6 +4,17 @@ import { db } from '../db';
 import { createDocument, deleteDocument } from './documents';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 
+const readStoredFileContent = (storagePath: string): string | null => {
+  try {
+    if (fs.existsSync(storagePath)) {
+      return fs.readFileSync(storagePath, 'utf-8');
+    }
+  } catch {
+    // Ignore read errors
+  }
+  return null;
+};
+
 export const mapMessage = (
   message: InstanceType<(typeof db)['ConversationMessage']> & {
     document?: InstanceType<(typeof db)['Document']> & {
@@ -13,25 +24,35 @@ export const mapMessage = (
     agent?: InstanceType<(typeof db)['Agent']> | null;
   }
 ) => {
-  let content: string | null = null;
-  if (message.document?.file?.storagePath) {
-    try {
-      if (fs.existsSync(message.document.file.storagePath)) {
-        content = fs.readFileSync(message.document.file.storagePath, 'utf-8');
-      }
-    } catch {
-      // Ignore read errors
-    }
-  }
-
+  const storagePath = message.document?.file?.storagePath;
   return {
     role: message.role,
     documentId: message.document?.publicId,
     actorId: message.actor?.publicId ?? null,
     agentId: message.agent?.publicId ?? null,
     position: message.position,
-    content,
+    content: storagePath ? readStoredFileContent(storagePath) : null,
     metadata: message.metadata ?? null,
+  };
+};
+
+const resolveParticipantDbIds = async (args: {
+  actorId?: string | null;
+  agentId?: string | null;
+}): Promise<{ actorDbId: number | null; agentDbId: number | null } | null> => {
+  const [actor, agent] = await Promise.all([
+    args.actorId
+      ? db.Actor.findOne({ where: { publicId: args.actorId } })
+      : null,
+    args.agentId
+      ? db.Agent.findOne({ where: { publicId: args.agentId } })
+      : null,
+  ]);
+  if (args.actorId && !actor) return null;
+  if (args.agentId && !agent) return null;
+  return {
+    actorDbId: actor ? actor.id : null,
+    agentDbId: agent ? agent.id : null,
   };
 };
 
@@ -106,22 +127,13 @@ export const addConversationMessage = async (args: {
   }
 
   let actorDbId: number | null = null;
-  if (args.actorId) {
-    const actor = await db.Actor.findOne({ where: { publicId: args.actorId } });
-    if (!actor) {
-      return null;
-    }
-    actorDbId = actor.id;
-  }
-
   let agentDbId: number | null = null;
-  if (args.agentId) {
-    const agent = await db.Agent.findOne({ where: { publicId: args.agentId } });
-    if (!agent) {
-      return null;
-    }
-    agentDbId = agent.id;
-  }
+  const participants = await resolveParticipantDbIds({
+    actorId: args.actorId,
+    agentId: args.agentId,
+  });
+  if (!participants) return null;
+  ({ actorDbId, agentDbId } = participants);
 
   const createdDoc = await createDocument({
     projectId: conversation.projectId,
