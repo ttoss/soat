@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.4.13](https://github.com/ttoss/soat/compare/v0.4.12...v0.4.13) (2026-05-02)
+
+### Bug Fixes
+
+* tools ([a15f6b8](https://github.com/ttoss/soat/commit/a15f6b8fd048774070c2f8a5562f4155b17ffcc8))
+
 ## [0.4.12](https://github.com/ttoss/soat/compare/v0.4.11...v0.4.12) (2026-05-02)
 
 ### Bug Fixes
