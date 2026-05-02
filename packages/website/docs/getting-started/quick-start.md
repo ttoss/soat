@@ -169,7 +169,7 @@ curl -s -X POST http://localhost:5047/api/v1/chats/completions \
   }" | jq '.choices[0].message.content'
 ```
 
-You should see a short answer from `qwen2.5:0.5b` running locally via Ollama.
+You should see a short answer from the configured model running locally via Ollama.
 
 ## 6. What's next?
 

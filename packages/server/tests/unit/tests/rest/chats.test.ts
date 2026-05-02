@@ -344,17 +344,15 @@ describe('Chats', () => {
       expect(response.body.error).toBeDefined();
     });
 
-    test('falls back to ollama when no aiProviderId is provided', async () => {
+    test('missing ai_provider_id returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chats/completions')
         .send({
           messages: [{ role: 'user', content: 'Hello' }],
         });
 
-      // Ollama is not running in tests, so it will fail with a connection error.
-      // The important thing is that we reached the ollama fallback path (not the aiProviderId path).
-      expect(response.status).not.toBe(401);
-      expect(response.status).not.toBe(403);
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
     });
   });
 
@@ -538,7 +536,7 @@ describe('Chats', () => {
       expect(response.text).toContain('data:');
     });
 
-    test('streams SSE response without ai_provider_id (ollama fallback)', async () => {
+    test('missing ai_provider_id returns 400 (streaming)', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chats/completions')
         .send({
@@ -546,8 +544,8 @@ describe('Chats', () => {
           stream: true,
         });
 
-      expect(response.status).toBe(200);
-      expect(response.headers['content-type']).toMatch(/text\/event-stream/);
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
     });
   });
 

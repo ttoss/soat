@@ -269,6 +269,45 @@ const validateMessages = (messages: unknown): ChatMessage[] | null => {
   return messages as ChatMessage[];
 };
 
+/**
+ * Handles streaming stateless chat completion response
+ */
+const handleStatelessStreamingCompletion = async (args: {
+  ctx: Context;
+  aiProviderId: string;
+  messages: ChatMessage[];
+  model?: string;
+}): Promise<void> => {
+  args.ctx.respond = false;
+  args.ctx.res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  });
+
+  try {
+    const textStream = await streamChatCompletion({
+      aiProviderId: args.aiProviderId,
+      model: args.model,
+      messages: args.messages,
+    });
+
+    for await (const chunk of textStream) {
+      args.ctx.res.write(
+        `data: ${JSON.stringify({ choices: [{ delta: { content: chunk } }] })}\n\n`
+      );
+    }
+
+    args.ctx.res.write('data: [DONE]\n\n');
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Internal server error';
+    args.ctx.res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
+  } finally {
+    args.ctx.res.end();
+  }
+};
+
 chatsRouter.post('/chats/completions', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
@@ -286,36 +325,19 @@ chatsRouter.post('/chats/completions', async (ctx: Context) => {
     return;
   }
 
+  if (!aiProviderId || typeof aiProviderId !== 'string') {
+    ctx.status = 400;
+    ctx.body = { error: 'ai_provider_id is required' };
+    return;
+  }
+
   if (stream) {
-    ctx.respond = false;
-    ctx.res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
+    await handleStatelessStreamingCompletion({
+      ctx,
+      aiProviderId,
+      messages: chatMessages,
+      model,
     });
-
-    try {
-      const textStream = await streamChatCompletion({
-        aiProviderId,
-        model,
-        messages: chatMessages,
-      });
-
-      for await (const chunk of textStream) {
-        ctx.res.write(
-          `data: ${JSON.stringify({ choices: [{ delta: { content: chunk } }] })}\n\n`
-        );
-      }
-
-      ctx.res.write('data: [DONE]\n\n');
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Internal server error';
-      ctx.res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
-    } finally {
-      ctx.res.end();
-    }
-
     return;
   }
 
