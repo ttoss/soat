@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.4.11](https://github.com/ttoss/soat/compare/v0.4.10...v0.4.11) (2026-05-02)
+
+### Features
+
+* make Document embedding vector dimension configurable via EMBEDDING_DIMENSIONS ([#64](https://github.com/ttoss/soat/issues/64)) ([6b6e62b](https://github.com/ttoss/soat/commit/6b6e62b418fc304ba23731ae24ba6d73d250e766))
+
 ## [0.4.10](https://github.com/ttoss/soat/compare/v0.4.9...v0.4.10) (2026-05-02)
 
 ### Bug Fixes
