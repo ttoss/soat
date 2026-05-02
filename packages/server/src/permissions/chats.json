@@ -1,0 +1,35 @@
+{
+  "module": "chats",
+  "operations": [
+    {
+      "operationId": "createChat",
+      "action": "chats:CreateChat",
+      "description": "Create a new chat"
+    },
+    {
+      "operationId": "listChats",
+      "action": "chats:ListChats",
+      "description": "List chats in a project"
+    },
+    {
+      "operationId": "getChat",
+      "action": "chats:GetChat",
+      "description": "Get a chat by ID"
+    },
+    {
+      "operationId": "deleteChat",
+      "action": "chats:DeleteChat",
+      "description": "Delete a chat"
+    },
+    {
+      "operationId": "createChatCompletionForChat",
+      "action": "chats:CreateChatCompletionForChat",
+      "description": "Generate a chat completion within a stored chat"
+    },
+    {
+      "operationId": "createChatCompletion",
+      "action": "chats:CreateChatCompletion",
+      "description": "Generate a stateless chat completion"
+    }
+  ]
+}

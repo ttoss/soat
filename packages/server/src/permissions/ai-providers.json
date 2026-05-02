@@ -1,0 +1,30 @@
+{
+  "module": "ai-providers",
+  "operations": [
+    {
+      "operationId": "listAiProviders",
+      "action": "ai-providers:ListAiProviders",
+      "description": "List AI providers in a project"
+    },
+    {
+      "operationId": "createAiProvider",
+      "action": "ai-providers:CreateAiProvider",
+      "description": "Create an AI provider"
+    },
+    {
+      "operationId": "getAiProvider",
+      "action": "ai-providers:GetAiProvider",
+      "description": "Get an AI provider by ID"
+    },
+    {
+      "operationId": "updateAiProvider",
+      "action": "ai-providers:UpdateAiProvider",
+      "description": "Update an AI provider"
+    },
+    {
+      "operationId": "deleteAiProvider",
+      "action": "ai-providers:DeleteAiProvider",
+      "description": "Delete an AI provider"
+    }
+  ]
+}

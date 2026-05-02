@@ -1,3 +1,6 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # API Keys
 
 The API Keys module provides long-lived programmatic credentials for users. An API key authenticates as its owning user and optionally restricts access to a single project and/or a subset of that user's policies.
@@ -7,6 +10,8 @@ The API Keys module provides long-lived programmatic credentials for users. An A
 API keys are prefixed with `sk_` and are identified in the system by a public `id` prefixed with `key_`. The raw key value is returned **only at creation time** and cannot be retrieved again. A truncated `key_prefix` (first 8 characters) is stored for identification.
 
 API keys use the standard `Authorization: Bearer <key>` header — the same as JWTs.
+
+> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Data Model
 
@@ -48,44 +53,57 @@ Policies listed in `policy_ids` are loaded from the global [Policies](./policies
 
 Delete the key via `DELETE /api/v1/api-keys/:id`. The key immediately stops authenticating. There is no rotation endpoint — create a new key and delete the old one.
 
-## Creating an API Key
+## Examples
 
-```http
-POST /api/v1/api-keys
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
+### Create an API key
 
-{
-  "name": "CI/CD Pipeline",
-  "project_id": "proj_V1StGXR8Z5jdHi6B",
-  "policy_ids": ["pol_V1StGXR8Z5jdHi6B"]
-}
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-api-key \
+  --name "CI/CD Pipeline" \
+  --project-id proj_V1StGXR8Z5jdHi6B \
+  --policy-ids pol_V1StGXR8Z5jdHi6B
 ```
 
-**Response** `201 Created`
+</TabItem>
+<TabItem value="sdk" label="SDK">
 
-```json
-{
-  "id": "key_V1StGXR8Z5jdHi6B",
-  "name": "CI/CD Pipeline",
-  "key_prefix": "sk_a1b2c3",
-  "key": "sk_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-  "user_id": "usr_V1StGXR8Z5jdHi6B",
-  "project_id": "proj_V1StGXR8Z5jdHi6B",
-  "policy_ids": ["pol_V1StGXR8Z5jdHi6B"],
-  "created_at": "2024-01-01T00:00:00.000Z",
-  "updated_at": "2024-01-01T00:00:00.000Z"
-}
+```ts
+// SDK
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
+
+const { data, error } = await soat.apiKeys.createApiKey({
+  body: {
+    name: 'CI/CD Pipeline',
+    project_id: 'proj_V1StGXR8Z5jdHi6B',
+    policy_ids: ['pol_V1StGXR8Z5jdHi6B'],
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+// data.key is the raw secret — store it securely, it is never returned again
 ```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/api-keys \
+  -H "Authorization: Bearer <jwt-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "CI/CD Pipeline",
+    "project_id": "proj_V1StGXR8Z5jdHi6B",
+    "policy_ids": ["pol_V1StGXR8Z5jdHi6B"]
+  }'
+```
+
+</TabItem>
+</Tabs>
 
 Store the `key` value securely — it is never returned again.
-
-## Permissions
-
-| Action         | Permission     | REST Endpoint                 | MCP Tool         |
-| -------------- | -------------- | ----------------------------- | ---------------- |
-| List API keys  | Authenticated  | `GET /api/v1/api-keys`        | `list-api-keys`  |
-| Create API key | Authenticated  | `POST /api/v1/api-keys`       | `create-api-key` |
-| Get API key    | Owner or admin | `GET /api/v1/api-keys/:id`    | `get-api-key`    |
-| Update API key | Owner or admin | `PUT /api/v1/api-keys/:id`    | `update-api-key` |
-| Delete API key | Owner or admin | `DELETE /api/v1/api-keys/:id` | `delete-api-key` |

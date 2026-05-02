@@ -1,0 +1,35 @@
+{
+  "module": "users",
+  "operations": [
+    {
+      "operationId": "listUsers",
+      "action": "users:ListUsers",
+      "description": "List all users"
+    },
+    {
+      "operationId": "createUser",
+      "action": "users:CreateUser",
+      "description": "Create a new user"
+    },
+    {
+      "operationId": "getUser",
+      "action": "users:GetUser",
+      "description": "Get a user by ID"
+    },
+    {
+      "operationId": "deleteUser",
+      "action": "users:DeleteUser",
+      "description": "Delete a user"
+    },
+    {
+      "operationId": "getUserPolicies",
+      "action": "users:GetUserPolicies",
+      "description": "Get policies attached to a user"
+    },
+    {
+      "operationId": "attachUserPolicies",
+      "action": "users:AttachUserPolicies",
+      "description": "Replace the full set of policies attached to a user"
+    }
+  ]
+}

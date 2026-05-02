@@ -1,0 +1,68 @@
+{
+  "module": "files",
+  "operations": [
+    {
+      "operationId": "listFiles",
+      "action": "files:GetFile",
+      "description": "List files in a project"
+    },
+    {
+      "operationId": "createFile",
+      "action": "files:CreateFile",
+      "description": "Create a metadata-only file record"
+    },
+    {
+      "operationId": "uploadFile",
+      "action": "files:UploadFile",
+      "description": "Upload a file (multipart)"
+    },
+    {
+      "operationId": "uploadFileBase64",
+      "action": "files:UploadFile",
+      "description": "Upload a file (base64-encoded)"
+    },
+    {
+      "operationId": "getFile",
+      "action": "files:GetFile",
+      "description": "Get file metadata by ID"
+    },
+    {
+      "operationId": "downloadFile",
+      "action": "files:DownloadFile",
+      "description": "Download file content"
+    },
+    {
+      "operationId": "downloadFileBase64",
+      "action": "files:DownloadFile",
+      "description": "Download file content as base64"
+    },
+    {
+      "operationId": "updateFileMetadata",
+      "action": "files:UpdateFileMetadata",
+      "description": "Update file metadata"
+    },
+    {
+      "operationId": "deleteFile",
+      "action": "files:DeleteFile",
+      "description": "Delete a file"
+    }
+  ],
+  "srnPatterns": [
+    {
+      "pattern": "soat:{project_id}:file:{id}",
+      "description": "Specific file by ID"
+    },
+    {
+      "pattern": "soat:{project_id}:file:/path/to/file.ext",
+      "description": "File at an exact logical path"
+    },
+    {
+      "pattern": "soat:{project_id}:file:/prefix/*",
+      "description": "All files under a path prefix"
+    },
+    {
+      "pattern": "soat:{project_id}:file:*",
+      "description": "All files in a project"
+    }
+  ]
+}

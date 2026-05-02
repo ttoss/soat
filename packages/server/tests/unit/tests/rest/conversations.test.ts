@@ -184,7 +184,11 @@ describe('Conversations', () => {
 
       await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${filteredConvId}/messages`)
-        .send({ message: 'Filter test', actor_id: secondActorId });
+        .send({
+          message: 'Filter test',
+          role: 'user',
+          actor_id: secondActorId,
+        });
 
       const response = await authenticatedTestClient(userToken).get(
         `/api/v1/conversations?actor_id=${secondActorId}`
@@ -341,11 +345,12 @@ describe('Conversations', () => {
     test('user with permission can add a message to a conversation', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
-        .send({ message: 'Hello world', actor_id: actorId });
+        .send({ message: 'Hello world', role: 'user', actor_id: actorId });
 
       expect(response.status).toBe(201);
       expect(response.body.document_id).toMatch(/^doc_/);
       expect(response.body.actor_id).toBe(actorId);
+      expect(response.body.agent_id).toBeNull();
       expect(typeof response.body.position).toBe('number');
       expect(response.body.content).toBe('Hello world');
       addedDocumentId = response.body.document_id;
@@ -383,7 +388,7 @@ describe('Conversations', () => {
     test('returns 404 for non-existent conversation', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/conversations/conv_nonexistent/messages')
-        .send({ message: 'Hello world', actor_id: actorId });
+        .send({ message: 'Hello world', role: 'user', actor_id: actorId });
 
       expect(response.status).toBe(404);
     });
@@ -394,6 +399,7 @@ describe('Conversations', () => {
         .post(`/api/v1/conversations/${conversationId}/messages`)
         .send({
           message: 'Message with metadata',
+          role: 'user',
           actor_id: actorId,
           metadata,
         });
@@ -405,7 +411,11 @@ describe('Conversations', () => {
     test('returns null metadata when metadata is not provided', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
-        .send({ message: 'Message without metadata', actor_id: actorId });
+        .send({
+          message: 'Message without metadata',
+          role: 'user',
+          actor_id: actorId,
+        });
 
       expect(response.status).toBe(201);
       expect(response.body.metadata).toBeNull();
@@ -415,7 +425,12 @@ describe('Conversations', () => {
       const metadata = { source: 'sms', external_id: 'msg_123' };
       const addRes = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
-        .send({ message: 'Persisted metadata', actor_id: actorId, metadata });
+        .send({
+          message: 'Persisted metadata',
+          role: 'user',
+          actor_id: actorId,
+          metadata,
+        });
 
       expect(addRes.status).toBe(201);
       const docId = addRes.body.document_id;
@@ -444,7 +459,7 @@ describe('Conversations', () => {
 
       const msgRes = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
-        .send({ message: 'Remove me', actor_id: actorId });
+        .send({ message: 'Remove me', role: 'user', actor_id: actorId });
       secondDocumentId = msgRes.body.document_id;
     });
 
@@ -539,16 +554,25 @@ describe('Conversations', () => {
 
       await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
-        .send({ message: 'Message from actor 1', actor_id: actorId });
+        .send({
+          message: 'Message from actor 1',
+          role: 'user',
+          actor_id: actorId,
+        });
       await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
         .send({
           message: 'Message from actor 2',
+          role: 'user',
           actor_id: secondActorIdForActorsTest,
         });
       await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
-        .send({ message: 'Another from actor 1', actor_id: actorId });
+        .send({
+          message: 'Another from actor 1',
+          role: 'user',
+          actor_id: actorId,
+        });
     });
 
     test('returns distinct actors who sent messages', async () => {
@@ -594,7 +618,11 @@ describe('Conversations', () => {
 
       await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
-        .send({ message: 'Content check message', actor_id: actorId });
+        .send({
+          message: 'Content check message',
+          role: 'user',
+          actor_id: actorId,
+        });
     });
 
     test('listed messages include content field', async () => {
@@ -605,6 +633,7 @@ describe('Conversations', () => {
       expect(response.status).toBe(200);
       expect(response.body.data.length).toBeGreaterThanOrEqual(1);
       expect(response.body.data[0].content).toBe('Content check message');
+      expect(response.body.data[0].agent_id).toBeNull();
     });
   });
 
@@ -620,7 +649,11 @@ describe('Conversations', () => {
 
       const msgRes = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${conversationId}/messages`)
-        .send({ message: 'Orphan test message', actor_id: actorId });
+        .send({
+          message: 'Orphan test message',
+          role: 'user',
+          actor_id: actorId,
+        });
       documentId = msgRes.body.document_id;
     });
 
@@ -694,41 +727,41 @@ describe('Conversations', () => {
     test('returns 501 when stream is requested', async () => {
       const res = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${convId}/generate`)
-        .send({ actor_id: actorId, stream: true });
+        .send({ agent_id: 'agt_test', stream: true });
       expect(res.status).toBe(501);
     });
 
-    test('returns 400 when actor has no agentId or chatId', async () => {
+    test('returns 404 for unknown agent', async () => {
       const res = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${convId}/generate`)
-        .send({ actor_id: actorId });
-      expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/agentId or chatId/i);
+        .send({ agent_id: 'agt_does_not_exist' });
+      expect(res.status).toBe(404);
     });
 
     test('returns 404 for unknown conversation', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations/conv_does_not_exist/generate')
-        .send({ actor_id: actorId });
+        .send({ agent_id: 'agt_test' });
       expect(res.status).toBe(404);
     });
 
     test('returns 401 when unauthenticated', async () => {
       const res = await testClient
         .post(`/api/v1/conversations/${convId}/generate`)
-        .send({ actor_id: actorId });
+        .send({ agent_id: 'agt_test' });
       expect(res.status).toBe(401);
     });
 
     test('accepts toolContext in request body', async () => {
       const res = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${convId}/generate`)
-        .send({ actor_id: actorId, tool_context: { user_id: 'u1' } });
+        .send({
+          agent_id: 'agt_does_not_exist',
+          tool_context: { user_id: 'u1' },
+        });
 
-      // toolContext is accepted by the schema (not rejected as an unknown property).
-      // The 400 is from app logic (actor has no agentId/chatId), not from toolContext validation.
-      expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/agentId or chatId/i);
+      // agent_id does not exist, so 404
+      expect(res.status).toBe(404);
     });
   });
 
@@ -773,7 +806,7 @@ describe('Conversations', () => {
 
       const msgRes = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${newConvId}/messages`)
-        .send({ actor_id: newActorId, message: 'hello' });
+        .send({ actor_id: newActorId, role: 'user', message: 'hello' });
       expect(msgRes.status).toBe(201);
 
       const delRes = await authenticatedTestClient(userToken).delete(

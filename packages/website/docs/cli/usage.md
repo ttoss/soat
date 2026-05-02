@@ -4,7 +4,7 @@ sidebar_position: 2
 
 # Usage Examples
 
-Common workflows using the SOAT CLI. All examples assume a configured profile — see [Introduction](./introduction.md) for setup.
+Common workflows using the SOAT CLI. All examples assume a configured profile — see [introduction](./introduction.md) for setup.
 
 ## Configure a Profile
 

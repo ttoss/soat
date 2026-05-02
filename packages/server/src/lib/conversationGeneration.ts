@@ -2,7 +2,6 @@ import fs from 'node:fs';
 
 import { db } from '../db';
 import { createGeneration, type GenerationResult } from './agents';
-import { createChatCompletionForChat } from './chats';
 import { addConversationMessage } from './conversationMessages';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 
@@ -10,15 +9,12 @@ type ConversationMessage = InstanceType<(typeof db)['ConversationMessage']> & {
   document?: InstanceType<(typeof db)['Document']> & {
     file?: InstanceType<(typeof db)['File']>;
   };
-  actor?: InstanceType<(typeof db)['Actor']>;
+  actor?: InstanceType<(typeof db)['Actor']> | null;
 };
 
 type GenerationContext = {
   conversation: InstanceType<(typeof db)['Conversation']>;
-  generatingActor: InstanceType<(typeof db)['Actor']> & {
-    agent?: InstanceType<(typeof db)['Agent']>;
-    chat?: InstanceType<(typeof db)['Chat']>;
-  };
+  generatingAgent: InstanceType<(typeof db)['Agent']>;
   messages: Array<ConversationMessage>;
   snapshotPosition: number;
 };
@@ -40,10 +36,9 @@ const readMessageContent = (msg: ConversationMessage): string => {
 
 const buildMessageEntry = (args: {
   msg: ConversationMessage;
-  generatingActorId: number;
 }): { role: string; content: string } => {
   const content = readMessageContent(args.msg);
-  if (args.msg.actorId === args.generatingActorId) {
+  if (args.msg.role === 'assistant') {
     return { role: 'assistant', content };
   }
   const speakerName = args.msg.actor?.name ?? 'participant';
@@ -65,13 +60,9 @@ const buildMessageEntry = (args: {
 
 const buildConversationHistory = (args: {
   messages: Array<ConversationMessage>;
-  generatingActorId: number;
 }) => {
   return args.messages.map((msg) => {
-    return buildMessageEntry({
-      msg,
-      generatingActorId: args.generatingActorId,
-    });
+    return buildMessageEntry({ msg });
   });
 };
 
@@ -129,77 +120,24 @@ const runAgentGeneration = async (args: {
   };
 };
 
-const runChatGeneration = async (args: {
-  chat: InstanceType<(typeof db)['Chat']>;
-  messagesForModel: Array<{
-    role: 'system' | 'user' | 'assistant';
-    content: string;
-  }>;
-  model?: string;
-}): Promise<InternalGenerationResult> => {
-  const result = await createChatCompletionForChat({
-    chatId: args.chat.publicId,
-    messages: args.messagesForModel,
-    model: args.model,
-  });
-
-  if (result === 'chat_not_found') {
-    return 'agent_or_chat_not_found';
-  }
-
-  if (result === 'ai_provider_not_found') {
-    return 'ai_provider_not_found';
-  }
-
-  return {
-    status: 'completed',
-    generationId: '',
-    traceId: '',
-    content: result.content,
-    model: result.model,
-  };
-};
-
-const runGenerationForActor = async (args: {
-  generatingActor: GenerationContext['generatingActor'];
+const runGenerationForAgent = async (args: {
+  generatingAgent: GenerationContext['generatingAgent'];
   messagesForModel: Array<{ role: string; content: string }>;
   model?: string;
   toolContext?: Record<string, string>;
-}): Promise<
-  | InternalGenerationResult
-  | 'actor_missing_agent_or_chat'
-  | 'agent_or_chat_not_found'
-> => {
-  if (args.generatingActor.agentId) {
-    if (!args.generatingActor.agent) {
-      return 'agent_or_chat_not_found';
-    }
-    return runAgentGeneration({
-      agent: args.generatingActor.agent,
-      messagesForModel: args.messagesForModel,
-      toolContext: args.toolContext,
-    });
-  } else if (args.generatingActor.chatId) {
-    if (!args.generatingActor.chat) {
-      return 'agent_or_chat_not_found';
-    }
-    return runChatGeneration({
-      chat: args.generatingActor.chat,
-      messagesForModel: args.messagesForModel as Array<{
-        role: 'system' | 'user' | 'assistant';
-        content: string;
-      }>,
-      model: args.model,
-    });
-  }
-  return 'actor_missing_agent_or_chat';
+}): Promise<InternalGenerationResult | 'agent_or_chat_not_found'> => {
+  return runAgentGeneration({
+    agent: args.generatingAgent,
+    messagesForModel: args.messagesForModel,
+    toolContext: args.toolContext,
+  });
 };
 
 const loadGenerationContext = async (args: {
   conversationId: string;
-  actorId: string;
+  agentId: string;
 }): Promise<
-  GenerationContext | 'conversation_not_found' | 'actor_not_found'
+  GenerationContext | 'conversation_not_found' | 'agent_not_found'
 > => {
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.conversationId },
@@ -209,16 +147,12 @@ const loadGenerationContext = async (args: {
     return 'conversation_not_found';
   }
 
-  const generatingActor = await db.Actor.findOne({
-    where: { publicId: args.actorId, projectId: conversation.projectId },
-    include: [
-      { model: db.Agent, as: 'agent' },
-      { model: db.Chat, as: 'chat' },
-    ],
+  const generatingAgent = await db.Agent.findOne({
+    where: { publicId: args.agentId, projectId: conversation.projectId },
   });
 
-  if (!generatingActor) {
-    return 'actor_not_found';
+  if (!generatingAgent) {
+    return 'agent_not_found';
   }
 
   const messages = await db.ConversationMessage.findAll({
@@ -239,19 +173,21 @@ const loadGenerationContext = async (args: {
 
   return {
     conversation,
-    generatingActor: generatingActor as GenerationContext['generatingActor'],
+    generatingAgent,
     messages: messages as ConversationMessage[],
     snapshotPosition,
   };
 };
 
-const buildPersonaSystem = (actor: {
+const buildPersonaSystem = (agent: {
   instructions?: string | null;
-  name: string;
+  name?: string | null;
 }) => {
-  const lines = actor.instructions ? [actor.instructions] : [];
+  const lines = agent.instructions ? [agent.instructions] : [];
   lines.push(
-    `You are ${actor.name}. Reply as this participant only — do not speak for any other actor.`
+    `You are ${
+      agent.name ?? 'Assistant'
+    }. Reply as this participant only — do not speak for any other actor.`
   );
   return lines.join('\n\n');
 };
@@ -272,41 +208,36 @@ export type GenerateConversationMessageResult =
       requiredAction: NonNullable<GenerationResult['requiredAction']>;
     }
   | 'conversation_not_found'
-  | 'actor_not_found'
-  | 'actor_missing_agent_or_chat'
+  | 'agent_not_found'
   | 'ai_provider_not_found'
   | 'agent_or_chat_not_found';
 
 export const generateConversationMessage = async (args: {
   conversationId: string;
-  actorId: string;
+  agentId: string;
   model?: string;
   toolContext?: Record<string, string>;
 }): Promise<GenerateConversationMessageResult> => {
   const ctx = await loadGenerationContext({
     conversationId: args.conversationId,
-    actorId: args.actorId,
+    agentId: args.agentId,
   });
 
   if (typeof ctx === 'string') {
     return ctx;
   }
 
-  const { conversation, generatingActor, messages, snapshotPosition } = ctx;
+  const { conversation, generatingAgent, messages, snapshotPosition } = ctx;
 
-  const history = buildConversationHistory({
-    messages,
-    generatingActorId: generatingActor.id,
-  });
-
-  const personaSystem = buildPersonaSystem(generatingActor);
+  const history = buildConversationHistory({ messages });
+  const personaSystem = buildPersonaSystem(generatingAgent);
   const messagesForModel = [
     { role: 'system', content: personaSystem },
     ...history,
   ];
 
-  const genResult = await runGenerationForActor({
-    generatingActor,
+  const genResult = await runGenerationForAgent({
+    generatingAgent,
     messagesForModel,
     model: args.model,
     toolContext: args.toolContext,
@@ -330,7 +261,8 @@ export const generateConversationMessage = async (args: {
   const persisted = await addConversationMessage({
     conversationId: args.conversationId,
     message: assistantContent,
-    actorId: args.actorId,
+    role: 'assistant',
+    agentId: args.agentId,
     position: snapshotPosition + 1,
   });
 
@@ -348,7 +280,7 @@ export const generateConversationMessage = async (args: {
         resourceId: persisted.documentId,
         data: {
           conversationId: args.conversationId,
-          actorId: args.actorId,
+          agentId: args.agentId,
           generationId,
           traceId,
         },

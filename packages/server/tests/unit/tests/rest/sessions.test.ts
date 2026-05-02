@@ -99,7 +99,7 @@ describe('Sessions', () => {
 
       expect(response.status).toBe(201);
       expect(response.body.name).toBe('Test Session');
-      expect(response.body.actor_id).toMatch(/^act_/);
+      expect(response.body.actor_id).toBeNull();
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -156,14 +156,22 @@ describe('Sessions', () => {
     });
 
     test('can filter by actorId', async () => {
-      // Create a session and capture its actorId
-      const createRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'actorId filter seed' });
-      const actorId = createRes.body.actor_id;
+      // Create an actor to use for filtering
+      const actorRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/actors')
+        .send({
+          project_id: projectId,
+          name: 'filter-test-actor',
+          type: 'user',
+        });
+      const actorId = actorRes.body.id;
       expect(actorId).toMatch(/^act_/);
 
-      // Create a second session reusing that actor
+      // Create two sessions using that actor
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'actorId filter seed', actor_id: actorId });
+
       await authenticatedTestClient(userToken)
         .post(`/api/v1/agents/${agentId}/sessions`)
         .send({ actor_id: actorId });
@@ -1077,9 +1085,7 @@ describe('Sessions', () => {
 
       // Second session must still be usable — the actor was not deleted.
       const msgRes = await authenticatedTestClient(userToken)
-        .post(
-          `/api/v1/agents/${agentId}/sessions/${secondSessionId}/messages`
-        )
+        .post(`/api/v1/agents/${agentId}/sessions/${secondSessionId}/messages`)
         .send({ message: 'still works?' });
       expect(msgRes.status).toBe(201);
 

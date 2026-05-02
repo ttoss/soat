@@ -1,0 +1,30 @@
+{
+  "module": "policies",
+  "operations": [
+    {
+      "operationId": "listPolicies",
+      "action": "policies:ListPolicies",
+      "description": "List all policies (admin only)"
+    },
+    {
+      "operationId": "createPolicy",
+      "action": "policies:CreatePolicy",
+      "description": "Create a new policy (admin only)"
+    },
+    {
+      "operationId": "getPolicy",
+      "action": "policies:GetPolicy",
+      "description": "Get a policy by ID (admin only)"
+    },
+    {
+      "operationId": "updatePolicy",
+      "action": "policies:UpdatePolicy",
+      "description": "Update a policy (admin only)"
+    },
+    {
+      "operationId": "deletePolicy",
+      "action": "policies:DeletePolicy",
+      "description": "Delete a policy (admin only)"
+    }
+  ]
+}

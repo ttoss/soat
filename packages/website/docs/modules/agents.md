@@ -1,3 +1,6 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Agents
 
 ## Overview
@@ -5,6 +8,8 @@
 Agents are persistent configurations for multi-step AI workflows. Unlike simple [chat](./chats.md) completions that make a single model call, agents execute **reasoning-and-acting loops**: the model can call tools, observe results, and continue reasoning until it reaches a final answer or hits a step limit.
 
 Each agent stores its AI provider, instructions, tool references, and execution parameters. To run an agent, send a prompt (and optional message history) — the server builds the agent from the stored configuration, executes the full loop, and returns the result.
+
+> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Key Concepts
 
@@ -348,6 +353,97 @@ When an agent invokes another agent via a `soat` tool (`create-agent-generation`
 
 When a generation pauses with `status: "requires_action"` (client tool), the `tool_context` provided in the original request is preserved and automatically reapplied when the generation resumes via `POST /agents/{agent_id}/generate/{generation_id}/tool-outputs`.
 
+## Examples
+
+### Create an agent
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-agent \
+  --project-id proj_ABC \
+  --name "My Agent" \
+  --ai-provider-id aip_01 \
+  --instructions "You are a helpful assistant."
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
+
+const { data, error } = await soat.agents.createAgent({
+  body: {
+    project_id: 'proj_ABC',
+    name: 'My Agent',
+    ai_provider_id: 'aip_01',
+    instructions: 'You are a helpful assistant.',
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/agents \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "name": "My Agent",
+    "ai_provider_id": "aip_01",
+    "instructions": "You are a helpful assistant."
+  }'
+```
+
+</TabItem>
+</Tabs>
+
+### Run a generation
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-agent-generation \
+  --agent-id agt_01 \
+  --prompt "What is the capital of France?"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+const { data, error } = await soat.agents.createAgentGeneration({
+  path: { agent_id: 'agt_01' },
+  body: { prompt: 'What is the capital of France?' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/agents/agt_01/generate \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "What is the capital of France?"}'
+```
+
+</TabItem>
+</Tabs>
+
 ## Example Flows
 
 ### 1. Fully Automatic (server-side tools only)
@@ -652,22 +748,3 @@ This design is self-contained: each generation only needs its own `remaining_dep
 For observability, every top-level generation also creates a **trace** identified by a unique `trace_id` (`agt_trace_` prefix). The server attaches the same `trace_id` to all generations in the chain automatically. This is internal server plumbing — agents do not receive or propagate `trace_id`.
 
 Example: A caller starts Agent A with `max_call_depth: 3`. Agent A runs with `remaining_depth: 3` and calls Agent B (`remaining_depth: 2`). Agent B calls Agent C (`remaining_depth: 1`). Agent C can still run but cannot nest further — if it tries to call Agent D, `remaining_depth` would be `0` → the server rejects the call.
-
-## Permissions
-
-| Action               | Permission                     | REST Endpoint                                                   | MCP Tool                    |
-| -------------------- | ------------------------------ | --------------------------------------------------------------- | --------------------------- |
-| Create an agent      | `agents:CreateAgent`           | `POST /agents`                                                  | `create-agent`              |
-| List agents          | `agents:ListAgents`            | `GET /agents`                                                   | `list-agents`               |
-| Get an agent         | `agents:GetAgent`              | `GET /agents/{agent_id}`                                        | `get-agent`                 |
-| Update an agent      | `agents:UpdateAgent`           | `PUT /agents/{agent_id}`                                        | `update-agent`              |
-| Delete an agent      | `agents:DeleteAgent`           | `DELETE /agents/{agent_id}`                                     | `delete-agent`              |
-| Run a generation     | `agents:CreateAgentGeneration` | `POST /agents/{agent_id}/generate`                              | `create-agent-generation`   |
-| Submit tool outputs  | `agents:CreateAgentGeneration` | `POST /agents/{agent_id}/generate/{generation_id}/tool-outputs` | `submit-agent-tool-outputs` |
-| Create an agent tool | `agents:CreateAgentTool`       | `POST /agents/tools`                                            | `create-agent-tool`         |
-| List agent tools     | `agents:ListAgentTools`        | `GET /agents/tools`                                             | `list-agent-tools`          |
-| Get an agent tool    | `agents:GetAgentTool`          | `GET /agents/tools/{tool_id}`                                   | `get-agent-tool`            |
-| Update an agent tool | `agents:UpdateAgentTool`       | `PUT /agents/tools/{tool_id}`                                   | `update-agent-tool`         |
-| Delete an agent tool | `agents:DeleteAgentTool`       | `DELETE /agents/tools/{tool_id}`                                | `delete-agent-tool`         |
-| List traces          | `agents:ListAgentTraces`       | `GET /agents/traces`                                            | `list-agent-traces`         |
-| Get a trace          | `agents:GetAgentTrace`         | `GET /agents/traces/{trace_id}`                                 | `get-agent-trace`           |

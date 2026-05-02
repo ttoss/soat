@@ -1,0 +1,75 @@
+{
+  "module": "agents",
+  "operations": [
+    {
+      "operationId": "createAgent",
+      "action": "agents:CreateAgent",
+      "description": "Create a new agent"
+    },
+    {
+      "operationId": "listAgents",
+      "action": "agents:ListAgents",
+      "description": "List agents in a project"
+    },
+    {
+      "operationId": "getAgent",
+      "action": "agents:GetAgent",
+      "description": "Get an agent by ID"
+    },
+    {
+      "operationId": "updateAgent",
+      "action": "agents:UpdateAgent",
+      "description": "Update an agent"
+    },
+    {
+      "operationId": "deleteAgent",
+      "action": "agents:DeleteAgent",
+      "description": "Delete an agent"
+    },
+    {
+      "operationId": "createAgentGeneration",
+      "action": "agents:CreateAgentGeneration",
+      "description": "Run a generation for an agent"
+    },
+    {
+      "operationId": "submitAgentToolOutputs",
+      "action": "agents:CreateAgentGeneration",
+      "description": "Submit tool outputs to resume a paused generation"
+    },
+    {
+      "operationId": "createAgentTool",
+      "action": "agents:CreateAgentTool",
+      "description": "Create an agent tool"
+    },
+    {
+      "operationId": "listAgentTools",
+      "action": "agents:ListAgentTools",
+      "description": "List agent tools in a project"
+    },
+    {
+      "operationId": "getAgentTool",
+      "action": "agents:GetAgentTool",
+      "description": "Get an agent tool by ID"
+    },
+    {
+      "operationId": "updateAgentTool",
+      "action": "agents:UpdateAgentTool",
+      "description": "Update an agent tool"
+    },
+    {
+      "operationId": "deleteAgentTool",
+      "action": "agents:DeleteAgentTool",
+      "description": "Delete an agent tool"
+    },
+    {
+      "operationId": "listAgentTraces",
+      "action": "agents:ListAgentTraces",
+      "description": "List agent execution traces"
+    },
+    {
+      "operationId": "getAgentTrace",
+      "action": "agents:GetAgentTrace",
+      "description": "Get an agent trace by ID"
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "module": "documents",
+  "operations": [
+    {
+      "operationId": "listDocuments",
+      "action": "documents:ListDocuments",
+      "description": "List documents in a project"
+    },
+    {
+      "operationId": "createDocument",
+      "action": "documents:CreateDocument",
+      "description": "Create a new document"
+    },
+    {
+      "operationId": "getDocument",
+      "action": "documents:GetDocument",
+      "description": "Get a document by ID"
+    },
+    {
+      "operationId": "updateDocument",
+      "action": "documents:UpdateDocument",
+      "description": "Update a document"
+    },
+    {
+      "operationId": "deleteDocument",
+      "action": "documents:DeleteDocument",
+      "description": "Delete a document"
+    },
+    {
+      "operationId": "searchDocuments",
+      "action": "documents:SearchDocuments",
+      "description": "Full-text search across documents"
+    }
+  ],
+  "srnPatterns": [
+    {
+      "pattern": "soat:{project_id}:document:{id}",
+      "description": "Specific document by ID"
+    },
+    {
+      "pattern": "soat:{project_id}:document:{path}",
+      "description": "Document at a logical path"
+    },
+    {
+      "pattern": "soat:{project_id}:document:/prefix/*",
+      "description": "All documents under a path prefix"
+    },
+    {
+      "pattern": "soat:{project_id}:document:*",
+      "description": "All documents in a project"
+    }
+  ]
+}

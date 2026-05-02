@@ -4,38 +4,64 @@ import { db } from '../db';
 import { createDocument, deleteDocument } from './documents';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 
+const readStoredFileContent = (storagePath: string): string | null => {
+  try {
+    if (fs.existsSync(storagePath)) {
+      return fs.readFileSync(storagePath, 'utf-8');
+    }
+  } catch {
+    // Ignore read errors
+  }
+  return null;
+};
+
 export const mapMessage = (
   message: InstanceType<(typeof db)['ConversationMessage']> & {
     document?: InstanceType<(typeof db)['Document']> & {
       file?: InstanceType<(typeof db)['File']>;
     };
-    actor?: InstanceType<(typeof db)['Actor']>;
+    actor?: InstanceType<(typeof db)['Actor']> | null;
+    agent?: InstanceType<(typeof db)['Agent']> | null;
   }
 ) => {
-  let content: string | null = null;
-  if (message.document?.file?.storagePath) {
-    try {
-      if (fs.existsSync(message.document.file.storagePath)) {
-        content = fs.readFileSync(message.document.file.storagePath, 'utf-8');
-      }
-    } catch {
-      // Ignore read errors
-    }
-  }
-
+  const storagePath = message.document?.file?.storagePath;
   return {
+    role: message.role,
     documentId: message.document?.publicId,
-    actorId: message.actor?.publicId,
+    actorId: message.actor?.publicId ?? null,
+    agentId: message.agent?.publicId ?? null,
     position: message.position,
-    content,
+    content: storagePath ? readStoredFileContent(storagePath) : null,
     metadata: message.metadata ?? null,
+  };
+};
+
+const resolveParticipantDbIds = async (args: {
+  actorId?: string | null;
+  agentId?: string | null;
+}): Promise<{ actorDbId: number | null; agentDbId: number | null } | null> => {
+  const [actor, agent] = await Promise.all([
+    args.actorId
+      ? db.Actor.findOne({ where: { publicId: args.actorId } })
+      : null,
+    args.agentId
+      ? db.Agent.findOne({ where: { publicId: args.agentId } })
+      : null,
+  ]);
+  if (args.actorId && !actor) return null;
+  if (args.agentId && !agent) return null;
+  return {
+    actorDbId: actor ? actor.id : null,
+    agentDbId: agent ? agent.id : null,
   };
 };
 
 const insertMessage = async (args: {
   conversationId: number;
   documentId: number;
-  actorId: number;
+  role: string;
+  actorId?: number | null;
+  agentId?: number | null;
   position?: number;
   metadata?: Record<string, unknown>;
 }) => {
@@ -72,7 +98,9 @@ const insertMessage = async (args: {
       {
         conversationId: args.conversationId,
         documentId: args.documentId,
-        actorId: args.actorId,
+        role: args.role,
+        actorId: args.actorId ?? null,
+        agentId: args.agentId ?? null,
         position,
         metadata: args.metadata ?? null,
       },
@@ -84,7 +112,9 @@ const insertMessage = async (args: {
 export const addConversationMessage = async (args: {
   conversationId: string;
   message: string;
-  actorId: string;
+  role: string;
+  actorId?: string | null;
+  agentId?: string | null;
   position?: number;
   metadata?: Record<string, unknown>;
 }) => {
@@ -96,11 +126,14 @@ export const addConversationMessage = async (args: {
     return null;
   }
 
-  const actor = await db.Actor.findOne({ where: { publicId: args.actorId } });
-
-  if (!actor) {
-    return null;
-  }
+  let actorDbId: number | null = null;
+  let agentDbId: number | null = null;
+  const participants = await resolveParticipantDbIds({
+    actorId: args.actorId,
+    agentId: args.agentId,
+  });
+  if (!participants) return null;
+  ({ actorDbId, agentDbId } = participants);
 
   const createdDoc = await createDocument({
     projectId: conversation.projectId,
@@ -118,7 +151,9 @@ export const addConversationMessage = async (args: {
   const result = await insertMessage({
     conversationId: conversation.id,
     documentId: document.id,
-    actorId: actor.id,
+    role: args.role,
+    actorId: actorDbId,
+    agentId: agentDbId,
     position: args.position,
     metadata: args.metadata,
   });
@@ -132,6 +167,7 @@ export const addConversationMessage = async (args: {
         include: [{ model: db.File, as: 'file' }],
       },
       { model: db.Actor, as: 'actor' },
+      { model: db.Agent, as: 'agent' },
     ],
   });
 

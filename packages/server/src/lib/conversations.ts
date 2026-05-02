@@ -319,6 +319,7 @@ export const listConversationMessages = async (args: {
         include: [{ model: db.File, as: 'file' }],
       },
       { model: db.Actor, as: 'actor' },
+      { model: db.Agent, as: 'agent' },
     ],
     order: [['position', 'ASC']],
     limit,
@@ -353,9 +354,11 @@ export const listConversationActors = async (args: {
   const seen = new Set<number>();
   const actors = [];
   for (const msg of messages) {
-    if (!seen.has(msg.actorId)) {
+    if (msg.actorId !== null && !seen.has(msg.actorId)) {
       seen.add(msg.actorId);
-      actors.push(msg.actor);
+      if (msg.actor) {
+        actors.push(msg.actor);
+      }
     }
   }
 

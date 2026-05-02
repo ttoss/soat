@@ -24,8 +24,43 @@ Agents working on the website package must adhere to the following guidelines to
 
 ## Module Documentation
 
-- **Permission Actions**: Each module doc owns its permission table in a `## Permissions` section. The table must have four columns: **Action**, **Permission**, **REST Endpoint**, and **MCP Tool**. `iam.md` explains the `resource:Action` format and wildcards but does **not** list individual actions — it links to each module's `## Permissions` section instead.
-- **Keep in sync**: When a new permission action is added to the server, add a row to the relevant module doc's permissions table and, if it introduces a new module, add a link in `iam.md`.
+Module docs live at `packages/website/docs/modules/<module>.md`. Each page must describe:
+
+- What the module does (overview)
+- Key concepts and data model
+- Any roles or access rules that apply
+
+**Canonical section order:**
+
+```
+# Module Name
+{one-sentence description}
+## Overview
+## Data Model           [always]
+## Key Concepts         [optional — omit if trivial]
+## Configuration        [only if the module requires env vars]
+## Examples             [always]
+```
+
+Do **not** add a `## Permissions` section to module docs. Instead, add this line at the end of the overview or as a callout:
+
+> See the [Permissions Reference](./permissions.md) for the IAM action strings for this module.
+
+### Permission actions are now auto-generated
+
+Permission action strings live in `packages/server/src/permissions/<module>.json`, one file per module. The Permissions Reference page (`packages/website/docs/modules/permissions.md`) is auto-generated from those JSON files by running:
+
+```bash
+pnpm --filter @soat/website generate-permissions-page
+```
+
+When a new permission action is added to the server:
+
+1. Add an entry to `packages/server/src/permissions/<module>.json`.
+2. Regenerate the page: `pnpm --filter @soat/website generate-permissions-page`.
+3. Do **not** manually edit `permissions.md` — it will be overwritten.
+
+`iam.md` explains the `resource:Action` format and wildcards but does **not** list individual actions — it links to the Permissions Reference page instead.
 
 ## Technical Requirements
 

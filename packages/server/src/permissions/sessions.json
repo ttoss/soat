@@ -1,0 +1,50 @@
+{
+  "module": "sessions",
+  "operations": [
+    {
+      "operationId": "createAgentSession",
+      "action": "agents:CreateSession",
+      "description": "Create a new session for an agent"
+    },
+    {
+      "operationId": "listAgentSessions",
+      "action": "agents:ListSessions",
+      "description": "List sessions for an agent"
+    },
+    {
+      "operationId": "getAgentSession",
+      "action": "agents:GetSession",
+      "description": "Get a session and its messages"
+    },
+    {
+      "operationId": "updateSession",
+      "action": "agents:UpdateSession",
+      "description": "Update session name, status, or tags"
+    },
+    {
+      "operationId": "deleteAgentSession",
+      "action": "agents:DeleteSession",
+      "description": "Delete a session"
+    },
+    {
+      "operationId": "addSessionMessage",
+      "action": "agents:SendSessionMessage",
+      "description": "Save a user message or trigger generation"
+    },
+    {
+      "operationId": "generateSessionResponse",
+      "action": "agents:SendSessionMessage",
+      "description": "Generate an assistant response in a session"
+    },
+    {
+      "operationId": "submitSessionToolOutputs",
+      "action": "agents:SubmitSessionToolOutputs",
+      "description": "Submit tool outputs for client tools in a session"
+    },
+    {
+      "operationId": "listAgentSessionMessages",
+      "action": "agents:ListSessionMessages",
+      "description": "List messages in a session"
+    }
+  ]
+}

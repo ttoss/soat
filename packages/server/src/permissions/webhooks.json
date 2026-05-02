@@ -1,0 +1,45 @@
+{
+  "module": "webhooks",
+  "operations": [
+    {
+      "operationId": "listWebhooks",
+      "action": "webhooks:ListWebhooks",
+      "description": "List webhooks in a project"
+    },
+    {
+      "operationId": "createWebhook",
+      "action": "webhooks:CreateWebhook",
+      "description": "Create a new webhook"
+    },
+    {
+      "operationId": "getWebhook",
+      "action": "webhooks:GetWebhook",
+      "description": "Get a webhook by ID"
+    },
+    {
+      "operationId": "updateWebhook",
+      "action": "webhooks:UpdateWebhook",
+      "description": "Update a webhook"
+    },
+    {
+      "operationId": "deleteWebhook",
+      "action": "webhooks:DeleteWebhook",
+      "description": "Delete a webhook"
+    },
+    {
+      "operationId": "rotateWebhookSecret",
+      "action": "webhooks:RotateWebhookSecret",
+      "description": "Rotate the signing secret for a webhook"
+    },
+    {
+      "operationId": "listWebhookDeliveries",
+      "action": "webhooks:ListWebhookDeliveries",
+      "description": "List delivery attempts for a webhook"
+    },
+    {
+      "operationId": "getWebhookDelivery",
+      "action": "webhooks:GetWebhookDelivery",
+      "description": "Get details of a specific webhook delivery"
+    }
+  ]
+}

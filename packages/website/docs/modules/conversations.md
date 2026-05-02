@@ -1,12 +1,17 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Conversations
 
-The Conversations module represents a multi-party dialogue within a project. A Conversation groups ordered messages, where each message is authored by an [Actor](./actors.md) — either a human contact (e.g. a WhatsApp user) or an AI-backed actor linked to an [Agent](./agents.md) or [Chat](./chats.md).
+The Conversations module represents a multi-party dialogue within a project. A Conversation groups ordered messages, each carrying an explicit `role` (`user`, `assistant`, or `system`) and an optional reference to an [Actor](./actors.md) for authorship tracking.
 
 ## Overview
 
-A Conversation belongs to a project and contains an ordered list of messages. Each message references a [Document](./documents.md) and is authored by an [Actor](./actors.md). Actors are not tied 1:1 to agents: an Actor may optionally reference an `Agent` or a `Chat`, which allows it to generate the next message from the conversation history.
+A Conversation belongs to a project and contains an ordered list of messages. Each message references a [Document](./documents.md), has a `role`, and optionally references an [Actor](./actors.md) as its author.
 
 Conversations are identified by an `id` prefixed with `conv_`. The internal database primary key is never returned.
+
+> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Data Model
 
@@ -30,7 +35,9 @@ Conversations are identified by an `id` prefixed with `conv_`. The internal data
 | Field         | Type           | Description                                                                                                                |
 | ------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `document_id` | string         | ID of the Document attached as a message                                                                                   |
-| `actor_id`    | string         | ID of the Actor who authored the message                                                                                   |
+| `role`        | string         | Role of the message: `user`, `assistant`, or `system`                                                                      |
+| `actor_id`    | string \| null | Optional ID of the Actor who authored the message; `null` for messages not tied to an actor                                |
+| `agent_id`    | string \| null | Optional ID of the Agent that generated this message; `null` for non-generated messages                                    |
 | `position`    | integer        | Zero-based position of the message in the conversation                                                                     |
 | `metadata`    | object \| null | Optional structured key-value data attached to the message (e.g. `phone`, `channel`). Injected into the AI prompt context. |
 | `content`     | string         | Full text content of the message (read from the underlying document)                                                       |
@@ -47,25 +54,11 @@ The pair `(conversation_id, position)` is uniquely indexed. See [Message orderin
 - An **Agent** / **Chat** is an AI configuration (provider, model, base instructions, tools).
 - An Actor **may** reference an `Agent` **or** a `Chat` (mutually exclusive) via `agent_id` / `chat_id`. Actors without either are plain human/external participants.
 
-The relationship is **N:1** — one agent can back many actors.
-
-#### Persona overrides
-
-Each AI-backed Actor has an optional `instructions` field (TEXT). At generation time, the effective system prompt is composed:
-
-```
-<agent.instructions or chat.system_message>
-
-<actor.instructions>
-
-You are <actor.name>. Reply as this participant.
-```
-
-Empty sections are skipped. This lets one agent configuration power multiple distinct voices without cloning the agent.
+Actors are used to track _who_ wrote a message (authorship). Generation is triggered separately by passing `agent_id` directly to `POST /conversations/:id/generate` — no actor is required to drive generation.
 
 #### Deletion rules
 
-- Deleting an `Agent` or `Chat` sets `agent_id` / `chat_id` on referencing actors to `null`. The actor and its historical messages are preserved; the actor can no longer generate until re-linked.
+- Deleting an `Agent` or `Chat` sets `agent_id` / `chat_id` on referencing actors to `null`. The actor and its historical messages are preserved.
 - Deleting an `Actor` is **blocked** if any conversation message references it. Remove the actor's messages (or delete the containing conversations) first.
 
 #### Convenience endpoints
@@ -74,9 +67,9 @@ Empty sections are skipped. This lets one agent configuration power multiple dis
 
 ### Messages
 
-Messages are ordered, actor-authored references to Documents within a conversation. Each document can appear at most once per conversation — adding the same document twice returns `409 Conflict`.
+Messages are ordered references to Documents within a conversation. Each message has a `role` (`user`, `assistant`, or `system`) and an optional `actor_id` for authorship tracking. Each document can appear at most once per conversation — adding the same document twice returns `409 Conflict`.
 
-When listing messages, each entry includes the full text `content` of the underlying document and the authoring `actor_id`.
+When listing messages, each entry includes the full text `content` of the underlying document, the message `role`, the optional authoring `actor_id`, and the optional `agent_id` of the Agent that generated it (set for `assistant` messages produced by `POST /conversations/:id/generate`, `null` otherwise).
 
 Removing a message from a conversation also deletes its underlying Document and the associated File on disk, preventing orphaned records.
 
@@ -90,22 +83,22 @@ The unique index `(conversation_id, position)` enforces that no two messages sha
 
 ### Generating the Next Message
 
-An AI-backed actor (one with `agent_id` or `chat_id`) can generate the next message from the conversation history:
+Any [Agent](./agents.md) can generate the next message from the conversation history:
 
 ```
 POST /api/v1/conversations/:id/generate
-{ "actor_id": "act_...", "model": "gpt-4o-mini", "stream": false }
+{ "agent_id": "agt_...", "stream": false }
 ```
 
 Flow:
 
 1. Load all messages ordered by `position`.
-2. Compose the effective system prompt (see [Persona overrides](#persona-overrides)).
-3. Map each message to a model message: the generating actor's own prior messages become `assistant`, all other authors become `user`. `user` content is prefixed with the authoring actor's name (`"[Alice]: ..."`) to preserve multi-party attribution.
-4. Dispatch to the Agents module (if the actor has `agent_id`) or the Chats module (if it has `chat_id`), reusing their generation plumbing — including agent tools and the `requires_action` client-tool flow.
-5. On `completed`, a new Document is created and attached as the next message, authored by the generating actor. The response includes:
+2. Compose the effective system prompt from the agent's `instructions`.
+3. Map each message to a model message using the stored `role` field. Messages with `role: 'assistant'` become assistant turns; all others become user turns.
+4. Dispatch to the Agents module, reusing its generation plumbing — including agent tools and the `requires_action` client-tool flow.
+5. On `completed`, a new Document is created and attached as the next message with `role: 'assistant'`. The response includes:
    - **`content`** — the AI-generated text of the reply (the canonical field; always a `string`).
-   - `message` — the persisted `ConversationMessageRecord` (`document_id`, `actor_id`, `position`, `content`).
+   - `message` — the persisted `ConversationMessageRecord` (`document_id`, `role`, `actor_id`, `agent_id`, `position`, `content`). `agent_id` is set to the ID of the generating agent.
    - `generation_id` and `trace_id` for observability.
    - `model` — the model name used for this generation.
 
@@ -114,7 +107,7 @@ Flow:
      '/api/v1/conversations/{conversation_id}/generate',
      {
        params: { path: { conversation_id } },
-       body: { actor_id },
+       body: { agent_id: agentId },
      }
    );
    // data.content is always the AI-generated text when data.status === 'completed'
@@ -122,8 +115,6 @@ Flow:
    ```
 
 6. On `requires_action` (agent client tools only), no message is persisted yet. Submit outputs via `POST /agents/:id/generate/:generation_id/tool-outputs`; the resolved message is persisted on completion.
-
-Actors without `agent_id` or `chat_id` cannot generate and return `400`.
 
 #### Concurrency
 
@@ -139,7 +130,7 @@ With `"stream": true`, the response is a `text/event-stream` emitting incrementa
 
 ```json
 {
-  "actor_id": "act_...",
+  "agent_id": "agt_...",
   "tool_context": {
     "user_id": "usr_abc123",
     "tenant_id": "tenant_xyz"
@@ -162,19 +153,91 @@ The following are not implemented in v1 but the data model leaves room for them:
 
 A conversation transitions between `open` and `closed`. Use `PATCH /conversations/:id` to update the status. New conversations default to `open`.
 
-## Permissions
+## Examples
 
-Conversation operations are governed by per-project policies. Grant the following permissions:
+### Create a conversation and add a message
 
-| Action                           | Permission                                  | REST Endpoint                               | MCP Tool                        |
-| -------------------------------- | ------------------------------------------- | ------------------------------------------- | ------------------------------- |
-| List conversations               | `conversations:ListConversations`           | `GET /api/v1/conversations`                 | `list-conversations`            |
-| Get conversation by ID           | `conversations:GetConversation`             | `GET /api/v1/conversations/:id`             | `get-conversation`              |
-| List conversation messages       | `conversations:GetConversation`             | `GET /api/v1/conversations/:id/messages`    | `list-conversation-messages`    |
-| List conversation actors         | `conversations:GetConversation`             | `GET /api/v1/conversations/:id/actors`      | `list-conversation-actors`      |
-| Create conversation              | `conversations:CreateConversation`          | `POST /api/v1/conversations`                | `create-conversation`           |
-| Update conversation status       | `conversations:UpdateConversation`          | `PATCH /api/v1/conversations/:id`           | `update-conversation`           |
-| Add message to conversation      | `conversations:UpdateConversation`          | `POST /api/v1/conversations/:id/messages`   | `add-conversation-message`      |
-| Remove message from conversation | `conversations:UpdateConversation`          | `DELETE /api/v1/conversations/:id/messages` | `remove-conversation-message`   |
-| Generate next message            | `conversations:GenerateConversationMessage` | `POST /api/v1/conversations/:id/generate`   | `generate-conversation-message` |
-| Delete conversation              | `conversations:DeleteConversation`          | `DELETE /api/v1/conversations/:id`          | `delete-conversation`           |
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-conversation --project-id proj_ABC --name "Support Thread"
+soat add-conversation-message \
+  --conversation-id conv_01 \
+  --content "Hello, I need help." \
+  --role user
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
+
+const { data: conv } = await soat.conversations.createConversation({
+  body: { project_id: 'proj_ABC', name: 'Support Thread' },
+});
+
+const { data: msg } = await soat.conversations.addConversationMessage({
+  path: { conversation_id: conv.id },
+  body: { content: 'Hello, I need help.', role: 'user' },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/conversations \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"project_id": "proj_ABC", "name": "Support Thread"}'
+
+curl -X POST https://api.example.com/api/v1/conversations/conv_01/messages \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Hello, I need help.", "role": "user"}'
+```
+
+</TabItem>
+</Tabs>
+
+### Generate the next message
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat generate-conversation-message \
+  --conversation-id conv_01 \
+  --agent-id agt_01
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+const { data: reply } = await soat.conversations.generateConversationMessage({
+  path: { conversation_id: 'conv_01' },
+  body: { agent_id: 'agt_01' },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/conversations/conv_01/generate \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id": "agt_01"}'
+```
+
+</TabItem>
+</Tabs>

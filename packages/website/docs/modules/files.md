@@ -1,3 +1,6 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Files
 
 The Files module provides file upload, download, metadata management, and deletion through a local filesystem storage backend. Files are stored in a configurable directory and tracked in PostgreSQL.
@@ -5,6 +8,8 @@ The Files module provides file upload, download, metadata management, and deleti
 ## Overview
 
 Files are associated with a project and stored at `{FILES_STORAGE_DIR}/{id}{ext}` on the server's local filesystem. Every file record exposes an `id` — the internal database primary key is never returned.
+
+> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Configuration
 
@@ -56,19 +61,7 @@ Path examples:
 
 Pass `path` in the upload or create body to set it; the `GET /api/v1/files` list endpoint accepts a `paths` query filter to retrieve files matching specific path prefixes.
 
-## Permissions
-
-File operations are governed by per-project policies. Grant the following permissions to allow a user to perform each action:
-
-| Action                        | Permission                 | REST Endpoint                      | MCP Tool               |
-| ----------------------------- | -------------------------- | ---------------------------------- | ---------------------- |
-| List files                    | `files:GetFile`            | `GET /api/v1/files`                | `list-files`           |
-| Get file metadata             | `files:GetFile`            | `GET /api/v1/files/:id`            | `get-file`             |
-| Create a metadata-only record | `files:CreateFile`         | `POST /api/v1/files`               | `create-file`          |
-| Upload a file                 | `files:UploadFile`         | `POST /api/v1/files/upload`        | `upload-file`          |
-| Download file content         | `files:DownloadFile`       | `GET /api/v1/files/:id/download`   | `download-file`        |
-| Update metadata               | `files:UpdateFileMetadata` | `PATCH /api/v1/files/:id/metadata` | `update-file-metadata` |
-| Delete a file                 | `files:DeleteFile`         | `DELETE /api/v1/files/:id`         | `delete-file`          |
+## Key Concepts
 
 ### Path-Based SRNs
 
@@ -84,3 +77,89 @@ Policies can target files by their logical `path` rather than their `id`. When a
 The list endpoint applies policy filters at the SQL level — the database returns only rows the caller is permitted to see.
 
 See the [IAM Reference](iam.md) for full SRN syntax and policy authoring guidance.
+
+## Examples
+
+### Upload a file (base64)
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat upload-file-base64 \
+  --project-id proj_ABC \
+  --filename logo.png \
+  --content-base64 "iVBORw0KGgo..." \
+  --path /assets/logo.png
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
+
+const { data, error } = await soat.files.uploadFileBase64({
+  body: {
+    project_id: 'proj_ABC',
+    filename: 'logo.png',
+    content_base64: 'iVBORw0KGgo...',
+    path: '/assets/logo.png',
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/files/upload-base64 \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "filename": "logo.png",
+    "content_base64": "iVBORw0KGgo...",
+    "path": "/assets/logo.png"
+  }'
+```
+
+</TabItem>
+</Tabs>
+
+### List files in a project
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-files --project-id proj_ABC
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+const { data, error } = await soat.files.listFiles({
+  query: { project_id: 'proj_ABC' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl https://api.example.com/api/v1/files?project_id=proj_ABC \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>

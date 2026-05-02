@@ -1,3 +1,6 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Projects
 
 The Projects module provides multi-tenant namespaces in SOAT. Every resource ([document](./documents.md), [file](./files.md), [actor](./actors.md), [conversation](./conversations.md)) belongs to a project. Projects are identified by an `id` prefixed with `proj_`.
@@ -5,6 +8,8 @@ The Projects module provides multi-tenant namespaces in SOAT. Every resource ([d
 ## Overview
 
 A Project is a top-level container that scopes all resources. Users access projects through policy-based authorization — there is no separate membership table. Whether a user can access a project is determined entirely by the [policies](./policies.md) attached to their account and the SRN patterns those policies contain.
+
+> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Data Model
 
@@ -49,55 +54,77 @@ To grant a user access to all projects, use a wildcard project segment:
 
 Authorization is policy-only — there is no Layer 1 membership gate. All access decisions are evaluated through the policy engine against the requested action and the resource SRN. See [IAM](./iam.md) for details.
 
-## Permissions
+## Examples
 
-Project CRUD is restricted to admin users. Reading a project requires the `projects:GetProject` action to be allowed by the caller's policies.
+### Create a project
 
-| Action            | Permission            | REST Endpoint                 | MCP Tool        |
-| ----------------- | --------------------- | ----------------------------- | --------------- |
-| List projects     | Authenticated         | `GET /api/v1/projects`        | `list-projects` |
-| Get project by ID | `projects:GetProject` | `GET /api/v1/projects/:id`    | `get-project`   |
-| Create project    | Admin only            | `POST /api/v1/projects`       | —               |
-| Delete project    | Admin only            | `DELETE /api/v1/projects/:id` | —               |
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
 
-**Response** `201 Created`
-
-### Update Member Policies
-
-```http
-PUT /api/v1/projects/proj_abc123/members/user_def456/policies
-Authorization: Bearer <admin-token>
-Content-Type: application/json
-
-{
-  "policy_ids": ["pol_def456", "pol_ghi789"]
-}
+```bash
+soat create-project --name "My Project"
 ```
 
-**Response** `200 OK`
+</TabItem>
+<TabItem value="sdk" label="SDK">
 
----
+```ts
+// SDK
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
 
-## API Keys
+const { data, error } = await soat.projects.createProject({
+  body: { name: 'My Project' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
 
-API Keys provide key-based authentication for programmatic access to SOAT. Each key is scoped to a single project and bound to a single policy document. The raw key is returned only once at creation time — it cannot be retrieved afterwards.
+</TabItem>
+<TabItem value="curl" label="curl">
 
-API Keys are identified by an `id` prefixed with `key_`.
+```bash
+curl -X POST https://api.example.com/api/v1/projects \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "My Project"}'
+```
 
-### API Key Data Model
+</TabItem>
+</Tabs>
 
-| Field        | Type   | Description                                    |
-| ------------ | ------ | ---------------------------------------------- |
-| `id`         | string | Public identifier prefixed with `key_`         |
-| `name`       | string | Human-readable label                           |
-| `key_prefix` | string | First 8 characters of the raw key (for lookup) |
-| `user_id`    | string | Public ID of the user who created the key      |
-| `project_id` | string | Public ID of the project the key is scoped to  |
-| `policy_id`  | string | Public ID of the attached policy               |
-| `created_at` | string | ISO 8601 creation timestamp                    |
-| `updated_at` | string | ISO 8601 last-updated timestamp                |
+### Get a project
 
-The raw secret key is only returned in the `POST` response. Only `key_prefix` and a bcrypt hash are stored.
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat get-project --project-id proj_ABC
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+const { data, error } = await soat.projects.getProject({
+  path: { project_id: 'proj_ABC' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl https://api.example.com/api/v1/projects/proj_ABC \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
 
 ### Security Model
 
