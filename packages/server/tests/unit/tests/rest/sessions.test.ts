@@ -851,6 +851,8 @@ describe('Sessions', () => {
       expect(recoveryRes.status).toBe(200);
     });
   });
+
+  describe('autoGenerate', () => {
     let autoSessionId: string;
 
     beforeAll(async () => {
