@@ -126,6 +126,61 @@ const emitGenerationCompleted = (
   );
 };
 
+/**
+ * Abort any in-flight generation and check the DB-based concurrency guard.
+ * Returns `'already_generating'` if the caller should bail out, `null` otherwise.
+ */
+const checkConcurrency = (args: {
+  sessionKey: string;
+  session: InstanceType<(typeof db)['Session']>;
+}): 'already_generating' | null => {
+  const hadExistingController = sessionAbortControllers.has(args.sessionKey);
+  abortSessionGeneration(args.sessionKey);
+  if (hadExistingController) {
+    return null;
+  }
+  if (args.session.generatingAt) {
+    const elapsed =
+      Date.now() - new Date(args.session.generatingAt).getTime();
+    if (elapsed < GENERATING_TIMEOUT_MS) {
+      return 'already_generating';
+    }
+  }
+  return null;
+};
+
+/**
+ * Emit the appropriate event and build the return value from a generation result.
+ */
+const buildGenerationResult = (
+  session: InstanceType<(typeof db)['Session']>,
+  result: Awaited<ReturnType<typeof generateConversationMessage>>
+) => {
+  if (typeof result === 'string') {
+    return result;
+  }
+  if (result.status === 'requires_action') {
+    emitGenerationRequiresAction(session, result.generationId, result.traceId);
+    return {
+      status: 'requires_action' as const,
+      generationId: result.generationId,
+      traceId: result.traceId,
+      requiredAction: result.requiredAction,
+    };
+  }
+  emitGenerationCompleted(session, result.generationId, result.traceId);
+  return {
+    status: 'completed' as const,
+    message: {
+      role: 'assistant' as const,
+      content: result.content,
+      model: result.model,
+    },
+    generationId: result.generationId,
+    traceId: result.traceId,
+  };
+};
+
 export const generateSessionResponse = async (args: {
   agentId: number;
   sessionId: string;
@@ -141,50 +196,32 @@ export const generateSessionResponse = async (args: {
     return 'session_not_found' as const;
   }
 
-  // Cancel any in-flight generation for this session before starting a new one.
-  // The in-memory map is the authoritative source for active generations;
-  // if a controller exists, abort it and skip the DB-based concurrency check.
   const sessionKey = `${args.agentId}#${args.sessionId}`;
-  const hadExistingController = sessionAbortControllers.has(sessionKey);
-  abortSessionGeneration(sessionKey);
-
-  if (!hadExistingController) {
-    // Concurrency guard: prevent concurrent LLM calls on the same session
-    // when no in-memory controller is present (e.g., another replica or stale DB state).
-    if (session.generatingAt) {
-      const elapsed = Date.now() - new Date(session.generatingAt).getTime();
-      if (elapsed < GENERATING_TIMEOUT_MS) {
-        return 'already_generating' as const;
-      }
-    }
+  const concurrencyResult = checkConcurrency({ sessionKey, session });
+  if (concurrencyResult) {
+    return concurrencyResult;
   }
 
   const conversation = session.conversation as InstanceType<
     (typeof db)['Conversation']
   >;
   const agent = (
-    session as unknown as {
-      agent?: InstanceType<(typeof db)['Agent']>;
-    }
+    session as unknown as { agent?: InstanceType<(typeof db)['Agent']> }
   ).agent;
 
   if (!agent) {
     return 'session_not_found' as const;
   }
 
-  const autoPopulated = buildToolContext(session);
   const mergedToolContext = {
-    ...autoPopulated,
+    ...buildToolContext(session),
     ...(session.toolContext ?? {}),
     ...(args.toolContext ?? {}),
   };
 
-  // Create a new AbortController for this generation and register it.
   const controller = new AbortController();
   sessionAbortControllers.set(sessionKey, controller);
-
   await session.update({ generatingAt: new Date() });
-
   emitGenerationStarted(session);
 
   let result: Awaited<ReturnType<typeof generateConversationMessage>>;
@@ -198,44 +235,15 @@ export const generateSessionResponse = async (args: {
       abortSignal: controller.signal,
     });
   } finally {
-    // Only clear generatingAt if this generation was not aborted by a newer one.
-    // If aborted, the new generation will set generatingAt itself.
     if (!controller.signal.aborted) {
       await session.update({ generatingAt: null });
     }
-    // Remove from map only if we are still the current controller for this session.
     if (sessionAbortControllers.get(sessionKey) === controller) {
       sessionAbortControllers.delete(sessionKey);
     }
   }
 
-  if (typeof result === 'string') {
-    return result;
-  }
-
-  if (result.status === 'requires_action') {
-    emitGenerationRequiresAction(session, result.generationId, result.traceId);
-
-    return {
-      status: 'requires_action' as const,
-      generationId: result.generationId,
-      traceId: result.traceId,
-      requiredAction: result.requiredAction,
-    };
-  }
-
-  emitGenerationCompleted(session, result.generationId, result.traceId);
-
-  return {
-    status: 'completed' as const,
-    message: {
-      role: 'assistant' as const,
-      content: result.content,
-      model: result.model,
-    },
-    generationId: result.generationId,
-    traceId: result.traceId,
-  };
+  return buildGenerationResult(session, result);
 };
 
 export const listSessionMessages = async (args: {
