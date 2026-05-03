@@ -130,7 +130,12 @@ export class HttpToolError extends Error {
   }
 
   toJSON() {
-    return { message: this.message, name: this.name, status: this.status, body: this.body };
+    return {
+      message: this.message,
+      name: this.name,
+      status: this.status,
+      body: this.body,
+    };
   }
 }
 
