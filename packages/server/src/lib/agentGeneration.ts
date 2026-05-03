@@ -18,7 +18,7 @@ import {
 } from './agentGenerationHelpers';
 import { buildModel } from './agentModel';
 import { resolveAgentTools } from './agentToolResolver';
-import { traces } from './agentTraces';
+import { serializeSteps, traces } from './agentTraces';
 import { resolveProjectPublicId } from './eventBus';
 
 export type { GenerationResult };
@@ -300,7 +300,7 @@ export const submitToolOutputs = async (args: {
     agentId: pending.agentId,
     status: 'completed',
     createdAt: new Date(),
-    steps: result.steps as unknown[],
+    steps: serializeSteps(result.steps as unknown[]),
   });
 
   const completedResult: GenerationResult = {

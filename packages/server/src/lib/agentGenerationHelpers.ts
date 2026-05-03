@@ -2,7 +2,7 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import type { LanguageModel, ModelMessage, Tool } from 'ai';
 import { stepCountIs, streamText } from 'ai';
 
-import { traces } from './agentTraces';
+import { serializeSteps, traces } from './agentTraces';
 import { emitEvent } from './eventBus';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -177,7 +177,7 @@ export const savePendingGeneration = (args: {
     agentId: args.agentId,
     status: 'requires_action',
     createdAt: new Date(),
-    steps: args.result.steps as unknown[],
+    steps: serializeSteps(args.result.steps as unknown[]),
   });
 
   pendingGenerations.set(args.generationId, {
@@ -253,7 +253,7 @@ export const buildCompletedGenerationResult = (args: {
     agentId: args.agentId,
     status: 'completed',
     createdAt: new Date(),
-    steps: args.result.steps as unknown[],
+    steps: serializeSteps(args.result.steps as unknown[]),
   });
 
   const completedResult: GenerationResult = {

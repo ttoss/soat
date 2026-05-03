@@ -118,6 +118,27 @@ const buildHttpRequestUrl = (args: {
   return qs ? `${args.resolvedUrl}${sep}${qs}` : args.resolvedUrl;
 };
 
+export class HttpToolError extends Error {
+  status: number;
+  body: string;
+
+  constructor(message: string, status: number, body: string) {
+    super(message);
+    this.name = 'HttpToolError';
+    this.status = status;
+    this.body = body;
+  }
+
+  toJSON() {
+    return {
+      message: this.message,
+      name: this.name,
+      status: this.status,
+      body: this.body,
+    };
+  }
+}
+
 const buildHttpToolExecute = (
   typedTool: TypedHttpTool,
   toolContext?: Record<string, string>
@@ -158,6 +179,14 @@ const buildHttpToolExecute = (
       },
       ...(hasBody ? { body: JSON.stringify(remainingArgs) } : {}),
     });
+    if (!response.ok) {
+      const body = await response.text();
+      throw new HttpToolError(
+        `HTTP ${response.status}: ${body}`,
+        response.status,
+        body
+      );
+    }
     return response.json();
   };
 };
