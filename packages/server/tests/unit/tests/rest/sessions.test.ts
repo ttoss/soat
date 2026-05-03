@@ -699,6 +699,159 @@ describe('Sessions', () => {
     });
   });
 
+  // ── Cancel-previous generation ─────────────────────────────────────────
+
+  describe('Cancel-previous generation', () => {
+    let cancelSessionId: string;
+
+    beforeEach(async () => {
+      jest.useRealTimers();
+
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'cancel-previous-test' });
+      cancelSessionId = res.body.id;
+
+      // Add a message so there's something to generate from
+      await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/sessions/${cancelSessionId}/messages`
+        )
+        .send({ message: 'Initial message' });
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    test('second generate request aborts in-flight generation and starts a new one', async () => {
+      let firstAborted = false;
+      let signalFirstStarted!: () => void;
+      const firstStarted = new Promise<void>((r) => {
+        signalFirstStarted = r;
+      });
+
+      // First call: blocks until the abort signal fires
+      mockCreateGeneration.mockImplementationOnce((args) => {
+        return new Promise((_, reject) => {
+          signalFirstStarted();
+          args.abortSignal?.addEventListener('abort', () => {
+            firstAborted = true;
+            reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }));
+          });
+        });
+      });
+
+      // Second call: resolves immediately to simulate a successful generation
+      mockCreateGeneration.mockImplementationOnce(() => {
+        return Promise.resolve({
+          id: 'gen_cancel_02',
+          traceId: 'trc_cancel_02',
+          status: 'completed',
+          output: { model: 'test-model', content: 'Second reply', finishReason: 'stop' },
+        });
+      });
+
+      // Start first generation (async, fire-and-forget)
+      await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/sessions/${cancelSessionId}/generate?async=true`
+        )
+        .expect(202);
+
+      // Wait until the first mock has started (generatingAt is set in DB)
+      await firstStarted;
+
+      // Trigger second generation — should cancel the first and start fresh
+      const secondRes = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${cancelSessionId}/generate?async=true`
+      );
+      expect(secondRes.status).toBe(202);
+
+      // Poll until the abort propagates to the first mock's listener
+      const deadline = Date.now() + 5000;
+      await new Promise<void>((resolve, reject) => {
+        const check = () => {
+          if (firstAborted) return resolve();
+          if (Date.now() >= deadline)
+            return reject(
+              new Error('Timeout: first generation was never aborted')
+            );
+          setImmediate(check);
+        };
+        setImmediate(check);
+      });
+
+      expect(firstAborted).toBe(true);
+    });
+
+    test('controller is removed from map after successful generation', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_cleanup_01',
+        traceId: 'trc_cleanup_01',
+        status: 'completed',
+        output: { model: 'test-model', content: 'Done', finishReason: 'stop' },
+      });
+
+      // Sync generate — waits for completion
+      const res = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${cancelSessionId}/generate`
+      );
+      expect(res.status).toBe(200);
+
+      // generating_at should be cleared, meaning the controller was removed
+      const sessionRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/${cancelSessionId}`
+      );
+      expect(sessionRes.body.generating_at).toBeNull();
+
+      // A subsequent generate should NOT return 409 (controller was cleaned up)
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_cleanup_02',
+        traceId: 'trc_cleanup_02',
+        status: 'completed',
+        output: { model: 'test-model', content: 'Second', finishReason: 'stop' },
+      });
+
+      const secondRes = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${cancelSessionId}/generate`
+      );
+      expect(secondRes.status).toBe(200);
+    });
+
+    test('controller is removed from map after generation error', async () => {
+      // Simulate createGeneration throwing a non-abort error
+      mockCreateGeneration.mockRejectedValueOnce(
+        new Error('Simulated LLM error')
+      );
+
+      const res = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${cancelSessionId}/generate`
+      );
+      // The error propagates as a 500
+      expect(res.status).toBe(500);
+
+      // generating_at should be cleared even after an error
+      const sessionRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/${cancelSessionId}`
+      );
+      expect(sessionRes.body.generating_at).toBeNull();
+
+      // A subsequent generate should work normally (no stale controller)
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_after_err_01',
+        traceId: 'trc_after_err_01',
+        status: 'completed',
+        output: { model: 'test-model', content: 'Recovery', finishReason: 'stop' },
+      });
+
+      const recoveryRes = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${cancelSessionId}/generate`
+      );
+      expect(recoveryRes.status).toBe(200);
+    });
+  });
+
   describe('autoGenerate', () => {
     let autoSessionId: string;
 

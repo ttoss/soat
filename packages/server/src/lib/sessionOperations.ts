@@ -7,6 +7,23 @@ import { emitEvent, resolveProjectPublicId } from './eventBus';
 
 const GENERATING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
+// ── In-memory abort controller map ───────────────────────────────────────
+// Key: `${agentId}#${sessionId}` — one controller per session.
+// Used to cancel in-flight LLM calls when a new generation request arrives.
+const sessionAbortControllers = new Map<string, AbortController>();
+
+/**
+ * Abort and remove the controller for the given session key, if one exists.
+ * Safe to call when no controller is registered.
+ */
+const abortSessionGeneration = (sessionKey: string) => {
+  const existing = sessionAbortControllers.get(sessionKey);
+  if (existing) {
+    existing.abort();
+    sessionAbortControllers.delete(sessionKey);
+  }
+};
+
 const sessionIncludes = () => {
   return [
     { model: db.Project, as: 'project' },
@@ -109,6 +126,60 @@ const emitGenerationCompleted = (
   );
 };
 
+/**
+ * Abort any in-flight generation and check the DB-based concurrency guard.
+ * Returns `'already_generating'` if the caller should bail out, `null` otherwise.
+ */
+const checkConcurrency = (args: {
+  sessionKey: string;
+  session: InstanceType<(typeof db)['Session']>;
+}): 'already_generating' | null => {
+  const hadExistingController = sessionAbortControllers.has(args.sessionKey);
+  abortSessionGeneration(args.sessionKey);
+  if (hadExistingController) {
+    return null;
+  }
+  if (args.session.generatingAt) {
+    const elapsed = Date.now() - new Date(args.session.generatingAt).getTime();
+    if (elapsed < GENERATING_TIMEOUT_MS) {
+      return 'already_generating';
+    }
+  }
+  return null;
+};
+
+/**
+ * Emit the appropriate event and build the return value from a generation result.
+ */
+const buildGenerationResult = (
+  session: InstanceType<(typeof db)['Session']>,
+  result: Awaited<ReturnType<typeof generateConversationMessage>>
+) => {
+  if (typeof result === 'string') {
+    return result;
+  }
+  if (result.status === 'requires_action') {
+    emitGenerationRequiresAction(session, result.generationId, result.traceId);
+    return {
+      status: 'requires_action' as const,
+      generationId: result.generationId,
+      traceId: result.traceId,
+      requiredAction: result.requiredAction,
+    };
+  }
+  emitGenerationCompleted(session, result.generationId, result.traceId);
+  return {
+    status: 'completed' as const,
+    message: {
+      role: 'assistant' as const,
+      content: result.content,
+      model: result.model,
+    },
+    generationId: result.generationId,
+    traceId: result.traceId,
+  };
+};
+
 export const generateSessionResponse = async (args: {
   agentId: number;
   sessionId: string;
@@ -124,36 +195,32 @@ export const generateSessionResponse = async (args: {
     return 'session_not_found' as const;
   }
 
-  // Concurrency guard: prevent concurrent LLM calls on the same session
-  if (session.generatingAt) {
-    const elapsed = Date.now() - new Date(session.generatingAt).getTime();
-    if (elapsed < GENERATING_TIMEOUT_MS) {
-      return 'already_generating' as const;
-    }
+  const sessionKey = `${args.agentId}#${args.sessionId}`;
+  const concurrencyResult = checkConcurrency({ sessionKey, session });
+  if (concurrencyResult) {
+    return concurrencyResult;
   }
 
   const conversation = session.conversation as InstanceType<
     (typeof db)['Conversation']
   >;
   const agent = (
-    session as unknown as {
-      agent?: InstanceType<(typeof db)['Agent']>;
-    }
+    session as unknown as { agent?: InstanceType<(typeof db)['Agent']> }
   ).agent;
 
   if (!agent) {
     return 'session_not_found' as const;
   }
 
-  const autoPopulated = buildToolContext(session);
   const mergedToolContext = {
-    ...autoPopulated,
+    ...buildToolContext(session),
     ...(session.toolContext ?? {}),
     ...(args.toolContext ?? {}),
   };
 
+  const controller = new AbortController();
+  sessionAbortControllers.set(sessionKey, controller);
   await session.update({ generatingAt: new Date() });
-
   emitGenerationStarted(session);
 
   let result: Awaited<ReturnType<typeof generateConversationMessage>>;
@@ -164,38 +231,18 @@ export const generateSessionResponse = async (args: {
       agentId: agent.publicId,
       model: args.model,
       toolContext: mergedToolContext,
+      abortSignal: controller.signal,
     });
   } finally {
-    await session.update({ generatingAt: null });
+    if (!controller.signal.aborted) {
+      await session.update({ generatingAt: null });
+    }
+    if (sessionAbortControllers.get(sessionKey) === controller) {
+      sessionAbortControllers.delete(sessionKey);
+    }
   }
 
-  if (typeof result === 'string') {
-    return result;
-  }
-
-  if (result.status === 'requires_action') {
-    emitGenerationRequiresAction(session, result.generationId, result.traceId);
-
-    return {
-      status: 'requires_action' as const,
-      generationId: result.generationId,
-      traceId: result.traceId,
-      requiredAction: result.requiredAction,
-    };
-  }
-
-  emitGenerationCompleted(session, result.generationId, result.traceId);
-
-  return {
-    status: 'completed' as const,
-    message: {
-      role: 'assistant' as const,
-      content: result.content,
-      model: result.model,
-    },
-    generationId: result.generationId,
-    traceId: result.traceId,
-  };
+  return buildGenerationResult(session, result);
 };
 
 export const listSessionMessages = async (args: {
