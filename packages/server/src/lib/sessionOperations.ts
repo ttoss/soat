@@ -140,8 +140,7 @@ const checkConcurrency = (args: {
     return null;
   }
   if (args.session.generatingAt) {
-    const elapsed =
-      Date.now() - new Date(args.session.generatingAt).getTime();
+    const elapsed = Date.now() - new Date(args.session.generatingAt).getTime();
     if (elapsed < GENERATING_TIMEOUT_MS) {
       return 'already_generating';
     }
