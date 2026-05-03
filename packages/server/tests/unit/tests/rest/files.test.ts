@@ -367,6 +367,93 @@ describe('Files', () => {
 
       expect(response.status).toBe(401);
     });
+
+    test('returns 400 when content is missing', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload/base64')
+        .send({ project_id: projectId, filename: 'missing-content.txt' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('content is required (base64-encoded)');
+    });
+
+    test('returns 400 when project_id is missing', async () => {
+      const content = Buffer.from('data').toString('base64');
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload/base64')
+        .send({ content, filename: 'missing-project.txt' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('projectId is required');
+    });
+
+    test('returns 403 when user has no upload permission', async () => {
+      const content = Buffer.from('no permission').toString('base64');
+
+      const response = await authenticatedTestClient(noPermToken)
+        .post('/api/v1/files/upload/base64')
+        .send({ project_id: projectId, content, filename: 'denied.txt' });
+
+      expect(response.status).toBe(403);
+    });
+  });
+
+  describe('POST /api/v1/files', () => {
+    test('authenticated user with permission can create file metadata record', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/files')
+        .send({
+          project_id: projectId,
+          filename: 'from-create-route.txt',
+          content_type: 'text/plain',
+          size: 12,
+          storage_type: 'local',
+          storage_path: 'manual/from-create-route.txt',
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.id).toBeDefined();
+      expect(response.body.filename).toBe('from-create-route.txt');
+    });
+
+    test('returns 401 for unauthenticated create request', async () => {
+      const response = await testClient.post('/api/v1/files').send({
+        project_id: projectId,
+        filename: 'unauth-create.txt',
+        storage_type: 'local',
+        storage_path: 'manual/unauth-create.txt',
+      });
+
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 403 when user has no create permission', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .post('/api/v1/files')
+        .send({
+          project_id: projectId,
+          filename: 'forbidden-create.txt',
+          storage_type: 'local',
+          storage_path: 'manual/forbidden-create.txt',
+        });
+
+      expect(response.status).toBe(403);
+    });
+
+    test('returns 400 when project does not exist', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/files')
+        .send({
+          project_id: 'prj_nonexistent123',
+          filename: 'bad-project.txt',
+          storage_type: 'local',
+          storage_path: 'manual/bad-project.txt',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('Invalid project ID');
+    });
   });
 
   describe('PATCH /api/v1/files/:id/metadata - filename update', () => {

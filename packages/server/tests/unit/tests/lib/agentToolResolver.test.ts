@@ -333,6 +333,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
   let adminToken: string;
   let projectId: string;
   let mcpToolId: string;
+  let httpToolId: string;
 
   beforeAll(async () => {
     // toolresolveradmin was bootstrapped by the first describe's beforeAll
@@ -353,6 +354,18 @@ describe('resolveAgentTools - mcp and soat types', () => {
         mcp: { url: 'http://localhost:19999/mcp' },
       });
     mcpToolId = mcpToolRes.body.id;
+
+    const httpToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents/tools')
+      .send({
+        project_id: projectId,
+        name: 'resolverHttpTool',
+        type: 'http',
+        description: 'HTTP tool for resolver branch tests',
+        parameters: { type: 'object', properties: {} },
+        execute: { url: 'https://example.com/branch-test', method: 'INVALID' },
+      });
+    httpToolId = httpToolRes.body.id;
   });
 
   afterEach(() => {
@@ -446,5 +459,194 @@ describe('resolveAgentTools - mcp and soat types', () => {
       expect.stringContaining('filter=active'),
       expect.anything()
     );
+  });
+
+  test('http tool execute falls back to POST for invalid method', async () => {
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+
+    const tools = await resolveAgentTools({ toolIds: [httpToolId] });
+    const httpTool = tools.resolverHttpTool;
+
+    if ('execute' in httpTool && typeof httpTool.execute === 'function') {
+      await httpTool.execute({}, {} as never);
+    }
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://example.com/branch-test',
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  test('mcp tool execute parses JSON text payload from tools/call', async () => {
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            result: {
+              tools: [
+                {
+                  name: 'json_echo',
+                  inputSchema: { type: 'object', properties: {} },
+                },
+              ],
+            },
+          }),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            result: { content: [{ text: '{"ok":true}' }] },
+          }),
+          { status: 200 }
+        )
+      );
+
+    const tools = await resolveAgentTools({ toolIds: [mcpToolId] });
+    const mcpTool = tools.json_echo;
+
+    if ('execute' in mcpTool && typeof mcpTool.execute === 'function') {
+      const result = await mcpTool.execute({}, {} as never);
+      expect(result).toEqual({ ok: true });
+    }
+  });
+
+  test('mcp tool execute returns raw text when tools/call text is not JSON', async () => {
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            result: {
+              tools: [
+                {
+                  name: 'text_echo',
+                  inputSchema: { type: 'object', properties: {} },
+                },
+              ],
+            },
+          }),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            result: { content: [{ text: 'plain text result' }] },
+          }),
+          { status: 200 }
+        )
+      );
+
+    const tools = await resolveAgentTools({ toolIds: [mcpToolId] });
+    const mcpTool = tools.text_echo;
+
+    if ('execute' in mcpTool && typeof mcpTool.execute === 'function') {
+      const result = await mcpTool.execute({}, {} as never);
+      expect(result).toBe('plain text result');
+    }
+  });
+
+  test('mcp tool execute returns full body when tools/call has no text content', async () => {
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            result: {
+              tools: [
+                {
+                  name: 'empty_content',
+                  inputSchema: { type: 'object', properties: {} },
+                },
+              ],
+            },
+          }),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            result: { content: [] },
+          }),
+          { status: 200 }
+        )
+      );
+
+    const tools = await resolveAgentTools({ toolIds: [mcpToolId] });
+    const mcpTool = tools.empty_content;
+
+    if ('execute' in mcpTool && typeof mcpTool.execute === 'function') {
+      const result = await mcpTool.execute({}, {} as never);
+      expect(result).toEqual({ result: { content: [] } });
+    }
+  });
+
+  test('resolveAgentTools applies projectIds filter when provided', async () => {
+    const tools = await resolveAgentTools({
+      toolIds: [httpToolId],
+      projectIds: [],
+    });
+
+    expect(Object.keys(tools)).toHaveLength(0);
+  });
+
+  test('soat tool resolves configured actions and executes through internal API', async () => {
+    const soatToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents/tools')
+      .send({
+        project_id: projectId,
+        name: 'mySoatTool',
+        type: 'soat',
+        actions: ['list-files'],
+      });
+
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [] })));
+
+    const tools = await resolveAgentTools({ toolIds: [soatToolRes.body.id] });
+    expect(tools).toHaveProperty('mySoatTool_list-files');
+
+    const soatTool = tools['mySoatTool_list-files'];
+    if ('execute' in soatTool && typeof soatTool.execute === 'function') {
+      await soatTool.execute({}, {} as never);
+    }
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/files'),
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+
+  test('soat tool returns boundary error when action is denied', async () => {
+    const deniedSoatRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents/tools')
+      .send({
+        project_id: projectId,
+        name: 'myDeniedSoatTool',
+        type: 'soat',
+        actions: ['list-files'],
+      });
+
+    const tools = await resolveAgentTools({
+      toolIds: [deniedSoatRes.body.id],
+      boundaryPolicy: {
+        statement: [{ effect: 'Deny', action: ['files:ListFiles'] }],
+      },
+    });
+
+    const soatTool = tools['myDeniedSoatTool_list-files'];
+    if ('execute' in soatTool && typeof soatTool.execute === 'function') {
+      const result = await soatTool.execute({}, {} as never);
+      expect(result).toEqual({
+        error: 'Forbidden: boundary policy denies list-files',
+      });
+    }
   });
 });

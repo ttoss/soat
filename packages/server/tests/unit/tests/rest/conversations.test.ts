@@ -385,6 +385,15 @@ describe('Conversations', () => {
       expect(response.status).toBe(400);
     });
 
+    test('missing role returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${conversationId}/messages`)
+        .send({ message: 'role is required branch' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('role is required');
+    });
+
     test('returns 404 for non-existent conversation', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/conversations/conv_nonexistent/messages')
@@ -494,6 +503,15 @@ describe('Conversations', () => {
       );
 
       expect(response.status).toBe(404);
+    });
+
+    test('returns 404 for non-existent conversation when removing message', async () => {
+      const response = await authenticatedTestClient(adminToken).delete(
+        '/api/v1/conversations/conv_nonexistent/messages/doc_nonexistent'
+      );
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe('Conversation not found');
     });
   });
 

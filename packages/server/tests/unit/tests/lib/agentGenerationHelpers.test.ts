@@ -211,6 +211,32 @@ describe('savePendingGeneration', () => {
     expect(result.status).toBe('requires_action');
     expect(result.requiredAction?.toolCalls).toHaveLength(2);
   });
+
+  test('uses default maxSteps when typedAgent.maxSteps is null', () => {
+    const agentWithoutMaxSteps: TypedAgent = {
+      ...mockAgent,
+      maxSteps: null,
+    };
+
+    savePendingGeneration({
+      generationId: 'gen_test003',
+      traceId: 'trc_test003',
+      pendingToolCalls: [
+        { toolCallId: 'tc_default', toolName: 'toolDefault', input: {} },
+      ],
+      allMessages: [{ role: 'user', content: 'Use defaults' }],
+      result: { steps: [], response: { messages: [] } },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      model: {} as any,
+      typedAgent: agentWithoutMaxSteps,
+      agentId: 'agt_test001',
+      resolvedTools: {},
+    });
+
+    expect(pendingGenerations.get('gen_test003')?.agentConfig.maxSteps).toBe(
+      20
+    );
+  });
 });
 
 describe('buildCompletedGenerationResult', () => {

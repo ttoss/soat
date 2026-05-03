@@ -282,6 +282,37 @@ describe('Webhooks', () => {
     });
   });
 
+  describe('GET /api/v1/projects/:projectId/webhooks/:webhookId/deliveries/:deliveryId', () => {
+    let webhookId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/projects/${projectId}/webhooks`)
+        .send({
+          name: 'Delivery detail test',
+          url: 'https://example.com/delivery-detail',
+          events: ['*'],
+        });
+      webhookId = res.body.id;
+    });
+
+    test('returns 404 for non-existent delivery', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/projects/${projectId}/webhooks/${webhookId}/deliveries/wdh_nonexistent`
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient.get(
+        `/api/v1/projects/${projectId}/webhooks/${webhookId}/deliveries/wdh_nonexistent`
+      );
+
+      expect(response.status).toBe(401);
+    });
+  });
+
   describe('DELETE /api/v1/projects/:projectId/webhooks/:webhookId', () => {
     let webhookId: string;
 

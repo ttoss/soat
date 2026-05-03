@@ -1,7 +1,13 @@
+import * as agentsModule from 'src/lib/agents';
+
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Agent Generation Routes', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
   test('POST /api/v1/agents/:id/generate returns 401 when unauthenticated', async () => {
     const response = await testClient
       .post('/api/v1/agents/agent_test_id/generate')
@@ -85,6 +91,137 @@ describe('Agent Generation Routes', () => {
 
       expect(response.status).toBe(404);
       expect(response.body.error).toBeDefined();
+    });
+  });
+
+  describe('validation and error branches', () => {
+    let adminToken: string;
+    let userToken: string;
+    let noPermToken: string;
+    let agentId: string;
+
+    beforeAll(async () => {
+      const bootstrapRes = await testClient
+        .post('/api/v1/users/bootstrap')
+        .send({ username: 'agentvalidadmin', password: 'supersecret' });
+
+      // Bootstrap can run only once in the test DB. If it already ran in
+      // another describe, reuse that admin account for setup.
+      if (bootstrapRes.status === 201) {
+        adminToken = await loginAs('agentvalidadmin', 'supersecret');
+      } else {
+        adminToken = await loginAs('agentgeneradmin', 'supersecret');
+      }
+
+      const userRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'agentvaliduser', password: 'agentvalidpass' });
+      userToken = await loginAs('agentvaliduser', 'agentvalidpass');
+
+      await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'agentvalidnoperm', password: 'agentnopass' });
+      noPermToken = await loginAs('agentvalidnoperm', 'agentnopass');
+
+      const projectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'AgentGeneration Validation Project' });
+      const projectId = projectRes.body.id;
+
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['agents:CreateAgent', 'agents:CreateAgentGeneration'],
+              },
+            ],
+          },
+        });
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${userRes.body.id}/policies`)
+        .send({ policy_ids: [policyRes.body.id] });
+
+      const aiProvRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'Validation Provider',
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        });
+
+      const agentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProvRes.body.id,
+          project_id: projectId,
+          name: 'Validation Agent',
+        });
+      agentId = agentRes.body.id;
+    });
+
+    test('returns 400 when messages is missing or empty', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [] });
+
+      expect(response.status).toBe(400);
+    });
+
+    test('returns 404 when user cannot access target agent', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'hello' }] });
+
+      expect(response.status).toBe(404);
+    });
+
+    test('returns 500 when createGeneration throws', async () => {
+      mockCreateGeneration.mockRejectedValueOnce(new Error('boom'));
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'hello' }] });
+
+      expect(response.status).toBe(500);
+      expect(response.body.error).toContain('boom');
+    });
+
+    test('tool-outputs returns 400 when payload is missing', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate/gen_x/tool-outputs`)
+        .send({ toolOutputs: [] });
+
+      expect(response.status).toBe(400);
+    });
+
+    test('tool-outputs returns 404 when generation is not found', async () => {
+      jest
+        .spyOn(agentsModule, 'submitToolOutputs')
+        .mockResolvedValueOnce('generation_not_found');
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate/gen_x/tool-outputs`)
+        .send({ toolOutputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe('Generation not found');
+    });
+
+    test('tool-outputs returns 404 when agent is not found', async () => {
+      jest
+        .spyOn(agentsModule, 'submitToolOutputs')
+        .mockResolvedValueOnce('not_found');
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate/gen_x/tool-outputs`)
+        .send({ toolOutputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe('Agent not found');
     });
   });
 });
