@@ -188,14 +188,27 @@ By default `POST .../generate` waits for the LLM to finish and returns the resul
 { "status": "accepted", "session_id": "sess_..." }
 ```
 
-### Concurrency guard
+### Concurrency and cancel-previous
 
-Both sync and async calls go through the same concurrency guard: if `generating_at` is set and less than 5 minutes have elapsed, generation is rejected as already in progress.
+Both sync and async calls go through the same concurrency handling. When a new generation request arrives while a previous one is still in-flight, the server **cancels the previous generation** and starts a fresh one. This ensures the model always sees the complete, up-to-date message history:
+
+```
+pos 0  user       "Hello"
+pos 1  user       "What is 2+2?"
+pos 2  user       "Are you sure?"   ← arrived while first generation was in-flight
+pos 3  assistant  "Yes, 2+2 is definitely 4."  ← model saw all three messages
+```
+
+The cancel-previous mechanism uses an in-memory `AbortController` per session. Each process tracks active generations; the abort signal is threaded through to the underlying LLM call so that in-flight streaming or text generation is cancelled as soon as possible.
+
+> **Trade-off:** Aborted generations still consume LLM tokens for the portion already processed before cancellation. For cost-sensitive workloads, consider rate-limiting generation requests.
+
+> **Multi-replica deployments:** The in-memory abort map is per-process. In a multi-replica setup, a new generation request reaching a different replica will not cancel a generation running on another replica. The snapshot-position safety net still applies in that case.
+
+If `generating_at` is set but no in-memory controller exists for the session (e.g., stale state after a process restart) and less than 5 minutes have elapsed, the generation is rejected as already in progress:
 
 - **Sync**: returns `409 Conflict` to the caller.
-- **Async**: the duplicate generation is silently dropped (the 202 response is still returned, but no LLM call is made). Any user message that was already saved via `POST .../messages` remains in the conversation history — it will simply have no assistant reply until the caller issues a new `POST .../generate` after the current generation completes.
-
-> **Note:** The guard is best-effort. Two simultaneous async requests arriving within the same milliseconds — before the first one writes `generating_at` to the database — may both trigger generation. Use synchronous calls if strict single-generation semantics are required.
+- **Async**: the duplicate generation is silently dropped (the 202 response is still returned, but no LLM call is made).
 
 ### Message ordering with concurrent writes
 

@@ -53,6 +53,7 @@ const runNonStreamGeneration = async (args: {
   generationId: string;
   traceId: string;
   agentId: string;
+  abortSignal?: AbortSignal;
 }): Promise<GenerationResult> => {
   const result = await generateText({
     model: args.model,
@@ -69,6 +70,7 @@ const runNonStreamGeneration = async (args: {
         | undefined) ?? undefined,
     stopWhen: stepCountIs((args.typedAgent.maxSteps as number) ?? 20),
     temperature: (args.typedAgent.temperature as number) ?? undefined,
+    abortSignal: args.abortSignal,
   });
 
   const pendingToolCalls = findPendingClientTools(
@@ -183,6 +185,7 @@ export const createGeneration = async (args: {
   remainingDepth?: number;
   authHeader?: string;
   toolContext?: Record<string, string>;
+  abortSignal?: AbortSignal;
 }): Promise<
   GenerationResult | 'not_found' | 'ai_provider_not_found' | ReadableStream
 > => {
@@ -226,6 +229,7 @@ export const createGeneration = async (args: {
     generationId: ctx.generationId,
     traceId,
     agentId: args.agentId,
+    abortSignal: args.abortSignal,
   });
 };
 

@@ -87,11 +87,13 @@ const runAgentGeneration = async (args: {
   agent: InstanceType<(typeof db)['Agent']>;
   messagesForModel: Array<{ role: string; content: string }>;
   toolContext?: Record<string, string>;
+  abortSignal?: AbortSignal;
 }): Promise<InternalGenerationResult> => {
   const result = await createGeneration({
     agentId: args.agent.publicId,
     messages: args.messagesForModel,
     toolContext: args.toolContext,
+    abortSignal: args.abortSignal,
   });
 
   if (result === 'not_found' || result instanceof ReadableStream) {
@@ -125,11 +127,13 @@ const runGenerationForAgent = async (args: {
   messagesForModel: Array<{ role: string; content: string }>;
   model?: string;
   toolContext?: Record<string, string>;
+  abortSignal?: AbortSignal;
 }): Promise<InternalGenerationResult | 'agent_or_chat_not_found'> => {
   return runAgentGeneration({
     agent: args.generatingAgent,
     messagesForModel: args.messagesForModel,
     toolContext: args.toolContext,
+    abortSignal: args.abortSignal,
   });
 };
 
@@ -217,6 +221,7 @@ export const generateConversationMessage = async (args: {
   agentId: string;
   model?: string;
   toolContext?: Record<string, string>;
+  abortSignal?: AbortSignal;
 }): Promise<GenerateConversationMessageResult> => {
   const ctx = await loadGenerationContext({
     conversationId: args.conversationId,
@@ -241,6 +246,7 @@ export const generateConversationMessage = async (args: {
     messagesForModel,
     model: args.model,
     toolContext: args.toolContext,
+    abortSignal: args.abortSignal,
   });
 
   if (typeof genResult === 'string') {
