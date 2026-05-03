@@ -1,4 +1,4 @@
-import type { JSONSchema7, Tool } from 'ai';
+import type { Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import {
   evaluatePolicies,
@@ -7,7 +7,10 @@ import {
 } from 'src/lib/iam';
 
 import { db } from '../db';
-import { soatTools } from './soatTools';
+import {
+  resolveMcpTools,
+  resolveSoatTools,
+} from './agentToolResolverExternalTools';
 
 // ── Path Parameter Interpolation ─────────────────────────────────────────
 
@@ -88,11 +91,117 @@ type TypedHttpTool = {
   name: string;
   description: string | null;
   parameters: Record<string, unknown> | null;
-  execute: {
-    url: string;
-    method?: string;
-    headers?: Record<string, string>;
-  } | null;
+  execute:
+    | {
+        url: string;
+        method?: string;
+        headers?: Record<string, string>;
+      }
+    | string
+    | null;
+};
+
+type HttpExecuteConfig = {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+};
+
+const isErrorLoggingEnabled = () => {
+  const value = process.env.SOAT_ERROR_LOGS_ENABLED;
+
+  if (value === undefined) {
+    return true;
+  }
+
+  return !['false', '0', 'off', 'no'].includes(value.toLowerCase());
+};
+
+const toToolErrorText = (args: { error: unknown }) => {
+  if (args.error instanceof Error) {
+    return args.error.stack ?? args.error.message;
+  }
+
+  return String(args.error);
+};
+
+const logToolCallingError = (args: {
+  toolName: string;
+  toolType: 'http' | 'mcp' | 'soat' | 'client';
+  url?: string;
+  method?: string;
+  error: unknown;
+}) => {
+  if (!isErrorLoggingEnabled()) {
+    return;
+  }
+
+  // eslint-disable-next-line no-console
+  console.error('Tool call failed:', {
+    toolName: args.toolName,
+    toolType: args.toolType,
+    url: args.url,
+    method: args.method,
+    error: toToolErrorText({ error: args.error }),
+  });
+};
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+};
+
+const parseHeaders = (args: {
+  value: unknown;
+}): Record<string, string> | undefined => {
+  if (!isPlainObject(args.value)) {
+    return undefined;
+  }
+
+  return args.value as Record<string, string>;
+};
+
+const parseHttpExecuteConfig = (
+  execute: TypedHttpTool['execute']
+): HttpExecuteConfig | null => {
+  const parsedExecute: unknown =
+    typeof execute === 'string' ? JSON.parse(execute) : execute;
+
+  if (!isPlainObject(parsedExecute)) {
+    return null;
+  }
+
+  const url = parsedExecute.url;
+  if (typeof url !== 'string' || !url) {
+    return null;
+  }
+
+  const method = parsedExecute.method;
+
+  return {
+    url,
+    method: typeof method === 'string' ? method : undefined,
+    headers: parseHeaders({ value: parsedExecute.headers }),
+  };
+};
+
+const buildInvalidHttpToolExecute = (args: {
+  toolName: string;
+  rawExecute: unknown;
+}) => {
+  return async () => {
+    const error = new Error(
+      `Invalid HTTP tool execute config for ${args.toolName}: expected object with string url`
+    );
+    logToolCallingError({
+      toolName: args.toolName,
+      toolType: 'http',
+      error: {
+        message: error.message,
+        execute: args.rawExecute,
+      },
+    });
+    throw error;
+  };
 };
 
 const buildHttpRequestUrl = (args: {
@@ -140,7 +249,10 @@ export class HttpToolError extends Error {
 }
 
 const buildHttpToolExecute = (
-  typedTool: TypedHttpTool,
+  args: {
+    toolName: string;
+    execute: HttpExecuteConfig;
+  },
   toolContext?: Record<string, string>
 ) => {
   return async (toolArgs: unknown) => {
@@ -153,41 +265,53 @@ const buildHttpToolExecute = (
       'HEAD',
       'OPTIONS',
     ];
-    const rawMethod = (typedTool.execute!.method ?? 'POST').toUpperCase();
+    const rawMethod = (args.execute.method ?? 'POST').toUpperCase();
     const method = ALLOWED_METHODS.includes(rawMethod) ? rawMethod : 'POST';
     const hasBody = !['GET', 'HEAD', 'DELETE'].includes(method);
     const rawArgs =
       toolArgs && typeof toolArgs === 'object'
         ? (toolArgs as Record<string, unknown>)
         : {};
-    const { resolvedUrl, remainingArgs } = resolveUrlPathParams({
-      url: typedTool.execute!.url,
-      toolArgs: rawArgs,
-    });
-    const url = buildHttpRequestUrl({
-      resolvedUrl,
-      method,
-      remainingArgs,
-      hasBody,
-    });
-    const response = await fetch(url, {
-      method,
-      headers: {
-        ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
-        ...typedTool.execute?.headers,
-        ...buildContextHeaders(toolContext),
-      },
-      ...(hasBody ? { body: JSON.stringify(remainingArgs) } : {}),
-    });
-    if (!response.ok) {
-      const body = await response.text();
-      throw new HttpToolError(
-        `HTTP ${response.status}: ${body}`,
-        response.status,
-        body
-      );
+    let url = args.execute.url;
+    try {
+      const { resolvedUrl, remainingArgs } = resolveUrlPathParams({
+        url: args.execute.url,
+        toolArgs: rawArgs,
+      });
+      url = buildHttpRequestUrl({
+        resolvedUrl,
+        method,
+        remainingArgs,
+        hasBody,
+      });
+      const response = await fetch(url, {
+        method,
+        headers: {
+          ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+          ...args.execute.headers,
+          ...buildContextHeaders(toolContext),
+        },
+        ...(hasBody ? { body: JSON.stringify(remainingArgs) } : {}),
+      });
+      if (!response.ok) {
+        const body = await response.text();
+        throw new HttpToolError(
+          `HTTP ${response.status}: ${body}`,
+          response.status,
+          body
+        );
+      }
+      return response.json();
+    } catch (error) {
+      logToolCallingError({
+        toolName: args.toolName,
+        toolType: 'http',
+        url,
+        method,
+        error,
+      });
+      throw error;
     }
-    return response.json();
   };
 };
 
@@ -199,10 +323,22 @@ const resolveHttpTool = (
     typeof typedTool.parameters === 'string'
       ? (JSON.parse(typedTool.parameters) as Record<string, unknown>)
       : typedTool.parameters;
+  let execute: HttpExecuteConfig | null = null;
+  try {
+    execute = parseHttpExecuteConfig(typedTool.execute);
+  } catch {
+    execute = null;
+  }
+
   return tool({
     description: typedTool.description ?? undefined,
     inputSchema: jsonSchema(parameters ?? { type: 'object', properties: {} }),
-    execute: buildHttpToolExecute(typedTool, toolContext),
+    execute: execute
+      ? buildHttpToolExecute({ toolName: typedTool.name, execute }, toolContext)
+      : buildInvalidHttpToolExecute({
+          toolName: typedTool.name,
+          rawExecute: typedTool.execute,
+        }),
   });
 };
 
@@ -220,156 +356,6 @@ const resolveClientTool = (typedTool: {
   });
 };
 
-const buildMcpToolExecute = (
-  mcpUrl: string,
-  mcpHeaders: Record<string, string>,
-  mcpToolName: string
-) => {
-  return async (toolArgs: unknown) => {
-    const callResponse = await fetch(mcpUrl, {
-      method: 'POST',
-      headers: mcpHeaders,
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 2,
-        method: 'tools/call',
-        params: { name: mcpToolName, arguments: toolArgs },
-      }),
-    });
-    const callBody = (await callResponse.json()) as {
-      result?: { content?: Array<{ text?: string }> };
-    };
-    const text = callBody.result?.content?.[0]?.text;
-    if (!text) return callBody;
-    try {
-      return JSON.parse(text);
-    } catch {
-      return text;
-    }
-  };
-};
-
-const resolveMcpTools = async (
-  typedTool: { mcp: { url: string; headers?: Record<string, string> } },
-  toolContext?: Record<string, string>
-): Promise<Record<string, Tool>> => {
-  const result: Record<string, Tool> = {};
-  const mcpUrl = typedTool.mcp.url;
-  const mcpHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json, text/event-stream',
-    ...typedTool.mcp.headers,
-    ...buildContextHeaders(toolContext),
-  };
-
-  const listResponse = await fetch(mcpUrl, {
-    method: 'POST',
-    headers: mcpHeaders,
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
-  });
-
-  if (!listResponse.ok) return result;
-
-  const listBody = (await listResponse.json()) as {
-    result?: {
-      tools?: Array<{
-        name: string;
-        description?: string;
-        inputSchema?: Record<string, unknown>;
-      }>;
-    };
-  };
-
-  for (const mcpTool of listBody.result?.tools ?? []) {
-    const mcpToolName = mcpTool.name;
-    result[mcpToolName] = tool({
-      description: mcpTool.description ?? undefined,
-      inputSchema: jsonSchema(
-        mcpTool.inputSchema ?? { type: 'object', properties: {} }
-      ),
-      execute: buildMcpToolExecute(mcpUrl, mcpHeaders, mcpToolName),
-    });
-  }
-
-  return result;
-};
-
-const buildSoatActionTool = (args: {
-  toolName: string;
-  toolDescription: string | null;
-  def: (typeof soatTools)[number];
-  boundaryPolicy?: unknown;
-  authHeader?: string;
-  toolContext?: Record<string, string>;
-}): Tool => {
-  const base = `http://localhost:${process.env.PORT || 5047}/api/v1`;
-  return tool({
-    description: args.toolDescription ?? args.def.description,
-    inputSchema: jsonSchema(args.def.inputSchema as JSONSchema7),
-    execute: async (toolArgs: unknown) => {
-      const iamAction = args.def.iamAction ?? args.def.name;
-      if (
-        !isSoatActionAllowedByBoundary({
-          boundaryPolicy: args.boundaryPolicy,
-          iamAction,
-        })
-      ) {
-        return { error: `Forbidden: boundary policy denies ${iamAction}` };
-      }
-      const rawArgs = toolArgs as Record<string, unknown>;
-      const path = args.def.path(rawArgs);
-      const soatBody = args.def.body ? args.def.body(rawArgs) : undefined;
-      const soatBodyWithContext =
-        soatBody && args.toolContext
-          ? { ...soatBody, toolContext: args.toolContext }
-          : soatBody;
-      const response = await fetch(`${base}${path}`, {
-        method: args.def.method,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(args.authHeader ? { Authorization: args.authHeader } : {}),
-          ...buildContextHeaders(args.toolContext),
-        },
-        body: soatBodyWithContext
-          ? JSON.stringify(soatBodyWithContext)
-          : undefined,
-      });
-      return response.json();
-    },
-  });
-};
-
-const resolveSoatTools = (
-  typedTool: {
-    name: string;
-    description: string | null;
-    actions: string[] | null;
-  },
-  args: {
-    boundaryPolicy?: unknown;
-    authHeader?: string;
-    toolContext?: Record<string, string>;
-  }
-): Record<string, Tool> => {
-  const result: Record<string, Tool> = {};
-  for (const action of typedTool.actions ?? []) {
-    const def = soatTools.find((t) => {
-      return t.name === action;
-    });
-    if (!def) continue;
-    const resolvedToolName = `${typedTool.name}_${action}`;
-    result[resolvedToolName] = buildSoatActionTool({
-      toolName: typedTool.name,
-      toolDescription: typedTool.description,
-      def,
-      boundaryPolicy: args.boundaryPolicy,
-      authHeader: args.authHeader,
-      toolContext: args.toolContext,
-    });
-  }
-  return result;
-};
-
 // ── Tool Resolution ───────────────────────────────────────────────────────
 
 type AgentToolRow = {
@@ -377,11 +363,14 @@ type AgentToolRow = {
   name: string;
   description: string | null;
   parameters: Record<string, unknown> | null;
-  execute: {
-    url: string;
-    method?: string;
-    headers?: Record<string, string>;
-  } | null;
+  execute:
+    | {
+        url: string;
+        method?: string;
+        headers?: Record<string, string>;
+      }
+    | string
+    | null;
   mcp: { url: string; headers?: Record<string, string> } | null;
   actions: string[] | null;
 };
@@ -402,19 +391,29 @@ const resolveToolByType = async (
     case 'mcp': {
       if (!typedTool.mcp?.url) return {};
       try {
-        return await resolveMcpTools(
-          typedTool as {
+        return await resolveMcpTools({
+          typedTool: typedTool as {
             mcp: { url: string; headers?: Record<string, string> };
           },
-          args.toolContext
-        );
+          toolContext: args.toolContext,
+          buildContextHeaders,
+          logToolCallingError,
+        });
       } catch {
         // Network errors resolving MCP tools should not abort entire resolution
         return {};
       }
     }
     case 'soat':
-      return resolveSoatTools(typedTool, args);
+      return resolveSoatTools({
+        typedTool,
+        boundaryPolicy: args.boundaryPolicy,
+        authHeader: args.authHeader,
+        toolContext: args.toolContext,
+        buildContextHeaders,
+        isSoatActionAllowedByBoundary,
+        logToolCallingError,
+      });
     default:
       return {};
   }

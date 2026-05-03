@@ -1,3 +1,4 @@
+import { db } from 'src/db';
 import {
   buildContextHeaders,
   HttpToolError,
@@ -210,6 +211,132 @@ describe('resolveAgentTools', () => {
     expect(httpError.body).toBe('Forbidden');
 
     fetchMock.mockRestore();
+  });
+
+  test('http tool execute supports legacy execute config stored as JSON string', async () => {
+    const legacyToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents/tools')
+      .send({
+        project_id: projectId,
+        name: 'myLegacyHttpTool',
+        type: 'http',
+        description: 'Legacy stored execute payload',
+        parameters: { type: 'object', properties: {} },
+        execute: {
+          url: 'https://example.com/api/users/{user_id}',
+          method: 'GET',
+        },
+      });
+
+    await db.AgentTool.update(
+      {
+        execute: {
+          url: 'https://example.com/api/users/{user_id}',
+          method: 'GET',
+        },
+      },
+      { where: { publicId: legacyToolRes.body.id } }
+    );
+
+    await db.sequelize.query(
+      'UPDATE agent_tools SET execute = to_jsonb($1::text) WHERE public_id = $2',
+      {
+        bind: [
+          JSON.stringify({
+            url: 'https://example.com/api/users/{user_id}',
+            method: 'GET',
+          }),
+          legacyToolRes.body.id,
+        ],
+      }
+    );
+
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true }), { status: 200 })
+      );
+
+    const tools = await resolveAgentTools({ toolIds: [legacyToolRes.body.id] });
+    const legacyTool = tools.myLegacyHttpTool;
+
+    if ('execute' in legacyTool && typeof legacyTool.execute === 'function') {
+      await legacyTool.execute(
+        { user_id: 'u_01', include: 'projects' },
+        {} as never
+      );
+    }
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://example.com/api/users/u_01?include=projects',
+      expect.objectContaining({ method: 'GET' })
+    );
+
+    fetchMock.mockRestore();
+  });
+
+  test('logs HTTP tool call errors when SOAT_ERROR_LOGS_ENABLED is enabled', async () => {
+    const originalValue = process.env.SOAT_ERROR_LOGS_ENABLED;
+    process.env.SOAT_ERROR_LOGS_ENABLED = 'true';
+
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => {
+        return undefined;
+      });
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response('Boom', { status: 500 }));
+
+    const tools = await resolveAgentTools({ toolIds: [httpToolId] });
+    const httpTool = tools.myHttpTool;
+
+    if ('execute' in httpTool && typeof httpTool.execute === 'function') {
+      await expect(httpTool.execute({}, {} as never)).rejects.toBeInstanceOf(
+        HttpToolError
+      );
+    }
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Tool call failed:',
+      expect.objectContaining({
+        toolName: 'myHttpTool',
+        toolType: 'http',
+      })
+    );
+
+    fetchMock.mockRestore();
+    consoleErrorSpy.mockRestore();
+    process.env.SOAT_ERROR_LOGS_ENABLED = originalValue;
+  });
+
+  test('does not log HTTP tool call errors when SOAT_ERROR_LOGS_ENABLED is disabled', async () => {
+    const originalValue = process.env.SOAT_ERROR_LOGS_ENABLED;
+    process.env.SOAT_ERROR_LOGS_ENABLED = 'false';
+
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => {
+        return undefined;
+      });
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response('Boom', { status: 500 }));
+
+    const tools = await resolveAgentTools({ toolIds: [httpToolId] });
+    const httpTool = tools.myHttpTool;
+
+    if ('execute' in httpTool && typeof httpTool.execute === 'function') {
+      await expect(httpTool.execute({}, {} as never)).rejects.toBeInstanceOf(
+        HttpToolError
+      );
+    }
+
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+
+    fetchMock.mockRestore();
+    consoleErrorSpy.mockRestore();
+    process.env.SOAT_ERROR_LOGS_ENABLED = originalValue;
   });
 });
 
