@@ -1,5 +1,6 @@
 import {
   buildContextHeaders,
+  HttpToolError,
   isSoatActionAllowedByBoundary,
   resolveAgentTools,
   resolveUrlPathParams,
@@ -145,6 +146,102 @@ describe('resolveAgentTools', () => {
     );
 
     fetchMock.mockRestore();
+  });
+
+  test('http tool execute throws HttpToolError on non-OK response with JSON body', async () => {
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+      );
+
+    const tools = await resolveAgentTools({ toolIds: [httpToolId] });
+    const httpTool = tools.myHttpTool;
+
+    let thrownError: unknown;
+    if ('execute' in httpTool && typeof httpTool.execute === 'function') {
+      try {
+        await httpTool.execute({}, {} as never);
+      } catch (error) {
+        thrownError = error;
+      }
+    }
+
+    expect(thrownError).toBeInstanceOf(HttpToolError);
+    const httpError = thrownError as HttpToolError;
+    expect(httpError.status).toBe(401);
+    expect(httpError.message).toContain('HTTP 401');
+    expect(httpError.body).toContain('Unauthorized');
+    expect(JSON.stringify(httpError)).not.toBe('{}');
+    const serialized = JSON.parse(JSON.stringify(httpError)) as {
+      message: string;
+      name: string;
+      status: number;
+      body: string;
+    };
+    expect(serialized.message).toContain('HTTP 401');
+    expect(serialized.name).toBe('HttpToolError');
+    expect(serialized.status).toBe(401);
+    expect(serialized.body).toContain('Unauthorized');
+
+    fetchMock.mockRestore();
+  });
+
+  test('http tool execute throws HttpToolError on non-OK response with plain text body', async () => {
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response('Forbidden', { status: 403 }));
+
+    const tools = await resolveAgentTools({ toolIds: [httpToolId] });
+    const httpTool = tools.myHttpTool;
+
+    let thrownError: unknown;
+    if ('execute' in httpTool && typeof httpTool.execute === 'function') {
+      try {
+        await httpTool.execute({}, {} as never);
+      } catch (error) {
+        thrownError = error;
+      }
+    }
+
+    expect(thrownError).toBeInstanceOf(HttpToolError);
+    const httpError = thrownError as HttpToolError;
+    expect(httpError.status).toBe(403);
+    expect(httpError.body).toBe('Forbidden');
+
+    fetchMock.mockRestore();
+  });
+});
+
+describe('HttpToolError', () => {
+  test('serializes to JSON with message, name, status, and body', () => {
+    const error = new HttpToolError(
+      'HTTP 401: Unauthorized',
+      401,
+      'Unauthorized'
+    );
+    const json = JSON.stringify(error);
+    expect(json).not.toBe('{}');
+    const parsed = JSON.parse(json) as {
+      message: string;
+      name: string;
+      status: number;
+      body: string;
+    };
+    expect(parsed.message).toBe('HTTP 401: Unauthorized');
+    expect(parsed.name).toBe('HttpToolError');
+    expect(parsed.status).toBe(401);
+    expect(parsed.body).toBe('Unauthorized');
+  });
+
+  test('is an instance of Error', () => {
+    const error = new HttpToolError(
+      'HTTP 500: Internal Server Error',
+      500,
+      'Internal Server Error'
+    );
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe('HttpToolError');
   });
 });
 
