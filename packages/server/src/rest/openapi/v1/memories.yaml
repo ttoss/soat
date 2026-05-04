@@ -1,0 +1,320 @@
+openapi: 3.0.3
+info:
+  title: SOAT Memories API
+  version: 1.0.0
+  description: API for managing memory configurations for RAG (Retrieval-Augmented Generation)
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Memories
+    description: Manage memory configurations for document retrieval
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/memories:
+    get:
+      tags:
+        - Memories
+      summary: List memories
+      description: Returns a list of memory configurations for a project
+      operationId: listMemories
+      parameters:
+        - name: project_id
+          in: query
+          description: Project ID (required if not using project key auth)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: List of memories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Memory'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+    post:
+      tags:
+        - Memories
+      summary: Create a memory
+      description: Creates a new memory configuration in a project
+      operationId: createMemory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - config
+              properties:
+                project_id:
+                  type: string
+                  description: Project ID (required if not using project key auth)
+                  example: proj_V1StGXR8Z5jdHi6B
+                name:
+                  type: string
+                  description: Memory name
+                  example: Product Documentation
+                description:
+                  type: string
+                  description: Optional description
+                  example: Retrieves product docs for support queries
+                config:
+                  $ref: '#/components/schemas/MemoryConfig'
+      responses:
+        '201':
+          description: Memory created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Memory'
+        '400':
+          description: Bad request (missing required fields or invalid config)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+  /api/v1/memories/{memory_id}:
+    get:
+      tags:
+        - Memories
+      summary: Get a memory
+      description: Returns a single memory configuration by ID
+      operationId: getMemory
+      parameters:
+        - name: memory_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: mem_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: Memory found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Memory'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory not found
+        '500':
+          description: Internal server error
+    put:
+      tags:
+        - Memories
+      summary: Update a memory
+      description: Updates an existing memory configuration
+      operationId: updateMemory
+      parameters:
+        - name: memory_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: mem_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Memory name
+                description:
+                  type: string
+                  nullable: true
+                  description: Optional description
+                config:
+                  $ref: '#/components/schemas/MemoryConfig'
+      responses:
+        '200':
+          description: Memory updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Memory'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory not found
+        '500':
+          description: Internal server error
+    delete:
+      tags:
+        - Memories
+      summary: Delete a memory
+      description: Deletes a memory configuration
+      operationId: deleteMemory
+      parameters:
+        - name: memory_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: mem_V1StGXR8Z5jdHi6B
+      responses:
+        '204':
+          description: Memory deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory not found
+        '500':
+          description: Internal server error
+  /api/v1/memories/{memory_id}/search:
+    post:
+      tags:
+        - Memories
+      summary: Search memory documents
+      description: Runs a document search using the memory's stored configuration, with optional field overrides in the request body
+      operationId: searchMemory
+      parameters:
+        - name: memory_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: mem_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryConfig'
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        file_id:
+                          type: string
+                        project_id:
+                          type: string
+                        filename:
+                          type: string
+                        title:
+                          type: string
+                        content:
+                          type: string
+                          nullable: true
+                        score:
+                          type: number
+                          description: Relevance score (0-1); only present when search is used
+                        created_at:
+                          type: string
+                          format: date-time
+                        updated_at:
+                          type: string
+                          format: date-time
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory not found
+        '500':
+          description: Internal server error
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    MemoryConfig:
+      type: object
+      description: Configuration for document retrieval. At least one of search, paths, or document_ids must be provided when creating a memory.
+      properties:
+        search:
+          type: string
+          description: Semantic search query string
+          example: How do I reset my password?
+        min_score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Minimum relevance score threshold (only used when search is set)
+          example: 0.7
+        limit:
+          type: integer
+          minimum: 1
+          description: Maximum number of documents to return
+          default: 10
+          example: 5
+        paths:
+          type: array
+          items:
+            type: string
+          description: Filter documents to files whose path starts with one of these prefixes
+          example:
+            - docs/products/
+        document_ids:
+          type: array
+          items:
+            type: string
+          description: Filter to specific document IDs
+          example:
+            - doc_V1StGXR8Z5jdHi6B
+    Memory:
+      type: object
+      properties:
+        id:
+          type: string
+          example: mem_V1StGXR8Z5jdHi6B
+        project_id:
+          type: string
+          example: proj_V1StGXR8Z5jdHi6B
+        name:
+          type: string
+          example: Product Documentation
+        description:
+          type: string
+          nullable: true
+          example: Retrieves product docs for support queries
+        config:
+          $ref: '#/components/schemas/MemoryConfig'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time

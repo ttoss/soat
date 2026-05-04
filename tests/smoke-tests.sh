@@ -418,6 +418,88 @@ $SOAT_CLI delete-document --document-id "$DOC1_ID"
 $SOAT_CLI delete-document --document-id "$DOC2_ID"
 echo "Documents deleted."
 
+# 13b. Memories — CRUD + search
+echo "=== Memories ==="
+
+# Create a document for memory search
+echo "--- Creating document for memory search ---"
+MEM_DOC_RESP=$($SOAT_CLI create-document \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --content "Artificial intelligence is transforming software development" \
+  --filename ai-memo.txt \
+  --path /memo/ai.txt)
+MEM_DOC_ID=$(echo "$MEM_DOC_RESP" | jq -r '.id')
+echo "Memory test doc id: $MEM_DOC_ID"
+
+# Create memory
+echo "--- Creating memory ---"
+MEM_RESP=$($SOAT_CLI create-memory \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "Smoke Test Memory" \
+  --description "A memory for smoke testing" \
+  --config "{\"document_ids\":[\"$MEM_DOC_ID\"]}")
+MEM_ID=$(echo "$MEM_RESP" | jq -r '.id')
+if ! printf '%s\n' "$MEM_ID" | grep -q '^mem_'; then
+  echo "ERROR: memory id expected to start with 'mem_', got '$MEM_ID'" >&2
+  exit 1
+fi
+echo "Memory id: $MEM_ID"
+
+# Get memory
+echo "--- Getting memory ---"
+MEM_GET_RESP=$($SOAT_CLI get-memory --memory-id "$MEM_ID")
+if ! printf '%s\n' "$MEM_GET_RESP" | jq -e --arg id "$MEM_ID" '.id == $id' >/dev/null 2>&1; then
+  echo "ERROR: GET memory returned unexpected payload" >&2
+  echo "$MEM_GET_RESP" >&2
+  exit 1
+fi
+echo "Memory retrieved."
+
+# List memories
+echo "--- Listing memories ---"
+MEM_LIST_RESP=$($SOAT_CLI list-memories --project_id "$PROJECT_PUBLIC_ID")
+if ! printf '%s\n' "$MEM_LIST_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
+  echo "ERROR: LIST memories did not return an array" >&2
+  echo "$MEM_LIST_RESP" >&2
+  exit 1
+fi
+echo "Memories listed."
+
+# Update memory
+echo "--- Updating memory ---"
+MEM_UPDATE_RESP=$($SOAT_CLI update-memory --memory-id "$MEM_ID" \
+  --name "Updated Smoke Memory")
+if ! printf '%s\n' "$MEM_UPDATE_RESP" | jq -e '.name == "Updated Smoke Memory"' >/dev/null 2>&1; then
+  echo "ERROR: UPDATE memory did not return updated name" >&2
+  echo "$MEM_UPDATE_RESP" >&2
+  exit 1
+fi
+echo "Memory updated."
+
+# Search memory (document_ids config — no embedding needed)
+echo "--- Searching memory ---"
+MEM_SEARCH_RESP=$($SOAT_CLI search-memory --memory-id "$MEM_ID")
+MEM_SEARCH_COUNT=$(echo "$MEM_SEARCH_RESP" | jq '.documents | length')
+if [ "$MEM_SEARCH_COUNT" -lt 1 ]; then
+  echo "ERROR: memory search returned $MEM_SEARCH_COUNT documents, expected at least 1" >&2
+  exit 1
+fi
+echo "Memory search returned $MEM_SEARCH_COUNT document(s): OK"
+
+# Delete memory
+echo "--- Deleting memory ---"
+$SOAT_CLI delete-memory --memory-id "$MEM_ID"
+echo "Memory deleted."
+
+# Verify memory is gone (404)
+echo "--- Verifying memory deletion ---"
+expect_cli_error_status 404 get-memory --memory-id "$MEM_ID"
+echo "Memory correctly returns 404 after deletion."
+
+# Clean up document
+$SOAT_CLI delete-document --document-id "$MEM_DOC_ID"
+echo "Memories coverage: OK"
+
 # 14. Chat completion — 401 without auth
 echo "--- Chat completion: 401 without auth ---"
 SOAT_TOKEN=invalid expect_cli_error_status 401 create-chat-completion --messages '[{"role":"user","content":"hello"}]'

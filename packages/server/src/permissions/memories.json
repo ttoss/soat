@@ -1,0 +1,35 @@
+{
+  "module": "memories",
+  "operations": [
+    {
+      "operationId": "listMemories",
+      "action": "memories:ListMemories",
+      "description": "List memory configurations in a project"
+    },
+    {
+      "operationId": "createMemory",
+      "action": "memories:CreateMemory",
+      "description": "Create a new memory configuration"
+    },
+    {
+      "operationId": "getMemory",
+      "action": "memories:GetMemory",
+      "description": "Get a memory configuration by ID"
+    },
+    {
+      "operationId": "updateMemory",
+      "action": "memories:UpdateMemory",
+      "description": "Update a memory configuration"
+    },
+    {
+      "operationId": "deleteMemory",
+      "action": "memories:DeleteMemory",
+      "description": "Delete a memory configuration"
+    },
+    {
+      "operationId": "searchMemory",
+      "action": "memories:GetMemory",
+      "description": "Search documents using a memory's configuration (reuses GetMemory permission)"
+    }
+  ]
+}
