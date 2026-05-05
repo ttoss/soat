@@ -201,9 +201,7 @@ describe('Actors', () => {
     });
 
     test('logs and returns 500 when router has an unhandled error', async () => {
-      const loggerSpy = jest.spyOn(console, 'error').mockImplementation(() => {
-        return undefined;
-      });
+      const loggerSpy = jest.spyOn(console, 'error');
 
       const listActorsSpy = jest
         .spyOn(actorsLib, 'listActors')
@@ -229,7 +227,7 @@ describe('Actors', () => {
       );
 
       listActorsSpy.mockRestore();
-      loggerSpy.mockRestore();
+      loggerSpy.mockReset();
     });
   });
 

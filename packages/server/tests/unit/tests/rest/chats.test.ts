@@ -288,14 +288,6 @@ describe('Chats', () => {
   });
 
   describe('POST /api/v1/chats/completions', () => {
-    beforeEach(() => {
-      jest.spyOn(console, 'error').mockImplementation(() => {});
-    });
-
-    afterEach(() => {
-      jest.restoreAllMocks();
-    });
-
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .post('/api/v1/chats/completions')
@@ -418,14 +410,6 @@ describe('Chats', () => {
     let chatId: string;
     let chatWithSystemId: string;
 
-    beforeEach(() => {
-      jest.spyOn(console, 'error').mockImplementation(() => {});
-    });
-
-    afterEach(() => {
-      jest.restoreAllMocks();
-    });
-
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
@@ -502,14 +486,6 @@ describe('Chats', () => {
   // ── Streaming /chats/completions ────────────────────────────────────────
 
   describe('POST /api/v1/chats/completions - streaming (real lib)', () => {
-    beforeEach(() => {
-      jest.spyOn(console, 'error').mockImplementation(() => {});
-    });
-
-    afterEach(() => {
-      jest.restoreAllMocks();
-    });
-
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.post('/api/v1/chats/completions').send({
         ai_provider_id: aiProviderId,
@@ -554,10 +530,6 @@ describe('Chats', () => {
   describe('POST /api/v1/chats/:chatId/completions - real lib paths (admin)', () => {
     let realChatId: string;
     let openAiProviderId: string;
-
-    beforeEach(() => {
-      jest.spyOn(console, 'error').mockImplementation(() => {});
-    });
 
     beforeAll(async () => {
       const chatRes = await authenticatedTestClient(adminToken)

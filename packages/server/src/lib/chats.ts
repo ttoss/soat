@@ -287,9 +287,17 @@ export const createChatCompletion = async (args: {
     model: args.model,
   });
 
+  const system = args.messages.find((m) => {
+    return m.role === 'system';
+  })?.content;
+  const nonSystemMessages = args.messages.filter((m) => {
+    return m.role !== 'system';
+  });
+
   const result = await generateText({
     model,
-    messages: args.messages as ModelMessage[],
+    system,
+    messages: nonSystemMessages as ModelMessage[],
   });
 
   return {
@@ -309,9 +317,17 @@ export const streamChatCompletion = async (args: {
     model: args.model,
   });
 
+  const system = args.messages.find((m) => {
+    return m.role === 'system';
+  })?.content;
+  const nonSystemMessages = args.messages.filter((m) => {
+    return m.role !== 'system';
+  });
+
   const result = streamText({
     model,
-    messages: args.messages as ModelMessage[],
+    system,
+    messages: nonSystemMessages as ModelMessage[],
   });
 
   return result.textStream;
@@ -385,7 +401,10 @@ export const createChatCompletionForChat = async (args: {
 
   const result = await generateText({
     model,
-    messages: finalMessages as ModelMessage[],
+    system: systemMessage ?? undefined,
+    messages: finalMessages.filter((m) => {
+      return m.role !== 'system';
+    }) as ModelMessage[],
   });
 
   return {
@@ -430,10 +449,6 @@ export const streamChatCompletionForChat = async (args: {
     return m.role !== 'system';
   });
 
-  const finalMessages: ChatMessage[] = systemMessage
-    ? [{ role: 'system', content: systemMessage }, ...userAssistantMessages]
-    : userAssistantMessages;
-
   const model = buildModel({
     provider: resolved.provider,
     secretValue: resolved.secretValue,
@@ -444,7 +459,8 @@ export const streamChatCompletionForChat = async (args: {
 
   const result = streamText({
     model,
-    messages: finalMessages as ModelMessage[],
+    system: systemMessage ?? undefined,
+    messages: userAssistantMessages as ModelMessage[],
   });
 
   return result.textStream;

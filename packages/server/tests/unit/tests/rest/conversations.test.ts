@@ -833,4 +833,96 @@ describe('Conversations', () => {
       expect(delRes.status).toBe(409);
     });
   });
+
+  describe('GET /api/v1/conversations/:id/tags', () => {
+    let conversationId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ project_id: projectId });
+      conversationId = res.body.id;
+    });
+
+    test('returns tags for a conversation', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/conversations/${conversationId}/tags`
+      );
+      expect(response.status).toBe(200);
+    });
+
+    test('returns 401 for unauthenticated request', async () => {
+      const response = await testClient.get(
+        `/api/v1/conversations/${conversationId}/tags`
+      );
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 404 for non-existent conversation', async () => {
+      const response = await authenticatedTestClient(adminToken).get(
+        '/api/v1/conversations/conv_nonexistent/tags'
+      );
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe('PUT /api/v1/conversations/:id/tags', () => {
+    let conversationId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ project_id: projectId });
+      conversationId = res.body.id;
+    });
+
+    test('replaces conversation tags', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .put(`/api/v1/conversations/${conversationId}/tags`)
+        .send({ env: 'prod' });
+      expect(response.status).toBe(200);
+    });
+
+    test('returns 401 for unauthenticated request', async () => {
+      const response = await testClient
+        .put(`/api/v1/conversations/${conversationId}/tags`)
+        .send({});
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 404 for non-existent conversation', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .put('/api/v1/conversations/conv_nonexistent/tags')
+        .send({ env: 'prod' });
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe('PATCH /api/v1/conversations/:id/tags', () => {
+    let conversationId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ project_id: projectId });
+      conversationId = res.body.id;
+      await authenticatedTestClient(userToken)
+        .put(`/api/v1/conversations/${conversationId}/tags`)
+        .send({ env: 'test' });
+    });
+
+    test('merges conversation tags', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/conversations/${conversationId}/tags`)
+        .send({ source: 'api' });
+      expect(response.status).toBe(200);
+    });
+
+    test('returns 401 for unauthenticated request', async () => {
+      const response = await testClient
+        .patch(`/api/v1/conversations/${conversationId}/tags`)
+        .send({});
+      expect(response.status).toBe(401);
+    });
+  });
 });

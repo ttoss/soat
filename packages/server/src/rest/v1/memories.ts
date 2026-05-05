@@ -1,3 +1,4 @@
+import type { MemoryConfig } from '@soat/postgresdb';
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
@@ -9,9 +10,29 @@ import {
   searchMemory,
   updateMemory,
 } from 'src/lib/memories';
-import type { MemoryConfig } from '@soat/postgresdb';
 
 const memoriesRouter = new Router<Context>();
+
+const isValidMemoryConfig = (config: MemoryConfig): boolean => {
+  return !!(
+    config.search ||
+    (config.paths && config.paths.length > 0) ||
+    (config.documentIds && config.documentIds.length > 0)
+  );
+};
+
+const resolveProjectPublicId = (
+  body: { projectId?: string },
+  apiKeyProjectPublicId: string | null | undefined
+): string | null => {
+  if (body.projectId) {
+    return body.projectId;
+  }
+  if (apiKeyProjectPublicId) {
+    return apiKeyProjectPublicId;
+  }
+  return null;
+};
 
 memoriesRouter.get('/memories', async (ctx: Context) => {
   if (!ctx.authUser) {
@@ -90,12 +111,7 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     return;
   }
 
-  const { config } = body;
-  if (
-    !config.search &&
-    (!config.paths || config.paths.length === 0) &&
-    (!config.documentIds || config.documentIds.length === 0)
-  ) {
+  if (!isValidMemoryConfig(body.config)) {
     ctx.status = 400;
     ctx.body = {
       error:
@@ -104,15 +120,14 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     return;
   }
 
-  let resolvedProjectPublicId = body.projectId;
+  const resolvedProjectPublicId = resolveProjectPublicId(
+    body,
+    ctx.authUser.apiKeyProjectPublicId
+  );
   if (!resolvedProjectPublicId) {
-    if (ctx.authUser.apiKeyProjectPublicId) {
-      resolvedProjectPublicId = ctx.authUser.apiKeyProjectPublicId;
-    } else {
-      ctx.status = 400;
-      ctx.body = { error: 'projectId is required' };
-      return;
-    }
+    ctx.status = 400;
+    ctx.body = { error: 'projectId is required' };
+    return;
   }
 
   const allowed = await ctx.authUser.isAllowed({

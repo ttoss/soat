@@ -4,10 +4,10 @@ import { getTransformIgnorePatterns } from '@ttoss/test-utils';
 export default jestUnitConfig({
   coverageThreshold: {
     './src/**/*.ts': {
-      branches: 55,
-      functions: 55,
-      lines: 55,
-      statements: 55,
+      branches: 57,
+      functions: 57,
+      lines: 57,
+      statements: 57,
     },
   },
   maxWorkers: 2,

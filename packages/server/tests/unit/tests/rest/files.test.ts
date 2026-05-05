@@ -562,4 +562,117 @@ describe('Files', () => {
       expect(response.status).toBe(403);
     });
   });
+
+  describe('GET /api/v1/files/:id/tags', () => {
+    let taggedFileId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/files/upload')
+        .attach('file', Buffer.from('tags file'), {
+          filename: 'tags.txt',
+          contentType: 'text/plain',
+        })
+        .field('project_id', projectId);
+      taggedFileId = res.body.id;
+    });
+
+    test('returns tags for a file', async () => {
+      const response = await authenticatedTestClient(adminToken).get(
+        `/api/v1/files/${taggedFileId}/tags`
+      );
+      expect(response.status).toBe(200);
+    });
+
+    test('returns 401 for unauthenticated request', async () => {
+      const response = await testClient.get(
+        `/api/v1/files/${taggedFileId}/tags`
+      );
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 404 for non-existent file', async () => {
+      const response = await authenticatedTestClient(adminToken).get(
+        '/api/v1/files/nonexistent-file-id/tags'
+      );
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe('PUT /api/v1/files/:id/tags', () => {
+    let taggedFileId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/files/upload')
+        .attach('file', Buffer.from('put tags file'), {
+          filename: 'puttags.txt',
+          contentType: 'text/plain',
+        })
+        .field('project_id', projectId);
+      taggedFileId = res.body.id;
+    });
+
+    test('replaces file tags', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .put(`/api/v1/files/${taggedFileId}/tags`)
+        .send({ env: 'prod', version: '1' });
+      expect(response.status).toBe(200);
+      expect(response.body.tags).toEqual({ env: 'prod', version: '1' });
+    });
+
+    test('returns 401 for unauthenticated request', async () => {
+      const response = await testClient
+        .put(`/api/v1/files/${taggedFileId}/tags`)
+        .send({});
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 404 for non-existent file', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .put('/api/v1/files/nonexistent-file-id/tags')
+        .send({ env: 'prod' });
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe('PATCH /api/v1/files/:id/tags', () => {
+    let taggedFileId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/files/upload')
+        .attach('file', Buffer.from('patch tags file'), {
+          filename: 'patchtags.txt',
+          contentType: 'text/plain',
+        })
+        .field('project_id', projectId);
+      taggedFileId = res.body.id;
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/files/${taggedFileId}/tags`)
+        .send({ env: 'test' });
+    });
+
+    test('merges file tags', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/files/${taggedFileId}/tags`)
+        .send({ version: '2' });
+      expect(response.status).toBe(200);
+      expect(response.body.tags).toEqual({ env: 'test', version: '2' });
+    });
+
+    test('returns 401 for unauthenticated request', async () => {
+      const response = await testClient
+        .patch(`/api/v1/files/${taggedFileId}/tags`)
+        .send({});
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 404 for non-existent file', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch('/api/v1/files/nonexistent-file-id/tags')
+        .send({ version: '2' });
+      expect(response.status).toBe(404);
+    });
+  });
 });

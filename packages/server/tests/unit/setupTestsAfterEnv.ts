@@ -7,6 +7,10 @@ import { app } from 'src/app';
 import { initializeDatabase } from 'src/db';
 import * as agentsModule from 'src/lib/agents';
 
+beforeEach(() => {
+  jest.spyOn(console, 'error').mockImplementation(() => {});
+});
+
 export const mockCreateGeneration = jest.spyOn(
   agentsModule,
   'createGeneration'
