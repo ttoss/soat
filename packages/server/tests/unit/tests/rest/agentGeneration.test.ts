@@ -223,5 +223,24 @@ describe('Agent Generation Routes', () => {
       expect(response.status).toBe(404);
       expect(response.body.error).toBe('Agent not found');
     });
+
+    test('tool-outputs returns 200 with result on success', async () => {
+      const mockResult = {
+        id: 'gen_ok',
+        traceId: 'trc_ok',
+        status: 'completed',
+        output: { model: 'test-model', content: 'done', finishReason: 'stop' },
+      };
+      jest
+        .spyOn(agentsModule, 'submitToolOutputs')
+        .mockResolvedValueOnce(mockResult as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate/gen_x/tool-outputs`)
+        .send({ toolOutputs: [{ tool_call_id: 'tc_1', output: 'result' }] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe('gen_ok');
+    });
   });
 });

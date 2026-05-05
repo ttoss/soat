@@ -113,8 +113,12 @@ export const runStreamGeneration = (args: {
   traceId: string;
   agentId: string;
 }): ReadableStream => {
-  const system = args.allMessages.find((m) => m.role === 'system')?.content;
-  const nonSystemMessages = args.allMessages.filter((m) => m.role !== 'system');
+  const system = args.allMessages.find((m) => {
+    return m.role === 'system';
+  })?.content;
+  const nonSystemMessages = args.allMessages.filter((m) => {
+    return m.role !== 'system';
+  });
   const result = streamText({
     model: args.model,
     system,

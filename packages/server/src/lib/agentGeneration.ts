@@ -55,8 +55,12 @@ const runNonStreamGeneration = async (args: {
   agentId: string;
   abortSignal?: AbortSignal;
 }): Promise<GenerationResult> => {
-  const system = args.allMessages.find((m) => m.role === 'system')?.content;
-  const nonSystemMessages = args.allMessages.filter((m) => m.role !== 'system');
+  const system = args.allMessages.find((m) => {
+    return m.role === 'system';
+  })?.content;
+  const nonSystemMessages = args.allMessages.filter((m) => {
+    return m.role !== 'system';
+  });
   const result = await generateText({
     model: args.model,
     system,
@@ -289,10 +293,12 @@ export const submitToolOutputs = async (args: {
     role: string;
     content: string;
   }>;
-  const system = typedPendingMessages.find((m) => m.role === 'system')?.content;
-  const nonSystemMessages = allMessages.filter(
-    (m) => (m as { role?: string }).role !== 'system'
-  );
+  const system = typedPendingMessages.find((m) => {
+    return m.role === 'system';
+  })?.content;
+  const nonSystemMessages = allMessages.filter((m) => {
+    return (m as { role?: string }).role !== 'system';
+  });
 
   const result = await generateText({
     model: pending.resolvedModel,

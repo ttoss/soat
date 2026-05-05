@@ -229,6 +229,15 @@ describe('Memories', () => {
       memoryId = res.body.id;
     });
 
+    test('updates description only', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .put(`/api/v1/memories/${memoryId}`)
+        .send({ description: 'Updated description' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.description).toBe('Updated description');
+    });
+
     test('authenticated user can update a memory', async () => {
       const response = await authenticatedTestClient(userToken)
         .put(`/api/v1/memories/${memoryId}`)

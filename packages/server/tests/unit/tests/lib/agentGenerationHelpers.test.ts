@@ -4,6 +4,7 @@ import {
   buildDepthGuardResult,
   findPendingClientTools,
   pendingGenerations,
+  runStreamGeneration,
   savePendingGeneration,
   type TypedAgent,
 } from 'src/lib/agentGenerationHelpers';
@@ -295,5 +296,54 @@ describe('buildCompletedGenerationResult', () => {
     });
 
     expect(result.output?.model).toBe('');
+  });
+});
+
+describe('runStreamGeneration', () => {
+  beforeEach(() => {
+    traces.clear();
+  });
+
+  test('evaluates default branch options before delegating to streamText', () => {
+    expect(() => {
+      runStreamGeneration({
+        model: {} as never,
+        allMessages: [{ role: 'user', content: 'Hello' }],
+        resolvedTools: {},
+        typedAgent: {
+          ...mockAgent,
+          maxSteps: null,
+          toolChoice: null,
+          temperature: null,
+        },
+        traceId: 'trc_stream_default',
+        agentId: 'agt_stream_default',
+      });
+    }).toThrow();
+  });
+
+  test('evaluates explicit branch options before delegating to streamText', () => {
+    const resolvedTools = {
+      clientTool: { inputSchema: {} },
+    };
+
+    expect(() => {
+      runStreamGeneration({
+        model: {} as never,
+        allMessages: [
+          { role: 'system', content: 'System prompt' },
+          { role: 'user', content: 'Hi' },
+        ],
+        resolvedTools: resolvedTools as never,
+        typedAgent: {
+          ...mockAgent,
+          maxSteps: 7,
+          toolChoice: 'required',
+          temperature: 0.4,
+        },
+        traceId: 'trc_stream_explicit',
+        agentId: 'agt_stream_explicit',
+      });
+    }).toThrow();
   });
 });

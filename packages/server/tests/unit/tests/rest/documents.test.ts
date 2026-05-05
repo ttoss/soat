@@ -713,4 +713,54 @@ describe('Documents', () => {
       expect(response.status).toBe(403);
     });
   });
+
+  describe('GET/PUT/PATCH /api/v1/documents/:id/tags', () => {
+    let tagDocId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'Document for tag operations.',
+          filename: 'tags-doc.txt',
+          tags: { env: 'test' },
+        });
+      tagDocId = res.body.id;
+    });
+
+    test('GET tags returns current tags', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${tagDocId}/tags`
+      );
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({ env: 'test' });
+    });
+
+    test('PUT tags replaces all tags', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .put(`/api/v1/documents/${tagDocId}/tags`)
+        .send({ region: 'us' });
+      expect(response.status).toBe(200);
+      expect(response.body.tags).toMatchObject({ region: 'us' });
+    });
+
+    test('PATCH tags merges into existing tags', async () => {
+      await authenticatedTestClient(userToken)
+        .put(`/api/v1/documents/${tagDocId}/tags`)
+        .send({ env: 'prod' });
+
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/documents/${tagDocId}/tags`)
+        .send({ version: '2' });
+      expect(response.status).toBe(200);
+    });
+
+    test('unauthenticated GET tags returns 401', async () => {
+      const response = await testClient.get(
+        `/api/v1/documents/${tagDocId}/tags`
+      );
+      expect(response.status).toBe(401);
+    });
+  });
 });
