@@ -118,8 +118,20 @@ export const getFile = async (args: { id: string }) => {
   };
 };
 
+/**
+ * Derives the storage category from a normalized path.
+ * The category is the first path segment (e.g., `/traces/foo.json` → `traces`).
+ * Falls back to `files` when the path has no sub-directory.
+ */
+const categoryFromPath = (normalizedPath: string | null): string => {
+  if (!normalizedPath) return 'files';
+  const segments = normalizedPath.split('/').filter(Boolean);
+  return segments.length > 1 ? segments[0] : 'files';
+};
+
 export const uploadFile = async (args: {
   projectId: number;
+  projectPublicId?: string;
   fileBuffer: Buffer;
   path?: string;
   filename?: string;
@@ -127,7 +139,6 @@ export const uploadFile = async (args: {
   metadata?: string;
 }) => {
   const storageDir = getStorageDir();
-  fs.mkdirSync(storageDir, { recursive: true });
 
   const normalizedPath =
     args.path !== undefined
@@ -135,6 +146,14 @@ export const uploadFile = async (args: {
       : args.filename
         ? normalizePath(args.filename)
         : null;
+
+  const projectPublicId =
+    args.projectPublicId ??
+    (await resolveProjectPublicId({ projectId: args.projectId }));
+
+  const category = categoryFromPath(normalizedPath);
+  const fileStorageDir = path.join(storageDir, projectPublicId, category);
+  fs.mkdirSync(fileStorageDir, { recursive: true });
 
   // Create DB record first to get publicId for the filename
   const file = await db.File.create({
@@ -149,28 +168,79 @@ export const uploadFile = async (args: {
   });
 
   const ext = args.filename ? path.extname(args.filename) : '';
-  const storagePath = path.join(storageDir, `${file.publicId}${ext}`);
+  const storagePath = path.join(fileStorageDir, `${file.publicId}${ext}`);
   fs.writeFileSync(storagePath, args.fileBuffer);
 
   await file.update({ storagePath, size: args.fileBuffer.length });
 
   const mapped = mapFile(file);
 
-  resolveProjectPublicId({ projectId: args.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'files.created',
-        projectId: args.projectId,
-        projectPublicId,
-        resourceType: 'file',
-        resourceId: file.publicId,
-        data: mapped as unknown as Record<string, unknown>,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitEvent({
+    type: 'files.created',
+    projectId: args.projectId,
+    projectPublicId,
+    resourceType: 'file',
+    resourceId: file.publicId,
+    data: mapped as unknown as Record<string, unknown>,
+    timestamp: new Date().toISOString(),
+  });
 
   return mapped;
+};
+
+/**
+ * Upserts a file by path: if a file with the given (projectId, path) already
+ * exists, overwrites the disk content and updates the DB record; otherwise
+ * creates a new File record and writes the file to disk.
+ *
+ * This is an internal helper used by trace persistence.
+ */
+export const upsertFileByPath = async (args: {
+  projectId: number;
+  projectPublicId: string;
+  path: string;
+  fileBuffer: Buffer;
+  contentType: string;
+  filename?: string;
+}) => {
+  const storageDir = getStorageDir();
+  const normalizedPath = normalizePath(args.path);
+  const category = categoryFromPath(normalizedPath);
+  const fileStorageDir = path.join(storageDir, args.projectPublicId, category);
+  fs.mkdirSync(fileStorageDir, { recursive: true });
+
+  const existing = await db.File.findOne({
+    where: { projectId: args.projectId, path: normalizedPath },
+  });
+
+  if (existing) {
+    // Overwrite on disk
+    fs.writeFileSync(existing.storagePath, args.fileBuffer);
+    await existing.update({
+      size: args.fileBuffer.length,
+      contentType: args.contentType,
+    });
+    return mapFile(existing);
+  }
+
+  // Create new record
+  const filename = args.filename ?? path.basename(normalizedPath);
+  const file = await db.File.create({
+    projectId: args.projectId,
+    path: normalizedPath,
+    filename,
+    contentType: args.contentType,
+    size: args.fileBuffer.length,
+    storageType: 'local' as const,
+    storagePath: '',
+  });
+
+  const ext = path.extname(filename);
+  const storagePath = path.join(fileStorageDir, `${file.publicId}${ext}`);
+  fs.writeFileSync(storagePath, args.fileBuffer);
+  await file.update({ storagePath });
+
+  return mapFile(file);
 };
 
 export const downloadFile = async (args: { id: string }) => {

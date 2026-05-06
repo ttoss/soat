@@ -18,6 +18,14 @@ Tutorials demonstrate real SOAT workflows end-to-end. Every tutorial must be ful
   - SDK tab: `createConfig({ baseUrl: 'http://localhost:5047/api/v1', auth: '' })`
 - **Write steps in order**. Number them `Step 1`, `Step 2`, … Use sub-steps (e.g. `### 3a`, `### 3b`) only when a single logical step has multiple variants.
 - **Cross-link to module docs at the point where a concept is first introduced**. Add a brief inline sentence linking to the relevant module page (e.g. [IAM](/docs/modules/iam), [Policies](/docs/modules/policies)) so readers can look up details without leaving the tutorial flow. Only link once per concept — do not repeat the same link in every step.
+- **Every step must reference at least one doc**. Each `## Step N` section must contain an inline link to either a SOAT module doc (`/docs/modules/<module>`) or a relevant third-party doc (e.g. [Ollama](https://ollama.com), [OpenAI](https://platform.openai.com/docs)). Steps that introduce a new resource must link to its module page; steps that only operate on an already-introduced resource may link to a specific subsection anchor (e.g. `[Sessions — Async Generation](/docs/modules/sessions#async-generation)`).
+- **Every step must reference at least one doc**. Each `## Step N` section must contain an inline link to either a SOAT module doc (`/docs/modules/<module>`) or a relevant third-party doc (e.g. [Ollama](https://ollama.com), [OpenAI](https://platform.openai.com/docs)). Steps that introduce a new resource must link to its module page; steps that only operate on an already-introduced resource may link to a specific subsection anchor (e.g. `[Sessions — Async Generation](/docs/modules/sessions#async-generation)`).
+- **Testable tutorials that create a local AI provider must hint at third-party alternatives**. Any step that creates a local Ollama-backed AI provider (for automated test compatibility) must include a sentence pointing readers to the [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms) tutorial. Example: "This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms)."
+- **Prerequisites must reference the getting-started docs**. Always include:
+  - [Quick Start](/docs/getting-started) — for readers who need to bring the stack up.
+  - [Key Concepts](/docs/getting-started/concepts) — for readers new to SOAT's mental model.
+  - [Advanced Configuration](/docs/getting-started/advanced-config) — for readers who need production hardening (secrets, env vars).
+    Link to third-party installation docs (e.g. [Ollama](https://ollama.com), [Docker](https://docs.docker.com/get-docker/)) when the tutorial depends on external tooling.
 
 ## Reading the Docs Locally
 

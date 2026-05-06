@@ -747,4 +747,227 @@ This design is self-contained: each generation only needs its own `remaining_dep
 
 For observability, every top-level generation also creates a **trace** identified by a unique `trace_id` (`agt_trace_` prefix). The server attaches the same `trace_id` to all generations in the chain automatically. This is internal server plumbing — agents do not receive or propagate `trace_id`.
 
+When an agent spawns a child generation, the parent's `generation_id` is recorded as the child's `initiator_generation_id`. This creates a generation-to-generation chain that lets you reconstruct the full call graph without any parent/root trace foreign keys. The child's final `trace_id` also appears in the parent's step data (as the tool call result), making tree traversal implicit in trace content.
+
 Example: A caller starts Agent A with `max_call_depth: 3`. Agent A runs with `remaining_depth: 3` and calls Agent B (`remaining_depth: 2`). Agent B calls Agent C (`remaining_depth: 1`). Agent C can still run but cannot nest further — if it tries to call Agent D, `remaining_depth` would be `0` → the server rejects the call.
+
+## Traces
+
+A trace is the execution log of a single generation — it records every step the agent took (model calls, tool invocations, results). Traces are persisted as **metadata in the database** with the full step content stored on disk as a [File](./files.md) record.
+
+### Trace Data Model
+
+| Field        | Type   | Description                                                    |
+| ------------ | ------ | -------------------------------------------------------------- |
+| `id`         | string | Public identifier (`agt_trace_` prefix)                        |
+| `project_id` | string | Project the trace belongs to                                   |
+| `agent_id`   | string | Agent that produced the trace                                  |
+| `file_id`    | string | ID of the File record containing the full JSON steps (on disk) |
+| `step_count` | number | Total number of steps recorded                                 |
+| `created_at` | string | ISO 8601 creation timestamp                                    |
+
+### Trace Content
+
+The full trace content (steps array) is **not** stored in the database. Instead, it is written to disk as a JSON file under the project's `traces` category:
+
+```
+{FILES_STORAGE_DIR}/{projectPublicId}/traces/{traceId}.json
+```
+
+To retrieve the content, use the `file_id` from the trace metadata and download the file via `GET /api/v1/files/{file_id}/download`.
+
+### Trace Endpoints
+
+#### List Traces
+
+```
+GET /api/v1/agents/traces?project_id=proj_ABC&agent_id=agt_01&limit=20&offset=0
+```
+
+Returns paginated metadata — no step content:
+
+```json
+{
+  "data": [
+    {
+      "id": "agt_trace_abc123",
+      "project_id": "proj_ABC",
+      "agent_id": "agt_01",
+      "file_id": "file_xyz",
+      "step_count": 5,
+      "created_at": "2025-01-15T10:30:00Z"
+    }
+  ],
+  "total": 42,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+#### Get Trace
+
+```
+GET /api/v1/agents/traces/{trace_id}
+```
+
+Returns trace metadata including `file_id`. To get the full steps, download the file:
+
+```json
+{
+  "id": "agt_trace_abc123",
+  "project_id": "proj_ABC",
+  "agent_id": "agt_01",
+  "file_id": "file_xyz",
+  "step_count": 5,
+  "created_at": "2025-01-15T10:30:00Z"
+}
+```
+
+### Tree Traversal
+
+When Agent A calls Agent B, Agent B's trace ID appears in Agent A's step data as part of the tool call result. There are no explicit `parent_trace_id` or `root_trace_id` foreign keys. To reconstruct the call tree:
+
+1. Fetch the parent trace's content (via `file_id` → download).
+2. Find steps where a `soat` tool action `create-agent-generation` was called.
+3. The tool call result contains the child's `trace_id`.
+4. Fetch the child trace to continue traversal.
+
+This design keeps the trace model simple and avoids circular FK complications.
+
+## Generations
+
+A generation is a persisted lifecycle record for a single agent execution. While a trace captures _what happened_ (steps), a generation captures _the lifecycle_ (who started it, when it started/completed, and why it stopped).
+
+### Generation Data Model
+
+| Field                     | Type        | Description                                             |
+| ------------------------- | ----------- | ------------------------------------------------------- |
+| `id`                      | string      | Public identifier (`agt_gen_` prefix)                   |
+| `project_id`              | string      | Project the generation belongs to                       |
+| `agent_id`                | string      | Agent that was executed                                 |
+| `trace_id`                | string      | Associated trace ID                                     |
+| `initiator_generation_id` | string/null | Generation that spawned this one (for nested calls)     |
+| `status`                  | string      | Current lifecycle state (see below)                     |
+| `started_at`              | string      | ISO 8601 timestamp when execution began                 |
+| `completed_at`            | string/null | ISO 8601 timestamp when execution finished              |
+| `last_activity_at`        | string/null | ISO 8601 timestamp of last step activity                |
+| `stop_reason`             | string/null | Why the generation ended (see below)                    |
+| `started_by`              | object/null | Identity of the principal that triggered the generation |
+| `created_at`              | string      | ISO 8601 creation timestamp                             |
+
+### Generation Status
+
+| Status            | Description                                       |
+| ----------------- | ------------------------------------------------- |
+| `in_progress`     | The generation is actively running                |
+| `requires_action` | Paused waiting for client tool outputs            |
+| `completed`       | The generation finished                           |
+| `failed`          | The generation encountered an unrecoverable error |
+
+### Stop Reason
+
+When `status` is `completed`, `stop_reason` indicates why:
+
+| Stop Reason               | Description                                        |
+| ------------------------- | -------------------------------------------------- |
+| `end_turn`                | Model produced a final response with no tool calls |
+| `max_steps`               | Step count reached `max_steps`                     |
+| `stop_condition`          | A configured `stop_conditions` rule was triggered  |
+| `no_executor`             | A tool without an executor was called (non-client) |
+| `stream_response_started` | Streaming generation handed off to the SSE stream  |
+| `depth_limit`             | Nested call exceeded `max_call_depth`              |
+
+### Initiator Generation
+
+When an agent spawns a nested generation (via `soat` tool action `create-agent-generation`), the server automatically sets `initiator_generation_id` on the child generation. You can also pass it explicitly:
+
+```json
+POST /api/v1/agents/{agent_id}/generate
+
+{
+  "messages": [{"role": "user", "content": "Do the thing"}],
+  "initiator_generation_id": "agt_gen_parent123"
+}
+```
+
+This forms a generation chain: `gen_A → gen_B → gen_C`. To trace the full call graph, follow `initiator_generation_id` pointers.
+
+### Generation Endpoints
+
+#### List Generations
+
+```
+GET /api/v1/agents/generations?project_id=proj_ABC&agent_id=agt_01&status=in_progress&limit=20&offset=0
+```
+
+Query parameters:
+
+| Parameter    | Type   | Description                                         |
+| ------------ | ------ | --------------------------------------------------- |
+| `project_id` | string | Filter by project                                   |
+| `agent_id`   | string | Filter by agent                                     |
+| `status`     | string | Filter by status (`in_progress`, `completed`, etc.) |
+| `limit`      | number | Page size (default: 50)                             |
+| `offset`     | number | Pagination offset (default: 0)                      |
+
+Response:
+
+```json
+{
+  "data": [
+    {
+      "id": "agt_gen_abc123",
+      "project_id": "proj_ABC",
+      "agent_id": "agt_01",
+      "trace_id": "agt_trace_def456",
+      "initiator_generation_id": null,
+      "status": "in_progress",
+      "started_at": "2025-01-15T10:30:00Z",
+      "completed_at": null,
+      "last_activity_at": "2025-01-15T10:30:05Z",
+      "stop_reason": null,
+      "started_by": { "type": "api_key", "id": "key_xyz" },
+      "created_at": "2025-01-15T10:30:00Z"
+    }
+  ],
+  "total": 15,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+#### Get Generation
+
+```
+GET /api/v1/agents/generations/{generation_id}
+```
+
+Returns the full generation record (same shape as list items).
+
+### Monitoring Running Generations
+
+To find all currently active generations (useful for dashboards and health checks):
+
+```
+GET /api/v1/agents/generations?status=in_progress&project_id=proj_ABC
+```
+
+## Permissions
+
+| Action                         | Description                |
+| ------------------------------ | -------------------------- |
+| `agents:CreateAgent`           | Create an agent            |
+| `agents:GetAgent`              | Get agent details          |
+| `agents:ListAgents`            | List agents                |
+| `agents:UpdateAgent`           | Update an agent            |
+| `agents:DeleteAgent`           | Delete an agent            |
+| `agents:CreateAgentTool`       | Create an agent tool       |
+| `agents:GetAgentTool`          | Get agent tool details     |
+| `agents:ListAgentTools`        | List agent tools           |
+| `agents:UpdateAgentTool`       | Update an agent tool       |
+| `agents:DeleteAgentTool`       | Delete an agent tool       |
+| `agents:CreateAgentGeneration` | Run a generation           |
+| `agents:ListAgentTraces`       | List traces                |
+| `agents:GetAgentTrace`         | Get trace details          |
+| `agents:ListAgentGenerations`  | List persisted generations |
+| `agents:GetAgentGeneration`    | Get generation details     |

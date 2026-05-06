@@ -764,7 +764,8 @@ describe('Agents', () => {
         .query({ projectId });
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(typeof response.body.total).toBe('number');
     });
   });
 

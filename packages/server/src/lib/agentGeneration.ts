@@ -18,8 +18,9 @@ import {
 } from './agentGenerationHelpers';
 import { buildModel } from './agentModel';
 import { resolveAgentTools } from './agentToolResolver';
-import { serializeSteps, traces } from './agentTraces';
+import { saveTrace, serializeSteps } from './agentTraces';
 import { resolveProjectPublicId } from './eventBus';
+import { createGenerationRecord, updateGenerationRecord } from './generations';
 
 export type { GenerationResult };
 
@@ -189,6 +190,7 @@ export const createGeneration = async (args: {
   messages: Array<{ role: string; content: string }>;
   stream?: boolean;
   traceId?: string;
+  initiatorGenerationId?: string | null;
   remainingDepth?: number;
   authHeader?: string;
   toolContext?: Record<string, string>;
@@ -200,10 +202,13 @@ export const createGeneration = async (args: {
   const traceId = args.traceId ?? generatePublicId(PUBLIC_ID_PREFIXES.trace);
 
   if (maxDepth <= 0) {
+    const depthGenId = generatePublicId(PUBLIC_ID_PREFIXES.generation);
     return buildDepthGuardResult({
       traceId,
       projectId: args.projectIds?.[0] ?? 0,
+      projectPublicId: '',
       agentId: args.agentId,
+      generationId: depthGenId,
     });
   }
 
@@ -216,6 +221,17 @@ export const createGeneration = async (args: {
   });
 
   if (ctx === 'not_found' || ctx === 'ai_provider_not_found') return ctx;
+
+  // Create the generation record in the DB (fire-and-forget errors)
+  createGenerationRecord({
+    publicId: ctx.generationId,
+    projectId: ctx.typedAgent.project.id as number,
+    agentId: args.agentId,
+    traceId,
+    initiatorGenerationId: args.initiatorGenerationId ?? null,
+    startedByPrincipalType: null,
+    startedByPrincipalId: null,
+  }).catch(() => {});
 
   if (args.stream) {
     return runStreamGeneration({
@@ -312,14 +328,19 @@ export const submitToolOutputs = async (args: {
     temperature: pending.agentConfig.temperature ?? undefined,
   });
 
-  traces.set(pending.traceId, {
-    id: pending.traceId,
+  saveTrace({
+    traceId: pending.traceId,
     projectId: pending.projectId,
+    projectPublicId: pending.projectPublicId,
     agentId: pending.agentId,
-    status: 'completed',
-    createdAt: new Date(),
     steps: serializeSteps(result.steps as unknown[]),
-  });
+  }).catch(() => {});
+  updateGenerationRecord({
+    publicId: args.generationId,
+    status: 'completed',
+    completedAt: new Date(),
+    stopReason: result.finishReason,
+  }).catch(() => {});
 
   const completedResult: GenerationResult = {
     id: args.generationId,

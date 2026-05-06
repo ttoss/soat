@@ -31,9 +31,10 @@ export const writeProfile = (name: string, profile: Profile): void => {
 export const resolveClient = (
   profileName?: string
 ): ReturnType<typeof createClient> => {
-  // 1. Explicit env vars take priority
   const envBaseUrl = process.env['SOAT_BASE_URL'];
   const envToken = process.env['SOAT_TOKEN'];
+
+  // 1. Both env vars set — use them directly, no profile needed.
   if (envBaseUrl && envToken) {
     return createClient(
       createConfig({
@@ -43,31 +44,30 @@ export const resolveClient = (
     );
   }
 
-  if (envBaseUrl && !envToken) {
-    return createClient(
-      createConfig({
-        baseUrl: envBaseUrl,
-      })
-    );
-  }
-
-  // 2. Profile from arg → env → 'default'
+  // 2. Try profile (arg → SOAT_PROFILE env → 'default').
+  //    SOAT_BASE_URL overrides the profile's stored baseUrl when present.
   const name = profileName ?? process.env['SOAT_PROFILE'] ?? 'default';
   const config = readConfig();
   const profile = config[name];
 
-  if (!profile) {
-    // eslint-disable-next-line no-console
-    console.error(
-      `Profile "${name}" not found. Run: soat configure${name !== 'default' ? ` --profile ${name}` : ''}`
+  if (profile) {
+    return createClient(
+      createConfig({
+        baseUrl: envBaseUrl ?? profile.baseUrl,
+        headers: { Authorization: `Bearer ${profile.token}` },
+      })
     );
-    process.exit(1);
   }
 
-  return createClient(
-    createConfig({
-      baseUrl: profile.baseUrl,
-      headers: { Authorization: `Bearer ${profile.token}` },
-    })
+  // 3. No profile found — if SOAT_BASE_URL is set, create an unauthenticated
+  //    client (useful for public endpoints like /health).
+  if (envBaseUrl) {
+    return createClient(createConfig({ baseUrl: envBaseUrl }));
+  }
+
+  // eslint-disable-next-line no-console
+  console.error(
+    `Profile "${name}" not found. Run: soat configure${name !== 'default' ? ` --profile ${name}` : ''}`
   );
+  process.exit(1);
 };

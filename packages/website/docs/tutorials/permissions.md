@@ -21,8 +21,10 @@ By the end you will understand how policies, users, and API keys compose togethe
 
 ## Prerequisites
 
-- SOAT running locally. Follow [Quick Start](/docs/getting-started) if needed.
+- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
+- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, users, and the IAM model before diving in.
 - CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
+- For production hardening (secrets, env vars), see [Advanced Configuration](/docs/getting-started/advanced-config).
 - Server is at `http://localhost:5047`.
 
 <Tabs groupId="client">
@@ -120,8 +122,10 @@ Create `alice` (project lead) and `bob` (read-only analyst). Only admins can cre
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-user --username alice --password Alice1234!
-soat create-user --username bob   --password Bob1234!
+ALICE_ID=$(soat create-user --username alice --password Alice1234! | jq -r '.id')
+BOB_ID=$(soat create-user --username bob --password Bob1234! | jq -r '.id')
+echo "alice: $ALICE_ID"
+echo "bob  : $BOB_ID"
 ```
 
 Note the `id` field (`usr_…`) for each user — you will need them when attaching policies.
@@ -177,7 +181,8 @@ See [Projects](/docs/modules/projects) for the full project management reference
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-project --name "Analytics"
+PROJECT_ID=$(soat create-project --name "Analytics" | jq -r '.id')
+echo "project: $PROJECT_ID"
 ```
 
 Copy the returned `id` (e.g. `proj_…`).
@@ -227,7 +232,7 @@ This policy allows all actions on every resource inside the Analytics project.
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-policy \
+FULL_POLICY_ID=$(soat create-policy \
   --name "analytics-full-access" \
   --description "Full access to the Analytics project" \
   --document '{
@@ -238,7 +243,8 @@ soat create-policy \
         "resource": ["soat:'"$PROJECT_ID"':*:*"]
       }
     ]
-  }'
+  }' | jq -r '.id')
+echo "full-access policy: $FULL_POLICY_ID"
 ```
 
 </TabItem>
@@ -302,7 +308,7 @@ This policy only allows read actions on files inside the project. For the full l
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-policy \
+READ_POLICY_ID=$(soat create-policy \
   --name "analytics-read-only" \
   --description "Read-only access to files and documents in Analytics" \
   --document '{
@@ -317,7 +323,8 @@ soat create-policy \
         "resource": ["soat:'"$PROJECT_ID"':*:*"]
       }
     ]
-  }'
+  }' | jq -r '.id')
+echo "read-only policy: $READ_POLICY_ID"
 ```
 
 </TabItem>
@@ -456,26 +463,27 @@ First, log in as each user to obtain their JWT tokens.
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-# Log in as Alice and save her token to a separate profile
+# Log in as Alice and save her token to a named profile
 soat login-user --username alice --password Alice1234!
 soat configure --profile alice
-# Token: <paste Alice's token>
 
 # Log in as Bob and save his token
 soat login-user --username bob --password Bob1234!
 soat configure --profile bob
-# Token: <paste Bob's token>
 
 # Create Alice's project key (using her profile)
-soat --profile alice create-api-key \
+ALICE_API_KEY=$(soat --profile alice create-api-key \
   --name "alice-analytics-key" \
-  --project-id "$PROJECT_ID"
+  --project-id "$PROJECT_ID" | jq -r '.key')
 
 # Create Bob's project key, explicitly restricting it to the read-only policy
-soat --profile bob create-api-key \
+BOB_API_KEY=$(soat --profile bob create-api-key \
   --name "bob-analytics-key" \
   --project-id "$PROJECT_ID" \
-  --policy-ids '["'"$READ_POLICY_ID"'"]'
+  --policy-ids '["'"$READ_POLICY_ID"'"]' | jq -r '.key')
+
+echo "Alice key: $ALICE_API_KEY"
+echo "Bob key  : $BOB_API_KEY"
 ```
 
 </TabItem>
@@ -572,7 +580,7 @@ Store the key value. The raw `sk_…` key is returned **only once**. Store it in
 
 ## Step 7 — Verify permissions
 
-Confirm that each key behaves as expected.
+Confirm that each key behaves as expected. The file upload and list operations used here are part of the [Files](/docs/modules/files) module.
 
 ### Alice can upload a file
 
@@ -582,18 +590,17 @@ Confirm that each key behaves as expected.
 ```bash
 echo "hello world" > sample.txt
 
-soat upload-file-base64 \
+SOAT_TOKEN="$ALICE_API_KEY" soat upload-file-base64 \
   --project-id "$PROJECT_ID" \
   --content "$(base64 -w 0 sample.txt)" \
   --filename "sample.txt"
-# → 201, file created
 
 # Switch to Bob's profile to test his permissions
+# → expect-fail
 SOAT_TOKEN="$BOB_API_KEY" soat upload-file-base64 \
   --project-id "$PROJECT_ID" \
   --content "$(base64 -w 0 sample.txt)" \
   --filename "sample.txt"
-# → 403, Bob's policy does not allow files:UploadFile
 ```
 
 </TabItem>
@@ -663,8 +670,7 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 
 ```bash
 # Bob can list files — read is allowed
-soat --profile bob list-files --project-id "$PROJECT_ID"
-# → 200, file list
+SOAT_TOKEN="$BOB_API_KEY" soat list-files --project-id "$PROJECT_ID"
 ```
 
 </TabItem>
@@ -700,12 +706,18 @@ Even if you tried to assign `FULL_POLICY_ID` to Bob's API key, it would not gran
 
 ```bash
 # Attempt to create a key for Bob with the full-access policy
-soat --profile bob create-api-key \
-  --name "bob-escalation-attempt" \
-  --project-id "$PROJECT_ID" \
-  --policy-ids '["'"$FULL_POLICY_ID"'"]'
 # Key is created, but when used it is still limited to Bob's read-only permissions
 # because Bob's user policies are the ceiling.
+ESCALATED_KEY=$(soat --profile bob create-api-key \
+  --name "bob-escalation-attempt" \
+  --project-id "$PROJECT_ID" \
+  --policy-ids '["'"$FULL_POLICY_ID"'"]' | jq -r '.key')
+
+# → expect-fail
+SOAT_TOKEN="$ESCALATED_KEY" soat upload-file-base64 \
+  --project-id "$PROJECT_ID" \
+  --content "$(base64 -w 0 sample.txt)" \
+  --filename "sample.txt"
 ```
 
 </TabItem>

@@ -7,9 +7,41 @@ The Files module provides file upload, download, metadata management, and deleti
 
 ## Overview
 
-Files are associated with a project and stored at `{FILES_STORAGE_DIR}/{id}{ext}` on the server's local filesystem. Every file record exposes an `id` — the internal database primary key is never returned.
+Files are associated with a project and stored on the server's local filesystem. Every file record exposes an `id` — the internal database primary key is never returned.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
+
+## Storage Layout
+
+Files are organized in a **project-scoped** directory structure:
+
+```
+{FILES_STORAGE_DIR}/{projectPublicId}/{category}/{fileId}{ext}
+```
+
+| Segment             | Description                                                                                        |
+| ------------------- | -------------------------------------------------------------------------------------------------- |
+| `FILES_STORAGE_DIR` | Root directory from the environment variable                                                       |
+| `projectPublicId`   | Public project ID (e.g. `proj_ABC`) — isolates files by project                                    |
+| `category`          | Derived from the first segment of the file's logical `path` (e.g., `/traces/foo.json` → `traces/`) |
+| `fileId`            | The file's public ID                                                                               |
+| `ext`               | File extension from the original filename                                                          |
+
+If a file has no `path`, the category defaults to `files/`.
+
+Examples:
+
+```
+/data/files/proj_1a123a/traces/agt_trace_abc123.json   # trace content
+/data/files/proj_1a123a/documents/doc_xyz.md           # document content
+/data/files/proj_1a123a/files/file_plain123.png        # file with no path → defaults to files/
+```
+
+This layout enables:
+
+- **Project-level cleanup** — delete a project's directory to remove all its files
+- **Natural sharding** — categories keep related files together
+- **Easy browsing** — directory structure mirrors logical organization
 
 ## Configuration
 
@@ -60,6 +92,15 @@ Path examples:
 ```
 
 Pass `path` in the upload or create body to set it; the `GET /api/v1/files` list endpoint accepts a `paths` query filter to retrieve files matching specific path prefixes.
+
+### Upsert by Path (Internal)
+
+The server provides an internal `upsertFileByPath` operation used by subsystems (e.g., trace persistence) that need to create or overwrite a file at a known logical path. The behavior:
+
+1. If a file already exists at `(project_id, path)`, its disk content is overwritten and the DB record is updated (size, content type).
+2. If no file exists at that path, a new file record is created and written to disk.
+
+This is not exposed as a public REST endpoint — it is an internal building block for modules that store derived data as files (traces, exports, etc.).
 
 ## Key Concepts
 

@@ -1,6 +1,8 @@
 export { Actor } from './Actor';
 export { Agent } from './Agent';
 export { AgentTool } from './AgentTool';
+export { Generation } from './Generation';
+export { Trace } from './Trace';
 export { AiProvider } from './AiProvider';
 export { ApiKey } from './ApiKey';
 export { Chat } from './Chat';

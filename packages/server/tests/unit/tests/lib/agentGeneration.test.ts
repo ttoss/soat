@@ -78,8 +78,10 @@ describe('submitToolOutputs', () => {
     pendingGenerations.set('gen_test_pending_001', {
       agentId: 'agent_test_1',
       projectId: 1,
+      projectPublicId: 'proj_test',
       traceId: 'trace_test_1',
       generationId: 'gen_test_pending_001',
+      initiatorGenerationId: null,
       pendingToolCalls: [{ toolCallId: 'tc_1', toolName: 'myTool', args: {} }],
       messages: [{ role: 'user', content: 'hello' }],
       resolvedModel: {} as never,

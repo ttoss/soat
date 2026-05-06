@@ -247,8 +247,10 @@ describe('Files', () => {
         .field('project_id', projectId);
       const fileId = uploadRes.body.id;
 
-      // Verify file exists on disk
-      const filesOnDisk = fs.readdirSync(storageDir);
+      // Verify file exists on disk (files are stored in subdirectories)
+      const filesOnDisk = fs.readdirSync(storageDir, {
+        recursive: true,
+      }) as string[];
       expect(
         filesOnDisk.some((f) => {
           return f.includes(fileId);
@@ -262,7 +264,9 @@ describe('Files', () => {
       expect(deleteRes.status).toBe(204);
 
       // Verify file is removed from disk
-      const filesAfter = fs.readdirSync(storageDir);
+      const filesAfter = fs.readdirSync(storageDir, {
+        recursive: true,
+      }) as string[];
       expect(
         filesAfter.some((f) => {
           return f.includes(fileId);
