@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 520" fill="none">
+  <!-- Background -->
+  <rect width="720" height="520" rx="12" fill="#0a0a0f"/>
+
+  <!-- Clients Layer -->
+  <rect x="60" y="30" width="600" height="70" rx="12" fill="#1a1a2e" stroke="#6c63ff" stroke-width="1.5"/>
+  <text x="360" y="58" text-anchor="middle" fill="#e0e0e0" font-family="system-ui, sans-serif" font-size="13" font-weight="600">Clients</text>
+  <text x="360" y="80" text-anchor="middle" fill="#a0a0b0" font-family="system-ui, sans-serif" font-size="12">REST API · MCP · CLI (soat) · TypeScript SDK</text>
+
+  <!-- Arrow down -->
+  <line x1="360" y1="100" x2="360" y2="140" stroke="#6c63ff" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <polygon points="354,136 360,146 366,136" fill="#6c63ff"/>
+
+  <!-- SOAT Server Layer -->
+  <rect x="60" y="150" width="600" height="220" rx="12" fill="#12122a" stroke="#6c63ff" stroke-width="1.5"/>
+  <text x="360" y="175" text-anchor="middle" fill="#e0e0e0" font-family="system-ui, sans-serif" font-size="14" font-weight="700">SOAT Server</text>
+
+  <!-- REST Router -->
+  <rect x="110" y="195" width="220" height="55" rx="8" fill="#1e1e3a" stroke="#8b5cf6" stroke-width="1"/>
+  <text x="220" y="227" text-anchor="middle" fill="#c4b5fd" font-family="system-ui, sans-serif" font-size="13" font-weight="500">REST Router</text>
+
+  <!-- MCP Server -->
+  <rect x="390" y="195" width="220" height="55" rx="8" fill="#1e1e3a" stroke="#8b5cf6" stroke-width="1"/>
+  <text x="500" y="227" text-anchor="middle" fill="#c4b5fd" font-family="system-ui, sans-serif" font-size="13" font-weight="500">MCP Server</text>
+
+  <!-- Arrows from REST and MCP to Business Logic -->
+  <line x1="220" y1="250" x2="220" y2="280" stroke="#4c4c6c" stroke-width="1.2"/>
+  <line x1="500" y1="250" x2="500" y2="280" stroke="#4c4c6c" stroke-width="1.2"/>
+  <line x1="220" y1="280" x2="500" y2="280" stroke="#4c4c6c" stroke-width="1.2"/>
+  <line x1="360" y1="280" x2="360" y2="300" stroke="#4c4c6c" stroke-width="1.2"/>
+  <polygon points="354,296 360,306 366,296" fill="#4c4c6c"/>
+
+  <!-- Business Logic -->
+  <rect x="160" y="305" width="400" height="55" rx="8" fill="#1e1e3a" stroke="#10b981" stroke-width="1"/>
+  <text x="360" y="330" text-anchor="middle" fill="#6ee7b7" font-family="system-ui, sans-serif" font-size="13" font-weight="500">Business Logic</text>
+  <text x="360" y="348" text-anchor="middle" fill="#6ee7b7" font-family="system-ui, sans-serif" font-size="11" opacity="0.8">(lib/ · permissions)</text>
+
+  <!-- Arrow down to PostgreSQL -->
+  <line x1="360" y1="370" x2="360" y2="420" stroke="#6c63ff" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <polygon points="354,416 360,426 366,416" fill="#6c63ff"/>
+
+  <!-- PostgreSQL Layer -->
+  <rect x="60" y="430" width="600" height="70" rx="12" fill="#1a1a2e" stroke="#6c63ff" stroke-width="1.5"/>
+  <text x="360" y="460" text-anchor="middle" fill="#e0e0e0" font-family="system-ui, sans-serif" font-size="14" font-weight="600">PostgreSQL</text>
+  <text x="360" y="482" text-anchor="middle" fill="#a0a0b0" font-family="system-ui, sans-serif" font-size="12">(pgvector for embeddings)</text>
+</svg>

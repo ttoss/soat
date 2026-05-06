@@ -1,6 +1,7 @@
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import HomepageFeatures from '@site/src/components/HomepageFeatures';
+import CodeBlock from '@theme/CodeBlock';
 import Heading from '@theme/Heading';
 import Layout from '@theme/Layout';
 import clsx from 'clsx';
@@ -27,10 +28,7 @@ const HomepageHeader = () => {
             Get Started — 5 min
           </Link>
           <Link
-            className={clsx(
-              'button button--outline button--secondary button--lg',
-              styles.secondaryButton
-            )}
+            className="button button--secondary button--lg"
             to="https://github.com/ttoss/soat"
           >
             Star on GitHub
@@ -71,23 +69,183 @@ const CodeShowcase = () => {
             </Link>
           </div>
           <div className={clsx('col col--6', styles.showcaseCode)}>
-            <pre>
-              <code>{`# 1. Send a message to your agent
-curl -X POST $SOAT/api/v1/agents/agt_123/sessions/ses_456/messages \\
-  -H "Authorization: Bearer $TOKEN" \\
-  -d '{"content":"Summarize the latest release notes."}'
+            <CodeBlock language="bash" title="Terminal">
+              {`# 1. Create a session
+soat create-agent-session --agent-id "agt_123" --auto-generate
 
-# 2. Get the assistant reply
-# (auto_generate handles tool calls, history, and the LLM round-trip)
-{
-  "role": "assistant",
-  "content": "Here are the highlights from v2.3 ..."
-}`}</code>
-            </pre>
+# 2. Send a message — get the reply
+soat generate-session-response \\
+  --agent-id "agt_123" \\
+  --session-id "ses_456" \\
+  --content "Summarize the release notes."
+
+# → { 
+#     "role": "assistant",
+#     "content": "Here are the highlights..." 
+#   }`}
+            </CodeBlock>
           </div>
         </div>
       </div>
     </section>
+  );
+};
+
+const IconRestApi = () => {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 48 48"
+      className={styles.surfaceIcon}
+    >
+      <rect
+        x="4"
+        y="10"
+        width="40"
+        height="28"
+        rx="4"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        fill="none"
+      />
+      <path
+        d="M12 24h24M12 18h16M12 30h20"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <circle cx="38" cy="18" r="2" fill="currentColor" opacity="0.6" />
+    </svg>
+  );
+};
+
+const IconMcp = () => {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 48 48"
+      className={styles.surfaceIcon}
+    >
+      <circle
+        cx="24"
+        cy="24"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        fill="none"
+      />
+      <circle cx="24" cy="24" r="3" fill="currentColor" opacity="0.7" />
+      <line
+        x1="24"
+        y1="4"
+        x2="24"
+        y2="14"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <line
+        x1="24"
+        y1="34"
+        x2="24"
+        y2="44"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <line
+        x1="4"
+        y1="24"
+        x2="14"
+        y2="24"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <line
+        x1="34"
+        y1="24"
+        x2="44"
+        y2="24"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+};
+
+const IconCli = () => {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 48 48"
+      className={styles.surfaceIcon}
+    >
+      <rect
+        x="4"
+        y="8"
+        width="40"
+        height="32"
+        rx="4"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        fill="none"
+      />
+      <polyline
+        points="12,22 18,28 12,34"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <line
+        x1="22"
+        y1="34"
+        x2="34"
+        y2="34"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+};
+
+const IconSdk = () => {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 48 48"
+      className={styles.surfaceIcon}
+    >
+      <polyline
+        points="16,14 6,24 16,34"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <polyline
+        points="32,14 42,24 32,34"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <line
+        x1="28"
+        y1="10"
+        x2="20"
+        y2="38"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 };
 
@@ -102,24 +260,36 @@ const SurfacesStrip = () => {
           Every operation in SOAT is reachable through the surface that fits the
           job. Same permissions, same data, same business logic.
         </p>
-        <div className="row">
+        <div className={clsx('row', styles.surfacesRow)}>
           <div className={clsx('col col--3', styles.surfaceCard)}>
-            <Heading as="h3">REST API</Heading>
-            <p>OpenAPI-described HTTP endpoints for any backend.</p>
+            <Link to="/docs/api" className={styles.surfaceLink}>
+              <IconRestApi />
+              <Heading as="h3">REST API</Heading>
+              <p>OpenAPI-described HTTP endpoints for any backend.</p>
+            </Link>
           </div>
           <div className={clsx('col col--3', styles.surfaceCard)}>
-            <Heading as="h3">MCP Server</Heading>
-            <p>Plug into Claude Desktop, Cursor, or any MCP runtime.</p>
+            <Link to="/docs/mcp" className={styles.surfaceLink}>
+              <IconMcp />
+              <Heading as="h3">MCP Server</Heading>
+              <p>Plug into Claude Desktop, Cursor, or any MCP runtime.</p>
+            </Link>
           </div>
           <div className={clsx('col col--3', styles.surfaceCard)}>
-            <Heading as="h3">CLI</Heading>
-            <p>
-              The <code>soat</code> command for scripts and CI pipelines.
-            </p>
+            <Link to="/docs/cli" className={styles.surfaceLink}>
+              <IconCli />
+              <Heading as="h3">CLI</Heading>
+              <p>
+                The <code>soat</code> command for scripts and CI pipelines.
+              </p>
+            </Link>
           </div>
           <div className={clsx('col col--3', styles.surfaceCard)}>
-            <Heading as="h3">TypeScript SDK</Heading>
-            <p>Typed client generated from the OpenAPI spec.</p>
+            <Link to="/docs/sdk" className={styles.surfaceLink}>
+              <IconSdk />
+              <Heading as="h3">TypeScript SDK</Heading>
+              <p>Typed client generated from the OpenAPI spec.</p>
+            </Link>
           </div>
         </div>
       </div>
@@ -144,7 +314,7 @@ const FinalCta = () => {
             Run it locally
           </Link>
           <Link
-            className="button button--outline button--primary button--lg"
+            className="button button--secondary button--lg"
             to="/docs/introduction"
           >
             Read the docs

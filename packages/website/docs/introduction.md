@@ -45,29 +45,9 @@ If you have ever shipped an AI product, you know the pattern: half the codebase 
 
 SOAT runs as a single Node.js server backed by PostgreSQL with [pgvector](https://github.com/pgvector/pgvector). One process exposes both the REST API and the Streamable HTTP MCP endpoint — both call the same business-logic layer and the same permission engine.
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                        Clients                          │
-│         REST API · MCP · CLI (soat) · TypeScript SDK    │
-└───────────────────────┬─────────────────────────────────┘
-                        │
-┌───────────────────────▼─────────────────────────────────┐
-│                    SOAT Server                          │
-│  ┌──────────────┐   ┌──────────────────────────────┐    │
-│  │  REST Router │   │         MCP Server           │    │
-│  └──────┬───────┘   └──────────────┬───────────────┘    │
-│         └──────────────┬───────────┘                    │
-│          ┌─────────────▼────────────┐                   │
-│          │     Business Logic       │                   │
-│          │  (lib/ · permissions)    │                   │
-│          └─────────────┬────────────┘                   │
-└────────────────────────┼────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────┐
-│                    PostgreSQL                           │
-│              (pgvector for embeddings)                  │
-└─────────────────────────────────────────────────────────┘
-```
+<div style={{display: 'flex', justifyContent: 'center'}}>
+  <img src="/img/architecture.svg" alt="SOAT Architecture" style={{width: '100%', maxWidth: 720}} />
+</div>
 
 ## One backend, four surfaces
 

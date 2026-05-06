@@ -2,8 +2,17 @@
   display: flex;
   align-items: center;
   padding: 4rem 0;
-  width: 100%;
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  margin-left: -50vw;
   border-top: 1px solid var(--ifm-color-emphasis-300);
+  background-image: radial-gradient(
+    circle,
+    var(--ifm-color-emphasis-300) 1px,
+    transparent 1px
+  );
+  background-size: 28px 28px;
 }
 
 .featureSvg {
