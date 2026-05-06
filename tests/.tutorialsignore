@@ -1,0 +1,9 @@
+# List tutorials (by filename without extension) that should NOT be run in automated tests.
+
+# One entry per line. Lines starting with # are comments. Blank lines are ignored.
+
+# Example:
+
+# connect-third-party-llms
+
+connect-third-party-llms
