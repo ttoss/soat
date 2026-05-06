@@ -12,34 +12,33 @@ type FeatureItem = {
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'Complete Backend',
+    title: 'Everything Your AI App Needs',
     Svg: require('@site/static/img/soat-complete-backend.svg').default,
     description: (
       <>
-        IAM, document and file storage with vector search, conversational
-        memory, secrets management, and webhooks — everything your AI app needs
-        in one server.
+        IAM, projects, API keys, files, vector search, secrets, webhooks, and
+        traces — a single PostgreSQL-backed server replaces a stack of services.
       </>
     ),
   },
   {
-    title: 'Agent Orchestration',
+    title: 'Agents, Sessions & RAG',
     Svg: require('@site/static/img/soat-agent-orchestration.svg').default,
     description: (
       <>
-        Run agents with tool calling, multi-turn conversations, and pluggable AI
-        providers. SOAT manages the full lifecycle so you can focus on your
-        product.
+        Tool-calling agents, multi-agent workflows, async generations, and
+        memory-driven retrieval. Two API calls take a user from message to
+        answer.
       </>
     ),
   },
   {
-    title: 'MCP Native',
+    title: 'MCP, REST, CLI & SDK',
     Svg: require('@site/static/img/soat-mcp-native.svg').default,
     description: (
       <>
-        Plug-and-play compatibility with the Model Context Protocol. Connect
-        effortlessly to Claude Desktop, Cursor, and other AI tools.
+        Every operation is reachable through four equivalent surfaces. Plug SOAT
+        into Claude Desktop, your backend, your scripts, or your TypeScript app.
       </>
     ),
   },
