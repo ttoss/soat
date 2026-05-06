@@ -41,6 +41,42 @@ const mapTrace = (row: InstanceType<(typeof db)['Trace']>): Trace => {
   };
 };
 
+const upsertTraceRecord = async (args: {
+  traceId: string;
+  projectId: number;
+  agentId: string;
+  agentDbId?: number | null;
+  filePublicId: string | undefined | null;
+  stepCount: number;
+}): Promise<void> => {
+  const existing = await db.Trace.findOne({
+    where: { publicId: args.traceId },
+  });
+
+  const fileDbId = args.filePublicId
+    ? ((await db.File.findOne({ where: { publicId: args.filePublicId } }))
+        ?.id ?? null)
+    : null;
+
+  if (existing) {
+    await existing.update({
+      fileDbId,
+      fileId: args.filePublicId ?? null,
+      stepCount: args.stepCount,
+    });
+  } else {
+    await db.Trace.create({
+      publicId: args.traceId,
+      projectId: args.projectId,
+      agentId: args.agentId,
+      agentDbId: args.agentDbId ?? null,
+      fileDbId,
+      fileId: args.filePublicId ?? null,
+      stepCount: args.stepCount,
+    });
+  }
+};
+
 /**
  * Upserts a Trace row in the DB and writes trace content (steps) to disk
  * via the File system. The file is stored at `/traces/{traceId}.json` under
@@ -69,36 +105,14 @@ export const saveTrace = async (args: {
     filename: `${args.traceId}.json`,
   });
 
-  // Find or create the Trace row
-  const existing = await db.Trace.findOne({
-    where: { publicId: args.traceId },
+  await upsertTraceRecord({
+    traceId: args.traceId,
+    projectId: args.projectId,
+    agentId: args.agentId,
+    agentDbId: args.agentDbId,
+    filePublicId: fileRecord.id,
+    stepCount: serializedSteps.length,
   });
-
-  if (existing) {
-    await existing.update({
-      fileDbId: fileRecord.id
-        ? ((await db.File.findOne({ where: { publicId: fileRecord.id } }))
-            ?.id ?? null)
-        : null,
-      fileId: fileRecord.id ?? null,
-      stepCount: serializedSteps.length,
-    });
-  } else {
-    // Find the file's DB internal id for the FK
-    const fileDbRow = fileRecord.id
-      ? await db.File.findOne({ where: { publicId: fileRecord.id } })
-      : null;
-
-    await db.Trace.create({
-      publicId: args.traceId,
-      projectId: args.projectId,
-      agentId: args.agentId,
-      agentDbId: args.agentDbId ?? null,
-      fileDbId: fileDbRow?.id ?? null,
-      fileId: fileRecord.id ?? null,
-      stepCount: serializedSteps.length,
-    });
-  }
 };
 
 export const listTraces = async (args: {

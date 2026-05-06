@@ -171,6 +171,50 @@ export const findPendingClientTools = (
     });
 };
 
+const storePendingGenerationState = (args: {
+  generationId: string;
+  traceId: string;
+  agentId: string;
+  typedAgent: TypedAgent;
+  pendingToolCalls: Array<{
+    toolCallId: string;
+    toolName: string;
+    input: unknown;
+  }>;
+  allMessages: Array<{ role: string; content: string }>;
+  result: { steps: unknown[]; response: { messages: unknown[] } };
+  model: LanguageModel;
+  resolvedTools: Record<string, Tool>;
+}): void => {
+  pendingGenerations.set(args.generationId, {
+    agentId: args.agentId,
+    projectId: args.typedAgent.project.id as number,
+    traceId: args.traceId,
+    generationId: args.generationId,
+    pendingToolCalls: args.pendingToolCalls.map((tc) => {
+      return {
+        toolCallId: tc.toolCallId,
+        toolName: tc.toolName,
+        args: tc.input,
+      };
+    }),
+    messages: [...args.allMessages, ...args.result.response.messages],
+    resolvedModel: args.model,
+    agentConfig: {
+      instructions: args.typedAgent.instructions,
+      maxSteps: (args.typedAgent.maxSteps as number) ?? 20,
+      toolChoice: args.typedAgent.toolChoice,
+      stopConditions: args.typedAgent.stopConditions,
+      activeToolIds: args.typedAgent.activeToolIds as string[] | null,
+      stepRules: args.typedAgent.stepRules,
+      temperature: args.typedAgent.temperature as number | null,
+    },
+    resolvedTools: args.resolvedTools,
+    initiatorGenerationId: null,
+    projectPublicId: args.typedAgent.project.publicId,
+  });
+};
+
 export const savePendingGeneration = (args: {
   generationId: string;
   traceId: string;
@@ -200,33 +244,7 @@ export const savePendingGeneration = (args: {
     lastActivityAt: new Date(),
   }).catch(() => {});
 
-  pendingGenerations.set(args.generationId, {
-    agentId: args.agentId,
-    projectId: args.typedAgent.project.id as number,
-    traceId: args.traceId,
-    generationId: args.generationId,
-    pendingToolCalls: args.pendingToolCalls.map((tc) => {
-      return {
-        toolCallId: tc.toolCallId,
-        toolName: tc.toolName,
-        args: tc.input,
-      };
-    }),
-    messages: [...args.allMessages, ...args.result.response.messages],
-    resolvedModel: args.model,
-    agentConfig: {
-      instructions: args.typedAgent.instructions,
-      maxSteps: (args.typedAgent.maxSteps as number) ?? 20,
-      toolChoice: args.typedAgent.toolChoice,
-      stopConditions: args.typedAgent.stopConditions,
-      activeToolIds: args.typedAgent.activeToolIds as string[] | null,
-      stepRules: args.typedAgent.stepRules,
-      temperature: args.typedAgent.temperature as number | null,
-    },
-    resolvedTools: args.resolvedTools,
-    initiatorGenerationId: null,
-    projectPublicId: args.typedAgent.project.publicId,
-  });
+  storePendingGenerationState(args);
 
   const requiresActionResult: GenerationResult = {
     id: args.generationId,
