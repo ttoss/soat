@@ -22,17 +22,17 @@ services:
     entrypoint:
       - /bin/sh
       - -c
-      - 'ollama serve & sleep 5 && (ollama list | grep -q qwen3-embedding:0.6b || ollama pull qwen3-embedding:0.6b) && (ollama list | grep -q qwen2.5:0.5b || ollama pull qwen2.5:0.5b) && wait'
+      - 'ollama serve & sleep 5 && (ollama list | grep -q qwen3-embedding:0.6b || ollama pull qwen3-embedding:0.6b) && (ollama list | grep -q qwen3.5:0.8b || ollama pull qwen3.5:0.8b) && wait'
     healthcheck:
       test:
         [
           'CMD-SHELL',
-          'ollama list | grep qwen3-embedding && ollama list | grep qwen2.5',
+          'ollama list | grep qwen3-embedding && ollama list | grep qwen3.5:0.8b',
         ]
       interval: 10s
       timeout: 30s
-      retries: 30
-      start_period: 30s
+      retries: 60
+      start_period: 60s
 
   server:
     build:
@@ -61,6 +61,7 @@ services:
       EMBEDDING_DIMENSIONS: '1024'
       OLLAMA_BASE_URL: http://ollama:11434
       NODE_OPTIONS: '--max-old-space-size=768'
+      DEBUG: 'soat:*'
     healthcheck:
       test:
         - CMD

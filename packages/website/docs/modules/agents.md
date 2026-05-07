@@ -36,22 +36,23 @@ Each agent stores its AI provider, instructions, tool references, and execution 
 
 Agent tools are reusable tool definitions that can be shared across multiple agents. Each tool is its own resource with a dedicated CRUD API.
 
-| Field             | Type   | Required | Description                                                                                                                                                                                                                                                                                     |
-| ----------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`              | string | auto     | Unique identifier (`agt_tool_` prefix)                                                                                                                                                                                                                                                          |
-| `project_id`      | string | yes      | Project the tool belongs to                                                                                                                                                                                                                                                                     |
-| `type`            | string | yes      | `http`, `client`, `mcp`, or `soat` (default: `"http"`)                                                                                                                                                                                                                                          |
-| `name`            | string | yes      | Tool name (`http`/`client`) or namespace prefix for the connection (`mcp`/`soat`)                                                                                                                                                                                                               |
-| `description`     | string | no       | What the tool does (sent to the model for selection)                                                                                                                                                                                                                                            |
-| `parameters`      | object | cond.    | JSON Schema for the tool's input — required for `http` and `client`                                                                                                                                                                                                                             |
-| `execute`         | object | cond.    | Execution configuration — required when `type` is `http`                                                                                                                                                                                                                                        |
-| `execute.url`     | string | yes      | HTTP endpoint called to execute the tool. May contain `{param_name}` placeholders (e.g. `/users/{user_id}`) that are replaced at call time with the corresponding tool argument value (URL-encoded). Arguments consumed as path parameters are excluded from the query string and request body. |
-| `execute.method`  | string | no       | HTTP method to use (default: `POST`). For `GET`, `HEAD`, or `DELETE` the tool arguments are appended as query-string parameters instead of a request body.                                                                                                                                      |
-| `execute.headers` | object | no       | Additional headers sent with the execution request                                                                                                                                                                                                                                              |
-| `mcp`             | object | cond.    | MCP server configuration — required when `type` is `mcp`                                                                                                                                                                                                                                        |
-| `mcp.url`         | string | yes      | URL of the MCP server (SSE or Streamable HTTP transport)                                                                                                                                                                                                                                        |
-| `mcp.headers`     | object | no       | Additional headers sent when connecting to the MCP server                                                                                                                                                                                                                                       |
-| `actions`         | array  | cond.    | List of SOAT platform actions to expose — required when `type` is `soat`                                                                                                                                                                                                                        |
+| Field               | Type   | Required | Description                                                                                                                                                                                                                                                                                     |
+| ------------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                | string | auto     | Unique identifier (`agt_tool_` prefix)                                                                                                                                                                                                                                                          |
+| `project_id`        | string | yes      | Project the tool belongs to                                                                                                                                                                                                                                                                     |
+| `type`              | string | yes      | `http`, `client`, `mcp`, or `soat` (default: `"http"`)                                                                                                                                                                                                                                          |
+| `name`              | string | yes      | Tool name (`http`/`client`) or namespace prefix for the connection (`mcp`/`soat`)                                                                                                                                                                                                               |
+| `description`       | string | no       | What the tool does (sent to the model for selection)                                                                                                                                                                                                                                            |
+| `parameters`        | object | cond.    | JSON Schema for the tool's input — required for `http` and `client`                                                                                                                                                                                                                             |
+| `execute`           | object | cond.    | Execution configuration — required when `type` is `http`                                                                                                                                                                                                                                        |
+| `execute.url`       | string | yes      | HTTP endpoint called to execute the tool. May contain `{param_name}` placeholders (e.g. `/users/{user_id}`) that are replaced at call time with the corresponding tool argument value (URL-encoded). Arguments consumed as path parameters are excluded from the query string and request body. |
+| `execute.method`    | string | no       | HTTP method to use (default: `POST`). For `GET`, `HEAD`, or `DELETE` the tool arguments are appended as query-string parameters instead of a request body.                                                                                                                                      |
+| `execute.headers`   | object | no       | Additional headers sent with the execution request                                                                                                                                                                                                                                              |
+| `mcp`               | object | cond.    | MCP server configuration — required when `type` is `mcp`                                                                                                                                                                                                                                        |
+| `mcp.url`           | string | yes      | URL of the MCP server (SSE or Streamable HTTP transport)                                                                                                                                                                                                                                        |
+| `mcp.headers`       | object | no       | Additional headers sent when connecting to the MCP server                                                                                                                                                                                                                                       |
+| `actions`           | array  | cond.    | List of SOAT platform actions to expose — required when `type` is `soat`                                                                                                                                                                                                                        |
+| `preset_parameters` | object | no       | Fixed parameter values for `soat` tools. Keys are removed from the schema shown to the model and injected automatically at execution time — see [Preset Parameters](#preset-parameters)                                                                                                         |
 
 Agents reference tools by their IDs via the `tool_ids` field. A single tool can be attached to many agents.
 
@@ -160,6 +161,37 @@ MCP tools execute on the MCP server side. The SOAT server acts as a proxy: it re
 The tool exposes actions from the SOAT platform itself (documents, conversations, files, secrets, etc.). Instead of pointing to an external endpoint, you list the platform actions the agent is allowed to use via the `actions` array. Each action name corresponds to an existing MCP tool registered on the platform (e.g., `get-document`, `search-documents`, `create-file`). The server executes these actions in-process, reusing the same permission checks as the REST API.
 
 Available actions come from the platform's registered MCP tools: actors, ai-providers, chats, conversations, documents, files, projects, and secrets.
+
+##### Preset Parameters
+
+`preset_parameters` lets you bake fixed values into a `soat` tool definition. When a key in `preset_parameters` matches a field in the action's input schema:
+
+1. That field is **removed from the schema shown to the model** — the model never sees or fills it in.
+2. The preset value is **merged into every call** before the request is dispatched.
+
+This eliminates the probabilistic risk of the model choosing a wrong value for parameters that should always be fixed (e.g., the ID of a specific document). It also enables creating multiple tool instances for different resources from the same action.
+
+Example — two tools backed by the same `update-document` action, each locked to a different document:
+
+```json
+{
+  "name": "public_doc",
+  "type": "soat",
+  "actions": ["update-document"],
+  "preset_parameters": { "id": "doc_abc123" }
+}
+```
+
+```json
+{
+  "name": "private_doc",
+  "type": "soat",
+  "actions": ["update-document"],
+  "preset_parameters": { "id": "doc_xyz789" }
+}
+```
+
+The model calls `public_doc_update-document` with only the fields it needs to supply (e.g., `content`). The server automatically injects `id: "doc_abc123"` before executing the request.
 
 #### Tool Name Resolution
 

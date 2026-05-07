@@ -40,13 +40,17 @@ services:
     entrypoint:
       - /bin/sh
       - -c
-      - 'ollama serve > /dev/null 2>&1 & sleep 5 && ollama pull qwen3-embedding:0.6b > /dev/null 2>&1 && ollama pull qwen2.5:0.5b > /dev/null 2>&1 && wait'
+      - 'ollama serve > /dev/null 2>&1 & sleep 5 && ollama pull qwen3-embedding:0.6b > /dev/null 2>&1 && ollama pull qwen3.5:0.8b > /dev/null 2>&1 && wait'
     healthcheck:
-      test: ['CMD-SHELL', 'ollama list | grep qwen3-embedding']
+      test:
+        [
+          'CMD-SHELL',
+          'ollama list | grep qwen3-embedding && ollama list | grep qwen3.5',
+        ]
       interval: 10s
       timeout: 30s
-      retries: 30
-      start_period: 30s
+      retries: 60
+      start_period: 60s
 
   server:
     image: ttoss/soat
@@ -148,7 +152,7 @@ AI_PROVIDER_ID=$(curl -s -X POST http://localhost:5047/api/v1/ai-providers \
     \"name\": \"Local Ollama\",
     \"provider\": \"ollama\",
     \"base_url\": \"http://ollama:11434\",
-    \"default_model\": \"qwen2.5:0.5b\"
+    \"default_model\": \"qwen3.5:0.8b\"
   }" | jq -r '.id')
 
 echo "AI Provider: $AI_PROVIDER_ID"

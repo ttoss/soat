@@ -29,7 +29,7 @@ By the end you will understand how [AI Providers](/docs/modules/ai-providers), [
 - For production hardening (secrets, env vars), see [Advanced Configuration](/docs/getting-started/advanced-config).
 - Server is at `http://localhost:5047`.
 - [Ollama](https://ollama.com) running locally with a chat model available.
-- This repo's tutorial test stack already provisions Ollama with `qwen2.5:0.5b`, so this tutorial runs in automated tests without external credentials.
+- This repo's tutorial test stack already provisions Ollama with `qwen3.5:0.8b`, so this tutorial runs in automated tests without external credentials.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -164,7 +164,7 @@ AI_PROVIDER_ID=$(soat create-ai-provider \
   --project-id "$PROJECT_ID" \
   --name "Local Ollama" \
   --provider "ollama" \
-  --default-model "qwen2.5:0.5b" | jq -r '.id')
+  --default-model "qwen3.5:0.8b" | jq -r '.id')
 echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 # AI_PROVIDER_ID: aip_8BTcGUvXnehCCQKs
 ```
@@ -179,7 +179,7 @@ const { data: aiProvider, error } =
       project_id: PROJECT_ID,
       name: 'Local Ollama',
       provider: 'ollama',
-      default_model: 'qwen2.5:0.5b',
+      default_model: 'qwen3.5:0.8b',
     },
   });
 
@@ -195,7 +195,7 @@ const AI_PROVIDER_ID = aiProvider.id; // aip_…
 AI_PROVIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/ai-providers" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Local Ollama\",\"provider\":\"ollama\",\"default_model\":\"qwen2.5:0.5b\"}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Local Ollama\",\"provider\":\"ollama\",\"default_model\":\"qwen3.5:0.8b\"}" \
   | jq -r '.id')
 echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 ```
@@ -217,7 +217,7 @@ AGENT_ID=$(soat create-agent \
   --project-id "$PROJECT_ID" \
   --ai-provider-id "$AI_PROVIDER_ID" \
   --name "Local Assistant" \
-  --instructions "You are a concise assistant running on a local Ollama model. Answer clearly and keep examples practical." \
+  --instructions "You are a concise assistant running on a local Ollama model. Keep answers short (max 20 words), clear, and practical." \
   | jq -r '.id')
 echo "AGENT_ID: $AGENT_ID"
 # AGENT_ID: agt_KO5nAMmsSOVBWLlN
@@ -233,7 +233,7 @@ const { data: agent, error } = await adminSoat.agents.createAgent({
     ai_provider_id: AI_PROVIDER_ID,
     name: 'Local Assistant',
     instructions:
-      'You are a concise assistant running on a local Ollama model. Answer clearly and keep examples practical.',
+      'You are a concise assistant running on a local Ollama model. Keep answers short (max 20 words), clear, and practical.',
   },
 });
 
@@ -249,7 +249,7 @@ const AGENT_ID = agent.id; // agt_…
 AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Local Assistant\",\"instructions\":\"You are a concise assistant running on a local Ollama model. Answer clearly and keep examples practical.\"}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Local Assistant\",\"instructions\":\"You are a concise assistant running on a local Ollama model. Keep answers short (max 20 words), clear, and practical.\"}" \
   | jq -r '.id')
 echo "AGENT_ID: $AGENT_ID"
 ```
@@ -329,7 +329,7 @@ Example output:
   "message": {
     "role": "assistant",
     "content": "The capital of France is Paris.",
-    "model": "qwen2.5:0.5b"
+    "model": "qwen3.5:0.8b"
   },
   "generation_id": "agt_gen_mznGfHSV4YAGiBXy",
   "trace_id": "agt_trace_8rcvif0n29WE37NL"
@@ -365,33 +365,23 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/mes
 </TabItem>
 </Tabs>
 
-### 7b — Follow-up message
+### 7b — Queue a follow-up message for async generation
 
-The model remembers the previous turn, so you can ask follow-up questions without repeating context.
+Now disable `auto_generate` and add a follow-up user message. We will generate the assistant reply in Step 10 using async mode.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+soat update-session \
+  --agent-id "$AGENT_ID" \
+  --session-id "$SESSION_ID" \
+  --auto-generate false
+
 soat add-session-message \
   --agent-id "$AGENT_ID" \
   --session-id "$SESSION_ID" \
-  --message "What is the population of that city?"
-```
-
-Example output:
-
-```json
-{
-  "status": "completed",
-  "message": {
-    "role": "assistant",
-    "content": "The population of Paris, the capital of France, is approximately 2.1 million people in the city proper, based on recent estimates (as of 2022 from sources like INSEE). Note that the greater metropolitan area has a much larger population, exceeding 12 million.",
-    "model": "qwen2.5:0.5b"
-  },
-  "generation_id": "agt_gen_1kBL5Nqp5aW9sG5m",
-  "trace_id": "agt_trace_DuB3MkGIDg4He8zx"
-}
+  --message "In one short sentence, what is the population of Paris?"
 ```
 
 </TabItem>
@@ -401,23 +391,29 @@ Example output:
 const { data: reply2, error: err2 } =
   await adminSoat.sessions.addSessionMessage({
     path: { agent_id: AGENT_ID, session_id: SESSION_ID },
-    body: { message: 'What is the population of that city?' },
+    body: {
+      message: 'In one short sentence, what is the population of Paris?',
+    },
   });
 
 if (err2) throw new Error(JSON.stringify(err2));
-
-console.log(reply2.message?.content);
-// "The population of Paris … approximately 2.1 million …"
+console.log(reply2.status);
+// "pending"
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
+curl -s -X PATCH "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"auto_generate":false}'
+
 curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message":"What is the population of that city?"}'
+  -d '{"message":"In one short sentence, what is the population of Paris?"}'
 ```
 
 </TabItem>
@@ -583,7 +579,7 @@ soat update-session \
 soat add-session-message \
   --agent-id "$AGENT_ID" \
   --session-id "$SESSION_ID" \
-  --message "Give me 3 concise facts about Sao Paulo."
+  --message "Give me 1 concise fact about Sao Paulo."
 
 soat generate-session-response \
   --agent-id "$AGENT_ID" \
@@ -613,7 +609,7 @@ if (updateErr) throw new Error(JSON.stringify(updateErr));
 
 const { error: addErr } = await adminSoat.sessions.addSessionMessage({
   path: { agent_id: AGENT_ID, session_id: SESSION_ID },
-  body: { message: 'Give me 3 concise facts about Sao Paulo.' },
+  body: { message: 'Give me 1 concise fact about Sao Paulo.' },
 });
 
 if (addErr) throw new Error(JSON.stringify(addErr));
@@ -641,7 +637,7 @@ curl -s -X PATCH "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID" \
 curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message":"Give me 3 concise facts about Sao Paulo."}'
+  -d '{"message":"Give me 1 concise fact about Sao Paulo."}'
 
 curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/generate?async=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \

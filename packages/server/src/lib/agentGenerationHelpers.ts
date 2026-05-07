@@ -1,9 +1,12 @@
-import type { LanguageModel, ModelMessage, Tool } from 'ai';
+import type { LanguageModel, ModelMessage, Tool, ToolChoice } from 'ai';
 import { stepCountIs, streamText } from 'ai';
+import createDebug from 'debug';
 
 import { saveTrace, serializeSteps } from './agentTraces';
 import { emitEvent } from './eventBus';
 import { updateGenerationRecord } from './generations';
+
+const log = createDebug('soat:generation');
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -114,6 +117,49 @@ export const buildAllMessages = (
   return [{ role: 'system', content: instructions }, ...messages];
 };
 
+// ── Step Rules ────────────────────────────────────────────────────────────
+
+type StepRule = {
+  step: number;
+  toolChoice?: { type: 'tool'; toolName: string };
+};
+
+const buildPrepareStep = (
+  stepRules: unknown
+):
+  | ((opts: { stepNumber: number }) => {
+      toolChoice?: ToolChoice<Record<string, Tool>>;
+      activeTools?: string[];
+    })
+  | undefined => {
+  if (!Array.isArray(stepRules) || stepRules.length === 0) return undefined;
+  const rules = stepRules as StepRule[];
+  log('buildPrepareStep (stream): rules=%o', rules);
+  return ({ stepNumber }) => {
+    // stepNumber is 0-based (AI SDK), step_rules use 1-indexed steps
+    const rule = rules.find((r) => {
+      return r.step === stepNumber + 1;
+    });
+    log(
+      'prepareStep (stream): stepNumber=%d (1-indexed=%d) rule=%o',
+      stepNumber,
+      stepNumber + 1,
+      rule
+    );
+    if (rule?.toolChoice?.type === 'tool' && rule.toolChoice.toolName) {
+      log(
+        'prepareStep (stream): forcing toolChoice=%s',
+        rule.toolChoice.toolName
+      );
+      return {
+        toolChoice: { type: 'tool', toolName: rule.toolChoice.toolName },
+        activeTools: [rule.toolChoice.toolName],
+      };
+    }
+    return {};
+  };
+};
+
 export const runStreamGeneration = (args: {
   model: LanguageModel;
   allMessages: Array<{ role: string; content: string }>;
@@ -128,6 +174,16 @@ export const runStreamGeneration = (args: {
   const nonSystemMessages = args.allMessages.filter((m) => {
     return m.role !== 'system';
   });
+  const prepareStep = buildPrepareStep(args.typedAgent.stepRules);
+  log(
+    'runStreamGeneration: agentId=%s toolCount=%d stepRulesCount=%d',
+    args.agentId,
+    Object.keys(args.resolvedTools).length,
+    Array.isArray(args.typedAgent.stepRules)
+      ? (args.typedAgent.stepRules as unknown[]).length
+      : 0
+  );
+  log('runStreamGeneration: tools=%o', Object.keys(args.resolvedTools));
   const result = streamText({
     model: args.model,
     system,
@@ -142,6 +198,7 @@ export const runStreamGeneration = (args: {
         | 'required'
         | { type: 'tool'; toolName: string }
         | undefined) ?? undefined,
+    prepareStep,
     stopWhen: stepCountIs((args.typedAgent.maxSteps as number) ?? 20),
     temperature: (args.typedAgent.temperature as number) ?? undefined,
   });

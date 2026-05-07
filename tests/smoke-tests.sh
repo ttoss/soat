@@ -515,13 +515,13 @@ echo "--- Chat completion: 400 without ai_provider_id ---"
 expect_cli_error_status 400 create-chat-completion --messages '[{"role":"user","content":"hello"}]'
 echo "400 without ai_provider_id: OK"
 
-# 16. Create AI provider (Ollama with qwen2.5:0.5b available in test env)
+# 16. Create AI provider (Ollama with qwen3.5:0.8b available in test env)
 echo "--- Creating AI provider ---"
 AI_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name smoke-ollama \
   --provider ollama \
-  --default_model "qwen2.5:0.5b" \
+  --default_model "qwen3.5:0.8b" \
   --base_url "http://ollama:11434")
 AI_PROVIDER_ID=$(echo "$AI_PROVIDER_RESP" | jq -r '.id')
 echo "AI Provider id: $AI_PROVIDER_ID"

@@ -821,6 +821,13 @@ components:
           items:
             type: string
           description: SOAT platform actions to expose
+        preset_parameters:
+          type: object
+          nullable: true
+          description: >-
+            Fixed parameters merged into every soat tool call. Keys matching
+            fields in the action's input schema are removed from the schema
+            shown to the model and injected automatically at execution time.
         created_at:
           type: string
           format: date-time
@@ -870,6 +877,12 @@ components:
           items:
             type: string
           description: SOAT platform actions
+        preset_parameters:
+          type: object
+          description: >-
+            Fixed parameters merged into every soat tool call. Keys matching
+            fields in the action's input schema are removed from the schema
+            shown to the model and injected automatically at execution time.
 
     UpdateAgentToolRequest:
       type: object
@@ -907,6 +920,13 @@ components:
           nullable: true
           items:
             type: string
+        preset_parameters:
+          type: object
+          nullable: true
+          description: >-
+            Fixed parameters merged into every soat tool call. Keys matching
+            fields in the action's input schema are removed from the schema
+            shown to the model and injected automatically at execution time.
 
     Agent:
       type: object

@@ -53,6 +53,8 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
+Admin is the built-in superuser role. It bypasses policy evaluation entirely. See [Users](/docs/modules/users) for full authentication and user management details.
+
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
@@ -95,6 +97,8 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project
 
+Every resource in SOAT lives inside a [project](/docs/modules/projects). Create one to hold the provider and agent.
+
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
@@ -133,7 +137,7 @@ PROJECT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/projects" \
 
 ## Step 3 — Store provider credentials as secrets
 
-Create one secret per provider credential set. SOAT stores the raw values encrypted and providers reference them by ID.
+[Secrets](/docs/modules/secrets) store sensitive values encrypted; providers reference them by ID. Create one secret per provider credential set.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -222,7 +226,7 @@ XAI_SECRET_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/secrets" \
 
 ## Step 4 — Create provider records
 
-Choose the provider that matches your hosted model. Examples:
+Each provider points to a hosted model endpoint. See [AI Providers](/docs/modules/ai-providers) for the full list of supported providers and configuration options. Choose the provider that matches your hosted model:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -316,7 +320,7 @@ OPENAI_PROVIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/ai-providers" \
 
 ## Step 5 — Create an agent
 
-Once the provider exists, create an agent that points at it.
+Once the provider exists, create an [agent](/docs/modules/agents) that points at it.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -362,7 +366,7 @@ AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
 
 ## Step 6 — Start a conversation
 
-Create a session and send a message through the provider-backed agent.
+Create a [session](/docs/modules/sessions) and send a message through the provider-backed agent.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

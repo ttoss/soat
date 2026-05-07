@@ -1,7 +1,10 @@
 import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
+import createDebug from 'debug';
 
 import { soatTools } from './soatTools';
+
+const log = createDebug('soat:tools');
 
 type LogToolCallingError = (args: {
   toolName: string;
@@ -117,10 +120,36 @@ export const resolveMcpTools = async (args: {
   }
 };
 
+const buildInputSchemaWithoutPresets = (
+  schema: JSONSchema7,
+  presetParameters?: Record<string, unknown>
+): JSONSchema7 => {
+  if (!presetParameters || Object.keys(presetParameters).length === 0) {
+    return schema;
+  }
+  const presetKeys = new Set(Object.keys(presetParameters));
+  const props = schema.properties
+    ? Object.fromEntries(
+        Object.entries(schema.properties).filter(([k]) => {
+          return !presetKeys.has(k);
+        })
+      )
+    : {};
+  const required = (schema.required ?? []).filter((k) => {
+    return !presetKeys.has(k);
+  });
+  return {
+    ...schema,
+    properties: props,
+    ...(required.length > 0 ? { required } : { required: undefined }),
+  };
+};
+
 const buildSoatActionTool = (args: {
   toolName: string;
   toolDescription: string | null;
   def: (typeof soatTools)[number];
+  presetParameters?: Record<string, unknown>;
   boundaryPolicy?: unknown;
   authHeader?: string;
   toolContext?: Record<string, string>;
@@ -133,10 +162,14 @@ const buildSoatActionTool = (args: {
   }) => boolean;
   logToolCallingError: LogToolCallingError;
 }): Tool => {
-  const base = `http://localhost:${process.env.PORT || 5047}/api/v1`;
+  const base = `http://localhost:${process.env.PORT || 5047}`;
+  const effectiveInputSchema = buildInputSchemaWithoutPresets(
+    args.def.inputSchema as JSONSchema7,
+    args.presetParameters
+  );
   return tool({
     description: args.toolDescription ?? args.def.description,
-    inputSchema: jsonSchema(args.def.inputSchema as JSONSchema7),
+    inputSchema: jsonSchema(effectiveInputSchema),
     execute: async (toolArgs: unknown) => {
       const iamAction = args.def.iamAction ?? args.def.name;
       if (
@@ -147,7 +180,10 @@ const buildSoatActionTool = (args: {
       ) {
         return { error: `Forbidden: boundary policy denies ${iamAction}` };
       }
-      const rawArgs = toolArgs as Record<string, unknown>;
+      const rawArgs = {
+        ...(args.presetParameters ?? {}),
+        ...(toolArgs as Record<string, unknown>),
+      };
       const path = args.def.path(rawArgs);
       const soatBody = args.def.body ? args.def.body(rawArgs) : undefined;
       const soatBodyWithContext =
@@ -156,7 +192,10 @@ const buildSoatActionTool = (args: {
           : soatBody;
 
       try {
-        const response = await fetch(`${base}${path}`, {
+        const url = `${base}${path}`;
+        const toolId = `${args.toolName}_${args.def.name}`;
+        log('soat tool execute: %s %s %s', toolId, args.def.method, url);
+        const response = await fetch(url, {
           method: args.def.method,
           headers: {
             'Content-Type': 'application/json',
@@ -167,8 +206,11 @@ const buildSoatActionTool = (args: {
             ? JSON.stringify(soatBodyWithContext)
             : undefined,
         });
-        return response.json();
+        const responseBody = await response.json();
+        log('soat tool result: %s status=%d', toolId, response.status);
+        return responseBody;
       } catch (error) {
+        log('soat tool error: %s', `${args.toolName}_${args.def.name}`);
         args.logToolCallingError({
           toolName: `${args.toolName}_${args.def.name}`,
           toolType: 'soat',
@@ -187,6 +229,7 @@ export const resolveSoatTools = (args: {
     name: string;
     description: string | null;
     actions: string[] | null;
+    presetParameters?: Record<string, unknown> | null;
   };
   boundaryPolicy?: unknown;
   authHeader?: string;
@@ -211,6 +254,7 @@ export const resolveSoatTools = (args: {
       toolName: args.typedTool.name,
       toolDescription: args.typedTool.description,
       def,
+      presetParameters: args.typedTool.presetParameters ?? undefined,
       boundaryPolicy: args.boundaryPolicy,
       authHeader: args.authHeader,
       toolContext: args.toolContext,

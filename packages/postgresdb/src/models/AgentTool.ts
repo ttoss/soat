@@ -60,6 +60,9 @@ export class AgentTool extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare actions: string[] | null;
 
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare presetParameters: object | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

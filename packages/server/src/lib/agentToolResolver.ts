@@ -373,6 +373,7 @@ type AgentToolRow = {
     | null;
   mcp: { url: string; headers?: Record<string, string> } | null;
   actions: string[] | null;
+  presetParameters: Record<string, unknown> | null;
 };
 
 const resolveToolByType = async (

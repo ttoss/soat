@@ -67,9 +67,6 @@ const handleGenerationResult = async (
 
 export const agentGenerationRouter = new Router<Context>();
 
-/**
- * @openapi POST /agents/:agent_id/generate
- */
 agentGenerationRouter.post(
   '/agents/:agent_id/generate',
   async (ctx: Context) => {
@@ -131,9 +128,6 @@ agentGenerationRouter.post(
   }
 );
 
-/**
- * @openapi POST /agents/:agent_id/generate/:generation_id/tool-outputs
- */
 agentGenerationRouter.post(
   '/agents/:agent_id/generate/:generation_id/tool-outputs',
   async (ctx: Context) => {

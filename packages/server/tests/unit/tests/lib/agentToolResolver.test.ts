@@ -873,4 +873,87 @@ describe('resolveAgentTools - mcp and soat types', () => {
       });
     }
   });
+
+  test('soat tool with preset_parameters strips preset keys from inputSchema', async () => {
+    const soatToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents/tools')
+      .send({
+        project_id: projectId,
+        name: 'myPresetSoatTool',
+        type: 'soat',
+        actions: ['get-document'],
+        preset_parameters: { documentId: 'doc_preset123' },
+      });
+    expect(soatToolRes.status).toBe(201);
+
+    const tools = await resolveAgentTools({
+      toolIds: [soatToolRes.body.id],
+    });
+    expect(tools).toHaveProperty('myPresetSoatTool_get-document');
+
+    const soatTool = tools['myPresetSoatTool_get-document'];
+    // The inputSchema presented to the model should NOT include 'id'
+    const schema = soatTool.inputSchema as {
+      jsonSchema?: { properties?: Record<string, unknown> };
+    };
+    const properties = schema?.jsonSchema?.properties ?? {};
+    expect(properties).not.toHaveProperty('documentId');
+  });
+
+  test('soat tool with preset_parameters injects preset values into execution', async () => {
+    const soatToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents/tools')
+      .send({
+        project_id: projectId,
+        name: 'myPresetExecTool',
+        type: 'soat',
+        actions: ['get-document'],
+        preset_parameters: { documentId: 'doc_injected' },
+      });
+
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: {} })));
+
+    const tools = await resolveAgentTools({ toolIds: [soatToolRes.body.id] });
+    const soatTool = tools['myPresetExecTool_get-document'];
+
+    if ('execute' in soatTool && typeof soatTool.execute === 'function') {
+      // Model does not supply 'id' — it is injected from preset_parameters
+      await soatTool.execute({}, {} as never);
+    }
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('doc_injected'),
+      expect.anything()
+    );
+  });
+
+  test('soat tool without preset_parameters works as before', async () => {
+    const soatToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents/tools')
+      .send({
+        project_id: projectId,
+        name: 'myNoPresetTool',
+        type: 'soat',
+        actions: ['list-files'],
+      });
+
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [] })));
+
+    const tools = await resolveAgentTools({ toolIds: [soatToolRes.body.id] });
+    expect(tools).toHaveProperty('myNoPresetTool_list-files');
+
+    const soatTool = tools['myNoPresetTool_list-files'];
+    if ('execute' in soatTool && typeof soatTool.execute === 'function') {
+      await soatTool.execute({}, {} as never);
+    }
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/files'),
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
 });

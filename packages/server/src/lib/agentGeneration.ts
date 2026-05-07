@@ -1,6 +1,7 @@
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
-import type { LanguageModel, ModelMessage, Tool } from 'ai';
+import type { LanguageModel, ModelMessage, Tool, ToolChoice } from 'ai';
 import { generateText, stepCountIs } from 'ai';
+import createDebug from 'debug';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 
 import { db } from '../db';
@@ -21,6 +22,8 @@ import { resolveAgentTools } from './agentToolResolver';
 import { saveTrace, serializeSteps } from './agentTraces';
 import { resolveProjectPublicId } from './eventBus';
 import { createGenerationRecord, updateGenerationRecord } from './generations';
+
+const log = createDebug('soat:generation');
 
 export type { GenerationResult };
 
@@ -44,6 +47,46 @@ const resolveAgentForGeneration = async (args: {
   return agent as unknown as TypedAgent | null;
 };
 
+// ── Step Rules ────────────────────────────────────────────────────────────
+
+type StepRule = {
+  step: number;
+  toolChoice?: { type: 'tool'; toolName: string };
+};
+
+const buildPrepareStep = (
+  stepRules: unknown
+):
+  | ((opts: { stepNumber: number }) => {
+      toolChoice?: ToolChoice<Record<string, Tool>>;
+      activeTools?: string[];
+    })
+  | undefined => {
+  if (!Array.isArray(stepRules) || stepRules.length === 0) return undefined;
+  const rules = stepRules as StepRule[];
+  log('buildPrepareStep: rules=%o', rules);
+  return ({ stepNumber }) => {
+    // stepNumber is 0-based (AI SDK), step_rules use 1-indexed steps
+    const rule = rules.find((r) => {
+      return r.step === stepNumber + 1;
+    });
+    log(
+      'prepareStep: stepNumber=%d (1-indexed=%d) rule=%o',
+      stepNumber,
+      stepNumber + 1,
+      rule
+    );
+    if (rule?.toolChoice?.type === 'tool' && rule.toolChoice.toolName) {
+      log('prepareStep: forcing toolChoice=%o', rule.toolChoice.toolName);
+      return {
+        toolChoice: { type: 'tool', toolName: rule.toolChoice.toolName },
+        activeTools: [rule.toolChoice.toolName],
+      };
+    }
+    return {};
+  };
+};
+
 // ── Non-Stream Generation ─────────────────────────────────────────────────
 
 const runNonStreamGeneration = async (args: {
@@ -62,6 +105,7 @@ const runNonStreamGeneration = async (args: {
   const nonSystemMessages = args.allMessages.filter((m) => {
     return m.role !== 'system';
   });
+  const prepareStep = buildPrepareStep(args.typedAgent.stepRules);
   const result = await generateText({
     model: args.model,
     system,
@@ -76,6 +120,7 @@ const runNonStreamGeneration = async (args: {
         | 'required'
         | { type: 'tool'; toolName: string }
         | undefined) ?? undefined,
+    prepareStep,
     stopWhen: stepCountIs((args.typedAgent.maxSteps as number) ?? 20),
     temperature: (args.typedAgent.temperature as number) ?? undefined,
     abortSignal: args.abortSignal,
@@ -220,6 +265,8 @@ export const createGeneration = async (args: {
     toolContext: args.toolContext,
   });
 
+  log('createGeneration: agentId=%s stream=%s', args.agentId, args.stream);
+
   if (ctx === 'not_found' || ctx === 'ai_provider_not_found') return ctx;
 
   // Create the generation record in the DB (fire-and-forget errors)
@@ -324,6 +371,7 @@ export const submitToolOutputs = async (args: {
       Object.keys(pending.resolvedTools).length > 0
         ? pending.resolvedTools
         : undefined,
+    prepareStep: buildPrepareStep(pending.agentConfig.stepRules),
     stopWhen: stepCountIs(pending.agentConfig.maxSteps),
     temperature: pending.agentConfig.temperature ?? undefined,
   });

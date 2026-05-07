@@ -153,6 +153,7 @@ const buildInputSchema = (
     description: string;
     required: boolean;
     type: string;
+    items?: unknown;
   }>
 ): JsonObjectSchema => {
   const allParams = [...pathParams, ...queryParams, ...bodyProps];
@@ -192,9 +193,13 @@ const buildInputSchema = (
         .replace(/\n/g, ' ')
         .trim();
       if (param.type === 'array') {
+        const itemsSchema =
+          'items' in param && param.items
+            ? (param.items as JSONSchema7)
+            : { type: 'string' as const };
         properties[param.camelName] = {
           type: 'array',
-          items: { type: 'string' },
+          items: itemsSchema,
           description,
         };
       } else {
@@ -337,13 +342,18 @@ const extractBodyProps = (args: {
   description: string;
   required: boolean;
   type: string;
+  items?: unknown;
 }> => {
   const rawBodySchema = args.requestBody?.content?.['application/json']?.schema;
   const bodySchema = resolveSchema(rawBodySchema, args.spec);
   return bodySchema?.properties
     ? Object.entries(bodySchema.properties).map(
         ([key, value]: [string, unknown]) => {
-          const val = value as { description?: unknown; type?: unknown };
+          const val = value as {
+            description?: unknown;
+            type?: unknown;
+            items?: unknown;
+          };
           return {
             snakeName: key,
             camelName: snakeToCamel(key),
@@ -351,6 +361,7 @@ const extractBodyProps = (args: {
               typeof val.description === 'string' ? val.description : '',
             required: (bodySchema.required || []).includes(key),
             type: typeof val.type === 'string' ? val.type : 'string',
+            items: val.items,
           };
         }
       )
