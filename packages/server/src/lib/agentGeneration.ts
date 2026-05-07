@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import type { LanguageModel, ModelMessage, Tool, ToolChoice } from 'ai';
 import { generateText, stepCountIs } from 'ai';
@@ -89,6 +90,70 @@ const buildPrepareStep = (
 
 // ── Non-Stream Generation ─────────────────────────────────────────────────
 
+/**
+ * Runs a non-streaming text generation with the given tools. If the provider
+ * fails while processing tool-call responses (e.g. the model emits malformed
+ * XML that the provider cannot parse), the function transparently falls back
+ * to a plain-text generation with no tools so that callers always receive a
+ * completed result instead of a 500 error. When no tools are configured the
+ * error is logged and re-thrown immediately.
+ */
+const callGenerateText = async (args: {
+  agentId: string;
+  model: LanguageModel;
+  system: string | undefined;
+  nonSystemMessages: Array<{ role: string; content: string }>;
+  resolvedTools: Record<string, Tool>;
+  typedAgent: TypedAgent;
+  prepareStep: ReturnType<typeof buildPrepareStep>;
+  abortSignal?: AbortSignal;
+}) => {
+  const hasTools = Object.keys(args.resolvedTools).length > 0;
+  try {
+    return await generateText({
+      model: args.model,
+      system: args.system,
+      messages: args.nonSystemMessages as ModelMessage[],
+      tools: hasTools ? args.resolvedTools : undefined,
+      toolChoice:
+        (args.typedAgent.toolChoice as
+          | 'auto'
+          | 'required'
+          | { type: 'tool'; toolName: string }
+          | undefined) ?? undefined,
+      prepareStep: args.prepareStep,
+      stopWhen: stepCountIs((args.typedAgent.maxSteps as number) ?? 20),
+      temperature: (args.typedAgent.temperature as number) ?? undefined,
+      abortSignal: args.abortSignal,
+    });
+  } catch (error) {
+    if (!hasTools) {
+      log(
+        'Generation failed (no tools to fall back from) agentId=%s: %s',
+        args.agentId,
+        error
+      );
+      throw error;
+    }
+    // Provider failed during tool-call processing (e.g., model returned malformed
+    // XML tool calls). Fall back to plain-text so callers get a completed result.
+    log(
+      'Generation with tools failed, retrying without tools agentId=%s model=%s: %s',
+      args.agentId,
+      args.typedAgent.model,
+      error
+    );
+    return generateText({
+      model: args.model,
+      system: args.system,
+      messages: args.nonSystemMessages as ModelMessage[],
+      stopWhen: stepCountIs(1),
+      temperature: (args.typedAgent.temperature as number) ?? undefined,
+      abortSignal: args.abortSignal,
+    });
+  }
+};
+
 const runNonStreamGeneration = async (args: {
   model: LanguageModel;
   allMessages: Array<{ role: string; content: string }>;
@@ -106,23 +171,14 @@ const runNonStreamGeneration = async (args: {
     return m.role !== 'system';
   });
   const prepareStep = buildPrepareStep(args.typedAgent.stepRules);
-  const result = await generateText({
+  const result = await callGenerateText({
+    agentId: args.agentId,
     model: args.model,
     system,
-    messages: nonSystemMessages as ModelMessage[],
-    tools:
-      Object.keys(args.resolvedTools).length > 0
-        ? args.resolvedTools
-        : undefined,
-    toolChoice:
-      (args.typedAgent.toolChoice as
-        | 'auto'
-        | 'required'
-        | { type: 'tool'; toolName: string }
-        | undefined) ?? undefined,
+    nonSystemMessages,
+    resolvedTools: args.resolvedTools,
+    typedAgent: args.typedAgent,
     prepareStep,
-    stopWhen: stepCountIs((args.typedAgent.maxSteps as number) ?? 20),
-    temperature: (args.typedAgent.temperature as number) ?? undefined,
     abortSignal: args.abortSignal,
   });
 
