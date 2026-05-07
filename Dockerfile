@@ -54,6 +54,12 @@ RUN echo "node-linker=hoisted" > .npmrc \
 # Copy built dist from builder stage
 COPY --from=builder /app/packages/cli/dist ./packages/cli/dist/
 COPY --from=builder /app/packages/sdk/dist ./packages/sdk/dist/
+
+# Copy the CLI bin wrapper and make it globally accessible
+COPY packages/cli/bin ./packages/cli/bin/
+RUN chmod +x ./packages/cli/bin/soat \
+    && ln -s /app/packages/cli/bin/soat /usr/local/bin/soat
+
 COPY tests/smoke-tests.sh /smoke-tests.sh
 
 CMD ["sh", "/smoke-tests.sh"]

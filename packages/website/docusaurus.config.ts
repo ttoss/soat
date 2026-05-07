@@ -191,8 +191,37 @@ const config: Config = {
           title: 'Docs',
           items: [
             {
-              label: 'Documentation',
+              label: 'Introduction',
               to: '/docs/introduction',
+            },
+            {
+              label: 'Getting Started',
+              to: '/docs/getting-started',
+            },
+            {
+              label: 'Tutorials',
+              to: '/docs/tutorials',
+            },
+          ],
+        },
+        {
+          title: 'Surfaces',
+          items: [
+            {
+              label: 'REST API',
+              to: '/docs/api',
+            },
+            {
+              label: 'MCP Server',
+              to: '/docs/mcp',
+            },
+            {
+              label: 'CLI',
+              to: '/docs/cli',
+            },
+            {
+              label: 'TypeScript SDK',
+              to: '/docs/sdk',
             },
           ],
         },
@@ -212,13 +241,17 @@ const config: Config = {
         {
           title: 'More',
           items: [
-            // {
-            //   label: 'Blog',
-            //   to: '/blog',
-            // },
             {
               label: 'GitHub',
               href: 'https://github.com/ttoss/soat',
+            },
+            {
+              label: 'Changelog',
+              href: 'https://github.com/ttoss/soat/blob/main/CHANGELOG.md',
+            },
+            {
+              label: 'License (MIT)',
+              href: 'https://github.com/ttoss/soat/blob/main/LICENSE',
             },
           ],
         },
@@ -227,7 +260,8 @@ const config: Config = {
     },
     prism: {
       theme: prismThemes.github,
-      darkTheme: prismThemes.dracula,
+      darkTheme: prismThemes.vsDark,
+      additionalLanguages: ['bash', 'shell-session', 'json'],
     },
   } satisfies Preset.ThemeConfig,
 };

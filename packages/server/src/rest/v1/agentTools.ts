@@ -106,6 +106,7 @@ agentToolsRouter.post('/agents/tools', async (ctx: Context) => {
     execute,
     mcp,
     actions,
+    presetParameters,
     projectId: projectPublicId,
   } = (ctx.request.body ?? {}) as {
     name?: unknown;
@@ -115,6 +116,7 @@ agentToolsRouter.post('/agents/tools', async (ctx: Context) => {
     execute?: unknown;
     mcp?: unknown;
     actions?: unknown;
+    presetParameters?: unknown;
     projectId?: string;
   };
 
@@ -134,13 +136,20 @@ agentToolsRouter.post('/agents/tools', async (ctx: Context) => {
   let parsedParameters: object | undefined;
   let parsedExecute: object | undefined;
   let parsedMcp: object | undefined;
+  let parsedPresetParameters: object | undefined;
   try {
     parsedParameters = coerceToJsonObject(parameters) as object | undefined;
     parsedExecute = coerceToJsonObject(execute) as object | undefined;
     parsedMcp = coerceToJsonObject(mcp) as object | undefined;
+    parsedPresetParameters = coerceToJsonObject(presetParameters) as
+      | object
+      | undefined;
   } catch {
     ctx.status = 400;
-    ctx.body = { error: 'parameters, execute, and mcp must be JSON objects' };
+    ctx.body = {
+      error:
+        'parameters, execute, mcp, and preset_parameters must be JSON objects',
+    };
     return;
   }
 
@@ -153,6 +162,7 @@ agentToolsRouter.post('/agents/tools', async (ctx: Context) => {
     execute: parsedExecute,
     mcp: parsedMcp,
     actions: Array.isArray(actions) ? actions : undefined,
+    presetParameters: parsedPresetParameters,
   });
 
   ctx.status = 201;
@@ -217,19 +227,32 @@ agentToolsRouter.put('/agents/tools/:tool_id', async (ctx: Context) => {
   const projectIds = await checkToolsAccess(ctx, 'agents:UpdateAgentTool');
   if (projectIds === null) return;
 
-  const { name, type, description, parameters, execute, mcp, actions } = (ctx
-    .request.body ?? {}) as Record<string, unknown>;
+  const {
+    name,
+    type,
+    description,
+    parameters,
+    execute,
+    mcp,
+    actions,
+    presetParameters,
+  } = (ctx.request.body ?? {}) as Record<string, unknown>;
 
   let parsedParameters: object | null | undefined;
   let parsedExecute: object | null | undefined;
   let parsedMcp: object | null | undefined;
+  let parsedPresetParameters: object | null | undefined;
   try {
     parsedParameters = coerceToJsonObject(parameters);
     parsedExecute = coerceToJsonObject(execute);
     parsedMcp = coerceToJsonObject(mcp);
+    parsedPresetParameters = coerceToJsonObject(presetParameters);
   } catch {
     ctx.status = 400;
-    ctx.body = { error: 'parameters, execute, and mcp must be JSON objects' };
+    ctx.body = {
+      error:
+        'parameters, execute, mcp, and preset_parameters must be JSON objects',
+    };
     return;
   }
 
@@ -243,6 +266,7 @@ agentToolsRouter.put('/agents/tools/:tool_id', async (ctx: Context) => {
     execute: parsedExecute,
     mcp: parsedMcp,
     actions: parseNullableArray(actions),
+    presetParameters: parsedPresetParameters,
   });
 
   if (result === 'not_found') {

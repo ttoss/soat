@@ -242,11 +242,11 @@ The smoke tests must cover every module end-to-end: users, projects, project pol
 
 ### Environment Variables
 
-`docker-compose.test.yml` must include every environment variable that the server requires at runtime for the features under test. Missing variables cause hard startup failures. Key variables:
+`tests/docker-compose.smoke.yml` must include every environment variable that the server requires at runtime for the features under test. Missing variables cause hard startup failures. Key variables:
 
 - `SECRETS_ENCRYPTION_KEY` — 64-character hex string (32 bytes) required by the secrets module. Use a fixed test value: `0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef`.
 
-Whenever a new env-dependent feature is added to the server, add the corresponding variable to the `server` service environment in `docker-compose.test.yml` at the same time.
+Whenever a new env-dependent feature is added to the server, add the corresponding variable to the `server` service environment in `tests/docker-compose.smoke.yml` at the same time.
 
 ### Prerequisites and Ordering
 
@@ -261,3 +261,81 @@ Some endpoints require prior setup that is not performed automatically. Always s
 - **Poll for async generation.** Agent generation endpoints may return `in_progress`; retry with a loop and `--max-time` guard before asserting the final status.
 - **Client-tool (`requires_action`) flow.** When testing client-side tool execution: assert `status == "requires_action"`, extract `requiredAction.toolCalls[0]`, submit a synthetic result to `POST /agents/:id/generate/:genId/tool-outputs`, then assert `status == "completed"`.
 - **Non-fatal server errors from LLM tool calls** (e.g., `SequelizeValidationError` when the model hallucinates a bad tool argument) do not fail the smoke tests — only the smoke assertions matter.
+
+## Tutorials Tests
+
+Tutorial tests run CLI commands from docs tutorials in a containerized environment.
+
+### Running
+
+Run all enabled tutorials:
+
+```bash
+docker compose -f tests/docker-compose.tutorials.yml up --build --renew-anon-volumes --remove-orphans --abort-on-container-exit --exit-code-from tutorials
+docker compose -f tests/docker-compose.tutorials.yml down --volumes
+```
+
+Run a single tutorial by name (without `.md`):
+
+```bash
+TUTORIAL_ID=permissions docker compose -f tests/docker-compose.tutorials.yml up --build --renew-anon-volumes --remove-orphans --abort-on-container-exit --exit-code-from tutorials
+docker compose -f tests/docker-compose.tutorials.yml down --volumes
+```
+
+### How It Works
+
+Tutorial discovery and execution is split across two scripts:
+
+- **`tests/run-tutorials.sh`** — Orchestrator. Reads all `*.md` files from `/tutorials`, filters out entries listed in `tests/.tutorialsignore`, bootstraps the admin user (idempotent), then calls `tutorials-tests.sh` for each file. If `TUTORIAL_ID` is set, only the matching tutorial is run.
+- **`tests/tutorials-tests.sh`** — Per-tutorial runner. Extracts and executes CLI commands from a single tutorial markdown file.
+
+`tutorials-tests.sh` does the following:
+
+1. Checks the target markdown file exists.
+2. Ensures `SOAT_BASE_URL` is set.
+3. Extracts commands only from `<TabItem value="cli">` fenced `bash` blocks.
+4. Joins multiline commands and executes them in order in one shell context.
+5. Supports `# → expect-fail` and `# → ignore` command annotations.
+6. Handles non-interactive profile setup by capturing `soat login-user` tokens and writing profiles for `soat configure` steps.
+
+### Ignoring Tutorials
+
+Add a tutorial's base filename (without `.md`) to `tests/.tutorialsignore` to exclude it from automated runs:
+
+```
+# tests/.tutorialsignore
+connect-third-party-llms
+```
+
+Lines starting with `#` and blank lines are ignored.
+
+### Adding a New Tutorial
+
+1. Drop the `.md` file into `packages/website/docs/tutorials/`.
+2. It is automatically discovered and run — no changes to the compose file needed.
+3. If it should not be run in CI (e.g., requires external services not available), add its name to `tests/.tutorialsignore`.
+
+### Local Usage
+
+```bash
+chmod +x tests/tutorials-tests.sh
+export SOAT_BASE_URL=http://localhost:5047
+./tests/tutorials-tests.sh packages/website/docs/tutorials/permissions.md
+```
+
+Verbose mode:
+
+```bash
+VERBOSE=1 ./tests/tutorials-tests.sh packages/website/docs/tutorials/permissions.md
+```
+
+### Requirements
+
+- SOAT server available at `SOAT_BASE_URL`
+- `soat` CLI in `PATH`
+- `curl` and `jq` available in the test container/environment
+
+### Limitations
+
+- Interactive manual input flows are intentionally bypassed.
+- Commands are executed with `eval`; only trusted tutorial files should be executed.

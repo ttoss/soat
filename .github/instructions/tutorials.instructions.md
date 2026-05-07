@@ -18,6 +18,13 @@ Tutorials demonstrate real SOAT workflows end-to-end. Every tutorial must be ful
   - SDK tab: `createConfig({ baseUrl: 'http://localhost:5047/api/v1', auth: '' })`
 - **Write steps in order**. Number them `Step 1`, `Step 2`, … Use sub-steps (e.g. `### 3a`, `### 3b`) only when a single logical step has multiple variants.
 - **Cross-link to module docs at the point where a concept is first introduced**. Add a brief inline sentence linking to the relevant module page (e.g. [IAM](/docs/modules/iam), [Policies](/docs/modules/policies)) so readers can look up details without leaving the tutorial flow. Only link once per concept — do not repeat the same link in every step.
+- **Every step must reference at least one doc**. Each `## Step N` section must contain an inline link to either a SOAT module doc (`/docs/modules/<module>`) or a relevant third-party doc (e.g. [Ollama](https://ollama.com), [OpenAI](https://platform.openai.com/docs)). Steps that introduce a new resource must link to its module page; steps that only operate on an already-introduced resource may link to a specific subsection anchor (e.g. `[Sessions — Async Generation](/docs/modules/sessions#async-generation)`).
+- **Testable tutorials that create a local AI provider must hint at third-party alternatives**. Any step that creates a local Ollama-backed AI provider (for automated test compatibility) must include a sentence pointing readers to the [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms) tutorial. Example: "This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms)."
+- **Prerequisites must reference the getting-started docs**. Always include:
+  - [Quick Start](/docs/getting-started) — for readers who need to bring the stack up.
+  - [Key Concepts](/docs/getting-started/concepts) — for readers new to SOAT's mental model.
+  - [Advanced Configuration](/docs/getting-started/advanced-config) — for readers who need production hardening (secrets, env vars).
+    Link to third-party installation docs (e.g. [Ollama](https://ollama.com), [Docker](https://docs.docker.com/get-docker/)) when the tutorial depends on external tooling.
 
 ## Reading the Docs Locally
 
@@ -61,12 +68,68 @@ The SDK is generated from the OpenAPI spec. Body fields match the OpenAPI spec (
 
 ```ts
 // Correct — body uses snake_case, path uses camelCase
-await Users.attachUserPolicies({
-  client: adminClient,
-  path: { userId: alice.id },
+await adminSoat.users.attachUserPolicies({
+  path: { user_id: alice.id },
   body: { policy_ids: [FULL_POLICY_ID] },
 });
 ```
+
+Note: the SDK client accessor is `adminSoat.<module>.<operation>(...)`. Path params in `params.path` also use snake_case to match the URL template.
+
+### Shell Quoting in CLI Tutorials
+
+The automated tutorial runner (`tests/tutorials-tests.sh`) extracts commands only from `<TabItem value="cli">` fenced bash blocks and replays them in a single shell context. It handles multi-line continuation via `_sq_open()` — a line accumulator that counts single quotes and continues while the count is odd. **Double-quoted multi-line strings are NOT handled**; do not spread a double-quoted string across lines.
+
+**Rules for JSON arguments in CLI commands:**
+
+1. **Always use single-quoted JSON** for `--document`, `--preset-parameters`, `--actions`, `--policy-ids`, and any other flag that takes a JSON value:
+
+   ```bash
+   soat create-policy --document '{"statement":[...]}'
+   ```
+
+2. **Variable interpolation inside single-quoted JSON** uses the `'"$VAR"'` pattern — close the single-quote, double-quote the variable, reopen single-quote:
+
+   ```bash
+   soat create-agent-tool --preset-parameters '{"documentId": "'"$PUBLIC_DOC_ID"'"}'
+   soat attach-user-policies --policy-ids '["'"$POLICY_ID"'"]'
+   ```
+
+3. **Multi-line single-quoted JSON is supported** by the runner because it counts unclosed single quotes:
+   ```bash
+   POLICY_ID=$(soat create-policy \
+     --name "my-policy" \
+     --document '{
+   "statement": [
+     {"effect": "Allow", "action": ["agents:CreateAgentGeneration"]}
+   ]
+   }' | jq -r '.id')
+   ```
+
+### SRN Format in Policy Documents
+
+SRN (SOAT Resource Name) values in policy `resource` arrays must follow exactly this format:
+
+```
+soat:<projectId>:<resourceType>:<resourceId>
+```
+
+- Exactly **4 colon-separated segments** — validated by `/^soat:[^:]+:[^:]+:[^:]+$/`.
+- `<resourceType>` is the **singular** resource name: `document`, `file`, `agent`, etc. (not `documents`, `files`).
+- `<resourceId>` can be an ID (`doc_xxx`) or a path (`/notes/public/note.txt`). Paths with a leading `/` are valid because they contain no colons.
+- Wildcards use `*`: `soat:proj_xxx:document:/notes/public/*` matches all documents under that path.
+- In CLI single-quoted JSON, interpolate the project ID as `'"$PROJECT_ID"'`:
+  ```bash
+  "resource": ["soat:'"$PROJECT_ID"':document:/notes/public/*"]
+  ```
+
+Common wrong formats:
+
+| Wrong                                             | Correct                                     |
+| ------------------------------------------------- | ------------------------------------------- |
+| `srn::$PROJECT_ID:documents:path:/notes/public/*` | `soat:$PROJECT_ID:document:/notes/public/*` |
+| `soat:$PROJECT_ID:documents:/notes/public/*`      | `soat:$PROJECT_ID:document:/notes/public/*` |
+| `soat:$PROJECT_ID:document:path:/notes/public/*`  | `soat:$PROJECT_ID:document:/notes/public/*` |
 
 ## Validation Workflow
 
@@ -120,17 +183,27 @@ soat attach-user-policies --user-id "$ALICE_ID" --policy-ids '["'"$POLICY_ID"'"]
 
 A CLI command that fails immediately reveals an SDK or REST bug. Fix the root cause before updating the tutorial.
 
-### 4. Check the build
+### 4. Run the automated tutorial test
 
-After editing the tutorial, verify Docusaurus renders it without errors:
+Before checking the build, run the tutorial through the containerised test runner to catch shell-quoting bugs, SRN format errors, and wrong CLI flags that only show up at runtime:
 
 ```bash
-cd packages/website && pnpm run build
+TUTORIAL_ID=<tutorial-name> docker compose -f tests/docker-compose.tutorials.yml \
+  up --build --renew-anon-volumes --remove-orphans \
+  --abort-on-container-exit --exit-code-from tutorials 2>&1 | tee /tmp/tutorial_run.log | tail -60
 ```
 
-Fix all warnings and errors before committing.
+`<tutorial-name>` is the filename without `.md` (e.g. `agent-soat-tools` for `agent-soat-tools.md`). The runner exits 0 on success and prints `✅ <name> passed` / `❌ <name> FAILED`.
 
-After editing the tutorial, verify Docusaurus renders it without errors:
+To capture full output for debugging without terminal truncation:
+
+```bash
+grep "tutorials-1\|server-1" /tmp/tutorial_run.log
+```
+
+### 5. Check the build
+
+After the tutorial test passes, verify Docusaurus renders it without errors:
 
 ```bash
 cd packages/website && pnpm run build
@@ -161,8 +234,12 @@ When a CLI command fails:
 | `--id` for user-scoped commands           | Use `--user-id` (path param is `userId`)                                                                                                                                                       |
 | `baseUrl: 'http://localhost:5047'` in SDK | Must be `baseUrl: 'http://localhost:5047/api/v1'`                                                                                                                                              |
 | `SOAT_URL=http://localhost:5047` for CLI  | Must be `SOAT_BASE_URL=http://localhost:5047/api/v1`                                                                                                                                           |
-| Shell quoting mixed IDs in policy JSON    | Use a temp file or heredoc: `printf '%s' '{"statement":[...]}' > /tmp/doc.json` then `--document "$(cat /tmp/doc.json)"`                                                                       |
+| Shell quoting mixed IDs in policy JSON    | Use single-quoted JSON with `'"$VAR"'` interpolation: `--document '{"key": "'"$VAR"'"}'`. The tutorial runner does not handle double-quoted multi-line strings.                                |
 | Omitting `resource` in policy documents   | Always include `"resource": ["soat:$PROJECT_ID:*:*"]` for project-scoped examples. Omitting it defaults to `["*"]` (all projects), which masks scoping bugs and is rarely the tutorial intent. |
+| Wrong SRN format in policy resource       | Must be `soat:<projectId>:<singularType>:<id-or-path>` — exactly 4 colon-separated segments. Wrong: `srn::`, `documents:path:`, 5 segments with `path:` infix.                                 |
+| `--provider` vs `--type` for AI providers | The flag is `--provider` (maps to body field `provider`). There is no `--type` flag. Similarly, `--default-model` not `--model`.                                                               |
+| Using wrong Ollama model name             | The docker-compose test stack only pulls `qwen2.5:0.5b`. Use that exact string; `qwen2.5:3b` and other variants are not available in CI.                                                       |
+| `attachUserPolicy` (singular)             | The operation is `attachUserPolicies` (plural) with path param `user_id` and body `policy_ids` (array). CLI: `soat attach-user-policies --user-id "$ID" --policy-ids '["'"$PID"'"]'`           |
 
 ## Tutorial Checklist
 
@@ -177,3 +254,7 @@ Before opening a PR with a new or updated tutorial:
 - [ ] SDK `baseUrl` ends with `/api/v1`
 - [ ] CLI prerequisite exports `SOAT_BASE_URL` (not `SOAT_URL`)
 - [ ] curl prerequisite exports `SOAT_URL` (without `/api/v1` — curl appends the full path)
+- [ ] JSON CLI arguments use single-quoted strings with `'"$VAR"'` for variable interpolation
+- [ ] SRN values follow `soat:<projectId>:<singularType>:<id-or-path>` — exactly 4 colon-separated segments
+- [ ] Automated tutorial test (`TUTORIAL_ID=<name> docker compose ...`) passes with exit code 0
+- [ ] Every step has at least one inline link to a SOAT module doc or relevant third-party doc

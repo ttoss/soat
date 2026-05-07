@@ -557,7 +557,7 @@ TOOL_RESP=$($SOAT_CLI create-agent-tool \
   --type http \
   --description "Lists all projects from the SOAT API. Call this tool whenever the user asks for the list of projects." \
   --parameters '{"type":"object","properties":{},"required":[]}' \
-  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
 TOOL_ID=$(echo "$TOOL_RESP" | jq -r '.id')
 echo "Agent Tool id: $TOOL_ID"
 

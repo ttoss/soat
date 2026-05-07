@@ -1,4 +1,4 @@
-# SOAT — Infrastructure for AI Apps
+# SOAT — The complete backend for AI apps
 
 <p align="center">
   <img src="./packages/website/static/img/hero.jpg" alt="SOAT Banner" width="100%">
@@ -7,46 +7,70 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![SafeSkill 92/100](https://img.shields.io/badge/SafeSkill-92%2F100_Verified%20Safe-brightgreen)](https://safeskill.dev/scan/ttoss-soat)
 
-**SOAT** is open-source infrastructure for building AI applications. It provides the essential backend services — identity and access management, document and file storage with vector search, conversational memory, agent orchestration, and a full MCP server — so you can focus on your product instead of reinventing the plumbing.
+**SOAT** is open-source infrastructure for building AI applications. One self-hostable Node.js server gives you IAM, file and document storage with vector search, conversational memory, agent orchestration, multi-agent workflows, retrieval-augmented generation, and a full Model Context Protocol server — backed by PostgreSQL.
+
+You bring the product. SOAT handles the plumbing.
 
 ## Why SOAT?
 
-Building AI applications requires a surprising amount of backend infrastructure: user management, API keys, persistent storage, semantic search, conversation history, agent execution, and tool integration. SOAT provides all of this out of the box.
+Shipping AI applications means rebuilding the same infrastructure on every project: users, API keys, encrypted secrets, file storage, embeddings, conversation history, agent tool calling, traces, observability. SOAT solves all of it once and exposes it through four equivalent surfaces — REST, MCP, CLI, and TypeScript SDK — so the same operation runs the same way whether you call it from a backend, Claude Desktop, a CI script, or your own UI.
 
-- **Complete IAM**: Users, projects, API keys, and fine-grained permissions.
-- **Documents & Files**: Ingestion, vector embeddings, and semantic search powered by [pgvector](https://github.com/pgvector/pgvector).
-- **Conversations & Actors**: Multi-party dialogue management with persistent message history.
-- **Agents & AI Providers**: Configure LLM providers, define agents with tools, and run AI-powered chat completions.
-- **MCP Native**: First-class support for the [Model Context Protocol](https://modelcontextprotocol.io/), enabling seamless integration with agent runtimes.
-- **REST API**: Standard HTTP endpoints for universal application access.
+## Highlights
+
+- **Identity & access** — users, projects, project memberships, JWTs, project keys, personal API keys, and reusable IAM policy documents enforced consistently on every surface.
+- **Files, documents & RAG** — pgvector-backed semantic search, plus _memories_ (named, reusable retrieval configurations) that let any agent do RAG without bespoke tool wiring.
+- **Agents that actually do things** — tool-calling reasoning loops with HTTP, MCP, client-side, and SOAT-platform tools, including multi-agent workflows where agents invoke other agents.
+- **Sessions** — a 1-user ↔ 1-agent interface that hides actors and conversations. Two API calls take a user from message to answer.
+- **Async generations** — kick off long-running agent runs, poll for status, or fire a webhook on completion.
+- **Operations** — encrypted secrets, HMAC-signed webhooks with event-pattern subscriptions, and trace records for every generation.
+- **MCP native** — every operation is automatically available as an MCP tool. Plug SOAT into Claude Desktop, Cursor, or any MCP-compatible runtime.
 
 ## Documentation
 
-**[Read the Full Documentation](https://soat.ttoss.dev)** — Architecture, API reference, and deployment guides.
+**[Read the full documentation](https://soat.ttoss.dev)** — quick start, key concepts, module reference, API, MCP, CLI, and SDK guides.
 
 ## Getting Started
 
-The quickest way to get started is using Docker Compose.
+The fastest path is Docker Compose:
 
-1. **Clone the repository**
+```bash
+git clone https://github.com/ttoss/soat.git
+cd soat
+```
 
-   ```bash
-   git clone https://github.com/ttoss/soat.git
-   cd soat
-   ```
+Follow the **[Getting Started Guide](https://soat.ttoss.dev/docs/getting-started)** to bring up the server and database in under five minutes.
 
-2. **Follow the [Getting Started Guide](https://soat.ttoss.dev/docs/getting-started)** to spin up the server and database using Docker Compose.
+## Client surfaces
+
+| Surface               | Best for                                                |
+| --------------------- | ------------------------------------------------------- |
+| **REST API**          | Backend services and custom integrations                |
+| **MCP server**        | Claude Desktop, Cursor, and other MCP-aware AI runtimes |
+| **CLI** (`soat`)      | Scripts, CI pipelines, and local exploration            |
+| **SDK** (`@soat/sdk`) | TypeScript and JavaScript applications                  |
+
+All four hit the same business logic and the same permission engine.
+
+## Repository layout
+
+This is a monorepo managed with pnpm and Turbo:
+
+- `packages/server` — the SOAT server (REST + MCP, business logic, permissions)
+- `packages/postgresdb` — Sequelize models and database utilities
+- `packages/sdk` — TypeScript SDK generated from the OpenAPI specs
+- `packages/cli` — the `soat` command-line client
+- `packages/website` — the documentation site (Docusaurus)
 
 ## Contributing
 
-We welcome contributions! Please feel free to submit issues and pull requests.
+Issues and pull requests are welcome. Run the tests with `pnpm --filter @soat/server test` and the smoke suite with `pnpm run -w smoke-tests`.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
-- [ttoss](https://ttoss.dev) - For the HTTP server and MCP packages
-- [pgvector](https://github.com/pgvector/pgvector) - PostgreSQL vector similarity search
-- [Ollama](https://ollama.com) - Local LLM and embedding models
+- [ttoss](https://ttoss.dev) — for `@ttoss/http-server` and `@ttoss/http-server-mcp`
+- [pgvector](https://github.com/pgvector/pgvector) — PostgreSQL vector similarity search
+- [Ollama](https://ollama.com) — local LLM and embedding models

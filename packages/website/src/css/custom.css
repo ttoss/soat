@@ -463,3 +463,137 @@ html[data-theme='dark'] .put > .menu__link::before {
   overflow-x: auto;
   max-width: 100%;
 }
+
+/* ===================================================================
+   CODE BLOCKS — Terminal / CLI Style Enhancement
+   =================================================================== */
+
+/* Code block container */
+div[class^='codeBlockContainer'],
+div[class*=' codeBlockContainer'] {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+html[data-theme='dark'] div[class^='codeBlockContainer'],
+html[data-theme='dark'] div[class*=' codeBlockContainer'] {
+  border-color: rgba(0, 229, 255, 0.12);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.4),
+    0 0 1px rgba(0, 229, 255, 0.2);
+  background: #0d1117;
+}
+
+/* Code block title bar (language label) */
+div[class^='codeBlockTitle'],
+div[class*=' codeBlockTitle'] {
+  background: var(--ifm-color-emphasis-200) !important;
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.4rem 1rem;
+}
+
+html[data-theme='dark'] div[class^='codeBlockTitle'],
+html[data-theme='dark'] div[class*=' codeBlockTitle'] {
+  background: rgba(0, 229, 255, 0.05) !important;
+  border-bottom-color: rgba(0, 229, 255, 0.1);
+  color: var(--ifm-color-primary);
+}
+
+/* The code content area */
+div[class^='codeBlockContent'],
+div[class*=' codeBlockContent'] {
+  background: #f8fafc !important;
+}
+
+html[data-theme='dark'] div[class^='codeBlockContent'],
+html[data-theme='dark'] div[class*=' codeBlockContent'] {
+  background: #0d1117 !important;
+}
+
+/* Increase line height and padding for readability */
+pre[class*='prism-code'] {
+  padding: 1.2rem 1.4rem !important;
+  line-height: 1.7 !important;
+  font-size: 0.88rem !important;
+}
+
+/* Bash/shell specific: make commands stand out */
+html[data-theme='dark'] .token.function {
+  color: #7ee787;
+}
+
+html[data-theme='dark'] .token.string {
+  color: #a5d6ff;
+}
+
+html[data-theme='dark'] .token.parameter,
+html[data-theme='dark'] .token.variable {
+  color: #ffa657;
+}
+
+html[data-theme='dark'] .token.comment {
+  color: #6e7681;
+  font-style: italic;
+}
+
+/* Force color on plain (unhighlighted) tokens in bash blocks — fixes
+   continuation lines that Prism doesn't tokenize properly */
+[class*='language-bash'] .token.plain,
+[class*='language-bash'] .token:not([class*='token']),
+[class*='language-shell'] .token.plain,
+[class*='language-shell'] .token:not([class*='token']) {
+  color: #c9d1d9;
+}
+
+html[data-theme='light'] [class*='language-bash'] .token.plain,
+html[data-theme='light'] [class*='language-bash'] .token:not([class*='token']),
+html[data-theme='light'] [class*='language-shell'] .token.plain,
+html[data-theme='light']
+  [class*='language-shell']
+  .token:not([class*='token']) {
+  color: #24292f;
+}
+
+/* Copy button styling */
+button[class*='copyButton'] {
+  border-radius: 0.4rem;
+  opacity: 0.5;
+  transition: all 200ms ease;
+}
+
+button[class*='copyButton']:hover {
+  opacity: 1;
+}
+
+html[data-theme='dark'] button[class*='copyButton']:hover {
+  background: rgba(0, 229, 255, 0.1);
+  color: var(--ifm-color-primary);
+}
+
+/* Tabs integration — make code-tab panels flush with code blocks */
+.tabs-container [role='tabpanel'] div[class^='codeBlockContainer'] {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  margin-top: 0;
+}
+
+/* Tab buttons styling */
+.tabs-container .tabs__item {
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem 0.5rem 0 0;
+}
+
+html[data-theme='dark'] .tabs-container .tabs__item--active {
+  background: #0d1117;
+  border-color: rgba(0, 229, 255, 0.12);
+  border-bottom-color: transparent;
+  color: var(--ifm-color-primary);
+}

@@ -8,7 +8,6 @@ import {
   savePendingGeneration,
   type TypedAgent,
 } from 'src/lib/agentGenerationHelpers';
-import { traces } from 'src/lib/agentTraces';
 
 describe('buildAllMessages', () => {
   test('returns messages unchanged when instructions is null', () => {
@@ -56,12 +55,14 @@ describe('buildDepthGuardResult', () => {
     const result = buildDepthGuardResult({
       traceId: 'trace-123',
       projectId: 1,
+      projectPublicId: 'proj_test',
       agentId: 'agent-abc',
+      generationId: 'gen_test123',
     });
 
     expect(result.status).toBe('completed');
     expect(result.traceId).toBe('trace-123');
-    expect(result.id).toMatch(/gen_/);
+    expect(result.id).toBe('gen_test123');
     expect(result.output).toBeDefined();
     expect(result.output?.content).toBe('Maximum call depth reached');
     expect(result.output?.finishReason).toBe('stop');
@@ -162,7 +163,6 @@ const mockAgent: TypedAgent = {
 
 describe('savePendingGeneration', () => {
   beforeEach(() => {
-    traces.clear();
     pendingGenerations.clear();
   });
 
@@ -189,7 +189,6 @@ describe('savePendingGeneration', () => {
     expect(result.requiredAction?.toolCalls).toHaveLength(1);
     expect(result.requiredAction?.toolCalls[0].toolName).toBe('myTool');
     expect(pendingGenerations.has('gen_test001')).toBe(true);
-    expect(traces.get('trc_test001')?.status).toBe('requires_action');
   });
 
   test('returns requires_action with multiple pending tool calls', () => {
@@ -241,10 +240,6 @@ describe('savePendingGeneration', () => {
 });
 
 describe('buildCompletedGenerationResult', () => {
-  beforeEach(() => {
-    traces.clear();
-  });
-
   test('returns completed result and updates traces', () => {
     const result = buildCompletedGenerationResult({
       generationId: 'gen_done001',
@@ -265,7 +260,6 @@ describe('buildCompletedGenerationResult', () => {
     expect(result.output?.content).toBe('Hello world');
     expect(result.output?.finishReason).toBe('stop');
     expect(result.output?.model).toBe('gpt-4');
-    expect(traces.get('trc_done001')?.status).toBe('completed');
   });
 
   test('uses typedAgent model when response has no modelId', () => {
@@ -300,10 +294,6 @@ describe('buildCompletedGenerationResult', () => {
 });
 
 describe('runStreamGeneration', () => {
-  beforeEach(() => {
-    traces.clear();
-  });
-
   test('evaluates default branch options before delegating to streamText', () => {
     expect(() => {
       runStreamGeneration({

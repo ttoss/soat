@@ -1,17 +1,22 @@
-import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
-import type { LanguageModel, ModelMessage, Tool } from 'ai';
+import type { LanguageModel, ModelMessage, Tool, ToolChoice } from 'ai';
 import { stepCountIs, streamText } from 'ai';
+import createDebug from 'debug';
 
-import { serializeSteps, traces } from './agentTraces';
+import { saveTrace, serializeSteps } from './agentTraces';
 import { emitEvent } from './eventBus';
+import { updateGenerationRecord } from './generations';
+
+const log = createDebug('soat:generation');
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
 export type PendingGeneration = {
   agentId: string;
   projectId: number;
+  projectPublicId: string;
   traceId: string;
   generationId: string;
+  initiatorGenerationId: string | null;
   pendingToolCalls: Array<{
     toolCallId: string;
     toolName: string;
@@ -75,18 +80,25 @@ export const pendingGenerations = new Map<string, PendingGeneration>();
 export const buildDepthGuardResult = (args: {
   traceId: string;
   projectId: number;
+  projectPublicId: string;
   agentId: string;
+  generationId: string;
 }): GenerationResult => {
-  traces.set(args.traceId, {
-    id: args.traceId,
+  saveTrace({
+    traceId: args.traceId,
     projectId: args.projectId,
+    projectPublicId: args.projectPublicId,
     agentId: args.agentId,
-    status: 'completed',
-    createdAt: new Date(),
     steps: [{ type: 'depth_guard', message: 'Maximum call depth reached' }],
-  });
+  }).catch(() => {});
+  updateGenerationRecord({
+    publicId: args.generationId,
+    status: 'completed',
+    completedAt: new Date(),
+    stopReason: 'depth_guard',
+  }).catch(() => {});
   return {
-    id: generatePublicId(PUBLIC_ID_PREFIXES.generation),
+    id: args.generationId,
     traceId: args.traceId,
     status: 'completed',
     output: {
@@ -105,6 +117,49 @@ export const buildAllMessages = (
   return [{ role: 'system', content: instructions }, ...messages];
 };
 
+// ── Step Rules ────────────────────────────────────────────────────────────
+
+type StepRule = {
+  step: number;
+  toolChoice?: { type: 'tool'; toolName: string };
+};
+
+const buildPrepareStep = (
+  stepRules: unknown
+):
+  | ((opts: { stepNumber: number }) => {
+      toolChoice?: ToolChoice<Record<string, Tool>>;
+      activeTools?: string[];
+    })
+  | undefined => {
+  if (!Array.isArray(stepRules) || stepRules.length === 0) return undefined;
+  const rules = stepRules as StepRule[];
+  log('buildPrepareStep (stream): rules=%o', rules);
+  return ({ stepNumber }) => {
+    // stepNumber is 0-based (AI SDK), step_rules use 1-indexed steps
+    const rule = rules.find((r) => {
+      return r.step === stepNumber + 1;
+    });
+    log(
+      'prepareStep (stream): stepNumber=%d (1-indexed=%d) rule=%o',
+      stepNumber,
+      stepNumber + 1,
+      rule
+    );
+    if (rule?.toolChoice?.type === 'tool' && rule.toolChoice.toolName) {
+      log(
+        'prepareStep (stream): forcing toolChoice=%s',
+        rule.toolChoice.toolName
+      );
+      return {
+        toolChoice: { type: 'tool', toolName: rule.toolChoice.toolName },
+        activeTools: [rule.toolChoice.toolName],
+      };
+    }
+    return {};
+  };
+};
+
 export const runStreamGeneration = (args: {
   model: LanguageModel;
   allMessages: Array<{ role: string; content: string }>;
@@ -119,6 +174,16 @@ export const runStreamGeneration = (args: {
   const nonSystemMessages = args.allMessages.filter((m) => {
     return m.role !== 'system';
   });
+  const prepareStep = buildPrepareStep(args.typedAgent.stepRules);
+  log(
+    'runStreamGeneration: agentId=%s toolCount=%d stepRulesCount=%d',
+    args.agentId,
+    Object.keys(args.resolvedTools).length,
+    Array.isArray(args.typedAgent.stepRules)
+      ? (args.typedAgent.stepRules as unknown[]).length
+      : 0
+  );
+  log('runStreamGeneration: tools=%o', Object.keys(args.resolvedTools));
   const result = streamText({
     model: args.model,
     system,
@@ -133,17 +198,17 @@ export const runStreamGeneration = (args: {
         | 'required'
         | { type: 'tool'; toolName: string }
         | undefined) ?? undefined,
+    prepareStep,
     stopWhen: stepCountIs((args.typedAgent.maxSteps as number) ?? 20),
     temperature: (args.typedAgent.temperature as number) ?? undefined,
   });
-  traces.set(args.traceId, {
-    id: args.traceId,
+  saveTrace({
+    traceId: args.traceId,
     projectId: args.typedAgent.project.id as number,
+    projectPublicId: args.typedAgent.project.publicId,
     agentId: args.agentId,
-    status: 'completed',
-    createdAt: new Date(),
     steps: [],
-  });
+  }).catch(() => {});
   return result.textStream as unknown as ReadableStream;
 };
 
@@ -163,9 +228,11 @@ export const findPendingClientTools = (
     });
 };
 
-export const savePendingGeneration = (args: {
+const storePendingGenerationState = (args: {
   generationId: string;
   traceId: string;
+  agentId: string;
+  typedAgent: TypedAgent;
   pendingToolCalls: Array<{
     toolCallId: string;
     toolName: string;
@@ -174,19 +241,8 @@ export const savePendingGeneration = (args: {
   allMessages: Array<{ role: string; content: string }>;
   result: { steps: unknown[]; response: { messages: unknown[] } };
   model: LanguageModel;
-  typedAgent: TypedAgent;
-  agentId: string;
   resolvedTools: Record<string, Tool>;
-}): GenerationResult => {
-  traces.set(args.traceId, {
-    id: args.traceId,
-    projectId: args.typedAgent.project.id as number,
-    agentId: args.agentId,
-    status: 'requires_action',
-    createdAt: new Date(),
-    steps: serializeSteps(args.result.steps as unknown[]),
-  });
-
+}): void => {
   pendingGenerations.set(args.generationId, {
     agentId: args.agentId,
     projectId: args.typedAgent.project.id as number,
@@ -211,7 +267,41 @@ export const savePendingGeneration = (args: {
       temperature: args.typedAgent.temperature as number | null,
     },
     resolvedTools: args.resolvedTools,
+    initiatorGenerationId: null,
+    projectPublicId: args.typedAgent.project.publicId,
   });
+};
+
+export const savePendingGeneration = (args: {
+  generationId: string;
+  traceId: string;
+  pendingToolCalls: Array<{
+    toolCallId: string;
+    toolName: string;
+    input: unknown;
+  }>;
+  allMessages: Array<{ role: string; content: string }>;
+  result: { steps: unknown[]; response: { messages: unknown[] } };
+  model: LanguageModel;
+  typedAgent: TypedAgent;
+  agentId: string;
+  resolvedTools: Record<string, Tool>;
+}): GenerationResult => {
+  const serializedStepsPending = serializeSteps(args.result.steps as unknown[]);
+  saveTrace({
+    traceId: args.traceId,
+    projectId: args.typedAgent.project.id as number,
+    projectPublicId: args.typedAgent.project.publicId,
+    agentId: args.agentId,
+    steps: serializedStepsPending,
+  }).catch(() => {});
+  updateGenerationRecord({
+    publicId: args.generationId,
+    status: 'requires_action',
+    lastActivityAt: new Date(),
+  }).catch(() => {});
+
+  storePendingGenerationState(args);
 
   const requiresActionResult: GenerationResult = {
     id: args.generationId,
@@ -254,14 +344,22 @@ export const buildCompletedGenerationResult = (args: {
   typedAgent: TypedAgent;
   agentId: string;
 }): GenerationResult => {
-  traces.set(args.traceId, {
-    id: args.traceId,
+  const serializedStepsCompleted = serializeSteps(
+    args.result.steps as unknown[]
+  );
+  saveTrace({
+    traceId: args.traceId,
     projectId: args.typedAgent.project.id as number,
+    projectPublicId: args.typedAgent.project.publicId,
     agentId: args.agentId,
+    steps: serializedStepsCompleted,
+  }).catch(() => {});
+  updateGenerationRecord({
+    publicId: args.generationId,
     status: 'completed',
-    createdAt: new Date(),
-    steps: serializeSteps(args.result.steps as unknown[]),
-  });
+    completedAt: new Date(),
+    stopReason: args.result.finishReason,
+  }).catch(() => {});
 
   const completedResult: GenerationResult = {
     id: args.generationId,

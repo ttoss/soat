@@ -5,78 +5,64 @@ sidebar_position: 1
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-# introduction
+# Introduction
 
-SOAT is open-source infrastructure for building AI applications. It provides the essential backend services — identity and access management, document and file storage with vector search, conversational memory, agent orchestration, and a full MCP server — so you can focus on your product instead of reinventing the plumbing.
+**SOAT is the complete backend for AI applications.** It bundles IAM, file and document storage, vector search, conversational memory, agent orchestration, multi-agent workflows, retrieval-augmented generation, and a full MCP server into a single self-hostable Node.js service backed by PostgreSQL.
 
-## Why SOAT?
+If you have ever shipped an AI product, you know the pattern: half the codebase is plumbing — users, API keys, embeddings, conversation history, tool calling, traces. SOAT solves all of it once, exposes it through four equivalent client surfaces, and gets out of your way.
 
-Building AI applications requires a surprising amount of backend infrastructure: user management, API keys, persistent storage, semantic search, conversation history, agent execution, and tool integration. Instead of stitching together dozens of services, SOAT gives you everything in a single, self-hostable server.
+## What you get out of the box
 
-## Core Capabilities
+### Identity & access management
 
-### Complete Backend
+- Users, projects, and project memberships
+- Per-resource permissions via reusable [IAM policy documents](/docs/modules/iam)
+- User JWTs, project API keys, and personal API keys with policy attachments
 
-IAM, documents, files, secrets, webhooks, and vector search — all behind a single REST API. SOAT handles authentication, authorization, and data persistence so your application code stays focused on user-facing features.
+### Storage & retrieval
 
-### Agent Orchestration
+- [Files](/docs/modules/files) and structured [documents](/docs/modules/documents) scoped to projects
+- pgvector embeddings and semantic search with score thresholds
+- Reusable retrieval configs via [memories](/docs/modules/memories) — point an agent at a memory and it does RAG
 
-Define agents with tools, configure LLM providers, and run multi-turn AI completions. SOAT manages the full agent lifecycle — including tool calling, conversation state, and streaming responses — through a unified API.
+### Agents & conversations
 
-### MCP Native
+- Configurable [agents](/docs/modules/agents) with HTTP, MCP, client-side, and `soat`-platform tools
+- Multi-step reasoning loops with `tool_choice`, step rules, and boundary policies
+- **Multi-agent workflows**: agents call other agents as tools
+- **Async generations**: long-running jobs you can poll or wait on
+- [Sessions](/docs/modules/sessions) — a 1↔1 user/agent interface that hides actors and conversations
+- [Conversations](/docs/modules/conversations) — multi-party message engine when you need full control
+- [Chats](/docs/modules/chats) — raw LLM completions when you don't need an agent at all
 
-First-class support for the [Model Context Protocol](https://modelcontextprotocol.io/). Every resource managed by SOAT is automatically available as an MCP tool, enabling seamless integration with Claude Desktop, Cursor, and other MCP-compatible runtimes.
+### Operations
 
-## Architecture Overview
+- Encrypted [secrets](/docs/modules/secrets) for provider keys
+- HMAC-signed [webhooks](/docs/modules/webhooks) with event-pattern subscriptions
+- Trace records for every generation — tool calls, latency, and cost-relevant fields
 
-SOAT runs as a single Node.js server backed by PostgreSQL (with [pgvector](https://github.com/pgvector/pgvector) for embeddings). The server exposes a REST API and a Streamable HTTP MCP endpoint — both backed by the same business logic and permission engine.
+## Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                        Clients                          │
-│          REST API · MCP · CLI (soat) · SDK              │
-└───────────────────────┬─────────────────────────────────┘
-                        │
-┌───────────────────────▼─────────────────────────────────┐
-│                    SOAT Server                          │
-│                                                         │
-│  ┌──────────────┐   ┌──────────────────────────────┐   │
-│  │  REST Router │   │         MCP Server           │   │
-│  └──────┬───────┘   └──────────────┬───────────────┘   │
-│         └──────────────┬───────────┘                   │
-│                        │                               │
-│          ┌─────────────▼────────────┐                  │
-│          │       Business Logic     │                  │
-│          │  (lib/ · permissions)    │                  │
-│          └─────────────┬────────────┘                  │
-└────────────────────────┼────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────┐
-│                    PostgreSQL                           │
-│              (pgvector for embeddings)                  │
-└─────────────────────────────────────────────────────────┘
-```
+SOAT runs as a single Node.js server backed by PostgreSQL with [pgvector](https://github.com/pgvector/pgvector). One process exposes both the REST API and the Streamable HTTP MCP endpoint — both call the same business-logic layer and the same permission engine.
 
-The full module reference is in the [Modules](/docs/modules/iam) section of the sidebar.
+<div style={{display: 'flex', justifyContent: 'center'}}>
+  <img src="/img/architecture.svg" alt="SOAT Architecture" style={{width: '100%', maxWidth: 720}} />
+</div>
 
-## Getting Started
+## One backend, four surfaces
 
-Head to the [Getting Started](/docs/getting-started) guide to spin up SOAT with Docker Compose in a few minutes.
+Every operation in SOAT is reachable through four interchangeable client surfaces. They share the same permission check, the same business logic, and the same response shape — pick the one that fits the job.
 
-## Client Surfaces
+| Surface               | Best for                                             | Docs                       |
+| --------------------- | ---------------------------------------------------- | -------------------------- |
+| **REST API**          | Backend services, custom integrations                | [API Reference](/docs/api) |
+| **MCP server**        | Claude Desktop, Cursor, and other MCP-aware runtimes | [MCP](/docs/mcp)           |
+| **CLI** (`soat`)      | Scripts, CI pipelines, and local exploration         | [CLI](/docs/cli)           |
+| **SDK** (`@soat/sdk`) | TypeScript and JavaScript applications               | [SDK](/docs/sdk)           |
 
-Every operation in SOAT is reachable through four surfaces. They are all equivalent — the same permission is checked, the same business logic runs, and the same data is returned regardless of which surface you use.
+Each operation is gated by a single [permission action](/docs/permissions) (e.g. `documents:CreateDocument`) that is enforced consistently across all four surfaces. See [IAM & Policies](/docs/modules/iam) for how policies are evaluated.
 
-| Surface               | Best for                                                       | Docs                       |
-| --------------------- | -------------------------------------------------------------- | -------------------------- |
-| **REST API**          | Backend services, custom integrations                          | [API Reference](/docs/api) |
-| **MCP server**        | AI agents and MCP-compatible runtimes (Claude Desktop, Cursor) | [MCP](/docs/mcp)           |
-| **CLI** (`soat`)      | Scripts, CI pipelines, local development                       | [CLI](/docs/cli)           |
-| **SDK** (`@soat/sdk`) | TypeScript/JavaScript applications                             | [SDK](/docs/sdk)           |
-
-Each operation has a single [permission action](/docs/permissions) (e.g. `documents:CreateDocument`) that controls access across all four surfaces. See [IAM & Policies](/docs/modules/iam) for how policies are evaluated.
-
-### Example — create a document
+## Example — create a document
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -120,3 +106,9 @@ curl -X POST https://api.example.com/api/v1/documents \
 
 </TabItem>
 </Tabs>
+
+## Where to next
+
+- **[Get started](/docs/getting-started)** — bring up SOAT with Docker Compose in five minutes
+- **[Key concepts](/docs/getting-started/concepts)** — the mental model behind projects, agents, and sessions
+- **[Modules](/docs/modules/iam)** — deep-dives into every resource type

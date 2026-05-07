@@ -36,22 +36,23 @@ Each agent stores its AI provider, instructions, tool references, and execution 
 
 Agent tools are reusable tool definitions that can be shared across multiple agents. Each tool is its own resource with a dedicated CRUD API.
 
-| Field             | Type   | Required | Description                                                                                                                                                                                                                                                                                     |
-| ----------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`              | string | auto     | Unique identifier (`agt_tool_` prefix)                                                                                                                                                                                                                                                          |
-| `project_id`      | string | yes      | Project the tool belongs to                                                                                                                                                                                                                                                                     |
-| `type`            | string | yes      | `http`, `client`, `mcp`, or `soat` (default: `"http"`)                                                                                                                                                                                                                                          |
-| `name`            | string | yes      | Tool name (`http`/`client`) or namespace prefix for the connection (`mcp`/`soat`)                                                                                                                                                                                                               |
-| `description`     | string | no       | What the tool does (sent to the model for selection)                                                                                                                                                                                                                                            |
-| `parameters`      | object | cond.    | JSON Schema for the tool's input — required for `http` and `client`                                                                                                                                                                                                                             |
-| `execute`         | object | cond.    | Execution configuration — required when `type` is `http`                                                                                                                                                                                                                                        |
-| `execute.url`     | string | yes      | HTTP endpoint called to execute the tool. May contain `{param_name}` placeholders (e.g. `/users/{user_id}`) that are replaced at call time with the corresponding tool argument value (URL-encoded). Arguments consumed as path parameters are excluded from the query string and request body. |
-| `execute.method`  | string | no       | HTTP method to use (default: `POST`). For `GET`, `HEAD`, or `DELETE` the tool arguments are appended as query-string parameters instead of a request body.                                                                                                                                      |
-| `execute.headers` | object | no       | Additional headers sent with the execution request                                                                                                                                                                                                                                              |
-| `mcp`             | object | cond.    | MCP server configuration — required when `type` is `mcp`                                                                                                                                                                                                                                        |
-| `mcp.url`         | string | yes      | URL of the MCP server (SSE or Streamable HTTP transport)                                                                                                                                                                                                                                        |
-| `mcp.headers`     | object | no       | Additional headers sent when connecting to the MCP server                                                                                                                                                                                                                                       |
-| `actions`         | array  | cond.    | List of SOAT platform actions to expose — required when `type` is `soat`                                                                                                                                                                                                                        |
+| Field               | Type   | Required | Description                                                                                                                                                                                                                                                                                     |
+| ------------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                | string | auto     | Unique identifier (`agt_tool_` prefix)                                                                                                                                                                                                                                                          |
+| `project_id`        | string | yes      | Project the tool belongs to                                                                                                                                                                                                                                                                     |
+| `type`              | string | yes      | `http`, `client`, `mcp`, or `soat` (default: `"http"`)                                                                                                                                                                                                                                          |
+| `name`              | string | yes      | Tool name (`http`/`client`) or namespace prefix for the connection (`mcp`/`soat`)                                                                                                                                                                                                               |
+| `description`       | string | no       | What the tool does (sent to the model for selection)                                                                                                                                                                                                                                            |
+| `parameters`        | object | cond.    | JSON Schema for the tool's input — required for `http` and `client`                                                                                                                                                                                                                             |
+| `execute`           | object | cond.    | Execution configuration — required when `type` is `http`                                                                                                                                                                                                                                        |
+| `execute.url`       | string | yes      | HTTP endpoint called to execute the tool. May contain `{param_name}` placeholders (e.g. `/users/{user_id}`) that are replaced at call time with the corresponding tool argument value (URL-encoded). Arguments consumed as path parameters are excluded from the query string and request body. |
+| `execute.method`    | string | no       | HTTP method to use (default: `POST`). For `GET`, `HEAD`, or `DELETE` the tool arguments are appended as query-string parameters instead of a request body.                                                                                                                                      |
+| `execute.headers`   | object | no       | Additional headers sent with the execution request                                                                                                                                                                                                                                              |
+| `mcp`               | object | cond.    | MCP server configuration — required when `type` is `mcp`                                                                                                                                                                                                                                        |
+| `mcp.url`           | string | yes      | URL of the MCP server (SSE or Streamable HTTP transport)                                                                                                                                                                                                                                        |
+| `mcp.headers`       | object | no       | Additional headers sent when connecting to the MCP server                                                                                                                                                                                                                                       |
+| `actions`           | array  | cond.    | List of SOAT platform actions to expose — required when `type` is `soat`                                                                                                                                                                                                                        |
+| `preset_parameters` | object | no       | Fixed parameter values for `soat` tools. Keys are removed from the schema shown to the model and injected automatically at execution time — see [Preset Parameters](#preset-parameters)                                                                                                         |
 
 Agents reference tools by their IDs via the `tool_ids` field. A single tool can be attached to many agents.
 
@@ -160,6 +161,37 @@ MCP tools execute on the MCP server side. The SOAT server acts as a proxy: it re
 The tool exposes actions from the SOAT platform itself (documents, conversations, files, secrets, etc.). Instead of pointing to an external endpoint, you list the platform actions the agent is allowed to use via the `actions` array. Each action name corresponds to an existing MCP tool registered on the platform (e.g., `get-document`, `search-documents`, `create-file`). The server executes these actions in-process, reusing the same permission checks as the REST API.
 
 Available actions come from the platform's registered MCP tools: actors, ai-providers, chats, conversations, documents, files, projects, and secrets.
+
+##### Preset Parameters
+
+`preset_parameters` lets you bake fixed values into a `soat` tool definition. When a key in `preset_parameters` matches a field in the action's input schema:
+
+1. That field is **removed from the schema shown to the model** — the model never sees or fills it in.
+2. The preset value is **merged into every call** before the request is dispatched.
+
+This eliminates the probabilistic risk of the model choosing a wrong value for parameters that should always be fixed (e.g., the ID of a specific document). It also enables creating multiple tool instances for different resources from the same action.
+
+Example — two tools backed by the same `update-document` action, each locked to a different document:
+
+```json
+{
+  "name": "public_doc",
+  "type": "soat",
+  "actions": ["update-document"],
+  "preset_parameters": { "id": "doc_abc123" }
+}
+```
+
+```json
+{
+  "name": "private_doc",
+  "type": "soat",
+  "actions": ["update-document"],
+  "preset_parameters": { "id": "doc_xyz789" }
+}
+```
+
+The model calls `public_doc_update-document` with only the fields it needs to supply (e.g., `content`). The server automatically injects `id: "doc_abc123"` before executing the request.
 
 #### Tool Name Resolution
 
@@ -747,4 +779,227 @@ This design is self-contained: each generation only needs its own `remaining_dep
 
 For observability, every top-level generation also creates a **trace** identified by a unique `trace_id` (`agt_trace_` prefix). The server attaches the same `trace_id` to all generations in the chain automatically. This is internal server plumbing — agents do not receive or propagate `trace_id`.
 
+When an agent spawns a child generation, the parent's `generation_id` is recorded as the child's `initiator_generation_id`. This creates a generation-to-generation chain that lets you reconstruct the full call graph without any parent/root trace foreign keys. The child's final `trace_id` also appears in the parent's step data (as the tool call result), making tree traversal implicit in trace content.
+
 Example: A caller starts Agent A with `max_call_depth: 3`. Agent A runs with `remaining_depth: 3` and calls Agent B (`remaining_depth: 2`). Agent B calls Agent C (`remaining_depth: 1`). Agent C can still run but cannot nest further — if it tries to call Agent D, `remaining_depth` would be `0` → the server rejects the call.
+
+## Traces
+
+A trace is the execution log of a single generation — it records every step the agent took (model calls, tool invocations, results). Traces are persisted as **metadata in the database** with the full step content stored on disk as a [File](./files.md) record.
+
+### Trace Data Model
+
+| Field        | Type   | Description                                                    |
+| ------------ | ------ | -------------------------------------------------------------- |
+| `id`         | string | Public identifier (`agt_trace_` prefix)                        |
+| `project_id` | string | Project the trace belongs to                                   |
+| `agent_id`   | string | Agent that produced the trace                                  |
+| `file_id`    | string | ID of the File record containing the full JSON steps (on disk) |
+| `step_count` | number | Total number of steps recorded                                 |
+| `created_at` | string | ISO 8601 creation timestamp                                    |
+
+### Trace Content
+
+The full trace content (steps array) is **not** stored in the database. Instead, it is written to disk as a JSON file under the project's `traces` category:
+
+```
+{FILES_STORAGE_DIR}/{projectPublicId}/traces/{traceId}.json
+```
+
+To retrieve the content, use the `file_id` from the trace metadata and download the file via `GET /api/v1/files/{file_id}/download`.
+
+### Trace Endpoints
+
+#### List Traces
+
+```
+GET /api/v1/agents/traces?project_id=proj_ABC&agent_id=agt_01&limit=20&offset=0
+```
+
+Returns paginated metadata — no step content:
+
+```json
+{
+  "data": [
+    {
+      "id": "agt_trace_abc123",
+      "project_id": "proj_ABC",
+      "agent_id": "agt_01",
+      "file_id": "file_xyz",
+      "step_count": 5,
+      "created_at": "2025-01-15T10:30:00Z"
+    }
+  ],
+  "total": 42,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+#### Get Trace
+
+```
+GET /api/v1/agents/traces/{trace_id}
+```
+
+Returns trace metadata including `file_id`. To get the full steps, download the file:
+
+```json
+{
+  "id": "agt_trace_abc123",
+  "project_id": "proj_ABC",
+  "agent_id": "agt_01",
+  "file_id": "file_xyz",
+  "step_count": 5,
+  "created_at": "2025-01-15T10:30:00Z"
+}
+```
+
+### Tree Traversal
+
+When Agent A calls Agent B, Agent B's trace ID appears in Agent A's step data as part of the tool call result. There are no explicit `parent_trace_id` or `root_trace_id` foreign keys. To reconstruct the call tree:
+
+1. Fetch the parent trace's content (via `file_id` → download).
+2. Find steps where a `soat` tool action `create-agent-generation` was called.
+3. The tool call result contains the child's `trace_id`.
+4. Fetch the child trace to continue traversal.
+
+This design keeps the trace model simple and avoids circular FK complications.
+
+## Generations
+
+A generation is a persisted lifecycle record for a single agent execution. While a trace captures _what happened_ (steps), a generation captures _the lifecycle_ (who started it, when it started/completed, and why it stopped).
+
+### Generation Data Model
+
+| Field                     | Type        | Description                                             |
+| ------------------------- | ----------- | ------------------------------------------------------- |
+| `id`                      | string      | Public identifier (`agt_gen_` prefix)                   |
+| `project_id`              | string      | Project the generation belongs to                       |
+| `agent_id`                | string      | Agent that was executed                                 |
+| `trace_id`                | string      | Associated trace ID                                     |
+| `initiator_generation_id` | string/null | Generation that spawned this one (for nested calls)     |
+| `status`                  | string      | Current lifecycle state (see below)                     |
+| `started_at`              | string      | ISO 8601 timestamp when execution began                 |
+| `completed_at`            | string/null | ISO 8601 timestamp when execution finished              |
+| `last_activity_at`        | string/null | ISO 8601 timestamp of last step activity                |
+| `stop_reason`             | string/null | Why the generation ended (see below)                    |
+| `started_by`              | object/null | Identity of the principal that triggered the generation |
+| `created_at`              | string      | ISO 8601 creation timestamp                             |
+
+### Generation Status
+
+| Status            | Description                                       |
+| ----------------- | ------------------------------------------------- |
+| `in_progress`     | The generation is actively running                |
+| `requires_action` | Paused waiting for client tool outputs            |
+| `completed`       | The generation finished                           |
+| `failed`          | The generation encountered an unrecoverable error |
+
+### Stop Reason
+
+When `status` is `completed`, `stop_reason` indicates why:
+
+| Stop Reason               | Description                                        |
+| ------------------------- | -------------------------------------------------- |
+| `end_turn`                | Model produced a final response with no tool calls |
+| `max_steps`               | Step count reached `max_steps`                     |
+| `stop_condition`          | A configured `stop_conditions` rule was triggered  |
+| `no_executor`             | A tool without an executor was called (non-client) |
+| `stream_response_started` | Streaming generation handed off to the SSE stream  |
+| `depth_limit`             | Nested call exceeded `max_call_depth`              |
+
+### Initiator Generation
+
+When an agent spawns a nested generation (via `soat` tool action `create-agent-generation`), the server automatically sets `initiator_generation_id` on the child generation. You can also pass it explicitly:
+
+```json
+POST /api/v1/agents/{agent_id}/generate
+
+{
+  "messages": [{"role": "user", "content": "Do the thing"}],
+  "initiator_generation_id": "agt_gen_parent123"
+}
+```
+
+This forms a generation chain: `gen_A → gen_B → gen_C`. To trace the full call graph, follow `initiator_generation_id` pointers.
+
+### Generation Endpoints
+
+#### List Generations
+
+```
+GET /api/v1/agents/generations?project_id=proj_ABC&agent_id=agt_01&status=in_progress&limit=20&offset=0
+```
+
+Query parameters:
+
+| Parameter    | Type   | Description                                         |
+| ------------ | ------ | --------------------------------------------------- |
+| `project_id` | string | Filter by project                                   |
+| `agent_id`   | string | Filter by agent                                     |
+| `status`     | string | Filter by status (`in_progress`, `completed`, etc.) |
+| `limit`      | number | Page size (default: 50)                             |
+| `offset`     | number | Pagination offset (default: 0)                      |
+
+Response:
+
+```json
+{
+  "data": [
+    {
+      "id": "agt_gen_abc123",
+      "project_id": "proj_ABC",
+      "agent_id": "agt_01",
+      "trace_id": "agt_trace_def456",
+      "initiator_generation_id": null,
+      "status": "in_progress",
+      "started_at": "2025-01-15T10:30:00Z",
+      "completed_at": null,
+      "last_activity_at": "2025-01-15T10:30:05Z",
+      "stop_reason": null,
+      "started_by": { "type": "api_key", "id": "key_xyz" },
+      "created_at": "2025-01-15T10:30:00Z"
+    }
+  ],
+  "total": 15,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+#### Get Generation
+
+```
+GET /api/v1/agents/generations/{generation_id}
+```
+
+Returns the full generation record (same shape as list items).
+
+### Monitoring Running Generations
+
+To find all currently active generations (useful for dashboards and health checks):
+
+```
+GET /api/v1/agents/generations?status=in_progress&project_id=proj_ABC
+```
+
+## Permissions
+
+| Action                         | Description                |
+| ------------------------------ | -------------------------- |
+| `agents:CreateAgent`           | Create an agent            |
+| `agents:GetAgent`              | Get agent details          |
+| `agents:ListAgents`            | List agents                |
+| `agents:UpdateAgent`           | Update an agent            |
+| `agents:DeleteAgent`           | Delete an agent            |
+| `agents:CreateAgentTool`       | Create an agent tool       |
+| `agents:GetAgentTool`          | Get agent tool details     |
+| `agents:ListAgentTools`        | List agent tools           |
+| `agents:UpdateAgentTool`       | Update an agent tool       |
+| `agents:DeleteAgentTool`       | Delete an agent tool       |
+| `agents:CreateAgentGeneration` | Run a generation           |
+| `agents:ListAgentTraces`       | List traces                |
+| `agents:GetAgentTrace`         | Get trace details          |
+| `agents:ListAgentGenerations`  | List persisted generations |
+| `agents:GetAgentGeneration`    | Get generation details     |

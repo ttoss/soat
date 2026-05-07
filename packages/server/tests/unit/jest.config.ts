@@ -10,7 +10,7 @@ export default jestUnitConfig({
       statements: 60,
     },
   },
-  maxWorkers: 2,
+  maxWorkers: 4,
   setupFiles: ['<rootDir>/setupTests.ts'],
   setupFilesAfterEnv: ['<rootDir>/setupTestsAfterEnv.ts'],
   transformIgnorePatterns: getTransformIgnorePatterns({

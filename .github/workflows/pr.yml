@@ -71,36 +71,30 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Cache Ollama models
-        uses: actions/cache@v5
-        with:
-          path: ~/.ollama/models
-          key: ollama-models-qwen3-embedding-0.6b-qwen2.5-0.5b
-
-      - name: Cache Ollama Docker image
-        id: cache-ollama-image
-        uses: actions/cache@v5
-        with:
-          path: /tmp/ollama-image.tar
-          key: ollama-docker-image-${{ hashFiles('docker-compose.test.yml') }}
-
-      - name: Load Ollama Docker image from cache
-        if: steps.cache-ollama-image.outputs.cache-hit == 'true'
-        run: docker load -i /tmp/ollama-image.tar
-
-      - name: Pull and save Ollama Docker image
-        if: steps.cache-ollama-image.outputs.cache-hit != 'true'
-        run: |
-          docker pull ollama/ollama:0.20.6
-          docker save ollama/ollama:0.20.6 -o /tmp/ollama-image.tar
+      - name: Setup Ollama
+        uses: ./.github/actions/setup-ollama
 
       - name: Run smoke tests
         run: pnpm run smoke-tests
         env:
           COMPOSE_BAKE: '1'
+
+  tutorials-test:
+    name: Tutorials Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Ollama
+        uses: ./.github/actions/setup-ollama
+
+      - name: Run tutorials tests
+        run: docker compose -f tests/docker-compose.tutorials.yml up --build --renew-anon-volumes --remove-orphans --abort-on-container-exit --exit-code-from tutorials
+
+      - name: Cleanup tutorials stack
+        if: always()
+        run: docker compose -f tests/docker-compose.tutorials.yml down --volumes
 
   all-checks:
     name: All Checks Passed
@@ -108,13 +102,15 @@ jobs:
     needs:
       - build-test-and-deploy
       - smoke-test
+      - tutorials-test
     if: always()
 
     steps:
       - name: Check all jobs passed
         run: |
           if [[ "${{ needs.build-test-and-deploy.result }}" != "success" || \
-                "${{ needs.smoke-test.result }}" != "success" ]]; then
+                "${{ needs.smoke-test.result }}" != "success" || \
+                "${{ needs.tutorials-test.result }}" != "success" ]]; then
             echo "One or more jobs failed."
             exit 1
           fi

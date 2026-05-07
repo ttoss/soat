@@ -25,16 +25,16 @@ services:
       test:
         [
           'CMD-SHELL',
-          'ollama list | grep qwen3-embedding && ollama list | grep qwen2.5',
+          'ollama list | grep qwen3-embedding && ollama list | grep qwen3.5',
         ]
       interval: 10s
       timeout: 30s
-      retries: 30
-      start_period: 30s
+      retries: 60
+      start_period: 60s
 
   server:
     build:
-      context: .
+      context: ..
       target: production
       cache_from:
         - type=gha
@@ -75,7 +75,7 @@ services:
 
   smoke-test:
     build:
-      context: .
+      context: ..
       target: smoke-test
       cache_from:
         - type=gha

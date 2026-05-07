@@ -12,6 +12,7 @@ export type MappedAgentTool = {
   execute: object | null;
   mcp: object | null;
   actions: string[] | null;
+  presetParameters: object | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -37,6 +38,7 @@ const mapAgentTool = (
     execute: tool.execute,
     mcp: tool.mcp,
     actions: tool.actions,
+    presetParameters: tool.presetParameters,
     createdAt: tool.createdAt,
     updatedAt: tool.updatedAt,
   };
@@ -53,6 +55,7 @@ export const createAgentTool = async (args: {
   execute?: object;
   mcp?: object;
   actions?: string[];
+  presetParameters?: object;
 }): Promise<MappedAgentTool> => {
   const agentTool = await db.AgentTool.create({
     projectId: args.projectId,
@@ -63,6 +66,7 @@ export const createAgentTool = async (args: {
     execute: args.execute ?? null,
     mcp: args.mcp ?? null,
     actions: args.actions ?? null,
+    presetParameters: args.presetParameters ?? null,
   });
 
   const created = await db.AgentTool.findOne({
@@ -121,6 +125,7 @@ const buildAgentToolUpdates = (args: {
   execute?: object | null;
   mcp?: object | null;
   actions?: string[] | null;
+  presetParameters?: object | null;
 }): Record<string, unknown> => {
   const updates: Record<string, unknown> = {};
   const fields = [
@@ -131,6 +136,7 @@ const buildAgentToolUpdates = (args: {
     'execute',
     'mcp',
     'actions',
+    'presetParameters',
   ] as const;
   for (const field of fields) {
     if (args[field] !== undefined) updates[field] = args[field];
@@ -148,6 +154,7 @@ export const updateAgentTool = async (args: {
   execute?: object | null;
   mcp?: object | null;
   actions?: string[] | null;
+  presetParameters?: object | null;
 }): Promise<MappedAgentTool | 'not_found'> => {
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) {

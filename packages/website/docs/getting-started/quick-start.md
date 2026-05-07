@@ -42,11 +42,15 @@ services:
       - -c
       - 'ollama serve > /dev/null 2>&1 & sleep 5 && ollama pull qwen3-embedding:0.6b > /dev/null 2>&1 && ollama pull qwen2.5:0.5b > /dev/null 2>&1 && wait'
     healthcheck:
-      test: ['CMD-SHELL', 'ollama list | grep qwen3-embedding']
+      test:
+        [
+          'CMD-SHELL',
+          'ollama list | grep qwen3-embedding && ollama list | grep qwen3.5',
+        ]
       interval: 10s
       timeout: 30s
-      retries: 30
-      start_period: 30s
+      retries: 60
+      start_period: 60s
 
   server:
     image: ttoss/soat

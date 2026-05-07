@@ -42,10 +42,14 @@ const startServer = async () => {
     }
   }
 
-  app.listen(SOAT_PORT, () => {
+  const server = app.listen(SOAT_PORT, () => {
     // eslint-disable-next-line no-console
     console.log(`SOAT Server is running on http://localhost:${SOAT_PORT}`);
   });
+
+  // Disable the default 5-minute requestTimeout so long-running LLM
+  // generations (which can take many minutes) are not forcibly terminated.
+  server.requestTimeout = 0;
 };
 
 startServer();
