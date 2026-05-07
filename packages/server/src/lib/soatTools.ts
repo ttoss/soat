@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * SOAT Tools - Dynamically loads available tools from MCP tool definitions.
  * Each tool represents a platform action that can be invoked by agents.
