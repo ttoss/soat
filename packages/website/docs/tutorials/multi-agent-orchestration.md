@@ -150,7 +150,7 @@ AI_PROVIDER_ID=$(soat create-ai-provider \
   --project-id "$PROJECT_ID" \
   --name "Local Ollama" \
   --provider "ollama" \
-  --default-model "qwen3.5:0.8b" | jq -r '.id')
+  --default-model "qwen2.5:0.5b" | jq -r '.id')
 echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 ```
 
@@ -163,7 +163,7 @@ const { data: aiProvider } = await adminSoat.aiProviders.createAiProvider({
     project_id: PROJECT_ID,
     name: 'Local Ollama',
     provider: 'ollama',
-    default_model: 'qwen3.5:0.8b',
+    default_model: 'qwen2.5:0.5b',
   },
 });
 const AI_PROVIDER_ID = aiProvider.id;
@@ -176,7 +176,7 @@ const AI_PROVIDER_ID = aiProvider.id;
 AI_PROVIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/ai-providers" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Local Ollama\",\"provider\":\"ollama\",\"default_model\":\"qwen3.5:0.8b\"}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Local Ollama\",\"provider\":\"ollama\",\"default_model\":\"qwen2.5:0.5b\"}" \
   | jq -r '.id')
 echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 ```

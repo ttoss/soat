@@ -93,21 +93,44 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# Run each tutorial.
+# Run tutorials in parallel, each with an isolated HOME to avoid profile
+# file races (tutorials write ~/.soat/config.json during login/configure).
+# ---------------------------------------------------------------------------
+LOG_DIR=$(mktemp -d)
+declare -A PIDS  # name → pid
+declare -A LOGS  # name → log file
+
+for tutorial in "${TO_RUN[@]}"; do
+  name=$(basename "$tutorial" .md)
+  log="${LOG_DIR}/${name}.log"
+  LOGS["$name"]="$log"
+  tutorial_home=$(mktemp -d)
+  (
+    HOME="$tutorial_home" bash "$TUTORIALS_SH" "$tutorial"
+  ) >"$log" 2>&1 &
+  PIDS["$name"]=$!
+  echo "Started tutorial: $name (pid ${PIDS[$name]})"
+done
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# Wait for all and collect results.
 # ---------------------------------------------------------------------------
 PASS=0
 FAIL=0
 FAILED_TUTORIALS=()
 
-for tutorial in "${TO_RUN[@]}"; do
-  name=$(basename "$tutorial" .md)
-  echo "=========================================="
-  echo "Running tutorial: $name"
-  echo "=========================================="
+for name in "${!PIDS[@]}"; do
+  pid="${PIDS[$name]}"
   set +e
-  bash "$TUTORIALS_SH" "$tutorial"
+  wait "$pid"
   rc=$?
   set -e
+  echo "=========================================="
+  echo "Tutorial: $name"
+  echo "=========================================="
+  cat "${LOGS[$name]}"
   if [[ $rc -eq 0 ]]; then
     echo ""
     echo "✅ $name passed"
@@ -120,6 +143,8 @@ for tutorial in "${TO_RUN[@]}"; do
   fi
   echo ""
 done
+
+rm -rf "$LOG_DIR"
 
 # ---------------------------------------------------------------------------
 # Summary
