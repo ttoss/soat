@@ -1,37 +1,14 @@
-/* eslint-disable max-lines */
 import type { MulterFile } from '@ttoss/http-server';
 import { multer, Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
-import {
-  createFile,
-  deleteFile,
-  downloadFile,
-  getFile,
-  getFileTags,
-  listFiles,
-  updateFileMetadata,
-  updateFileTags,
-  uploadFile,
-} from 'src/lib/files';
-import { buildSrn } from 'src/lib/iam';
+import { createFile, listFiles, uploadFile } from 'src/lib/files';
 import { compilePolicy } from 'src/lib/policyCompiler';
 
+import { registerFileAccessRoutes } from './fileAccessRoutes';
+
 const upload = multer({ storage: multer.memoryStorage() });
-
 const filesRouter = new Router<Context>();
-
-const buildFileTagContext = (file: {
-  tags?: Record<string, unknown> | null;
-}): Record<string, string> => {
-  const context: Record<string, string> = { 'soat:ResourceType': 'file' };
-  if (file.tags) {
-    for (const [k, v] of Object.entries(file.tags)) {
-      context[`soat:ResourceTag/${k}`] = v as string;
-    }
-  }
-  return context;
-};
 
 const listFilesWithPolicy = async (args: {
   authUser: NonNullable<Context['authUser']>;
@@ -48,9 +25,11 @@ const listFilesWithPolicy = async (args: {
     resourceType: 'file',
     projectPublicId,
   });
+
   if (!hasAccess) {
     return { data: [], total: 0, limit: limit ?? 50, offset: offset ?? 0 };
   }
+
   return listFiles({ projectIds, policyWhere, limit, offset });
 };
 
@@ -98,58 +77,6 @@ filesRouter.get('/files', async (ctx: Context) => {
   });
 });
 
-filesRouter.get('/files/:file_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  const file = await getFile({ id: ctx.params.file_id });
-
-  if (!file) {
-    ctx.status = 404;
-    ctx.body = { error: 'File not found' };
-    return;
-  }
-
-  // Check if user is allowed to read files in this project
-  const srn = buildSrn({
-    projectPublicId: file.projectId!,
-    resourceType: 'file',
-    resourceId: file.id,
-  });
-  const context: Record<string, string> = { 'soat:ResourceType': 'file' };
-  if (file.tags) {
-    for (const [k, v] of Object.entries(file.tags)) {
-      context[`soat:ResourceTag/${k}`] = v;
-    }
-  }
-  const resources: string[] = [srn];
-  if (file.path) {
-    resources.push(
-      buildSrn({
-        projectPublicId: file.projectId!,
-        resourceType: 'file',
-        resourceId: file.path,
-      })
-    );
-  }
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: file.projectId!,
-    action: 'files:GetFile',
-    resources,
-    context,
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  ctx.body = file;
-});
-
 filesRouter.post('/files', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -168,7 +95,6 @@ filesRouter.post('/files', async (ctx: Context) => {
     metadata?: string;
   };
 
-  // Check if user is allowed to create files in this project
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: body.projectId,
     action: 'files:CreateFile',
@@ -180,7 +106,6 @@ filesRouter.post('/files', async (ctx: Context) => {
     return;
   }
 
-  // Convert projectId to internal ID
   const project = await db.Project.findOne({
     where: { publicId: body.projectId },
   });
@@ -196,70 +121,6 @@ filesRouter.post('/files', async (ctx: Context) => {
   });
   ctx.status = 201;
   ctx.body = file;
-});
-
-filesRouter.delete('/files/:file_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  // Get file to check project permission
-  const file = await db.File.findOne({
-    where: { publicId: ctx.params.file_id },
-    include: [{ model: db.Project, as: 'project' }],
-  });
-
-  if (!file) {
-    ctx.status = 404;
-    ctx.body = { error: 'File not found' };
-    return;
-  }
-
-  // Check if user is allowed to delete files in this project
-  const srnDel = buildSrn({
-    projectPublicId: file.project!.publicId,
-    resourceType: 'file',
-    resourceId: file.publicId,
-  });
-  const contextDel: Record<string, string> = { 'soat:ResourceType': 'file' };
-  if (file.tags) {
-    for (const [k, v] of Object.entries(file.tags as Record<string, string>)) {
-      contextDel[`soat:ResourceTag/${k}`] = v;
-    }
-  }
-  const resourcesDel: string[] = [srnDel];
-  if ((file as { path?: string | null }).path) {
-    resourcesDel.push(
-      buildSrn({
-        projectPublicId: file.project!.publicId,
-        resourceType: 'file',
-        resourceId: (file as { path: string }).path,
-      })
-    );
-  }
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: file.project!.publicId,
-    action: 'files:DeleteFile',
-    resources: resourcesDel,
-    context: contextDel,
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const result = await deleteFile({ id: ctx.params.file_id });
-
-  if (result === null) {
-    ctx.status = 404;
-    ctx.body = { error: 'File not found' };
-    return;
-  }
-
-  ctx.status = 204;
 });
 
 filesRouter.post(
@@ -390,366 +251,6 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
   ctx.body = record;
 });
 
-const buildFileDownloadResources = (fileRecord: {
-  id: string;
-  projectId?: string | null;
-  path?: string | null;
-  tags?: Record<string, unknown> | null;
-}): { srns: string[]; context: Record<string, string> } => {
-  const srn = buildSrn({
-    projectPublicId: fileRecord.projectId!,
-    resourceType: 'file',
-    resourceId: fileRecord.id,
-  });
-  const context = buildFileTagContext(fileRecord);
-  const srns: string[] = [srn];
-  if (fileRecord.path) {
-    srns.push(
-      buildSrn({
-        projectPublicId: fileRecord.projectId!,
-        resourceType: 'file',
-        resourceId: fileRecord.path,
-      })
-    );
-  }
-  return { srns, context };
-};
-
-filesRouter.get('/files/:file_id/download', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  const fileRecord = await getFile({ id: ctx.params.file_id });
-
-  if (!fileRecord) {
-    ctx.status = 404;
-    ctx.body = { error: 'File not found' };
-    return;
-  }
-
-  const { srns, context } = buildFileDownloadResources(fileRecord);
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: fileRecord.projectId!,
-    action: 'files:DownloadFile',
-    resources: srns,
-    context,
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const result = await downloadFile({ id: ctx.params.file_id });
-
-  if (!result) {
-    ctx.status = 404;
-    ctx.body = { error: 'File not found on disk' };
-    return;
-  }
-
-  ctx.set('Content-Type', result.contentType ?? 'application/octet-stream');
-  if (result.filename) {
-    ctx.set('Content-Disposition', `attachment; filename="${result.filename}"`);
-  }
-  if (result.size != null) {
-    ctx.set('Content-Length', String(result.size));
-  }
-  ctx.body = result.stream;
-});
-
-filesRouter.get('/files/:file_id/download/base64', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  const fileRecord = await getFile({ id: ctx.params.file_id });
-
-  if (!fileRecord) {
-    ctx.status = 404;
-    ctx.body = { error: 'File not found' };
-    return;
-  }
-
-  const srnDlB64 = buildSrn({
-    projectPublicId: fileRecord.projectId!,
-    resourceType: 'file',
-    resourceId: fileRecord.id,
-  });
-  const contextDlB64: Record<string, string> = { 'soat:ResourceType': 'file' };
-  if (fileRecord.tags) {
-    for (const [k, v] of Object.entries(fileRecord.tags)) {
-      contextDlB64[`soat:ResourceTag/${k}`] = v;
-    }
-  }
-  const resourcesDlB64: string[] = [srnDlB64];
-  if (fileRecord.path) {
-    resourcesDlB64.push(
-      buildSrn({
-        projectPublicId: fileRecord.projectId!,
-        resourceType: 'file',
-        resourceId: fileRecord.path,
-      })
-    );
-  }
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: fileRecord.projectId!,
-    action: 'files:DownloadFile',
-    resources: resourcesDlB64,
-    context: contextDlB64,
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const result = await downloadFile({ id: ctx.params.file_id });
-
-  if (!result) {
-    ctx.status = 404;
-    ctx.body = { error: 'File not found on disk' };
-    return;
-  }
-
-  const chunks: Buffer[] = [];
-  for await (const chunk of result.stream) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  const buffer = Buffer.concat(chunks);
-
-  ctx.body = {
-    content: buffer.toString('base64'),
-    filename: result.filename,
-    contentType: result.contentType,
-    size: result.size,
-  };
-});
-
-filesRouter.patch('/files/:file_id/metadata', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  const fileRecord = await getFile({ id: ctx.params.file_id });
-
-  if (!fileRecord) {
-    ctx.status = 404;
-    ctx.body = { error: 'File not found' };
-    return;
-  }
-
-  const srnMeta = buildSrn({
-    projectPublicId: fileRecord.projectId!,
-    resourceType: 'file',
-    resourceId: fileRecord.id,
-  });
-  const contextMeta: Record<string, string> = { 'soat:ResourceType': 'file' };
-  if (fileRecord.tags) {
-    for (const [k, v] of Object.entries(fileRecord.tags)) {
-      contextMeta[`soat:ResourceTag/${k}`] = v;
-    }
-  }
-  const resourcesMeta: string[] = [srnMeta];
-  if (fileRecord.path) {
-    resourcesMeta.push(
-      buildSrn({
-        projectPublicId: fileRecord.projectId!,
-        resourceType: 'file',
-        resourceId: fileRecord.path,
-      })
-    );
-  }
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: fileRecord.projectId!,
-    action: 'files:UpdateFileMetadata',
-    resources: resourcesMeta,
-    context: contextMeta,
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const body = ctx.request.body as { metadata?: string; filename?: string };
-  const updated = await updateFileMetadata({
-    id: ctx.params.file_id,
-    metadata: body.metadata,
-    filename: body.filename,
-  });
-
-  ctx.body = updated;
-});
-
-filesRouter.get('/files/:file_id/tags', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  const file = await getFile({ id: ctx.params.file_id });
-
-  if (!file) {
-    ctx.status = 404;
-    ctx.body = { error: 'File not found' };
-    return;
-  }
-
-  const srn = buildSrn({
-    projectPublicId: file.projectId!,
-    resourceType: 'file',
-    resourceId: file.id,
-  });
-  const context: Record<string, string> = { 'soat:ResourceType': 'file' };
-  if (file.tags) {
-    for (const [k, v] of Object.entries(file.tags)) {
-      context[`soat:ResourceTag/${k}`] = v;
-    }
-  }
-  const srnTagResources: string[] = [srn];
-  if (file.path) {
-    srnTagResources.push(
-      buildSrn({
-        projectPublicId: file.projectId!,
-        resourceType: 'file',
-        resourceId: file.path,
-      })
-    );
-  }
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: file.projectId!,
-    action: 'files:GetFile',
-    resources: srnTagResources,
-    context,
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  ctx.body = await getFileTags({ id: ctx.params.file_id });
-});
-
-filesRouter.put('/files/:file_id/tags', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  const file = await getFile({ id: ctx.params.file_id });
-
-  if (!file) {
-    ctx.status = 404;
-    ctx.body = { error: 'File not found' };
-    return;
-  }
-
-  const srn = buildSrn({
-    projectPublicId: file.projectId!,
-    resourceType: 'file',
-    resourceId: file.id,
-  });
-  const context: Record<string, string> = { 'soat:ResourceType': 'file' };
-  if (file.tags) {
-    for (const [k, v] of Object.entries(file.tags)) {
-      context[`soat:ResourceTag/${k}`] = v;
-    }
-  }
-  const srnPutResources: string[] = [srn];
-  if (file.path) {
-    srnPutResources.push(
-      buildSrn({
-        projectPublicId: file.projectId!,
-        resourceType: 'file',
-        resourceId: file.path,
-      })
-    );
-  }
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: file.projectId!,
-    action: 'files:UpdateFileMetadata',
-    resources: srnPutResources,
-    context,
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const tags = ctx.request.body as Record<string, string>;
-  ctx.body = await updateFileTags({
-    id: ctx.params.file_id,
-    tags,
-    merge: false,
-  });
-});
-
-filesRouter.patch('/files/:file_id/tags', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  const file = await getFile({ id: ctx.params.file_id });
-
-  if (!file) {
-    ctx.status = 404;
-    ctx.body = { error: 'File not found' };
-    return;
-  }
-
-  const srn = buildSrn({
-    projectPublicId: file.projectId!,
-    resourceType: 'file',
-    resourceId: file.id,
-  });
-  const context: Record<string, string> = { 'soat:ResourceType': 'file' };
-  if (file.tags) {
-    for (const [k, v] of Object.entries(file.tags)) {
-      context[`soat:ResourceTag/${k}`] = v;
-    }
-  }
-  const srnPatchResources: string[] = [srn];
-  if (file.path) {
-    srnPatchResources.push(
-      buildSrn({
-        projectPublicId: file.projectId!,
-        resourceType: 'file',
-        resourceId: file.path,
-      })
-    );
-  }
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: file.projectId!,
-    action: 'files:UpdateFileMetadata',
-    resources: srnPatchResources,
-    context,
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const tags = ctx.request.body as Record<string, string>;
-  ctx.body = await updateFileTags({
-    id: ctx.params.file_id,
-    tags,
-    merge: true,
-  });
-});
+registerFileAccessRoutes({ filesRouter });
 
 export { filesRouter };

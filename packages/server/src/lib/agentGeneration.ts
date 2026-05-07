@@ -1,6 +1,5 @@
-/* eslint-disable max-lines */
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
-import type { LanguageModel, ModelMessage, Tool, ToolChoice } from 'ai';
+import type { LanguageModel, ModelMessage, Tool } from 'ai';
 import { generateText, stepCountIs } from 'ai';
 import createDebug from 'debug';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
@@ -8,20 +7,21 @@ import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 import { db } from '../db';
 import {
   buildAllMessages,
-  buildCompletedGenerationResult,
   buildDepthGuardResult,
-  findPendingClientTools,
   type GenerationResult,
-  type PendingGeneration,
   pendingGenerations,
   runStreamGeneration,
-  savePendingGeneration,
   type TypedAgent,
 } from './agentGenerationHelpers';
 import { buildModel } from './agentModel';
+import {
+  buildPrepareStep,
+  buildToolResultMessages as buildToolResultMessagesFromOutputs,
+  runNonStreamGeneration,
+} from './agentNonStreamGeneration';
 import { resolveAgentTools } from './agentToolResolver';
 import { saveTrace, serializeSteps } from './agentTraces';
-import { resolveProjectPublicId } from './eventBus';
+import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { createGenerationRecord, updateGenerationRecord } from './generations';
 
 const log = createDebug('soat:generation');
@@ -46,184 +46,6 @@ const resolveAgentForGeneration = async (args: {
   });
 
   return agent as unknown as TypedAgent | null;
-};
-
-// ── Step Rules ────────────────────────────────────────────────────────────
-
-type StepRule = {
-  step: number;
-  toolChoice?: { type: 'tool'; toolName: string };
-};
-
-const buildPrepareStep = (
-  stepRules: unknown
-):
-  | ((opts: { stepNumber: number }) => {
-      toolChoice?: ToolChoice<Record<string, Tool>>;
-      activeTools?: string[];
-    })
-  | undefined => {
-  if (!Array.isArray(stepRules) || stepRules.length === 0) return undefined;
-  const rules = stepRules as StepRule[];
-  log('buildPrepareStep: rules=%o', rules);
-  return ({ stepNumber }) => {
-    // stepNumber is 0-based (AI SDK), step_rules use 1-indexed steps
-    const rule = rules.find((r) => {
-      return r.step === stepNumber + 1;
-    });
-    log(
-      'prepareStep: stepNumber=%d (1-indexed=%d) rule=%o',
-      stepNumber,
-      stepNumber + 1,
-      rule
-    );
-    if (rule?.toolChoice?.type === 'tool' && rule.toolChoice.toolName) {
-      log('prepareStep: forcing toolChoice=%o', rule.toolChoice.toolName);
-      return {
-        toolChoice: { type: 'tool', toolName: rule.toolChoice.toolName },
-        activeTools: [rule.toolChoice.toolName],
-      };
-    }
-    return {};
-  };
-};
-
-// ── Non-Stream Generation ─────────────────────────────────────────────────
-
-/**
- * Runs a non-streaming text generation with the given tools. If the provider
- * fails while processing tool-call responses (e.g. the model emits malformed
- * XML that the provider cannot parse), the function transparently falls back
- * to a plain-text generation with no tools so that callers always receive a
- * completed result instead of a 500 error. When no tools are configured the
- * error is logged and re-thrown immediately.
- */
-const callGenerateText = async (args: {
-  agentId: string;
-  model: LanguageModel;
-  system: string | undefined;
-  nonSystemMessages: Array<{ role: string; content: string }>;
-  resolvedTools: Record<string, Tool>;
-  typedAgent: TypedAgent;
-  prepareStep: ReturnType<typeof buildPrepareStep>;
-  abortSignal?: AbortSignal;
-}) => {
-  const hasTools = Object.keys(args.resolvedTools).length > 0;
-  try {
-    return await generateText({
-      model: args.model,
-      system: args.system,
-      messages: args.nonSystemMessages as ModelMessage[],
-      tools: hasTools ? args.resolvedTools : undefined,
-      toolChoice:
-        (args.typedAgent.toolChoice as
-          | 'auto'
-          | 'required'
-          | { type: 'tool'; toolName: string }
-          | undefined) ?? undefined,
-      prepareStep: args.prepareStep,
-      stopWhen: stepCountIs((args.typedAgent.maxSteps as number) ?? 20),
-      temperature: (args.typedAgent.temperature as number) ?? undefined,
-      abortSignal: args.abortSignal,
-    });
-  } catch (error) {
-    if (!hasTools) {
-      log(
-        'Generation failed (no tools to fall back from) agentId=%s: %s',
-        args.agentId,
-        error
-      );
-      throw error;
-    }
-    // Provider failed during tool-call processing (e.g., model returned malformed
-    // XML tool calls). Fall back to plain-text so callers get a completed result.
-    log(
-      'Generation with tools failed, retrying without tools agentId=%s model=%s: %s',
-      args.agentId,
-      args.typedAgent.model,
-      error
-    );
-    return generateText({
-      model: args.model,
-      system: args.system,
-      messages: args.nonSystemMessages as ModelMessage[],
-      stopWhen: stepCountIs(1),
-      temperature: (args.typedAgent.temperature as number) ?? undefined,
-      abortSignal: args.abortSignal,
-    });
-  }
-};
-
-const runNonStreamGeneration = async (args: {
-  model: LanguageModel;
-  allMessages: Array<{ role: string; content: string }>;
-  resolvedTools: Record<string, Tool>;
-  typedAgent: TypedAgent;
-  generationId: string;
-  traceId: string;
-  agentId: string;
-  abortSignal?: AbortSignal;
-}): Promise<GenerationResult> => {
-  const system = args.allMessages.find((m) => {
-    return m.role === 'system';
-  })?.content;
-  const nonSystemMessages = args.allMessages.filter((m) => {
-    return m.role !== 'system';
-  });
-  const prepareStep = buildPrepareStep(args.typedAgent.stepRules);
-  const result = await callGenerateText({
-    agentId: args.agentId,
-    model: args.model,
-    system,
-    nonSystemMessages,
-    resolvedTools: args.resolvedTools,
-    typedAgent: args.typedAgent,
-    prepareStep,
-    abortSignal: args.abortSignal,
-  });
-
-  const pendingToolCalls = findPendingClientTools(
-    result.steps as Array<{
-      toolCalls?: Array<{
-        toolCallId: string;
-        toolName: string;
-        input: unknown;
-      }>;
-    }>,
-    args.resolvedTools
-  );
-
-  if (pendingToolCalls.length > 0) {
-    return savePendingGeneration({
-      generationId: args.generationId,
-      traceId: args.traceId,
-      pendingToolCalls,
-      allMessages: args.allMessages,
-      result: result as {
-        steps: unknown[];
-        response: { messages: unknown[]; modelId?: string };
-        text: string;
-        finishReason: string;
-      },
-      model: args.model,
-      typedAgent: args.typedAgent,
-      agentId: args.agentId,
-      resolvedTools: args.resolvedTools,
-    });
-  }
-
-  return buildCompletedGenerationResult({
-    generationId: args.generationId,
-    traceId: args.traceId,
-    result: result as {
-      steps: unknown[];
-      response?: { modelId?: string };
-      text: string;
-      finishReason: string;
-    },
-    typedAgent: args.typedAgent,
-    agentId: args.agentId,
-  });
 };
 
 // ── Build Generation Context ──────────────────────────────────────────────
@@ -361,34 +183,6 @@ export const createGeneration = async (args: {
 
 // ── Submit Tool Outputs ───────────────────────────────────────────────────
 
-const buildToolResultMessages = (
-  toolOutputs: Array<{ toolCallId: string; output: unknown }>,
-  pendingToolCalls: PendingGeneration['pendingToolCalls']
-) => {
-  return toolOutputs.map((output) => {
-    const pendingTool = pendingToolCalls.find((tc) => {
-      return tc.toolCallId === output.toolCallId;
-    });
-    return {
-      role: 'tool' as const,
-      content: [
-        {
-          type: 'tool-result' as const,
-          toolCallId: output.toolCallId,
-          toolName: pendingTool?.toolName ?? '',
-          output: {
-            type: 'text' as const,
-            value:
-              typeof output.output === 'string'
-                ? output.output
-                : JSON.stringify(output.output),
-          },
-        },
-      ],
-    };
-  });
-};
-
 export const submitToolOutputs = async (args: {
   projectIds?: number[];
   agentId: string;
@@ -403,10 +197,10 @@ export const submitToolOutputs = async (args: {
 
   pendingGenerations.delete(args.generationId);
 
-  const toolResultMessages = buildToolResultMessages(
-    args.toolOutputs,
-    pending.pendingToolCalls
-  );
+  const toolResultMessages = buildToolResultMessagesFromOutputs({
+    toolOutputs: args.toolOutputs,
+    pendingToolCalls: pending.pendingToolCalls,
+  });
   const allMessages = [...pending.messages, ...toolResultMessages];
   const typedPendingMessages = pending.messages as Array<{
     role: string;
@@ -427,7 +221,10 @@ export const submitToolOutputs = async (args: {
       Object.keys(pending.resolvedTools).length > 0
         ? pending.resolvedTools
         : undefined,
-    prepareStep: buildPrepareStep(pending.agentConfig.stepRules),
+    prepareStep: buildPrepareStep({
+      stepRules: pending.agentConfig.stepRules,
+      logContext: 'non_stream',
+    }),
     stopWhen: stepCountIs(pending.agentConfig.maxSteps),
     temperature: pending.agentConfig.temperature ?? undefined,
   });
@@ -459,16 +256,14 @@ export const submitToolOutputs = async (args: {
 
   resolveProjectPublicId({ projectId: pending.projectId }).then(
     (projectPublicId) => {
-      import('./eventBus').then(({ emitEvent }) => {
-        emitEvent({
-          type: 'agents.generation.completed',
-          projectId: pending.projectId,
-          projectPublicId,
-          resourceType: 'generation',
-          resourceId: args.generationId,
-          data: completedResult as unknown as Record<string, unknown>,
-          timestamp: new Date().toISOString(),
-        });
+      emitEvent({
+        type: 'agents.generation.completed',
+        projectId: pending.projectId,
+        projectPublicId,
+        resourceType: 'generation',
+        resourceId: args.generationId,
+        data: completedResult as unknown as Record<string, unknown>,
+        timestamp: new Date().toISOString(),
       });
     }
   );
