@@ -1,6 +1,6 @@
 {
   "name": "@soat/server",
-  "version": "0.4.17",
+  "version": "0.4.18",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsup",
@@ -40,8 +40,8 @@
     "@testcontainers/postgresql": "^11.14.0",
     "@ttoss/config": "^1.37.10",
     "@ttoss/test-utils": "^4.2.10",
-    "@types/jest": "^30.0.0",
     "@types/debug": "^4.1.12",
+    "@types/jest": "^30.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24",
