@@ -153,6 +153,9 @@ const buildSoatActionTool = (args: {
   boundaryPolicy?: unknown;
   authHeader?: string;
   toolContext?: Record<string, string>;
+  traceId?: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
   buildContextHeaders: (
     toolContext?: Record<string, string>
   ) => Record<string, string>;
@@ -190,6 +193,14 @@ const buildSoatActionTool = (args: {
         soatBody && args.toolContext
           ? { ...soatBody, toolContext: args.toolContext }
           : soatBody;
+      const soatBodyWithTrace =
+        soatBodyWithContext && args.traceId
+          ? {
+              ...soatBodyWithContext,
+              parent_trace_id: args.traceId,
+              root_trace_id: args.rootTraceId ?? args.traceId,
+            }
+          : soatBodyWithContext;
 
       try {
         const url = `${base}${path}`;
@@ -202,8 +213,8 @@ const buildSoatActionTool = (args: {
             ...(args.authHeader ? { Authorization: args.authHeader } : {}),
             ...args.buildContextHeaders(args.toolContext),
           },
-          body: soatBodyWithContext
-            ? JSON.stringify(soatBodyWithContext)
+          body: soatBodyWithTrace
+            ? JSON.stringify(soatBodyWithTrace)
             : undefined,
         });
         const responseBody = await response.json();
@@ -234,6 +245,9 @@ export const resolveSoatTools = (args: {
   boundaryPolicy?: unknown;
   authHeader?: string;
   toolContext?: Record<string, string>;
+  traceId?: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
   buildContextHeaders: (
     toolContext?: Record<string, string>
   ) => Record<string, string>;
@@ -258,6 +272,9 @@ export const resolveSoatTools = (args: {
       boundaryPolicy: args.boundaryPolicy,
       authHeader: args.authHeader,
       toolContext: args.toolContext,
+      traceId: args.traceId,
+      parentTraceId: args.parentTraceId,
+      rootTraceId: args.rootTraceId,
       buildContextHeaders: args.buildContextHeaders,
       isSoatActionAllowedByBoundary: args.isSoatActionAllowedByBoundary,
       logToolCallingError: args.logToolCallingError,

@@ -1,0 +1,20 @@
+{
+  "module": "traces",
+  "operations": [
+    {
+      "operationId": "listTraces",
+      "action": "traces:ListTraces",
+      "description": "List execution traces in a project"
+    },
+    {
+      "operationId": "getTrace",
+      "action": "traces:GetTrace",
+      "description": "Get a trace by ID"
+    },
+    {
+      "operationId": "getTraceTree",
+      "action": "traces:GetTraceTree",
+      "description": "Get the full execution tree for a trace"
+    }
+  ]
+}

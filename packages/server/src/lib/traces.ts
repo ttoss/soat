@@ -1,13 +1,21 @@
+import { Op } from '@ttoss/postgresdb';
+
 import { db } from '../db';
 import { upsertFileByPath } from './files';
 
 export type Trace = {
   id: string;
-  projectId: number;
+  projectId: string;
   agentId: string;
   fileId: string | null;
   stepCount: number;
+  parentTraceId: string | null;
+  rootTraceId: string | null;
   createdAt: Date;
+};
+
+export type TraceTreeNode = Trace & {
+  children: TraceTreeNode[];
 };
 
 /**
@@ -30,13 +38,19 @@ export const serializeSteps = (steps: unknown[]): unknown[] => {
   ) as unknown[];
 };
 
-const mapTrace = (row: InstanceType<(typeof db)['Trace']>): Trace => {
+const mapTrace = (
+  row: InstanceType<(typeof db)['Trace']> & {
+    project?: InstanceType<(typeof db)['Project']>;
+  }
+): Trace => {
   return {
     id: row.publicId,
-    projectId: row.projectId,
+    projectId: (row.project?.publicId ?? String(row.projectId)) as string,
     agentId: row.agentId,
     fileId: row.fileId ?? null,
     stepCount: row.stepCount,
+    parentTraceId: row.parentTraceId ?? null,
+    rootTraceId: row.rootTraceId ?? null,
     createdAt: row.createdAt,
   };
 };
@@ -48,6 +62,8 @@ const upsertTraceRecord = async (args: {
   agentDbId?: number | null;
   filePublicId: string | undefined | null;
   stepCount: number;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
 }): Promise<void> => {
   const existing = await db.Trace.findOne({
     where: { publicId: args.traceId },
@@ -55,6 +71,16 @@ const upsertTraceRecord = async (args: {
 
   const fileDbId = args.filePublicId
     ? ((await db.File.findOne({ where: { publicId: args.filePublicId } }))
+        ?.id ?? null)
+    : null;
+
+  const parentTraceDbId = args.parentTraceId
+    ? ((await db.Trace.findOne({ where: { publicId: args.parentTraceId } }))
+        ?.id ?? null)
+    : null;
+
+  const rootTraceDbId = args.rootTraceId
+    ? ((await db.Trace.findOne({ where: { publicId: args.rootTraceId } }))
         ?.id ?? null)
     : null;
 
@@ -73,6 +99,10 @@ const upsertTraceRecord = async (args: {
       fileDbId,
       fileId: args.filePublicId ?? null,
       stepCount: args.stepCount,
+      parentTraceId: args.parentTraceId ?? null,
+      parentTraceDbId,
+      rootTraceId: args.rootTraceId ?? null,
+      rootTraceDbId,
     });
   }
 };
@@ -91,6 +121,8 @@ export const saveTrace = async (args: {
   agentId: string;
   agentDbId?: number | null;
   steps: unknown[];
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
 }): Promise<void> => {
   const serializedSteps = serializeSteps(args.steps);
   const content = Buffer.from(JSON.stringify(serializedSteps), 'utf8');
@@ -112,6 +144,8 @@ export const saveTrace = async (args: {
     agentDbId: args.agentDbId,
     filePublicId: fileRecord.id,
     stepCount: serializedSteps.length,
+    parentTraceId: args.parentTraceId ?? null,
+    rootTraceId: args.rootTraceId ?? null,
   });
 };
 
@@ -138,6 +172,7 @@ export const listTraces = async (args: {
 
   const { count, rows } = await db.Trace.findAndCountAll({
     where: Object.keys(where).length > 0 ? where : undefined,
+    include: [{ model: db.Project, as: 'project' }],
     order: [['createdAt', 'DESC']],
     limit,
     offset,
@@ -156,8 +191,80 @@ export const getTrace = async (args: {
     where.projectId = args.projectIds;
   }
 
-  const row = await db.Trace.findOne({ where });
+  const row = await db.Trace.findOne({
+    where,
+    include: [{ model: db.Project, as: 'project' }],
+  });
   if (!row) return 'not_found';
 
   return mapTrace(row);
+};
+
+/**
+ * Returns the full trace tree rooted at the given trace.
+ *
+ * Strategy:
+ * 1. Resolve the target trace.
+ * 2. Determine the root: if `rootTraceId` is null, this trace is the root;
+ *    otherwise fetch the root.
+ * 3. Query all traces that share the same root (rootTraceId = rootPublicId)
+ *    plus the root itself.
+ * 4. Build the tree in memory from the flat list.
+ */
+export const getTraceTree = async (args: {
+  projectIds?: number[];
+  traceId: string;
+}): Promise<TraceTreeNode | 'not_found'> => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: Record<string, any> = { publicId: args.traceId };
+  if (args.projectIds !== undefined) {
+    if (args.projectIds.length === 0) return 'not_found';
+    where.projectId = args.projectIds;
+  }
+
+  const targetRow = await db.Trace.findOne({
+    where,
+    include: [{ model: db.Project, as: 'project' }],
+  });
+  if (!targetRow) return 'not_found';
+
+  // Determine root publicId
+  const rootPublicId = targetRow.rootTraceId ?? targetRow.publicId;
+
+  // Query all traces in the tree (root + all descendants sharing rootTraceId)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const treeWhere: Record<string, any> = {
+    [Op.or]: [{ publicId: rootPublicId }, { rootTraceId: rootPublicId }],
+  };
+  if (args.projectIds !== undefined) {
+    treeWhere.projectId = args.projectIds;
+  }
+
+  const allRows = await db.Trace.findAll({
+    where: treeWhere,
+    include: [{ model: db.Project, as: 'project' }],
+    order: [['createdAt', 'ASC']],
+  });
+
+  const allTraces = allRows.map(mapTrace);
+
+  // Build tree in memory
+  const nodeMap = new Map<string, TraceTreeNode>();
+  for (const trace of allTraces) {
+    nodeMap.set(trace.id, { ...trace, children: [] });
+  }
+
+  let root: TraceTreeNode | undefined;
+  for (const node of nodeMap.values()) {
+    if (!node.parentTraceId) {
+      root = node;
+    } else {
+      const parent = nodeMap.get(node.parentTraceId);
+      if (parent) {
+        parent.children.push(node);
+      }
+    }
+  }
+
+  return root ?? 'not_found';
 };

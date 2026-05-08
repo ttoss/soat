@@ -20,9 +20,9 @@ import {
   runNonStreamGeneration,
 } from './agentNonStreamGeneration';
 import { resolveAgentTools } from './agentToolResolver';
-import { saveTrace, serializeSteps } from './agentTraces';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { createGenerationRecord, updateGenerationRecord } from './generations';
+import { saveTrace, serializeSteps } from './traces';
 
 const log = createDebug('soat:generation');
 
@@ -64,6 +64,9 @@ const buildGenerationContext = async (args: {
   messages: Array<{ role: string; content: string }>;
   authHeader?: string;
   toolContext?: Record<string, string>;
+  traceId?: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
 }): Promise<GenerationContext | 'not_found' | 'ai_provider_not_found'> => {
   const typedAgent = await resolveAgentForGeneration({
     agentId: args.agentId,
@@ -93,6 +96,9 @@ const buildGenerationContext = async (args: {
         boundaryPolicy: typedAgent.boundaryPolicy,
         authHeader: args.authHeader,
         toolContext: args.toolContext,
+        traceId: args.traceId,
+        parentTraceId: args.parentTraceId,
+        rootTraceId: args.rootTraceId,
       })
     : {};
 
@@ -113,6 +119,8 @@ export const createGeneration = async (args: {
   messages: Array<{ role: string; content: string }>;
   stream?: boolean;
   traceId?: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
   initiatorGenerationId?: string | null;
   remainingDepth?: number;
   authHeader?: string;
@@ -132,6 +140,8 @@ export const createGeneration = async (args: {
       projectPublicId: '',
       agentId: args.agentId,
       generationId: depthGenId,
+      parentTraceId: args.parentTraceId ?? null,
+      rootTraceId: args.rootTraceId ?? null,
     });
   }
 
@@ -141,6 +151,9 @@ export const createGeneration = async (args: {
     messages: args.messages,
     authHeader: args.authHeader,
     toolContext: args.toolContext,
+    traceId,
+    parentTraceId: args.parentTraceId,
+    rootTraceId: args.rootTraceId,
   });
 
   log('createGeneration: agentId=%s stream=%s', args.agentId, args.stream);
@@ -166,6 +179,8 @@ export const createGeneration = async (args: {
       typedAgent: ctx.typedAgent,
       traceId,
       agentId: args.agentId,
+      parentTraceId: args.parentTraceId ?? null,
+      rootTraceId: args.rootTraceId ?? null,
     });
   }
 
@@ -177,6 +192,8 @@ export const createGeneration = async (args: {
     generationId: ctx.generationId,
     traceId,
     agentId: args.agentId,
+    parentTraceId: args.parentTraceId ?? null,
+    rootTraceId: args.rootTraceId ?? null,
     abortSignal: args.abortSignal,
   });
 };
@@ -235,6 +252,8 @@ export const submitToolOutputs = async (args: {
     projectPublicId: pending.projectPublicId,
     agentId: pending.agentId,
     steps: serializeSteps(result.steps as unknown[]),
+    parentTraceId: pending.parentTraceId ?? undefined,
+    rootTraceId: pending.rootTraceId ?? undefined,
   }).catch(() => {});
   updateGenerationRecord({
     publicId: args.generationId,

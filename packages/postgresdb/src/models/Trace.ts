@@ -77,6 +77,34 @@ export class Trace extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare fileId: string | null;
 
+  // Tree structure — null parentTraceId means this trace IS the root
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare parentTraceId: string | null;
+
+  @Index
+  @ForeignKey(() => {
+    return Trace;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare parentTraceDbId: number | null;
+
+  @BelongsTo(() => Trace, { foreignKey: 'parentTraceDbId', as: 'parentTrace' })
+  declare parentTrace: Trace | null;
+
+  // Denormalized root trace publicId for fast tree queries
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare rootTraceId: string | null;
+
+  @Index
+  @ForeignKey(() => {
+    return Trace;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare rootTraceDbId: number | null;
+
+  @BelongsTo(() => Trace, { foreignKey: 'rootTraceDbId', as: 'rootTrace' })
+  declare rootTrace: Trace | null;
+
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
   declare stepCount: number;
 

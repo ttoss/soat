@@ -97,18 +97,22 @@ const callGenerateText = async (args: {
   } catch (error) {
     if (!hasTools) {
       log(
-        'Generation failed (no tools to fall back from) agentId=%s: %s',
+        'callGenerateText FAILED (no tools) agentId=%s errorType=%s message=%s stack=%s',
         args.agentId,
-        error
+        error instanceof Error ? error.constructor.name : typeof error,
+        error instanceof Error ? error.message : String(error),
+        error instanceof Error ? error.stack : ''
       );
       throw error;
     }
 
     log(
-      'Generation with tools failed, retrying without tools agentId=%s model=%s: %s',
+      'callGenerateText FAILED (has tools, retrying without) agentId=%s model=%s errorType=%s message=%s stack=%s',
       args.agentId,
       args.typedAgent.model,
-      error
+      error instanceof Error ? error.constructor.name : typeof error,
+      error instanceof Error ? error.message : String(error),
+      error instanceof Error ? error.stack : ''
     );
 
     return generateText({
@@ -130,6 +134,8 @@ export const runNonStreamGeneration = async (args: {
   generationId: string;
   traceId: string;
   agentId: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
   abortSignal?: AbortSignal;
 }): Promise<GenerationResult> => {
   const system = args.allMessages.find((message) => {
@@ -145,6 +151,11 @@ export const runNonStreamGeneration = async (args: {
     logContext: 'non_stream',
   });
 
+  log(
+    'runNonStreamGeneration: calling callGenerateText agentId=%s maxSteps=%s',
+    args.agentId,
+    args.typedAgent.maxSteps
+  );
   const result = await callGenerateText({
     agentId: args.agentId,
     model: args.model,
@@ -171,6 +182,8 @@ export const runNonStreamGeneration = async (args: {
     return savePendingGeneration({
       generationId: args.generationId,
       traceId: args.traceId,
+      parentTraceId: args.parentTraceId ?? null,
+      rootTraceId: args.rootTraceId ?? null,
       pendingToolCalls,
       allMessages: args.allMessages,
       result: result as {
@@ -189,6 +202,8 @@ export const runNonStreamGeneration = async (args: {
   return buildCompletedGenerationResult({
     generationId: args.generationId,
     traceId: args.traceId,
+    parentTraceId: args.parentTraceId ?? null,
+    rootTraceId: args.rootTraceId ?? null,
     result: result as {
       steps: unknown[];
       response?: { modelId?: string };

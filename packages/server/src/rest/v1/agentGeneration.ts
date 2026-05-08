@@ -1,8 +1,11 @@
 import type { ServerResponse } from 'node:http';
 
 import { Router } from '@ttoss/http-server';
+import createDebug from 'debug';
 import type { Context } from 'src/Context';
 import { createGeneration, submitToolOutputs } from 'src/lib/agents';
+
+const log = createDebug('soat:agentGeneration');
 
 const pipeStreamToResponse = async (
   stream: ReadableStream,
@@ -86,11 +89,20 @@ agentGenerationRouter.post(
       return;
     }
 
-    const { messages, stream, traceId, maxCallDepth, toolContext } = ctx.request
-      .body as {
+    const {
+      messages,
+      stream,
+      traceId,
+      parentTraceId,
+      rootTraceId,
+      maxCallDepth,
+      toolContext,
+    } = ctx.request.body as {
       messages?: unknown;
       stream?: boolean;
       traceId?: string;
+      parentTraceId?: string;
+      rootTraceId?: string;
       maxCallDepth?: unknown;
       toolContext?: Record<string, string>;
     };
@@ -111,12 +123,15 @@ agentGenerationRouter.post(
         messages: messages as Array<{ role: string; content: string }>,
         stream: stream === true,
         traceId,
+        parentTraceId,
+        rootTraceId,
         remainingDepth:
           typeof maxCallDepth === 'number' ? maxCallDepth : undefined,
         authHeader: (ctx.headers.authorization as string) ?? '',
         toolContext,
       });
     } catch (error) {
+      log('createGeneration threw agentId=%s %O', ctx.params.agent_id, error);
       ctx.status = 500;
       ctx.body = {
         error: error instanceof Error ? error.message : 'Generation failed',
