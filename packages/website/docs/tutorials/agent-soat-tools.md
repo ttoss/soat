@@ -377,7 +377,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/policies/attach-user" \
 
 ## Step 6 — Create soat tools
 
-Create three [agent tools](/docs/modules/agents#agent-tools). Notice the third tool — `docs-write` — has `preset_parameters` containing the public document's ID. The key uses **camelCase** (`documentId`) because soat tool schemas use camelCase property names internally. The model will never see the `documentId` field; it will be injected automatically at call time.
+Create three [agent tools](/docs/modules/agents#agent-tool). Notice the third tool — `docs-write` — has `preset_parameters` containing the public document's ID. The key uses **camelCase** (`documentId`) because soat tool schemas use camelCase property names internally. The model will never see the `documentId` field; it will be injected automatically at call time.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

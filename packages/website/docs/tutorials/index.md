@@ -1,8 +1,7 @@
 ---
 sidebar_position: 0
+title: Tutorials
 ---
-
-# Tutorials
 
 Tutorials walk you through complete, end-to-end workflows using SOAT. Each one starts from scratch and demonstrates how the platform's building blocks fit together in a real scenario.
 

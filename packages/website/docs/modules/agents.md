@@ -983,23 +983,3 @@ To find all currently active generations (useful for dashboards and health check
 ```
 GET /api/v1/agents/generations?status=in_progress&project_id=proj_ABC
 ```
-
-## Permissions
-
-| Action                         | Description                |
-| ------------------------------ | -------------------------- |
-| `agents:CreateAgent`           | Create an agent            |
-| `agents:GetAgent`              | Get agent details          |
-| `agents:ListAgents`            | List agents                |
-| `agents:UpdateAgent`           | Update an agent            |
-| `agents:DeleteAgent`           | Delete an agent            |
-| `agents:CreateAgentTool`       | Create an agent tool       |
-| `agents:GetAgentTool`          | Get agent tool details     |
-| `agents:ListAgentTools`        | List agent tools           |
-| `agents:UpdateAgentTool`       | Update an agent tool       |
-| `agents:DeleteAgentTool`       | Delete an agent tool       |
-| `agents:CreateAgentGeneration` | Run a generation           |
-| `agents:ListAgentTraces`       | List traces                |
-| `agents:GetAgentTrace`         | Get trace details          |
-| `agents:ListAgentGenerations`  | List persisted generations |
-| `agents:GetAgentGeneration`    | Get generation details     |

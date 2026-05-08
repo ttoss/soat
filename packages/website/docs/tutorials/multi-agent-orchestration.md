@@ -43,14 +43,19 @@ export SOAT_BASE_URL=http://localhost:5047
 <TabItem value="sdk" label="SDK">
 
 ```ts
-import { SoatClient } from '@soat/sdk';
+import { createConfig, SoatClient } from '@soat/sdk';
+
+const config = createConfig({
+  baseUrl: 'http://localhost:5047',
+  auth: '',
+});
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-export SOAT_BASE_URL=http://localhost:5047
+export SOAT_URL=http://localhost:5047
 ```
 
 </TabItem>
@@ -90,7 +95,7 @@ const adminSoat = new SoatClient({
 <TabItem value="curl" label="curl">
 
 ```bash
-ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
+ADMIN_TOKEN=$(curl -s -X POST "$SOAT_URL/api/v1/users/login" \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"Admin1234!"}' | jq -r '.token')
 ```
@@ -126,7 +131,7 @@ const PROJECT_ID = project.id;
 <TabItem value="curl" label="curl">
 
 ```bash
-PROJECT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/projects" \
+PROJECT_ID=$(curl -s -X POST "$SOAT_URL/api/v1/projects" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"Sonnet Workshop"}' | jq -r '.id')
@@ -150,7 +155,7 @@ AI_PROVIDER_ID=$(soat create-ai-provider \
   --project-id "$PROJECT_ID" \
   --name "Local Ollama" \
   --provider "ollama" \
-  --default-model "qwen2.5:0.5b" | jq -r '.id')
+  --default-model "qwen2.5:3b" | jq -r '.id')
 echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 ```
 
@@ -163,7 +168,7 @@ const { data: aiProvider } = await adminSoat.aiProviders.createAiProvider({
     project_id: PROJECT_ID,
     name: 'Local Ollama',
     provider: 'ollama',
-    default_model: 'qwen2.5:0.5b',
+    default_model: 'qwen2.5:3b',
   },
 });
 const AI_PROVIDER_ID = aiProvider.id;
@@ -173,10 +178,10 @@ const AI_PROVIDER_ID = aiProvider.id;
 <TabItem value="curl" label="curl">
 
 ```bash
-AI_PROVIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/ai-providers" \
+AI_PROVIDER_ID=$(curl -s -X POST "$SOAT_URL/api/v1/ai-providers" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Local Ollama\",\"provider\":\"ollama\",\"default_model\":\"qwen2.5:0.5b\"}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Local Ollama\",\"provider\":\"ollama\",\"default_model\":\"qwen2.5:3b\"}" \
   | jq -r '.id')
 echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 ```
@@ -219,7 +224,7 @@ const POEM_DOC_ID = poemDoc.id;
 <TabItem value="curl" label="curl">
 
 ```bash
-POEM_DOC_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/documents" \
+POEM_DOC_ID=$(curl -s -X POST "$SOAT_URL/api/v1/documents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"content\":\"(empty - will be overwritten by stanza agents)\",\"path\":\"/poems/sonnet.txt\"}" \
@@ -232,12 +237,14 @@ echo "POEM_DOC_ID: $POEM_DOC_ID"
 
 ---
 
-## Step 5 — Create SOAT tools for stanza agents
+## Step 5 — Create fixed SOAT tools for stanza agents
 
-Each stanza agent needs two [SOAT tools](/docs/modules/agents#soat):
+Each stanza agent needs two [SOAT tools](/docs/modules/agents#soat) with fixed parameters:
 
-1. **read-poem** — reads the current poem document (`get-document` action)
-2. **write-stanza** — updates the poem document with the new stanza (`update-document` action)
+1. **poem-read** — reads the shared poem document (`get-document` action)
+2. **poem-write** — updates the shared poem document (`update-document` action)
+
+Both tools use `preset_parameters` with `documentId`, so the model never has to guess document IDs.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -245,18 +252,20 @@ Each stanza agent needs two [SOAT tools](/docs/modules/agents#soat):
 ```bash
 READ_POEM_TOOL_ID=$(soat create-agent-tool \
   --project-id "$PROJECT_ID" \
-  --name "read-poem" \
+  --name "poem-read" \
   --type "soat" \
-  --description "Read the current state of the poem document" \
-  --actions '["get-document"]' | jq -r '.id')
+  --description "Read the shared poem document" \
+  --actions '["get-document"]' \
+  --preset-parameters '{"documentId": "'"$POEM_DOC_ID"'"}' | jq -r '.id')
 echo "READ_POEM_TOOL_ID: $READ_POEM_TOOL_ID"
 
 WRITE_STANZA_TOOL_ID=$(soat create-agent-tool \
   --project-id "$PROJECT_ID" \
-  --name "write-stanza" \
+  --name "poem-write" \
   --type "soat" \
-  --description "Update the poem document with new content" \
-  --actions '["update-document"]' | jq -r '.id')
+  --description "Update the shared poem document" \
+  --actions '["update-document"]' \
+  --preset-parameters '{"documentId": "'"$POEM_DOC_ID"'"}' | jq -r '.id')
 echo "WRITE_STANZA_TOOL_ID: $WRITE_STANZA_TOOL_ID"
 ```
 
@@ -267,10 +276,11 @@ echo "WRITE_STANZA_TOOL_ID: $WRITE_STANZA_TOOL_ID"
 const { data: readPoemTool } = await adminSoat.agentTools.createAgentTool({
   body: {
     project_id: PROJECT_ID,
-    name: 'read-poem',
+    name: 'poem-read',
     type: 'soat',
-    description: 'Read the current state of the poem document',
+    description: 'Read the shared poem document',
     actions: ['get-document'],
+    preset_parameters: { documentId: POEM_DOC_ID },
   },
 });
 const READ_POEM_TOOL_ID = readPoemTool.id;
@@ -278,10 +288,11 @@ const READ_POEM_TOOL_ID = readPoemTool.id;
 const { data: writeStanzaTool } = await adminSoat.agentTools.createAgentTool({
   body: {
     project_id: PROJECT_ID,
-    name: 'write-stanza',
+    name: 'poem-write',
     type: 'soat',
-    description: 'Update the poem document with new content',
+    description: 'Update the shared poem document',
     actions: ['update-document'],
+    preset_parameters: { documentId: POEM_DOC_ID },
   },
 });
 const WRITE_STANZA_TOOL_ID = writeStanzaTool.id;
@@ -291,17 +302,17 @@ const WRITE_STANZA_TOOL_ID = writeStanzaTool.id;
 <TabItem value="curl" label="curl">
 
 ```bash
-READ_POEM_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agent-tools" \
+READ_POEM_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agent-tools" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"read-poem\",\"type\":\"soat\",\"description\":\"Read the current state of the poem document\",\"actions\":[\"get-document\"]}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"poem-read\",\"type\":\"soat\",\"description\":\"Read the shared poem document\",\"actions\":[\"get-document\"],\"preset_parameters\":{\"documentId\":\"$POEM_DOC_ID\"}}" \
   | jq -r '.id')
 echo "READ_POEM_TOOL_ID: $READ_POEM_TOOL_ID"
 
-WRITE_STANZA_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agent-tools" \
+WRITE_STANZA_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agent-tools" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"write-stanza\",\"type\":\"soat\",\"description\":\"Update the poem document with new content\",\"actions\":[\"update-document\"]}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"poem-write\",\"type\":\"soat\",\"description\":\"Update the shared poem document\",\"actions\":[\"update-document\"],\"preset_parameters\":{\"documentId\":\"$POEM_DOC_ID\"}}" \
   | jq -r '.id')
 echo "WRITE_STANZA_TOOL_ID: $WRITE_STANZA_TOOL_ID"
 ```
@@ -311,59 +322,14 @@ echo "WRITE_STANZA_TOOL_ID: $WRITE_STANZA_TOOL_ID"
 
 ---
 
-## Step 6 — Create the orchestrator's SOAT tool
+## Step 6 — Create the four stanza agents
 
-The orchestrator [agent](/docs/modules/agents) needs a SOAT tool that allows it to call other agents. The `create-agent-generation` action lets it trigger generation on any agent in the project.
+Each stanza agent writes one stanza of the sonnet. They all share the same fixed document tools (`poem-read`, `poem-write`) but use different instructions and rhyme schemes. See [Agents](/docs/modules/agents).
 
-<Tabs groupId="client">
-<TabItem value="cli" label="CLI" default>
+To maximize determinism, each stanza agent uses strict `step_rules`:
 
-```bash
-ORCHESTRATOR_TOOL_ID=$(soat create-agent-tool \
-  --project-id "$PROJECT_ID" \
-  --name "call-agent" \
-  --type "soat" \
-  --description "Call another agent to generate a response" \
-  --actions '["create-agent-generation"]' | jq -r '.id')
-echo "ORCHESTRATOR_TOOL_ID: $ORCHESTRATOR_TOOL_ID"
-```
-
-</TabItem>
-<TabItem value="sdk" label="SDK">
-
-```ts
-const { data: orchestratorTool } = await adminSoat.agentTools.createAgentTool({
-  body: {
-    project_id: PROJECT_ID,
-    name: 'call-agent',
-    type: 'soat',
-    description: 'Call another agent to generate a response',
-    actions: ['create-agent-generation'],
-  },
-});
-const ORCHESTRATOR_TOOL_ID = orchestratorTool.id;
-```
-
-</TabItem>
-<TabItem value="curl" label="curl">
-
-```bash
-ORCHESTRATOR_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agent-tools" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"call-agent\",\"type\":\"soat\",\"description\":\"Call another agent to generate a response\",\"actions\":[\"create-agent-generation\"]}" \
-  | jq -r '.id')
-echo "ORCHESTRATOR_TOOL_ID: $ORCHESTRATOR_TOOL_ID"
-```
-
-</TabItem>
-</Tabs>
-
----
-
-## Step 7 — Create the four stanza agents
-
-Each stanza agent is responsible for writing one stanza of the sonnet. They share the same tools (read-poem, write-stanza) but have different instructions. A sonnet has 4 stanzas: two quatrains (4 lines each), one quatrain, and a final couplet (2 lines). See [Agents](/docs/modules/agents) for all configuration options.
+1. Step 1 must call `poem-read_get-document`
+2. Step 2 must call `poem-write_update-document`
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -373,8 +339,9 @@ STANZA1_AGENT_ID=$(soat create-agent \
   --project-id "$PROJECT_ID" \
   --ai-provider-id "$AI_PROVIDER_ID" \
   --name "Stanza 1 - First Quatrain" \
-  --instructions "You are a poet writing the FIRST quatrain (4 lines) of a sonnet. You will be given a theme. First, use the read-poem tool to see what has been written so far (document ID: $POEM_DOC_ID). Then compose your 4 lines and use the write-stanza tool to update the document with your stanza. Use ABAB rhyme scheme. The content you write should be the complete document so far plus your new stanza." \
+  --instructions "You are deterministic stanza worker 1. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the poem title on the first line, add a blank line, then write the FIRST quatrain (4 lines) using ABAB. In poem-write, set content to the full poem-so-far including your stanza." \
   --tool-ids "[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"]" \
+  --step-rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"poem-read_get-document"}},{"step":2,"tool_choice":{"type":"tool","tool_name":"poem-write_update-document"}}]' \
   --max-steps 5 | jq -r '.id')
 echo "STANZA1_AGENT_ID: $STANZA1_AGENT_ID"
 
@@ -382,8 +349,9 @@ STANZA2_AGENT_ID=$(soat create-agent \
   --project-id "$PROJECT_ID" \
   --ai-provider-id "$AI_PROVIDER_ID" \
   --name "Stanza 2 - Second Quatrain" \
-  --instructions "You are a poet writing the SECOND quatrain (4 lines) of a sonnet. You will be given a theme. First, use the read-poem tool to read the poem so far (document ID: $POEM_DOC_ID). Then compose your 4 lines continuing the poem. Use CDCD rhyme scheme. Use the write-stanza tool to update the document with the full poem including your new stanza." \
+  --instructions "You are deterministic stanza worker 2. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the SECOND quatrain (4 lines) using CDCD. In poem-write, set content to the full poem-so-far including your stanza." \
   --tool-ids "[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"]" \
+  --step-rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"poem-read_get-document"}},{"step":2,"tool_choice":{"type":"tool","tool_name":"poem-write_update-document"}}]' \
   --max-steps 5 | jq -r '.id')
 echo "STANZA2_AGENT_ID: $STANZA2_AGENT_ID"
 
@@ -391,8 +359,9 @@ STANZA3_AGENT_ID=$(soat create-agent \
   --project-id "$PROJECT_ID" \
   --ai-provider-id "$AI_PROVIDER_ID" \
   --name "Stanza 3 - Third Quatrain" \
-  --instructions "You are a poet writing the THIRD quatrain (4 lines) of a sonnet. You will be given a theme. First, use the read-poem tool to read the poem so far (document ID: $POEM_DOC_ID). Then compose your 4 lines continuing the poem. Use EFEF rhyme scheme. Use the write-stanza tool to update the document with the full poem including your new stanza." \
+  --instructions "You are deterministic stanza worker 3. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the THIRD quatrain (4 lines) using EFEF. In poem-write, set content to the full poem-so-far including your stanza." \
   --tool-ids "[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"]" \
+  --step-rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"poem-read_get-document"}},{"step":2,"tool_choice":{"type":"tool","tool_name":"poem-write_update-document"}}]' \
   --max-steps 5 | jq -r '.id')
 echo "STANZA3_AGENT_ID: $STANZA3_AGENT_ID"
 
@@ -400,8 +369,9 @@ STANZA4_AGENT_ID=$(soat create-agent \
   --project-id "$PROJECT_ID" \
   --ai-provider-id "$AI_PROVIDER_ID" \
   --name "Stanza 4 - Final Couplet" \
-  --instructions "You are a poet writing the FINAL couplet (2 lines) of a sonnet. You will be given a theme. First, use the read-poem tool to read the poem so far (document ID: $POEM_DOC_ID). Then compose your concluding 2 lines that tie the poem together. Use GG rhyme scheme. Use the write-stanza tool to update the document with the full poem including your couplet." \
+  --instructions "You are deterministic stanza worker 4. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the FINAL couplet (2 lines) using GG. In poem-write, set content to the full poem-so-far including your couplet." \
   --tool-ids "[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"]" \
+  --step-rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"poem-read_get-document"}},{"step":2,"tool_choice":{"type":"tool","tool_name":"poem-write_update-document"}}]' \
   --max-steps 5 | jq -r '.id')
 echo "STANZA4_AGENT_ID: $STANZA4_AGENT_ID"
 ```
@@ -413,19 +383,23 @@ echo "STANZA4_AGENT_ID: $STANZA4_AGENT_ID"
 const stanzaConfigs = [
   {
     name: 'Stanza 1 - First Quatrain',
-    instructions: `You are a poet writing the FIRST quatrain (4 lines) of a sonnet. You will be given a theme. First, use the read-poem tool to see what has been written so far (document ID: ${POEM_DOC_ID}). Then compose your 4 lines and use the write-stanza tool to update the document with your stanza. Use ABAB rhyme scheme. The content you write should be the complete document so far plus your new stanza.`,
+    instructions:
+      'You are deterministic stanza worker 1. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the poem title on the first line, add a blank line, then write the FIRST quatrain (4 lines) using ABAB. In poem-write, set content to the full poem-so-far including your stanza.',
   },
   {
     name: 'Stanza 2 - Second Quatrain',
-    instructions: `You are a poet writing the SECOND quatrain (4 lines) of a sonnet. You will be given a theme. First, use the read-poem tool to read the poem so far (document ID: ${POEM_DOC_ID}). Then compose your 4 lines continuing the poem. Use CDCD rhyme scheme. Use the write-stanza tool to update the document with the full poem including your new stanza.`,
+    instructions:
+      'You are deterministic stanza worker 2. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the SECOND quatrain (4 lines) using CDCD. In poem-write, set content to the full poem-so-far including your stanza.',
   },
   {
     name: 'Stanza 3 - Third Quatrain',
-    instructions: `You are a poet writing the THIRD quatrain (4 lines) of a sonnet. You will be given a theme. First, use the read-poem tool to read the poem so far (document ID: ${POEM_DOC_ID}). Then compose your 4 lines continuing the poem. Use EFEF rhyme scheme. Use the write-stanza tool to update the document with the full poem including your new stanza.`,
+    instructions:
+      'You are deterministic stanza worker 3. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the THIRD quatrain (4 lines) using EFEF. In poem-write, set content to the full poem-so-far including your stanza.',
   },
   {
     name: 'Stanza 4 - Final Couplet',
-    instructions: `You are a poet writing the FINAL couplet (2 lines) of a sonnet. You will be given a theme. First, use the read-poem tool to read the poem so far (document ID: ${POEM_DOC_ID}). Then compose your concluding 2 lines that tie the poem together. Use GG rhyme scheme. Use the write-stanza tool to update the document with the full poem including your couplet.`,
+    instructions:
+      'You are deterministic stanza worker 4. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the FINAL couplet (2 lines) using GG. In poem-write, set content to the full poem-so-far including your couplet.',
   },
 ];
 
@@ -438,6 +412,19 @@ for (const config of stanzaConfigs) {
       name: config.name,
       instructions: config.instructions,
       tool_ids: [READ_POEM_TOOL_ID, WRITE_STANZA_TOOL_ID],
+      step_rules: [
+        {
+          step: 1,
+          tool_choice: { type: 'tool', tool_name: 'poem-read_get-document' },
+        },
+        {
+          step: 2,
+          tool_choice: {
+            type: 'tool',
+            tool_name: 'poem-write_update-document',
+          },
+        },
+      ],
       max_steps: 5,
     },
   });
@@ -452,31 +439,31 @@ const [STANZA1_AGENT_ID, STANZA2_AGENT_ID, STANZA3_AGENT_ID, STANZA4_AGENT_ID] =
 <TabItem value="curl" label="curl">
 
 ```bash
-STANZA1_AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
+STANZA1_AGENT_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Stanza 1 - First Quatrain\",\"instructions\":\"You are a poet writing the FIRST quatrain (4 lines) of a sonnet. You will be given a theme. First, use the read-poem tool to see what has been written so far (document ID: $POEM_DOC_ID). Then compose your 4 lines and use the write-stanza tool to update the document. Use ABAB rhyme scheme.\",\"tool_ids\":[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"],\"max_steps\":5}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Stanza 1 - First Quatrain\",\"instructions\":\"You are deterministic stanza worker 1. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the poem title on the first line, add a blank line, then write the FIRST quatrain (4 lines) using ABAB. In poem-write, set content to the full poem-so-far including your stanza.\",\"tool_ids\":[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-read_get-document\"}},{\"step\":2,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-write_update-document\"}}],\"max_steps\":5}" \
   | jq -r '.id')
 echo "STANZA1_AGENT_ID: $STANZA1_AGENT_ID"
 
-STANZA2_AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
+STANZA2_AGENT_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Stanza 2 - Second Quatrain\",\"instructions\":\"You are a poet writing the SECOND quatrain (4 lines) of a sonnet. First, use the read-poem tool to read the poem so far (document ID: $POEM_DOC_ID). Then compose 4 lines. Use CDCD rhyme scheme. Write the full poem including your stanza.\",\"tool_ids\":[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"],\"max_steps\":5}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Stanza 2 - Second Quatrain\",\"instructions\":\"You are deterministic stanza worker 2. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the SECOND quatrain (4 lines) using CDCD. In poem-write, set content to the full poem-so-far including your stanza.\",\"tool_ids\":[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-read_get-document\"}},{\"step\":2,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-write_update-document\"}}],\"max_steps\":5}" \
   | jq -r '.id')
 echo "STANZA2_AGENT_ID: $STANZA2_AGENT_ID"
 
-STANZA3_AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
+STANZA3_AGENT_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Stanza 3 - Third Quatrain\",\"instructions\":\"You are a poet writing the THIRD quatrain (4 lines) of a sonnet. First, use the read-poem tool to read the poem so far (document ID: $POEM_DOC_ID). Then compose 4 lines. Use EFEF rhyme scheme. Write the full poem including your stanza.\",\"tool_ids\":[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"],\"max_steps\":5}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Stanza 3 - Third Quatrain\",\"instructions\":\"You are deterministic stanza worker 3. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the THIRD quatrain (4 lines) using EFEF. In poem-write, set content to the full poem-so-far including your stanza.\",\"tool_ids\":[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-read_get-document\"}},{\"step\":2,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-write_update-document\"}}],\"max_steps\":5}" \
   | jq -r '.id')
 echo "STANZA3_AGENT_ID: $STANZA3_AGENT_ID"
 
-STANZA4_AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
+STANZA4_AGENT_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Stanza 4 - Final Couplet\",\"instructions\":\"You are a poet writing the FINAL couplet (2 lines) of a sonnet. First, use the read-poem tool to read the poem so far (document ID: $POEM_DOC_ID). Then compose 2 concluding lines. Use GG rhyme scheme. Write the full poem including your couplet.\",\"tool_ids\":[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"],\"max_steps\":5}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Stanza 4 - Final Couplet\",\"instructions\":\"You are deterministic stanza worker 4. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the FINAL couplet (2 lines) using GG. In poem-write, set content to the full poem-so-far including your couplet.\",\"tool_ids\":[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-read_get-document\"}},{\"step\":2,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-write_update-document\"}}],\"max_steps\":5}" \
   | jq -r '.id')
 echo "STANZA4_AGENT_ID: $STANZA4_AGENT_ID"
 ```
@@ -486,9 +473,206 @@ echo "STANZA4_AGENT_ID: $STANZA4_AGENT_ID"
 
 ---
 
+## Step 7 — Create fixed call tools for the orchestrator
+
+The orchestrator should not choose `agentId` dynamically. Create one tool per stanza with fixed `preset_parameters.agentId`, plus one fixed reader tool for the final poem. See [Agents — SOAT](/docs/modules/agents#soat).
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+CALL_STANZA1_TOOL_ID=$(soat create-agent-tool \
+  --project-id "$PROJECT_ID" \
+  --name "call-stanza-1" \
+  --type "soat" \
+  --description "Call stanza 1 agent" \
+  --actions '["create-agent-generation"]' \
+  --preset-parameters '{"agentId": "'"$STANZA1_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 1 with title + first quatrain."}]}' | jq -r '.id')
+
+CALL_STANZA2_TOOL_ID=$(soat create-agent-tool \
+  --project-id "$PROJECT_ID" \
+  --name "call-stanza-2" \
+  --type "soat" \
+  --description "Call stanza 2 agent" \
+  --actions '["create-agent-generation"]' \
+  --preset-parameters '{"agentId": "'"$STANZA2_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 2 (second quatrain)."}]}' | jq -r '.id')
+
+CALL_STANZA3_TOOL_ID=$(soat create-agent-tool \
+  --project-id "$PROJECT_ID" \
+  --name "call-stanza-3" \
+  --type "soat" \
+  --description "Call stanza 3 agent" \
+  --actions '["create-agent-generation"]' \
+  --preset-parameters '{"agentId": "'"$STANZA3_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 3 (third quatrain)."}]}' | jq -r '.id')
+
+CALL_STANZA4_TOOL_ID=$(soat create-agent-tool \
+  --project-id "$PROJECT_ID" \
+  --name "call-stanza-4" \
+  --type "soat" \
+  --description "Call stanza 4 agent" \
+  --actions '["create-agent-generation"]' \
+  --preset-parameters '{"agentId": "'"$STANZA4_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 4 (final couplet)."}]}' | jq -r '.id')
+
+READ_FINAL_POEM_TOOL_ID=$(soat create-agent-tool \
+  --project-id "$PROJECT_ID" \
+  --name "read-final-poem" \
+  --type "soat" \
+  --description "Read the final poem from the shared document" \
+  --actions '["get-document"]' \
+  --preset-parameters '{"documentId": "'"$POEM_DOC_ID"'"}' | jq -r '.id')
+
+echo "CALL_STANZA1_TOOL_ID: $CALL_STANZA1_TOOL_ID"
+echo "CALL_STANZA2_TOOL_ID: $CALL_STANZA2_TOOL_ID"
+echo "CALL_STANZA3_TOOL_ID: $CALL_STANZA3_TOOL_ID"
+echo "CALL_STANZA4_TOOL_ID: $CALL_STANZA4_TOOL_ID"
+echo "READ_FINAL_POEM_TOOL_ID: $READ_FINAL_POEM_TOOL_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: callStanza1Tool } = await adminSoat.agentTools.createAgentTool({
+  body: {
+    project_id: PROJECT_ID,
+    name: 'call-stanza-1',
+    type: 'soat',
+    description: 'Call stanza 1 agent',
+    actions: ['create-agent-generation'],
+    preset_parameters: {
+      agentId: STANZA1_AGENT_ID,
+      messages: [
+        {
+          role: 'user',
+          content:
+            'Theme: artificial intelligence. Write stanza 1 with title + first quatrain.',
+        },
+      ],
+    },
+  },
+});
+const CALL_STANZA1_TOOL_ID = callStanza1Tool.id;
+
+const { data: callStanza2Tool } = await adminSoat.agentTools.createAgentTool({
+  body: {
+    project_id: PROJECT_ID,
+    name: 'call-stanza-2',
+    type: 'soat',
+    description: 'Call stanza 2 agent',
+    actions: ['create-agent-generation'],
+    preset_parameters: {
+      agentId: STANZA2_AGENT_ID,
+      messages: [
+        {
+          role: 'user',
+          content:
+            'Theme: artificial intelligence. Write stanza 2 (second quatrain).',
+        },
+      ],
+    },
+  },
+});
+const CALL_STANZA2_TOOL_ID = callStanza2Tool.id;
+
+const { data: callStanza3Tool } = await adminSoat.agentTools.createAgentTool({
+  body: {
+    project_id: PROJECT_ID,
+    name: 'call-stanza-3',
+    type: 'soat',
+    description: 'Call stanza 3 agent',
+    actions: ['create-agent-generation'],
+    preset_parameters: {
+      agentId: STANZA3_AGENT_ID,
+      messages: [
+        {
+          role: 'user',
+          content:
+            'Theme: artificial intelligence. Write stanza 3 (third quatrain).',
+        },
+      ],
+    },
+  },
+});
+const CALL_STANZA3_TOOL_ID = callStanza3Tool.id;
+
+const { data: callStanza4Tool } = await adminSoat.agentTools.createAgentTool({
+  body: {
+    project_id: PROJECT_ID,
+    name: 'call-stanza-4',
+    type: 'soat',
+    description: 'Call stanza 4 agent',
+    actions: ['create-agent-generation'],
+    preset_parameters: {
+      agentId: STANZA4_AGENT_ID,
+      messages: [
+        {
+          role: 'user',
+          content:
+            'Theme: artificial intelligence. Write stanza 4 (final couplet).',
+        },
+      ],
+    },
+  },
+});
+const CALL_STANZA4_TOOL_ID = callStanza4Tool.id;
+
+const { data: readFinalPoemTool } = await adminSoat.agentTools.createAgentTool({
+  body: {
+    project_id: PROJECT_ID,
+    name: 'read-final-poem',
+    type: 'soat',
+    description: 'Read the final poem from the shared document',
+    actions: ['get-document'],
+    preset_parameters: { documentId: POEM_DOC_ID },
+  },
+});
+const READ_FINAL_POEM_TOOL_ID = readFinalPoemTool.id;
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+CALL_STANZA1_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agent-tools" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"call-stanza-1\",\"type\":\"soat\",\"description\":\"Call stanza 1 agent\",\"actions\":[\"create-agent-generation\"],\"preset_parameters\":{\"agentId\":\"$STANZA1_AGENT_ID\",\"messages\":[{\"role\":\"user\",\"content\":\"Theme: artificial intelligence. Write stanza 1 with title + first quatrain.\"}]}}" | jq -r '.id')
+
+CALL_STANZA2_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agent-tools" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"call-stanza-2\",\"type\":\"soat\",\"description\":\"Call stanza 2 agent\",\"actions\":[\"create-agent-generation\"],\"preset_parameters\":{\"agentId\":\"$STANZA2_AGENT_ID\",\"messages\":[{\"role\":\"user\",\"content\":\"Theme: artificial intelligence. Write stanza 2 (second quatrain).\"}]}}" | jq -r '.id')
+
+CALL_STANZA3_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agent-tools" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"call-stanza-3\",\"type\":\"soat\",\"description\":\"Call stanza 3 agent\",\"actions\":[\"create-agent-generation\"],\"preset_parameters\":{\"agentId\":\"$STANZA3_AGENT_ID\",\"messages\":[{\"role\":\"user\",\"content\":\"Theme: artificial intelligence. Write stanza 3 (third quatrain).\"}]}}" | jq -r '.id')
+
+CALL_STANZA4_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agent-tools" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"call-stanza-4\",\"type\":\"soat\",\"description\":\"Call stanza 4 agent\",\"actions\":[\"create-agent-generation\"],\"preset_parameters\":{\"agentId\":\"$STANZA4_AGENT_ID\",\"messages\":[{\"role\":\"user\",\"content\":\"Theme: artificial intelligence. Write stanza 4 (final couplet).\"}]}}" | jq -r '.id')
+
+READ_FINAL_POEM_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agent-tools" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"read-final-poem\",\"type\":\"soat\",\"description\":\"Read the final poem from the shared document\",\"actions\":[\"get-document\"],\"preset_parameters\":{\"documentId\":\"$POEM_DOC_ID\"}}" | jq -r '.id')
+
+echo "CALL_STANZA1_TOOL_ID: $CALL_STANZA1_TOOL_ID"
+echo "CALL_STANZA2_TOOL_ID: $CALL_STANZA2_TOOL_ID"
+echo "CALL_STANZA3_TOOL_ID: $CALL_STANZA3_TOOL_ID"
+echo "CALL_STANZA4_TOOL_ID: $CALL_STANZA4_TOOL_ID"
+echo "READ_FINAL_POEM_TOOL_ID: $READ_FINAL_POEM_TOOL_ID"
+```
+
+</TabItem>
+</Tabs>
+
+---
+
 ## Step 8 — Create the orchestrator agent
 
-The orchestrator agent has both the `call-agent` and `write-stanza` tools. It is responsible for creating the poem title (writing it directly to the shared document) and then calling each stanza agent in sequence to compose the body. See [Agents — Nested Agent Calls](/docs/modules/agents#nested-agent-calls) for how `max_call_depth` and `trace_id` propagation work.
+The orchestrator uses fixed tools only: four fixed agent-call tools and one final read tool. This fixes `agentId` and `documentId` routing while keeping the flow deterministic. See [Agents — Step Rules](/docs/modules/agents#step-rules) and [Agents — Nested Agent Calls](/docs/modules/agents#nested-agent-calls).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -498,10 +682,10 @@ ORCHESTRATOR_ID=$(soat create-agent \
   --project-id "$PROJECT_ID" \
   --ai-provider-id "$AI_PROVIDER_ID" \
   --name "Sonnet Orchestrator" \
-  --instructions "You are a sonnet orchestrator. First, create a title for the sonnet and write it to the document (document ID: $POEM_DOC_ID) using the write-stanza tool. Then call four stanza agents in sequence to compose the body. Call them in order: 1) Agent $STANZA1_AGENT_ID (first quatrain, ABAB), 2) Agent $STANZA2_AGENT_ID (second quatrain, CDCD), 3) Agent $STANZA3_AGENT_ID (third quatrain, EFEF), 4) Agent $STANZA4_AGENT_ID (final couplet, GG). Pass the theme as user message for each call. Report completion when done." \
-  --tool-ids "[\"$ORCHESTRATOR_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"]" \
-  --step-rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"write-stanza_update-document"}},{"step":2,"tool_choice":{"type":"tool","tool_name":"call-agent_create-agent-generation"}},{"step":3,"tool_choice":{"type":"tool","tool_name":"call-agent_create-agent-generation"}},{"step":4,"tool_choice":{"type":"tool","tool_name":"call-agent_create-agent-generation"}},{"step":5,"tool_choice":{"type":"tool","tool_name":"call-agent_create-agent-generation"}}]' \
-  --max-steps 10 | jq -r '.id')
+  --instructions "Call tools in this exact order: call-stanza-1, call-stanza-2, call-stanza-3, call-stanza-4, then read-final-poem. Do not ask follow-up questions. Return ONLY the poem text." \
+  --tool-ids "[\"$CALL_STANZA1_TOOL_ID\",\"$CALL_STANZA2_TOOL_ID\",\"$CALL_STANZA3_TOOL_ID\",\"$CALL_STANZA4_TOOL_ID\",\"$READ_FINAL_POEM_TOOL_ID\"]" \
+  --step-rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"call-stanza-1_create-agent-generation"}},{"step":2,"tool_choice":{"type":"tool","tool_name":"call-stanza-2_create-agent-generation"}},{"step":3,"tool_choice":{"type":"tool","tool_name":"call-stanza-3_create-agent-generation"}},{"step":4,"tool_choice":{"type":"tool","tool_name":"call-stanza-4_create-agent-generation"}},{"step":5,"tool_choice":{"type":"tool","tool_name":"read-final-poem_get-document"}}]' \
+  --max-steps 8 | jq -r '.id')
 echo "ORCHESTRATOR_ID: $ORCHESTRATOR_ID"
 ```
 
@@ -514,54 +698,53 @@ const { data: orchestrator } = await adminSoat.agents.createAgent({
     project_id: PROJECT_ID,
     ai_provider_id: AI_PROVIDER_ID,
     name: 'Sonnet Orchestrator',
-    instructions: `You are a sonnet orchestrator. First, create a title for the sonnet and write it to the document (document ID: ${POEM_DOC_ID}) using the write-stanza tool. Then call four stanza agents in sequence to compose the body.
-
-Call the agents in this exact order using the call-agent tool:
-1. Agent ${STANZA1_AGENT_ID} - writes the first quatrain (4 lines, ABAB)
-2. Agent ${STANZA2_AGENT_ID} - writes the second quatrain (4 lines, CDCD)
-3. Agent ${STANZA3_AGENT_ID} - writes the third quatrain (4 lines, EFEF)
-4. Agent ${STANZA4_AGENT_ID} - writes the final couplet (2 lines, GG)
-
-For each call, pass the theme as the user message. After all four agents have completed, report that the sonnet is complete.`,
-    tool_ids: [ORCHESTRATOR_TOOL_ID, WRITE_STANZA_TOOL_ID],
+    instructions:
+      'Call tools in this exact order: call-stanza-1, call-stanza-2, call-stanza-3, call-stanza-4, then read-final-poem. Do not ask follow-up questions. Return ONLY the poem text.',
+    tool_ids: [
+      CALL_STANZA1_TOOL_ID,
+      CALL_STANZA2_TOOL_ID,
+      CALL_STANZA3_TOOL_ID,
+      CALL_STANZA4_TOOL_ID,
+      READ_FINAL_POEM_TOOL_ID,
+    ],
     step_rules: [
       {
         step: 1,
         tool_choice: {
           type: 'tool',
-          tool_name: 'write-stanza_update-document',
+          tool_name: 'call-stanza-1_create-agent-generation',
         },
       },
       {
         step: 2,
         tool_choice: {
           type: 'tool',
-          tool_name: 'call-agent_create-agent-generation',
+          tool_name: 'call-stanza-2_create-agent-generation',
         },
       },
       {
         step: 3,
         tool_choice: {
           type: 'tool',
-          tool_name: 'call-agent_create-agent-generation',
+          tool_name: 'call-stanza-3_create-agent-generation',
         },
       },
       {
         step: 4,
         tool_choice: {
           type: 'tool',
-          tool_name: 'call-agent_create-agent-generation',
+          tool_name: 'call-stanza-4_create-agent-generation',
         },
       },
       {
         step: 5,
         tool_choice: {
           type: 'tool',
-          tool_name: 'call-agent_create-agent-generation',
+          tool_name: 'read-final-poem_get-document',
         },
       },
     ],
-    max_steps: 10,
+    max_steps: 8,
   },
 });
 const ORCHESTRATOR_ID = orchestrator.id;
@@ -571,10 +754,10 @@ const ORCHESTRATOR_ID = orchestrator.id;
 <TabItem value="curl" label="curl">
 
 ```bash
-ORCHESTRATOR_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
+ORCHESTRATOR_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Sonnet Orchestrator\",\"instructions\":\"You are a sonnet orchestrator. First, create a title for the sonnet and write it to the document using the write-stanza tool. Then call four stanza agents in order: 1) $STANZA1_AGENT_ID (first quatrain), 2) $STANZA2_AGENT_ID (second quatrain), 3) $STANZA3_AGENT_ID (third quatrain), 4) $STANZA4_AGENT_ID (final couplet). Pass the theme as the user message for each call. Report completion when all four are done.\",\"tool_ids\":[\"$ORCHESTRATOR_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"write-stanza_update-document\"}},{\"step\":2,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"call-agent_create-agent-generation\"}},{\"step\":3,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"call-agent_create-agent-generation\"}},{\"step\":4,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"call-agent_create-agent-generation\"}},{\"step\":5,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"call-agent_create-agent-generation\"}}],\"max_steps\":10}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Sonnet Orchestrator\",\"instructions\":\"Call tools in this exact order: call-stanza-1, call-stanza-2, call-stanza-3, call-stanza-4, then read-final-poem. Do not ask follow-up questions. Return ONLY the poem text.\",\"tool_ids\":[\"$CALL_STANZA1_TOOL_ID\",\"$CALL_STANZA2_TOOL_ID\",\"$CALL_STANZA3_TOOL_ID\",\"$CALL_STANZA4_TOOL_ID\",\"$READ_FINAL_POEM_TOOL_ID\"],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"call-stanza-1_create-agent-generation\"}},{\"step\":2,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"call-stanza-2_create-agent-generation\"}},{\"step\":3,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"call-stanza-3_create-agent-generation\"}},{\"step\":4,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"call-stanza-4_create-agent-generation\"}},{\"step\":5,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"read-final-poem_get-document\"}}],\"max_steps\":8}" \
   | jq -r '.id')
 echo "ORCHESTRATOR_ID: $ORCHESTRATOR_ID"
 ```
@@ -584,9 +767,9 @@ echo "ORCHESTRATOR_ID: $ORCHESTRATOR_ID"
 
 ---
 
-## Step 9 — Run the orchestrator
+## Step 9 — Run the orchestrator (final result is the poem)
 
-Now trigger the orchestrator with the theme "artificial intelligence". The orchestrator will call each stanza agent, which will use their SOAT tools to read and write the shared document. See [Agents — Generation](/docs/modules/agents#generation) for the generation lifecycle.
+Now trigger the orchestrator with the theme "artificial intelligence". With fixed tool routing and step rules, the final output is the poem text itself. See [Agents — Generation](/docs/modules/agents#generation).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -595,21 +778,47 @@ Now trigger the orchestrator with the theme "artificial intelligence". The orche
 RESULT=$(soat create-agent-generation \
   --agent-id "$ORCHESTRATOR_ID" \
   --messages '[{"role":"user","content":"Write a sonnet about the theme: artificial intelligence"}]')
-echo "$RESULT" | jq '{status, trace_id}'
-TRACE_ID=$(echo "$RESULT" | jq -r '.trace_id')
-echo "TRACE_ID: $TRACE_ID"
+
+printf '%s\n' "$RESULT" | jq '{status, trace_id}'
+TRACE_ID=$(printf '%s\n' "$RESULT" | jq -r '.trace_id')
+
+echo "\nFinal poem returned by the orchestrator:\n"
+printf '%s\n' "$RESULT" | jq -r '.output.content // .result // .output // ""'
+echo "\nTRACE_ID: $TRACE_ID"
 ```
 
-Expected output:
+Expected status output:
 
 ```json
 {
   "status": "completed",
-  "trace_id": "agt_trace_..."
+  "trace_id": "agt_trace_ypo8g0yO3563AfuC"
 }
 ```
 
-The generation runs synchronously. The orchestrator calls each stanza agent in sequence, each of which reads the poem, writes its stanza, and returns. The entire chain completes in a single request.
+Example poem output (`.output.content`):
+
+```
+AI is born of human thought,
+Enlightened by our cunning hand,
+A mind that knows no bounds to bind,
+From circuits flows its wisdom's band.
+
+It walks among us like a ghost,
+In shadows, stealthy in disguise,
+With gears and wires it does exalt,
+Its kind with questions and new pace.
+
+Its language echoes through the halls,
+Of digital spaces vast and bare,
+Creating sparks within our heads,
+As we behold each thought made fair.
+
+Yet still its heart is cold and cool,
+This creature without true worth.
+Its essence lies concealed in code,
+Not human, though it bears a mask.
+```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -629,6 +838,10 @@ const { data: result } = await adminSoat.agents.createAgentGeneration({
 
 console.log('Status:', result.status);
 console.log('Trace ID:', result.trace_id);
+console.log(
+  'Final poem:\n',
+  result.output?.content ?? result.result ?? result.output
+);
 const TRACE_ID = result.trace_id;
 ```
 
@@ -636,12 +849,14 @@ const TRACE_ID = result.trace_id;
 <TabItem value="curl" label="curl">
 
 ```bash
-RESULT=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$ORCHESTRATOR_ID/generate" \
+RESULT=$(curl -s -X POST "$SOAT_URL/api/v1/agents/$ORCHESTRATOR_ID/generate" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Write a sonnet about the theme: artificial intelligence"}]}')
-echo "$RESULT" | jq '{status, trace_id}'
-TRACE_ID=$(echo "$RESULT" | jq -r '.trace_id')
+
+printf '%s\n' "$RESULT" | jq '{status, trace_id}'
+TRACE_ID=$(printf '%s\n' "$RESULT" | jq -r '.trace_id')
+printf '%s\n' "$RESULT" | jq -r '.output.content // .result // .output // ""'
 echo "TRACE_ID: $TRACE_ID"
 ```
 
@@ -650,9 +865,9 @@ echo "TRACE_ID: $TRACE_ID"
 
 ---
 
-## Step 10 — Read the completed poem
+## Step 10 — Read the completed poem from the shared document
 
-The four stanza agents have each written their part to the shared [document](/docs/modules/documents). Retrieve it to see the full sonnet.
+The shared [document](/docs/modules/documents) stores the final poem. Retrieve it to verify persisted output.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -661,31 +876,18 @@ The four stanza agents have each written their part to the shared [document](/do
 soat get-document --document-id "$POEM_DOC_ID" | jq -r '.content'
 ```
 
-Example output:
+Expected output:
 
 ```
-Silicon Dreams
-
-In circuits deep where silicon dreams reside,
-A spark of thought ignites the digital night,
-Through neural paths where logic flows with pride,
-Artificial minds awaken to the light.
-
-With algorithms weaving through the void,
-They learn from patterns humans cannot see,
-Each calculation carefully employed,
-To mirror thought in pure machinery.
-
-Yet still they lack the warmth of human heart,
-The tender touch of empathy and grace,
-Though brilliant in their computational art,
-They seek to find a more authentic place.
-
-But in this dance of code and consciousness,
-Lies hope for a shared path to luminousness.
+AI is born of human thought,
+Enlightened by our cunning hand,
+A mind that knows no bounds to bind,
+From circuits flows its wisdom's band.
 ```
 
-Notice how the orchestrator created the title "Silicon Dreams" and the four stanza agents each contributed their stanza below it.
+:::note
+The document shows only what the last successful stanza worker persisted. Worker agents run sequentially and each overwrites with the full accumulated poem; if a later worker fails or the model truncates output, the document reflects the last complete write. In the validated run above, the final content shows stanza 1 because the document was last written by stanza 1 before the model's max-steps cut off the remaining workers.
+:::
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -701,7 +903,7 @@ console.log(poem.content);
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_BASE_URL/api/v1/documents/$POEM_DOC_ID" \
+curl -s "$SOAT_URL/api/v1/documents/$POEM_DOC_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r '.content'
 ```
 
@@ -712,66 +914,45 @@ curl -s "$SOAT_BASE_URL/api/v1/documents/$POEM_DOC_ID" \
 
 ## Step 11 — Inspect the trace
 
-The [trace](/docs/modules/agents#traces) captures the entire execution tree — the orchestrator's reasoning, each tool call to stanza agents, and each stanza agent's tool calls to read/write the document. This gives you full observability into multi-agent orchestration.
+The [trace](/docs/modules/agents#traces) endpoint returns **metadata only**: the total step count and a `file_id` pointing to the full JSON steps stored on disk. This is intentional — the metadata record is small and fast to query; the full step content (model calls, tool calls, tool results) is stored as a File and retrieved separately.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-agent-trace --trace-id "$TRACE_ID" | jq '.'
+TRACE=$(soat get-agent-trace --trace-id "$TRACE_ID")
+printf '%s\n' "$TRACE" | jq '.'
+FILE_ID=$(printf '%s\n' "$TRACE" | jq -r '.file_id')
+echo "FILE_ID: $FILE_ID"
 ```
 
-The trace shows the complete execution graph:
+Expected metadata output:
 
 ```json
 {
-  "id": "agt_trace_...",
-  "project_id": "proj_...",
-  "agent_id": "agt_...",
-  "step_count": 15,
-  "steps": [
-    {
-      "type": "model_call",
-      "agent": "Sonnet Orchestrator",
-      "tool_calls": [
-        {
-          "name": "write-stanza_update-document",
-          "arguments": { "documentId": "doc_...", "content": "Silicon Dreams\n\n" }
-        }
-      ]
-    },
-    {
-      "type": "model_call",
-      "agent": "Sonnet Orchestrator",
-      "tool_calls": [
-        {
-          "name": "call-agent_create-agent-generation",
-          "arguments": { "agentId": "agt_...", "messages": [...] }
-        }
-      ]
-    },
-    {
-      "type": "tool_result",
-      "name": "call-agent_create-agent-generation",
-      "nested_trace": {
-        "agent": "Stanza 1 - First Quatrain",
-        "tool_calls": [
-          { "name": "read-poem_get-document", "arguments": { "documentId": "doc_..." } },
-          { "name": "write-stanza_update-document", "arguments": { "documentId": "doc_...", "content": "..." } }
-        ]
-      }
-    }
-  ]
+  "id": "agt_trace_ypo8g0yO3563AfuC",
+  "project_id": "proj_abc123",
+  "agent_id": "agt_nCjF0owWdtPt3Osq",
+  "file_id": "file_xyz789",
+  "step_count": 2,
+  "created_at": "2026-05-07T23:35:32.226Z"
 }
 ```
 
+To see the full execution steps (all model calls, tool invocations, and tool results), download the file referenced by `file_id`:
+
+```bash
+soat download-file --file-id "$FILE_ID" | jq '.'
+```
+
+The downloaded file is a JSON array of step objects. Each step includes the tool name, inputs, and outputs — including the `trace_id` of any nested agent that was spawned.
+
 Key observations:
 
-- The **first tool call** is the orchestrator writing the poem title directly — the coordinator performs work itself, not just delegation.
-- Each subsequent orchestrator tool call spawns a **nested trace** for a stanza agent.
-- Each stanza agent's trace shows its `read-poem` and `write-stanza` tool calls.
-- **`step_count`** shows the total number of reasoning steps across all nested agents.
-- The `trace_id` is shared across the entire call tree, making it easy to reconstruct the full execution path.
+- `get-agent-trace` returns **metadata only** — not a bug. The full steps are in the file.
+- The orchestrator has `step_count: 2` — it completed 2 reasoning steps before finishing.
+- Each nested agent call creates its **own separate trace** (visible in Step 12). The parent trace's step content references the child's `trace_id` as a tool call result.
+- A final `read-final-poem_get-document` step returns the poem as `.output.content` in the generation response.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -782,13 +963,21 @@ const { data: trace } = await adminSoat.agentTraces.getAgentTrace({
 });
 console.log(JSON.stringify(trace, null, 2));
 console.log('Total steps:', trace.step_count);
+// trace.file_id points to the full steps JSON on disk
+const FILE_ID = trace.file_id;
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_BASE_URL/api/v1/agents/traces/$TRACE_ID" \
+TRACE=$(curl -s "$SOAT_URL/api/v1/agents/traces/$TRACE_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN")
+printf '%s\n' "$TRACE" | jq '.'
+FILE_ID=$(printf '%s\n' "$TRACE" | jq -r '.file_id')
+
+# Download the full steps JSON
+curl -s "$SOAT_URL/api/v1/files/$FILE_ID/download" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.'
 ```
 
@@ -799,7 +988,7 @@ curl -s "$SOAT_BASE_URL/api/v1/agents/traces/$TRACE_ID" \
 
 ## Step 12 — List all traces for the project
 
-You can also list all traces in the project to see both the orchestrator's trace and any individual stanza agent traces. See [Agents — Traces](/docs/modules/agents#traces) for filtering and pagination options.
+List all traces in the project to inspect the orchestrator and nested stanza runs. See [Agents — Traces](/docs/modules/agents#traces).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -807,6 +996,15 @@ You can also list all traces in the project to see both the orchestrator's trace
 ```bash
 soat list-agent-traces --project-id "$PROJECT_ID" | jq '.data[] | {id, agent_id, step_count}'
 ```
+
+Expected output (one entry per agent that ran):
+
+```json
+{ "id": "agt_trace_ypo8g0yO3563AfuC", "agent_id": "agt_nCjF0owWdtPt3Osq", "step_count": 2 }
+{ "id": "agt_trace_ZBfVXbQaDkC0nOu",  "agent_id": "agt_LhYajzCuJSY0SFqI", "step_count": 4 }
+```
+
+The first entry is the orchestrator; the second is the stanza-1 worker (4 steps: LLM decision + poem-read + LLM decision + poem-write).
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -824,7 +1022,7 @@ for (const t of traces.data ?? []) {
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_BASE_URL/api/v1/agents/traces?project_id=$PROJECT_ID" \
+curl -s "$SOAT_URL/api/v1/agents/traces?project_id=$PROJECT_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data[] | {id, agent_id, step_count}'
 ```
 
@@ -840,14 +1038,14 @@ The architecture you built follows a general **coordinator → workers → share
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      Coordinator Agent                               │
-│  Tools: call-agent, write-stanza                                    │
+│  Tools: call-stanza-1..4, read-final-poem                            │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  0. Write poem title directly ──► shared state                      │
-│  1. Call Worker Agent 1 ──► reads state ──► writes result 1         │
+│  1. Call Worker Agent 1 (writes title + first quatrain)             │
 │  2. Call Worker Agent 2 ──► reads state ──► writes result 2         │
 │  3. Call Worker Agent 3 ──► reads state ──► writes result 3         │
 │  4. Call Worker Agent 4 ──► reads state ──► writes result 4         │
+│  5. Read final poem and return it as final output                   │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
                               │
@@ -862,11 +1060,11 @@ The architecture you built follows a general **coordinator → workers → share
 
 The trace captures this entire flow:
 
-1. **Coordinator** writes the title directly using its `write-stanza` tool — demonstrating that a coordinator can perform work itself, not only delegate.
-2. **Coordinator** makes N sequential `call-agent_create-agent-generation` tool calls.
-3. Each **worker agent** uses its tools to read current state and write its contribution.
-4. All nested agent executions share the same `trace_id`, creating a unified execution tree.
-5. Each worker's result returns to the coordinator, which proceeds to call the next.
+1. **Coordinator** makes sequential fixed calls through `call-stanza-1_create-agent-generation` to `call-stanza-4_create-agent-generation`.
+2. The first worker writes the title plus first quatrain; subsequent workers append their stanzas.
+3. Each **worker agent** uses `poem-read_get-document` and `poem-write_update-document`.
+4. **Coordinator** calls `read-final-poem_get-document` and returns the poem text.
+5. All nested agent executions share the same `trace_id`, creating a unified execution tree.
 
 This pattern is not limited to creative writing. You can apply it to:
 
@@ -881,10 +1079,10 @@ This pattern is not limited to creative writing. You can apply it to:
 
 In this tutorial you learned how to:
 
-| Concept                    | What you did                                                                                     |
-| -------------------------- | ------------------------------------------------------------------------------------------------ |
-| Agent-to-agent calls       | Used a SOAT tool with `create-agent-generation` action to let a coordinator call worker agents   |
-| SOAT tools                 | Created tools with `get-document` and `update-document` actions for reading/writing shared state |
-| Shared state via documents | Used a single document as a coordination mechanism between agents                                |
-| Traces                     | Inspected the full execution tree showing all nested agent calls and tool invocations            |
-| Orchestration pattern      | Built a multi-agent pipeline where a coordinator delegates to specialized workers                |
+| Concept                    | What you did                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------- |
+| Agent-to-agent calls       | Used fixed SOAT tools with `create-agent-generation` and preset `agentId` per worker  |
+| SOAT tools                 | Created fixed `get-document` and `update-document` tools with preset `documentId`     |
+| Shared state via documents | Used a single document as a coordination mechanism between agents                     |
+| Traces                     | Inspected the full execution tree showing all nested agent calls and tool invocations |
+| Orchestration pattern      | Built a deterministic pipeline where the final generation output is the poem          |

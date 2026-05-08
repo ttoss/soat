@@ -69,15 +69,3 @@ Example: a memory may store `{ "paths": ["docs/"] }` and a caller overrides it a
   "limit": 10
 }
 ```
-
-## Permissions
-
-| Action                  | Description                                         |
-| ----------------------- | --------------------------------------------------- |
-| `memories:ListMemories` | List all memory configurations in a project         |
-| `memories:CreateMemory` | Create a new memory configuration                   |
-| `memories:GetMemory`    | Read a single memory configuration (and run search) |
-| `memories:UpdateMemory` | Update a memory configuration                       |
-| `memories:DeleteMemory` | Delete a memory configuration                       |
-
-The `searchMemory` operation (`POST /memories/:memory_id/search`) reuses the `memories:GetMemory` action — any principal that can read a memory can also invoke its search.
