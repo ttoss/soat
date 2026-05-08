@@ -29,6 +29,8 @@ runs:
       with:
         path: /tmp/ollama-image.tar
         key: ollama-docker-image-${{ hashFiles('tests/docker-compose.smoke.yml') }}
+        restore-keys: |
+          ollama-docker-image-
 
     - name: Load Ollama Docker image from cache
       if: steps.cache-ollama-image.outputs.cache-hit == 'true'

@@ -1,4 +1,4 @@
-import { canAccessFile } from 'src/rest/v1/fileAuthorization';
+import { canAccessFile } from 'src/lib/fileAuthorization';
 
 describe('fileAuthorization', () => {
   test('builds resources/context without tags', async () => {

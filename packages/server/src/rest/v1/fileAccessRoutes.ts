@@ -10,7 +10,7 @@ import {
 } from 'src/lib/files';
 
 import { db } from '../../db';
-import { canAccessFile } from './fileAuthorization';
+import { canAccessFile } from '../../lib/fileAuthorization';
 
 const collectStreamToBuffer = async (args: {
   stream: AsyncIterable<unknown>;
