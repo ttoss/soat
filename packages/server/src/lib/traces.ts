@@ -55,6 +55,24 @@ const mapTrace = (
   };
 };
 
+const findTraceDbId = async (
+  publicId: string | null | undefined
+): Promise<number | null> => {
+  if (!publicId) return null;
+  return ((await db.Trace.findOne({ where: { publicId } }))?.id ?? null) as
+    | number
+    | null;
+};
+
+const findFileDbId = async (
+  publicId: string | null | undefined
+): Promise<number | null> => {
+  if (!publicId) return null;
+  return ((await db.File.findOne({ where: { publicId } }))?.id ?? null) as
+    | number
+    | null;
+};
+
 const upsertTraceRecord = async (args: {
   traceId: string;
   projectId: number;
@@ -69,20 +87,9 @@ const upsertTraceRecord = async (args: {
     where: { publicId: args.traceId },
   });
 
-  const fileDbId = args.filePublicId
-    ? ((await db.File.findOne({ where: { publicId: args.filePublicId } }))
-        ?.id ?? null)
-    : null;
-
-  const parentTraceDbId = args.parentTraceId
-    ? ((await db.Trace.findOne({ where: { publicId: args.parentTraceId } }))
-        ?.id ?? null)
-    : null;
-
-  const rootTraceDbId = args.rootTraceId
-    ? ((await db.Trace.findOne({ where: { publicId: args.rootTraceId } }))
-        ?.id ?? null)
-    : null;
+  const fileDbId = await findFileDbId(args.filePublicId);
+  const parentTraceDbId = await findTraceDbId(args.parentTraceId);
+  const rootTraceDbId = await findTraceDbId(args.rootTraceId);
 
   if (existing) {
     await existing.update({
@@ -200,6 +207,26 @@ export const getTrace = async (args: {
   return mapTrace(row);
 };
 
+const buildTraceTree = (traces: Trace[]): TraceTreeNode | undefined => {
+  const nodeMap = new Map<string, TraceTreeNode>();
+  for (const trace of traces) {
+    nodeMap.set(trace.id, { ...trace, children: [] });
+  }
+
+  let root: TraceTreeNode | undefined;
+  for (const node of nodeMap.values()) {
+    if (!node.parentTraceId) {
+      root = node;
+    } else {
+      const parent = nodeMap.get(node.parentTraceId);
+      if (parent) {
+        parent.children.push(node);
+      }
+    }
+  }
+  return root;
+};
+
 /**
  * Returns the full trace tree rooted at the given trace.
  *
@@ -247,24 +274,5 @@ export const getTraceTree = async (args: {
   });
 
   const allTraces = allRows.map(mapTrace);
-
-  // Build tree in memory
-  const nodeMap = new Map<string, TraceTreeNode>();
-  for (const trace of allTraces) {
-    nodeMap.set(trace.id, { ...trace, children: [] });
-  }
-
-  let root: TraceTreeNode | undefined;
-  for (const node of nodeMap.values()) {
-    if (!node.parentTraceId) {
-      root = node;
-    } else {
-      const parent = nodeMap.get(node.parentTraceId);
-      if (parent) {
-        parent.children.push(node);
-      }
-    }
-  }
-
-  return root ?? 'not_found';
+  return buildTraceTree(allTraces) ?? 'not_found';
 };

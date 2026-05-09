@@ -145,6 +145,78 @@ const buildInputSchemaWithoutPresets = (
   };
 };
 
+const buildSoatRequestBody = (args: {
+  def: (typeof soatTools)[number];
+  rawArgs: Record<string, unknown>;
+  toolContext?: Record<string, string>;
+  traceId?: string;
+  rootTraceId?: string | null;
+}) => {
+  const soatBody = args.def.body ? args.def.body(args.rawArgs) : undefined;
+  const soatBodyWithContext =
+    soatBody && args.toolContext
+      ? { ...soatBody, toolContext: args.toolContext }
+      : soatBody;
+  return soatBodyWithContext && args.traceId
+    ? {
+        ...soatBodyWithContext,
+        parent_trace_id: args.traceId,
+        root_trace_id: args.rootTraceId ?? args.traceId,
+      }
+    : soatBodyWithContext;
+};
+
+const executeSoatTool = async (args: {
+  toolName: string;
+  def: (typeof soatTools)[number];
+  rawArgs: Record<string, unknown>;
+  base: string;
+  authHeader?: string;
+  toolContext?: Record<string, string>;
+  traceId?: string;
+  rootTraceId?: string | null;
+  buildContextHeaders: (
+    toolContext?: Record<string, string>
+  ) => Record<string, string>;
+  logToolCallingError: LogToolCallingError;
+}) => {
+  const path = args.def.path(args.rawArgs);
+  const body = buildSoatRequestBody({
+    def: args.def,
+    rawArgs: args.rawArgs,
+    toolContext: args.toolContext,
+    traceId: args.traceId,
+    rootTraceId: args.rootTraceId,
+  });
+  try {
+    const url = `${args.base}${path}`;
+    const toolId = `${args.toolName}_${args.def.name}`;
+    log('soat tool execute: %s %s %s', toolId, args.def.method, url);
+    const response = await fetch(url, {
+      method: args.def.method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(args.authHeader ? { Authorization: args.authHeader } : {}),
+        ...args.buildContextHeaders(args.toolContext),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const responseBody = await response.json();
+    log('soat tool result: %s status=%d', toolId, response.status);
+    return responseBody;
+  } catch (error) {
+    log('soat tool error: %s', `${args.toolName}_${args.def.name}`);
+    args.logToolCallingError({
+      toolName: `${args.toolName}_${args.def.name}`,
+      toolType: 'soat',
+      url: `${args.base}${path}`,
+      method: args.def.method,
+      error,
+    });
+    throw error;
+  }
+};
+
 const buildSoatActionTool = (args: {
   toolName: string;
   toolDescription: string | null;
@@ -187,50 +259,18 @@ const buildSoatActionTool = (args: {
         ...(args.presetParameters ?? {}),
         ...(toolArgs as Record<string, unknown>),
       };
-      const path = args.def.path(rawArgs);
-      const soatBody = args.def.body ? args.def.body(rawArgs) : undefined;
-      const soatBodyWithContext =
-        soatBody && args.toolContext
-          ? { ...soatBody, toolContext: args.toolContext }
-          : soatBody;
-      const soatBodyWithTrace =
-        soatBodyWithContext && args.traceId
-          ? {
-              ...soatBodyWithContext,
-              parent_trace_id: args.traceId,
-              root_trace_id: args.rootTraceId ?? args.traceId,
-            }
-          : soatBodyWithContext;
-
-      try {
-        const url = `${base}${path}`;
-        const toolId = `${args.toolName}_${args.def.name}`;
-        log('soat tool execute: %s %s %s', toolId, args.def.method, url);
-        const response = await fetch(url, {
-          method: args.def.method,
-          headers: {
-            'Content-Type': 'application/json',
-            ...(args.authHeader ? { Authorization: args.authHeader } : {}),
-            ...args.buildContextHeaders(args.toolContext),
-          },
-          body: soatBodyWithTrace
-            ? JSON.stringify(soatBodyWithTrace)
-            : undefined,
-        });
-        const responseBody = await response.json();
-        log('soat tool result: %s status=%d', toolId, response.status);
-        return responseBody;
-      } catch (error) {
-        log('soat tool error: %s', `${args.toolName}_${args.def.name}`);
-        args.logToolCallingError({
-          toolName: `${args.toolName}_${args.def.name}`,
-          toolType: 'soat',
-          url: `${base}${path}`,
-          method: args.def.method,
-          error,
-        });
-        throw error;
-      }
+      return executeSoatTool({
+        toolName: args.toolName,
+        def: args.def,
+        rawArgs,
+        base,
+        authHeader: args.authHeader,
+        toolContext: args.toolContext,
+        traceId: args.traceId,
+        rootTraceId: args.rootTraceId,
+        buildContextHeaders: args.buildContextHeaders,
+        logToolCallingError: args.logToolCallingError,
+      });
     },
   });
 };

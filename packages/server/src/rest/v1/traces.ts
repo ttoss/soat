@@ -1,5 +1,4 @@
 import { Router } from '@ttoss/http-server';
-
 import type { Context } from 'src/Context';
 import { getTrace, getTraceTree, listTraces } from 'src/lib/traces';
 

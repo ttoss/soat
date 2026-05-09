@@ -2,9 +2,9 @@ import type { LanguageModel, ModelMessage, Tool, ToolChoice } from 'ai';
 import { stepCountIs, streamText } from 'ai';
 import createDebug from 'debug';
 
-import { saveTrace, serializeSteps } from './traces';
 import { emitEvent } from './eventBus';
 import { updateGenerationRecord } from './generations';
+import { saveTrace, serializeSteps } from './traces';
 
 const log = createDebug('soat:generation');
 

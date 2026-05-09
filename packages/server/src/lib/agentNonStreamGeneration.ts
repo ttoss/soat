@@ -65,6 +65,35 @@ export const buildPrepareStep = (args: {
   };
 };
 
+const retryWithoutTools = (args: {
+  agentId: string;
+  model: LanguageModel;
+  system: string | undefined;
+  nonSystemMessages: Array<{ role: string; content: string }>;
+  typedAgent: TypedAgent;
+  abortSignal?: AbortSignal;
+  error: unknown;
+}) => {
+  log(
+    'callGenerateText FAILED (has tools, retrying without) agentId=%s model=%s errorType=%s message=%s stack=%s',
+    args.agentId,
+    args.typedAgent.model,
+    args.error instanceof Error
+      ? args.error.constructor.name
+      : typeof args.error,
+    args.error instanceof Error ? args.error.message : String(args.error),
+    args.error instanceof Error ? args.error.stack : ''
+  );
+  return generateText({
+    model: args.model,
+    system: args.system,
+    messages: args.nonSystemMessages as ModelMessage[],
+    stopWhen: stepCountIs(1),
+    temperature: (args.typedAgent.temperature as number) ?? undefined,
+    abortSignal: args.abortSignal,
+  });
+};
+
 const callGenerateText = async (args: {
   agentId: string;
   model: LanguageModel;
@@ -105,25 +134,70 @@ const callGenerateText = async (args: {
       );
       throw error;
     }
+    return retryWithoutTools({ ...args, error });
+  }
+};
 
-    log(
-      'callGenerateText FAILED (has tools, retrying without) agentId=%s model=%s errorType=%s message=%s stack=%s',
-      args.agentId,
-      args.typedAgent.model,
-      error instanceof Error ? error.constructor.name : typeof error,
-      error instanceof Error ? error.message : String(error),
-      error instanceof Error ? error.stack : ''
-    );
+type GenerateTextResult = {
+  steps: unknown[];
+  response?: { messages?: unknown[]; modelId?: string };
+  text: string;
+  finishReason: string;
+};
 
-    return generateText({
+const resolveGenerationResult = (args: {
+  generationId: string;
+  traceId: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
+  allMessages: Array<{ role: string; content: string }>;
+  resolvedTools: Record<string, Tool>;
+  model: LanguageModel;
+  typedAgent: TypedAgent;
+  agentId: string;
+  result: GenerateTextResult;
+}): GenerationResult => {
+  const pendingToolCalls = findPendingClientTools(
+    args.result.steps as Array<{
+      toolCalls?: Array<{
+        toolCallId: string;
+        toolName: string;
+        input: unknown;
+      }>;
+    }>,
+    args.resolvedTools
+  );
+
+  if (pendingToolCalls.length > 0) {
+    return savePendingGeneration({
+      generationId: args.generationId,
+      traceId: args.traceId,
+      parentTraceId: args.parentTraceId ?? null,
+      rootTraceId: args.rootTraceId ?? null,
+      pendingToolCalls,
+      allMessages: args.allMessages,
+      result: args.result as {
+        steps: unknown[];
+        response: { messages: unknown[]; modelId?: string };
+        text: string;
+        finishReason: string;
+      },
       model: args.model,
-      system: args.system,
-      messages: args.nonSystemMessages as ModelMessage[],
-      stopWhen: stepCountIs(1),
-      temperature: (args.typedAgent.temperature as number) ?? undefined,
-      abortSignal: args.abortSignal,
+      typedAgent: args.typedAgent,
+      agentId: args.agentId,
+      resolvedTools: args.resolvedTools,
     });
   }
+
+  return buildCompletedGenerationResult({
+    generationId: args.generationId,
+    traceId: args.traceId,
+    parentTraceId: args.parentTraceId ?? null,
+    rootTraceId: args.rootTraceId ?? null,
+    result: args.result,
+    typedAgent: args.typedAgent,
+    agentId: args.agentId,
+  });
 };
 
 export const runNonStreamGeneration = async (args: {
@@ -167,51 +241,9 @@ export const runNonStreamGeneration = async (args: {
     abortSignal: args.abortSignal,
   });
 
-  const pendingToolCalls = findPendingClientTools(
-    result.steps as Array<{
-      toolCalls?: Array<{
-        toolCallId: string;
-        toolName: string;
-        input: unknown;
-      }>;
-    }>,
-    args.resolvedTools
-  );
-
-  if (pendingToolCalls.length > 0) {
-    return savePendingGeneration({
-      generationId: args.generationId,
-      traceId: args.traceId,
-      parentTraceId: args.parentTraceId ?? null,
-      rootTraceId: args.rootTraceId ?? null,
-      pendingToolCalls,
-      allMessages: args.allMessages,
-      result: result as {
-        steps: unknown[];
-        response: { messages: unknown[]; modelId?: string };
-        text: string;
-        finishReason: string;
-      },
-      model: args.model,
-      typedAgent: args.typedAgent,
-      agentId: args.agentId,
-      resolvedTools: args.resolvedTools,
-    });
-  }
-
-  return buildCompletedGenerationResult({
-    generationId: args.generationId,
-    traceId: args.traceId,
-    parentTraceId: args.parentTraceId ?? null,
-    rootTraceId: args.rootTraceId ?? null,
-    result: result as {
-      steps: unknown[];
-      response?: { modelId?: string };
-      text: string;
-      finishReason: string;
-    },
-    typedAgent: args.typedAgent,
-    agentId: args.agentId,
+  return resolveGenerationResult({
+    ...args,
+    result: result as GenerateTextResult,
   });
 };
 
