@@ -20,9 +20,9 @@ import {
   runNonStreamGeneration,
 } from './agentNonStreamGeneration';
 import { resolveAgentTools } from './agentToolResolver';
-import { saveTrace, serializeSteps } from './agentTraces';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { createGenerationRecord, updateGenerationRecord } from './generations';
+import { saveTrace, serializeSteps } from './traces';
 
 const log = createDebug('soat:generation');
 
@@ -64,6 +64,9 @@ const buildGenerationContext = async (args: {
   messages: Array<{ role: string; content: string }>;
   authHeader?: string;
   toolContext?: Record<string, string>;
+  traceId?: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
 }): Promise<GenerationContext | 'not_found' | 'ai_provider_not_found'> => {
   const typedAgent = await resolveAgentForGeneration({
     agentId: args.agentId,
@@ -93,6 +96,9 @@ const buildGenerationContext = async (args: {
         boundaryPolicy: typedAgent.boundaryPolicy,
         authHeader: args.authHeader,
         toolContext: args.toolContext,
+        traceId: args.traceId,
+        parentTraceId: args.parentTraceId,
+        rootTraceId: args.rootTraceId,
       })
     : {};
 
@@ -107,12 +113,87 @@ const buildGenerationContext = async (args: {
 
 // ── Create Generation ─────────────────────────────────────────────────────
 
+const dispatchGeneration = (args: {
+  stream: boolean | undefined;
+  ctx: GenerationContext;
+  traceId: string;
+  agentId: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
+  abortSignal?: AbortSignal;
+}): Promise<GenerationResult | ReadableStream> => {
+  if (args.stream) {
+    const stream = runStreamGeneration({
+      model: args.ctx.model,
+      allMessages: args.ctx.allMessages,
+      resolvedTools: args.ctx.resolvedTools,
+      typedAgent: args.ctx.typedAgent,
+      traceId: args.traceId,
+      agentId: args.agentId,
+      parentTraceId: args.parentTraceId ?? null,
+      rootTraceId: args.rootTraceId ?? null,
+    });
+    return Promise.resolve(stream);
+  }
+  return runNonStreamGeneration({
+    model: args.ctx.model,
+    allMessages: args.ctx.allMessages,
+    resolvedTools: args.ctx.resolvedTools,
+    typedAgent: args.ctx.typedAgent,
+    generationId: args.ctx.generationId,
+    traceId: args.traceId,
+    agentId: args.agentId,
+    parentTraceId: args.parentTraceId ?? null,
+    rootTraceId: args.rootTraceId ?? null,
+    abortSignal: args.abortSignal,
+  });
+};
+
+const resolveContextAndRecord = async (args: {
+  agentId: string;
+  projectIds?: number[];
+  messages: Array<{ role: string; content: string }>;
+  authHeader?: string;
+  toolContext?: Record<string, string>;
+  traceId: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
+  initiatorGenerationId?: string | null;
+}): Promise<GenerationContext | 'not_found' | 'ai_provider_not_found'> => {
+  const ctx = await buildGenerationContext({
+    agentId: args.agentId,
+    projectIds: args.projectIds,
+    messages: args.messages,
+    authHeader: args.authHeader,
+    toolContext: args.toolContext,
+    traceId: args.traceId,
+    parentTraceId: args.parentTraceId,
+    rootTraceId: args.rootTraceId,
+  });
+
+  if (ctx === 'not_found' || ctx === 'ai_provider_not_found') return ctx;
+
+  createGenerationRecord({
+    publicId: ctx.generationId,
+    projectId: ctx.typedAgent.project.id as number,
+    agentId: args.agentId,
+    traceId: args.traceId,
+    initiatorGenerationId: args.initiatorGenerationId ?? null,
+    startedByPrincipalType: null,
+    startedByPrincipalId: null,
+  }).catch(() => {});
+
+  return ctx;
+};
+
 export const createGeneration = async (args: {
   projectIds?: number[];
   agentId: string;
   messages: Array<{ role: string; content: string }>;
   stream?: boolean;
   traceId?: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
   initiatorGenerationId?: string | null;
   remainingDepth?: number;
   authHeader?: string;
@@ -132,56 +213,75 @@ export const createGeneration = async (args: {
       projectPublicId: '',
       agentId: args.agentId,
       generationId: depthGenId,
+      parentTraceId: args.parentTraceId ?? null,
+      rootTraceId: args.rootTraceId ?? null,
     });
   }
 
-  const ctx = await buildGenerationContext({
+  const ctx = await resolveContextAndRecord({
     agentId: args.agentId,
     projectIds: args.projectIds,
     messages: args.messages,
     authHeader: args.authHeader,
     toolContext: args.toolContext,
+    traceId,
+    parentTraceId: args.parentTraceId,
+    rootTraceId: args.rootTraceId,
+    initiatorGenerationId: args.initiatorGenerationId,
   });
 
   log('createGeneration: agentId=%s stream=%s', args.agentId, args.stream);
 
   if (ctx === 'not_found' || ctx === 'ai_provider_not_found') return ctx;
 
-  // Create the generation record in the DB (fire-and-forget errors)
-  createGenerationRecord({
-    publicId: ctx.generationId,
-    projectId: ctx.typedAgent.project.id as number,
-    agentId: args.agentId,
-    traceId,
-    initiatorGenerationId: args.initiatorGenerationId ?? null,
-    startedByPrincipalType: null,
-    startedByPrincipalId: null,
-  }).catch(() => {});
-
-  if (args.stream) {
-    return runStreamGeneration({
-      model: ctx.model,
-      allMessages: ctx.allMessages,
-      resolvedTools: ctx.resolvedTools,
-      typedAgent: ctx.typedAgent,
-      traceId,
-      agentId: args.agentId,
-    });
-  }
-
-  return runNonStreamGeneration({
-    model: ctx.model,
-    allMessages: ctx.allMessages,
-    resolvedTools: ctx.resolvedTools,
-    typedAgent: ctx.typedAgent,
-    generationId: ctx.generationId,
+  return dispatchGeneration({
+    stream: args.stream,
+    ctx,
     traceId,
     agentId: args.agentId,
+    parentTraceId: args.parentTraceId,
+    rootTraceId: args.rootTraceId,
     abortSignal: args.abortSignal,
   });
 };
 
 // ── Submit Tool Outputs ───────────────────────────────────────────────────
+
+const fireCompletionSideEffects = (args: {
+  generationId: string;
+  pending: NonNullable<ReturnType<typeof pendingGenerations.get>>;
+  result: { steps: unknown[]; finishReason: string };
+  completedResult: GenerationResult;
+}): void => {
+  saveTrace({
+    traceId: args.pending.traceId,
+    projectId: args.pending.projectId,
+    projectPublicId: args.pending.projectPublicId,
+    agentId: args.pending.agentId,
+    steps: serializeSteps(args.result.steps as unknown[]),
+    parentTraceId: args.pending.parentTraceId ?? undefined,
+    rootTraceId: args.pending.rootTraceId ?? undefined,
+  }).catch(() => {});
+  updateGenerationRecord({
+    publicId: args.generationId,
+    status: 'completed',
+    completedAt: new Date(),
+    stopReason: args.result.finishReason,
+  }).catch(() => {});
+  resolveProjectPublicId({ projectId: args.pending.projectId }).then(
+    (projectPublicId) => {
+      emitEvent({
+        type: 'agents.generation.completed',
+        projectId: args.pending.projectId,
+        projectPublicId,
+        resourceType: 'generation',
+        resourceId: args.generationId,
+        data: args.completedResult as unknown as Record<string, unknown>,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  );
+};
 
 export const submitToolOutputs = async (args: {
   projectIds?: number[];
@@ -229,20 +329,6 @@ export const submitToolOutputs = async (args: {
     temperature: pending.agentConfig.temperature ?? undefined,
   });
 
-  saveTrace({
-    traceId: pending.traceId,
-    projectId: pending.projectId,
-    projectPublicId: pending.projectPublicId,
-    agentId: pending.agentId,
-    steps: serializeSteps(result.steps as unknown[]),
-  }).catch(() => {});
-  updateGenerationRecord({
-    publicId: args.generationId,
-    status: 'completed',
-    completedAt: new Date(),
-    stopReason: result.finishReason,
-  }).catch(() => {});
-
   const completedResult: GenerationResult = {
     id: args.generationId,
     traceId: pending.traceId,
@@ -254,19 +340,12 @@ export const submitToolOutputs = async (args: {
     },
   };
 
-  resolveProjectPublicId({ projectId: pending.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'agents.generation.completed',
-        projectId: pending.projectId,
-        projectPublicId,
-        resourceType: 'generation',
-        resourceId: args.generationId,
-        data: completedResult as unknown as Record<string, unknown>,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  fireCompletionSideEffects({
+    generationId: args.generationId,
+    pending,
+    result,
+    completedResult,
+  });
 
   return completedResult;
 };

@@ -4,7 +4,6 @@ import {
   Actors as ActorsSdk,
   Agents as AgentsSdk,
   AgentTools as AgentToolsSdk,
-  AgentTraces as AgentTracesSdk,
   AiProviders as AiProvidersSdk,
   ApiKeys as ApiKeysSdk,
   Chats as ChatsSdk,
@@ -15,6 +14,7 @@ import {
   Projects as ProjectsSdk,
   Secrets as SecretsSdk,
   Sessions as SessionsSdk,
+  Traces as TracesSdk,
   Users as UsersSdk,
   Webhooks as WebhooksSdk,
 } from './generated/sdk.gen.js';
@@ -89,7 +89,6 @@ export interface SoatClientOptions {
 export class SoatClient {
   readonly actors: typeof ActorsSdk;
   readonly agentTools: typeof AgentToolsSdk;
-  readonly agentTraces: typeof AgentTracesSdk;
   readonly agents: typeof AgentsSdk;
   readonly aiProviders: typeof AiProvidersSdk;
   readonly apiKeys: typeof ApiKeysSdk;
@@ -101,6 +100,7 @@ export class SoatClient {
   readonly projects: typeof ProjectsSdk;
   readonly secrets: typeof SecretsSdk;
   readonly sessions: typeof SessionsSdk;
+  readonly traces: typeof TracesSdk;
   readonly users: typeof UsersSdk;
   readonly webhooks: typeof WebhooksSdk;
 
@@ -118,7 +118,6 @@ export class SoatClient {
 
     this.actors = bindResource(ActorsSdk, httpClient);
     this.agentTools = bindResource(AgentToolsSdk, httpClient);
-    this.agentTraces = bindResource(AgentTracesSdk, httpClient);
     this.agents = bindResource(AgentsSdk, httpClient);
     this.aiProviders = bindResource(AiProvidersSdk, httpClient);
     this.apiKeys = bindResource(ApiKeysSdk, httpClient);
@@ -130,6 +129,7 @@ export class SoatClient {
     this.projects = bindResource(ProjectsSdk, httpClient);
     this.secrets = bindResource(SecretsSdk, httpClient);
     this.sessions = bindResource(SessionsSdk, httpClient);
+    this.traces = bindResource(TracesSdk, httpClient);
     this.users = bindResource(UsersSdk, httpClient);
     this.webhooks = bindResource(WebhooksSdk, httpClient);
   }

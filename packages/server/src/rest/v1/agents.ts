@@ -12,7 +12,6 @@ import {
 
 import { agentGenerationRouter } from './agentGeneration';
 import { agentToolsRouter } from './agentTools';
-import { agentTracesRouter } from './agentTraces';
 import { sessionsRouter } from './sessions';
 
 export const agentsRouter = new Router<Context>();
@@ -29,11 +28,6 @@ agentsRouter.use(
 
 agentsRouter.use(agentToolsRouter.routes());
 agentsRouter.use(agentToolsRouter.allowedMethods());
-
-// ── Traces (must be mounted before /agents/:agent_id) ─────────────────────
-
-agentsRouter.use(agentTracesRouter.routes());
-agentsRouter.use(agentTracesRouter.allowedMethods());
 
 // ── Agents CRUD ──────────────────────────────────────────────────────────
 

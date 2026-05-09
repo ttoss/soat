@@ -817,6 +817,71 @@ describe('MCP tools - happy path', () => {
     expect(res.status).toBe(200);
   });
 
+  // ── Traces ───────────────────────────────────────────────────────────────
+
+  let mcpTraceId: string;
+  let mcpChildTraceId: string;
+
+  test('list-traces returns results after seeding', async () => {
+    const { db } = await import('src/db');
+    const { saveTrace } = await import('src/lib/traces');
+
+    const project = await db.Project.findOne({
+      where: { publicId: projectId },
+    });
+    const internalProjectId = project!.id;
+
+    mcpTraceId = `trc_mcp_root_${Date.now()}`;
+    mcpChildTraceId = `trc_mcp_child_${Date.now()}`;
+
+    await saveTrace({
+      traceId: mcpTraceId,
+      projectId: internalProjectId,
+      projectPublicId: projectId,
+      agentId: 'agt_mcp_test_001',
+      steps: [{ type: 'text-delta', text: 'hello' }],
+    });
+
+    await saveTrace({
+      traceId: mcpChildTraceId,
+      projectId: internalProjectId,
+      projectPublicId: projectId,
+      agentId: 'agt_mcp_test_002',
+      steps: [{ type: 'text-delta', text: 'world' }],
+      parentTraceId: mcpTraceId,
+      rootTraceId: mcpTraceId,
+    });
+
+    const res = await mcpCall('list-traces', { projectId });
+
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(Array.isArray(result.data)).toBe(true);
+    expect(result.data.some((t: { id: string }) => t.id === mcpTraceId)).toBe(
+      true
+    );
+  });
+
+  test('get-trace returns the trace', async () => {
+    const res = await mcpCall('get-trace', { traceId: mcpTraceId });
+
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBe(mcpTraceId);
+    expect(result.projectId).toBe(projectId);
+  });
+
+  test('get-trace-tree returns tree with child', async () => {
+    const res = await mcpCall('get-trace-tree', { traceId: mcpTraceId });
+
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBe(mcpTraceId);
+    expect(Array.isArray(result.children)).toBe(true);
+    expect(result.children).toHaveLength(1);
+    expect(result.children[0].id).toBe(mcpChildTraceId);
+  });
+
   test('delete-policy deletes the policy', async () => {
     const res = await mcpCall('delete-policy', { policyId: mcpPolicyId });
 

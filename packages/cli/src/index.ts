@@ -364,11 +364,15 @@ program
         result.response && 'status' in result.response
           ? result.response.status
           : undefined;
+      const errorPayload =
+        result.error instanceof Error
+          ? { name: result.error.name, message: result.error.message }
+          : result.error;
       console.error(
         JSON.stringify(
           {
             status,
-            error: result.error,
+            error: errorPayload,
           },
           null,
           2

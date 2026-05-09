@@ -13,6 +13,7 @@ import { memoriesRouter } from './memories';
 import { policiesRouter } from './policies';
 import { projectsRouter } from './projects';
 import { secretsRouter } from './secrets';
+import { tracesRouter } from './traces';
 import { usersRouter } from './users';
 import { webhooksRouter } from './webhooks';
 
@@ -31,6 +32,7 @@ v1Router.use(documentsRouter.routes());
 v1Router.use(filesRouter.routes());
 v1Router.use(projectsRouter.routes());
 v1Router.use(secretsRouter.routes());
+v1Router.use(tracesRouter.routes());
 v1Router.use(usersRouter.routes());
 v1Router.use(webhooksRouter.routes());
 

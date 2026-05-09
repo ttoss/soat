@@ -60,16 +60,6 @@
       "operationId": "deleteAgentTool",
       "action": "agents:DeleteAgentTool",
       "description": "Delete an agent tool"
-    },
-    {
-      "operationId": "listAgentTraces",
-      "action": "agents:ListAgentTraces",
-      "description": "List agent execution traces"
-    },
-    {
-      "operationId": "getAgentTrace",
-      "action": "agents:GetAgentTrace",
-      "description": "Get an agent trace by ID"
     }
   ]
 }

@@ -2,9 +2,9 @@ import type { LanguageModel, ModelMessage, Tool, ToolChoice } from 'ai';
 import { stepCountIs, streamText } from 'ai';
 import createDebug from 'debug';
 
-import { saveTrace, serializeSteps } from './agentTraces';
 import { emitEvent } from './eventBus';
 import { updateGenerationRecord } from './generations';
+import { saveTrace, serializeSteps } from './traces';
 
 const log = createDebug('soat:generation');
 
@@ -15,6 +15,8 @@ export type PendingGeneration = {
   projectId: number;
   projectPublicId: string;
   traceId: string;
+  parentTraceId: string | null;
+  rootTraceId: string | null;
   generationId: string;
   initiatorGenerationId: string | null;
   pendingToolCalls: Array<{
@@ -83,6 +85,8 @@ export const buildDepthGuardResult = (args: {
   projectPublicId: string;
   agentId: string;
   generationId: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
 }): GenerationResult => {
   saveTrace({
     traceId: args.traceId,
@@ -90,6 +94,8 @@ export const buildDepthGuardResult = (args: {
     projectPublicId: args.projectPublicId,
     agentId: args.agentId,
     steps: [{ type: 'depth_guard', message: 'Maximum call depth reached' }],
+    parentTraceId: args.parentTraceId ?? null,
+    rootTraceId: args.rootTraceId ?? null,
   }).catch(() => {});
   updateGenerationRecord({
     publicId: args.generationId,
@@ -167,6 +173,8 @@ export const runStreamGeneration = (args: {
   typedAgent: TypedAgent;
   traceId: string;
   agentId: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
 }): ReadableStream => {
   const system = args.allMessages.find((m) => {
     return m.role === 'system';
@@ -208,6 +216,8 @@ export const runStreamGeneration = (args: {
     projectPublicId: args.typedAgent.project.publicId,
     agentId: args.agentId,
     steps: [],
+    parentTraceId: args.parentTraceId ?? null,
+    rootTraceId: args.rootTraceId ?? null,
   }).catch(() => {});
   return result.textStream as unknown as ReadableStream;
 };
@@ -231,6 +241,8 @@ export const findPendingClientTools = (
 const storePendingGenerationState = (args: {
   generationId: string;
   traceId: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
   agentId: string;
   typedAgent: TypedAgent;
   pendingToolCalls: Array<{
@@ -247,6 +259,8 @@ const storePendingGenerationState = (args: {
     agentId: args.agentId,
     projectId: args.typedAgent.project.id as number,
     traceId: args.traceId,
+    parentTraceId: args.parentTraceId ?? null,
+    rootTraceId: args.rootTraceId ?? null,
     generationId: args.generationId,
     pendingToolCalls: args.pendingToolCalls.map((tc) => {
       return {
@@ -275,6 +289,8 @@ const storePendingGenerationState = (args: {
 export const savePendingGeneration = (args: {
   generationId: string;
   traceId: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
   pendingToolCalls: Array<{
     toolCallId: string;
     toolName: string;
@@ -294,6 +310,8 @@ export const savePendingGeneration = (args: {
     projectPublicId: args.typedAgent.project.publicId,
     agentId: args.agentId,
     steps: serializedStepsPending,
+    parentTraceId: args.parentTraceId ?? null,
+    rootTraceId: args.rootTraceId ?? null,
   }).catch(() => {});
   updateGenerationRecord({
     publicId: args.generationId,
@@ -335,6 +353,8 @@ export const savePendingGeneration = (args: {
 export const buildCompletedGenerationResult = (args: {
   generationId: string;
   traceId: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
   result: {
     steps: unknown[];
     response?: { modelId?: string };
@@ -353,6 +373,8 @@ export const buildCompletedGenerationResult = (args: {
     projectPublicId: args.typedAgent.project.publicId,
     agentId: args.agentId,
     steps: serializedStepsCompleted,
+    parentTraceId: args.parentTraceId ?? null,
+    rootTraceId: args.rootTraceId ?? null,
   }).catch(() => {});
   updateGenerationRecord({
     publicId: args.generationId,

@@ -914,13 +914,13 @@ curl -s "$SOAT_URL/api/v1/documents/$POEM_DOC_ID" \
 
 ## Step 11 — Inspect the trace
 
-The [trace](/docs/modules/agents#traces) endpoint returns **metadata only**: the total step count and a `file_id` pointing to the full JSON steps stored on disk. This is intentional — the metadata record is small and fast to query; the full step content (model calls, tool calls, tool results) is stored as a File and retrieved separately.
+The [trace](/docs/modules/traces) endpoint returns **metadata only**: the total step count and a `file_id` pointing to the full JSON steps stored on disk. This is intentional — the metadata record is small and fast to query; the full step content (model calls, tool calls, tool results) is stored as a File and retrieved separately.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-TRACE=$(soat get-agent-trace --trace-id "$TRACE_ID")
+TRACE=$(soat get-trace --trace-id "$TRACE_ID")
 printf '%s\n' "$TRACE" | jq '.'
 FILE_ID=$(printf '%s\n' "$TRACE" | jq -r '.file_id')
 echo "FILE_ID: $FILE_ID"
@@ -935,6 +935,8 @@ Expected metadata output:
   "agent_id": "agt_nCjF0owWdtPt3Osq",
   "file_id": "file_xyz789",
   "step_count": 2,
+  "parent_trace_id": null,
+  "root_trace_id": null,
   "created_at": "2026-05-07T23:35:32.226Z"
 }
 ```
@@ -949,16 +951,16 @@ The downloaded file is a JSON array of step objects. Each step includes the tool
 
 Key observations:
 
-- `get-agent-trace` returns **metadata only** — not a bug. The full steps are in the file.
+- `get-trace` returns **metadata only** — not a bug. The full steps are in the file.
 - The orchestrator has `step_count: 2` — it completed 2 reasoning steps before finishing.
-- Each nested agent call creates its **own separate trace** (visible in Step 12). The parent trace's step content references the child's `trace_id` as a tool call result.
+- Each nested agent call creates its **own separate trace** (visible in Step 13). The parent trace's step content references the child's `trace_id` as a tool call result.
 - A final `read-final-poem_get-document` step returns the poem as `.output.content` in the generation response.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: trace } = await adminSoat.agentTraces.getAgentTrace({
+const { data: trace } = await adminSoat.traces.getTrace({
   path: { trace_id: TRACE_ID },
 });
 console.log(JSON.stringify(trace, null, 2));
@@ -971,7 +973,7 @@ const FILE_ID = trace.file_id;
 <TabItem value="curl" label="curl">
 
 ```bash
-TRACE=$(curl -s "$SOAT_URL/api/v1/agents/traces/$TRACE_ID" \
+TRACE=$(curl -s "$SOAT_URL/api/v1/traces/$TRACE_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN")
 printf '%s\n' "$TRACE" | jq '.'
 FILE_ID=$(printf '%s\n' "$TRACE" | jq -r '.file_id')
@@ -986,35 +988,97 @@ curl -s "$SOAT_URL/api/v1/files/$FILE_ID/download" \
 
 ---
 
-## Step 12 — List all traces for the project
+## Step 12 — Inspect the trace tree
 
-List all traces in the project to inspect the orchestrator and nested stanza runs. See [Agents — Traces](/docs/modules/agents#traces).
+The `/tree` endpoint returns the full execution tree rooted at the orchestrator trace. Each node is a [trace](/docs/modules/traces) record, and its `children` array contains the traces spawned by sub-agent tool calls. This gives you end-to-end observability across all nested agent calls in a single response.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat list-agent-traces --project-id "$PROJECT_ID" | jq '.data[] | {id, agent_id, step_count}'
+soat get-trace-tree --trace-id "$TRACE_ID" | jq '.'
 ```
 
-Expected output (one entry per agent that ran):
+Expected output structure:
 
 ```json
-{ "id": "agt_trace_ypo8g0yO3563AfuC", "agent_id": "agt_nCjF0owWdtPt3Osq", "step_count": 2 }
-{ "id": "agt_trace_ZBfVXbQaDkC0nOu",  "agent_id": "agt_LhYajzCuJSY0SFqI", "step_count": 4 }
+{
+  "id": "agt_trace_ypo8g0yO3563AfuC",
+  "agent_id": "agt_nCjF0owWdtPt3Osq",
+  "step_count": 2,
+  "parent_trace_id": null,
+  "root_trace_id": null,
+  "children": [
+    {
+      "id": "agt_trace_ZBfVXbQaDkC0nOu",
+      "agent_id": "agt_LhYajzCuJSY0SFqI",
+      "step_count": 4,
+      "parent_trace_id": "agt_trace_ypo8g0yO3563AfuC",
+      "root_trace_id": "agt_trace_ypo8g0yO3563AfuC",
+      "children": []
+    }
+  ]
+}
 ```
 
-The first entry is the orchestrator; the second is the stanza-1 worker (4 steps: LLM decision + poem-read + LLM decision + poem-write).
+The root node is the orchestrator. Each entry in `children` is a stanza worker that was invoked via a `call-stanza-N_create-agent-generation` tool call. Workers that did not run (because the orchestrator's step limit was reached) will not appear.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: traces } = await adminSoat.agentTraces.listAgentTraces({
+const { data: tree } = await adminSoat.traces.getTraceTree({
+  path: { trace_id: TRACE_ID },
+});
+console.log(JSON.stringify(tree, null, 2));
+console.log('Orchestrator steps:', tree.step_count);
+console.log('Nested agent traces:', tree.children?.length ?? 0);
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s "$SOAT_URL/api/v1/traces/$TRACE_ID/tree" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.'
+```
+
+</TabItem>
+</Tabs>
+
+---
+
+## Step 13 — List all traces for the project
+
+List all traces in the project to inspect the orchestrator and nested stanza runs. See [Traces](/docs/modules/traces).
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-traces --project-id "$PROJECT_ID" | jq '.data[] | {id, agent_id, step_count, parent_trace_id}'
+```
+
+Expected output (one entry per agent that ran):
+
+```json
+{ "id": "agt_trace_ypo8g0yO3563AfuC", "agent_id": "agt_nCjF0owWdtPt3Osq", "step_count": 2, "parent_trace_id": null }
+{ "id": "agt_trace_ZBfVXbQaDkC0nOu",  "agent_id": "agt_LhYajzCuJSY0SFqI", "step_count": 4, "parent_trace_id": "agt_trace_ypo8g0yO3563AfuC" }
+```
+
+The first entry is the orchestrator (`parent_trace_id: null`); the second is the stanza-1 worker (4 steps: LLM decision + poem-read + LLM decision + poem-write).
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: traces } = await adminSoat.traces.listTraces({
   query: { project_id: PROJECT_ID },
 });
 for (const t of traces.data ?? []) {
-  console.log(`Trace ${t.id} | Agent: ${t.agent_id} | Steps: ${t.step_count}`);
+  console.log(
+    `Trace ${t.id} | Agent: ${t.agent_id} | Steps: ${t.step_count} | Parent: ${t.parent_trace_id ?? 'root'}`
+  );
 }
 ```
 
@@ -1022,8 +1086,8 @@ for (const t of traces.data ?? []) {
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_URL/api/v1/agents/traces?project_id=$PROJECT_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data[] | {id, agent_id, step_count}'
+curl -s "$SOAT_URL/api/v1/traces?project_id=$PROJECT_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data[] | {id, agent_id, step_count, parent_trace_id}'
 ```
 
 </TabItem>
@@ -1079,10 +1143,10 @@ This pattern is not limited to creative writing. You can apply it to:
 
 In this tutorial you learned how to:
 
-| Concept                    | What you did                                                                          |
-| -------------------------- | ------------------------------------------------------------------------------------- |
-| Agent-to-agent calls       | Used fixed SOAT tools with `create-agent-generation` and preset `agentId` per worker  |
-| SOAT tools                 | Created fixed `get-document` and `update-document` tools with preset `documentId`     |
-| Shared state via documents | Used a single document as a coordination mechanism between agents                     |
-| Traces                     | Inspected the full execution tree showing all nested agent calls and tool invocations |
-| Orchestration pattern      | Built a deterministic pipeline where the final generation output is the poem          |
+| Concept                    | What you did                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------ |
+| Agent-to-agent calls       | Used fixed SOAT tools with `create-agent-generation` and preset `agentId` per worker |
+| SOAT tools                 | Created fixed `get-document` and `update-document` tools with preset `documentId`    |
+| Shared state via documents | Used a single document as a coordination mechanism between agents                    |
+| Traces                     | Fetched individual traces, the full tree (`/tree`), and listed all project traces    |
+| Orchestration pattern      | Built a deterministic pipeline where the final generation output is the poem         |

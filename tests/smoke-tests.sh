@@ -775,16 +775,16 @@ echo "Client tool generation completed after tool output: OK"
 
 # 34b. Trace checks (list traces + fetch current generation trace)
 echo "--- Verifying trace endpoints ---"
-TRACES_RESP=$($SOAT_CLI list-agent-traces --project_id "$PROJECT_PUBLIC_ID")
+TRACES_RESP=$($SOAT_CLI list-traces --project_id "$PROJECT_PUBLIC_ID")
 if ! printf '%s\n' "$TRACES_RESP" | jq -e '((type == "array") or (type == "object" and (.data | type == "array")))' >/dev/null 2>&1; then
-  echo "ERROR: list-agent-traces did not return a JSON array/data array" >&2
+  echo "ERROR: list-traces did not return a JSON array/data array" >&2
   echo "$TRACES_RESP" >&2
   exit 1
 fi
 echo "Trace listing endpoint: OK"
 
 if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
-  TRACE_GET_RESP=$($SOAT_CLI get-agent-trace --trace-id "$CLIENT_TRACE_ID")
+  TRACE_GET_RESP=$($SOAT_CLI get-trace --trace-id "$CLIENT_TRACE_ID")
   TRACE_RETURNED_ID=$(printf '%s\n' "$TRACE_GET_RESP" | jq -r '.id // empty')
   if [ "$TRACE_RETURNED_ID" != "$CLIENT_TRACE_ID" ]; then
     echo "ERROR: Trace endpoint returned mismatched id '$TRACE_RETURNED_ID' for '$CLIENT_TRACE_ID'" >&2
@@ -792,6 +792,15 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
     exit 1
   fi
   echo "Trace retrieval endpoint: OK"
+
+  TRACE_TREE_RESP=$($SOAT_CLI get-trace-tree --trace-id "$CLIENT_TRACE_ID")
+  TRACE_TREE_ID=$(printf '%s\n' "$TRACE_TREE_RESP" | jq -r '.id // empty')
+  if [ "$TRACE_TREE_ID" != "$CLIENT_TRACE_ID" ]; then
+    echo "ERROR: Trace tree endpoint returned mismatched id '$TRACE_TREE_ID' for '$CLIENT_TRACE_ID'" >&2
+    echo "$TRACE_TREE_RESP" >&2
+    exit 1
+  fi
+  echo "Trace tree endpoint: OK"
 else
   echo "ERROR: Generation response did not include trace_id" >&2
   exit 1

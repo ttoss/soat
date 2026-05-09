@@ -1,0 +1,256 @@
+openapi: 3.0.3
+info:
+  title: Traces API
+  version: 1.0.0
+  description: >
+    Execution traces represent the full observability tree for agent runs.
+    A trace captures one agent's execution session (potentially multiple LLM
+    calls in a tool-calling loop). When agents call other agents, each gets
+    its own trace linked via parentTraceId/rootTraceId, forming a tree that
+    can be retrieved with the /tree endpoint.
+  contact:
+    name: SOAT API Support
+
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+
+tags:
+  - name: Traces
+    description: Inspect execution traces and trace trees
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/traces:
+    get:
+      tags:
+        - Traces
+      summary: List traces
+      description: Returns a paginated list of execution traces for the project.
+      operationId: listTraces
+      parameters:
+        - name: project_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Project public ID to filter by
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of traces
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Trace'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/traces/{trace_id}:
+    get:
+      tags:
+        - Traces
+      summary: Get a trace
+      description: Returns a single trace by ID.
+      operationId: getTrace
+      parameters:
+        - name: trace_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Public ID of the trace
+      responses:
+        '200':
+          description: Trace details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trace'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Trace not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/traces/{trace_id}/tree:
+    get:
+      tags:
+        - Traces
+      summary: Get trace tree
+      description: >
+        Returns the full execution tree rooted at the given trace (or its root
+        if the given trace is a child). Each node represents one agent's
+        execution session. The `children` array contains traces triggered by
+        sub-agent tool calls from that trace.
+      operationId: getTraceTree
+      parameters:
+        - name: trace_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Public ID of any trace in the tree (root or child)
+      responses:
+        '200':
+          description: Trace tree rooted at the resolved root trace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraceTreeNode'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Trace not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Trace:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public ID of the trace
+          example: agt_trace_V1StGXR8Z5jdHi6B
+        project_id:
+          type: string
+          description: Public ID of the project
+        agent_id:
+          type: string
+          description: Public ID of the agent that produced this trace
+        file_id:
+          type: string
+          nullable: true
+          description: >
+            Public ID of the File containing the full serialized steps JSON.
+            Null if the trace has not been saved yet (save is fire-and-forget).
+          example: file_xyz789
+        step_count:
+          type: integer
+          description: Number of steps recorded in this trace
+          example: 2
+        parent_trace_id:
+          type: string
+          nullable: true
+          description: >
+            Public ID of the parent trace. Null if this trace is the root
+            (i.e., it was not triggered by a sub-agent call from another trace).
+        root_trace_id:
+          type: string
+          nullable: true
+          description: >
+            Public ID of the root trace for the entire execution tree.
+            Null if this trace is itself the root.
+        created_at:
+          type: string
+          format: date-time
+
+    TraceTreeNode:
+      type: object
+      description: A trace node in the execution tree, with nested children.
+      properties:
+        id:
+          type: string
+          description: Public ID of the trace
+        project_id:
+          type: string
+        agent_id:
+          type: string
+        file_id:
+          type: string
+          nullable: true
+        step_count:
+          type: integer
+        parent_trace_id:
+          type: string
+          nullable: true
+        root_trace_id:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        children:
+          type: array
+          description: Child traces triggered by sub-agent calls from this trace
+          items:
+            $ref: '#/components/schemas/TraceTreeNode'
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string

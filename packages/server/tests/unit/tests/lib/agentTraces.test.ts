@@ -4,7 +4,7 @@ import {
   listTraces,
   saveTrace,
   serializeSteps,
-} from 'src/lib/agentTraces';
+} from 'src/lib/traces';
 
 describe('listTraces', () => {
   test('returns empty data when projectIds is empty array', async () => {
@@ -55,7 +55,7 @@ describe('saveTrace and upsertTraceRecord', () => {
     expect(result).not.toBe('not_found');
     if (result !== 'not_found') {
       expect(result.id).toBe(traceId);
-      expect(result.projectId).toBe(projectId);
+      expect(result.projectId).toBe(projectPublicId);
       expect(result.agentId).toBe('agt_trace_lib_001');
       expect(result.stepCount).toBe(1);
     }

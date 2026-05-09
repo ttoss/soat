@@ -8,7 +8,6 @@ export {
   submitToolOutputs,
 } from './agentGeneration';
 export { resolveUrlPathParams } from './agentToolResolver';
-export { getTrace, listTraces } from './agentTraces';
 
 // Re-export AgentTool CRUD and types.
 export {

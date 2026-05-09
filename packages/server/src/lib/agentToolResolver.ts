@@ -382,6 +382,9 @@ const resolveToolByType = async (
     boundaryPolicy?: unknown;
     authHeader?: string;
     toolContext?: Record<string, string>;
+    traceId?: string;
+    parentTraceId?: string | null;
+    rootTraceId?: string | null;
   }
 ): Promise<Record<string, Tool>> => {
   switch (typedTool.type) {
@@ -411,6 +414,9 @@ const resolveToolByType = async (
         boundaryPolicy: args.boundaryPolicy,
         authHeader: args.authHeader,
         toolContext: args.toolContext,
+        traceId: args.traceId,
+        parentTraceId: args.parentTraceId,
+        rootTraceId: args.rootTraceId,
         buildContextHeaders,
         isSoatActionAllowedByBoundary,
         logToolCallingError,
@@ -426,6 +432,9 @@ export const resolveAgentTools = async (args: {
   boundaryPolicy?: unknown;
   authHeader?: string;
   toolContext?: Record<string, string>;
+  traceId?: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
 }): Promise<Record<string, Tool>> => {
   const resolvedTools: Record<string, Tool> = {};
 

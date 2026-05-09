@@ -94,6 +94,8 @@ describe('submitToolOutputs', () => {
       projectId: 1,
       projectPublicId: 'prj_test',
       traceId: 'trc_test',
+      parentTraceId: null,
+      rootTraceId: null,
       generationId: 'gen_pending_1',
       initiatorGenerationId: null,
       pendingToolCalls: [
