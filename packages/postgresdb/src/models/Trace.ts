@@ -88,7 +88,12 @@ export class Trace extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare parentTraceDbId: number | null;
 
-  @BelongsTo(() => Trace, { foreignKey: 'parentTraceDbId', as: 'parentTrace' })
+  @BelongsTo(
+    () => {
+      return Trace;
+    },
+    { foreignKey: 'parentTraceDbId', as: 'parentTrace' }
+  )
   declare parentTrace: Trace | null;
 
   // Denormalized root trace publicId for fast tree queries
@@ -102,7 +107,12 @@ export class Trace extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare rootTraceDbId: number | null;
 
-  @BelongsTo(() => Trace, { foreignKey: 'rootTraceDbId', as: 'rootTrace' })
+  @BelongsTo(
+    () => {
+      return Trace;
+    },
+    { foreignKey: 'rootTraceDbId', as: 'rootTrace' }
+  )
   declare rootTrace: Trace | null;
 
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
