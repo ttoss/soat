@@ -53,8 +53,6 @@ describe('Agents', () => {
                 'agents:GetAgentTool',
                 'agents:UpdateAgentTool',
                 'agents:DeleteAgentTool',
-                'agents:ListAgentTraces',
-                'agents:GetAgentTrace',
               ],
             },
           ],
@@ -739,50 +737,6 @@ describe('Agents', () => {
 
       // noPermToken has no policies → projectIds=[] → agent not found in empty scope
       expect(response.status).toBe(404);
-    });
-  });
-
-  // ── Traces ───────────────────────────────────────────────────────────────
-
-  describe('GET /api/v1/agents/traces', () => {
-    test('unauthenticated request returns 401', async () => {
-      const response = await testClient.get('/api/v1/agents/traces');
-      expect(response.status).toBe(401);
-    });
-
-    test('user without project access returns 403', async () => {
-      const response = await authenticatedTestClient(noPermToken)
-        .get('/api/v1/agents/traces')
-        .query({ projectId: otherProjectId });
-
-      expect(response.status).toBe(403);
-    });
-
-    test('authenticated user can list traces', async () => {
-      const response = await authenticatedTestClient(userToken)
-        .get('/api/v1/agents/traces')
-        .query({ projectId });
-
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body.data)).toBe(true);
-      expect(typeof response.body.total).toBe('number');
-    });
-  });
-
-  describe('GET /api/v1/agents/traces/:traceId', () => {
-    test('unauthenticated request returns 401', async () => {
-      const response = await testClient.get(
-        '/api/v1/agents/traces/agt_trace_fake'
-      );
-      expect(response.status).toBe(401);
-    });
-
-    test('unknown traceId returns 404', async () => {
-      const response = await authenticatedTestClient(userToken).get(
-        '/api/v1/agents/traces/agt_trace_doesnotexist0000'
-      );
-      expect(response.status).toBe(404);
-      expect(response.body.error).toBeDefined();
     });
   });
 });
