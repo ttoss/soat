@@ -15,16 +15,16 @@ Traces support **parent-child relationships**: when an agent spawns a sub-agent 
 
 ## Data Model
 
-| Field             | Type           | Description                                                                                 |
-| ----------------- | -------------- | ------------------------------------------------------------------------------------------- |
-| `id`              | string         | Public identifier for the trace                                                             |
-| `project_id`      | string         | Project the trace belongs to                                                                |
-| `agent_id`        | string         | Agent that produced the trace                                                               |
-| `file_id`         | string \| null | ID of the file containing the serialized steps (JSON array)                                 |
-| `step_count`      | number         | Number of reasoning steps recorded                                                          |
-| `parent_trace_id` | string \| null | ID of the parent trace when this generation was triggered by another agent                  |
-| `root_trace_id`   | string \| null | ID of the root trace in a multi-agent chain; `null` when this trace is itself the root      |
-| `created_at`      | string         | ISO 8601 creation timestamp                                                                 |
+| Field             | Type           | Description                                                                            |
+| ----------------- | -------------- | -------------------------------------------------------------------------------------- |
+| `id`              | string         | Public identifier for the trace                                                        |
+| `project_id`      | string         | Project the trace belongs to                                                           |
+| `agent_id`        | string         | Agent that produced the trace                                                          |
+| `file_id`         | string \| null | ID of the file containing the serialized steps (JSON array)                            |
+| `step_count`      | number         | Number of reasoning steps recorded                                                     |
+| `parent_trace_id` | string \| null | ID of the parent trace when this generation was triggered by another agent             |
+| `root_trace_id`   | string \| null | ID of the root trace in a multi-agent chain; `null` when this trace is itself the root |
+| `created_at`      | string         | ISO 8601 creation timestamp                                                            |
 
 ## Key Concepts
 
