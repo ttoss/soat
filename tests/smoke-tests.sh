@@ -387,27 +387,27 @@ if [ "$GET_DOC1_PATH" != "/animals/fox.txt" ]; then
 fi
 echo "GET document path: OK"
 
-# 11c. Search documents by path prefix
-echo "--- Search documents by path prefix ---"
-PATH_SEARCH_RESP=$($SOAT_CLI search-documents \
+# 11c. Search knowledge by path prefix
+echo "--- Search knowledge by path prefix ---"
+PATH_SEARCH_RESP=$($SOAT_CLI search-knowledge \
   --project_id "$PROJECT_PUBLIC_ID" \
-  --paths '["/animals/"]')
-PATH_SEARCH_COUNT=$(echo "$PATH_SEARCH_RESP" | jq '.documents | length')
+  --paths '["animals/"]')
+PATH_SEARCH_COUNT=$(echo "$PATH_SEARCH_RESP" | jq '.results | length')
 if [ "$PATH_SEARCH_COUNT" -lt 1 ]; then
   echo "ERROR: path-prefix search returned $PATH_SEARCH_COUNT results, expected at least 1" >&2
   exit 1
 fi
 echo "Path-prefix search returned $PATH_SEARCH_COUNT result(s): OK"
 
-# 12. Search documents
-echo "--- Searching documents ---"
-SEARCH_RESP=$($SOAT_CLI search-documents \
+# 12. Search knowledge
+echo "--- Searching knowledge ---"
+SEARCH_RESP=$($SOAT_CLI search-knowledge \
   --project_id "$PROJECT_PUBLIC_ID" \
-  --search "fox animal jumping" \
+  --query "fox animal jumping" \
   --limit 5)
-SEARCH_COUNT=$(echo "$SEARCH_RESP" | jq '.documents | length')
+SEARCH_COUNT=$(echo "$SEARCH_RESP" | jq '.results | length')
 if [ "$SEARCH_COUNT" -lt 1 ]; then
-  echo "ERROR: Document search returned $SEARCH_COUNT results, expected at least 1" >&2
+  echo "ERROR: Knowledge search returned $SEARCH_COUNT results, expected at least 1" >&2
   exit 1
 fi
 echo "Search returned $SEARCH_COUNT result(s)."
@@ -421,23 +421,12 @@ echo "Documents deleted."
 # 13b. Memories — CRUD + search
 echo "=== Memories ==="
 
-# Create a document for memory search
-echo "--- Creating document for memory search ---"
-MEM_DOC_RESP=$($SOAT_CLI create-document \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --content "Artificial intelligence is transforming software development" \
-  --filename ai-memo.txt \
-  --path /memo/ai.txt)
-MEM_DOC_ID=$(echo "$MEM_DOC_RESP" | jq -r '.id')
-echo "Memory test doc id: $MEM_DOC_ID"
-
 # Create memory
 echo "--- Creating memory ---"
 MEM_RESP=$($SOAT_CLI create-memory \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "Smoke Test Memory" \
-  --description "A memory for smoke testing" \
-  --config "{\"document_ids\":[\"$MEM_DOC_ID\"]}")
+  --description "A memory for smoke testing")
 MEM_ID=$(echo "$MEM_RESP" | jq -r '.id')
 if ! printf '%s\n' "$MEM_ID" | grep -q '^mem_'; then
   echo "ERROR: memory id expected to start with 'mem_', got '$MEM_ID'" >&2
@@ -476,16 +465,6 @@ if ! printf '%s\n' "$MEM_UPDATE_RESP" | jq -e '.name == "Updated Smoke Memory"' 
 fi
 echo "Memory updated."
 
-# Search memory (document_ids config — no embedding needed)
-echo "--- Searching memory ---"
-MEM_SEARCH_RESP=$($SOAT_CLI search-memory --memory-id "$MEM_ID")
-MEM_SEARCH_COUNT=$(echo "$MEM_SEARCH_RESP" | jq '.documents | length')
-if [ "$MEM_SEARCH_COUNT" -lt 1 ]; then
-  echo "ERROR: memory search returned $MEM_SEARCH_COUNT documents, expected at least 1" >&2
-  exit 1
-fi
-echo "Memory search returned $MEM_SEARCH_COUNT document(s): OK"
-
 # Delete memory
 echo "--- Deleting memory ---"
 $SOAT_CLI delete-memory --memory-id "$MEM_ID"
@@ -496,8 +475,6 @@ echo "--- Verifying memory deletion ---"
 expect_cli_error_status 404 get-memory --memory-id "$MEM_ID"
 echo "Memory correctly returns 404 after deletion."
 
-# Clean up document
-$SOAT_CLI delete-document --document-id "$MEM_DOC_ID"
 echo "Memories coverage: OK"
 
 # 14. Chat completion — 401 without auth

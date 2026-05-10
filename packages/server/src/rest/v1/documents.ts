@@ -11,7 +11,6 @@ import {
   updateDocument,
   updateDocumentTags,
 } from 'src/lib/documents';
-import { resolveDocumentSearch } from 'src/lib/documentSearch';
 import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
 
@@ -299,76 +298,6 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     ctx.body = updated;
   } catch (error) {
     throw new AppError({ message: 'Error updating document', cause: error });
-  }
-});
-
-documentsRouter.post('/documents/search', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  const body = ctx.request.body as {
-    projectId?: string;
-    search?: string;
-    minScore?: number;
-    limit?: number;
-    paths?: string[];
-    documentIds?: string[];
-  };
-
-  if (!body.search && !body.paths && !body.documentIds) {
-    ctx.status = 400;
-    ctx.body = {
-      error: 'At least one of search, paths, or documentIds is required',
-    };
-    return;
-  }
-
-  const projectIds = await ctx.authUser!.resolveProjectIds({
-    projectPublicId: body.projectId,
-    action: 'documents:SearchDocuments',
-  });
-
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  // Compile SQL-level policy filter when a specific project is requested
-  let policyWhere: Record<string, unknown> | undefined;
-  if (body.projectId) {
-    const policies = await ctx.authUser!.getPolicies(body.projectId);
-    const compiled = compilePolicy({
-      policies,
-      action: 'documents:SearchDocuments',
-      resourceType: 'document',
-      projectPublicId: body.projectId,
-    });
-    if (!compiled.hasAccess) {
-      ctx.body = { documents: [] };
-      return;
-    }
-    policyWhere = compiled.where;
-  }
-
-  try {
-    const results = await resolveDocumentSearch({
-      projectIds,
-      policyWhere,
-      config: {
-        search: body.search,
-        minScore: body.minScore,
-        limit: body.limit,
-        paths: body.paths,
-        documentIds: body.documentIds,
-      },
-    });
-    ctx.body = { documents: results };
-  } catch (error) {
-    throw new AppError({ message: 'Error searching documents', cause: error });
   }
 });
 

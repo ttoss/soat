@@ -1,0 +1,10 @@
+{
+  "module": "knowledge",
+  "operations": [
+    {
+      "operationId": "searchKnowledge",
+      "action": "knowledge:SearchKnowledge",
+      "description": "Search across documents and knowledge sources"
+    }
+  ]
+}

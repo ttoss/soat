@@ -25,11 +25,6 @@
       "operationId": "deleteDocument",
       "action": "documents:DeleteDocument",
       "description": "Delete a document"
-    },
-    {
-      "operationId": "searchDocuments",
-      "action": "documents:SearchDocuments",
-      "description": "Full-text search across documents"
     }
   ],
   "srnPatterns": [

@@ -10,14 +10,6 @@ import {
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Project } from './Project';
 
-export type MemoryConfig = {
-  search?: string;
-  minScore?: number;
-  limit?: number;
-  paths?: string[];
-  documentIds?: string[];
-};
-
 @Table({
   tableName: 'memories',
   hooks: {
@@ -52,9 +44,6 @@ export class Memory extends Model {
 
   @Column({ type: DataType.TEXT, allowNull: true })
   declare description: string | null;
-
-  @Column({ type: DataType.JSONB, allowNull: false })
-  declare config: MemoryConfig;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

@@ -62,7 +62,6 @@ paths:
               type: object
               required:
                 - name
-                - config
               properties:
                 project_id:
                   type: string
@@ -76,8 +75,6 @@ paths:
                   type: string
                   description: Optional description
                   example: Retrieves product docs for support queries
-                config:
-                  $ref: '#/components/schemas/MemoryConfig'
       responses:
         '201':
           description: Memory created
@@ -149,8 +146,6 @@ paths:
                   type: string
                   nullable: true
                   description: Optional description
-                config:
-                  $ref: '#/components/schemas/MemoryConfig'
       responses:
         '200':
           description: Memory updated
@@ -190,69 +185,6 @@ paths:
           description: Memory not found
         '500':
           description: Internal server error
-  /api/v1/memories/{memory_id}/search:
-    post:
-      tags:
-        - Memories
-      summary: Search memory documents
-      description: Runs a document search using the memory's stored configuration, with optional field overrides in the request body
-      operationId: searchMemory
-      parameters:
-        - name: memory_id
-          in: path
-          required: true
-          schema:
-            type: string
-            example: mem_V1StGXR8Z5jdHi6B
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MemoryConfig'
-      responses:
-        '200':
-          description: Search results
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  documents:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                        file_id:
-                          type: string
-                        project_id:
-                          type: string
-                        filename:
-                          type: string
-                        title:
-                          type: string
-                        content:
-                          type: string
-                          nullable: true
-                        score:
-                          type: number
-                          description: Relevance score (0-1); only present when search is used
-                        created_at:
-                          type: string
-                          format: date-time
-                        updated_at:
-                          type: string
-                          format: date-time
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: Memory not found
-        '500':
-          description: Internal server error
 components:
   securitySchemes:
     bearerAuth:
@@ -260,40 +192,6 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
-    MemoryConfig:
-      type: object
-      description: Configuration for document retrieval. At least one of search, paths, or document_ids must be provided when creating a memory.
-      properties:
-        search:
-          type: string
-          description: Semantic search query string
-          example: How do I reset my password?
-        min_score:
-          type: number
-          minimum: 0
-          maximum: 1
-          description: Minimum relevance score threshold (only used when search is set)
-          example: 0.7
-        limit:
-          type: integer
-          minimum: 1
-          description: Maximum number of documents to return
-          default: 10
-          example: 5
-        paths:
-          type: array
-          items:
-            type: string
-          description: Filter documents to files whose path starts with one of these prefixes
-          example:
-            - docs/products/
-        document_ids:
-          type: array
-          items:
-            type: string
-          description: Filter to specific document IDs
-          example:
-            - doc_V1StGXR8Z5jdHi6B
     Memory:
       type: object
       properties:
@@ -310,8 +208,6 @@ components:
           type: string
           nullable: true
           example: Retrieves product docs for support queries
-        config:
-          $ref: '#/components/schemas/MemoryConfig'
         created_at:
           type: string
           format: date-time

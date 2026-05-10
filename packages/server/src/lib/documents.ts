@@ -1,19 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { Op } from '@ttoss/postgresdb';
-
 import { db } from '../db';
-import { mapDocument } from './documentSearch';
 import { getEmbedding } from './embedding';
 import { emitEvent } from './eventBus';
+import { mapDocument } from './knowledge';
 import { registerResourceFieldMap } from './policyCompiler';
 
-export type {
-  DocumentQueryConfig,
-  QueryDocumentResult,
-} from './documentSearch';
-export { resolveDocumentSearch } from './documentSearch';
+export type { DocumentQueryConfig, QueryDocumentResult } from './knowledge';
+export { resolveDocumentSearch } from './knowledge';
 
 registerResourceFieldMap({
   resourceType: 'document',
@@ -351,93 +346,6 @@ export const updateDocument = async (args: {
   });
 
   return mapped;
-};
-
-/**
- * Build Sequelize query options for document search
- */
-const buildSearchQueryOptions = (args: {
-  projectIds?: number[];
-  tags?: Record<string, string>;
-}) => {
-  const fileWhere =
-    args.projectIds !== undefined ? { projectId: args.projectIds } : undefined;
-
-  const docWhere: Record<string, unknown> =
-    args.tags && Object.keys(args.tags).length > 0
-      ? { tags: { [Op.contains]: args.tags } }
-      : {};
-
-  return { fileWhere, docWhere };
-};
-
-/**
- * Map database document to result with score
- */
-const mapSearchResult = (doc: InstanceType<(typeof db)['Document']>) => {
-  const distance = parseFloat((doc.getDataValue('distance') as string) ?? '1');
-  const score = 1 - distance;
-  const mapped = mapDocument(doc);
-
-  let content: string | null = null;
-  if (doc.file?.storagePath && fs.existsSync(doc.file.storagePath)) {
-    content = fs.readFileSync(doc.file.storagePath, 'utf-8');
-  }
-
-  return { ...mapped, content, score };
-};
-
-export const searchDocuments = async (args: {
-  projectIds?: number[];
-  query: string;
-  limit?: number;
-  threshold?: number;
-  tags?: Record<string, string>;
-}) => {
-  if (args.projectIds !== undefined && args.projectIds.length === 0) {
-    return [];
-  }
-
-  const embedding = await getEmbedding({ text: args.query });
-  const limit = args.limit ?? 10;
-  const embeddingLiteral = `[${embedding.join(',')}]`;
-
-  const { fileWhere, docWhere } = buildSearchQueryOptions({
-    projectIds: args.projectIds,
-    tags: args.tags,
-  });
-
-  const documents = await db.Document.findAll({
-    where: docWhere,
-    attributes: {
-      include: [
-        [
-          db.Document.sequelize!.literal(`embedding <=> '${embeddingLiteral}'`),
-          'distance',
-        ],
-      ],
-    },
-    include: [
-      {
-        model: db.File,
-        as: 'file',
-        where: fileWhere,
-        include: [{ model: db.Project, as: 'project' }],
-      },
-    ],
-    order: db.Document.sequelize!.literal(
-      `embedding <=> '${embeddingLiteral}'`
-    ),
-    limit,
-  });
-
-  return documents
-    .map((doc: InstanceType<(typeof db)['Document']>) => {
-      return mapSearchResult(doc);
-    })
-    .filter((doc: { score: number }) => {
-      return args.threshold === undefined || doc.score >= args.threshold;
-    });
 };
 
 export const getDocumentTags = async (args: { id: string }) => {

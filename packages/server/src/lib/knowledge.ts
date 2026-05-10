@@ -52,6 +52,24 @@ export type QueryDocumentResult = {
   id: string;
   fileId?: string;
   projectId?: string;
+  path?: string;
+  filename?: string;
+  size?: number;
+  title?: string;
+  metadata?: unknown;
+  tags?: Record<string, string>;
+  content: string | null;
+  score?: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type KnowledgeResult = {
+  sourceType: 'document';
+  documentId: string;
+  fileId?: string;
+  projectId?: string;
+  path?: string;
   filename?: string;
   size?: number;
   title?: string;
@@ -234,4 +252,46 @@ export const resolveDocumentSearch = async (args: {
   });
 
   return filterByScore(mapped, config);
+};
+
+// ── Public API ───────────────────────────────────────────────────────────
+
+export const searchKnowledge = async (args: {
+  projectIds?: number[];
+  query?: string;
+  minScore?: number;
+  limit?: number;
+  paths?: string[];
+  documentIds?: string[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  policyWhere?: Record<string, any>;
+}): Promise<KnowledgeResult[]> => {
+  const docs = await resolveDocumentSearch({
+    projectIds: args.projectIds,
+    policyWhere: args.policyWhere,
+    config: {
+      search: args.query,
+      minScore: args.minScore,
+      limit: args.limit,
+      paths: args.paths,
+      documentIds: args.documentIds,
+    },
+  });
+
+  return docs.map((doc) => ({
+    sourceType: 'document' as const,
+    documentId: doc.id,
+    fileId: doc.fileId,
+    projectId: doc.projectId,
+    path: doc.path,
+    filename: doc.filename,
+    size: doc.size,
+    title: doc.title,
+    metadata: doc.metadata,
+    tags: doc.tags,
+    content: doc.content,
+    score: doc.score,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  }));
 };

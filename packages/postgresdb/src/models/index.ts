@@ -9,7 +9,7 @@ export { ConversationMessage } from './ConversationMessage';
 export { Document } from './Document';
 export { File } from './File';
 export { Generation } from './Generation';
-export { Memory, type MemoryConfig } from './Memory';
+export { Memory } from './Memory';
 export { Policy } from './Policy';
 export { Project } from './Project';
 export { Secret } from './Secret';

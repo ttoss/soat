@@ -25,11 +25,6 @@
       "operationId": "deleteMemory",
       "action": "memories:DeleteMemory",
       "description": "Delete a memory configuration"
-    },
-    {
-      "operationId": "searchMemory",
-      "action": "memories:GetMemory",
-      "description": "Search documents using a memory's configuration (reuses GetMemory permission)"
     }
   ]
 }
