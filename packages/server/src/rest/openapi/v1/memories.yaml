@@ -75,6 +75,12 @@ paths:
                   type: string
                   description: Optional description
                   example: Retrieves product docs for support queries
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: Optional list of tags for filtering in knowledge search
+                  example: ['projectA', 'customer-support']
       responses:
         '201':
           description: Memory created
@@ -146,6 +152,12 @@ paths:
                   type: string
                   nullable: true
                   description: Optional description
+                tags:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+                  description: Optional list of tags for filtering in knowledge search
       responses:
         '200':
           description: Memory updated
@@ -208,6 +220,13 @@ components:
           type: string
           nullable: true
           example: Retrieves product docs for support queries
+        tags:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: List of tags for filtering in knowledge search
+          example: ['projectA', 'customer-support']
         created_at:
           type: string
           format: date-time

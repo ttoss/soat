@@ -8,8 +8,12 @@ import {
   listMemories,
   updateMemory,
 } from 'src/lib/memories';
+import { memoryEntriesRouter } from './memoryEntries';
 
 const memoriesRouter = new Router<Context>();
+
+memoriesRouter.use(memoryEntriesRouter.routes());
+memoriesRouter.use(memoryEntriesRouter.allowedMethods());
 
 const resolveProjectPublicId = (
   body: { projectId?: string },
@@ -86,6 +90,7 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     projectId?: string;
     name?: string;
     description?: string;
+    tags?: string[];
   };
 
   if (!body.name) {
@@ -127,6 +132,7 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     projectId: project.id,
     name: body.name,
     description: body.description,
+    tags: body.tags,
   });
 
   ctx.status = 201;
@@ -160,12 +166,14 @@ memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
   const body = ctx.request.body as {
     name?: string;
     description?: string | null;
+    tags?: string[] | null;
   };
 
   const updated = await updateMemory({
     id: ctx.params.memory_id,
     name: body.name,
     description: body.description,
+    tags: body.tags,
   });
 
   ctx.body = updated;

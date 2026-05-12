@@ -1,12 +1,29 @@
 # PRD: Knowledge Module
 
+## Implementation Status
+
+| Component                          | Status         | Notes                                                                             |
+| ---------------------------------- | -------------- | --------------------------------------------------------------------------------- |
+| `knowledge.ts` lib                 | ✅ Implemented | `searchKnowledge()`, `resolveDocumentSearch()`, `mapDocument()`, types            |
+| `POST /api/v1/knowledge/search`    | ✅ Implemented | Document search works end-to-end with auth, policy, validation                    |
+| OpenAPI spec (`knowledge.yaml`)    | ✅ Implemented | `searchKnowledge` operationId, `KnowledgeResult` schema                           |
+| Permission (`SearchKnowledge`)     | ✅ Implemented | `knowledge.json` with `knowledge:SearchKnowledge`                                 |
+| Router mounted in `index.ts`       | ✅ Implemented | Knowledge routes registered                                                       |
+| Module docs page                   | ✅ Implemented | `packages/website/docs/modules/knowledge.md`                                      |
+| Migration from `documentSearch.ts` | ✅ Done        | `documentSearch.ts` removed; `documents.ts` re-exports from `knowledge.ts`        |
+| `searchKnowledge` soat-tool        | ✅ Implemented | Auto-generated from OpenAPI YAML via `soatTools.ts`                               |
+| Memory source integration          | ❌ Not started | `memory_ids`, `memory_tags` filters, `source_type: "memory"`, entry vector search |
+| `document_filters` parameter       | ❌ Not started | Nested filter object for paths/tags/document_ids (currently flat parameters)      |
+| Memory entry ranking/merge         | ❌ Not started | Interleaving memory + document results by score                                   |
+| Knowledge graph retrieval          | ❌ Future      | Entity/relationship graph traversal                                               |
+
 ## Overview
 
 The Knowledge module is the **unified retrieval layer** for agents. It searches across all knowledge sources — documents, memory entries, and (in the future) knowledge graphs — and returns ranked, merged results.
 
 The knowledge module does not own any data. It orchestrates queries against data modules (documents, memories) and merges the results into a single ranked list. This decouples agents from the specifics of how knowledge is stored.
 
-This module replaces the existing `POST /api/v1/documents/search` endpoint with a broader `POST /api/v1/knowledge/search` that can query documents, memories, or both in a single call.
+The migration from `POST /api/v1/documents/search` to `POST /api/v1/knowledge/search` is **already complete**. The old endpoint and `documentSearch.ts` have been removed. The `documents.ts` module re-exports `mapDocument`, `resolveDocumentSearch`, `DocumentQueryConfig`, and `QueryDocumentResult` from `knowledge.ts` for backward compatibility of internal imports.
 
 ## Key Concepts
 
@@ -14,14 +31,17 @@ This module replaces the existing `POST /api/v1/documents/search` endpoint with 
 
 A single endpoint accepts a query and optional filters that scope which sources to search:
 
-- **Memory IDs** — search entries within specific memories
+- **Memory IDs** — search entries within specific memories by ID
+- **Memory tags** — search entries in memories matching tag patterns (supports glob: `user*` matches `user`, `user-prefs`, `user-history`)
 - **Document filters** — filter documents by paths, tags, or document IDs
 
-If no filters are provided, the search runs across all accessible documents and memories in the project.
+If no source filters are provided, the search runs across all accessible documents and memories in the project.
+
+Memory IDs and memory tags can be combined — the search includes entries from memories that match **either** filter (union).
 
 ### Source-Tagged Results
 
-Every result includes a `source_type` field (`document` or `memory`) and the relevant source IDs, so the caller knows where each piece of knowledge came from.
+Every result includes a `source_type` field so the caller knows where each piece of knowledge came from. Currently only `document` is supported. When memory integration is implemented, `memory` will be added as a second source type.
 
 ### Ranking
 
@@ -30,28 +50,34 @@ Results from all sources are ranked by cosine similarity score against the query
 ## Search Algorithm
 
 ```
-Input: query (string), project_id, memory_ids[]?, document_filters?, min_score?, limit?
+Input: query (string), project_id, memory_ids[]?, memory_tags[]?, document_filters?, min_score?, limit?
 
 STEP 1 — EMBED
   Generate embedding for the query.
 
-STEP 2 — SEARCH SOURCES (parallel)
+STEP 2 — RESOLVE MEMORY SCOPE
+  Collect target memories from:
+    - memory_ids (if provided): memories matching these IDs
+    - memory_tags (if provided): memories whose tags match any pattern (glob)
+  Union the two sets. If neither is provided, use all memories in the project.
 
-  IF memory_ids is provided (or no filters → all memories in project):
-    Search memory entries by cosine similarity.
+STEP 3 — SEARCH SOURCES (parallel)
+
+  IF target memories is non-empty:
+    Search memory entries within resolved memories by cosine similarity.
     Tag each result with source_type = "memory".
 
   IF document_filters is provided (or no filters → all documents in project):
     Search documents by cosine similarity (existing resolveDocumentSearch logic).
     Tag each result with source_type = "document".
 
-STEP 3 — MERGE & RANK
+STEP 4 — MERGE & RANK
   Combine all results into a single list.
   Sort by score descending.
   Apply min_score filter.
   Apply limit.
 
-STEP 4 — RETURN
+STEP 5 — RETURN
   Return the merged, ranked list.
 ```
 
@@ -67,6 +93,7 @@ POST /api/v1/knowledge/search
   "query": "customer communication preferences",
   "project_id": "prj_01",
   "memory_ids": ["mem_abc", "mem_def"],
+  "memory_tags": ["projectA", "user*"],
   "document_filters": {
     "paths": ["/sales/"],
     "document_ids": ["doc_01"],
@@ -75,6 +102,12 @@ POST /api/v1/knowledge/search
   "min_score": 0.5,
   "limit": 10
 }
+```
+
+`memory_tags` supports glob patterns: `user*` matches memories tagged `user`, `user-prefs`, `user-history`, etc. When both `memory_ids` and `memory_tags` are provided, the search includes entries from the **union** of both sets.
+
+```
+
 ```
 
 Response:
@@ -115,13 +148,53 @@ Response:
 
 ## Agent Integration
 
+### Knowledge Config
+
+Agents store a `knowledgeConfig` JSONB field that mirrors the `searchKnowledge` parameters. This replaces the previous `AgentMemory` join table approach — no separate attachment endpoints needed.
+
+```json
+{
+  "knowledge_config": {
+    "memory_ids": ["mem_abc"],
+    "memory_tags": ["crm"],
+    "document_filters": { "paths": ["/sales/"] },
+    "min_score": 0.5,
+    "limit": 10
+  }
+}
+```
+
+Simple case (one memory): `{ "knowledge_config": { "memory_ids": ["mem_abc"] } }`
+
+### Three Knowledge Retrieval Paths
+
+| Path                                                             | When                            | Who decides                   | Injected as                      |
+| ---------------------------------------------------------------- | ------------------------------- | ----------------------------- | -------------------------------- |
+| **Agent config** (`knowledge_config` on agent)                   | Every generation, automatically | Agent creator (at setup time) | System messages                  |
+| **Per-generation request** (`knowledge_config` in generate body) | One specific generation         | Caller (at request time)      | System messages                  |
+| **Agent self-retrieval**                                         | During generation, dynamically  | The agent (LLM decides)       | Via `search_knowledge` soat-tool |
+
+### Merge Behavior (Agent Config + Per-Generation)
+
+When both are provided, they **append** (not override):
+
+- **Array fields** (`memory_ids`, `memory_tags`, `document_filters.paths`, `document_filters.document_ids`) → union
+- **Object fields** (`document_filters.tags`) → shallow merge (per-generation wins on key conflicts)
+- **Scalar fields** (`min_score`, `limit`) → per-generation overrides agent config
+
+```
+Agent config:       { memory_ids: ["mem_abc"], limit: 5 }
+Per-generation:     { memory_ids: ["mem_xyz"], document_filters: { paths: ["/docs/"] } }
+→ Merged:           { memory_ids: ["mem_abc", "mem_xyz"], document_filters: { paths: ["/docs/"] }, limit: 5 }
+```
+
 ### Context Assembly
 
-When an agent generates a response, the knowledge module is the single entry point for retrieving context:
+When an agent generates a response:
 
-1. Determine which memories are attached to the agent.
-2. Call `searchKnowledge` with the conversation context as the query, scoped to the agent's attached memories and project documents.
-3. Inject the top results as system messages, tagged by source:
+1. **Merge configs** — append the agent's stored `knowledgeConfig` with the per-generation `knowledgeConfig` (if provided).
+2. Call `searchKnowledge` with the merged filters and the conversation context as the query.
+3. Inject results as **system messages**, tagged by source:
 
 ```
 [Memory: Customer Preferences] Customer prefers email over phone calls
@@ -136,34 +209,42 @@ When an agent generates a response, the knowledge module is the single entry poi
 
 This tool replaces the separate `search_documents` tool. The `write_memory` tool stays in the memory module.
 
-## Migration from `documentSearch`
+## Migration from `documentSearch` (Completed)
 
-### What Changes
+The migration is **already done**. This section is kept for historical context.
 
-| Before                          | After                                                        |
+| Before                          | After (current state)                                        |
 | ------------------------------- | ------------------------------------------------------------ |
-| `POST /api/v1/documents/search` | `POST /api/v1/knowledge/search`                              |
-| `src/lib/documentSearch.ts`     | `src/lib/knowledge.ts`                                       |
-| `resolveDocumentSearch()`       | Private helper inside `knowledge.ts`                         |
-| `mapDocument()` (shared mapper) | Stays exported from `knowledge.ts` (documents CRUD needs it) |
-| `search_documents` soat-tool    | `search_knowledge` soat-tool                                 |
+| `POST /api/v1/documents/search` | Removed — replaced by `POST /api/v1/knowledge/search`        |
+| `src/lib/documentSearch.ts`     | Removed — logic lives in `src/lib/knowledge.ts`              |
+| `resolveDocumentSearch()`       | Exported from `knowledge.ts` (used by document CRUD routes)  |
+| `mapDocument()` (shared mapper) | Exported from `knowledge.ts` (re-exported by `documents.ts`) |
+| `search_documents` soat-tool    | Replaced by `searchKnowledge` soat-tool (auto-generated)     |
 
-### What Stays the Same
-
-- Document CRUD endpoints (`POST/GET/PUT/DELETE /api/v1/documents`) are unchanged — they remain in the documents module.
-- The existing `resolveDocumentSearch` logic is preserved as an internal function inside `knowledge.ts`.
-- `mapDocument` remains exported for document CRUD routes.
-
-### Backwards Compatibility
-
-The old `POST /api/v1/documents/search` endpoint should be kept temporarily as a deprecated alias that delegates to the knowledge module with `document_filters` only (no memory search). This can be removed in a future version.
+`documents.ts` re-exports `mapDocument`, `resolveDocumentSearch`, `DocumentQueryConfig`, and `QueryDocumentResult` from `knowledge.ts` so existing internal imports continue to work without changes.
 
 ## Implementation Architecture
+
+### Current state (document search only)
+
+```
+src/lib/knowledge.ts
+├── searchKnowledge()          — public: searches documents, returns KnowledgeResult[]
+├── resolveDocumentSearch()    — exported: document vector search with policy/path/id filters
+├── mapDocument()              — exported: shared mapper for document CRUD
+├── mapRawDocument()           — private: maps DB row + reads file content
+├── buildDocWhere()            — private: builds Sequelize where for document IDs
+├── buildFileInclude()         — private: builds File include with project/path filters
+├── filterByScore()            — private: filters results below min_score
+└── types                      — KnowledgeResult, DocumentQueryConfig, QueryDocumentResult
+```
+
+### Planned state (after memory integration)
 
 ```
 src/lib/knowledge.ts
 ├── searchKnowledge()          — public: unified search orchestrator
-├── searchDocuments()          — private: existing resolveDocumentSearch logic
+├── resolveDocumentSearch()    — exported: existing document search logic
 ├── searchMemoryEntries()      — private: cosine search against MemoryEntry table
 ├── mergeAndRank()             — private: combine + sort + filter results
 ├── mapDocument()              — exported: shared mapper for document CRUD
@@ -182,12 +263,12 @@ The caller must also have read access to the memories and documents being search
 
 The knowledge module is designed to accommodate additional retrieval strategies:
 
-| Capability       | Status | Description                                                      |
-| ---------------- | ------ | ---------------------------------------------------------------- |
-| Document search  | Now    | Cosine similarity on document embeddings                         |
-| Memory search    | Now    | Cosine similarity on memory entry embeddings                     |
-| Knowledge graph  | Future | Build and traverse a graph of entities and relationships         |
-| Hybrid retrieval | Future | Combine embedding search with graph traversal for richer context |
+| Capability       | Status     | Description                                                                 |
+| ---------------- | ---------- | --------------------------------------------------------------------------- |
+| Document search  | ✅ Done    | Cosine similarity on document embeddings                                    |
+| Memory search    | ❌ Planned | Cosine similarity on memory entry embeddings (depends on MemoryEntry model) |
+| Knowledge graph  | ❌ Future  | Build and traverse a graph of entities and relationships                    |
+| Hybrid retrieval | ❌ Future  | Combine embedding search with graph traversal for richer context            |
 
 When graph retrieval is added, it slots into the same `searchKnowledge` orchestrator as another parallel source, with results merged into the same ranked output.
 
@@ -195,8 +276,8 @@ When graph retrieval is added, it slots into the same `searchKnowledge` orchestr
 
 The knowledge module owns **no tables**. It queries:
 
-- `MemoryEntry` (from the memory module) — filtered by `memoryId`
-- `Document` + `File` (from the documents module) — filtered by paths, tags, document IDs
+- `Document` + `File` (from the documents module) — filtered by paths, tags, document IDs ✅
+- `MemoryEntry` (from the memory module) — filtered by `memoryId` ❌ (not yet implemented; depends on MemoryEntry model)
 
 ## OpenAPI Spec
 

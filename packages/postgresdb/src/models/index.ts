@@ -10,6 +10,7 @@ export { Document } from './Document';
 export { File } from './File';
 export { Generation } from './Generation';
 export { Memory } from './Memory';
+export { MemoryEntry } from './MemoryEntry';
 export { Policy } from './Policy';
 export { Project } from './Project';
 export { Secret } from './Secret';

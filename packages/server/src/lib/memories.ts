@@ -10,6 +10,7 @@ const mapMemory = (
     projectId: instance.project?.publicId,
     name: instance.name,
     description: instance.description ?? undefined,
+    tags: instance.tags ?? undefined,
     createdAt: instance.createdAt,
     updatedAt: instance.updatedAt,
   };
@@ -19,11 +20,13 @@ export const createMemory = async (args: {
   projectId: number;
   name: string;
   description?: string;
+  tags?: string[];
 }) => {
   const memory = await db.Memory.create({
     projectId: args.projectId,
     name: args.name,
     description: args.description ?? null,
+    tags: args.tags ?? null,
   });
 
   const withProject = await db.Memory.findOne({
@@ -56,6 +59,7 @@ export const updateMemory = async (args: {
   id: string;
   name?: string;
   description?: string | null;
+  tags?: string[] | null;
 }) => {
   const memory = await db.Memory.findOne({
     where: { publicId: args.id },
@@ -65,6 +69,7 @@ export const updateMemory = async (args: {
   if (args.name !== undefined) memory.name = args.name;
   if (args.description !== undefined)
     memory.description = args.description ?? null;
+  if (args.tags !== undefined) memory.tags = args.tags ?? null;
 
   await memory.save();
 

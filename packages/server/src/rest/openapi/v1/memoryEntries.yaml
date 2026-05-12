@@ -1,0 +1,244 @@
+openapi: 3.0.3
+info:
+  title: SOAT Memory Entries API
+  version: 1.0.0
+  description: API for managing individual memory entries within a memory container
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: MemoryEntries
+    description: Manage individual memory entries (the actual knowledge items stored in a memory)
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/memories/{memory_id}/entries:
+    get:
+      tags:
+        - MemoryEntries
+      summary: List memory entries
+      description: Returns all entries in a memory container
+      operationId: listMemoryEntries
+      x-iam-action: memories:ListMemoryEntries
+      parameters:
+        - name: memory_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: mem_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: List of memory entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MemoryEntry'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory not found
+        '500':
+          description: Internal server error
+    post:
+      tags:
+        - MemoryEntries
+      summary: Create a memory entry
+      description: Creates a new entry in the specified memory container. Automatically generates an embedding for semantic search.
+      operationId: createMemoryEntry
+      x-iam-action: memories:CreateMemoryEntry
+      parameters:
+        - name: memory_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: mem_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+                  description: The text content of the memory entry
+                  example: The customer prefers email communication over phone calls
+                source:
+                  type: string
+                  enum: [manual, agent, extraction]
+                  description: How this entry was created
+                  default: manual
+                  example: manual
+      responses:
+        '201':
+          description: Memory entry created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryEntry'
+        '400':
+          description: Bad request (missing required fields)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory not found
+        '500':
+          description: Internal server error
+  /api/v1/memories/{memory_id}/entries/{entry_id}:
+    get:
+      tags:
+        - MemoryEntries
+      summary: Get a memory entry
+      description: Returns a single memory entry by ID
+      operationId: getMemoryEntry
+      x-iam-action: memories:GetMemoryEntry
+      parameters:
+        - name: memory_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: mem_V1StGXR8Z5jdHi6B
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: me_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: Memory entry found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryEntry'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory or entry not found
+        '500':
+          description: Internal server error
+    put:
+      tags:
+        - MemoryEntries
+      summary: Update a memory entry
+      description: Updates an existing memory entry. Regenerates the embedding if content changes.
+      operationId: updateMemoryEntry
+      x-iam-action: memories:UpdateMemoryEntry
+      parameters:
+        - name: memory_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: mem_V1StGXR8Z5jdHi6B
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: me_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+                  description: Updated text content
+      responses:
+        '200':
+          description: Memory entry updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryEntry'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory or entry not found
+        '500':
+          description: Internal server error
+    delete:
+      tags:
+        - MemoryEntries
+      summary: Delete a memory entry
+      description: Deletes a memory entry
+      operationId: deleteMemoryEntry
+      x-iam-action: memories:DeleteMemoryEntry
+      parameters:
+        - name: memory_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: mem_V1StGXR8Z5jdHi6B
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: me_V1StGXR8Z5jdHi6B
+      responses:
+        '204':
+          description: Memory entry deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory or entry not found
+        '500':
+          description: Internal server error
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    MemoryEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          example: me_V1StGXR8Z5jdHi6B
+        memory_id:
+          type: string
+          example: mem_V1StGXR8Z5jdHi6B
+        content:
+          type: string
+          example: The customer prefers email communication over phone calls
+        source:
+          type: string
+          enum: [manual, agent, extraction]
+          example: manual
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
