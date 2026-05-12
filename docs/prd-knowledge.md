@@ -15,7 +15,80 @@
 | Memory source integration          | ❌ Not started | `memory_ids`, `memory_tags` filters, `source_type: "memory"`, entry vector search |
 | `document_filters` parameter       | ❌ Not started | Nested filter object for paths/tags/document_ids (currently flat parameters)      |
 | Memory entry ranking/merge         | ❌ Not started | Interleaving memory + document results by score                                   |
-| Knowledge graph retrieval          | ❌ Future      | Entity/relationship graph traversal                                               |
+| Knowledge ↔ Entities integration   | ❌ Future      | `traverseEntities()` as third source; `source_type: "entity"` in results          |
+| Post-conversation extraction       | ❌ Future      | Async trigger on conversation turn; facts written via `writeMemoryEntry()`        |
+
+## Implementation Phases
+
+### Phase 1 — Document Search ✅ Complete
+
+**Goal:** Unified knowledge search across documents using pgvector similarity.
+
+**Deliverables:**
+
+- `searchKnowledge()` lib function (document source only)
+- `POST /api/v1/knowledge/search` endpoint with auth, policy, validation
+- `SearchKnowledge` permission, OpenAPI spec, module docs
+- `search_knowledge` soat-tool (auto-generated from OpenAPI)
+- Migration: `documentSearch.ts` removed; `documents.ts` re-exports from `knowledge.ts`
+
+---
+
+### Phase 2 — Memory Source Integration ❌ Not started
+
+**Goal:** Extend `searchKnowledge()` to query memory entries alongside documents and return interleaved results ranked by score.
+
+**Deliverables:**
+
+- `memory_ids` and `memory_tags` (glob) parameters on `POST /api/v1/knowledge/search`
+- `document_filters` nested object replacing flat `paths`/`document_ids` params
+- `resolveMemorySearch()` lib function — given memory IDs (resolved from IDs + tag patterns), run pgvector cosine search on `MemoryEntry.embedding`
+- Parallel execution: `resolveDocumentSearch()` and `resolveMemorySearch()` run concurrently, results merged and re-ranked by score
+- `source_type: "memory"` added to `KnowledgeResult` (alongside existing `"document"`)
+- OpenAPI spec update → SDK/CLI regeneration → `search_knowledge` soat-tool automatically gains memory parameters
+- Tests: memory-only search, document-only search, mixed search, tag glob matching, min_score filtering
+
+**Unlocks:** Phase 2 of the Memory module (agent read path). Agents can recall facts from memories using the existing `search_knowledge` soat-tool.
+
+---
+
+### Phase 5 — Knowledge ↔ Entities Integration ❌ Future
+
+**Goal:** Add entity/relationship graph traversal as a third knowledge source alongside documents and memories.
+
+**Dependencies:** Entities module (all components in [prd-entities.md](./prd-entities.md)) must be complete first.
+
+**Deliverables:**
+
+- `traverseEntities()` lib function in `knowledge.ts` — given a query and project scope, traverse the entity/relationship graph and return relevant entities/relationships with a score
+- `entity_filters` parameter on `POST /api/v1/knowledge/search` — scope graph traversal by entity type or relationship verb
+- `source_type: "entity"` added to `KnowledgeResult` — each entity result carries `entity_id`, `relationship_path`, `content` (serialized from entity properties), and `score`
+- Parallel execution: document search, memory search, and entity traversal run concurrently; results merged and re-ranked by score
+- OpenAPI spec update → SDK/CLI regeneration → `search_knowledge` soat-tool gains entity parameters automatically
+- Tests: entity-only search, mixed (document + memory + entity) search, relationship path filtering
+
+**Unlocks:** Agents that can reason over structured domain knowledge — "What companies does actor_1 own? What is their MRR?"
+
+---
+
+### Phase 6 — Post-Conversation Extraction (async) ❌ Future
+
+**Goal:** Wire the memory extraction algorithm (defined in prd-memories.md Phase 4) into the conversation/agent pipeline so facts are extracted automatically after each turn — with no changes needed to the caller.
+
+**Dependencies:** Phase 2 of this PRD (memory integration) must be complete. Memory extraction algorithm (prd-memories.md Phase 4) must be complete.
+
+**Deliverables:**
+
+- Fire-and-forget extraction trigger at the end of `createGeneration()` — non-blocking; does not affect generation latency
+- Trigger condition: agent's merged `knowledgeConfig` includes at least one `memory_id` and `extraction` is not disabled
+- Calls `extractMemoryFacts({ messages, memoryIds })` — runs LLM to extract candidate facts, then `writeMemoryEntry()` for each
+- Extraction result (`{ created, updated, skipped }`) stored on the `Generation` trace for observability
+- Config flag `extraction: false` on `knowledgeConfig` to opt out per-agent or per-generation
+- Tests: extraction triggered on generation complete, not triggered when no memory IDs, extraction result recorded on trace
+
+**Unlocks:** Zero-effort conversational memory — agents accumulate knowledge just by talking, no explicit `write_memory` calls needed.
+
+---
 
 ## Overview
 

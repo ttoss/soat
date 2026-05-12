@@ -37,6 +37,81 @@ Memory entries are the individual knowledge items stored inside a memory. When a
 - **`agent`** — Entry written by an agent during execution.
 - **`extraction`** — Entry extracted from a document or external source.
 
+## Write Algorithm
+
+Every write to a memory — via REST, agent tool, or extraction — goes through the same deduplication algorithm. You never need to check for duplicates yourself.
+
+### How It Works
+
+When you call `POST /api/v1/memories/:memoryId/entries`, the server:
+
+1. **Embeds** the incoming content.
+2. **Finds** the most similar existing entry in that memory (cosine similarity via pgvector).
+3. **Decides** based on two configurable thresholds:
+
+| Similarity range        | Decision   | What happens                                                              |
+| ----------------------- | ---------- | ------------------------------------------------------------------------- |
+| ≥ `duplicate_threshold` | **Skip**   | The fact is already known. Returns the existing entry unchanged.          |
+| ≥ `update_threshold`    | **Merge**  | The fact overlaps. An LLM merges old and new into a single updated entry. |
+| < `update_threshold`    | **Create** | The fact is new. A new entry is created.                                  |
+
+### Request Fields
+
+| Field                 | Type   | Default  | Description                                 |
+| --------------------- | ------ | -------- | ------------------------------------------- |
+| `content`             | string | —        | The fact or observation to write            |
+| `source`              | string | `manual` | Origin: `manual`, `agent`, `extraction`     |
+| `duplicate_threshold` | number | `0.95`   | Similarity above which the write is skipped |
+| `update_threshold`    | number | `0.75`   | Similarity above which entries are merged   |
+
+### Response
+
+The response always includes an `action` field alongside the entry:
+
+| `action`  | HTTP status | Meaning                                      |
+| --------- | ----------- | -------------------------------------------- |
+| `created` | `201`       | New entry written                            |
+| `updated` | `200`       | Existing entry merged with new content       |
+| `skipped` | `200`       | Duplicate detected — existing entry returned |
+
+### Examples
+
+**First write — new fact:**
+
+```json
+POST /api/v1/memories/mem_abc/entries
+{ "content": "Customer prefers email over phone calls" }
+
+→ 201 { "action": "created", "id": "me_001", "content": "Customer prefers email over phone calls", ... }
+```
+
+**Duplicate write — same fact rephrased:**
+
+```json
+POST /api/v1/memories/mem_abc/entries
+{ "content": "The customer likes email more than phone" }
+
+→ 200 { "action": "skipped", "id": "me_001", "content": "Customer prefers email over phone calls", ... }
+```
+
+**Merge write — related fact with new detail:**
+
+```json
+POST /api/v1/memories/mem_abc/entries
+{ "content": "Customer prefers email, especially for billing inquiries" }
+
+→ 200 { "action": "updated", "id": "me_001", "content": "Customer prefers email over phone calls, especially for billing inquiries", ... }
+```
+
+**Unrelated write — genuinely new fact:**
+
+```json
+POST /api/v1/memories/mem_abc/entries
+{ "content": "Customer fiscal year ends in March" }
+
+→ 201 { "action": "created", "id": "me_002", "content": "Customer fiscal year ends in March", ... }
+```
+
 ## Permissions
 
 See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.

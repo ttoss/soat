@@ -2,16 +2,86 @@
 
 ## Implementation Status
 
-| Component                      | Status         | Notes                                                                      |
-| ------------------------------ | -------------- | -------------------------------------------------------------------------- | --- | ----------------- | -------------- | -------------------------------------------------------- | --- | ----------------- | -------------- | ------------------------------------ |
-| Memory model (container CRUD)  | ✅ Implemented | Model, lib, REST, OpenAPI, permissions, tests, docs                        |     | Memory tags field | ❌ Not started | `tags` column on Memory model for categorizing/filtering |     | MemoryEntry model | ❌ Not started | No model, no `me_` prefix registered |
-| Entry write (dedup algorithm)  | ❌ Not started | Core write algorithm with two-threshold dedup                              |
-| Entry REST endpoints           | ❌ Not started | `POST/GET/PUT/DELETE /memories/:memoryId/entries`                          |
-| Entry permissions              | ❌ Not started | `WriteMemoryEntry`, `ListMemoryEntries`, etc.                              |
-| `knowledgeConfig` on Agent     | ❌ Not started | JSONB field on Agent model with knowledge search params                    |
-| Extraction (post-conversation) | ❌ Not started | Auto-extract facts from conversation turns                                 |
-| write_memory soat-tool         | ❌ Not started | Agent tool for writing to a memory                                         |
-| Knowledge integration          | ❌ Not started | Memory entries as a source in `searchKnowledge()` (depends on MemoryEntry) |
+| Component                      | Status         | Notes                                                                                                |
+| ------------------------------ | -------------- | ---------------------------------------------------------------------------------------------------- |
+| Memory model (container CRUD)  | ✅ Implemented | Model, lib, REST, OpenAPI, permissions, tests, docs                                                  |
+| Memory tags field              | ❌ Not started | `tags` column on Memory model for categorizing/filtering                                             |
+| MemoryEntry model              | ✅ Implemented | Model with `me_` prefix, embedding column, lib, REST, OpenAPI, permissions, tests                    |
+| Entry write (dedup algorithm)  | ✅ Implemented | Two-threshold dedup/merge/skip in `writeMemoryEntry`; `mergeEntryContent` uses Ollama chat           |
+| Entry REST endpoints           | ✅ Implemented | `POST/GET/PUT/DELETE /api/v1/memories/:memoryId/entries`; POST returns `action` field                |
+| Entry permissions              | ✅ Implemented | `WriteMemoryEntry`, `ReadMemoryEntry`, `ListMemoryEntries`, `UpdateMemoryEntry`, `DeleteMemoryEntry` |
+| `knowledgeConfig` on Agent     | ❌ Not started | JSONB field on Agent model with knowledge search params                                              |
+| Extraction (post-conversation) | ❌ Not started | Auto-extract facts from conversation turns                                                           |
+| write_memory soat-tool         | ❌ Not started | Agent tool for writing to a memory                                                                   |
+| Knowledge integration          | ❌ Not started | Memory entries as a source in `searchKnowledge()` (depends on MemoryEntry)                           |
+
+## Implementation Phases
+
+### Phase 1 — Memory Storage & Write Algorithm ✅ Complete
+
+**Goal:** Give developers a REST API to create memories, write entries with automatic deduplication, and manage the full entry lifecycle.
+
+**Deliverables:**
+
+- `Memory` and `MemoryEntry` DB models with pgvector embedding column
+- `writeMemoryEntry()` lib function with two-threshold dedup/merge/skip algorithm
+- `mergeEntryContent()` using Ollama chat for LLM-based merge
+- `POST/GET/PUT/DELETE /api/v1/memories` — memory CRUD
+- `POST/GET/PUT/DELETE /api/v1/memories/:memoryId/entries` — entry CRUD; POST returns `action` field
+- OpenAPI spec, permissions (`WriteMemoryEntry`, `ReadMemoryEntry`, etc.), tests
+
+**Unlocks:** Manual memory management via REST. Developers can build their own write workflows.
+
+---
+
+### Phase 2 — Agent Read & Write ❌ Not started
+
+**Goal:** Make agents memory-aware. Agents can recall facts before generating and write new facts during generation. This is the minimum needed for a compelling AI app tutorial.
+
+**Deliverables:**
+
+- **Memory source in `searchKnowledge()`** — add `memoryIds` and `memoryTags` parameters; query MemoryEntry embeddings in parallel with documents; interleave results by score; add `source_type: "memory"` to `KnowledgeResult`
+- **`document_filters` parameter** — refactor flat document params into a nested `document_filters` object in the OpenAPI spec and lib
+- **`write_memory` soat-tool** — agent tool that calls `writeMemoryEntry()` with `{ content, memoryId }`; auto-registered when the agent's `knowledge_config` includes memory IDs
+- **`knowledge_config` on Agent** — JSONB field on the `agents` table; merged with per-generation `knowledge_config` using append semantics; drives automatic context injection before generation
+- **Automatic context injection** — before each generation, embed the latest message, call `searchKnowledge()` with the merged config, inject results as system messages
+- OpenAPI spec updates, SDK/CLI regeneration, tests, module docs
+
+**Unlocks:** Agents that remember and recall. First tutorial: "Build an agent with persistent memory."
+
+---
+
+### Phase 3 — Memory Tags & Filtering ❌ Not started
+
+**Goal:** Enable memory organisation at scale — multiple memories per project, filtered by tag patterns.
+
+**Deliverables:**
+
+- `tags` column (string array) on the `Memory` model
+- Tag filter on `GET /api/v1/memories` (exact and glob match)
+- `memory_tags` glob matching in `searchKnowledge()` — e.g., `user*` matches `user`, `user-prefs`, `user-history`
+- Update OpenAPI spec, permissions page, module docs
+
+**Unlocks:** Multi-memory projects. Agents scoped to tag-matched memories without knowing IDs upfront.
+
+---
+
+### Phase 4 — Automatic Extraction ❌ Not started
+
+**Goal:** Agents learn passively. Facts are extracted from conversations automatically — no explicit `write_memory` call needed.
+
+**Deliverables:**
+
+- Post-generation extraction pipeline (fire-and-forget, non-blocking)
+- LLM prompt to extract atomic facts from completed conversation turn
+- Each candidate runs through the standard `writeMemoryEntry()` write algorithm
+- Extraction triggered when an agent's `knowledge_config` includes `memory_ids` with `extraction: true`
+- Return summary `{ created, updated, skipped }` in the generation trace
+- Tests covering extraction trigger, candidate extraction, dedup during extraction
+
+**Unlocks:** Zero-effort conversational memory — agents accumulate knowledge just by talking.
+
+---
 
 ## Overview
 

@@ -1,14 +1,14 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
+import { getMemory } from 'src/lib/memories';
 import {
-  createMemoryEntry,
   deleteMemoryEntry,
   getMemoryEntry,
   listMemoryEntries,
   updateMemoryEntry,
+  writeMemoryEntry,
 } from 'src/lib/memoryEntries';
-import { getMemory } from 'src/lib/memories';
 
 export const memoryEntriesRouter = new Router<Context>();
 
@@ -89,6 +89,8 @@ memoryEntriesRouter.post(
     const body = ctx.request.body as {
       content?: string;
       source?: string;
+      duplicateThreshold?: number;
+      updateThreshold?: number;
     };
 
     if (!body.content) {
@@ -101,17 +103,19 @@ memoryEntriesRouter.post(
       where: { publicId: ctx.params.memory_id },
     });
 
-    const entry = await createMemoryEntry({
+    const result = await writeMemoryEntry({
       memoryId: memoryRow!.id,
       content: body.content,
       source:
         body.source === 'agent' || body.source === 'extraction'
           ? body.source
           : 'manual',
+      duplicateThreshold: body.duplicateThreshold,
+      updateThreshold: body.updateThreshold,
     });
 
-    ctx.status = 201;
-    ctx.body = entry;
+    ctx.status = result.action === 'created' ? 201 : 200;
+    ctx.body = { ...result.entry, action: result.action };
   }
 );
 

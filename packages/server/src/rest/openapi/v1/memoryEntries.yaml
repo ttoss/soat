@@ -84,13 +84,31 @@ paths:
                   description: How this entry was created
                   default: manual
                   example: manual
+                duplicate_threshold:
+                  type: number
+                  description: Cosine similarity score at or above which the incoming content is considered a duplicate and skipped (default 0.95)
+                  default: 0.95
+                  minimum: 0
+                  maximum: 1
+                update_threshold:
+                  type: number
+                  description: Cosine similarity score at or above which the incoming content is merged with the existing entry via LLM (default 0.75)
+                  default: 0.75
+                  minimum: 0
+                  maximum: 1
       responses:
+        '200':
+          description: Memory entry deduplicated (action is "skipped" or "updated")
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryEntryWriteResult'
         '201':
           description: Memory entry created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MemoryEntry'
+                $ref: '#/components/schemas/MemoryEntryWriteResult'
         '400':
           description: Bad request (missing required fields)
         '401':
@@ -242,3 +260,12 @@ components:
         updated_at:
           type: string
           format: date-time
+    MemoryEntryWriteResult:
+      allOf:
+        - $ref: '#/components/schemas/MemoryEntry'
+        - type: object
+          properties:
+            action:
+              type: string
+              enum: [created, updated, skipped]
+              description: The outcome of the write operation
