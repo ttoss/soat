@@ -22,12 +22,12 @@ services:
     entrypoint:
       - /bin/sh
       - -c
-      - 'ollama serve & sleep 5 && (ollama list | grep -q qwen3-embedding:0.6b || ollama pull qwen3-embedding:0.6b) && (ollama list | grep -q qwen2.5:1.5b || ollama pull qwen2.5:1.5b) && wait'
+      - 'ollama serve & sleep 5 && (ollama list | grep -q qwen3-embedding:0.6b || ollama pull qwen3-embedding:0.6b) && (ollama list | grep -q qwen2.5:0.5b || ollama pull qwen2.5:0.5b) && wait'
     healthcheck:
       test:
         [
           'CMD-SHELL',
-          'ollama list | grep qwen3-embedding && ollama list | grep qwen2.5:1.5b',
+          'ollama list | grep qwen3-embedding && ollama list | grep qwen2.5:0.5b',
         ]
       interval: 10s
       timeout: 30s
