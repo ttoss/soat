@@ -1,4 +1,5 @@
 import { saveTrace } from 'src/lib/traces';
+
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Traces REST API', () => {
@@ -111,7 +112,9 @@ describe('Traces REST API', () => {
         .get('/api/v1/traces')
         .query({ projectId });
       expect(res.status).toBe(200);
-      const ids = res.body.data.map((t: { id: string }) => t.id);
+      const ids = res.body.data.map((t: { id: string }) => {
+        return t.id;
+      });
       expect(ids).toContain(traceId);
     });
 

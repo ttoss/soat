@@ -24,6 +24,7 @@ export const PUBLIC_ID_PREFIXES = {
   webhookDelivery: 'whd_',
   session: 'sess_',
   memory: 'mem_',
+  memoryEntry: 'me_',
 } as const;
 
 /**

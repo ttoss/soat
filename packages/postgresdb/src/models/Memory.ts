@@ -3,20 +3,14 @@ import {
   Column,
   DataType,
   ForeignKey,
+  HasMany,
   Model,
   Table,
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
+import { MemoryEntry } from './MemoryEntry';
 import { Project } from './Project';
-
-export type MemoryConfig = {
-  search?: string;
-  minScore?: number;
-  limit?: number;
-  paths?: string[];
-  documentIds?: string[];
-};
 
 @Table({
   tableName: 'memories',
@@ -53,8 +47,13 @@ export class Memory extends Model {
   @Column({ type: DataType.TEXT, allowNull: true })
   declare description: string | null;
 
-  @Column({ type: DataType.JSONB, allowNull: false })
-  declare config: MemoryConfig;
+  @Column({ type: DataType.ARRAY(DataType.STRING), allowNull: true })
+  declare tags: string[] | null;
+
+  @HasMany(() => {
+    return MemoryEntry;
+  })
+  declare entries: MemoryEntry[];
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

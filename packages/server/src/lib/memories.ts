@@ -1,11 +1,4 @@
-import type { MemoryConfig } from '@soat/postgresdb';
 import { db } from 'src/db';
-
-import type {
-  DocumentQueryConfig,
-  QueryDocumentResult,
-} from './documentSearch';
-import { resolveDocumentSearch } from './documentSearch';
 
 const mapMemory = (
   instance: InstanceType<(typeof db)['Memory']> & {
@@ -17,7 +10,7 @@ const mapMemory = (
     projectId: instance.project?.publicId,
     name: instance.name,
     description: instance.description ?? undefined,
-    config: instance.config,
+    tags: instance.tags ?? undefined,
     createdAt: instance.createdAt,
     updatedAt: instance.updatedAt,
   };
@@ -27,13 +20,13 @@ export const createMemory = async (args: {
   projectId: number;
   name: string;
   description?: string;
-  config: MemoryConfig;
+  tags?: string[];
 }) => {
   const memory = await db.Memory.create({
     projectId: args.projectId,
     name: args.name,
     description: args.description ?? null,
-    config: args.config,
+    tags: args.tags ?? null,
   });
 
   const withProject = await db.Memory.findOne({
@@ -66,7 +59,7 @@ export const updateMemory = async (args: {
   id: string;
   name?: string;
   description?: string | null;
-  config?: MemoryConfig;
+  tags?: string[] | null;
 }) => {
   const memory = await db.Memory.findOne({
     where: { publicId: args.id },
@@ -76,7 +69,7 @@ export const updateMemory = async (args: {
   if (args.name !== undefined) memory.name = args.name;
   if (args.description !== undefined)
     memory.description = args.description ?? null;
-  if (args.config !== undefined) memory.config = args.config;
+  if (args.tags !== undefined) memory.tags = args.tags ?? null;
 
   await memory.save();
 
@@ -97,25 +90,4 @@ export const deleteMemory = async (args: {
   if (!memory) return null;
   await memory.destroy();
   return 'deleted';
-};
-
-export const searchMemory = async (args: {
-  id: string;
-  projectIds: number[];
-  overrides?: Partial<DocumentQueryConfig>;
-}): Promise<QueryDocumentResult[] | null> => {
-  const memory = await db.Memory.findOne({
-    where: { publicId: args.id },
-  });
-
-  if (!memory) return null;
-
-  if (!args.projectIds.includes(memory.projectId)) return null;
-
-  const config: DocumentQueryConfig = {
-    ...memory.config,
-    ...args.overrides,
-  };
-
-  return resolveDocumentSearch({ projectIds: args.projectIds, config });
 };

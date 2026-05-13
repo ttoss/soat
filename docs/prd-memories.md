@@ -1,339 +1,497 @@
 # PRD: Memory Module
 
+## Implementation Status
+
+| Component                      | Status         | Notes                                                                                                                |
+| ------------------------------ | -------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Memory model (container CRUD)  | ✅ Implemented | Model, lib, REST, OpenAPI, permissions, tests, docs                                                                  |
+| Memory tags field              | ✅ Implemented | `tags` string-array column on Memory model; used by `resolveMemorySearch` glob filter                                |
+| MemoryEntry model              | ✅ Implemented | Model with `me_` prefix, embedding column, lib, REST, OpenAPI, permissions, tests                                    |
+| Entry write (dedup algorithm)  | ✅ Implemented | Two-threshold dedup/merge/skip in `writeMemoryEntry`; `mergeEntryContent` concatenates existing and incoming content |
+| Entry REST endpoints           | ✅ Implemented | `POST/GET/PUT/DELETE /api/v1/memories/:memoryId/entries`; POST returns `action` field                                |
+| Entry permissions              | ✅ Implemented | `WriteMemoryEntry`, `ReadMemoryEntry`, `ListMemoryEntries`, `UpdateMemoryEntry`, `DeleteMemoryEntry`                 |
+| `knowledgeConfig` on Agent     | ✅ Implemented | JSONB field on Agent model; merged with per-generation config; drives automatic context injection                    |
+| Extraction (post-conversation) | ❌ Not started | Auto-extract facts from conversation turns                                                                           |
+| write_memory soat-tool         | ❌ Not started | Agent tool for writing to a memory                                                                                   |
+| Knowledge integration          | ✅ Implemented | `resolveMemorySearch()` in `knowledge.ts`; `memoryIds`/`memoryTags` in `searchKnowledge()`                           |
+
+## Implementation Phases
+
+### Phase 1 — Memory Storage & Write Algorithm ✅ Complete
+
+**Goal:** Give developers a REST API to create memories, write entries with automatic deduplication, and manage the full entry lifecycle.
+
+**Deliverables:**
+
+- `Memory` and `MemoryEntry` DB models with pgvector embedding column
+- `writeMemoryEntry()` lib function with two-threshold dedup/merge/skip algorithm
+- `mergeEntryContent()` concatenating existing and incoming content
+- `POST/GET/PUT/DELETE /api/v1/memories` — memory CRUD
+- `POST/GET/PUT/DELETE /api/v1/memories/:memoryId/entries` — entry CRUD; POST returns `action` field
+- OpenAPI spec, permissions (`WriteMemoryEntry`, `ReadMemoryEntry`, etc.), tests
+
+**Unlocks:** Manual memory management via REST. Developers can build their own write workflows.
+
+---
+
+### Phase 2 — Agent Read & Write ✅ Partially complete
+
+**Goal:** Make agents memory-aware. Agents can recall facts before generating and write new facts during generation. This is the minimum needed for a compelling AI app tutorial.
+
+**Deliverables:**
+
+- ✅ **Memory source in `searchKnowledge()`** — `memoryIds` and `memoryTags` parameters added; `resolveMemorySearch()` queries MemoryEntry embeddings; results interleaved by score; `source_type: "memory"` in `KnowledgeResult`
+- ✅ **`document_paths` and `document_ids` parameters** — flat fields in OpenAPI spec and lib (replacing nested `document_filters`)
+- ✅ **`knowledge_config` on Agent** — JSONB field on `agents` table; merged with per-generation `knowledge_config` using append semantics; drives automatic context injection via `buildKnowledgeMessages()` in `agentKnowledge.ts`
+- ✅ **Automatic context injection** — `buildKnowledgeMessages()` called in `agentGeneration.ts` before each generation; results injected as system messages
+- ❌ **`write_memory` soat-tool** — agent tool that calls `writeMemoryEntry()` with `{ content, memoryId }`; not yet implemented
+- ✅ OpenAPI spec updated, SDK/CLI regenerated, tests added
+
+**Unlocks:** Agents that remember and recall. First tutorial: "Build an agent with persistent memory."
+
+---
+
+### Phase 3 — Memory Tags & Filtering ❌ Not started
+
+**Goal:** Enable memory organisation at scale — multiple memories per project, filtered by tag patterns.
+
+**Deliverables:**
+
+- `tags` column (string array) on the `Memory` model
+- Tag filter on `GET /api/v1/memories` (exact and glob match)
+- `memory_tags` glob matching in `searchKnowledge()` — e.g., `user*` matches `user`, `user-prefs`, `user-history`
+- Update OpenAPI spec, permissions page, module docs
+
+**Unlocks:** Multi-memory projects. Agents scoped to tag-matched memories without knowing IDs upfront.
+
+---
+
+### Phase 4 — Automatic Extraction ❌ Not started
+
+**Goal:** Agents learn passively. Facts are extracted from conversations automatically — no explicit `write_memory` call needed.
+
+**Deliverables:**
+
+- Post-generation extraction pipeline (fire-and-forget, non-blocking)
+- LLM prompt to extract atomic facts from completed conversation turn
+- Each candidate runs through the standard `writeMemoryEntry()` write algorithm
+- Extraction triggered when an agent's `knowledge_config` includes `memory_ids` with `extraction: true`
+- Return summary `{ created, updated, skipped }` in the generation trace
+- Tests covering extraction trigger, candidate extraction, dedup during extraction
+
+**Unlocks:** Zero-effort conversational memory — agents accumulate knowledge just by talking.
+
+---
+
 ## Overview
 
-The Memory module provides a reusable, project-scoped mechanism for injecting contextual knowledge into agents and chats. A memory is a **named, saved document query** — it defines filtering and search criteria that are evaluated at query time to return matching documents. When an agent or chat runs, attached memories are queried and the resulting documents are injected as system messages.
+The Memory module provides a project-scoped mechanism for storing and retrieving knowledge. A **memory** is a named container that accumulates atomic facts (entries) via a deduplication and merge algorithm.
 
-The same query shape used by a memory is also available as an ad-hoc document search endpoint (`POST /api/v1/documents/search`). A memory is simply a persisted preset for that query.
+A project can have **many memories**, each representing a different knowledge domain (e.g., "Customer Preferences", "Project Context", "Technical Decisions"). Entries written to a memory are automatically deduplicated within that memory's scope.
+
+Searching across memories and documents is handled by the **knowledge module** (`POST /api/v1/knowledge/search`). The memory module owns storage and write logic only — it does not expose its own search endpoint.
 
 This module resolves two roadmap items:
 
-- **Built-in RAG (P0)** — semantic search over project documents
-- **Agent Memory (P2)** — persistent, configurable context for agents
+- **Agent Memory (P2)** — persistent, project-scoped knowledge for agents
+- **Conversational Memory** — auto-extract facts from conversations
 
 ## Key Concepts
 
-### Memory Entity
+### Memory (Container)
 
-A memory is a named, project-scoped configuration that describes how to retrieve documents. It is independent of any agent or chat — it can be created, queried, and managed on its own.
+A memory is a named, project-scoped knowledge container. It groups related entries and defines the dedup scope.
 
-| Field         | Type     | Required | Description                                                                    |
-| ------------- | -------- | -------- | ------------------------------------------------------------------------------ |
-| `id`          | string   | auto     | Public ID with `mem_` prefix                                                   |
-| `name`        | string   | yes      | Human-readable name. Also used as tool name when exposed to agents.            |
-| `description` | string   | no       | Description of what this memory provides. Used as tool description for agents. |
-| `config`      | object   | yes      | Query configuration (see Query Fields below)                                   |
-| `project_id`  | string   | yes      | The project this memory belongs to                                             |
-| `created_at`  | datetime | auto     |                                                                                |
-| `updated_at`  | datetime | auto     |                                                                                |
+| Field         | Type             | Required | Description                                                                |
+| ------------- | ---------------- | -------- | -------------------------------------------------------------------------- |
+| `id`          | string           | auto     | Public ID with `mem_` prefix                                               |
+| `project_id`  | string           | yes      | The project this memory belongs to                                         |
+| `name`        | string           | yes      | Human-readable name (e.g., "Customer Preferences")                         |
+| `description` | string           | no       | Description of what this memory stores                                     |
+| `tags`        | array of strings | no       | Tags for categorizing and filtering memories (e.g., `["projectA", "crm"]`) |
+| `created_at`  | datetime         | auto     |                                                                            |
+| `updated_at`  | datetime         | auto     |                                                                            |
 
-### Query Fields
+Tags are free-form strings used to group and filter memories. The knowledge search endpoint supports glob-pattern matching on tags (e.g., `user*` matches `user`, `user-prefs`, `user-history`).
 
-All query fields are optional individually, but at least one of `search`, `paths`, or `document_ids` must be provided. When multiple fields are set, they act as AND filters — only documents matching **all** conditions are returned.
+### Memory Entry
 
-| Field          | Type     | Description                                                                  |
-| -------------- | -------- | ---------------------------------------------------------------------------- |
-| `search`       | string   | Semantic search query. Documents are ranked by embedding similarity.         |
-| `min_score`    | number   | Minimum similarity score threshold (0–1). Only applies when `search` is set. |
-| `limit`        | number   | Maximum number of documents to return. Default: 10.                          |
-| `paths`        | string[] | Filter to documents whose file path starts with any of these prefixes.       |
-| `document_ids` | string[] | Filter to these specific document public IDs.                                |
+A memory entry is an atomic piece of knowledge stored inside a memory. Entries are the units of knowledge.
+
+| Field        | Type     | Required | Description                                                                 |
+| ------------ | -------- | -------- | --------------------------------------------------------------------------- |
+| `id`         | string   | auto     | Public ID with `me_` prefix                                                 |
+| `memory_id`  | string   | auto     | The memory this entry belongs to                                            |
+| `content`    | string   | yes      | The knowledge content (a single fact, observation, or piece of information) |
+| `source`     | string   | auto     | How the entry was created: `manual`, `agent`, `extraction`                  |
+| `embedding`  | vector   | auto     | Embedding vector for semantic search (generated on create/update)           |
+| `created_at` | datetime | auto     |                                                                             |
+| `updated_at` | datetime | auto     |                                                                             |
+
+**Source types:**
+
+- `manual` — created by a user via the REST API
+- `agent` — created by an agent via the `write_memory` soat-tool during a generation
+- `extraction` — created by the automatic extraction system after a conversation turn
+
+**Design principles:**
+
+- Entries are **atomic** — one fact per entry (e.g., "Customer prefers email communication", not a paragraph mixing multiple facts).
+- Entries are **memory-scoped** — deduplication runs within a single memory's entries. Different memories can hold related facts independently.
+- Entries are **automatically deduplicated** — the write algorithm prevents duplicate and near-duplicate entries within a memory.
+- Entries are **mutable** — they can be merged with new information or manually updated.
+- Entries are **embedded** — each entry has an embedding vector computed from its content, enabling semantic search.
+
+### Relationship to Documents and Knowledge
+
+Memories and documents are independent storage systems. The **knowledge module** provides a unified search layer across both.
+
+| Concern            | Memories                           | Documents                         | Knowledge                            |
+| ------------------ | ---------------------------------- | --------------------------------- | ------------------------------------ |
+| What it stores     | Atomic facts (1–2 sentences)       | Full content (files, pages, etc.) | Nothing — query orchestrator only    |
+| How content enters | Write algorithm (dedup/merge/skip) | Upload or create                  | —                                    |
+| Search endpoint    | —                                  | —                                 | `POST /api/v1/knowledge/search`      |
+| Managed by         | System (automatic dedup)           | User (manual upload)              | System (unified retrieval + ranking) |
+
+See the [Knowledge Module PRD](./prd-knowledge.md) for details.
+
+## Write Algorithm
+
+Every write to a memory — manual, agent, or extraction — goes through the same algorithm. The caller provides `content` and the system determines the outcome. Dedup is scoped to the target memory.
+
+```
+Input: content (string), memory_id
+
+STEP 1 — EMBED
+  Generate embedding for the content.
+
+STEP 2 — SEARCH
+  Search existing entries in this memory by cosine similarity.
+  Let topMatch = highest-similarity existing entry.
+
+STEP 3 — DECIDE
+
+  CASE 1: topMatch.score ≥ DUPLICATE_THRESHOLD (default 0.95)
+    → SKIP. The fact is already known.
+    Return { action: "skipped", entry: topMatch }
+
+  CASE 2: topMatch.score ≥ UPDATE_THRESHOLD (default 0.75)
+    → MERGE. The fact overlaps with existing knowledge.
+    Prompt an LLM:
+      "Given the existing fact and the new fact, produce a single
+       updated fact that combines both. If they contradict,
+       prefer the new information."
+      Input: { existing: topMatch.content, new: content }
+      Output: { merged: string }
+    Update topMatch: content = merged, re-generate embedding, update updated_at.
+    Return { action: "updated", entry: topMatch }
+
+  CASE 3: topMatch.score < UPDATE_THRESHOLD (or no existing entries)
+    → CREATE. This is genuinely new knowledge.
+    Create a new entry with the provided content and embedding.
+    Return { action: "created", entry: newEntry }
+```
+
+### Why This Algorithm Works
+
+The two-threshold approach handles three scenarios cleanly:
+
+- **High similarity (≥ 0.95):** "The user likes Python" vs "User prefers Python" → same fact, skip.
+- **Medium similarity (0.75–0.95):** "The user likes Python" vs "The user likes Python 3.12 specifically" → related, merge into a richer fact.
+- **Low similarity (< 0.75):** "The user likes Python" vs "The project deadline is Friday" → unrelated, create new entry.
+
+The LLM-based merge step handles nuance that pure embedding similarity cannot: contradiction resolution, information enrichment, and phrasing consolidation.
+
+### Threshold Configuration
+
+Thresholds can be overridden per request via optional fields in the write endpoint body:
+
+| Field                 | Type   | Default | Description                               |
+| --------------------- | ------ | ------- | ----------------------------------------- |
+| `duplicate_threshold` | number | 0.95    | Similarity above which content is skipped |
+| `update_threshold`    | number | 0.75    | Similarity above which content merges     |
 
 ### Examples
 
-**Semantic search:**
-
-**Semantic search:**
+**First write — no existing entries:**
 
 ```json
+POST /api/v1/memories/mem_abc/entries
+{ "content": "Customer prefers email over phone calls" }
+
+→ { "action": "created", "entry": { "id": "me_001", "content": "Customer prefers email over phone calls", ... } }
+```
+
+**Duplicate write — same fact rephrased:**
+
+```json
+POST /api/v1/memories/mem_abc/entries
+{ "content": "The customer likes email more than phone" }
+
+→ { "action": "skipped", "entry": { "id": "me_001", "content": "Customer prefers email over phone calls", ... } }
+```
+
+**Merge write — related fact with new detail:**
+
+```json
+POST /api/v1/memories/mem_abc/entries
+{ "content": "Customer prefers email, especially for billing inquiries" }
+
+→ { "action": "updated", "entry": { "id": "me_001", "content": "Customer prefers email over phone calls, especially for billing inquiries", ... } }
+```
+
+**Unrelated write — new fact:**
+
+```json
+POST /api/v1/memories/mem_abc/entries
+{ "content": "Customer fiscal year ends in March" }
+
+→ { "action": "created", "entry": { "id": "me_002", "content": "Customer fiscal year ends in March", ... } }
+```
+
+## Write Paths
+
+### 1. Manual Write (REST API)
+
+The user calls `POST /api/v1/memories/:memoryId/entries` with `{ "content": "..." }`. The write algorithm runs within that memory and returns the action taken plus the entry.
+
+### 2. Agent Write (soat-tool)
+
+During a generation, an agent can call the `write_memory` tool with `{ "content": "...", "memoryId": "mem_..." }`. The write algorithm runs identically.
+
+### 3. Automatic Extraction (post-conversation)
+
+Runs **after a conversation turn completes** (fire-and-forget, does not block the response). This is the only path that extracts multiple facts from a single input.
+
+```
+Input: conversation messages[], target memory_id
+
+STEP 1 — EXTRACT CANDIDATE FACTS
+  Prompt an LLM with the conversation context:
+    "Extract discrete, atomic facts from this conversation.
+     Return a JSON array of { content: string } objects.
+     Only extract facts that are worth remembering long-term.
+     Skip transient information (greetings, acknowledgments, etc.)."
+
+  → candidates: { content: string }[]
+
+  If candidates is empty → STOP (nothing to remember)
+
+STEP 2 — WRITE EACH CANDIDATE
+  For each candidate, run the write algorithm against the target memory.
+  Each candidate independently results in create, merge, or skip.
+
+STEP 3 — RETURN
+  Return a summary: { created: number, updated: number, skipped: number }
+```
+
+Extraction is triggered when an agent or chat with attached memories completes a generation.
+
+## Agent Integration
+
+### Knowledge Config
+
+Instead of a separate join table, the Agent model stores a `knowledgeConfig` JSONB field that mirrors the `searchKnowledge` parameters. This is simpler — one field on the agent instead of a separate table and attachment endpoints.
+
+```json
+PUT /api/v1/agents/{agent_id}
 {
-  "name": "Bitcoin Knowledge",
-  "config": {
-    "search": "bitcoin price analysis",
+  "knowledge_config": {
+    "memory_ids": ["mem_abc", "mem_def"],
+    "memory_tags": ["crm", "user*"],
+    "document_paths": ["/sales/"],
+    "document_ids": ["doc_01"],
+    "min_score": 0.5,
     "limit": 10
   }
 }
 ```
 
-**Specific documents:**
+**Simple case** — agent needs just one memory:
+
+```json
+{ "knowledge_config": { "memory_ids": ["mem_abc"] } }
+```
+
+**Rich case** — agent needs memories + scoped documents:
 
 ```json
 {
-  "name": "Product Specs",
-  "config": {
-    "document_ids": ["doc_abc123", "doc_def456"]
+  "knowledge_config": {
+    "memory_ids": ["mem_abc"],
+    "memory_tags": ["projectA"],
+    "document_paths": ["/docs/"],
+    "limit": 20
   }
 }
 ```
 
-**Path prefix:**
+**No knowledge** — omit `knowledge_config` or set to `null`.
 
-```json
-{
-  "name": "Knowledge Base",
-  "config": {
-    "paths": ["/knowledge-base/bitcoin/", "/reports/2024/"]
-  }
-}
+### Three Knowledge Retrieval Paths
+
+There are three ways to provide knowledge to an agent:
+
+| Path                                                             | When                            | Who decides                   | Injected as                      |
+| ---------------------------------------------------------------- | ------------------------------- | ----------------------------- | -------------------------------- |
+| **Agent config** (`knowledge_config` on agent)                   | Every generation, automatically | Agent creator (at setup time) | System messages                  |
+| **Per-generation request** (`knowledge_config` in generate body) | One specific generation         | Caller (at request time)      | System messages                  |
+| **Agent self-retrieval**                                         | During generation, dynamically  | The agent (LLM decides)       | Via `search_knowledge` soat-tool |
+
+### Merge Behavior (Agent Config + Per-Generation)
+
+When both the agent's stored `knowledge_config` and a per-generation `knowledge_config` are provided, they are **appended** (not overridden):
+
+- **Array fields** (`memory_ids`, `memory_tags`, `document_paths`, `document_ids`) → union of both sets
+- **Scalar fields** (`min_score`, `limit`) → per-generation overrides agent config
+
+Example:
+
+```
+Agent config:       { memory_ids: ["mem_abc"], limit: 5 }
+Per-generation:     { memory_ids: ["mem_xyz"], document_paths: ["/docs/"] }
+
+→ Merged:           { memory_ids: ["mem_abc", "mem_xyz"], document_paths: ["/docs/"], limit: 5 }
 ```
 
-**Combined — RAG scoped to a folder:**
+Both sets of results are injected as **system messages**, ordered by score.
 
-```json
-{
-  "name": "Bitcoin KB Search",
-  "config": {
-    "search": "bitcoin",
-    "paths": ["/knowledge-base/"],
-    "min_score": 0.8,
-    "limit": 5
-  }
-}
+### Generation Flow
+
+1. **Merge configs** — combine agent's stored `knowledgeConfig` with per-generation `knowledgeConfig` (if provided) using append semantics.
+2. **Search** — call `searchKnowledge()` with the merged config filters and the conversation context as the query.
+3. **Inject** — prepend results as system messages, tagged by source.
+4. **Generate** — send to LLM with instructions + knowledge + conversation.
+5. **Post-generate (async)** — if the merged config includes `memory_ids`, the extraction algorithm runs on the completed conversation turn, writing new facts to those memories.
+
+### Agent Memory Tools (soat-tools)
+
+When an agent has a `knowledgeConfig` with memory IDs, it gains access to these tools:
+
+| Tool               | Description                                                          |
+| ------------------ | -------------------------------------------------------------------- |
+| `write_memory`     | Write content to a memory (system decides: create, merge, or skip)   |
+| `search_knowledge` | Search across memories and documents (delegated to knowledge module) |
+
+These tools are gated by the agent's boundary policy.
+
+### Context Injection
+
+Relevant memory entries are injected as system messages before the conversation:
+
+```
+[Memory: Customer Preferences] Customer prefers email over phone calls, especially for billing inquiries
+[Memory: Customer Preferences] Customer fiscal year ends in March
+[Memory: Project Context] The deadline is June 15
 ```
 
-**Combined — RAG within specific documents:**
-
-```json
-{
-  "name": "Targeted Search",
-  "config": {
-    "search": "bitcoin",
-    "document_ids": ["doc_abc123", "doc_def456"]
-  }
-}
-```
-
-### Query Result
-
-When a memory is queried (via the API or internally by an agent/chat), it returns an **array of documents** — not a pre-formatted string. The consumer is responsible for formatting the documents into system messages or any other shape.
-
-```json
-{
-  "documents": [
-    {
-      "id": "doc_abc123",
-      "title": "Bitcoin Basics",
-      "content": "Bitcoin is a decentralized...",
-      "score": 0.92
-    }
-  ]
-}
-```
-
-- `score` is present only when the memory has a `search` field (semantic similarity score).
-- Memories without `search` return documents without a score.
-
-## Attachment to Agents and Chats
-
-### Persisted Defaults
-
-Memories can be permanently attached to an agent or chat via a join table. These are the **default memories** that are always resolved when the agent/chat runs.
-
-- Attach: `POST /api/v1/agents/:agentId/memories` with `{ "memory_id": "mem_..." }`
-- Detach: `DELETE /api/v1/agents/:agentId/memories/:memoryId`
-- List: `GET /api/v1/agents/:agentId/memories`
-- Same endpoints exist for chats: `/api/v1/chats/:chatId/memories`
-
-### Per-Request Supplement
-
-Callers can pass `memory_ids` in the generate/chat request body. These memories are **merged** with the persisted defaults (union, deduplicated). Per-request memories do **not** override or replace defaults — they add to them.
-
-```json
-POST /api/v1/agents/:agentId/generate
-{
-  "messages": [...],
-  "memory_ids": ["mem_extra1", "mem_extra2"]
-}
-```
-
-Final memory set = `persistedMemories ∪ requestMemories`
-
-To remove a default memory, detach it from the agent — not via per-request override.
-
-### Multiple Memories
-
-Agents and chats can have **many memories** attached. Each memory is resolved independently. The resulting documents from all memories are combined and injected as system messages.
-
-## Permissions
-
-### Memory CRUD
-
-| Permission              | Endpoint                                |
-| ----------------------- | --------------------------------------- |
-| `memories:CreateMemory` | `POST /api/v1/memories`                 |
-| `memories:ListMemories` | `GET /api/v1/memories`                  |
-| `memories:GetMemory`    | `GET /api/v1/memories/:memoryId`        |
-| `memories:UpdateMemory` | `PUT /api/v1/memories/:memoryId`        |
-| `memories:DeleteMemory` | `DELETE /api/v1/memories/:memoryId`     |
-| `memories:GetMemory`    | `POST /api/v1/memories/:memoryId/query` |
-
-### Attachment Permissions
-
-Attaching/detaching memories to agents uses **agent permissions** (`agents:UpdateAgent`).
-Attaching/detaching memories to chats uses **chat permissions** (`chats:UpdateChat`).
-
-### Document Access Scoping
-
-When a memory is queried through an agent's `soat` tool, three layers determine what documents are returned:
-
-1. **Caller permissions** — the user or API key that triggered the generation must be allowed to search documents (`documents:SearchDocuments`), and the caller's policy may restrict **which resources** (e.g., specific files or paths) they can access. Only documents the caller is authorized to read are candidates.
-2. **Agent boundary policy** — if the agent defines a `boundary_policy`, it further restricts both the allowed **actions** and **resources**. The effective permission is the intersection of caller and boundary policies (see [SOAT Action Permissions](../modules/agents.md#soat-action-permissions)). A boundary that only allows `resource: ["file/reports/*"]` means the agent can never return documents outside that path, regardless of the caller's broader access.
-3. **Memory config filters** — `search`, `paths`, `document_ids`, `min_score`, and `limit` from the memory's `config` further narrow the result set within the already-permitted documents.
-
-All three layers AND together: the caller's policy determines the accessible document set, the boundary policy intersects it further, and the config filters scope the actual query within what remains. Everything lives inside a single project — no cross-project access is possible.
-
-## REST API
-
-All body fields use `snake_case` per project convention.
-
-| Method | Path                                         | Description                          |
-| ------ | -------------------------------------------- | ------------------------------------ |
-| POST   | `/api/v1/memories`                           | Create a memory                      |
-| GET    | `/api/v1/memories`                           | List memories in accessible projects |
-| GET    | `/api/v1/memories/:memoryId`                 | Get a memory by ID                   |
-| PUT    | `/api/v1/memories/:memoryId`                 | Update a memory                      |
-| DELETE | `/api/v1/memories/:memoryId`                 | Delete a memory                      |
-| POST   | `/api/v1/memories/:memoryId/query`           | Query a memory and return documents  |
-| POST   | `/api/v1/agents/:agentId/memories`           | Attach a memory to an agent          |
-| GET    | `/api/v1/agents/:agentId/memories`           | List memories attached to an agent   |
-| DELETE | `/api/v1/agents/:agentId/memories/:memoryId` | Detach a memory from an agent        |
-| POST   | `/api/v1/chats/:chatId/memories`             | Attach a memory to a chat            |
-| GET    | `/api/v1/chats/:chatId/memories`             | List memories attached to a chat     |
-| DELETE | `/api/v1/chats/:chatId/memories/:memoryId`   | Detach a memory from a chat          |
-
-### Query Endpoint
-
-`POST /api/v1/memories/:memoryId/query` allows users to preview/test what a memory returns. This is also the internal code path used by agents and chats at generation time.
-
-Optional request body to override any query fields:
-
-```json
-{
-  "search": "override search query",
-  "limit": 5
-}
-```
-
-Any field passed in the request body overrides the corresponding saved field on the memory.
-
-Response:
-
-```json
-{
-  "documents": [
-    {
-      "id": "doc_abc123",
-      "title": "Bitcoin Basics",
-      "content": "...",
-      "score": 0.92
-    }
-  ]
-}
-```
+The system embeds the latest user message and calls `searchKnowledge()` with the agent's `knowledgeConfig` filters to retrieve the top matches.
 
 ## Data Model
 
 ### Memory Table
 
-| Column      | DB Type   | Notes                                                                 |
-| ----------- | --------- | --------------------------------------------------------------------- |
-| id          | UUID      | Internal primary key (never exposed)                                  |
-| publicId    | VARCHAR   | `mem_` + nanoid, exposed as `id`                                      |
-| name        | VARCHAR   | Required                                                              |
-| description | TEXT      | Optional                                                              |
-| config      | JSONB     | Query config: `search`, `min_score`, `limit`, `paths`, `document_ids` |
-| projectId   | INTEGER   | FK → Project                                                          |
-| createdAt   | TIMESTAMP |                                                                       |
-| updatedAt   | TIMESTAMP |                                                                       |
+| Column      | Type          | Constraints                      |
+| ----------- | ------------- | -------------------------------- |
+| id          | INTEGER       | PK, auto-increment               |
+| publicId    | VARCHAR(32)   | UNIQUE, NOT NULL, `mem_` prefix  |
+| projectId   | INTEGER       | FK → Project, NOT NULL           |
+| name        | VARCHAR       | NOT NULL                         |
+| description | TEXT          | NULL                             |
+| tags        | VARCHAR ARRAY | NULL, for categorizing/filtering |
+| createdAt   | TIMESTAMP     | NOT NULL                         |
+| updatedAt   | TIMESTAMP     | NOT NULL                         |
 
-### AgentMemory Join Table
+### MemoryEntry Table
 
-| Column    | DB Type   | Notes                |
-| --------- | --------- | -------------------- |
-| id        | UUID      | Internal primary key |
-| agentId   | INTEGER   | FK → Agent           |
-| memoryId  | INTEGER   | FK → Memory          |
-| createdAt | TIMESTAMP |                      |
+| Column    | Type         | Constraints                    |
+| --------- | ------------ | ------------------------------ |
+| id        | INTEGER      | PK, auto-increment             |
+| publicId  | VARCHAR(32)  | UNIQUE, NOT NULL, `me_` prefix |
+| memoryId  | INTEGER      | FK → Memory, NOT NULL          |
+| content   | TEXT         | NOT NULL                       |
+| source    | VARCHAR(20)  | NOT NULL, enum                 |
+| embedding | VECTOR(1536) | NOT NULL                       |
+| createdAt | TIMESTAMP    | NOT NULL                       |
+| updatedAt | TIMESTAMP    | NOT NULL                       |
 
-### ChatMemory Join Table
+**Indexes:**
 
-| Column    | DB Type   | Notes                |
-| --------- | --------- | -------------------- |
-| id        | UUID      | Internal primary key |
-| chatId    | INTEGER   | FK → Chat            |
-| memoryId  | INTEGER   | FK → Memory          |
-| createdAt | TIMESTAMP |                      |
+- `UNIQUE (publicId)` on both tables
+- `(memoryId)` — for listing entries within a memory
+- `HNSW (embedding)` — for cosine similarity search
 
-## Agent/Chat Integration
+### Agent `knowledgeConfig` Field
 
-When an agent or chat generates a response:
+Stored as JSONB on the `agents` table. Schema:
 
-1. Collect persisted memories (from join table) and per-request `memory_ids`.
-2. Merge into a deduplicated set.
-3. For each memory, execute the saved query (scoped by caller's `projectIds`):
-   a. Start with all documents in the caller's accessible projects.
-   b. If `document_ids` → filter to those specific docs.
-   c. If `paths` → filter to docs matching those path prefixes.
-   d. If `search` → rank by semantic similarity, apply `min_score` threshold.
-   e. If no `search` → return docs in creation order.
-   f. Apply `limit`.
-4. Combine all returned documents from all memories.
-5. Format documents into system messages and prepend to the conversation.
-
-Each document becomes a system message:
-
-```
-[Document: Bitcoin Basics]
-Bitcoin is a decentralized digital currency...
-```
-
-## Implementation Checklist
-
-- [ ] **DB Model**: `Memory.ts`, `AgentMemory.ts`, `ChatMemory.ts` in `packages/postgresdb/src/models/`
-- [ ] **Public ID**: Register `mem_` prefix in `packages/postgresdb/src/utils/publicId.ts`
-- [ ] **Model index**: Export new models from `packages/postgresdb/src/models/index.ts`
-- [ ] **Business logic**: `packages/server/src/lib/memories.ts`
-- [ ] **REST routes**: `packages/server/src/rest/v1/memories.ts`
-- [ ] **OpenAPI spec**: `packages/server/src/rest/openapi/v1/memories.yaml`
-- [ ] **Route registration**: Mount in `packages/server/src/rest/v1/index.ts`
-- [ ] **Agent/chat attachment routes**: Add memory sub-routes to agents and chats routers
-- [ ] **Agent/chat integration**: Modify `createGeneration` and chat flow to resolve memories
-- [ ] **soat-tools**: `packages/server/src/lib/soat-tools/memories.ts`
-- [ ] **MCP tools**: `packages/server/src/mcp/tools/memories.ts`
-- [ ] **Documentation**: `packages/website/docs/modules/memories.md`
-- [ ] **Unit tests**: `packages/server/tests/unit/tests/memories.test.ts`
-- [ ] **MCP tests**: Add memory tool tests to `packages/server/tests/unit/tests/mcp.test.ts`
-- [ ] **Smoke tests**: Add memory steps to `tests/smoke-tests.sh`
-
-## Document Search Endpoint
-
-The same query shape is available as an ad-hoc endpoint for searching documents without creating a memory:
-
-```
-POST /api/v1/documents/search
-```
-
-Request body:
-
-```json
-{
-  "search": "bitcoin",
-  "paths": ["/knowledge-base/"],
-  "min_score": 0.8,
-  "limit": 5
+```ts
+interface KnowledgeConfig {
+  memoryIds?: string[]; // mem_... IDs to search
+  memoryTags?: string[]; // glob patterns to match memory tags
+  documentPaths?: string[]; // file path prefixes
+  documentIds?: string[]; // doc_... IDs
+  minScore?: number; // minimum cosine similarity (0–1)
+  limit?: number; // max results to inject
 }
 ```
 
-Response shape is identical to the memory query endpoint. This shares the same underlying resolution function — a memory is just a named preset for this query.
+No join table needed. The agent stores its knowledge retrieval config inline.
 
-## Future Extensions
+## Permissions
 
-These are **not** in scope for V1 but are natural additions:
+### Memory CRUD
 
-| Feature               | Description                                                 |
-| --------------------- | ----------------------------------------------------------- |
-| Conversational memory | Auto-extract facts from chat history (Mem0/ChatGPT pattern) |
-| Agent self-editing    | Agent can create/update memories via tools (Letta pattern)  |
-| Episodic memory       | Few-shot examples from past successful interactions         |
-| Background processing | Async memory refinement between conversations (sleep-time)  |
-| Tags filter           | Add `tags` field to query for filtering by document tags    |
+| Permission              | Endpoint                            |
+| ----------------------- | ----------------------------------- |
+| `memories:CreateMemory` | `POST /api/v1/memories`             |
+| `memories:ListMemories` | `GET /api/v1/memories`              |
+| `memories:GetMemory`    | `GET /api/v1/memories/:memoryId`    |
+| `memories:UpdateMemory` | `PUT /api/v1/memories/:memoryId`    |
+| `memories:DeleteMemory` | `DELETE /api/v1/memories/:memoryId` |
+
+### Entry Operations
+
+| Permission                   | Endpoint                                             |
+| ---------------------------- | ---------------------------------------------------- |
+| `memories:WriteMemoryEntry`  | `POST /api/v1/memories/:memoryId/entries`            |
+| `memories:ListMemoryEntries` | `GET /api/v1/memories/:memoryId/entries`             |
+| `memories:GetMemoryEntry`    | `GET /api/v1/memories/:memoryId/entries/:entryId`    |
+| `memories:UpdateMemoryEntry` | `PUT /api/v1/memories/:memoryId/entries/:entryId`    |
+| `memories:DeleteMemoryEntry` | `DELETE /api/v1/memories/:memoryId/entries/:entryId` |
+
+### Knowledge Config Permissions
+
+Updating an agent's `knowledgeConfig` uses `agents:UpdateAgent` (standard agent update).
+
+## REST API
+
+All body fields use `snake_case` per project convention.
+
+### Memory CRUD
+
+| Method | Path                         | Description                          |
+| ------ | ---------------------------- | ------------------------------------ |
+| POST   | `/api/v1/memories`           | Create a memory                      |
+| GET    | `/api/v1/memories`           | List memories in accessible projects |
+| GET    | `/api/v1/memories/:memoryId` | Get a memory by ID                   |
+| PUT    | `/api/v1/memories/:memoryId` | Update a memory                      |
+| DELETE | `/api/v1/memories/:memoryId` | Delete a memory and all its entries  |
+
+### Entry Operations
+
+| Method | Path                                          | Description                                            |
+| ------ | --------------------------------------------- | ------------------------------------------------------ |
+| POST   | `/api/v1/memories/:memoryId/entries`          | Write content (system decides: create, merge, or skip) |
+| GET    | `/api/v1/memories/:memoryId/entries`          | List entries in a memory                               |
+| GET    | `/api/v1/memories/:memoryId/entries/:entryId` | Get an entry by ID                                     |
+| PUT    | `/api/v1/memories/:memoryId/entries/:entryId` | Manually update an entry (bypasses dedup)              |
+| DELETE | `/api/v1/memories/:memoryId/entries/:entryId` | Delete an entry                                        |
+
+### Agent Knowledge Config
+
+No separate endpoints — use the standard agent update endpoint:
+
+| Method | Path                      | Description                               |
+| ------ | ------------------------- | ----------------------------------------- |
+| PUT    | `/api/v1/agents/:agentId` | Update agent including `knowledge_config` |

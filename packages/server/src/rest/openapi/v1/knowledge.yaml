@@ -1,0 +1,244 @@
+openapi: 3.0.3
+info:
+  title: SOAT Knowledge API
+  version: 1.0.0
+  description: Unified semantic search across knowledge sources
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Knowledge
+    description: Unified search across documents and knowledge sources
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/knowledge/search:
+    post:
+      tags:
+        - Knowledge
+      summary: Search knowledge
+      description: Searches across documents and memory entries using semantic search, file paths, document IDs, or memory IDs/tags. At least one of `query`, `document_paths`, `document_ids`, `memory_ids`, or `memory_tags` must be provided.
+      operationId: searchKnowledge
+      x-iam-action: knowledge:SearchKnowledge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                project_id:
+                  type: string
+                  description: Limit search to a specific project
+                  example: 'prj_V1StGXR8Z5jdHi6B'
+                query:
+                  type: string
+                  description: Semantic search query text
+                  example: 'customer communication preferences'
+                min_score:
+                  type: number
+                  description: Minimum similarity score (0–1). Results with lower scores are excluded. Only applies when `query` is provided.
+                  minimum: 0
+                  maximum: 1
+                  example: 0.5
+                limit:
+                  type: integer
+                  description: Maximum number of results to return (default 10)
+                  minimum: 1
+                  example: 10
+                memory_ids:
+                  type: array
+                  description: Search entries within these specific memories
+                  items:
+                    type: string
+                  example: ['mem_V1StGXR8Z5jdHi6B']
+                memory_tags:
+                  type: array
+                  description: Search entries in memories whose tags match any of these patterns (glob supported)
+                  items:
+                    type: string
+                  example: ['customer*', 'support']
+                document_paths:
+                  type: array
+                  description: Filter results to documents whose file path starts with one of these prefixes
+                  items:
+                    type: string
+                  example: ['/sales/', '/hr/']
+                document_ids:
+                  type: array
+                  description: Filter results to specific document IDs
+                  items:
+                    type: string
+                  example: ['doc_V1StGXR8Z5jdHi6B']
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - results
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/KnowledgeResult'
+        '400':
+          description: Bad request — at least one search parameter is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    KnowledgeResult:
+      oneOf:
+        - $ref: '#/components/schemas/DocumentKnowledgeResult'
+        - $ref: '#/components/schemas/MemoryKnowledgeResult'
+      discriminator:
+        propertyName: source_type
+        mapping:
+          document: '#/components/schemas/DocumentKnowledgeResult'
+          memory: '#/components/schemas/MemoryKnowledgeResult'
+    DocumentKnowledgeResult:
+      type: object
+      required:
+        - source_type
+        - document_id
+        - content
+        - created_at
+        - updated_at
+      properties:
+        source_type:
+          type: string
+          enum:
+            - document
+          description: The type of knowledge source this result comes from
+          example: document
+        document_id:
+          type: string
+          description: Public ID of the document
+          example: 'doc_V1StGXR8Z5jdHi6B'
+        file_id:
+          type: string
+          description: Public ID of the underlying file
+          example: 'fil_V1StGXR8Z5jdHi6B'
+        project_id:
+          type: string
+          description: Public ID of the project the document belongs to
+          example: 'prj_V1StGXR8Z5jdHi6B'
+        path:
+          type: string
+          description: Logical path of the file within the project
+          example: '/sales/policies.txt'
+        filename:
+          type: string
+          description: Filename of the underlying file
+          example: 'policies.txt'
+        size:
+          type: integer
+          description: File size in bytes
+          example: 1024
+        title:
+          type: string
+          description: Document title
+          example: 'Sales Communication Policy'
+        metadata:
+          type: object
+          description: Arbitrary metadata attached to the document
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+          description: Key-value tags
+          example:
+            department: sales
+        content:
+          type: string
+          nullable: true
+          description: Full text content of the document
+        score:
+          type: number
+          description: Semantic similarity score (0–1). Only present when `query` was provided.
+          minimum: 0
+          maximum: 1
+          example: 0.82
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last updated timestamp
+    MemoryKnowledgeResult:
+      type: object
+      required:
+        - source_type
+        - entry_id
+        - memory_id
+        - content
+        - created_at
+        - updated_at
+      properties:
+        source_type:
+          type: string
+          enum:
+            - memory
+          description: The type of knowledge source this result comes from
+          example: memory
+        entry_id:
+          type: string
+          description: Public ID of the memory entry
+          example: 'me_V1StGXR8Z5jdHi6B'
+        memory_id:
+          type: string
+          description: Public ID of the parent memory
+          example: 'mem_V1StGXR8Z5jdHi6B'
+        content:
+          type: string
+          description: Text content of the memory entry
+        score:
+          type: number
+          description: Semantic similarity score (0–1). Only present when `query` was provided.
+          minimum: 0
+          maximum: 1
+          example: 0.79
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last updated timestamp
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string

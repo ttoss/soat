@@ -72,6 +72,17 @@ Status: **Implemented.** Agent generations run asynchronously with pollable stat
 
 Give agents a persistent memory store (key-value or summarized context) that carries over between sessions. The agent can read and write to its own memory. Backed by the existing documents + embedding infrastructure.
 
+**Implementation phases:**
+
+| Phase | Description                                                                   | Status         |
+| ----- | ----------------------------------------------------------------------------- | -------------- |
+| 1     | Memory CRUD + write algorithm (dedup/merge/skip)                              | ✅ Complete    |
+| 2     | Agent read/write — `knowledge_config`, `write_memory` tool, context injection | ❌ Not started |
+| 3     | Memory tags & filtering                                                       | ❌ Not started |
+| 4     | Automatic fact extraction post-conversation                                   | ❌ Not started |
+
+See [prd-memories.md](./prd-memories.md) and [prd-knowledge.md](./prd-knowledge.md) for full specs.
+
 ---
 
 ## 9. Evaluation & Testing Framework

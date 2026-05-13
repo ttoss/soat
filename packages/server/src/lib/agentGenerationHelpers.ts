@@ -69,6 +69,7 @@ export type TypedAgent = {
   stepRules: unknown;
   boundaryPolicy: unknown;
   temperature: unknown;
+  knowledgeConfig: unknown;
   project: { id: unknown; publicId: string };
   aiProvider: { publicId: string };
 };

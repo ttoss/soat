@@ -228,11 +228,13 @@ describe('Policies', () => {
   });
 
   describe('DELETE /api/v1/policies/:policyId', () => {
-    const sendDoc = () => ({
-      document: {
-        statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
-      },
-    });
+    const sendDoc = () => {
+      return {
+        document: {
+          statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+        },
+      };
+    };
 
     test('admin can delete a policy', async () => {
       const createRes = await authenticatedTestClient(adminToken)

@@ -36,6 +36,7 @@ export type MappedAgent = {
   stepRules: object[] | null;
   boundaryPolicy: object | null;
   temperature: number | null;
+  knowledgeConfig: object | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -70,6 +71,7 @@ const mapAgent = (
     stepRules: agent.stepRules,
     boundaryPolicy: agent.boundaryPolicy,
     temperature: agent.temperature,
+    knowledgeConfig: agent.knowledgeConfig,
     createdAt: agent.createdAt,
     updatedAt: agent.updatedAt,
   };
@@ -90,6 +92,7 @@ type AgentUpdateFields = {
   stepRules?: object[] | null;
   boundaryPolicy?: object | null;
   temperature?: number | null;
+  knowledgeConfig?: object | null;
 };
 
 const AGENT_SCALAR_FIELDS = [
@@ -104,6 +107,7 @@ const AGENT_SCALAR_FIELDS = [
   'stepRules',
   'boundaryPolicy',
   'temperature',
+  'knowledgeConfig',
 ] as const;
 
 const buildAgentUpdates = (
@@ -139,6 +143,7 @@ export const createAgent = async (args: {
   stepRules?: object[];
   boundaryPolicy?: object;
   temperature?: number;
+  knowledgeConfig?: object;
 }): Promise<MappedAgent | 'ai_provider_not_found'> => {
   const aiProviderId = await resolveAiProviderDbId(args.aiProviderId);
   if (!aiProviderId) return 'ai_provider_not_found';

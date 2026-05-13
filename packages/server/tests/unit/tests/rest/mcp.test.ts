@@ -857,9 +857,11 @@ describe('MCP tools - happy path', () => {
     expect(res.status).toBe(200);
     const result = parseResult(res);
     expect(Array.isArray(result.data)).toBe(true);
-    expect(result.data.some((t: { id: string }) => t.id === mcpTraceId)).toBe(
-      true
-    );
+    expect(
+      result.data.some((t: { id: string }) => {
+        return t.id === mcpTraceId;
+      })
+    ).toBe(true);
   });
 
   test('get-trace returns the trace', async () => {

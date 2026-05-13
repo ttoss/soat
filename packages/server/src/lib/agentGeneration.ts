@@ -13,6 +13,7 @@ import {
   runStreamGeneration,
   type TypedAgent,
 } from './agentGenerationHelpers';
+import { buildKnowledgeMessages } from './agentKnowledge';
 import { buildModel } from './agentModel';
 import {
   buildPrepareStep,
@@ -102,11 +103,31 @@ const buildGenerationContext = async (args: {
       })
     : {};
 
+  const knowledgeMessages = await buildKnowledgeMessages({
+    knowledgeConfig: typedAgent.knowledgeConfig,
+    projectIds: args.projectIds,
+    messages: args.messages,
+  });
+
+  log(
+    'buildGenerationContext: agentId=%s knowledgeMessages=%d userMessages=%d',
+    args.agentId,
+    knowledgeMessages.length,
+    args.messages.length
+  );
+
+  const allMessages = buildAllMessages(typedAgent.instructions, [
+    ...knowledgeMessages,
+    ...args.messages,
+  ]);
+
+  log('buildGenerationContext: allMessages=%o', allMessages);
+
   return {
     typedAgent,
     model,
     resolvedTools,
-    allMessages: buildAllMessages(typedAgent.instructions, args.messages),
+    allMessages,
     generationId: generatePublicId(PUBLIC_ID_PREFIXES.generation),
   };
 };

@@ -15,22 +15,23 @@ Each agent stores its AI provider, instructions, tool references, and execution 
 
 ### Agent Resource
 
-| Field             | Type          | Required | Description                                                                                                                      |
-| ----------------- | ------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `id`              | string        | auto     | Unique identifier (`agt_` prefix)                                                                                                |
-| `project_id`      | string        | yes      | Project the agent belongs to                                                                                                     |
-| `ai_provider_id`  | string        | yes      | AI provider used for the model                                                                                                   |
-| `name`            | string        | no       | Display name                                                                                                                     |
-| `instructions`    | string        | no       | System instructions guiding agent behavior                                                                                       |
-| `model`           | string        | no       | Model identifier (falls back to AI provider default)                                                                             |
-| `tool_ids`        | array         | no       | IDs of agent tools attached to this agent                                                                                        |
-| `max_steps`       | number        | no       | Maximum reasoning steps before stopping (default: `20`)                                                                          |
-| `tool_choice`     | string/object | no       | How the model selects tools — see [Tool Choice](#tool-choice)                                                                    |
-| `stop_conditions` | array         | no       | Additional stop conditions — see [Stop Conditions](#stop-conditions)                                                             |
-| `active_tool_ids` | array         | no       | Subset of `tool_ids` available at each step — see [Active Tools](#active-tools)                                                  |
-| `step_rules`      | array         | no       | Per-step overrides for `tool_choice` and `active_tool_ids` — see [Step Rules](#step-rules)                                       |
-| `boundary_policy` | object        | no       | Boundary policy that limits which `soat` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions) |
-| `temperature`     | number        | no       | Sampling temperature                                                                                                             |
+| Field              | Type          | Required | Description                                                                                                                      |
+| ------------------ | ------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `id`               | string        | auto     | Unique identifier (`agt_` prefix)                                                                                                |
+| `project_id`       | string        | yes      | Project the agent belongs to                                                                                                     |
+| `ai_provider_id`   | string        | yes      | AI provider used for the model                                                                                                   |
+| `name`             | string        | no       | Display name                                                                                                                     |
+| `instructions`     | string        | no       | System instructions guiding agent behavior                                                                                       |
+| `model`            | string        | no       | Model identifier (falls back to AI provider default)                                                                             |
+| `tool_ids`         | array         | no       | IDs of agent tools attached to this agent                                                                                        |
+| `max_steps`        | number        | no       | Maximum reasoning steps before stopping (default: `20`)                                                                          |
+| `tool_choice`      | string/object | no       | How the model selects tools — see [Tool Choice](#tool-choice)                                                                    |
+| `stop_conditions`  | array         | no       | Additional stop conditions — see [Stop Conditions](#stop-conditions)                                                             |
+| `active_tool_ids`  | array         | no       | Subset of `tool_ids` available at each step — see [Active Tools](#active-tools)                                                  |
+| `step_rules`       | array         | no       | Per-step overrides for `tool_choice` and `active_tool_ids` — see [Step Rules](#step-rules)                                       |
+| `boundary_policy`  | object        | no       | Boundary policy that limits which `soat` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions) |
+| `temperature`      | number        | no       | Sampling temperature                                                                                                             |
+| `knowledge_config` | object        | no       | Knowledge retrieval config injected before every generation — see [Knowledge Config](#knowledge-config)                          |
 
 ### Agent Tool
 
@@ -722,6 +723,58 @@ Where `agt_tool_s2d7p4qx` is a `soat` tool configured as:
 6. Caller receives `{ "status": "completed", "text": "The rate-limiting policy states…" }`.
 
 You can combine `soat` tools with `http`, `client`, and `mcp` tools in the same agent.
+
+## Knowledge Config
+
+An agent can automatically retrieve relevant knowledge before every generation by setting a `knowledge_config` on the agent resource. The server embeds the latest user message, runs a unified knowledge search across documents and memory entries, and injects matching results as system messages at the top of the conversation.
+
+### Config Shape
+
+| Field            | Type       | Description                                                                                 |
+| ---------------- | ---------- | ------------------------------------------------------------------------------------------- |
+| `memory_ids`     | `string[]` | Search entries within these specific memories (`mem_` prefix)                               |
+| `memory_tags`    | `string[]` | Search entries in memories whose tags match any of these patterns (glob supported: `user*`) |
+| `document_ids`   | `string[]` | Scope document results to these specific document IDs                                       |
+| `document_paths` | `string[]` | Scope document results to files under these path prefixes                                   |
+| `min_score`      | `number`   | Minimum relevance score (0–1) for results to be included (default: 0.5)                     |
+| `limit`          | `number`   | Maximum number of results to inject (default: 5)                                            |
+
+### Merge Semantics
+
+The per-generation `knowledge_config` (passed on the generate request) is merged with the agent's stored `knowledge_config`. Arrays (`memory_ids`, `memory_tags`, `document_ids`, `document_paths`) are **unioned**. Scalars (`min_score`, `limit`) use the per-generation value when present, otherwise fall back to the agent config.
+
+### Context Injection
+
+Results are injected as system messages prepended to the conversation, one message per result:
+
+```
+[Document: /reports/q1.txt] Q1 revenue was $4.2M across all regions.
+[Memory: Customer Preferences] Customer prefers email over phone calls.
+```
+
+The agent receives this context before generating its first response.
+
+### Example — Agent With Memory Knowledge Config
+
+```json
+{
+  "ai_provider_id": "aip_openai",
+  "name": "Customer Support Agent",
+  "instructions": "You are a helpful customer support agent.",
+  "knowledge_config": {
+    "memory_ids": ["mem_customer_prefs"],
+    "memory_tags": ["support*"],
+    "document_ids": [],
+    "document_paths": ["/docs/products/"],
+    "min_score": 0.6,
+    "limit": 8
+  }
+}
+```
+
+### `write_memory` Tool
+
+When an agent has `knowledge_config.memory_ids` set and a `soat` tool with the `memories:WriteMemoryEntry` action, it can write new facts to those memories during generation. See the [Memories module](./memories.md#agent-integration) for details.
 
 ## SOAT Action Permissions
 

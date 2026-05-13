@@ -27,9 +27,29 @@
       "description": "Delete a memory configuration"
     },
     {
-      "operationId": "searchMemory",
-      "action": "memories:GetMemory",
-      "description": "Search documents using a memory's configuration (reuses GetMemory permission)"
+      "operationId": "listMemoryEntries",
+      "action": "memories:ListMemoryEntries",
+      "description": "List entries in a memory"
+    },
+    {
+      "operationId": "createMemoryEntry",
+      "action": "memories:CreateMemoryEntry",
+      "description": "Create a new memory entry"
+    },
+    {
+      "operationId": "getMemoryEntry",
+      "action": "memories:GetMemoryEntry",
+      "description": "Get a memory entry by ID"
+    },
+    {
+      "operationId": "updateMemoryEntry",
+      "action": "memories:UpdateMemoryEntry",
+      "description": "Update a memory entry"
+    },
+    {
+      "operationId": "deleteMemoryEntry",
+      "action": "memories:DeleteMemoryEntry",
+      "description": "Delete a memory entry"
     }
   ]
 }
