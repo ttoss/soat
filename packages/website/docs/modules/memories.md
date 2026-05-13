@@ -146,25 +146,25 @@ See the [Agents module](./agents.md#knowledge-config) for the full `knowledge_co
 
 ### `write_memory` Agent Tool
 
-Agents can write new facts to a memory during generation using the `write_memory` soat-tool. This tool is automatically available when the agent's `knowledge_config` includes at least one `memory_id`.
+Agents can write new facts to a memory during generation by setting `write_memory_id` in the agent's `knowledge_config`. When this field is present, SOAT automatically injects a `write_memory` tool into every generation — no manual tool attachment needed.
 
-The tool takes two inputs:
+The tool accepts a single input:
 
-| Input      | Type   | Description                                    |
-| ---------- | ------ | ---------------------------------------------- |
-| `memoryId` | string | ID of the target memory (`mem_` prefix)        |
-| `content`  | string | The fact or observation to write to the memory |
+| Input     | Type   | Description                            |
+| --------- | ------ | -------------------------------------- |
+| `content` | string | The atomic fact to write to the memory |
 
-The write goes through the standard [deduplication algorithm](#write-algorithm) — the agent never produces duplicate entries.
+The target memory is fixed by the `write_memory_id` value — the agent cannot choose a different memory. The write goes through the standard [deduplication algorithm](#write-algorithm), so the agent never produces duplicate entries. Entries written by the tool are tagged with `source: "agent"`.
 
-To enable the tool, attach a `soat` tool with the `memories:WriteMemoryEntry` action to the agent:
+To enable the tool, set `write_memory_id` in the agent's `knowledge_config`:
 
 ```json
 {
-  "type": "soat",
-  "name": "memory-tools",
-  "actions": ["memories:WriteMemoryEntry"]
+  "knowledge_config": {
+    "memory_ids": ["mem_alice"],
+    "write_memory_id": "mem_alice"
+  }
 }
 ```
 
-When the agent's `knowledge_config.memory_ids` is set, the server also injects the memory IDs as preset parameters so the agent always writes to the correct memory without needing to specify it explicitly.
+You can set `write_memory_id` to the same memory used for retrieval (so the agent reads from and writes to the same pool) or to a separate memory.

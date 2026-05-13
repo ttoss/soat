@@ -688,6 +688,37 @@ describe('Agents', () => {
       expect(genRes.status).not.toBe(400);
       expect(genRes.status).not.toBe(404);
     });
+
+    test('agent with write_memory_id in knowledge_config includes write_memory tool', async () => {
+      // Create a memory to write to
+      const memRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/memories')
+        .send({ project_id: projectId, name: 'Agent Write Memory Test' });
+      expect(memRes.status).toBe(201);
+      const memoryId = memRes.body.id;
+
+      // Create agent with write_memory_id in knowledge_config
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Write Memory Agent',
+          knowledge_config: { write_memory_id: memoryId },
+        });
+      expect(createRes.status).toBe(201);
+      expect(createRes.body.knowledge_config.write_memory_id).toBe(memoryId);
+      const writeMemAgentId = createRes.body.id;
+
+      // Generation should succeed (write_memory tool is available but may not be called by the model)
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${writeMemAgentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
+      expect(genRes.status).not.toBe(400);
+      expect(genRes.status).not.toBe(404);
+    });
   });
 
   // ── Submit Tool Outputs ──────────────────────────────────────────────────

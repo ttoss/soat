@@ -12,7 +12,6 @@
 | Entry permissions              | ✅ Implemented | `WriteMemoryEntry`, `ReadMemoryEntry`, `ListMemoryEntries`, `UpdateMemoryEntry`, `DeleteMemoryEntry`                 |
 | `knowledgeConfig` on Agent     | ✅ Implemented | JSONB field on Agent model; merged with per-generation config; drives automatic context injection                    |
 | Extraction (post-conversation) | ❌ Not started | Auto-extract facts from conversation turns                                                                           |
-| write_memory soat-tool         | ❌ Not started | Agent tool for writing to a memory                                                                                   |
 | Knowledge integration          | ✅ Implemented | `resolveMemorySearch()` in `knowledge.ts`; `memoryIds`/`memoryTags` in `searchKnowledge()`                           |
 
 ## Implementation Phases
@@ -44,7 +43,7 @@
 - ✅ **`document_paths` and `document_ids` parameters** — flat fields in OpenAPI spec and lib (replacing nested `document_filters`)
 - ✅ **`knowledge_config` on Agent** — JSONB field on `agents` table; merged with per-generation `knowledge_config` using append semantics; drives automatic context injection via `buildKnowledgeMessages()` in `agentKnowledge.ts`
 - ✅ **Automatic context injection** — `buildKnowledgeMessages()` called in `agentGeneration.ts` before each generation; results injected as system messages
-- ❌ **`write_memory` soat-tool** — agent tool that calls `writeMemoryEntry()` with `{ content, memoryId }`; not yet implemented
+- ✅ **`write_memory` tool via `write_memory_id`** — setting `knowledge_config.write_memory_id` on an agent auto-injects a `write_memory` tool (takes `{ content }`); the tool resolves the target memory and calls `writeMemoryEntry()` with `source: 'agent'`; same deduplication semantics as manual writes
 - ✅ OpenAPI spec updated, SDK/CLI regenerated, tests added
 
 **Unlocks:** Agents that remember and recall. First tutorial: "Build an agent with persistent memory."

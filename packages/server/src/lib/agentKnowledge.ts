@@ -1,10 +1,14 @@
+import type { Tool } from 'ai';
+import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
+import { db } from '../db';
+import { writeMemoryEntry } from './memoryEntries';
 import { searchKnowledge } from './knowledge';
 
 const log = createDebug('soat:knowledge');
 
-type KnowledgeConfig = {
+export type KnowledgeConfig = {
   memoryIds?: string[];
   memoryTags?: string[];
   documentIds?: string[];
@@ -12,6 +16,7 @@ type KnowledgeConfig = {
   minScore?: number;
   limit?: number;
   query?: string;
+  writeMemoryId?: string;
 };
 
 const anyLength = (arr: unknown[] | undefined): boolean => {
@@ -78,4 +83,35 @@ export const buildKnowledgeMessages = async (args: {
   log('buildKnowledgeMessages: knowledge text=%s', knowledgeText);
 
   return [{ role: 'system', content: `Knowledge context:\n${knowledgeText}` }];
+};
+
+export const buildWriteMemoryTool = (args: { writeMemoryId: string }): Tool => {
+  return tool({
+    description:
+      'Write a fact to memory. The system automatically deduplicates: creates new entries, merges with similar existing ones, or skips duplicates.',
+    inputSchema: jsonSchema<{ content: string }>({
+      type: 'object',
+      properties: {
+        content: {
+          type: 'string',
+          description: 'The atomic fact to remember',
+        },
+      },
+      required: ['content'],
+    }),
+    execute: async ({ content }: { content: string }) => {
+      const memory = await db.Memory.findOne({
+        where: { publicId: args.writeMemoryId },
+      });
+      if (!memory) {
+        return { error: `Memory ${args.writeMemoryId} not found` };
+      }
+      const result = await writeMemoryEntry({
+        memoryId: memory.id as number,
+        content,
+        source: 'agent',
+      });
+      return { action: result.action, entryId: result.entry.id };
+    },
+  });
 };

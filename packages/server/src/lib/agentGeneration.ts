@@ -13,7 +13,7 @@ import {
   runStreamGeneration,
   type TypedAgent,
 } from './agentGenerationHelpers';
-import { buildKnowledgeMessages } from './agentKnowledge';
+import { buildKnowledgeMessages, buildWriteMemoryTool } from './agentKnowledge';
 import { buildModel } from './agentModel';
 import {
   buildPrepareStep,
@@ -102,6 +102,16 @@ const buildGenerationContext = async (args: {
         rootTraceId: args.rootTraceId,
       })
     : {};
+
+  const knowledgeConfig = typedAgent.knowledgeConfig as
+    | { writeMemoryId?: string }
+    | null
+    | undefined;
+  if (knowledgeConfig?.writeMemoryId) {
+    resolvedTools['write_memory'] = buildWriteMemoryTool({
+      writeMemoryId: knowledgeConfig.writeMemoryId,
+    });
+  }
 
   const knowledgeMessages = await buildKnowledgeMessages({
     knowledgeConfig: typedAgent.knowledgeConfig,

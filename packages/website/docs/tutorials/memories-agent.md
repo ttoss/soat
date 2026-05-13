@@ -12,9 +12,10 @@ This tutorial shows how to give an agent a long-term memory that persists across
 1. Create a [Memory](/docs/modules/memories) container and tag it for filtering.
 2. Write memory entries and observe the three deduplication outcomes: **created**, **skipped**, and **updated**.
 3. Upload a [Document](/docs/modules/documents) with structured reference information.
-4. Create an [agent](/docs/modules/agents) that retrieves from both memories and the document via `knowledge_config`.
+4. Create an [agent](/docs/modules/agents) that retrieves from both memories and the document via `knowledge_config`, with `write_memory_id` enabled so the agent can persist new facts it learns.
 5. Run a generation and observe the model answering accurately from injected context — with no RAG logic in the prompt.
-6. Query the knowledge layer directly to see memory entries and document chunks side by side.
+6. Observe the agent writing a new fact to memory with `source: "agent"`.
+7. Query the knowledge layer directly to see memory entries and document chunks side by side.
 
 By the end you will understand how Memories, Documents, and the Knowledge search layer compose with agents to build stateful, context-aware AI assistants.
 
@@ -524,14 +525,15 @@ The `knowledge_config` field on an [agent](/docs/modules/agents) tells SOAT whic
 
 The fields you can set in `knowledge_config`:
 
-| Field            | Effect                                                                |
-| ---------------- | --------------------------------------------------------------------- |
-| `memory_ids`     | Search only these specific memories                                   |
-| `memory_tags`    | Search memories whose tags match (supports glob patterns)             |
-| `document_paths` | Include chunks from documents whose path starts with the given prefix |
-| `document_ids`   | Include chunks from specific documents by ID                          |
-| `min_score`      | Minimum cosine similarity (0–1) for a result to be injected           |
-| `limit`          | Maximum number of results to inject                                   |
+| Field             | Description                                                                                            |
+| ----------------- | ------------------------------------------------------------------------------------------------------ |
+| `memory_ids`      | Search specific memories by ID                                                                         |
+| `memory_tags`     | Search memories whose tags match (supports glob patterns)                                              |
+| `document_paths`  | Include chunks from documents whose path starts with the given prefix                                  |
+| `document_ids`    | Include chunks from specific documents by ID                                                           |
+| `min_score`       | Minimum cosine similarity (0–1) for a result to be injected                                            |
+| `limit`           | Maximum number of results to inject                                                                    |
+| `write_memory_id` | ID of a memory the agent can write to; enables the `write_memory` tool automatically during generation |
 
 Here we combine the memory from Step 4 with the document uploaded in Step 7 so the agent can draw on both personal customer facts and the structured support policy.
 
@@ -543,8 +545,8 @@ AGENT_ID=$(soat create-agent \
   --project-id "$PROJECT_ID" \
   --ai-provider-id "$AI_PROVIDER_ID" \
   --name "Support Agent" \
-  --instructions "You are a helpful customer support assistant. Use the provided knowledge context to answer questions accurately and concisely." \
-  --knowledge-config '{"memory_ids":["'"$MEMORY_ID"'"],"document_paths":["/alice/"],"limit":5}' \
+  --instructions "You are a helpful customer support assistant. Use the provided knowledge context to answer questions accurately and concisely. When you learn new facts about a customer, use the write_memory tool to persist them." \
+  --knowledge-config '{"memory_ids":["'"$MEMORY_ID"'"],"document_paths":["/alice/"],"limit":5,"write_memory_id":"'"$MEMORY_ID"'"}' \
   | jq -r '.id')
 echo "AGENT_ID: $AGENT_ID"
 ```
@@ -564,6 +566,7 @@ const { data: agent } = await adminSoat.agents.createAgent({
       memory_ids: [MEMORY_ID],
       document_paths: ['/alice/'],
       limit: 5,
+      write_memory_id: MEMORY_ID,
     },
   },
 });
@@ -577,7 +580,7 @@ const AGENT_ID = agent.id;
 AGENT_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Support Agent\",\"instructions\":\"You are a helpful customer support assistant. Use the provided knowledge context to answer questions accurately and concisely.\",\"knowledge_config\":{\"memory_ids\":[\"$MEMORY_ID\"],\"document_paths\":[\"/alice/\"],\"limit\":5}}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Support Agent\",\"instructions\":\"You are a helpful customer support assistant. Use the provided knowledge context to answer questions accurately and concisely. When you learn new facts about a customer, use the write_memory tool to persist them.\",\"knowledge_config\":{\"memory_ids\":[\"$MEMORY_ID\"],\"document_paths\":[\"/alice/\"],\"limit\":5,\"write_memory_id\":\"$MEMORY_ID\"}}" \
   | jq -r '.id')
 echo "AGENT_ID: $AGENT_ID"
 ```
@@ -655,7 +658,94 @@ curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate" \
 
 ---
 
-## Step 10 — Query the knowledge layer directly
+## Step 10 — Observe the agent writing to memory
+
+When `write_memory_id` is set on the agent's `knowledge_config`, SOAT automatically makes a `write_memory` tool available during generation. If the model decides to call it (for example, because the user reveals new information), the fact is persisted via the same deduplication algorithm used for manual writes.
+
+Send a message that introduces a new fact not yet in memory:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-agent-generation \
+  --agent-id "$AGENT_ID" \
+  --messages '[{"role":"user","content":"Just so you know, Alice moved to the West Coast and is now in the PT timezone."}]' \
+  | jq '{status: .status, output: .output.content}'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: gen2 } = await adminSoat.agents.createAgentGeneration({
+  path: { agent_id: AGENT_ID },
+  body: {
+    messages: [
+      {
+        role: 'user',
+        content:
+          'Just so you know, Alice moved to the West Coast and is now in the PT timezone.',
+      },
+    ],
+  },
+});
+console.log(gen2.status); // "completed"
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Just so you know, Alice moved to the West Coast and is now in the PT timezone."}]}' \
+  | jq '{status: .status, output: .output.content}'
+```
+
+</TabItem>
+</Tabs>
+
+After the generation completes, list the memory entries and look for any with `source == "agent"`:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-memory-entries --memory-id "$MEMORY_ID" \
+  | jq '[.[] | select(.source == "agent") | {content: .content, source: .source}]'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: entries } = await MemoryEntries.listMemoryEntries({
+  client: authClient,
+  path: { memory_id: MEMORY_ID },
+});
+const agentEntries = entries.filter((e) => e.source === 'agent');
+console.log(agentEntries.map((e) => e.content));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s "$SOAT_URL/api/v1/memories/$MEMORY_ID/entries" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '[.[] | select(.source == "agent") | {content: .content, source: .source}]'
+```
+
+</TabItem>
+</Tabs>
+
+If the model called `write_memory`, you will see an entry with `"source": "agent"` containing the timezone fact. The write goes through the same deduplication algorithm — subsequent mentions of Alice's timezone will be deduplicated automatically.
+
+---
+
+## Step 11 — Query the knowledge layer directly
 
 The [Knowledge](/docs/modules/knowledge) endpoint is the same search layer the agent uses internally. Pass both `memory_ids` and `document_paths` to see exactly which chunks — from both sources — would be injected for a given question.
 

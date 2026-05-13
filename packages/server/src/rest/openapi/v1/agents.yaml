@@ -920,6 +920,10 @@ components:
               type: number
             limit:
               type: integer
+            write_memory_id:
+              type: string
+              nullable: true
+              description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
         created_at:
           type: string
           format: date-time
@@ -991,6 +995,10 @@ components:
               type: number
             limit:
               type: integer
+            write_memory_id:
+              type: string
+              nullable: true
+              description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
 
     UpdateAgentRequest:
       type: object
@@ -1062,6 +1070,10 @@ components:
               type: number
             limit:
               type: integer
+            write_memory_id:
+              type: string
+              nullable: true
+              description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
 
     CreateAgentGenerationRequest:
       type: object
