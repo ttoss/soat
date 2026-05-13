@@ -78,15 +78,17 @@ describe('buildKnowledgeMessages', () => {
     mockSearchKnowledge.mockResolvedValueOnce([
       {
         sourceType: 'document',
-        documentId: 1,
-        fileId: 1,
-        projectId: 1,
+        documentId: 'doc_1',
+        fileId: 'fil_1',
+        projectId: 'prj_1',
         path: 'docs/guide.md',
         filename: 'guide.md',
         size: 100,
         title: 'Guide',
         content: 'Document content here',
         score: 0.9,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
@@ -105,15 +107,17 @@ describe('buildKnowledgeMessages', () => {
     mockSearchKnowledge.mockResolvedValueOnce([
       {
         sourceType: 'document',
-        documentId: 1,
-        fileId: 1,
-        projectId: 1,
-        path: null,
+        documentId: 'doc_1',
+        fileId: 'fil_1',
+        projectId: 'prj_1',
+        path: undefined,
         filename: 'guide.md',
         size: 100,
         title: 'Guide',
         content: 'Document content here',
         score: 0.9,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
@@ -129,10 +133,12 @@ describe('buildKnowledgeMessages', () => {
     mockSearchKnowledge.mockResolvedValueOnce([
       {
         sourceType: 'memory',
+        entryId: 'mne_001',
         memoryId: 'mem_001',
-        projectId: 1,
         content: 'Memory content here',
         score: 0.8,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
@@ -188,22 +194,26 @@ describe('buildKnowledgeMessages', () => {
     mockSearchKnowledge.mockResolvedValueOnce([
       {
         sourceType: 'document',
-        documentId: 1,
-        fileId: 1,
-        projectId: 1,
+        documentId: 'doc_2',
+        fileId: 'fil_2',
+        projectId: 'prj_1',
         path: 'a.md',
         filename: 'a.md',
         size: 50,
         title: 'A',
         content: 'Content A',
         score: 0.9,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
       {
         sourceType: 'memory',
+        entryId: 'mne_002',
         memoryId: 'mem_002',
-        projectId: 1,
         content: 'Memory B',
         score: 0.7,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
