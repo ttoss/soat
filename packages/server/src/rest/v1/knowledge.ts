@@ -22,14 +22,28 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     query?: string;
     minScore?: number;
     limit?: number;
-    paths?: string[];
-    documentIds?: string[];
+    memoryIds?: string[];
+    memoryTags?: string[];
+    documentFilters?: {
+      paths?: string[];
+      documentIds?: string[];
+    };
   };
 
-  if (!body.query && !body.paths && !body.documentIds) {
+  const hasDocumentFilters =
+    body.documentFilters &&
+    ((body.documentFilters.paths && body.documentFilters.paths.length > 0) ||
+      (body.documentFilters.documentIds &&
+        body.documentFilters.documentIds.length > 0));
+  const hasMemoryFilters =
+    (body.memoryIds && body.memoryIds.length > 0) ||
+    (body.memoryTags && body.memoryTags.length > 0);
+
+  if (!body.query && !hasDocumentFilters && !hasMemoryFilters) {
     ctx.status = 400;
     ctx.body = {
-      error: 'At least one of query, paths, or documentIds is required',
+      error:
+        'At least one of query, memory_ids, memory_tags, or document_filters is required',
     };
     return;
   }
@@ -68,8 +82,10 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
       query: body.query,
       minScore: body.minScore,
       limit: body.limit,
-      paths: body.paths,
-      documentIds: body.documentIds,
+      paths: body.documentFilters?.paths,
+      documentIds: body.documentFilters?.documentIds,
+      memoryIds: body.memoryIds,
+      memoryTags: body.memoryTags,
     });
     ctx.body = { results };
   } catch (error) {

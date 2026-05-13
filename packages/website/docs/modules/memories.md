@@ -115,3 +115,56 @@ POST /api/v1/memories/mem_abc/entries
 ## Permissions
 
 See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
+
+## Agent Integration
+
+Agents can read from and write to memories automatically during generation.
+
+### Automatic Knowledge Retrieval
+
+Set `knowledge_config` on an agent to have the server search relevant memory entries before every generation and inject them as system messages:
+
+```json
+{
+  "knowledge_config": {
+    "memory_ids": ["mem_abc"],
+    "memory_tags": ["customer*"],
+    "min_score": 0.6,
+    "limit": 5
+  }
+}
+```
+
+Before each generation the server embeds the latest user message, runs `searchKnowledge` with the merged config, and prepends results like:
+
+```
+[Memory: Customer Preferences] Customer prefers email over phone calls, especially for billing inquiries
+[Memory: Customer Preferences] Customer fiscal year ends in March
+```
+
+See the [Agents module](./agents.md#knowledge-config) for the full `knowledge_config` reference and merge semantics.
+
+### `write_memory` Agent Tool
+
+Agents can write new facts to a memory during generation using the `write_memory` soat-tool. This tool is automatically available when the agent's `knowledge_config` includes at least one `memory_id`.
+
+The tool takes two inputs:
+
+| Input      | Type   | Description                                    |
+| ---------- | ------ | ---------------------------------------------- |
+| `memoryId` | string | ID of the target memory (`mem_` prefix)        |
+| `content`  | string | The fact or observation to write to the memory |
+
+The write goes through the standard [deduplication algorithm](#write-algorithm) — the agent never produces duplicate entries.
+
+To enable the tool, attach a `soat` tool with the `memories:WriteMemoryEntry` action to the agent:
+
+```json
+{
+  "type": "soat",
+  "name": "memory-tools",
+  "actions": ["memories:WriteMemoryEntry"]
+}
+```
+
+When the agent's `knowledge_config.memory_ids` is set, the server also injects the memory IDs as preset parameters so the agent always writes to the correct memory without needing to specify it explicitly.

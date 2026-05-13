@@ -24,7 +24,7 @@ paths:
       tags:
         - Knowledge
       summary: Search knowledge
-      description: Searches across documents using semantic search, file paths, or document IDs. At least one of `query`, `paths`, or `document_ids` must be provided.
+      description: Searches across documents and memory entries using semantic search, file paths, document IDs, or memory IDs/tags. At least one of `query`, `paths`, `document_ids`, `memory_ids`, or `memory_tags` must be provided.
       operationId: searchKnowledge
       x-iam-action: knowledge:SearchKnowledge
       requestBody:
@@ -53,18 +53,34 @@ paths:
                   description: Maximum number of results to return (default 10)
                   minimum: 1
                   example: 10
-                paths:
+                memory_ids:
                   type: array
-                  description: Filter results to documents whose file path starts with one of these prefixes
+                  description: Search entries within these specific memories
                   items:
                     type: string
-                  example: ['/sales/', '/hr/']
-                document_ids:
+                  example: ['mem_V1StGXR8Z5jdHi6B']
+                memory_tags:
                   type: array
-                  description: Filter results to specific document IDs
+                  description: Search entries in memories whose tags match any of these patterns (glob supported)
                   items:
                     type: string
-                  example: ['doc_V1StGXR8Z5jdHi6B']
+                  example: ['customer*', 'support']
+                document_filters:
+                  type: object
+                  description: Scope document results
+                  properties:
+                    paths:
+                      type: array
+                      description: Filter results to documents whose file path starts with one of these prefixes
+                      items:
+                        type: string
+                      example: ['/sales/', '/hr/']
+                    document_ids:
+                      type: array
+                      description: Filter results to specific document IDs
+                      items:
+                        type: string
+                      example: ['doc_V1StGXR8Z5jdHi6B']
       responses:
         '200':
           description: Search results
@@ -80,7 +96,7 @@ paths:
                     items:
                       $ref: '#/components/schemas/KnowledgeResult'
         '400':
-          description: Bad request — at least one of query, paths, or document_ids is required
+          description: Bad request — at least one search parameter is required
           content:
             application/json:
               schema:
@@ -105,6 +121,15 @@ components:
       bearerFormat: JWT
   schemas:
     KnowledgeResult:
+      oneOf:
+        - $ref: '#/components/schemas/DocumentKnowledgeResult'
+        - $ref: '#/components/schemas/MemoryKnowledgeResult'
+      discriminator:
+        propertyName: source_type
+        mapping:
+          document: '#/components/schemas/DocumentKnowledgeResult'
+          memory: '#/components/schemas/MemoryKnowledgeResult'
+    DocumentKnowledgeResult:
       type: object
       required:
         - source_type
@@ -167,6 +192,47 @@ components:
           minimum: 0
           maximum: 1
           example: 0.82
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last updated timestamp
+    MemoryKnowledgeResult:
+      type: object
+      required:
+        - source_type
+        - entry_id
+        - memory_id
+        - content
+        - created_at
+        - updated_at
+      properties:
+        source_type:
+          type: string
+          enum:
+            - memory
+          description: The type of knowledge source this result comes from
+          example: memory
+        entry_id:
+          type: string
+          description: Public ID of the memory entry
+          example: 'me_V1StGXR8Z5jdHi6B'
+        memory_id:
+          type: string
+          description: Public ID of the parent memory
+          example: 'mem_V1StGXR8Z5jdHi6B'
+        content:
+          type: string
+          description: Text content of the memory entry
+        score:
+          type: number
+          description: Semantic similarity score (0–1). Only present when `query` was provided.
+          minimum: 0
+          maximum: 1
+          example: 0.79
         created_at:
           type: string
           format: date-time

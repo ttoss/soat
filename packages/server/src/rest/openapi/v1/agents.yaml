@@ -895,6 +895,31 @@ components:
           type: number
           nullable: true
           description: Sampling temperature
+        knowledge_config:
+          type: object
+          nullable: true
+          description: Knowledge retrieval config injected before every generation
+          properties:
+            memory_ids:
+              type: array
+              items:
+                type: string
+            memory_tags:
+              type: array
+              items:
+                type: string
+            document_ids:
+              type: array
+              items:
+                type: string
+            document_paths:
+              type: array
+              items:
+                type: string
+            min_score:
+              type: number
+            limit:
+              type: integer
         created_at:
           type: string
           format: date-time
@@ -943,6 +968,29 @@ components:
           type: object
         temperature:
           type: number
+        knowledge_config:
+          type: object
+          properties:
+            memory_ids:
+              type: array
+              items:
+                type: string
+            memory_tags:
+              type: array
+              items:
+                type: string
+            document_ids:
+              type: array
+              items:
+                type: string
+            document_paths:
+              type: array
+              items:
+                type: string
+            min_score:
+              type: number
+            limit:
+              type: integer
 
     UpdateAgentRequest:
       type: object
@@ -990,6 +1038,30 @@ components:
         temperature:
           type: number
           nullable: true
+        knowledge_config:
+          type: object
+          nullable: true
+          properties:
+            memory_ids:
+              type: array
+              items:
+                type: string
+            memory_tags:
+              type: array
+              items:
+                type: string
+            document_ids:
+              type: array
+              items:
+                type: string
+            document_paths:
+              type: array
+              items:
+                type: string
+            min_score:
+              type: number
+            limit:
+              type: integer
 
     CreateAgentGenerationRequest:
       type: object

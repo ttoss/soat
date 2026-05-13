@@ -22,6 +22,7 @@ import {
 import { resolveAgentTools } from './agentToolResolver';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { createGenerationRecord, updateGenerationRecord } from './generations';
+import { searchKnowledge } from './knowledge';
 import { saveTrace, serializeSteps } from './traces';
 
 const log = createDebug('soat:generation');
@@ -102,11 +103,65 @@ const buildGenerationContext = async (args: {
       })
     : {};
 
+  const knowledgeConfig = typedAgent.knowledgeConfig as
+    | {
+        memoryIds?: string[];
+        memoryTags?: string[];
+        documentIds?: string[];
+        documentPaths?: string[];
+        minScore?: number;
+        limit?: number;
+        query?: string;
+      }
+    | null
+    | undefined;
+
+  let knowledgeMessages: Array<{ role: string; content: string }> = [];
+  if (knowledgeConfig) {
+    const lastUserMessage = [...args.messages]
+      .reverse()
+      .find((m) => m.role === 'user');
+    const query = lastUserMessage?.content ?? knowledgeConfig.query;
+    const hasFilters =
+      (knowledgeConfig.memoryIds?.length ?? 0) > 0 ||
+      (knowledgeConfig.memoryTags?.length ?? 0) > 0 ||
+      (knowledgeConfig.documentPaths?.length ?? 0) > 0 ||
+      (knowledgeConfig.documentIds?.length ?? 0) > 0;
+    if (query || hasFilters) {
+      const results = await searchKnowledge({
+        projectIds: args.projectIds,
+        query,
+        memoryIds: knowledgeConfig.memoryIds,
+        memoryTags: knowledgeConfig.memoryTags,
+        paths: knowledgeConfig.documentPaths,
+        documentIds: knowledgeConfig.documentIds,
+        minScore: knowledgeConfig.minScore,
+        limit: knowledgeConfig.limit,
+      });
+      if (results.length > 0) {
+        const knowledgeText = results
+          .map((r) => {
+            if (r.sourceType === 'document') {
+              return `[Document: ${r.path ?? r.filename}]\n${r.content}`;
+            }
+            return `[Memory: ${r.memoryId}]\n${r.content}`;
+          })
+          .join('\n\n');
+        knowledgeMessages = [
+          { role: 'system', content: `Knowledge context:\n${knowledgeText}` },
+        ];
+      }
+    }
+  }
+
   return {
     typedAgent,
     model,
     resolvedTools,
-    allMessages: buildAllMessages(typedAgent.instructions, args.messages),
+    allMessages: buildAllMessages(typedAgent.instructions, [
+      ...knowledgeMessages,
+      ...args.messages,
+    ]),
     generationId: generatePublicId(PUBLIC_ID_PREFIXES.generation),
   };
 };

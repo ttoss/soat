@@ -72,6 +72,7 @@ const parseUpdateAgentBody = (body: Record<string, unknown>) => {
     stepRules: parseOptional<object[] | null>(body.stepRules),
     boundaryPolicy: parseOptional<object | null>(body.boundaryPolicy),
     temperature: parseOptional<number | null>(body.temperature),
+    knowledgeConfig: parseOptional<object | null>(body.knowledgeConfig),
   };
 };
 
@@ -119,6 +120,7 @@ const buildCreateAgentArgs = (
     boundaryPolicy: body.boundaryPolicy as object | undefined,
     temperature:
       typeof body.temperature === 'number' ? body.temperature : undefined,
+    knowledgeConfig: body.knowledgeConfig as object | undefined,
   };
 };
 

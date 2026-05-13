@@ -64,22 +64,32 @@ export type QueryDocumentResult = {
   updatedAt: Date;
 };
 
-export type KnowledgeResult = {
-  sourceType: 'document';
-  documentId: string;
-  fileId?: string;
-  projectId?: string;
-  path?: string;
-  filename?: string;
-  size?: number;
-  title?: string;
-  metadata?: unknown;
-  tags?: Record<string, string>;
-  content: string | null;
-  score?: number;
-  createdAt: Date;
-  updatedAt: Date;
-};
+export type KnowledgeResult =
+  | {
+      sourceType: 'document';
+      documentId: string;
+      fileId?: string;
+      projectId?: string;
+      path?: string;
+      filename?: string;
+      size?: number;
+      title?: string;
+      metadata?: unknown;
+      tags?: Record<string, string>;
+      content: string | null;
+      score?: number;
+      createdAt: Date;
+      updatedAt: Date;
+    }
+  | {
+      sourceType: 'memory';
+      entryId: string;
+      memoryId: string;
+      content: string;
+      score?: number;
+      createdAt: Date;
+      updatedAt: Date;
+    };
 
 // ── Private helpers ──────────────────────────────────────────────────────
 
@@ -256,6 +266,122 @@ export const resolveDocumentSearch = async (args: {
 
 // ── Public API ───────────────────────────────────────────────────────────
 
+export type MemoryQueryConfig = {
+  memoryIds?: string[];
+  memoryTags?: string[];
+  search?: string;
+  minScore?: number;
+  limit?: number;
+};
+
+export const resolveMemorySearch = async (args: {
+  projectIds?: number[];
+  config: MemoryQueryConfig;
+}): Promise<Extract<KnowledgeResult, { sourceType: 'memory' }>[]> => {
+  const { config, projectIds } = args;
+
+  const hasMemoryIds = config.memoryIds && config.memoryIds.length > 0;
+  const hasMemoryTags = config.memoryTags && config.memoryTags.length > 0;
+  if (!hasMemoryIds && !hasMemoryTags) return [];
+
+  const limit = config.limit ?? 10;
+
+  // Build Memory where clause (by publicId OR by tags)
+  const memoryWhere: Record<string, unknown>[] = [];
+  if (hasMemoryIds) {
+    memoryWhere.push({ publicId: config.memoryIds });
+  }
+  if (hasMemoryTags) {
+    memoryWhere.push({
+      tags: {
+        [Op.overlap]: config.memoryTags,
+      },
+    });
+  }
+
+  const memoryIncludeWhere: Record<string, unknown> = {
+    [Op.or]: memoryWhere,
+  };
+  if (projectIds !== undefined && projectIds.length > 0) {
+    memoryIncludeWhere['projectId'] = projectIds;
+  }
+
+  if (config.search) {
+    const embedding = await getEmbedding({ text: config.search });
+    const embeddingLiteral = `[${embedding.join(',')}]`;
+
+    const entries = await db.MemoryEntry.findAll({
+      attributes: {
+        include: [
+          [
+            db.MemoryEntry.sequelize!.literal(
+              `embedding <=> '${embeddingLiteral}'`
+            ),
+            'distance',
+          ],
+        ],
+      },
+      include: [
+        {
+          model: db.Memory,
+          as: 'memory',
+          where: memoryIncludeWhere as Record<string, unknown>,
+          required: true,
+        },
+      ],
+      order: db.MemoryEntry.sequelize!.literal(
+        `embedding <=> '${embeddingLiteral}'`
+      ),
+      subQuery: false,
+      limit,
+    });
+
+    return entries
+      .map((entry) => {
+        const distance = parseFloat(
+          (entry.getDataValue('distance') as string) ?? '1'
+        );
+        const score = 1 - distance;
+        return {
+          sourceType: 'memory' as const,
+          entryId: entry.publicId,
+          memoryId: (entry.memory as InstanceType<typeof db.Memory>).publicId,
+          content: entry.content,
+          score,
+          createdAt: entry.createdAt,
+          updatedAt: entry.updatedAt,
+        };
+      })
+      .filter((r) => {
+        if (config.minScore === undefined) return true;
+        return (r.score ?? 0) >= config.minScore;
+      });
+  }
+
+  // No semantic search — just list entries for matching memories
+  const entries = await db.MemoryEntry.findAll({
+    include: [
+      {
+        model: db.Memory,
+        as: 'memory',
+        where: memoryIncludeWhere as Record<string, unknown>,
+        required: true,
+      },
+    ],
+    order: [['createdAt', 'ASC']],
+    limit,
+  });
+
+  return entries.map((entry) => ({
+    sourceType: 'memory' as const,
+    entryId: entry.publicId,
+    memoryId: (entry.memory as InstanceType<typeof db.Memory>).publicId,
+    content: entry.content,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+  }));
+};
+
 export const searchKnowledge = async (args: {
   projectIds?: number[];
   query?: string;
@@ -263,22 +389,48 @@ export const searchKnowledge = async (args: {
   limit?: number;
   paths?: string[];
   documentIds?: string[];
+  memoryIds?: string[];
+  memoryTags?: string[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
 }): Promise<KnowledgeResult[]> => {
-  const docs = await resolveDocumentSearch({
-    projectIds: args.projectIds,
-    policyWhere: args.policyWhere,
-    config: {
-      search: args.query,
-      minScore: args.minScore,
-      limit: args.limit,
-      paths: args.paths,
-      documentIds: args.documentIds,
-    },
-  });
+  const hasDocumentSearch =
+    args.query ||
+    (args.paths && args.paths.length > 0) ||
+    (args.documentIds && args.documentIds.length > 0);
+  const hasMemorySearch =
+    (args.memoryIds && args.memoryIds.length > 0) ||
+    (args.memoryTags && args.memoryTags.length > 0);
 
-  return docs.map((doc) => ({
+  const [docs, memoryEntries] = await Promise.all([
+    hasDocumentSearch || (!hasDocumentSearch && !hasMemorySearch)
+      ? resolveDocumentSearch({
+          projectIds: args.projectIds,
+          policyWhere: args.policyWhere,
+          config: {
+            search: args.query,
+            minScore: args.minScore,
+            limit: args.limit,
+            paths: args.paths,
+            documentIds: args.documentIds,
+          },
+        })
+      : Promise.resolve([]),
+    hasMemorySearch
+      ? resolveMemorySearch({
+          projectIds: args.projectIds,
+          config: {
+            memoryIds: args.memoryIds,
+            memoryTags: args.memoryTags,
+            search: args.query,
+            minScore: args.minScore,
+            limit: args.limit,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const docResults: KnowledgeResult[] = docs.map((doc) => ({
     sourceType: 'document' as const,
     documentId: doc.id,
     fileId: doc.fileId,
@@ -294,4 +446,18 @@ export const searchKnowledge = async (args: {
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   }));
+
+  const allResults = [...docResults, ...memoryEntries];
+
+  // Sort by score descending when available, otherwise keep original order
+  if (args.query) {
+    allResults.sort((a, b) => {
+      const aScore = a.score ?? 0;
+      const bScore = b.score ?? 0;
+      return bScore - aScore;
+    });
+  }
+
+  const limit = args.limit ?? 10;
+  return allResults.slice(0, limit);
 };

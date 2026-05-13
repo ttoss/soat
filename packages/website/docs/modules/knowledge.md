@@ -5,9 +5,9 @@ import TabItem from '@theme/TabItem';
 
 ## Overview
 
-The Knowledge module provides unified semantic search across documents in a project. It replaces the former per-module search endpoints with a single endpoint that can search documents by semantic query, logical path prefix, or explicit document IDs.
+The Knowledge module provides unified semantic search across all knowledge sources in a project — documents and memory entries. A single endpoint searches across these sources simultaneously, ranks results by vector similarity, and returns an interleaved list tagged by source type.
 
-Each result is tagged with a `source_type` discriminant (`"document"`) to prepare for future knowledge sources (e.g., memory entries).
+Each result carries a `source_type` discriminant (`"document"` or `"memory"`) so callers know where each piece of knowledge came from.
 
 See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -15,9 +15,22 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 
 ### KnowledgeResult
 
+A `KnowledgeResult` is a discriminated union on `source_type`. All results share common fields; source-specific fields are only present for the matching type.
+
+#### Common fields (all source types)
+
+| Field         | Type                       | Description                                              |
+| ------------- | -------------------------- | -------------------------------------------------------- |
+| `source_type` | `"document"` \| `"memory"` | Discriminant for the knowledge source type               |
+| `content`     | `string\|null`             | Text content of the result                               |
+| `score`       | `number`                   | Relevance score (0–1); only present when `query` is used |
+| `created_at`  | `string`                   | ISO 8601 creation timestamp                              |
+| `updated_at`  | `string`                   | ISO 8601 last-updated timestamp                          |
+
+#### Document result (`source_type: "document"`)
+
 | Field         | Type           | Description                                              |
 | ------------- | -------------- | -------------------------------------------------------- |
-| `source_type` | `"document"`   | Discriminant for the knowledge source type               |
 | `document_id` | `string`       | Public document ID (`doc_` prefix)                       |
 | `file_id`     | `string`       | ID of the underlying File record                         |
 | `project_id`  | `string`       | ID of the owning project                                 |
@@ -26,27 +39,42 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 | `size`        | `number`       | File size in bytes                                       |
 | `title`       | `string\|null` | Document title (if set)                                  |
 | `metadata`    | `object\|null` | Arbitrary JSON metadata                                  |
-| `tags`        | `string[]`     | Tags associated with the document                        |
-| `content`     | `string\|null` | Text content of the document                             |
-| `score`       | `number`       | Relevance score (0–1); only present when `query` is used |
-| `created_at`  | `string`       | ISO 8601 creation timestamp                              |
-| `updated_at`  | `string`       | ISO 8601 last-updated timestamp                          |
+| `tags`        | `object`       | Key-value tags associated with the document              |
+
+#### Memory result (`source_type: "memory"`)
+
+| Field       | Type     | Description                                    |
+| ----------- | -------- | ---------------------------------------------- |
+| `entry_id`  | `string` | Public memory entry ID (`me_` prefix)          |
+| `memory_id` | `string` | Public ID of the parent memory (`mem_` prefix) |
 
 ## Key Concepts
 
 ### Search Modes
 
-The `POST /knowledge/search` endpoint supports three complementary filters that can be combined:
+The `POST /knowledge/search` endpoint accepts the following filters. At least one must be provided.
 
-| Parameter      | Type       | Description                                                |
-| -------------- | ---------- | ---------------------------------------------------------- |
-| `query`        | `string`   | Semantic search query — ranks results by vector similarity |
-| `paths`        | `string[]` | Filter to documents at paths starting with these prefixes  |
-| `document_ids` | `string[]` | Filter to specific document IDs                            |
-
-At least one of `query`, `paths`, or `document_ids` must be provided.
+| Parameter          | Type       | Description                                                                                |
+| ------------------ | ---------- | ------------------------------------------------------------------------------------------ |
+| `query`            | `string`   | Semantic search query — ranks results by vector similarity                                 |
+| `memory_ids`       | `string[]` | Search entries within these specific memories                                              |
+| `memory_tags`      | `string[]` | Search entries in memories whose tags match any of these patterns (supports glob: `user*`) |
+| `document_filters` | `object`   | Filter document results — see [Document Filters](#document-filters) below                  |
 
 When `query` is set, results include a `score` field and are ordered by descending relevance. `min_score` and `limit` apply additional controls.
+
+`memory_ids` and `memory_tags` can be combined — the search includes entries from memories matching **either** (union semantics).
+
+If neither `memory_ids` nor `memory_tags` is provided, the search does **not** include memory entries (only documents). Similarly, if `document_filters` is omitted and no `query` is provided alone, only memories are searched. This lets callers control exactly which sources to include.
+
+### Document Filters
+
+`document_filters` is an optional nested object that scopes document results:
+
+| Field          | Type       | Description                                               |
+| -------------- | ---------- | --------------------------------------------------------- |
+| `paths`        | `string[]` | Filter to documents at paths starting with these prefixes |
+| `document_ids` | `string[]` | Filter to specific document IDs                           |
 
 ### Project Scoping
 
@@ -64,7 +92,89 @@ When `query` is set, results include a `score` field and are ordered by descendi
 
 ## Examples
 
-### Semantic search across a project
+### Semantic search across documents and memories
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat search-knowledge \
+  --project-id proj_ABC \
+  --query "quarterly revenue" \
+  --memory-ids mem_xyz \
+  --limit 5
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
+
+const { data, error } = await soat.knowledge.searchKnowledge({
+  body: {
+    project_id: 'proj_ABC',
+    query: 'quarterly revenue',
+    memory_ids: ['mem_xyz'],
+    limit: 5,
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+console.log(data.results);
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/knowledge/search \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "query": "quarterly revenue",
+    "memory_ids": ["mem_xyz"],
+    "limit": 5
+  }'
+```
+
+</TabItem>
+</Tabs>
+
+### Memory-only search by tag
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat search-knowledge \
+  --project-id proj_ABC \
+  --query "customer communication" \
+  --memory-tags "customer*"
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/knowledge/search \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "query": "customer communication",
+    "memory_tags": ["customer*"]
+  }'
+```
+
+</TabItem>
+</Tabs>
+
+### Document-scoped retrieval
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -110,7 +220,7 @@ curl -X POST https://api.example.com/api/v1/knowledge/search \
 </TabItem>
 </Tabs>
 
-### Path-scoped retrieval
+### Path-scoped document retrieval
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -118,7 +228,7 @@ curl -X POST https://api.example.com/api/v1/knowledge/search \
 ```bash
 soat search-knowledge \
   --project-id proj_ABC \
-  --paths /docs/products/
+  --document-filters-paths /docs/products/
 ```
 
 </TabItem>
@@ -130,7 +240,7 @@ curl -X POST https://api.example.com/api/v1/knowledge/search \
   -H "Content-Type: application/json" \
   -d '{
     "project_id": "proj_ABC",
-    "paths": ["/docs/products/"]
+    "document_filters": { "paths": ["/docs/products/"] }
   }'
 ```
 

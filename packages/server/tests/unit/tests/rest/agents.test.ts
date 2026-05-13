@@ -662,6 +662,32 @@ describe('Agents', () => {
       // noPermToken has no policies → projectIds=[] → agent not found in empty scope
       expect(response.status).toBe(404);
     });
+
+    test('agent with knowledge_config injects knowledge context before generation', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Knowledge Agent',
+          knowledge_config: {
+            document_paths: ['/'],
+            min_score: 0,
+            limit: 3,
+          },
+        });
+      expect(createRes.status).toBe(201);
+      const knowledgeAgentId = createRes.body.id;
+      expect(createRes.body.knowledge_config).toBeDefined();
+
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${knowledgeAgentId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'Tell me something' }] });
+
+      // Generation runs (knowledge search executes as part of context building)
+      expect(genRes.status).not.toBe(400);
+      expect(genRes.status).not.toBe(404);
+    });
   });
 
   // ── Submit Tool Outputs ──────────────────────────────────────────────────

@@ -157,6 +157,7 @@ const mockAgent: TypedAgent = {
   stepRules: null,
   boundaryPolicy: null,
   temperature: null,
+  knowledgeConfig: null,
   project: { id: 1, publicId: 'prj_test123' },
   aiProvider: { publicId: 'aip_test123' },
 };
