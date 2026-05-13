@@ -143,6 +143,7 @@ export const createAgent = async (args: {
   stepRules?: object[];
   boundaryPolicy?: object;
   temperature?: number;
+  knowledgeConfig?: object;
 }): Promise<MappedAgent | 'ai_provider_not_found'> => {
   const aiProviderId = await resolveAiProviderDbId(args.aiProviderId);
   if (!aiProviderId) return 'ai_provider_not_found';

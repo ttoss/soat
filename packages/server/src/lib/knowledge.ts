@@ -93,11 +93,6 @@ export type KnowledgeResult =
 
 // ── Private helpers ──────────────────────────────────────────────────────
 
-const buildDocWhere = (documentIds?: string[]) => {
-  if (!documentIds || documentIds.length === 0) return undefined;
-  return { publicId: documentIds };
-};
-
 const buildFileInclude = (args: {
   projectIds?: number[];
   paths?: string[];
@@ -202,27 +197,6 @@ const mergeWhereClauses = (
   return Object.keys(merged).length > 0 ? merged : undefined;
 };
 
-const checkNeedsSubQueryFalse = (
-  policyWhere: Record<string, unknown> | undefined
-): boolean => {
-  if (!policyWhere) return false;
-  return Object.keys(policyWhere).some((k) => {
-    return k.startsWith('$');
-  });
-};
-
-const filterByScore = (
-  docs: QueryDocumentResult[],
-  config: DocumentQueryConfig
-): QueryDocumentResult[] => {
-  if (!config.search || config.minScore === undefined) return docs;
-  const minScore = config.minScore;
-  return docs.filter((doc) => {
-    const score = (doc as { score?: number }).score;
-    return score !== undefined && score >= minScore;
-  });
-};
-
 export const resolveDocumentSearch = async (args: {
   projectIds?: number[];
   config: DocumentQueryConfig;
@@ -237,10 +211,17 @@ export const resolveDocumentSearch = async (args: {
   }
 
   const fileInclude = buildFileInclude({ projectIds, paths: config.paths });
-  const docWhere = buildDocWhere(config.documentIds);
+  const docWhere =
+    config.documentIds && config.documentIds.length > 0
+      ? { publicId: config.documentIds }
+      : undefined;
 
   const effectiveDocWhere = mergeWhereClauses(docWhere, args.policyWhere);
-  const needsSubQueryFalse = checkNeedsSubQueryFalse(args.policyWhere);
+  const needsSubQueryFalse =
+    !!args.policyWhere &&
+    Object.keys(args.policyWhere).some((k) => {
+      return k.startsWith('$');
+    });
 
   const rawDocuments = config.search
     ? await findDocumentsWithSearch({
@@ -260,8 +241,11 @@ export const resolveDocumentSearch = async (args: {
   const mapped = rawDocuments.map((doc) => {
     return mapRawDocument(doc, config);
   });
-
-  return filterByScore(mapped, config);
+  if (!config.search || config.minScore === undefined) return mapped;
+  const minScore = config.minScore;
+  return mapped.filter((doc) => {
+    return ('score' in doc ? (doc.score ?? -1) : -1) >= minScore;
+  });
 };
 
 // ── Public API ───────────────────────────────────────────────────────────
@@ -274,64 +258,55 @@ export type MemoryQueryConfig = {
   limit?: number;
 };
 
+const buildMemoryIncludeWhere = (args: {
+  config: MemoryQueryConfig;
+  projectIds?: number[];
+}): { where: Record<string, unknown>; hasFilters: boolean } => {
+  const { config, projectIds } = args;
+  const hasMemoryIds =
+    config.memoryIds !== undefined && config.memoryIds.length > 0;
+  const hasMemoryTags =
+    config.memoryTags !== undefined && config.memoryTags.length > 0;
+  if (!hasMemoryIds && !hasMemoryTags) return { where: {}, hasFilters: false };
+  const memoryWhere: Record<string, unknown>[] = [];
+  if (hasMemoryIds) memoryWhere.push({ publicId: config.memoryIds });
+  if (hasMemoryTags)
+    memoryWhere.push({ tags: { [Op.overlap]: config.memoryTags } });
+  const where: Record<string, unknown> = { [Op.or]: memoryWhere };
+  if (projectIds && projectIds.length > 0) where['projectId'] = projectIds;
+  return { where, hasFilters: true };
+};
+
 export const resolveMemorySearch = async (args: {
   projectIds?: number[];
   config: MemoryQueryConfig;
 }): Promise<Extract<KnowledgeResult, { sourceType: 'memory' }>[]> => {
   const { config, projectIds } = args;
-
-  const hasMemoryIds = config.memoryIds && config.memoryIds.length > 0;
-  const hasMemoryTags = config.memoryTags && config.memoryTags.length > 0;
-  if (!hasMemoryIds && !hasMemoryTags) return [];
-
+  const { where: memoryIncludeWhere, hasFilters } = buildMemoryIncludeWhere({
+    config,
+    projectIds,
+  });
+  if (!hasFilters) return [];
   const limit = config.limit ?? 10;
-
-  // Build Memory where clause (by publicId OR by tags)
-  const memoryWhere: Record<string, unknown>[] = [];
-  if (hasMemoryIds) {
-    memoryWhere.push({ publicId: config.memoryIds });
-  }
-  if (hasMemoryTags) {
-    memoryWhere.push({
-      tags: {
-        [Op.overlap]: config.memoryTags,
-      },
-    });
-  }
-
-  const memoryIncludeWhere: Record<string, unknown> = {
-    [Op.or]: memoryWhere,
-  };
-  if (projectIds !== undefined && projectIds.length > 0) {
-    memoryIncludeWhere['projectId'] = projectIds;
-  }
 
   if (config.search) {
     const embedding = await getEmbedding({ text: config.search });
     const embeddingLiteral = `[${embedding.join(',')}]`;
+    const distanceLiteral = db.MemoryEntry.sequelize!.literal(
+      `embedding <=> '${embeddingLiteral}'`
+    );
 
     const entries = await db.MemoryEntry.findAll({
-      attributes: {
-        include: [
-          [
-            db.MemoryEntry.sequelize!.literal(
-              `embedding <=> '${embeddingLiteral}'`
-            ),
-            'distance',
-          ],
-        ],
-      },
+      attributes: { include: [[distanceLiteral, 'distance']] },
       include: [
         {
           model: db.Memory,
           as: 'memory',
-          where: memoryIncludeWhere as Record<string, unknown>,
+          where: memoryIncludeWhere,
           required: true,
         },
       ],
-      order: db.MemoryEntry.sequelize!.literal(
-        `embedding <=> '${embeddingLiteral}'`
-      ),
+      order: distanceLiteral,
       subQuery: false,
       limit,
     });
@@ -353,18 +328,18 @@ export const resolveMemorySearch = async (args: {
         };
       })
       .filter((r) => {
-        if (config.minScore === undefined) return true;
-        return (r.score ?? 0) >= config.minScore;
+        return (
+          config.minScore === undefined || (r.score ?? 0) >= config.minScore
+        );
       });
   }
 
-  // No semantic search — just list entries for matching memories
   const entries = await db.MemoryEntry.findAll({
     include: [
       {
         model: db.Memory,
         as: 'memory',
-        where: memoryIncludeWhere as Record<string, unknown>,
+        where: memoryIncludeWhere,
         required: true,
       },
     ],
@@ -372,17 +347,19 @@ export const resolveMemorySearch = async (args: {
     limit,
   });
 
-  return entries.map((entry) => ({
-    sourceType: 'memory' as const,
-    entryId: entry.publicId,
-    memoryId: (entry.memory as InstanceType<typeof db.Memory>).publicId,
-    content: entry.content,
-    createdAt: entry.createdAt,
-    updatedAt: entry.updatedAt,
-  }));
+  return entries.map((entry) => {
+    return {
+      sourceType: 'memory' as const,
+      entryId: entry.publicId,
+      memoryId: (entry.memory as InstanceType<typeof db.Memory>).publicId,
+      content: entry.content,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+    };
+  });
 };
 
-export const searchKnowledge = async (args: {
+type SearchKnowledgeArgs = {
   projectIds?: number[];
   query?: string;
   minScore?: number;
@@ -393,17 +370,28 @@ export const searchKnowledge = async (args: {
   memoryTags?: string[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
-}): Promise<KnowledgeResult[]> => {
+};
+
+const getSearchFlags = (
+  args: SearchKnowledgeArgs
+): { hasDocumentSearch: boolean; hasMemorySearch: boolean } => {
   const hasDocumentSearch =
-    args.query ||
-    (args.paths && args.paths.length > 0) ||
-    (args.documentIds && args.documentIds.length > 0);
+    args.query !== undefined ||
+    (args.paths !== undefined && args.paths.length > 0) ||
+    (args.documentIds !== undefined && args.documentIds.length > 0);
   const hasMemorySearch =
-    (args.memoryIds && args.memoryIds.length > 0) ||
-    (args.memoryTags && args.memoryTags.length > 0);
+    (args.memoryIds !== undefined && args.memoryIds.length > 0) ||
+    (args.memoryTags !== undefined && args.memoryTags.length > 0);
+  return { hasDocumentSearch, hasMemorySearch };
+};
+
+export const searchKnowledge = async (
+  args: SearchKnowledgeArgs
+): Promise<KnowledgeResult[]> => {
+  const { hasDocumentSearch, hasMemorySearch } = getSearchFlags(args);
 
   const [docs, memoryEntries] = await Promise.all([
-    hasDocumentSearch || (!hasDocumentSearch && !hasMemorySearch)
+    !hasMemorySearch || hasDocumentSearch
       ? resolveDocumentSearch({
           projectIds: args.projectIds,
           policyWhere: args.policyWhere,
@@ -430,22 +418,24 @@ export const searchKnowledge = async (args: {
       : Promise.resolve([]),
   ]);
 
-  const docResults: KnowledgeResult[] = docs.map((doc) => ({
-    sourceType: 'document' as const,
-    documentId: doc.id,
-    fileId: doc.fileId,
-    projectId: doc.projectId,
-    path: doc.path,
-    filename: doc.filename,
-    size: doc.size,
-    title: doc.title,
-    metadata: doc.metadata,
-    tags: doc.tags,
-    content: doc.content,
-    score: doc.score,
-    createdAt: doc.createdAt,
-    updatedAt: doc.updatedAt,
-  }));
+  const docResults: KnowledgeResult[] = docs.map((doc) => {
+    return {
+      sourceType: 'document' as const,
+      documentId: doc.id,
+      fileId: doc.fileId,
+      projectId: doc.projectId,
+      path: doc.path,
+      filename: doc.filename,
+      size: doc.size,
+      title: doc.title,
+      metadata: doc.metadata,
+      tags: doc.tags,
+      content: doc.content,
+      score: doc.score,
+      createdAt: doc.createdAt,
+      updatedAt: doc.updatedAt,
+    };
+  });
 
   const allResults = [...docResults, ...memoryEntries];
 

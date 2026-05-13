@@ -1,11 +1,52 @@
 import { Router } from '@ttoss/http-server';
-
 import { AppError } from 'src/AppError';
 import type { Context } from 'src/Context';
 import { searchKnowledge } from 'src/lib/knowledge';
 import { compilePolicy } from 'src/lib/policyCompiler';
 
 const knowledgeRouter = new Router<Context>();
+
+type KnowledgeSearchBody = {
+  projectId?: string;
+  query?: string;
+  minScore?: number;
+  limit?: number;
+  memoryIds?: string[];
+  memoryTags?: string[];
+  documentFilters?: {
+    paths?: string[];
+    documentIds?: string[];
+  };
+};
+
+const hasSearchFilters = (body: KnowledgeSearchBody): boolean => {
+  const hasDocumentFilters =
+    body.documentFilters !== undefined &&
+    ((body.documentFilters.paths !== undefined &&
+      body.documentFilters.paths.length > 0) ||
+      (body.documentFilters.documentIds !== undefined &&
+        body.documentFilters.documentIds.length > 0));
+  const hasMemoryFilters =
+    (body.memoryIds !== undefined && body.memoryIds.length > 0) ||
+    (body.memoryTags !== undefined && body.memoryTags.length > 0);
+  return Boolean(body.query) || hasDocumentFilters || hasMemoryFilters;
+};
+
+const resolvePolicyWhere = async (
+  ctx: Context,
+  body: KnowledgeSearchBody
+): Promise<{ forbidden: boolean; policyWhere?: Record<string, unknown> }> => {
+  if (!body.projectId) return { forbidden: false };
+  const policies = await ctx.authUser!.getPolicies(body.projectId);
+  const compiled = compilePolicy({
+    policies,
+    action: 'knowledge:SearchKnowledge',
+    resourceType: 'document',
+    projectPublicId: body.projectId,
+  });
+  if (!compiled.hasAccess) return { forbidden: true };
+  return { forbidden: false, policyWhere: compiled.where };
+};
 
 /**
  * @openapi POST /api/v1/knowledge/search
@@ -17,29 +58,9 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     return;
   }
 
-  const body = ctx.request.body as {
-    projectId?: string;
-    query?: string;
-    minScore?: number;
-    limit?: number;
-    memoryIds?: string[];
-    memoryTags?: string[];
-    documentFilters?: {
-      paths?: string[];
-      documentIds?: string[];
-    };
-  };
+  const body = ctx.request.body as KnowledgeSearchBody;
 
-  const hasDocumentFilters =
-    body.documentFilters &&
-    ((body.documentFilters.paths && body.documentFilters.paths.length > 0) ||
-      (body.documentFilters.documentIds &&
-        body.documentFilters.documentIds.length > 0));
-  const hasMemoryFilters =
-    (body.memoryIds && body.memoryIds.length > 0) ||
-    (body.memoryTags && body.memoryTags.length > 0);
-
-  if (!body.query && !hasDocumentFilters && !hasMemoryFilters) {
+  if (!hasSearchFilters(body)) {
     ctx.status = 400;
     ctx.body = {
       error:
@@ -59,20 +80,10 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     return;
   }
 
-  let policyWhere: Record<string, unknown> | undefined;
-  if (body.projectId) {
-    const policies = await ctx.authUser.getPolicies(body.projectId);
-    const compiled = compilePolicy({
-      policies,
-      action: 'knowledge:SearchKnowledge',
-      resourceType: 'document',
-      projectPublicId: body.projectId,
-    });
-    if (!compiled.hasAccess) {
-      ctx.body = { results: [] };
-      return;
-    }
-    policyWhere = compiled.where;
+  const { forbidden, policyWhere } = await resolvePolicyWhere(ctx, body);
+  if (forbidden) {
+    ctx.body = { results: [] };
+    return;
   }
 
   try {

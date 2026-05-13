@@ -44,6 +44,7 @@ type CreateAgentBody = {
   stepRules?: unknown;
   boundaryPolicy?: unknown;
   temperature?: unknown;
+  knowledgeConfig?: unknown;
   projectId?: string;
 };
 

@@ -9,7 +9,7 @@ describe('Documents', () => {
   let userId: string;
   let projectId: string;
   let policyId: string;
-  let noPermToken: string;
+  let _noPermToken: string;
 
   beforeAll(async () => {
     await testClient
@@ -58,7 +58,7 @@ describe('Documents', () => {
       .post('/api/v1/users')
       .send({ username: 'docsnoperm', password: 'nopassword' });
     expect(noPermRes.status).toBe(201);
-    noPermToken = await loginAs('docsnoperm', 'nopassword');
+    _noPermToken = await loginAs('docsnoperm', 'nopassword');
   });
 
   afterAll(() => {

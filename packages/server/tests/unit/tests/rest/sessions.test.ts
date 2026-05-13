@@ -714,9 +714,7 @@ describe('Sessions', () => {
 
       // Add a message so there's something to generate from
       await authenticatedTestClient(userToken)
-        .post(
-          `/api/v1/agents/${agentId}/sessions/${cancelSessionId}/messages`
-        )
+        .post(`/api/v1/agents/${agentId}/sessions/${cancelSessionId}/messages`)
         .send({ message: 'Initial message' });
     });
 
@@ -737,7 +735,11 @@ describe('Sessions', () => {
           signalFirstStarted();
           args.abortSignal?.addEventListener('abort', () => {
             firstAborted = true;
-            reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }));
+            reject(
+              Object.assign(new Error('The operation was aborted'), {
+                name: 'AbortError',
+              })
+            );
           });
         });
       });
@@ -748,7 +750,11 @@ describe('Sessions', () => {
           id: 'gen_cancel_02',
           traceId: 'trc_cancel_02',
           status: 'completed',
-          output: { model: 'test-model', content: 'Second reply', finishReason: 'stop' },
+          output: {
+            model: 'test-model',
+            content: 'Second reply',
+            finishReason: 'stop',
+          },
         });
       });
 
@@ -810,7 +816,11 @@ describe('Sessions', () => {
         id: 'gen_cleanup_02',
         traceId: 'trc_cleanup_02',
         status: 'completed',
-        output: { model: 'test-model', content: 'Second', finishReason: 'stop' },
+        output: {
+          model: 'test-model',
+          content: 'Second',
+          finishReason: 'stop',
+        },
       });
 
       const secondRes = await authenticatedTestClient(userToken).post(
@@ -842,7 +852,11 @@ describe('Sessions', () => {
         id: 'gen_after_err_01',
         traceId: 'trc_after_err_01',
         status: 'completed',
-        output: { model: 'test-model', content: 'Recovery', finishReason: 'stop' },
+        output: {
+          model: 'test-model',
+          content: 'Recovery',
+          finishReason: 'stop',
+        },
       });
 
       const recoveryRes = await authenticatedTestClient(userToken).post(

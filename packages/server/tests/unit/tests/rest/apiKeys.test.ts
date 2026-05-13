@@ -412,9 +412,8 @@ describe('API Keys', () => {
     });
 
     test('API key scoped to a project only sees keys scoped to that project', async () => {
-      const response = await authenticatedTestClient(rawScopedKey).get(
-        '/api/v1/api-keys'
-      );
+      const response =
+        await authenticatedTestClient(rawScopedKey).get('/api/v1/api-keys');
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);

@@ -86,6 +86,7 @@ describe('Knowledge', () => {
         project_id: projectId,
         document_filters: { paths: ['/docs/'] },
       });
+      expect(response.status).toBe(401);
     });
 
     test('returns 400 when no query, paths, or documentIds provided', async () => {
@@ -142,7 +143,9 @@ describe('Knowledge', () => {
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.results)).toBe(true);
       const memResult = response.body.results.find(
-        (r: { source_type: string }) => r.source_type === 'memory'
+        (r: { source_type: string }) => {
+          return r.source_type === 'memory';
+        }
       );
       expect(memResult).toBeDefined();
       expect(memResult.entry_id).toBeDefined();
@@ -160,7 +163,9 @@ describe('Knowledge', () => {
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.results)).toBe(true);
       const memResult = response.body.results.find(
-        (r: { source_type: string }) => r.source_type === 'memory'
+        (r: { source_type: string }) => {
+          return r.source_type === 'memory';
+        }
       );
       expect(memResult).toBeDefined();
       expect(memResult.source_type).toBe('memory');
