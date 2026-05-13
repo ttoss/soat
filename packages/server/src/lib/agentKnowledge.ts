@@ -1,4 +1,8 @@
+import createDebug from 'debug';
+
 import { searchKnowledge } from './knowledge';
+
+const log = createDebug('soat:knowledge');
 
 type KnowledgeConfig = {
   memoryIds?: string[];
@@ -45,6 +49,13 @@ export const buildKnowledgeMessages = async (args: {
   });
   const query = lastUserMessage?.content ?? config.query;
 
+  log(
+    'buildKnowledgeMessages: query=%s memoryIds=%o documentPaths=%o',
+    query,
+    config.memoryIds,
+    config.documentPaths
+  );
+
   if (!query && !hasKnowledgeFilters(config)) return [];
 
   const results = await searchKnowledge({
@@ -58,9 +69,13 @@ export const buildKnowledgeMessages = async (args: {
     limit: config.limit,
   });
 
+  log('buildKnowledgeMessages: results count=%d', results.length);
+
   if (results.length === 0) return [];
 
   const knowledgeText = results.map(formatResult).join('\n\n');
+
+  log('buildKnowledgeMessages: knowledge text=%s', knowledgeText);
 
   return [{ role: 'system', content: `Knowledge context:\n${knowledgeText}` }];
 };

@@ -24,7 +24,7 @@ paths:
       tags:
         - Knowledge
       summary: Search knowledge
-      description: Searches across documents and memory entries using semantic search, file paths, document IDs, or memory IDs/tags. At least one of `query`, `paths`, `document_ids`, `memory_ids`, or `memory_tags` must be provided.
+      description: Searches across documents and memory entries using semantic search, file paths, document IDs, or memory IDs/tags. At least one of `query`, `document_paths`, `document_ids`, `memory_ids`, or `memory_tags` must be provided.
       operationId: searchKnowledge
       x-iam-action: knowledge:SearchKnowledge
       requestBody:
@@ -65,22 +65,18 @@ paths:
                   items:
                     type: string
                   example: ['customer*', 'support']
-                document_filters:
-                  type: object
-                  description: Scope document results
-                  properties:
-                    paths:
-                      type: array
-                      description: Filter results to documents whose file path starts with one of these prefixes
-                      items:
-                        type: string
-                      example: ['/sales/', '/hr/']
-                    document_ids:
-                      type: array
-                      description: Filter results to specific document IDs
-                      items:
-                        type: string
-                      example: ['doc_V1StGXR8Z5jdHi6B']
+                document_paths:
+                  type: array
+                  description: Filter results to documents whose file path starts with one of these prefixes
+                  items:
+                    type: string
+                  example: ['/sales/', '/hr/']
+                document_ids:
+                  type: array
+                  description: Filter results to specific document IDs
+                  items:
+                    type: string
+                  example: ['doc_V1StGXR8Z5jdHi6B']
       responses:
         '200':
           description: Search results

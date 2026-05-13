@@ -2,18 +2,18 @@
 
 ## Implementation Status
 
-| Component                      | Status         | Notes                                                                                                |
-| ------------------------------ | -------------- | ---------------------------------------------------------------------------------------------------- |
-| Memory model (container CRUD)  | ✅ Implemented | Model, lib, REST, OpenAPI, permissions, tests, docs                                                  |
-| Memory tags field              | ❌ Not started | `tags` column on Memory model for categorizing/filtering                                             |
-| MemoryEntry model              | ✅ Implemented | Model with `me_` prefix, embedding column, lib, REST, OpenAPI, permissions, tests                    |
-| Entry write (dedup algorithm)  | ✅ Implemented | Two-threshold dedup/merge/skip in `writeMemoryEntry`; `mergeEntryContent` uses Ollama chat           |
-| Entry REST endpoints           | ✅ Implemented | `POST/GET/PUT/DELETE /api/v1/memories/:memoryId/entries`; POST returns `action` field                |
-| Entry permissions              | ✅ Implemented | `WriteMemoryEntry`, `ReadMemoryEntry`, `ListMemoryEntries`, `UpdateMemoryEntry`, `DeleteMemoryEntry` |
-| `knowledgeConfig` on Agent     | ❌ Not started | JSONB field on Agent model with knowledge search params                                              |
-| Extraction (post-conversation) | ❌ Not started | Auto-extract facts from conversation turns                                                           |
-| write_memory soat-tool         | ❌ Not started | Agent tool for writing to a memory                                                                   |
-| Knowledge integration          | ❌ Not started | Memory entries as a source in `searchKnowledge()` (depends on MemoryEntry)                           |
+| Component                      | Status         | Notes                                                                                                                |
+| ------------------------------ | -------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Memory model (container CRUD)  | ✅ Implemented | Model, lib, REST, OpenAPI, permissions, tests, docs                                                                  |
+| Memory tags field              | ✅ Implemented | `tags` string-array column on Memory model; used by `resolveMemorySearch` glob filter                                |
+| MemoryEntry model              | ✅ Implemented | Model with `me_` prefix, embedding column, lib, REST, OpenAPI, permissions, tests                                    |
+| Entry write (dedup algorithm)  | ✅ Implemented | Two-threshold dedup/merge/skip in `writeMemoryEntry`; `mergeEntryContent` concatenates existing and incoming content |
+| Entry REST endpoints           | ✅ Implemented | `POST/GET/PUT/DELETE /api/v1/memories/:memoryId/entries`; POST returns `action` field                                |
+| Entry permissions              | ✅ Implemented | `WriteMemoryEntry`, `ReadMemoryEntry`, `ListMemoryEntries`, `UpdateMemoryEntry`, `DeleteMemoryEntry`                 |
+| `knowledgeConfig` on Agent     | ✅ Implemented | JSONB field on Agent model; merged with per-generation config; drives automatic context injection                    |
+| Extraction (post-conversation) | ❌ Not started | Auto-extract facts from conversation turns                                                                           |
+| write_memory soat-tool         | ❌ Not started | Agent tool for writing to a memory                                                                                   |
+| Knowledge integration          | ✅ Implemented | `resolveMemorySearch()` in `knowledge.ts`; `memoryIds`/`memoryTags` in `searchKnowledge()`                           |
 
 ## Implementation Phases
 
@@ -25,7 +25,7 @@
 
 - `Memory` and `MemoryEntry` DB models with pgvector embedding column
 - `writeMemoryEntry()` lib function with two-threshold dedup/merge/skip algorithm
-- `mergeEntryContent()` using Ollama chat for LLM-based merge
+- `mergeEntryContent()` concatenating existing and incoming content
 - `POST/GET/PUT/DELETE /api/v1/memories` — memory CRUD
 - `POST/GET/PUT/DELETE /api/v1/memories/:memoryId/entries` — entry CRUD; POST returns `action` field
 - OpenAPI spec, permissions (`WriteMemoryEntry`, `ReadMemoryEntry`, etc.), tests
@@ -34,18 +34,18 @@
 
 ---
 
-### Phase 2 — Agent Read & Write ❌ Not started
+### Phase 2 — Agent Read & Write ✅ Partially complete
 
 **Goal:** Make agents memory-aware. Agents can recall facts before generating and write new facts during generation. This is the minimum needed for a compelling AI app tutorial.
 
 **Deliverables:**
 
-- **Memory source in `searchKnowledge()`** — add `memoryIds` and `memoryTags` parameters; query MemoryEntry embeddings in parallel with documents; interleave results by score; add `source_type: "memory"` to `KnowledgeResult`
-- **`document_filters` parameter** — refactor flat document params into a nested `document_filters` object in the OpenAPI spec and lib
-- **`write_memory` soat-tool** — agent tool that calls `writeMemoryEntry()` with `{ content, memoryId }`; auto-registered when the agent's `knowledge_config` includes memory IDs
-- **`knowledge_config` on Agent** — JSONB field on the `agents` table; merged with per-generation `knowledge_config` using append semantics; drives automatic context injection before generation
-- **Automatic context injection** — before each generation, embed the latest message, call `searchKnowledge()` with the merged config, inject results as system messages
-- OpenAPI spec updates, SDK/CLI regeneration, tests, module docs
+- ✅ **Memory source in `searchKnowledge()`** — `memoryIds` and `memoryTags` parameters added; `resolveMemorySearch()` queries MemoryEntry embeddings; results interleaved by score; `source_type: "memory"` in `KnowledgeResult`
+- ✅ **`document_paths` and `document_ids` parameters** — flat fields in OpenAPI spec and lib (replacing nested `document_filters`)
+- ✅ **`knowledge_config` on Agent** — JSONB field on `agents` table; merged with per-generation `knowledge_config` using append semantics; drives automatic context injection via `buildKnowledgeMessages()` in `agentKnowledge.ts`
+- ✅ **Automatic context injection** — `buildKnowledgeMessages()` called in `agentGeneration.ts` before each generation; results injected as system messages
+- ❌ **`write_memory` soat-tool** — agent tool that calls `writeMemoryEntry()` with `{ content, memoryId }`; not yet implemented
+- ✅ OpenAPI spec updated, SDK/CLI regenerated, tests added
 
 **Unlocks:** Agents that remember and recall. First tutorial: "Build an agent with persistent memory."
 
@@ -299,11 +299,8 @@ PUT /api/v1/agents/{agent_id}
   "knowledge_config": {
     "memory_ids": ["mem_abc", "mem_def"],
     "memory_tags": ["crm", "user*"],
-    "document_filters": {
-      "paths": ["/sales/"],
-      "document_ids": ["doc_01"],
-      "tags": { "department": "sales" }
-    },
+    "document_paths": ["/sales/"],
+    "document_ids": ["doc_01"],
     "min_score": 0.5,
     "limit": 10
   }
@@ -323,7 +320,7 @@ PUT /api/v1/agents/{agent_id}
   "knowledge_config": {
     "memory_ids": ["mem_abc"],
     "memory_tags": ["projectA"],
-    "document_filters": { "paths": ["/docs/"] },
+    "document_paths": ["/docs/"],
     "limit": 20
   }
 }
@@ -345,17 +342,16 @@ There are three ways to provide knowledge to an agent:
 
 When both the agent's stored `knowledge_config` and a per-generation `knowledge_config` are provided, they are **appended** (not overridden):
 
-- **Array fields** (`memory_ids`, `memory_tags`, `document_filters.paths`, `document_filters.document_ids`) → union of both sets
-- **Object fields** (`document_filters.tags`) → shallow merge (per-generation wins on key conflicts)
+- **Array fields** (`memory_ids`, `memory_tags`, `document_paths`, `document_ids`) → union of both sets
 - **Scalar fields** (`min_score`, `limit`) → per-generation overrides agent config
 
 Example:
 
 ```
 Agent config:       { memory_ids: ["mem_abc"], limit: 5 }
-Per-generation:     { memory_ids: ["mem_xyz"], document_filters: { paths: ["/docs/"] } }
+Per-generation:     { memory_ids: ["mem_xyz"], document_paths: ["/docs/"] }
 
-→ Merged:           { memory_ids: ["mem_abc", "mem_xyz"], document_filters: { paths: ["/docs/"] }, limit: 5 }
+→ Merged:           { memory_ids: ["mem_abc", "mem_xyz"], document_paths: ["/docs/"], limit: 5 }
 ```
 
 Both sets of results are injected as **system messages**, ordered by score.
@@ -433,11 +429,8 @@ Stored as JSONB on the `agents` table. Schema:
 interface KnowledgeConfig {
   memoryIds?: string[]; // mem_... IDs to search
   memoryTags?: string[]; // glob patterns to match memory tags
-  documentFilters?: {
-    paths?: string[]; // file path prefixes
-    documentIds?: string[]; // doc_... IDs
-    tags?: Record<string, string>;
-  };
+  documentPaths?: string[]; // file path prefixes
+  documentIds?: string[]; // doc_... IDs
   minScore?: number; // minimum cosine similarity (0–1)
   limit?: number; // max results to inject
 }

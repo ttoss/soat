@@ -84,7 +84,7 @@ describe('Knowledge', () => {
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.post('/api/v1/knowledge/search').send({
         project_id: projectId,
-        document_filters: { paths: ['/docs/'] },
+        document_paths: ['/docs/'],
       });
       expect(response.status).toBe(401);
     });
@@ -102,7 +102,7 @@ describe('Knowledge', () => {
         .post('/api/v1/knowledge/search')
         .send({
           project_id: projectId,
-          document_filters: { paths: ['/docs/'] },
+          document_paths: ['/docs/'],
         });
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.results)).toBe(true);
@@ -119,7 +119,7 @@ describe('Knowledge', () => {
         .post('/api/v1/knowledge/search')
         .send({
           project_id: projectId,
-          document_filters: { paths: ['/docs/'] },
+          document_paths: ['/docs/'],
         });
       expect(response.status).toBe(403);
     });
@@ -127,7 +127,7 @@ describe('Knowledge', () => {
     test('returns results array in response body', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
-        .send({ project_id: projectId, document_filters: { paths: ['/'] } });
+        .send({ project_id: projectId, document_paths: ['/'] });
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('results');
       expect(Array.isArray(response.body.results)).toBe(true);
@@ -177,7 +177,7 @@ describe('Knowledge', () => {
         .send({
           project_id: projectId,
           query: 'sky',
-          document_filters: { paths: ['/docs/'] },
+          document_paths: ['/docs/'],
           memory_ids: [memoryId],
         });
       expect(response.status).toBe(200);

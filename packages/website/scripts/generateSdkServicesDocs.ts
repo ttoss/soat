@@ -40,7 +40,16 @@ interface ModuleConfig {
   file: string;
   className: string;
   label: string;
+  docFile: string;
 }
+
+/**
+ * Map spec filenames to a different module doc page when the spec belongs to
+ * a sub-resource whose documentation lives inside a parent module's page.
+ */
+const DOC_OVERRIDES: Record<string, string> = {
+  memoryEntries: 'memories',
+};
 
 const loadModules = (): ModuleConfig[] => {
   return fs
@@ -57,7 +66,8 @@ const loadModules = (): ModuleConfig[] => {
       const label = camelCase(spec.tags?.[0]?.name ?? file);
       // HeyAPI generates the class name from the tag, which is already PascalCase
       const className = label.replace(/\s+/g, '');
-      return { file, className, label };
+      const docFile = DOC_OVERRIDES[file] ?? file;
+      return { file, className, label, docFile };
     });
 };
 
@@ -114,7 +124,7 @@ const main = () => {
     sections.push(`## ${mod.label}`);
     sections.push('');
     sections.push(
-      `See [${mod.label} module docs](../modules/${mod.file}) for permissions and data model.`
+      `See [${mod.label} module docs](../modules/${mod.docFile}) for permissions and data model.`
     );
     sections.push('');
     sections.push(renderTable(mod.className, methods));

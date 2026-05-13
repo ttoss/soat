@@ -64,9 +64,18 @@ const toTitleCase = (kebab: string): string => {
     .join('');
 };
 
+/**
+ * Map spec filenames to a different module doc page when the spec belongs to
+ * a sub-resource whose documentation lives inside a parent module's page.
+ */
+const DOC_OVERRIDES: Record<string, string> = {
+  memoryEntries: 'memories',
+};
+
 interface ModuleConfig {
   file: string;
   label: string;
+  docFile: string;
 }
 
 const loadModules = (): ModuleConfig[] => {
@@ -82,7 +91,8 @@ const loadModules = (): ModuleConfig[] => {
         fs.readFileSync(path.join(SPECS_DIR, f), 'utf-8')
       ) as OpenApiSpec;
       const label = spec.tags?.[0]?.name ?? toTitleCase(file);
-      return { file, label };
+      const docFile = DOC_OVERRIDES[file] ?? file;
+      return { file, label, docFile };
     });
 };
 
@@ -192,7 +202,7 @@ const main = () => {
     sections.push(`## ${mod.label}`);
     sections.push('');
     sections.push(
-      `See [${mod.label} module docs](../modules/${mod.file}) for permissions and data model.`
+      `See [${mod.label} module docs](../modules/${mod.docFile}) for permissions and data model.`
     );
     sections.push('');
     sections.push(renderTable(commands));

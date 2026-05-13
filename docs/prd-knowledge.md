@@ -2,21 +2,21 @@
 
 ## Implementation Status
 
-| Component                          | Status         | Notes                                                                             |
-| ---------------------------------- | -------------- | --------------------------------------------------------------------------------- |
-| `knowledge.ts` lib                 | ✅ Implemented | `searchKnowledge()`, `resolveDocumentSearch()`, `mapDocument()`, types            |
-| `POST /api/v1/knowledge/search`    | ✅ Implemented | Document search works end-to-end with auth, policy, validation                    |
-| OpenAPI spec (`knowledge.yaml`)    | ✅ Implemented | `searchKnowledge` operationId, `KnowledgeResult` schema                           |
-| Permission (`SearchKnowledge`)     | ✅ Implemented | `knowledge.json` with `knowledge:SearchKnowledge`                                 |
-| Router mounted in `index.ts`       | ✅ Implemented | Knowledge routes registered                                                       |
-| Module docs page                   | ✅ Implemented | `packages/website/docs/modules/knowledge.md`                                      |
-| Migration from `documentSearch.ts` | ✅ Done        | `documentSearch.ts` removed; `documents.ts` re-exports from `knowledge.ts`        |
-| `searchKnowledge` soat-tool        | ✅ Implemented | Auto-generated from OpenAPI YAML via `soatTools.ts`                               |
-| Memory source integration          | ❌ Not started | `memory_ids`, `memory_tags` filters, `source_type: "memory"`, entry vector search |
-| `document_filters` parameter       | ❌ Not started | Nested filter object for paths/tags/document_ids (currently flat parameters)      |
-| Memory entry ranking/merge         | ❌ Not started | Interleaving memory + document results by score                                   |
-| Knowledge ↔ Entities integration   | ❌ Future      | `traverseEntities()` as third source; `source_type: "entity"` in results          |
-| Post-conversation extraction       | ❌ Future      | Async trigger on conversation turn; facts written via `writeMemoryEntry()`        |
+| Component                          | Status         | Notes                                                                                            |
+| ---------------------------------- | -------------- | ------------------------------------------------------------------------------------------------ |
+| `knowledge.ts` lib                 | ✅ Implemented | `searchKnowledge()`, `resolveDocumentSearch()`, `mapDocument()`, types                           |
+| `POST /api/v1/knowledge/search`    | ✅ Implemented | Document search works end-to-end with auth, policy, validation                                   |
+| OpenAPI spec (`knowledge.yaml`)    | ✅ Implemented | `searchKnowledge` operationId, `KnowledgeResult` schema                                          |
+| Permission (`SearchKnowledge`)     | ✅ Implemented | `knowledge.json` with `knowledge:SearchKnowledge`                                                |
+| Router mounted in `index.ts`       | ✅ Implemented | Knowledge routes registered                                                                      |
+| Module docs page                   | ✅ Implemented | `packages/website/docs/modules/knowledge.md`                                                     |
+| Migration from `documentSearch.ts` | ✅ Done        | `documentSearch.ts` removed; `documents.ts` re-exports from `knowledge.ts`                       |
+| `searchKnowledge` soat-tool        | ✅ Implemented | Auto-generated from OpenAPI YAML via `soatTools.ts`                                              |
+| Memory source integration          | ✅ Implemented | `memory_ids`, `memory_tags` filters; `resolveMemorySearch()`; `source_type: "memory"` in results |
+| `document_filters` parameter       | ✅ Implemented | Flat `document_paths` and `document_ids` fields in OpenAPI spec                                  |
+| Memory entry ranking/merge         | ✅ Implemented | Document + memory results interleaved by score in `searchKnowledge()`                            |
+| Knowledge ↔ Entities integration   | ❌ Future      | `traverseEntities()` as third source; `source_type: "entity"` in results                         |
+| Post-conversation extraction       | ❌ Future      | Async trigger on conversation turn; facts written via `writeMemoryEntry()`                       |
 
 ## Implementation Phases
 
@@ -34,18 +34,18 @@
 
 ---
 
-### Phase 2 — Memory Source Integration ❌ Not started
+### Phase 2 — Memory Source Integration ✅ Complete
 
 **Goal:** Extend `searchKnowledge()` to query memory entries alongside documents and return interleaved results ranked by score.
 
 **Deliverables:**
 
 - `memory_ids` and `memory_tags` (glob) parameters on `POST /api/v1/knowledge/search`
-- `document_filters` nested object replacing flat `paths`/`document_ids` params
-- `resolveMemorySearch()` lib function — given memory IDs (resolved from IDs + tag patterns), run pgvector cosine search on `MemoryEntry.embedding`
+- `document_paths` and `document_ids` flat parameters (replacing nested `document_filters`)
+- `resolveMemorySearch()` lib function in `knowledge.ts` — runs pgvector cosine search on `MemoryEntry.embedding`, resolves memories by IDs and tag patterns
 - Parallel execution: `resolveDocumentSearch()` and `resolveMemorySearch()` run concurrently, results merged and re-ranked by score
-- `source_type: "memory"` added to `KnowledgeResult` (alongside existing `"document"`)
-- OpenAPI spec update → SDK/CLI regeneration → `search_knowledge` soat-tool automatically gains memory parameters
+- `source_type: "memory"` added to `KnowledgeResult`
+- OpenAPI spec updated → SDK/CLI regenerated → `search_knowledge` soat-tool gains memory parameters automatically
 - Tests: memory-only search, document-only search, mixed search, tag glob matching, min_score filtering
 
 **Unlocks:** Phase 2 of the Memory module (agent read path). Agents can recall facts from memories using the existing `search_knowledge` soat-tool.
@@ -106,7 +106,7 @@ A single endpoint accepts a query and optional filters that scope which sources 
 
 - **Memory IDs** — search entries within specific memories by ID
 - **Memory tags** — search entries in memories matching tag patterns (supports glob: `user*` matches `user`, `user-prefs`, `user-history`)
-- **Document filters** — filter documents by paths, tags, or document IDs
+- **Document paths/IDs** — filter documents by paths or document IDs
 
 If no source filters are provided, the search runs across all accessible documents and memories in the project.
 
@@ -123,7 +123,7 @@ Results from all sources are ranked by cosine similarity score against the query
 ## Search Algorithm
 
 ```
-Input: query (string), project_id, memory_ids[]?, memory_tags[]?, document_filters?, min_score?, limit?
+Input: query (string), project_id, memory_ids[]?, memory_tags[]?, document_paths[]?, document_ids[]?, min_score?, limit?
 
 STEP 1 — EMBED
   Generate embedding for the query.
@@ -140,7 +140,7 @@ STEP 3 — SEARCH SOURCES (parallel)
     Search memory entries within resolved memories by cosine similarity.
     Tag each result with source_type = "memory".
 
-  IF document_filters is provided (or no filters → all documents in project):
+  IF document_paths or document_ids is provided (or no filters → all documents in project):
     Search documents by cosine similarity (existing resolveDocumentSearch logic).
     Tag each result with source_type = "document".
 
@@ -167,11 +167,8 @@ POST /api/v1/knowledge/search
   "project_id": "prj_01",
   "memory_ids": ["mem_abc", "mem_def"],
   "memory_tags": ["projectA", "user*"],
-  "document_filters": {
-    "paths": ["/sales/"],
-    "document_ids": ["doc_01"],
-    "tags": { "department": "sales" }
-  },
+  "document_paths": ["/sales/"],
+  "document_ids": ["doc_01"],
   "min_score": 0.5,
   "limit": 10
 }
@@ -230,7 +227,7 @@ Agents store a `knowledgeConfig` JSONB field that mirrors the `searchKnowledge` 
   "knowledge_config": {
     "memory_ids": ["mem_abc"],
     "memory_tags": ["crm"],
-    "document_filters": { "paths": ["/sales/"] },
+    "document_paths": ["/sales/"],
     "min_score": 0.5,
     "limit": 10
   }
@@ -251,14 +248,13 @@ Simple case (one memory): `{ "knowledge_config": { "memory_ids": ["mem_abc"] } }
 
 When both are provided, they **append** (not override):
 
-- **Array fields** (`memory_ids`, `memory_tags`, `document_filters.paths`, `document_filters.document_ids`) → union
-- **Object fields** (`document_filters.tags`) → shallow merge (per-generation wins on key conflicts)
+- **Array fields** (`memory_ids`, `memory_tags`, `document_paths`, `document_ids`) → union
 - **Scalar fields** (`min_score`, `limit`) → per-generation overrides agent config
 
 ```
 Agent config:       { memory_ids: ["mem_abc"], limit: 5 }
-Per-generation:     { memory_ids: ["mem_xyz"], document_filters: { paths: ["/docs/"] } }
-→ Merged:           { memory_ids: ["mem_abc", "mem_xyz"], document_filters: { paths: ["/docs/"] }, limit: 5 }
+Per-generation:     { memory_ids: ["mem_xyz"], document_paths: ["/docs/"] }
+→ Merged:           { memory_ids: ["mem_abc", "mem_xyz"], document_paths: ["/docs/"], limit: 5 }
 ```
 
 ### Context Assembly

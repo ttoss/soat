@@ -49,11 +49,11 @@ When you call `POST /api/v1/memories/:memoryId/entries`, the server:
 2. **Finds** the most similar existing entry in that memory (cosine similarity via pgvector).
 3. **Decides** based on two configurable thresholds:
 
-| Similarity range        | Decision   | What happens                                                              |
-| ----------------------- | ---------- | ------------------------------------------------------------------------- |
-| ≥ `duplicate_threshold` | **Skip**   | The fact is already known. Returns the existing entry unchanged.          |
-| ≥ `update_threshold`    | **Merge**  | The fact overlaps. An LLM merges old and new into a single updated entry. |
-| < `update_threshold`    | **Create** | The fact is new. A new entry is created.                                  |
+| Similarity range        | Decision   | What happens                                                               |
+| ----------------------- | ---------- | -------------------------------------------------------------------------- |
+| ≥ `duplicate_threshold` | **Skip**   | The fact is already known. Returns the existing entry unchanged.           |
+| ≥ `update_threshold`    | **Merge**  | The fact overlaps. The incoming content is appended to the existing entry. |
+| < `update_threshold`    | **Create** | The fact is new. A new entry is created.                                   |
 
 ### Request Fields
 
@@ -100,7 +100,7 @@ POST /api/v1/memories/mem_abc/entries
 POST /api/v1/memories/mem_abc/entries
 { "content": "Customer prefers email, especially for billing inquiries" }
 
-→ 200 { "action": "updated", "id": "me_001", "content": "Customer prefers email over phone calls, especially for billing inquiries", ... }
+→ 200 { "action": "updated", "id": "me_001", "content": "Customer prefers email over phone calls\nCustomer prefers email, especially for billing inquiries", ... }
 ```
 
 **Unrelated write — genuinely new fact:**

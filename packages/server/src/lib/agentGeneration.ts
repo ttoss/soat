@@ -109,14 +109,25 @@ const buildGenerationContext = async (args: {
     messages: args.messages,
   });
 
+  log(
+    'buildGenerationContext: agentId=%s knowledgeMessages=%d userMessages=%d',
+    args.agentId,
+    knowledgeMessages.length,
+    args.messages.length
+  );
+
+  const allMessages = buildAllMessages(typedAgent.instructions, [
+    ...knowledgeMessages,
+    ...args.messages,
+  ]);
+
+  log('buildGenerationContext: allMessages=%o', allMessages);
+
   return {
     typedAgent,
     model,
     resolvedTools,
-    allMessages: buildAllMessages(typedAgent.instructions, [
-      ...knowledgeMessages,
-      ...args.messages,
-    ]),
+    allMessages,
     generationId: generatePublicId(PUBLIC_ID_PREFIXES.generation),
   };
 };

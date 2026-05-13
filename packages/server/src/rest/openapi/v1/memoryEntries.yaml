@@ -92,7 +92,7 @@ paths:
                   maximum: 1
                 update_threshold:
                   type: number
-                  description: Cosine similarity score at or above which the incoming content is merged with the existing entry via LLM (default 0.75)
+                  description: Cosine similarity score at or above which the incoming content is appended to the existing entry (default 0.75)
                   default: 0.75
                   minimum: 0
                   maximum: 1

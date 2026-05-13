@@ -390,8 +390,8 @@ echo "GET document path: OK"
 # 11c. Search knowledge by path prefix
 echo "--- Search knowledge by path prefix ---"
 PATH_SEARCH_RESP=$($SOAT_CLI search-knowledge \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --paths '["animals/"]')
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --document-paths '["animals/"]')
 PATH_SEARCH_COUNT=$(echo "$PATH_SEARCH_RESP" | jq '.results | length')
 if [ "$PATH_SEARCH_COUNT" -lt 1 ]; then
   echo "ERROR: path-prefix search returned $PATH_SEARCH_COUNT results, expected at least 1" >&2
@@ -465,6 +465,80 @@ if ! printf '%s\n' "$MEM_UPDATE_RESP" | jq -e '.name == "Updated Smoke Memory"' 
 fi
 echo "Memory updated."
 
+# ── Memory entries — dedup write algorithm ────────────────────────────────────
+echo "--- Memory entries: first write (created) ---"
+ME1_RESP=$($SOAT_CLI create-memory-entry \
+  --memory-id "$MEM_ID" \
+  --content "Smoke test customer prefers email over phone calls")
+ME1_ACTION=$(printf '%s\n' "$ME1_RESP" | jq -r '.action')
+ME1_ID=$(printf '%s\n' "$ME1_RESP" | jq -r '.id')
+if [ "$ME1_ACTION" != "created" ]; then
+  echo "ERROR: Expected action=created, got $ME1_ACTION" >&2
+  echo "$ME1_RESP" >&2
+  exit 1
+fi
+echo "Memory entry created: $ME1_ID"
+
+echo "--- Memory entries: duplicate write (skipped) ---"
+ME_SKIP_RESP=$($SOAT_CLI create-memory-entry \
+  --memory-id "$MEM_ID" \
+  --content "Smoke test customer prefers email over phone calls")
+ME_SKIP_ACTION=$(printf '%s\n' "$ME_SKIP_RESP" | jq -r '.action')
+if [ "$ME_SKIP_ACTION" != "skipped" ]; then
+  echo "ERROR: Expected action=skipped, got $ME_SKIP_ACTION" >&2
+  echo "$ME_SKIP_RESP" >&2
+  exit 1
+fi
+echo "Duplicate correctly skipped."
+
+echo "--- Memory entries: similar write (updated) ---"
+ME_UPD_RESP=$($SOAT_CLI create-memory-entry \
+  --memory-id "$MEM_ID" \
+  --content "Smoke test customer prefers email, especially for billing inquiries")
+ME_UPD_ACTION=$(printf '%s\n' "$ME_UPD_RESP" | jq -r '.action')
+if [ "$ME_UPD_ACTION" != "updated" ]; then
+  echo "ERROR: Expected action=updated, got $ME_UPD_ACTION" >&2
+  echo "$ME_UPD_RESP" >&2
+  exit 1
+fi
+echo "Similar entry correctly merged (updated)."
+
+echo "--- Memory entries: unrelated write (created) ---"
+ME2_RESP=$($SOAT_CLI create-memory-entry \
+  --memory-id "$MEM_ID" \
+  --content "Smoke test customer fiscal year ends in December")
+ME2_ACTION=$(printf '%s\n' "$ME2_RESP" | jq -r '.action')
+if [ "$ME2_ACTION" != "created" ]; then
+  echo "ERROR: Expected action=created for unrelated fact, got $ME2_ACTION" >&2
+  echo "$ME2_RESP" >&2
+  exit 1
+fi
+echo "Unrelated entry created."
+
+echo "--- List memory entries ---"
+ME_LIST_RESP=$($SOAT_CLI list-memory-entries --memory-id "$MEM_ID")
+ME_LIST_COUNT=$(printf '%s\n' "$ME_LIST_RESP" | jq 'length')
+if [ "$ME_LIST_COUNT" -ne 2 ]; then
+  echo "ERROR: Expected 2 entries after dedup writes, got $ME_LIST_COUNT" >&2
+  echo "$ME_LIST_RESP" >&2
+  exit 1
+fi
+echo "Memory entries listed: $ME_LIST_COUNT entries."
+
+echo "--- Knowledge search via memory_ids ---"
+KS_RESP=$($SOAT_CLI search-knowledge \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --query "smoke test customer communication" \
+  --memory-ids "[\"$MEM_ID\"]")
+KS_COUNT=$(printf '%s\n' "$KS_RESP" | jq '.results | length')
+if [ "$KS_COUNT" -lt 1 ]; then
+  echo "ERROR: Knowledge search returned 0 results" >&2
+  echo "$KS_RESP" >&2
+  exit 1
+fi
+echo "Knowledge search returned $KS_COUNT result(s)."
+echo "Memory entries + knowledge search coverage: OK"
+
 # Delete memory
 echo "--- Deleting memory ---"
 $SOAT_CLI delete-memory --memory-id "$MEM_ID"
@@ -492,13 +566,13 @@ echo "--- Chat completion: 400 without ai_provider_id ---"
 expect_cli_error_status 400 create-chat-completion --messages '[{"role":"user","content":"hello"}]'
 echo "400 without ai_provider_id: OK"
 
-# 16. Create AI provider (Ollama with qwen2.5:0.5b available in test env)
+# 16. Create AI provider (Ollama with qwen2.5:3b available in test env)
 echo "--- Creating AI provider ---"
 AI_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name smoke-ollama \
   --provider ollama \
-  --default_model "qwen2.5:0.5b" \
+  --default_model "qwen2.5:3b" \
   --base_url "http://ollama:11434")
 AI_PROVIDER_ID=$(echo "$AI_PROVIDER_RESP" | jq -r '.id')
 echo "AI Provider id: $AI_PROVIDER_ID"

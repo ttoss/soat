@@ -29,7 +29,7 @@ By the end you will understand how [AI Providers](/docs/modules/ai-providers), [
 - For production hardening (secrets, env vars), see [Advanced Configuration](/docs/getting-started/advanced-config).
 - Server is at `http://localhost:5047`.
 - [Ollama](https://ollama.com) running locally with a chat model available.
-- This repo's tutorial test stack already provisions Ollama with `qwen2.5:0.5b`, so this tutorial runs in automated tests without external credentials.
+- This repo's tutorial test stack already provisions Ollama with `qwen2.5:3b`, so this tutorial runs in automated tests without external credentials.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -164,7 +164,7 @@ AI_PROVIDER_ID=$(soat create-ai-provider \
   --project-id "$PROJECT_ID" \
   --name "Local Ollama" \
   --provider "ollama" \
-  --default-model "qwen2.5:0.5b" | jq -r '.id')
+  --default-model "qwen2.5:3b" | jq -r '.id')
 echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 # AI_PROVIDER_ID: aip_8BTcGUvXnehCCQKs
 ```
@@ -179,7 +179,7 @@ const { data: aiProvider, error } =
       project_id: PROJECT_ID,
       name: 'Local Ollama',
       provider: 'ollama',
-      default_model: 'qwen2.5:0.5b',
+      default_model: 'qwen2.5:3b',
     },
   });
 
@@ -195,7 +195,7 @@ const AI_PROVIDER_ID = aiProvider.id; // aip_…
 AI_PROVIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/ai-providers" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Local Ollama\",\"provider\":\"ollama\",\"default_model\":\"qwen2.5:0.5b\"}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Local Ollama\",\"provider\":\"ollama\",\"default_model\":\"qwen2.5:3b\"}" \
   | jq -r '.id')
 echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 ```
@@ -329,7 +329,7 @@ Example output:
   "message": {
     "role": "assistant",
     "content": "The capital of France is Paris.",
-    "model": "qwen2.5:0.5b"
+    "model": "qwen2.5:3b"
   },
   "generation_id": "agt_gen_mznGfHSV4YAGiBXy",
   "trace_id": "agt_trace_8rcvif0n29WE37NL"

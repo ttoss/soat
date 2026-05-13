@@ -13,19 +13,14 @@ type KnowledgeSearchBody = {
   limit?: number;
   memoryIds?: string[];
   memoryTags?: string[];
-  documentFilters?: {
-    paths?: string[];
-    documentIds?: string[];
-  };
+  documentPaths?: string[];
+  documentIds?: string[];
 };
 
 const hasSearchFilters = (body: KnowledgeSearchBody): boolean => {
   const hasDocumentFilters =
-    body.documentFilters !== undefined &&
-    ((body.documentFilters.paths !== undefined &&
-      body.documentFilters.paths.length > 0) ||
-      (body.documentFilters.documentIds !== undefined &&
-        body.documentFilters.documentIds.length > 0));
+    (body.documentPaths !== undefined && body.documentPaths.length > 0) ||
+    (body.documentIds !== undefined && body.documentIds.length > 0);
   const hasMemoryFilters =
     (body.memoryIds !== undefined && body.memoryIds.length > 0) ||
     (body.memoryTags !== undefined && body.memoryTags.length > 0);
@@ -64,7 +59,7 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     ctx.status = 400;
     ctx.body = {
       error:
-        'At least one of query, memory_ids, memory_tags, or document_filters is required',
+        'At least one of query, memory_ids, memory_tags, document_paths, or document_ids is required',
     };
     return;
   }
@@ -93,8 +88,8 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
       query: body.query,
       minScore: body.minScore,
       limit: body.limit,
-      paths: body.documentFilters?.paths,
-      documentIds: body.documentFilters?.documentIds,
+      paths: body.documentPaths,
+      documentIds: body.documentIds,
       memoryIds: body.memoryIds,
       memoryTags: body.memoryTags,
     });

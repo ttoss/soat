@@ -103,7 +103,7 @@ describe('buildModel', () => {
     const model = buildModel({
       provider: 'ollama',
       secretValue: null,
-      model: 'qwen2.5:0.5b',
+      model: 'qwen2.5:3b',
     });
     expect(model).toBeDefined();
   });

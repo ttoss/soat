@@ -349,7 +349,7 @@ The `knowledge_config` on agents gains an optional `entity_filters` field:
 {
   "knowledge_config": {
     "memory_ids": ["mem_abc"],
-    "document_filters": { "paths": ["/sales/"] },
+    "document_paths": ["/sales/"],
     "entity_filters": {
       "entity_ids": ["ent_abc"],
       "entity_types": ["company", "product"],

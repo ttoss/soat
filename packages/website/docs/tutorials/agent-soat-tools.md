@@ -32,7 +32,7 @@ By the end you will understand:
 ## Prerequisites
 
 - SOAT running locally with Ollama. Follow the [Quick Start](/docs/getting-started) guide.
-- An Ollama instance accessible at `http://ollama:11434` with model `qwen2.5:0.5b` pulled (`ollama pull qwen2.5:0.5b`).
+- An Ollama instance accessible at `http://ollama:11434` with model `qwen2.5:3b` pulled (`ollama pull qwen2.5:3b`).
 - CLI, SDK, or curl available. The server is at `http://localhost:5047`.
 
 <Tabs groupId="client">
@@ -153,7 +153,7 @@ PROVIDER_ID=$(soat create-ai-provider \
   --project-id "$PROJECT_ID" \
   --name "Ollama" \
   --provider "ollama" \
-  --default-model "qwen2.5:0.5b" | jq -r '.id')
+  --default-model "qwen2.5:3b" | jq -r '.id')
 echo "Provider: $PROVIDER_ID"
 ```
 
@@ -166,7 +166,7 @@ const { data: provider } = await adminSoat.aiProviders.createAiProvider({
     project_id: projectId,
     name: 'Ollama',
     provider: 'ollama',
-    default_model: 'qwen2.5:0.5b',
+    default_model: 'qwen2.5:3b',
   },
 });
 const providerId = provider!.id;
@@ -179,7 +179,7 @@ const providerId = provider!.id;
 PROVIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/ai-providers" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Ollama\",\"provider\":\"ollama\",\"default_model\":\"qwen2.5:0.5b\"}" | jq -r '.id')
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Ollama\",\"provider\":\"ollama\",\"default_model\":\"qwen2.5:3b\"}" | jq -r '.id')
 echo "Provider: $PROVIDER_ID"
 ```
 

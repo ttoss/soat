@@ -1,6 +1,5 @@
 import type { MemoryEntrySource } from '@soat/postgresdb';
 import { Op } from '@ttoss/postgresdb';
-import { Ollama } from 'ollama';
 import { db } from 'src/db';
 import { getEmbedding } from 'src/lib/embedding';
 
@@ -19,34 +18,11 @@ const mapMemoryEntry = (
   };
 };
 
-export const mergeEntryContent = async (args: {
+export const mergeEntryContent = (args: {
   existing: string;
   incoming: string;
-}): Promise<string> => {
-  const provider = process.env.EMBEDDING_PROVIDER;
-  const model = process.env.EMBEDDING_MODEL;
-
-  if (provider !== 'ollama' || !model) {
-    return args.incoming;
-  }
-
-  const host = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
-  const ollama = new Ollama({ host });
-
-  const prompt = `You are a knowledge merging assistant. Given an existing fact and a new fact, produce a single updated fact that combines both. If they contradict, prefer the new information. Return only the merged fact, nothing else.\n\nExisting fact: ${args.existing}\nNew fact: ${args.incoming}\n\nMerged fact:`;
-
-  const stream = await ollama.chat({
-    model,
-    stream: true,
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  let merged = '';
-  for await (const chunk of stream) {
-    merged += chunk.message.content;
-  }
-
-  return merged.trim() || args.incoming;
+}): string => {
+  return `${args.existing}\n${args.incoming}`;
 };
 
 const findTopSimilarEntry = async (args: {
@@ -81,7 +57,7 @@ const mergeAndUpdateEntry = async (args: {
   incoming: string;
 }): Promise<ReturnType<typeof mapMemoryEntry>> => {
   const match = args.match!;
-  const mergedContent = await mergeEntryContent({
+  const mergedContent = mergeEntryContent({
     existing: match.content,
     incoming: args.incoming,
   });

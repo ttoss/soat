@@ -54,27 +54,19 @@ A `KnowledgeResult` is a discriminated union on `source_type`. All results share
 
 The `POST /knowledge/search` endpoint accepts the following filters. At least one must be provided.
 
-| Parameter          | Type       | Description                                                                                |
-| ------------------ | ---------- | ------------------------------------------------------------------------------------------ |
-| `query`            | `string`   | Semantic search query — ranks results by vector similarity                                 |
-| `memory_ids`       | `string[]` | Search entries within these specific memories                                              |
-| `memory_tags`      | `string[]` | Search entries in memories whose tags match any of these patterns (supports glob: `user*`) |
-| `document_filters` | `object`   | Filter document results — see [Document Filters](#document-filters) below                  |
+| Parameter        | Type       | Description                                                                                |
+| ---------------- | ---------- | ------------------------------------------------------------------------------------------ |
+| `query`          | `string`   | Semantic search query — ranks results by vector similarity                                 |
+| `memory_ids`     | `string[]` | Search entries within these specific memories                                              |
+| `memory_tags`    | `string[]` | Search entries in memories whose tags match any of these patterns (supports glob: `user*`) |
+| `document_paths` | `string[]` | Filter document results to paths starting with these prefixes                              |
+| `document_ids`   | `string[]` | Filter document results to specific document IDs                                           |
 
 When `query` is set, results include a `score` field and are ordered by descending relevance. `min_score` and `limit` apply additional controls.
 
 `memory_ids` and `memory_tags` can be combined — the search includes entries from memories matching **either** (union semantics).
 
-If neither `memory_ids` nor `memory_tags` is provided, the search does **not** include memory entries (only documents). Similarly, if `document_filters` is omitted and no `query` is provided alone, only memories are searched. This lets callers control exactly which sources to include.
-
-### Document Filters
-
-`document_filters` is an optional nested object that scopes document results:
-
-| Field          | Type       | Description                                               |
-| -------------- | ---------- | --------------------------------------------------------- |
-| `paths`        | `string[]` | Filter to documents at paths starting with these prefixes |
-| `document_ids` | `string[]` | Filter to specific document IDs                           |
+If neither `memory_ids` nor `memory_tags` is provided, the search does **not** include memory entries (only documents). Similarly, if neither `document_paths` nor `document_ids` is provided and no `query` is given alone, only memories are searched. This lets callers control exactly which sources to include.
 
 ### Project Scoping
 
@@ -228,7 +220,7 @@ curl -X POST https://api.example.com/api/v1/knowledge/search \
 ```bash
 soat search-knowledge \
   --project-id proj_ABC \
-  --document-filters-paths /docs/products/
+  --document-paths /docs/products/
 ```
 
 </TabItem>
@@ -240,7 +232,7 @@ curl -X POST https://api.example.com/api/v1/knowledge/search \
   -H "Content-Type: application/json" \
   -d '{
     "project_id": "proj_ABC",
-    "document_filters": { "paths": ["/docs/products/"] }
+    "document_paths": ["/docs/products/"]
   }'
 ```
 
