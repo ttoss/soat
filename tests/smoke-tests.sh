@@ -391,7 +391,7 @@ echo "GET document path: OK"
 echo "--- Search knowledge by path prefix ---"
 PATH_SEARCH_RESP=$($SOAT_CLI search-knowledge \
   --project-id "$PROJECT_PUBLIC_ID" \
-  --document-paths '["animals/"]')
+  --document-paths '["/animals/"]')
 PATH_SEARCH_COUNT=$(echo "$PATH_SEARCH_RESP" | jq '.results | length')
 if [ "$PATH_SEARCH_COUNT" -lt 1 ]; then
   echo "ERROR: path-prefix search returned $PATH_SEARCH_COUNT results, expected at least 1" >&2
@@ -566,13 +566,13 @@ echo "--- Chat completion: 400 without ai_provider_id ---"
 expect_cli_error_status 400 create-chat-completion --messages '[{"role":"user","content":"hello"}]'
 echo "400 without ai_provider_id: OK"
 
-# 16. Create AI provider (Ollama with qwen2.5:3b available in test env)
+# 16. Create AI provider (Ollama with qwen2.5:1.5b available in test env)
 echo "--- Creating AI provider ---"
 AI_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name smoke-ollama \
   --provider ollama \
-  --default_model "qwen2.5:3b" \
+  --default_model "qwen2.5:1.5b" \
   --base_url "http://ollama:11434")
 AI_PROVIDER_ID=$(echo "$AI_PROVIDER_RESP" | jq -r '.id')
 echo "AI Provider id: $AI_PROVIDER_ID"

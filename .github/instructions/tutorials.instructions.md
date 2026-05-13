@@ -238,7 +238,7 @@ When a CLI command fails:
 | Omitting `resource` in policy documents   | Always include `"resource": ["soat:$PROJECT_ID:*:*"]` for project-scoped examples. Omitting it defaults to `["*"]` (all projects), which masks scoping bugs and is rarely the tutorial intent. |
 | Wrong SRN format in policy resource       | Must be `soat:<projectId>:<singularType>:<id-or-path>` — exactly 4 colon-separated segments. Wrong: `srn::`, `documents:path:`, 5 segments with `path:` infix.                                 |
 | `--provider` vs `--type` for AI providers | The flag is `--provider` (maps to body field `provider`). There is no `--type` flag. Similarly, `--default-model` not `--model`.                                                               |
-| Using wrong Ollama model name             | The docker-compose test stack only pulls `qwen2.5:3b`. Use that exact string; `qwen2.5:0.5b` and other variants are not available in CI.                                                       |
+| Using wrong Ollama model name             | The docker-compose test stack only pulls `qwen2.5:1.5b`. Use that exact string; `qwen2.5:0.5b` and other variants are not available in CI.                                                       |
 | `attachUserPolicy` (singular)             | The operation is `attachUserPolicies` (plural) with path param `user_id` and body `policy_ids` (array). CLI: `soat attach-user-policies --user-id "$ID" --policy-ids '["'"$PID"'"]'`           |
 
 ## Tutorial Checklist
