@@ -1,6 +1,6 @@
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
-import HomepageFeatures from '@site/src/components/HomepageFeatures';
+import HomepageSurfaces from '@site/src/components/HomepageSurfaces';
 import CodeBlock from '@theme/CodeBlock';
 import Heading from '@theme/Heading';
 import Layout from '@theme/Layout';
@@ -9,18 +9,65 @@ import type * as React from 'react';
 
 import styles from './index.module.css';
 
+const platformPillars = [
+  {
+    title: 'Build',
+    description:
+      'Projects, AI providers, secrets, files, and documents give agents a durable workspace.',
+  },
+  {
+    title: 'Orchestrate',
+    description:
+      'Agents, tools, sessions, conversations, and actors handle real multi-step workflows.',
+  },
+  {
+    title: 'Remember',
+    description:
+      'Knowledge search and memories retrieve context, deduplicate writes, and preserve useful facts.',
+  },
+  {
+    title: 'Govern',
+    description:
+      'IAM policies, API keys, scoped secrets, and resource names keep every operation bounded.',
+  },
+  {
+    title: 'Observe',
+    description:
+      'Traces and webhooks expose what agents did, which tools ran, and what changed downstream.',
+  },
+];
+
+const formationSteps = [
+  {
+    title: 'Declare',
+    description:
+      'Describe providers, memories, tools, agents, documents, and webhooks in one JSON or YAML template.',
+  },
+  {
+    title: 'Resolve',
+    description:
+      'SOAT builds the dependency graph, resolves refs, and provisions resources in the correct order.',
+  },
+  {
+    title: 'Operate',
+    description:
+      'Every create, update, and delete operation is tracked with resources, outputs, and an immutable event log.',
+  },
+];
+
 const HomepageHeader = () => {
   return (
     <header className={clsx('hero hero--primary', styles.heroBanner)}>
-      <div className="container">
-        <Heading as="h1" className="hero__title">
-          The complete backend for AI apps.
+      <div className={clsx('container', styles.heroContent)}>
+        <Heading as="h1" className={clsx('hero__title', styles.heroTitle)}>
+          The infrastructure layer for production-ready AI agents.
         </Heading>
-        <p className="hero__subtitle">
-          Open-source infrastructure for agents, RAG, and conversations — with
-          IAM, vector search, and MCP built in. Self-host in 5 minutes.
+        <p className={clsx('hero__subtitle', styles.heroSubtitle)}>
+          Run tool-calling agents with durable sessions, searchable knowledge,
+          writable memory, scoped secrets, IAM policies, traces, and MCP from
+          one self-hosted server.
         </p>
-        <div className={styles.buttons}>
+        <div className={clsx(styles.buttons, styles.heroButtons)}>
           <Link
             className="button button--secondary button--lg"
             to="/docs/getting-started"
@@ -42,48 +89,37 @@ const HomepageHeader = () => {
   );
 };
 
-const CodeShowcase = () => {
+const ArchitectureBand = () => {
   return (
-    <section className={styles.showcase}>
+    <section className={styles.architecture}>
       <div className="container">
-        <div className="row">
-          <div className={clsx('col col--6', styles.showcaseCopy)}>
+        <div className={styles.architectureLayout}>
+          <div className={styles.architectureCopy}>
+            <p className={styles.eyebrow}>What SOAT provides</p>
             <Heading as="h2">
-              From zero to a working agent in two calls.
+              One self-hosted layer for the agent backend stack.
             </Heading>
-            <p>
-              Spin up SOAT, point it at any OpenAI-compatible LLM, and ship a
-              tool-calling agent with persistent memory and full traces —
-              without writing a single line of backend code.
+            <p className={styles.architectureLead}>
+              SOAT packages the production services agents need into a single
+              control surface: storage, orchestration, retrieval, governance,
+              and observability.
             </p>
-            <ul className={styles.checkList}>
-              <li>Configure providers, agents, and tools through the API</li>
-              <li>Sessions handle conversation history automatically</li>
-              <li>Plug it into Claude Desktop or Cursor over MCP</li>
-            </ul>
-            <Link
-              className="button button--primary button--lg"
-              to="/docs/getting-started"
-            >
-              Try it now
-            </Link>
+            <div className={styles.platformPillars}>
+              {platformPillars.map((pillar) => {
+                return (
+                  <div className={styles.platformPillar} key={pillar.title}>
+                    <Heading as="h3">{pillar.title}</Heading>
+                    <p>{pillar.description}</p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className={clsx('col col--6', styles.showcaseCode)}>
-            <CodeBlock language="bash" title="Terminal">
-              {`# 1. Create a session
-soat create-agent-session --agent-id "agt_123" --auto-generate
-
-# 2. Send a message — get the reply
-soat generate-session-response \\
-  --agent-id "agt_123" \\
-  --session-id "ses_456" \\
-  --content "Summarize the release notes."
-
-# → { 
-#     "role": "assistant",
-#     "content": "Here are the highlights..." 
-#   }`}
-            </CodeBlock>
+          <div className={styles.architectureVisual}>
+            <img
+              src="/img/soat-architecture.png"
+              alt="SOAT architecture visualization with connected infrastructure panels and a central vector galaxy"
+            />
           </div>
         </div>
       </div>
@@ -91,205 +127,84 @@ soat generate-session-response \\
   );
 };
 
-const IconRestApi = () => {
+const FormationsSpotlight = () => {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 48 48"
-      className={styles.surfaceIcon}
-    >
-      <rect
-        x="4"
-        y="10"
-        width="40"
-        height="28"
-        rx="4"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        fill="none"
-      />
-      <path
-        d="M12 24h24M12 18h16M12 30h20"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <circle cx="38" cy="18" r="2" fill="currentColor" opacity="0.6" />
-    </svg>
-  );
-};
-
-const IconMcp = () => {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 48 48"
-      className={styles.surfaceIcon}
-    >
-      <circle
-        cx="24"
-        cy="24"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        fill="none"
-      />
-      <circle cx="24" cy="24" r="3" fill="currentColor" opacity="0.7" />
-      <line
-        x1="24"
-        y1="4"
-        x2="24"
-        y2="14"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <line
-        x1="24"
-        y1="34"
-        x2="24"
-        y2="44"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <line
-        x1="4"
-        y1="24"
-        x2="14"
-        y2="24"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <line
-        x1="34"
-        y1="24"
-        x2="44"
-        y2="24"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-};
-
-const IconCli = () => {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 48 48"
-      className={styles.surfaceIcon}
-    >
-      <rect
-        x="4"
-        y="8"
-        width="40"
-        height="32"
-        rx="4"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        fill="none"
-      />
-      <polyline
-        points="12,22 18,28 12,34"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <line
-        x1="22"
-        y1="34"
-        x2="34"
-        y2="34"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-};
-
-const IconSdk = () => {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 48 48"
-      className={styles.surfaceIcon}
-    >
-      <polyline
-        points="16,14 6,24 16,34"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <polyline
-        points="32,14 42,24 32,34"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <line
-        x1="28"
-        y1="10"
-        x2="20"
-        y2="38"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-};
-
-const SurfacesStrip = () => {
-  return (
-    <section className={styles.surfaces}>
+    <section className={styles.formations}>
       <div className="container">
-        <Heading as="h2" className="text--center">
-          One backend. Four ways to call it.
-        </Heading>
-        <p className={clsx('text--center', styles.surfacesLead)}>
-          Every operation in SOAT is reachable through the surface that fits the
-          job. Same permissions, same data, same business logic.
-        </p>
-        <div className={clsx('row', styles.surfacesRow)}>
-          <div className={clsx('col col--3', styles.surfaceCard)}>
-            <Link to="/docs/api" className={styles.surfaceLink}>
-              <IconRestApi />
-              <Heading as="h3">REST API</Heading>
-              <p>OpenAPI-described HTTP endpoints for any backend.</p>
+        <div className={styles.formationsHeader}>
+          <p className={styles.eyebrow}>Agent Formations</p>
+          <Heading as="h2">
+            Deploy complete agent stacks from one template.
+          </Heading>
+          <p>
+            Agent Formations are the declarative deployment layer in SOAT.
+            Define the desired stack once, preview the plan, then let SOAT
+            create or update every dependent resource with consistent
+            permissions and traceable operations.
+          </p>
+        </div>
+        <div className={styles.formationSteps}>
+          {formationSteps.map((step, index) => {
+            return (
+              <div className={styles.formationStep} key={step.title}>
+                <span className={styles.formationStepNumber}>
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <Heading as="h3">{step.title}</Heading>
+                <p>{step.description}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+const CodeShowcase = () => {
+  return (
+    <section className={styles.showcase}>
+      <div className="container">
+        <div className="row">
+          <div className={clsx('col col--6', styles.showcaseCopy)}>
+            <Heading as="h2">
+              Plan, deploy, and inspect the stack from the CLI.
+            </Heading>
+            <p>
+              Formations make an agent backend reproducible. The same template
+              can create an AI provider, memory, tools, and the agent that uses
+              them, while SOAT records outputs and operation events.
+            </p>
+            <ul className={styles.checkList}>
+              <li>Define the stack once in a formation template</li>
+              <li>Preview changes before deployment with a plan</li>
+              <li>Use refs instead of hand-wiring generated resource IDs</li>
+            </ul>
+            <Link
+              className="button button--primary button--lg"
+              to="/docs/modules/agent-formations"
+            >
+              Read Agent Formations
             </Link>
           </div>
-          <div className={clsx('col col--3', styles.surfaceCard)}>
-            <Link to="/docs/mcp" className={styles.surfaceLink}>
-              <IconMcp />
-              <Heading as="h3">MCP Server</Heading>
-              <p>Plug into Claude Desktop, Cursor, or any MCP runtime.</p>
-            </Link>
-          </div>
-          <div className={clsx('col col--3', styles.surfaceCard)}>
-            <Link to="/docs/cli" className={styles.surfaceLink}>
-              <IconCli />
-              <Heading as="h3">CLI</Heading>
-              <p>
-                The <code>soat</code> command for scripts and CI pipelines.
-              </p>
-            </Link>
-          </div>
-          <div className={clsx('col col--3', styles.surfaceCard)}>
-            <Link to="/docs/sdk" className={styles.surfaceLink}>
-              <IconSdk />
-              <Heading as="h3">TypeScript SDK</Heading>
-              <p>Typed client generated from the OpenAPI spec.</p>
-            </Link>
+          <div className={clsx('col col--6', styles.showcaseCode)}>
+            <CodeBlock language="bash" title="Terminal">
+              {`TEMPLATE=$(cat agent-stack.json)
+
+soat plan-agent-formation \\
+  --project_id "$PROJECT_ID" \\
+  --template "$TEMPLATE"
+
+FORMATION=$(soat create-agent-formation \\
+  --project_id "$PROJECT_ID" \\
+  --name "support-stack" \\
+  --template "$TEMPLATE")
+
+FORMATION_ID=$(echo "$FORMATION" | jq -r '.id')
+
+soat list-agent-formation-events \\
+  --formation_id "$FORMATION_ID"`}
+            </CodeBlock>
           </div>
         </div>
       </div>
@@ -301,10 +216,10 @@ const FinalCta = () => {
   return (
     <section className={styles.finalCta}>
       <div className="container text--center">
-        <Heading as="h2">Stop rebuilding the same AI plumbing.</Heading>
+        <Heading as="h2">Stop rebuilding agent infrastructure.</Heading>
         <p className={styles.finalLead}>
-          Self-host SOAT and ship agents, RAG, and conversational memory on your
-          own infrastructure — open source, MIT licensed.
+          Self-host SOAT and ship production-ready agents with sessions,
+          knowledge, memory, IAM, traces, and MCP on your own infrastructure.
         </p>
         <div className={styles.buttons}>
           <Link
@@ -329,14 +244,15 @@ export default function Home(): React.ReactNode {
   const { siteConfig } = useDocusaurusContext();
   return (
     <Layout
-      title={`${siteConfig.title} — The complete backend for AI apps`}
-      description="Open-source infrastructure for AI applications — agents, RAG, conversations, IAM, vector search, and MCP, all in one self-hostable server."
+      title={`${siteConfig.title} — Infrastructure for production-ready AI agents`}
+      description="Run tool-calling agents with durable sessions, searchable knowledge, writable memory, scoped secrets, IAM policies, traces, and MCP from one self-hosted server."
     >
       <HomepageHeader />
       <main>
-        <HomepageFeatures />
+        <ArchitectureBand />
+        <FormationsSpotlight />
+        <HomepageSurfaces />
         <CodeShowcase />
-        <SurfacesStrip />
         <FinalCta />
       </main>
     </Layout>

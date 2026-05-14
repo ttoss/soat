@@ -4,15 +4,37 @@
  */
 
 .heroBanner {
-  padding: 4rem 0;
-  text-align: center;
+  min-height: 680px;
+  display: flex;
+  align-items: center;
+  padding: 7rem 0;
+  text-align: left;
   position: relative;
   overflow: hidden;
 }
 
+.heroContent {
+  position: relative;
+  z-index: 1;
+}
+
+.heroTitle {
+  max-width: 760px;
+}
+
+.heroSubtitle {
+  max-width: 720px;
+}
+
 @media screen and (max-width: 996px) {
   .heroBanner {
-    padding: 2rem;
+    min-height: 560px;
+    padding: 4rem 1.5rem;
+  }
+
+  .heroTitle,
+  .heroSubtitle {
+    max-width: 100%;
   }
 }
 
@@ -22,6 +44,10 @@
   justify-content: center;
   gap: 1rem;
   flex-wrap: wrap;
+}
+
+.heroButtons {
+  justify-content: flex-start;
 }
 
 .secondaryButton {
@@ -38,8 +64,234 @@
 
 .heroNote {
   margin-top: 1.25rem;
+  color: #ffffff;
   font-size: 0.9rem;
   opacity: 0.85;
+}
+
+.architecture {
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  margin-left: -50vw;
+  padding: 5rem 0;
+  border-top: 1px solid var(--ifm-color-emphasis-300);
+  background:
+    radial-gradient(
+      circle at 75% 35%,
+      rgba(0, 229, 255, 0.12) 0%,
+      transparent 34%
+    ),
+    linear-gradient(
+      180deg,
+      var(--ifm-background-color) 0%,
+      var(--ifm-background-surface-color) 100%
+    );
+}
+
+.architectureLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(420px, 1.1fr);
+  gap: 3rem;
+  align-items: center;
+}
+
+.architectureCopy h2 {
+  max-width: 680px;
+  margin-bottom: 1rem;
+}
+
+.eyebrow {
+  margin-bottom: 0.75rem;
+  color: var(--ifm-color-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.architectureLead {
+  max-width: 680px;
+  margin-bottom: 1.75rem;
+  color: var(--ifm-font-color-secondary);
+  font-size: 1.05rem;
+}
+
+.platformPillars {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.875rem;
+}
+
+.platformPillar {
+  min-height: 132px;
+  padding: 1rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.platformPillar h3 {
+  margin-bottom: 0.4rem;
+  font-size: 1rem;
+}
+
+.platformPillar p {
+  margin: 0;
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.architectureVisual {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(0, 229, 255, 0.16);
+  border-radius: 8px;
+  background: #080c14;
+  box-shadow: 0 24px 80px rgba(8, 12, 20, 0.22);
+}
+
+.architectureVisual::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(8, 12, 20, 0) 45%, #080c14 100%),
+    linear-gradient(90deg, rgba(8, 12, 20, 0.16) 0%, transparent 44%);
+  pointer-events: none;
+}
+
+.architectureVisual img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  object-position: center;
+}
+
+html[data-theme='dark'] .architecture {
+  background:
+    radial-gradient(
+      circle at 78% 36%,
+      rgba(0, 229, 255, 0.14) 0%,
+      transparent 34%
+    ),
+    linear-gradient(180deg, #080c14 0%, #101722 100%);
+}
+
+html[data-theme='dark'] .platformPillar {
+  border-color: rgba(0, 229, 255, 0.1);
+  background: rgba(22, 27, 34, 0.72);
+}
+
+html[data-theme='dark'] .architectureVisual {
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.42),
+    0 0 34px rgba(0, 229, 255, 0.08);
+}
+
+@media screen and (max-width: 996px) {
+  .architecture {
+    padding: 3.5rem 0;
+  }
+
+  .architectureLayout {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+
+  .platformPillars {
+    grid-template-columns: 1fr;
+  }
+}
+
+.formations {
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  margin-left: -50vw;
+  padding: 5rem 0;
+  border-top: 1px solid rgba(0, 229, 255, 0.08);
+  background:
+    radial-gradient(
+      circle at 18% 20%,
+      rgba(142, 68, 173, 0.22) 0%,
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 82% 30%,
+      rgba(0, 229, 255, 0.14) 0%,
+      transparent 32%
+    ),
+    #080c14;
+  color: #f0f8ff;
+}
+
+.formationsHeader {
+  max-width: 780px;
+  margin-bottom: 2.25rem;
+}
+
+.formationsHeader h2 {
+  color: #f0f8ff;
+}
+
+.formationsHeader p:not(.eyebrow) {
+  color: rgba(240, 248, 255, 0.78);
+  font-size: 1.05rem;
+}
+
+.formationSteps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.formationStep {
+  min-height: 220px;
+  padding: 1.25rem;
+  border: 1px solid rgba(0, 229, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(22, 27, 34, 0.68);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.formationStepNumber {
+  display: block;
+  margin-bottom: 1.2rem;
+  color: var(--ifm-color-primary);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.formationStep h3 {
+  margin-bottom: 0.5rem;
+  color: #f0f8ff;
+  font-size: 1.2rem;
+}
+
+.formationStep p {
+  margin: 0;
+  color: rgba(240, 248, 255, 0.72);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+@media screen and (max-width: 996px) {
+  .formations {
+    padding: 3.5rem 0;
+  }
+
+  .formationSteps {
+    grid-template-columns: 1fr;
+  }
+
+  .formationStep {
+    min-height: auto;
+  }
 }
 
 .showcase {
@@ -88,73 +340,9 @@
   padding: 1.25rem;
   border-radius: 8px;
   overflow-x: auto;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   line-height: 1.5;
   margin: 0;
-}
-
-.surfaces {
-  padding: 4rem 0;
-  border-top: 1px solid var(--ifm-color-emphasis-300);
-  background: var(--ifm-color-emphasis-100);
-  width: 100vw;
-  position: relative;
-  left: 50%;
-  margin-left: -50vw;
-}
-
-.surfacesLead {
-  max-width: 720px;
-  margin: 0.5rem auto 2.5rem;
-  opacity: 0.85;
-}
-
-.surfaceCard {
-  text-align: center;
-  padding: 1.5rem;
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  transition:
-    border-color 0.25s ease,
-    box-shadow 0.25s ease;
-}
-
-.surfaceCard:hover {
-  border-color: rgba(0, 229, 255, 0.35);
-  box-shadow:
-    0 0 24px rgba(0, 229, 255, 0.12),
-    0 0 48px rgba(142, 68, 173, 0.08);
-}
-
-.surfaceCard h3 {
-  margin-bottom: 0.5rem;
-}
-
-.surfacesRow {
-  justify-content: center;
-}
-
-.surfaceIcon {
-  width: 48px;
-  height: 48px;
-  margin-bottom: 0.75rem;
-  color: var(--ifm-color-primary);
-}
-
-.surfaceLink {
-  display: block;
-  text-decoration: none;
-  color: inherit;
-  transition: transform 0.15s ease;
-}
-
-.surfaceLink:hover {
-  text-decoration: none;
-  color: inherit;
-  transform: translateY(-2px);
 }
 
 .finalCta {

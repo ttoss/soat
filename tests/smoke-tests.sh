@@ -1193,5 +1193,95 @@ $SOAT_CLI delete-webhook --project-id "$PROJECT_PUBLIC_ID" --webhook-id "$WEBHOO
 echo "Webhook deleted."
 echo "Webhooks coverage: OK"
 
+# ── Agent Formations ──────────────────────────────────────────────────────────
+
+echo ""
+echo "=== Agent Formations ==="
+
+# Validate template
+echo "--- Validating formation template ---"
+VALIDATE_RESP=$($SOAT_CLI validate-agent-formation \
+  --template '{"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Test Memory"}}},"outputs":{"memoryId":{"ref":"myMemory"}}}')
+if ! printf '%s\n' "$VALIDATE_RESP" | jq -e '.valid == true' >/dev/null 2>&1; then
+  echo "ERROR: validate-agent-formation did not return valid=true" >&2
+  echo "$VALIDATE_RESP" >&2
+  exit 1
+fi
+echo "Formation template validated."
+
+# Plan
+echo "--- Planning formation ---"
+PLAN_RESP=$($SOAT_CLI plan-agent-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --template '{"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Test Memory"}}},"outputs":{"memoryId":{"ref":"myMemory"}}}')
+if ! printf '%s\n' "$PLAN_RESP" | jq -e '.actions | type == "array"' >/dev/null 2>&1; then
+  echo "ERROR: plan-agent-formation did not return actions array" >&2
+  echo "$PLAN_RESP" >&2
+  exit 1
+fi
+echo "Formation planned."
+
+# Create
+echo "--- Creating formation ---"
+FORMATION_RESP=$($SOAT_CLI create-agent-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-formation" \
+  --template '{"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Formation Memory"}}},"outputs":{"memoryId":{"ref":"myMemory"}}}')
+FORMATION_ID=$(printf '%s\n' "$FORMATION_RESP" | jq -r '.id')
+if [[ -z "$FORMATION_ID" || "$FORMATION_ID" == "null" ]]; then
+  echo "ERROR: create-agent-formation did not return an id" >&2
+  echo "$FORMATION_RESP" >&2
+  exit 1
+fi
+echo "Formation created: $FORMATION_ID"
+
+# List
+echo "--- Listing formations ---"
+FORMATION_LIST_RESP=$($SOAT_CLI list-agent-formations --project_id "$PROJECT_PUBLIC_ID")
+if ! printf '%s\n' "$FORMATION_LIST_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
+  echo "ERROR: list-agent-formations did not return an array" >&2
+  echo "$FORMATION_LIST_RESP" >&2
+  exit 1
+fi
+echo "Formations listed."
+
+# Get
+echo "--- Getting formation ---"
+FORMATION_GET_RESP=$($SOAT_CLI get-agent-formation --formation_id "$FORMATION_ID")
+if ! printf '%s\n' "$FORMATION_GET_RESP" | jq -e --arg id "$FORMATION_ID" '.id == $id' >/dev/null 2>&1; then
+  echo "ERROR: get-agent-formation returned unexpected payload" >&2
+  echo "$FORMATION_GET_RESP" >&2
+  exit 1
+fi
+echo "Formation retrieved."
+
+# List events
+echo "--- Listing formation events ---"
+FORMATION_EVENTS_RESP=$($SOAT_CLI list-agent-formation-events --formation_id "$FORMATION_ID")
+if ! printf '%s\n' "$FORMATION_EVENTS_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
+  echo "ERROR: list-agent-formation-events did not return an array" >&2
+  echo "$FORMATION_EVENTS_RESP" >&2
+  exit 1
+fi
+echo "Formation events listed."
+
+# Update
+echo "--- Updating formation ---"
+FORMATION_UPDATE_RESP=$($SOAT_CLI update-agent-formation \
+  --formation_id "$FORMATION_ID" \
+  --template '{"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Formation Memory Updated"}}},"outputs":{"memoryId":{"ref":"myMemory"}}}')
+if ! printf '%s\n' "$FORMATION_UPDATE_RESP" | jq -e --arg id "$FORMATION_ID" '.id == $id' >/dev/null 2>&1; then
+  echo "ERROR: update-agent-formation returned unexpected payload" >&2
+  echo "$FORMATION_UPDATE_RESP" >&2
+  exit 1
+fi
+echo "Formation updated."
+
+# Delete
+echo "--- Deleting formation ---"
+$SOAT_CLI delete-agent-formation --formation_id "$FORMATION_ID"
+echo "Formation deleted."
+echo "Agent Formations coverage: OK"
+
 echo ""
 echo "=== All smoke tests passed! ==="

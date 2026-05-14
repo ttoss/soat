@@ -1,7 +1,7 @@
 # SOAT — The complete backend for AI apps
 
 <p align="center">
-  <img src="./packages/website/static/img/hero.jpg" alt="SOAT Banner" width="100%">
+  <img src="./packages/website/static/img/hero.png" alt="SOAT Banner" width="100%">
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

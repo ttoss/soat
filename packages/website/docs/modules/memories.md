@@ -112,10 +112,6 @@ POST /api/v1/memories/mem_abc/entries
 → 201 { "action": "created", "id": "me_002", "content": "Customer fiscal year ends in March", ... }
 ```
 
-## Permissions
-
-See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
-
 ## Tag Filtering
 
 Tags are free-form strings you attach to a memory at creation or update time. They let you organise and filter memories without knowing their IDs upfront.
