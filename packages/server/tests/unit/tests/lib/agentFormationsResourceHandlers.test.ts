@@ -279,15 +279,23 @@ describe('agentFormationsResourceHandlers', () => {
   describe('applyUpdateResource', () => {
     test('updates ai_provider, agent_tool, agent, memory, memory_entry, webhook, and ignores document', async () => {
       mockLookupSecretInternalId.mockResolvedValueOnce(84);
-      const agentUpdate = jest.fn().mockResolvedValue(undefined);
-      const agentInstance = {
-        update: agentUpdate,
-      } as InstanceType<(typeof db)['Agent']>;
-      const entrySave = jest.fn().mockResolvedValue(undefined);
-      const memoryEntryInstance = {
+      const agentInstance = db.Agent.build({
+        publicId: 'agt_1',
+        projectId: 1,
+        aiProviderId: 1,
+      });
+      const agentUpdate = jest
+        .spyOn(agentInstance, 'update')
+        .mockResolvedValue(agentInstance);
+      const memoryEntryInstance = db.MemoryEntry.build({
+        publicId: 'men_1',
+        memoryId: 1,
         content: 'old content',
-        save: entrySave,
-      } as InstanceType<(typeof db)['MemoryEntry']>;
+        source: 'manual',
+      });
+      const entrySave = jest
+        .spyOn(memoryEntryInstance, 'save')
+        .mockResolvedValue(memoryEntryInstance);
 
       jest.spyOn(db.Agent, 'findOne').mockResolvedValueOnce(agentInstance);
       jest

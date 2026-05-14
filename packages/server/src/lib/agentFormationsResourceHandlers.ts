@@ -262,26 +262,26 @@ const UPDATE_HANDLERS: Record<string, UpdateHandler> = {
 // ── Delete Handler ────────────────────────────────────────────────────────
 
 const DELETE_HANDLERS: Record<string, DeleteHandler> = {
-  ai_provider: ({ physicalResourceId }) => {
-    return deleteAiProvider({ id: physicalResourceId });
+  ai_provider: async ({ physicalResourceId }) => {
+    await deleteAiProvider({ id: physicalResourceId });
   },
-  agent_tool: ({ physicalResourceId }) => {
-    return deleteAgentTool({ id: physicalResourceId });
+  agent_tool: async ({ physicalResourceId }) => {
+    await deleteAgentTool({ id: physicalResourceId });
   },
-  agent: ({ physicalResourceId }) => {
-    return deleteAgent({ id: physicalResourceId });
+  agent: async ({ physicalResourceId }) => {
+    await deleteAgent({ id: physicalResourceId });
   },
-  document: ({ physicalResourceId }) => {
-    return deleteDocument({ id: physicalResourceId });
+  document: async ({ physicalResourceId }) => {
+    await deleteDocument({ id: physicalResourceId });
   },
-  memory: ({ physicalResourceId }) => {
-    return deleteMemory({ id: physicalResourceId });
+  memory: async ({ physicalResourceId }) => {
+    await deleteMemory({ id: physicalResourceId });
   },
-  memory_entry: ({ physicalResourceId }) => {
-    return deleteMemoryEntry({ id: physicalResourceId });
+  memory_entry: async ({ physicalResourceId }) => {
+    await deleteMemoryEntry({ id: physicalResourceId });
   },
-  webhook: ({ physicalResourceId }) => {
-    return deleteWebhook({ id: physicalResourceId });
+  webhook: async ({ physicalResourceId }) => {
+    await deleteWebhook({ id: physicalResourceId });
   },
 };
 
