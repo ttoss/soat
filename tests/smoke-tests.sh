@@ -686,16 +686,30 @@ MCP_AGENT_RESP=$($SOAT_CLI create-agent \
   --project_id "$PROJECT_PUBLIC_ID" \
   --ai_provider_id "$AI_PROVIDER_ID" \
   --name mcp-agent-lister \
-  --instructions "You are a helpful assistant with access to SOAT tools via MCP. When asked to list agents, call the list-agents MCP tool and return the results. Always use the tool." \
+  --instructions "You are a helpful assistant with access to SOAT tools via MCP. When asked to list agents, call the list-agents MCP tool exactly once and return a concise summary. Always use the tool." \
   --tool_ids "[\"$MCP_TOOL_ID\"]" \
-  --max_steps 5)
+  --max_steps 2)
 MCP_AGENT_ID=$(echo "$MCP_AGENT_RESP" | jq -r '.id')
 echo "MCP Agent id: $MCP_AGENT_ID"
 
 # 27. Ask the agent to list agents via MCP
 echo "--- Running MCP agent generation ---"
-MCP_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$MCP_AGENT_ID" \
-  --messages '[{"role":"user","content":"List all agents. Use the list-agents tool."}]' | sanitize_json)
+# Bound this call to keep smoke runs deterministic when model/tool orchestration stalls.
+set +e
+MCP_GEN_RAW=$(timeout 180 $SOAT_CLI create-agent-generation --agent-id "$MCP_AGENT_ID" \
+  --messages '[{"role":"user","content":"List all agents. Use the list-agents tool exactly once."}]' 2>&1)
+MCP_GEN_EXIT=$?
+set -e
+if [ "$MCP_GEN_EXIT" -ne 0 ]; then
+  if [ "$MCP_GEN_EXIT" -eq 124 ]; then
+    echo "ERROR: MCP generation timed out after 180s" >&2
+  else
+    echo "ERROR: MCP generation command failed with exit code $MCP_GEN_EXIT" >&2
+  fi
+  echo "$MCP_GEN_RAW" >&2
+  exit 1
+fi
+MCP_GEN_RESP=$(printf '%s\n' "$MCP_GEN_RAW" | sanitize_json)
 echo "MCP Generation response:"
 printf '%s\n' "$MCP_GEN_RESP" | jq .
 
@@ -1214,8 +1228,8 @@ echo "--- Planning formation ---"
 PLAN_RESP=$($SOAT_CLI plan-agent-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
   --template '{"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Test Memory"}}},"outputs":{"memoryId":{"ref":"myMemory"}}}')
-if ! printf '%s\n' "$PLAN_RESP" | jq -e '.actions | type == "array"' >/dev/null 2>&1; then
-  echo "ERROR: plan-agent-formation did not return actions array" >&2
+if ! printf '%s\n' "$PLAN_RESP" | jq -e '((.changes // .actions) | type == "array")' >/dev/null 2>&1; then
+  echo "ERROR: plan-agent-formation did not return changes/actions array" >&2
   echo "$PLAN_RESP" >&2
   exit 1
 fi
@@ -1228,7 +1242,7 @@ FORMATION_RESP=$($SOAT_CLI create-agent-formation \
   --name "smoke-formation" \
   --template '{"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Formation Memory"}}},"outputs":{"memoryId":{"ref":"myMemory"}}}')
 FORMATION_ID=$(printf '%s\n' "$FORMATION_RESP" | jq -r '.id')
-if [[ -z "$FORMATION_ID" || "$FORMATION_ID" == "null" ]]; then
+if [ -z "$FORMATION_ID" ] || [ "$FORMATION_ID" = "null" ]; then
   echo "ERROR: create-agent-formation did not return an id" >&2
   echo "$FORMATION_RESP" >&2
   exit 1

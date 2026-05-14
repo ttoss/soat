@@ -6,7 +6,7 @@
 
 ## 1. Overview
 
-SOAT is open-source infrastructure for building AI applications. It provides the essential backend services — identity and access management, document and file storage with vector search, conversational memory, agent orchestration, and a full MCP server — so developers can focus on their product instead of reinventing the plumbing.
+SOAT is open-source infrastructure for production-ready AI agents. It provides the essential infrastructure layer — identity and access management, document and file storage with vector search, memory entries and knowledge search, agent orchestration, and a full MCP server — so developers can focus on their product instead of reinventing the plumbing.
 
 This brand system translates that capability into a clear identity: **robust, precise infrastructure** that powers intelligent applications.
 

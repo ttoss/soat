@@ -1,8 +1,8 @@
 import { Router } from '@ttoss/http-server';
 
 import { actorsRouter } from './actors';
-import { agentFormationsRouter } from './agentFormations';
 import { actorTagsRouter } from './actorTags';
+import { agentFormationsRouter } from './agentFormations';
 import { agentsRouter } from './agents';
 import { aiProvidersRouter } from './aiProviders';
 import { apiKeysRouter } from './apiKeys';

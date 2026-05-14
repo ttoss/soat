@@ -10,7 +10,7 @@ This page explains the mental model behind SOAT and how its core resources fit t
 
 A **project** is the primary resource boundary. Almost everything — AI providers, agents, files, documents, conversations, sessions, secrets, webhooks, memories — belongs to a project. Access control, API keys, and trace records are all scoped to projects.
 
-Every API call that touches project-owned resources must carry credentials authorized for that project: a user JWT with project membership, a personal API key with the right policies, or a project-scoped API key.
+Every API call that touches project-owned resources must carry credentials authorized for that project: a user JWT, a personal API key with the right policies, or a project-scoped API key.
 
 See the [Projects module](/docs/modules/projects).
 
@@ -38,13 +38,13 @@ See [AI Providers](/docs/modules/ai-providers) and [Secrets](/docs/modules/secre
 
 ## Files, Documents & Memories — RAG building blocks
 
-| Resource     | What it is                                                                       |
-| ------------ | -------------------------------------------------------------------------------- |
-| **File**     | An object stored under a path inside a project (binary or text)                  |
-| **Document** | A semantically searchable record extracted from a file or created directly       |
-| **Memory**   | A reusable retrieval configuration — what to search, what to filter, how to rank |
+| Resource     | What it is                                                                  |
+| ------------ | --------------------------------------------------------------------------- |
+| **File**     | An object stored under a path inside a project (binary or text)             |
+| **Document** | A semantically searchable record extracted from a file or created directly  |
+| **Memory**   | A named container for memory entries that stores durable context for agents |
 
-Documents are embedded with pgvector and queryable by semantic similarity. A **memory** turns a retrieval recipe (paths, document IDs, search query, score threshold, limit) into a named reusable resource. Pointing an agent at a memory is how SOAT does RAG without bespoke tool wiring.
+Documents and memory entries are embedded with pgvector and queryable by semantic similarity. Agents can retrieve this context through [knowledge search](/docs/modules/knowledge) using `knowledge_config` and can write new facts via memory-aware tools.
 
 See [Files](/docs/modules/files), [Documents](/docs/modules/documents), and [Memories](/docs/modules/memories).
 
@@ -75,6 +75,10 @@ Tools are first-class resources, shareable across agents. Agents support `tool_c
 
 Generations are **asynchronous by default**: kick one off, poll for status, or hand off to a webhook when it completes.
 
+## Agent Formations
+
+When you need reproducible deployments, use [Agent Formations](/docs/modules/agent-formations). A formation template declares providers, memories, tools, agents, and related resources in one place. SOAT resolves references, provisions resources in dependency order, and stores an operation/event log for each create, update, or delete.
+
 ## Observability
 
 Every generation produces a **trace** record with the model, tool calls, durations, and finish reason. Combined with project-scoped webhooks (HMAC-signed, retried up to three times), this gives you the hooks you need to wire SOAT into existing observability and event pipelines.
@@ -92,11 +96,12 @@ SOAT instance
     ├── Secrets (encrypted values)
     ├── AI Providers (LLM connections)
     ├── Agent tools (http, mcp, client, soat)
+    ├── Agent formations
     ├── Agents
     │   └── Sessions → Messages
     ├── Files
     ├── Documents (pgvector RAG chunks)
-    ├── Memories (retrieval configs)
+    ├── Memories → Entries
     ├── Conversations → Messages
     ├── Chats
     └── Webhooks

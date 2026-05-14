@@ -4,13 +4,13 @@ import { db } from 'src/db';
 import {
   createAgentFormation,
   deleteAgentFormation,
+  type FormationTemplate,
   getAgentFormation,
   listAgentFormationEvents,
   listAgentFormations,
   planAgentFormation,
   updateAgentFormation,
   validateFormationTemplate,
-  type FormationTemplate,
 } from 'src/lib/agentFormations';
 
 export const agentFormationsRouter = new Router<Context>();

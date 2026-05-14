@@ -7,7 +7,7 @@ import TabItem from '@theme/TabItem';
 
 # Introduction
 
-**SOAT is the complete backend for AI applications.** It bundles IAM, file and document storage, vector search, conversational memory, agent orchestration, multi-agent workflows, retrieval-augmented generation, and a full MCP server into a single self-hostable Node.js service backed by PostgreSQL.
+**SOAT is the infrastructure layer for production-ready AI agents.** It bundles IAM, file and document storage, vector search, conversational memory, agent orchestration, multi-agent workflows, retrieval-augmented generation, declarative stack deployment, and a full MCP server into a single self-hostable Node.js service backed by PostgreSQL.
 
 If you have ever shipped an AI product, you know the pattern: half the codebase is plumbing — users, API keys, embeddings, conversation history, tool calling, traces. SOAT solves all of it once, exposes it through four equivalent client surfaces, and gets out of your way.
 
@@ -23,7 +23,7 @@ If you have ever shipped an AI product, you know the pattern: half the codebase 
 
 - [Files](/docs/modules/files) and structured [documents](/docs/modules/documents) scoped to projects
 - pgvector embeddings and semantic search with score thresholds
-- Reusable retrieval configs via [memories](/docs/modules/memories) — point an agent at a memory and it does RAG
+- [Memories](/docs/modules/memories) as durable context stores, plus [Knowledge](/docs/modules/knowledge) for unified search across documents and memory entries
 
 ### Agents & conversations
 
@@ -40,6 +40,11 @@ If you have ever shipped an AI product, you know the pattern: half the codebase 
 - Encrypted [secrets](/docs/modules/secrets) for provider keys
 - HMAC-signed [webhooks](/docs/modules/webhooks) with event-pattern subscriptions
 - Trace records for every generation — tool calls, latency, and cost-relevant fields
+
+### Declarative deployment
+
+- [Agent formations](/docs/modules/agent-formations) to define full agent stacks (providers, memories, tools, agents) in JSON/YAML
+- Dependency-aware provisioning with operation history and event logs for each deployment
 
 ## Architecture
 

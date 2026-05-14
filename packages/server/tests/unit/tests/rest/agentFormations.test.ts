@@ -408,4 +408,110 @@ describe('AgentFormations', () => {
       expect(res.status).toBe(401);
     });
   });
+
+  // ── Optional resource properties ──────────────────────────────────────────
+
+  describe('Formation with optional resource properties', () => {
+    let optionalPropsFormationId: string;
+
+    const templateWithOptionalProps = {
+      resources: {
+        MemoryWithDescription: {
+          type: 'memory',
+          properties: {
+            name: 'Memory With Metadata',
+            description: 'This is a memory with description',
+            tags: ['important', 'core'],
+          },
+        },
+        ToolWithOptions: {
+          type: 'agent_tool',
+          properties: {
+            name: 'Tool With Full Options',
+            description: 'Tool with description and parameters',
+            parameters: {
+              type: 'object',
+              properties: {
+                query: { type: 'string', description: 'Search query' },
+              },
+            },
+          },
+        },
+        WebhookWithEvents: {
+          type: 'webhook',
+          properties: {
+            name: 'Webhook With Events',
+            url: 'https://example.com/webhook',
+            events: ['memory.created', 'memory.updated'],
+            description: 'Webhook with description and events',
+          },
+        },
+      },
+    };
+
+    test('creates formation with resources having optional properties', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/agent-formations')
+        .send({
+          project_id: projectId,
+          name: `optional-props-${Date.now()}`,
+          template: templateWithOptionalProps,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      expect(res.body.resources).toHaveLength(3);
+      expect(res.body.resources[0].logical_id).toBe('MemoryWithDescription');
+      expect(res.body.resources[1].logical_id).toBe('ToolWithOptions');
+      expect(res.body.resources[2].logical_id).toBe('WebhookWithEvents');
+      optionalPropsFormationId = res.body.id;
+    });
+
+    test('retrieves formation and includes the stored template', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/agent-formations/${optionalPropsFormationId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.template).toBeDefined();
+      expect(res.body.template.resources).toBeDefined();
+      expect(Object.keys(res.body.template.resources)).toHaveLength(3);
+    });
+
+    test('updates memory resource with modified optional properties', async () => {
+      const updateTemplate = {
+        resources: {
+          MemoryWithDescription: {
+            type: 'memory',
+            properties: {
+              name: 'Memory Updated',
+              description: 'Updated description for memory',
+              tags: ['updated', 'modified'],
+            },
+          },
+          ToolWithOptions: templateWithOptionalProps.resources.ToolWithOptions,
+          WebhookWithEvents:
+            templateWithOptionalProps.resources.WebhookWithEvents,
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/agent-formations/${optionalPropsFormationId}`)
+        .send({ template: updateTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('active');
+      const memoryResource = res.body.resources.find(
+        (r: any) => r.logical_id === 'MemoryWithDescription'
+      );
+      expect(memoryResource).toBeDefined();
+      expect(memoryResource.status).toBe('updated');
+    });
+
+    test('deletes formation with optional properties', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/agent-formations/${optionalPropsFormationId}`
+      );
+      expect(res.status).toBe(204);
+    });
+  });
 });

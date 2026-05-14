@@ -236,6 +236,8 @@ pnpm run -w smoke-tests
 
 The script uses `set -e` and exits with a non-zero code on the first failure, printing which step failed.
 
+Keep `tests/smoke-tests.sh` POSIX-compatible (`#!/bin/sh`): use `[`/`]` tests instead of Bash-only constructs like `[[ ... ]]`.
+
 ### Scope
 
 The smoke tests must cover every module end-to-end: users, projects, project policies, project keys, secrets, files, documents, conversations, chats, AI providers, agents (HTTP tool, MCP tool, client tool, SOAT tool), and traces. Every new module must have corresponding smoke test steps added before the implementation is considered done.
@@ -259,6 +261,7 @@ Some endpoints require prior setup that is not performed automatically. Always s
 
 - **Do not assert LLM output content.** Only check structural/status fields (e.g., `status == "completed"`, `id` is present). LLM responses vary by model and prompt.
 - **Poll for async generation.** Agent generation endpoints may return `in_progress`; retry with a loop and `--max-time` guard before asserting the final status.
+- **Bound long-running LLM tool orchestration.** For MCP/agent flows that can stall, wrap calls with an explicit timeout and fail fast with a clear error.
 - **Client-tool (`requires_action`) flow.** When testing client-side tool execution: assert `status == "requires_action"`, extract `requiredAction.toolCalls[0]`, submit a synthetic result to `POST /agents/:id/generate/:genId/tool-outputs`, then assert `status == "completed"`.
 - **Non-fatal server errors from LLM tool calls** (e.g., `SequelizeValidationError` when the model hallucinates a bad tool argument) do not fail the smoke tests — only the smoke assertions matter.
 

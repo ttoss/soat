@@ -650,7 +650,9 @@ describe('Memories', () => {
         .query({ project_id: projectId, tags: 'crm' });
 
       expect(response.status).toBe(200);
-      const ids = response.body.map((m: { id: string }) => m.id);
+      const ids = response.body.map((m: { id: string }) => {
+        return m.id;
+      });
       expect(ids).toContain(taggedMemoryId);
       expect(ids).not.toContain(prefixedMemoryId);
       expect(ids).not.toContain(untaggedMemoryId);
@@ -662,7 +664,9 @@ describe('Memories', () => {
         .query({ project_id: projectId, tags: 'customer*' });
 
       expect(response.status).toBe(200);
-      const ids = response.body.map((m: { id: string }) => m.id);
+      const ids = response.body.map((m: { id: string }) => {
+        return m.id;
+      });
       expect(ids).toContain(taggedMemoryId);
       expect(ids).toContain(prefixedMemoryId);
       expect(ids).not.toContain(untaggedMemoryId);
@@ -674,7 +678,9 @@ describe('Memories', () => {
         .query({ project_id: projectId, tags: ['crm', 'customer-prefs'] });
 
       expect(response.status).toBe(200);
-      const ids = response.body.map((m: { id: string }) => m.id);
+      const ids = response.body.map((m: { id: string }) => {
+        return m.id;
+      });
       expect(ids).toContain(taggedMemoryId);
       expect(ids).toContain(prefixedMemoryId);
       expect(ids).not.toContain(untaggedMemoryId);
@@ -687,7 +693,9 @@ describe('Memories', () => {
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
-      const ids = response.body.map((m: { id: string }) => m.id);
+      const ids = response.body.map((m: { id: string }) => {
+        return m.id;
+      });
       expect(ids).not.toContain(taggedMemoryId);
       expect(ids).not.toContain(prefixedMemoryId);
       expect(ids).not.toContain(untaggedMemoryId);
@@ -699,7 +707,9 @@ describe('Memories', () => {
         .query({ project_id: projectId });
 
       expect(response.status).toBe(200);
-      const ids = response.body.map((m: { id: string }) => m.id);
+      const ids = response.body.map((m: { id: string }) => {
+        return m.id;
+      });
       expect(ids).toContain(taggedMemoryId);
       expect(ids).toContain(prefixedMemoryId);
       expect(ids).toContain(untaggedMemoryId);

@@ -1,0 +1,377 @@
+import { db } from 'src/db';
+
+import {
+  buildDependencyGraph,
+  resolveRefs,
+  topologicalSort,
+} from './agentFormationsHelpers';
+import {
+  applyCreateResource,
+  applyDeleteResource,
+  applyUpdateResource,
+} from './agentFormationsResourceHandlers';
+import type {
+  FormationEvent,
+  FormationTemplate,
+  ResourceDeclaration,
+} from './agentFormationsTypes';
+
+// ── Output Resolution ─────────────────────────────────────────────────────
+
+export const resolveFormationOutputs = (
+  template: FormationTemplate,
+  resolvedIds: Map<string, string>
+): Record<string, string> => {
+  const outputs: Record<string, string> = {};
+  if (!template.outputs) return outputs;
+  for (const [outputName, outputValue] of Object.entries(template.outputs)) {
+    try {
+      const resolved = resolveRefs(outputValue, resolvedIds);
+      if (typeof resolved === 'string') outputs[outputName] = resolved;
+    } catch {
+      // Skip unresolvable outputs
+    }
+  }
+  return outputs;
+};
+
+// ── Orphaned Resource Deletion ────────────────────────────────────────────
+
+export const handleOrphanedDeletes = async (args: {
+  template: FormationTemplate;
+  existingResources: InstanceType<(typeof db)['AgentFormationResource']>[];
+  events: FormationEvent[];
+}): Promise<void> => {
+  const { template, existingResources, events } = args;
+  const newLogicalIds = new Set(Object.keys(template.resources));
+  const toDelete = existingResources.filter((r) => {
+    return !newLogicalIds.has(r.logicalId) && r.physicalResourceId;
+  });
+  for (const resource of toDelete) {
+    try {
+      await applyDeleteResource({
+        resourceType: resource.resourceType,
+        physicalResourceId: resource.physicalResourceId!,
+      });
+      await resource.update({ status: 'deleted' });
+      events.push({
+        timestamp: new Date().toISOString(),
+        logicalId: resource.logicalId,
+        resourceType: resource.resourceType,
+        action: 'delete',
+        status: 'succeeded',
+        physicalResourceId: resource.physicalResourceId ?? undefined,
+      });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      events.push({
+        timestamp: new Date().toISOString(),
+        logicalId: resource.logicalId,
+        resourceType: resource.resourceType,
+        action: 'delete',
+        status: 'failed',
+        error: errorMsg,
+      });
+    }
+  }
+};
+
+// ── Single Resource Processing ────────────────────────────────────────────
+
+type ResourceRow = InstanceType<(typeof db)['AgentFormationResource']>;
+
+const applyCreateChange = async (args: {
+  resourceRow: ResourceRow;
+  resourceType: string;
+  resolvedProperties: Record<string, unknown>;
+  projectId: number;
+  logicalId: string;
+  resolvedIds: Map<string, string>;
+  events: FormationEvent[];
+}): Promise<void> => {
+  const {
+    resourceRow,
+    resourceType,
+    resolvedProperties,
+    projectId,
+    logicalId,
+    resolvedIds,
+    events,
+  } = args;
+  const physicalId = await applyCreateResource({
+    resourceType,
+    resolvedProperties,
+    projectId,
+  });
+  resolvedIds.set(logicalId, physicalId);
+  await resourceRow.update({
+    physicalResourceId: physicalId,
+    status: 'created',
+    lastAppliedProperties: resolvedProperties,
+  });
+  events.push({
+    timestamp: new Date().toISOString(),
+    logicalId,
+    resourceType,
+    action: 'create',
+    status: 'succeeded',
+    physicalResourceId: physicalId,
+  });
+};
+
+const applyUpdateChange = async (args: {
+  resourceRow: ResourceRow;
+  existing: ResourceRow & { physicalResourceId: string };
+  resourceType: string;
+  resolvedProperties: Record<string, unknown>;
+  logicalId: string;
+  resolvedIds: Map<string, string>;
+  events: FormationEvent[];
+}): Promise<void> => {
+  const {
+    resourceRow,
+    existing,
+    resourceType,
+    resolvedProperties,
+    logicalId,
+    resolvedIds,
+    events,
+  } = args;
+  const lastProps = (existing.lastAppliedProperties ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const propertiesChanged =
+    JSON.stringify(lastProps) !== JSON.stringify(resolvedProperties);
+  resolvedIds.set(logicalId, existing.physicalResourceId);
+  if (propertiesChanged) {
+    await applyUpdateResource({
+      resourceType,
+      physicalResourceId: existing.physicalResourceId,
+      resolvedProperties,
+    });
+    await resourceRow.update({
+      status: 'updated',
+      lastAppliedProperties: resolvedProperties,
+    });
+    events.push({
+      timestamp: new Date().toISOString(),
+      logicalId,
+      resourceType,
+      action: 'update',
+      status: 'succeeded',
+      physicalResourceId: existing.physicalResourceId,
+    });
+  } else {
+    events.push({
+      timestamp: new Date().toISOString(),
+      logicalId,
+      resourceType,
+      action: 'no-op',
+      status: 'succeeded',
+      physicalResourceId: existing.physicalResourceId,
+    });
+  }
+};
+
+export const processResourceChange = async (args: {
+  logicalId: string;
+  decl: ResourceDeclaration;
+  existing: ResourceRow | undefined;
+  resolvedIds: Map<string, string>;
+  events: FormationEvent[];
+  projectId: number;
+  formationId: number;
+}): Promise<void> => {
+  const {
+    logicalId,
+    decl,
+    existing,
+    resolvedIds,
+    events,
+    projectId,
+    formationId,
+  } = args;
+  const resolvedProperties = resolveRefs(
+    decl.properties,
+    resolvedIds
+  ) as Record<string, unknown>;
+
+  let resourceRow: ResourceRow;
+  if (!existing) {
+    resourceRow = await db.AgentFormationResource.create({
+      agentFormationId: formationId,
+      logicalId,
+      resourceType: decl.type,
+      status: 'pending',
+      physicalResourceId: null,
+      lastAppliedProperties: null,
+    });
+  } else {
+    resourceRow = existing;
+  }
+
+  if (!existing || !existing.physicalResourceId) {
+    await applyCreateChange({
+      resourceRow,
+      resourceType: decl.type,
+      resolvedProperties,
+      projectId,
+      logicalId,
+      resolvedIds,
+      events,
+    });
+  } else {
+    const existingWithId = existing as ResourceRow & {
+      physicalResourceId: string;
+    };
+    await applyUpdateChange({
+      resourceRow,
+      existing: existingWithId,
+      resourceType: decl.type,
+      resolvedProperties,
+      logicalId,
+      resolvedIds,
+      events,
+    });
+  }
+};
+
+// ── Apply Formation Template ──────────────────────────────────────────────
+
+export const applyFormationTemplate = async (args: {
+  formation: InstanceType<(typeof db)['AgentFormation']>;
+  template: FormationTemplate;
+  existingResources: InstanceType<(typeof db)['AgentFormationResource']>[];
+  projectId: number;
+  operation: InstanceType<(typeof db)['AgentFormationOperation']>;
+}): Promise<void> => {
+  const { formation, template, existingResources, projectId, operation } = args;
+
+  const graph = buildDependencyGraph(template);
+  const sortedOrder = topologicalSort(graph)!;
+  const existingMap = new Map(
+    existingResources.map((r) => {
+      return [r.logicalId, r];
+    })
+  );
+  const resolvedIds = new Map<string, string>();
+  const formationId = (formation as unknown as { id: number }).id;
+
+  for (const [lid, existing] of existingMap.entries()) {
+    if (existing.physicalResourceId && template.resources[lid]) {
+      resolvedIds.set(lid, existing.physicalResourceId);
+    }
+  }
+
+  const events: FormationEvent[] = [];
+
+  for (const logicalId of sortedOrder) {
+    const decl = template.resources[logicalId];
+    const existing = existingMap.get(logicalId);
+    try {
+      await processResourceChange({
+        logicalId,
+        decl,
+        existing,
+        resolvedIds,
+        events,
+        projectId,
+        formationId,
+      });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      events.push({
+        timestamp: new Date().toISOString(),
+        logicalId,
+        resourceType: decl.type,
+        action: existing ? 'update' : 'create',
+        status: 'failed',
+        error: errorMsg,
+      });
+      await operation.update({
+        status: 'failed',
+        events,
+        error: { message: errorMsg, logicalId },
+      });
+      await formation.update({ status: 'failed' });
+      return;
+    }
+  }
+
+  await handleOrphanedDeletes({ template, existingResources, events });
+
+  const outputs = resolveFormationOutputs(template, resolvedIds);
+  await operation.update({ status: 'succeeded', events });
+  await formation.update({ status: 'active', outputs, template });
+};
+
+// ── Ordered Delete Helpers ────────────────────────────────────────────────
+
+export const buildDeleteOrder = (
+  template: FormationTemplate | null,
+  existingResources: InstanceType<(typeof db)['AgentFormationResource']>[]
+): InstanceType<(typeof db)['AgentFormationResource']>[] => {
+  let deleteOrder: string[] = [];
+  if (template?.resources) {
+    const graph = buildDependencyGraph(template);
+    const sorted = topologicalSort(graph);
+    if (sorted) deleteOrder = [...sorted].reverse();
+  }
+
+  const resourceMap = new Map(
+    existingResources.map((r) => {
+      return [r.logicalId, r];
+    })
+  );
+  const ordered: InstanceType<(typeof db)['AgentFormationResource']>[] = [];
+
+  for (const logicalId of deleteOrder) {
+    const r = resourceMap.get(logicalId);
+    if (r) ordered.push(r);
+  }
+  for (const r of existingResources) {
+    if (!deleteOrder.includes(r.logicalId)) ordered.push(r);
+  }
+
+  return ordered;
+};
+
+export const performResourceDeletions = async (
+  orderedResources: InstanceType<(typeof db)['AgentFormationResource']>[]
+): Promise<{ events: FormationEvent[]; hasError: boolean }> => {
+  const events: FormationEvent[] = [];
+  let hasError = false;
+
+  for (const resource of orderedResources) {
+    if (!resource.physicalResourceId) continue;
+    try {
+      await applyDeleteResource({
+        resourceType: resource.resourceType,
+        physicalResourceId: resource.physicalResourceId,
+      });
+      await resource.update({ status: 'deleted' });
+      events.push({
+        timestamp: new Date().toISOString(),
+        logicalId: resource.logicalId,
+        resourceType: resource.resourceType,
+        action: 'delete',
+        status: 'succeeded',
+        physicalResourceId: resource.physicalResourceId,
+      });
+    } catch (error) {
+      hasError = true;
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      events.push({
+        timestamp: new Date().toISOString(),
+        logicalId: resource.logicalId,
+        resourceType: resource.resourceType,
+        action: 'delete',
+        status: 'failed',
+        error: errorMsg,
+      });
+    }
+  }
+
+  return { events, hasError };
+};

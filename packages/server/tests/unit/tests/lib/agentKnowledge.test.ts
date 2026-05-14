@@ -1,5 +1,5 @@
-import * as knowledgeModule from 'src/lib/knowledge';
 import { buildKnowledgeMessages } from 'src/lib/agentKnowledge';
+import * as knowledgeModule from 'src/lib/knowledge';
 
 const mockSearchKnowledge = jest.spyOn(knowledgeModule, 'searchKnowledge');
 
