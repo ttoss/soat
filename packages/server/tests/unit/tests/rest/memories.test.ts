@@ -610,4 +610,99 @@ describe('Memories', () => {
       });
     });
   });
+
+  describe('GET /api/v1/memories with tag filter', () => {
+    let taggedMemoryId: string;
+    let prefixedMemoryId: string;
+    let untaggedMemoryId: string;
+
+    beforeAll(async () => {
+      const taggedRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/memories')
+        .send({
+          project_id: projectId,
+          name: 'Tagged Memory Alpha',
+          tags: ['customer-support', 'crm'],
+        });
+      taggedMemoryId = taggedRes.body.id;
+
+      const prefixedRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/memories')
+        .send({
+          project_id: projectId,
+          name: 'Tagged Memory Beta',
+          tags: ['customer-prefs'],
+        });
+      prefixedMemoryId = prefixedRes.body.id;
+
+      const untaggedRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/memories')
+        .send({
+          project_id: projectId,
+          name: 'Untagged Memory',
+        });
+      untaggedMemoryId = untaggedRes.body.id;
+    });
+
+    test('exact tag match returns only matching memories', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .get('/api/v1/memories')
+        .query({ project_id: projectId, tags: 'crm' });
+
+      expect(response.status).toBe(200);
+      const ids = response.body.map((m: { id: string }) => m.id);
+      expect(ids).toContain(taggedMemoryId);
+      expect(ids).not.toContain(prefixedMemoryId);
+      expect(ids).not.toContain(untaggedMemoryId);
+    });
+
+    test('glob tag pattern matches multiple memories', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .get('/api/v1/memories')
+        .query({ project_id: projectId, tags: 'customer*' });
+
+      expect(response.status).toBe(200);
+      const ids = response.body.map((m: { id: string }) => m.id);
+      expect(ids).toContain(taggedMemoryId);
+      expect(ids).toContain(prefixedMemoryId);
+      expect(ids).not.toContain(untaggedMemoryId);
+    });
+
+    test('multiple tag patterns are ORed', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .get('/api/v1/memories')
+        .query({ project_id: projectId, tags: ['crm', 'customer-prefs'] });
+
+      expect(response.status).toBe(200);
+      const ids = response.body.map((m: { id: string }) => m.id);
+      expect(ids).toContain(taggedMemoryId);
+      expect(ids).toContain(prefixedMemoryId);
+      expect(ids).not.toContain(untaggedMemoryId);
+    });
+
+    test('tag pattern with no match returns empty array', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .get('/api/v1/memories')
+        .query({ project_id: projectId, tags: 'nonexistent-tag-xyz*' });
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      const ids = response.body.map((m: { id: string }) => m.id);
+      expect(ids).not.toContain(taggedMemoryId);
+      expect(ids).not.toContain(prefixedMemoryId);
+      expect(ids).not.toContain(untaggedMemoryId);
+    });
+
+    test('no tags filter returns all memories', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .get('/api/v1/memories')
+        .query({ project_id: projectId });
+
+      expect(response.status).toBe(200);
+      const ids = response.body.map((m: { id: string }) => m.id);
+      expect(ids).toContain(taggedMemoryId);
+      expect(ids).toContain(prefixedMemoryId);
+      expect(ids).toContain(untaggedMemoryId);
+    });
+  });
 });

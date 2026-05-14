@@ -116,6 +116,67 @@ POST /api/v1/memories/mem_abc/entries
 
 See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Tag Filtering
+
+Tags are free-form strings you attach to a memory at creation or update time. They let you organise and filter memories without knowing their IDs upfront.
+
+### Setting Tags
+
+Pass `tags` when creating or updating a memory:
+
+```json
+POST /api/v1/memories
+{
+  "project_id": "prj_abc",
+  "name": "Customer Preferences",
+  "tags": ["customer", "crm", "user-prefs"]
+}
+```
+
+### Filtering `GET /api/v1/memories`
+
+Use the `tags` query parameter to filter the list. The parameter supports **glob patterns**:
+
+| Pattern      | Matches                                          |
+| ------------ | ------------------------------------------------ |
+| `crm`        | Only `crm` (exact)                               |
+| `customer*`  | `customer`, `customer-support`, `customer-prefs` |
+| `user-?refs` | `user-prefs`, `user-xrefs`, etc.                 |
+
+Multiple patterns are **ORed** — a memory is included if any of its tags match any pattern.
+
+**Example — exact match:**
+
+```
+GET /api/v1/memories?project_id=prj_abc&tags=crm
+```
+
+**Example — glob prefix:**
+
+```
+GET /api/v1/memories?project_id=prj_abc&tags=customer*
+```
+
+**Example — multiple patterns:**
+
+```
+GET /api/v1/memories?project_id=prj_abc&tags=customer*&tags=crm
+```
+
+### Using Tags in Knowledge Search
+
+The same glob syntax applies to `memory_tags` in `POST /api/v1/knowledge/search`:
+
+```json
+{
+  "project_id": "prj_abc",
+  "query": "preferred contact method",
+  "memory_tags": ["customer*"]
+}
+```
+
+The server resolves all memories whose tags match the patterns, then searches entries within those memories. This lets agents and search callers target a category of memories without knowing specific IDs.
+
 ## Agent Integration
 
 Agents can read from and write to memories automatically during generation.

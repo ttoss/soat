@@ -2,17 +2,17 @@
 
 ## Implementation Status
 
-| Component                      | Status         | Notes                                                                                                                |
-| ------------------------------ | -------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Memory model (container CRUD)  | ✅ Implemented | Model, lib, REST, OpenAPI, permissions, tests, docs                                                                  |
-| Memory tags field              | ✅ Implemented | `tags` string-array column on Memory model; used by `resolveMemorySearch` glob filter                                |
-| MemoryEntry model              | ✅ Implemented | Model with `me_` prefix, embedding column, lib, REST, OpenAPI, permissions, tests                                    |
-| Entry write (dedup algorithm)  | ✅ Implemented | Two-threshold dedup/merge/skip in `writeMemoryEntry`; `mergeEntryContent` concatenates existing and incoming content |
-| Entry REST endpoints           | ✅ Implemented | `POST/GET/PUT/DELETE /api/v1/memories/:memoryId/entries`; POST returns `action` field                                |
-| Entry permissions              | ✅ Implemented | `WriteMemoryEntry`, `ReadMemoryEntry`, `ListMemoryEntries`, `UpdateMemoryEntry`, `DeleteMemoryEntry`                 |
-| `knowledgeConfig` on Agent     | ✅ Implemented | JSONB field on Agent model; merged with per-generation config; drives automatic context injection                    |
-| Extraction (post-conversation) | ❌ Not started | Auto-extract facts from conversation turns                                                                           |
-| Knowledge integration          | ✅ Implemented | `resolveMemorySearch()` in `knowledge.ts`; `memoryIds`/`memoryTags` in `searchKnowledge()`                           |
+| Component                      | Status         | Notes                                                                                                                          |
+| ------------------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Memory model (container CRUD)  | ✅ Implemented | Model, lib, REST, OpenAPI, permissions, tests, docs                                                                            |
+| Memory tags field              | ✅ Implemented | `tags` string-array column on Memory model; glob filter on `GET /memories`; `resolveMemoryIdsByGlobTags()` in knowledge search |
+| MemoryEntry model              | ✅ Implemented | Model with `me_` prefix, embedding column, lib, REST, OpenAPI, permissions, tests                                              |
+| Entry write (dedup algorithm)  | ✅ Implemented | Two-threshold dedup/merge/skip in `writeMemoryEntry`; `mergeEntryContent` concatenates existing and incoming content           |
+| Entry REST endpoints           | ✅ Implemented | `POST/GET/PUT/DELETE /api/v1/memories/:memoryId/entries`; POST returns `action` field                                          |
+| Entry permissions              | ✅ Implemented | `WriteMemoryEntry`, `ReadMemoryEntry`, `ListMemoryEntries`, `UpdateMemoryEntry`, `DeleteMemoryEntry`                           |
+| `knowledgeConfig` on Agent     | ✅ Implemented | JSONB field on Agent model; merged with per-generation config; drives automatic context injection                              |
+| Extraction (post-conversation) | ❌ Not started | Auto-extract facts from conversation turns                                                                                     |
+| Knowledge integration          | ✅ Implemented | `resolveMemorySearch()` in `knowledge.ts`; `memoryIds`/`memoryTags` in `searchKnowledge()`                                     |
 
 ## Implementation Phases
 
@@ -50,16 +50,16 @@
 
 ---
 
-### Phase 3 — Memory Tags & Filtering ❌ Not started
+### Phase 3 — Memory Tags & Filtering ✅ Complete
 
 **Goal:** Enable memory organisation at scale — multiple memories per project, filtered by tag patterns.
 
 **Deliverables:**
 
-- `tags` column (string array) on the `Memory` model
-- Tag filter on `GET /api/v1/memories` (exact and glob match)
-- `memory_tags` glob matching in `searchKnowledge()` — e.g., `user*` matches `user`, `user-prefs`, `user-history`
-- Update OpenAPI spec, permissions page, module docs
+- ✅ `tags` column (string array) on the `Memory` model
+- ✅ Tag filter on `GET /api/v1/memories` — supports exact match and glob patterns (`*`, `?`); multiple patterns are ORed
+- ✅ `memory_tags` glob matching in `searchKnowledge()` — two-step resolution via `resolveMemoryIdsByGlobTags()` using `ILIKE` on `unnest(tags)`, then entry search on matched memory IDs
+- ✅ OpenAPI spec updated (`tags` query param with array schema), SDK/CLI regenerated, tests added, module docs updated
 
 **Unlocks:** Multi-memory projects. Agents scoped to tag-matched memories without knowing IDs upfront.
 

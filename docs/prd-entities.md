@@ -5,7 +5,7 @@
 | Component                      | Status         | Notes                                                         |
 | ------------------------------ | -------------- | ------------------------------------------------------------- |
 | `Entity` model                 | ❌ Not started | DB table for typed domain objects                             |
-| `Relationship` model           | ❌ Not started | Directed edges connecting actors/entities with verbs          |
+| `Relationship` model           | ❌ Not started | Directed edges connecting entities with verbs (entity↔entity) |
 | `entities.ts` lib              | ❌ Not started | CRUD + traversal logic                                        |
 | REST routes                    | ❌ Not started | `/api/v1/entities`, `/api/v1/relationships`                   |
 | OpenAPI spec (`entities.yaml`) | ❌ Not started | Entity and Relationship schemas, CRUD + traverse operations   |
@@ -17,9 +17,11 @@
 
 ## Overview
 
-The Entities module manages **structured domain objects** and the **relationships between them**. While documents store unstructured text and memories store atomic facts, entities model the real-world objects that actors interact with — companies, products, metrics, people, etc.
+The Entities module manages **structured domain objects** and the **relationships between them**. While documents store unstructured text and memories store atomic facts, entities model the real-world objects in a project's domain — companies, products, metrics, people, etc.
 
-Entities form a **knowledge graph** — a directed graph where nodes are entities (and actors) and edges are relationships with semantic verbs. This graph enables traversal-based retrieval: "What does actor_1 own?" → traverse `is_owner_of` edges → find `company_x` → traverse `has_mrr` edges → find `10k in 2025`.
+Entities form a **knowledge graph** — a directed graph where **all nodes are entities** and edges are relationships with semantic verbs. Actors participate in the graph as entities with `type: "actor"` and an `actorId` FK back to the Actor table. This unified design eliminates polymorphism — relationships are always entity↔entity, enabling simple FK constraints, single-table graph queries, and uniform embedding search.
+
+Example traversal: "What does Pedro own?" → find Entity(`type: "actor"`, `actorId → act_01`) → traverse `is_owner_of` edges → find Entity(`type: "company"`, `name: "Company X"`) → traverse `has_mrr` edges → find Entity(`type: "metric"`, `name: "10k MRR 2025"`).
 
 The entities module owns the data (Entity and Relationship tables). The **knowledge module** queries this data via graph traversal as a third search source alongside documents and memories.
 
@@ -27,49 +29,61 @@ The entities module owns the data (Entity and Relationship tables). The **knowle
 
 ### Entities
 
-An entity is a typed domain object within a project. It represents something concrete in the user's domain — a company, a product, a metric value, a location, etc.
+An entity is a typed domain object within a project. It represents something concrete in the user's domain — a company, a product, a metric value, a location, or even an actor.
 
 ```
 Entity: company_x
   type: "company"
   name: "Company X"
   properties: { "industry": "saas", "founded": "2020" }
+
+Entity: pedro (actor node)
+  type: "actor"
+  name: "Pedro"
+  actorId: → Actor(act_01)
 ```
 
-Entities are **not actors**. Actors are authenticated users or API keys that interact with the system. Entities are passive domain objects that actors have relationships with. However, actors can be **nodes** in the relationship graph — an actor can be connected to entities via relationship edges.
+**Actors as entities.** The Actor table remains the source of truth for authentication, sessions, and conversation participation. When an actor needs to participate in the knowledge graph, a corresponding Entity with `type: "actor"` is created with an `actorId` FK pointing back to the Actor row. This is a lightweight bridge — the Entity is the actor's graph representation, not a replacement for the Actor model.
+
+An actor entity can be created automatically (e.g., when the first relationship involving that actor is created) or explicitly via the REST API.
 
 ### Relationships
 
-A relationship is a directed edge connecting two nodes (actors or entities) with a semantic verb:
+A relationship is a directed edge connecting two entities with a semantic verb:
 
 ```
-actor_1 --[is_owner_of]--> company_x
-company_x --[has_mrr]--> mrr_10k_2025
-mrr_10k_2025 --[measured_in]--> year_2025
+ent_pedro(actor) --[is_owner_of]--> ent_company_x(company)
+ent_company_x(company) --[has_mrr]--> ent_mrr_10k(metric)
+ent_mrr_10k(metric) --[measured_in]--> ent_2025(period)
 ```
 
 Each relationship has:
 
-- **Subject** — the source node (actor or entity)
+- **Subject** — the source entity (FK → Entity)
 - **Verb** — the predicate describing the relationship (e.g., `is_owner_of`, `has_mrr`, `works_at`)
-- **Object** — the target node (actor or entity)
+- **Object** — the target entity (FK → Entity)
 - **Properties** — optional JSONB metadata on the edge (e.g., temporal bounds, confidence score)
 
-### Node Types
+### Unified Node Model
 
-Relationships connect two kinds of nodes:
+All nodes in the graph are entities. Actors participate as entities with `type: "actor"`.
 
-| Node type | Source table | Example                 |
-| --------- | ------------ | ----------------------- |
-| `actor`   | `Actor`      | A user persona          |
-| `entity`  | `Entity`     | A company, product, KPI |
+| Entity type | Example                              | Notes                             |
+| ----------- | ------------------------------------ | --------------------------------- |
+| `actor`     | Pedro (with `actorId` → Actor table) | Bridge to auth/session system     |
+| `company`   | Company X                            | Domain object                     |
+| `product`   | Product Y                            | Domain object                     |
+| `metric`    | 10k MRR 2025                         | Temporal fact                     |
+| _(any)_     | User-defined types per project       | Extensible without schema changes |
 
-The subject and object of a relationship can each be either an actor or an entity, enabling four edge patterns:
+Since all nodes live in one table, relationships are always entity↔entity:
 
-- actor → entity: `actor_1 --[is_owner_of]--> company_x`
-- entity → entity: `company_x --[has_mrr]--> mrr_10k`
-- entity → actor: `company_x --[employs]--> actor_2`
-- actor → actor: `actor_1 --[reports_to]--> actor_2`
+- `ent_pedro(actor) --[is_owner_of]--> ent_company_x(company)`
+- `ent_company_x(company) --[has_mrr]--> ent_mrr_10k(metric)`
+- `ent_company_x(company) --[employs]--> ent_alice(actor)`
+- `ent_pedro(actor) --[reports_to]--> ent_alice(actor)`
+
+No polymorphic columns, no UNION queries, real FK constraints on both sides.
 
 ### Properties vs Entities
 
@@ -88,38 +102,41 @@ Each entity has an optional embedding vector generated from its name, type, and 
 
 ### Entity Table
 
-| Column       | Type          | Notes                                              |
-| ------------ | ------------- | -------------------------------------------------- |
-| `id`         | `INTEGER`     | Internal PK, never exposed                         |
-| `publicId`   | `STRING(32)`  | Prefix `ent_`, unique, NOT NULL                    |
-| `projectId`  | `INTEGER`     | FK → Project, NOT NULL                             |
-| `type`       | `STRING`      | Domain type (e.g., `company`, `product`), NOT NULL |
-| `name`       | `STRING`      | Human-readable name, NOT NULL                      |
-| `properties` | `JSONB`       | Arbitrary key-value metadata, nullable             |
-| `embedding`  | `VECTOR(dim)` | From name + type + properties, nullable            |
-| `tags`       | `JSONB`       | Key-value string pairs for ABAC, nullable          |
-| `createdAt`  | `DATE`        |                                                    |
-| `updatedAt`  | `DATE`        |                                                    |
+| Column       | Type          | Notes                                                       |
+| ------------ | ------------- | ----------------------------------------------------------- |
+| `id`         | `INTEGER`     | Internal PK, never exposed                                  |
+| `publicId`   | `STRING(32)`  | Prefix `ent_`, unique, NOT NULL                             |
+| `projectId`  | `INTEGER`     | FK → Project, NOT NULL                                      |
+| `type`       | `STRING`      | Domain type (e.g., `actor`, `company`, `product`), NOT NULL |
+| `name`       | `STRING`      | Human-readable name, NOT NULL                               |
+| `actorId`    | `INTEGER`     | FK → Actor, nullable. Set only when `type = "actor"`        |
+| `properties` | `JSONB`       | Arbitrary key-value metadata, nullable                      |
+| `embedding`  | `VECTOR(dim)` | From name + type + properties, nullable                     |
+| `tags`       | `JSONB`       | Key-value string pairs for ABAC, nullable                   |
+| `createdAt`  | `DATE`        |                                                             |
+| `updatedAt`  | `DATE`        |                                                             |
 
 Unique constraint: `(projectId, type, name)` — no duplicate entities of the same type and name within a project.
 
+Additional constraint: `actorId` is unique (one entity per actor). A `CHECK` constraint ensures `actorId IS NOT NULL` only when `type = 'actor'`.
+
 ### Relationship Table
 
-| Column        | Type         | Notes                                                       |
-| ------------- | ------------ | ----------------------------------------------------------- |
-| `id`          | `INTEGER`    | Internal PK, never exposed                                  |
-| `publicId`    | `STRING(32)` | Prefix `rel_`, unique, NOT NULL                             |
-| `projectId`   | `INTEGER`    | FK → Project, NOT NULL                                      |
-| `subjectType` | `ENUM`       | `actor` or `entity`, NOT NULL                               |
-| `subjectId`   | `INTEGER`    | FK → Actor or Entity (polymorphic), NOT NULL                |
-| `verb`        | `STRING`     | Semantic predicate (e.g., `is_owner_of`), NOT NULL          |
-| `objectType`  | `ENUM`       | `actor` or `entity`, NOT NULL                               |
-| `objectId`    | `INTEGER`    | FK → Actor or Entity (polymorphic), NOT NULL                |
-| `properties`  | `JSONB`      | Edge metadata (temporal bounds, confidence, etc.), nullable |
-| `createdAt`   | `DATE`       |                                                             |
-| `updatedAt`   | `DATE`       |                                                             |
+| Column       | Type         | Notes                                                       |
+| ------------ | ------------ | ----------------------------------------------------------- |
+| `id`         | `INTEGER`    | Internal PK, never exposed                                  |
+| `publicId`   | `STRING(32)` | Prefix `rel_`, unique, NOT NULL                             |
+| `projectId`  | `INTEGER`    | FK → Project, NOT NULL                                      |
+| `subjectId`  | `INTEGER`    | FK → Entity, NOT NULL                                       |
+| `verb`       | `STRING`     | Semantic predicate (e.g., `is_owner_of`), NOT NULL          |
+| `objectId`   | `INTEGER`    | FK → Entity, NOT NULL                                       |
+| `properties` | `JSONB`      | Edge metadata (temporal bounds, confidence, etc.), nullable |
+| `createdAt`  | `DATE`       |                                                             |
+| `updatedAt`  | `DATE`       |                                                             |
 
-Unique constraint: `(projectId, subjectType, subjectId, verb, objectType, objectId)` — no duplicate edges.
+Unique constraint: `(projectId, subjectId, verb, objectId)` — no duplicate edges.
+
+Both `subjectId` and `objectId` are real FK constraints to the Entity table — no polymorphism.
 
 ## REST API
 
@@ -198,24 +215,22 @@ Deleting an entity also deletes all relationships where it is the subject or obj
 POST /api/v1/relationships
 {
   "project_id": "prj_01",
-  "subject_type": "actor",
-  "subject_id": "act_01",
+  "subject_id": "ent_pedro",
   "verb": "is_owner_of",
-  "object_type": "entity",
   "object_id": "ent_abc123",
   "properties": { "since": "2020-01-01" }
 }
 ```
+
+Both `subject_id` and `object_id` are entity IDs (`ent_` prefix). To connect an actor, first ensure the actor has a corresponding entity (created automatically or via `POST /api/v1/entities` with `type: "actor"` and `actor_id`).
 
 Response (`201`):
 
 ```json
 {
   "id": "rel_xyz789",
-  "subject_type": "actor",
-  "subject_id": "act_01",
+  "subject_id": "ent_pedro",
   "verb": "is_owner_of",
-  "object_type": "entity",
   "object_id": "ent_abc123",
   "properties": { "since": "2020-01-01" },
   "created_at": "2026-05-12T00:00:00Z",
@@ -226,16 +241,14 @@ Response (`201`):
 #### List Relationships
 
 ```
-GET /api/v1/relationships?project_id=prj_01&subject_id=act_01&subject_type=actor
+GET /api/v1/relationships?project_id=prj_01&subject_id=ent_pedro
 ```
 
 Query parameters:
 
 - `project_id` (required)
-- `subject_id` (optional) — filter by subject
-- `subject_type` (optional) — `actor` or `entity`
-- `object_id` (optional) — filter by object
-- `object_type` (optional) — `actor` or `entity`
+- `subject_id` (optional) — filter by subject entity ID
+- `object_id` (optional) — filter by object entity ID
 - `verb` (optional) — filter by verb
 
 #### Delete Relationship
@@ -252,8 +265,7 @@ DELETE /api/v1/relationships/:relationship_id
 POST /api/v1/entities/traverse
 {
   "project_id": "prj_01",
-  "start_node_type": "actor",
-  "start_node_id": "act_01",
+  "start_entity_id": "ent_pedro",
   "verbs": ["is_owner_of", "has_mrr"],
   "max_depth": 3,
   "direction": "outgoing"
@@ -267,19 +279,9 @@ Response:
   "paths": [
     {
       "nodes": [
-        { "node_type": "actor", "node_id": "act_01", "name": "Pedro" },
-        {
-          "node_type": "entity",
-          "node_id": "ent_abc",
-          "name": "Company X",
-          "type": "company"
-        },
-        {
-          "node_type": "entity",
-          "node_id": "ent_def",
-          "name": "10k MRR 2025",
-          "type": "metric"
-        }
+        { "id": "ent_pedro", "type": "actor", "name": "Pedro" },
+        { "id": "ent_abc", "type": "company", "name": "Company X" },
+        { "id": "ent_def", "type": "metric", "name": "10k MRR 2025" }
       ],
       "edges": [
         { "id": "rel_01", "verb": "is_owner_of" },
@@ -292,7 +294,7 @@ Response:
 
 Parameters:
 
-- `start_node_type` / `start_node_id` — where to start traversal
+- `start_entity_id` — entity ID to start traversal from (can be any type including `actor`)
 - `verbs` (optional) — only follow edges with these verbs; if omitted, follow all
 - `max_depth` — maximum hops (default: 2, max: 5)
 - `direction` — `outgoing`, `incoming`, or `both` (default: `outgoing`)
@@ -320,7 +322,7 @@ The entities module is a **data source** for the knowledge module, same as docum
 ```
 searchKnowledge()
 ├── resolveDocumentSearch()     → source_type: "document"   ✅ done
-├── searchMemoryEntries()       → source_type: "memory"     ❌ not started
+├── resolveMemorySearch()       → source_type: "memory"     ✅ done
 └── traverseEntities()          → source_type: "entity"     ❌ not started (this PRD)
 ```
 
@@ -353,7 +355,7 @@ The `knowledge_config` on agents gains an optional `entity_filters` field:
     "entity_filters": {
       "entity_ids": ["ent_abc"],
       "entity_types": ["company", "product"],
-      "start_nodes": [{ "node_type": "actor", "node_id": "act_01" }],
+      "start_entity_ids": ["ent_pedro"],
       "verbs": ["is_owner_of", "has_mrr"],
       "max_depth": 2
     }
@@ -361,7 +363,9 @@ The `knowledge_config` on agents gains an optional `entity_filters` field:
 }
 ```
 
-If `entity_filters` is provided, the knowledge module traverses the graph starting from the specified nodes (or entities matching the type/ID filters) and includes reachable entities in the results. If no entity filters are specified but entities exist in the project, they are searched by embedding similarity only (no traversal).
+Since actors are entities, `start_entity_ids` can include actor entities (e.g., `ent_pedro` with `type: "actor"`). No separate `start_nodes` with type discrimination needed.
+
+If `entity_filters` is provided, the knowledge module traverses the graph starting from the specified entities and includes reachable entities in the results. If no entity filters are specified but entities exist in the project, they are searched by embedding similarity only (no traversal).
 
 ## Agent Integration
 
@@ -386,11 +390,14 @@ These tools enable agents to **build knowledge graphs dynamically** during conve
 ### Example Agent Workflow
 
 1. Agent processes a conversation: "Pedro owns Company X, which has 10k MRR in 2025"
-2. Agent calls `createEntity({ type: "company", name: "Company X", properties: { industry: "saas" } })`
-3. Agent calls `createEntity({ type: "metric", name: "10k MRR 2025", properties: { value: 10000, currency: "USD", period: "2025" } })`
-4. Agent calls `createRelationship({ subjectType: "actor", subjectId: "act_01", verb: "is_owner_of", objectType: "entity", objectId: "ent_abc" })`
-5. Agent calls `createRelationship({ subjectType: "entity", subjectId: "ent_abc", verb: "has_mrr", objectType: "entity", objectId: "ent_def" })`
-6. Later, `searchKnowledge` traverses: `act_01 → company_x → 10k_mrr_2025`
+2. Agent calls `createEntity({ type: "actor", name: "Pedro", actorId: "act_01" })` → returns `ent_pedro`
+3. Agent calls `createEntity({ type: "company", name: "Company X", properties: { industry: "saas" } })` → returns `ent_abc`
+4. Agent calls `createEntity({ type: "metric", name: "10k MRR 2025", properties: { value: 10000, currency: "USD", period: "2025" } })` → returns `ent_def`
+5. Agent calls `createRelationship({ subjectId: "ent_pedro", verb: "is_owner_of", objectId: "ent_abc" })`
+6. Agent calls `createRelationship({ subjectId: "ent_abc", verb: "has_mrr", objectId: "ent_def" })`
+7. Later, `searchKnowledge` traverses: `ent_pedro(actor) → ent_abc(company) → ent_def(metric)`
+
+Step 2 can be skipped if the actor entity already exists (e.g., auto-created on first relationship).
 
 ## Permissions
 
@@ -415,48 +422,64 @@ src/lib/entities.ts
 ├── listEntities()             — list with type/name/project filters
 ├── updateEntity()             — update fields, regenerate embedding
 ├── deleteEntity()             — delete entity + cascade relationships
-├── createRelationship()       — create edge, validate both nodes exist
+├── getOrCreateActorEntity()   — find or create entity with type="actor" for a given actorId
+├── createRelationship()       — create edge, validate both entities exist
 ├── listRelationships()        — list with subject/object/verb filters
 ├── deleteRelationship()       — delete edge
-├── traverseEntities()         — BFS/DFS graph traversal with depth limit
-├── searchEntitiesByEmbedding() — cosine similarity on entity embeddings
+├── traverseEntities()         — BFS/DFS graph traversal with depth limit (single-table, no polymorphism)
+├── searchEntitiesByEmbedding() — cosine similarity on entity embeddings (single query, all types)
 └── types                      — Entity, Relationship, TraversalResult
 ```
 
 ### Traversal Algorithm
 
 ```
-Input: start_node (type + id), verbs[]?, max_depth, direction, project_id
+Input: start_entity_id, verbs[]?, max_depth, direction, project_id
 
 STEP 1 — VALIDATE
-  Verify start_node exists and caller has read access.
+  Verify start entity exists and caller has read access.
 
-STEP 2 — BFS
-  Queue ← [(start_node, depth=0)]
-  Visited ← {start_node}
+STEP 2 — BFS (single-table, no polymorphism)
+  Queue ← [(start_entity, depth=0)]
+  Visited ← {start_entity.id}
   Paths ← []
 
   WHILE Queue is not empty:
-    (node, depth) ← dequeue
+    (entity, depth) ← dequeue
     IF depth ≥ max_depth: continue
 
     edges ← query Relationship where:
       - projectId matches
-      - subject or object matches node (based on direction)
+      - subjectId or objectId matches entity.id (based on direction)
       - verb IN verbs (if specified)
+    (Single JOIN on Entity table — no CASE/UNION needed)
 
     FOR each edge:
-      neighbor ← the other node on the edge
-      IF neighbor NOT IN Visited:
-        Visited.add(neighbor)
+      neighbor ← Entity on the other side of the edge
+      IF neighbor.id NOT IN Visited:
+        Visited.add(neighbor.id)
         Queue.add((neighbor, depth + 1))
-        Record path: node → edge → neighbor
+        Record path: entity → edge → neighbor
 
 STEP 3 — RETURN
-  Return collected paths with node details.
+  Return collected paths with entity details (including type for context).
 ```
 
 Max depth hard cap: 5 (prevents runaway traversals on dense graphs).
+
+## Design Decision: Unified Node Model
+
+The original design used polymorphic relationships (`subjectType`/`objectType` as `actor | entity`). This was replaced with a **unified model** where all graph nodes are entities:
+
+| Concern               | Polymorphic (old)                                 | Unified (current)                               |
+| --------------------- | ------------------------------------------------- | ----------------------------------------------- |
+| Relationship FKs      | Polymorphic (no real DB constraint)               | Real FK → Entity on both sides                  |
+| Graph queries         | CASE/UNION across Actor + Entity tables           | Single JOIN on Entity table                     |
+| Embedding search      | UNION across two tables (Actor has no embeddings) | Single query on Entity table                    |
+| Adding new node types | Change enum + all queries                         | Add new `type` value, no schema change          |
+| Actor auth concerns   | Mixed into graph model                            | Cleanly separated: Actor = auth, Entity = graph |
+
+The `actorId` FK on Entity is the only bridge between the two worlds. Actor-specific behavior (sessions, messages, auth) stays in the Actor table. Graph behavior (relationships, traversal, embeddings) stays in Entity.
 
 ## Open Questions
 
@@ -469,3 +492,5 @@ Max depth hard cap: 5 (prevents runaway traversals on dense graphs).
 4. **Relationship deduplication** — the unique constraint prevents exact duplicates, but what about semantically equivalent relationships with different verbs (`owns` vs `is_owner_of`)?
 
 5. **Scale** — BFS traversal with max_depth=5 on a dense graph could touch many nodes. Should there be a `max_results` cap on traversal output?
+
+6. **Auto-creation of actor entities** — should the system automatically create an entity with `type: "actor"` when an Actor is created, or only on demand (first relationship, explicit API call)? On-demand keeps the Entity table lean; auto-creation ensures actors are always graph-ready.

@@ -3,8 +3,8 @@ import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { writeMemoryEntry } from './memoryEntries';
 import { searchKnowledge } from './knowledge';
+import { writeMemoryEntry } from './memoryEntries';
 
 const log = createDebug('soat:knowledge');
 

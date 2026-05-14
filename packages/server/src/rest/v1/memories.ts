@@ -37,6 +37,12 @@ memoriesRouter.get('/memories', async (ctx: Context) => {
   }
 
   const projectPublicId = ctx.query.projectId as string | undefined;
+  const rawTags = ctx.query.tags;
+  const tags: string[] | undefined = rawTags
+    ? Array.isArray(rawTags)
+      ? (rawTags as string[])
+      : [rawTags as string]
+    : undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -49,7 +55,7 @@ memoriesRouter.get('/memories', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listMemories({ projectIds: projectIds ?? [] });
+  ctx.body = await listMemories({ projectIds: projectIds ?? [], tags });
 });
 
 memoriesRouter.get('/memories/:memory_id', async (ctx: Context) => {

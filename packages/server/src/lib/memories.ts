@@ -1,4 +1,20 @@
+import { Op } from '@ttoss/postgresdb';
 import { db } from 'src/db';
+
+const buildTagsGlobLiteral = (args: { tags: string[] }) => {
+  const sequelize = db.Memory.sequelize!;
+  const patterns = args.tags.map((tag) => {
+    return tag.replace(/\*/g, '%').replace(/\?/g, '_');
+  });
+  const conditions = patterns
+    .map((p) => {
+      return `tag ILIKE ${sequelize.escape(p)}`;
+    })
+    .join(' OR ');
+  return sequelize.literal(
+    `EXISTS (SELECT 1 FROM unnest("Memory"."tags") AS t(tag) WHERE ${conditions})`
+  );
+};
 
 const mapMemory = (
   instance: InstanceType<(typeof db)['Memory']> & {
@@ -37,9 +53,17 @@ export const createMemory = async (args: {
   return mapMemory(withProject!);
 };
 
-export const listMemories = async (args: { projectIds: number[] }) => {
+export const listMemories = async (args: {
+  projectIds: number[];
+  tags?: string[];
+}) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: any = { projectId: args.projectIds };
+  if (args.tags && args.tags.length > 0) {
+    where[Op.and] = buildTagsGlobLiteral({ tags: args.tags });
+  }
   const memories = await db.Memory.findAll({
-    where: { projectId: args.projectIds },
+    where,
     include: [{ model: db.Project, as: 'project' }],
     order: [['createdAt', 'ASC']],
   });

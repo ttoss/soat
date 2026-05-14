@@ -4,6 +4,10 @@ import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
 import { getEmbedding } from './embedding';
+import type { MemoryKnowledgeResult } from './knowledgeMemory';
+import { resolveMemorySearch } from './knowledgeMemory';
+
+export type { MemoryQueryConfig } from './knowledgeMemory';
 
 // ── Shared document mapper ───────────────────────────────────────────────
 
@@ -81,15 +85,7 @@ export type KnowledgeResult =
       createdAt: Date;
       updatedAt: Date;
     }
-  | {
-      sourceType: 'memory';
-      entryId: string;
-      memoryId: string;
-      content: string;
-      score?: number;
-      createdAt: Date;
-      updatedAt: Date;
-    };
+  | MemoryKnowledgeResult;
 
 // ── Private helpers ──────────────────────────────────────────────────────
 
@@ -245,117 +241,6 @@ export const resolveDocumentSearch = async (args: {
   const minScore = config.minScore;
   return mapped.filter((doc) => {
     return ('score' in doc ? (doc.score ?? -1) : -1) >= minScore;
-  });
-};
-
-// ── Public API ───────────────────────────────────────────────────────────
-
-export type MemoryQueryConfig = {
-  memoryIds?: string[];
-  memoryTags?: string[];
-  search?: string;
-  minScore?: number;
-  limit?: number;
-};
-
-const buildMemoryIncludeWhere = (args: {
-  config: MemoryQueryConfig;
-  projectIds?: number[];
-}): { where: Record<string, unknown>; hasFilters: boolean } => {
-  const { config, projectIds } = args;
-  const hasMemoryIds =
-    config.memoryIds !== undefined && config.memoryIds.length > 0;
-  const hasMemoryTags =
-    config.memoryTags !== undefined && config.memoryTags.length > 0;
-  if (!hasMemoryIds && !hasMemoryTags) return { where: {}, hasFilters: false };
-  const memoryWhere: Record<string, unknown>[] = [];
-  if (hasMemoryIds) memoryWhere.push({ publicId: config.memoryIds });
-  if (hasMemoryTags)
-    memoryWhere.push({ tags: { [Op.overlap]: config.memoryTags } });
-  const where: Record<string, unknown> = { [Op.or]: memoryWhere };
-  if (projectIds && projectIds.length > 0) where['projectId'] = projectIds;
-  return { where, hasFilters: true };
-};
-
-export const resolveMemorySearch = async (args: {
-  projectIds?: number[];
-  config: MemoryQueryConfig;
-}): Promise<Extract<KnowledgeResult, { sourceType: 'memory' }>[]> => {
-  const { config, projectIds } = args;
-  const { where: memoryIncludeWhere, hasFilters } = buildMemoryIncludeWhere({
-    config,
-    projectIds,
-  });
-  if (!hasFilters) return [];
-  const limit = config.limit ?? 10;
-
-  if (config.search) {
-    const embedding = await getEmbedding({ text: config.search });
-    const embeddingLiteral = `[${embedding.join(',')}]`;
-    const distanceLiteral = db.MemoryEntry.sequelize!.literal(
-      `embedding <=> '${embeddingLiteral}'`
-    );
-
-    const entries = await db.MemoryEntry.findAll({
-      attributes: { include: [[distanceLiteral, 'distance']] },
-      include: [
-        {
-          model: db.Memory,
-          as: 'memory',
-          where: memoryIncludeWhere,
-          required: true,
-        },
-      ],
-      order: distanceLiteral,
-      subQuery: false,
-      limit,
-    });
-
-    return entries
-      .map((entry) => {
-        const distance = parseFloat(
-          (entry.getDataValue('distance') as string) ?? '1'
-        );
-        const score = 1 - distance;
-        return {
-          sourceType: 'memory' as const,
-          entryId: entry.publicId,
-          memoryId: (entry.memory as InstanceType<typeof db.Memory>).publicId,
-          content: entry.content,
-          score,
-          createdAt: entry.createdAt,
-          updatedAt: entry.updatedAt,
-        };
-      })
-      .filter((r) => {
-        return (
-          config.minScore === undefined || (r.score ?? 0) >= config.minScore
-        );
-      });
-  }
-
-  const entries = await db.MemoryEntry.findAll({
-    include: [
-      {
-        model: db.Memory,
-        as: 'memory',
-        where: memoryIncludeWhere,
-        required: true,
-      },
-    ],
-    order: [['createdAt', 'ASC']],
-    limit,
-  });
-
-  return entries.map((entry) => {
-    return {
-      sourceType: 'memory' as const,
-      entryId: entry.publicId,
-      memoryId: (entry.memory as InstanceType<typeof db.Memory>).publicId,
-      content: entry.content,
-      createdAt: entry.createdAt,
-      updatedAt: entry.updatedAt,
-    };
   });
 };
 
