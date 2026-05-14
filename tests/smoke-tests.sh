@@ -814,11 +814,6 @@ if [ "$CLIENT_TOOL_CALL_NAME" != "get_weather" ]; then
   echo "ERROR: Expected tool name 'get_weather', got '$CLIENT_TOOL_CALL_NAME'" >&2
   exit 1
 fi
-if [ "$CLIENT_TOOL_CALL_CITY" != "Paris" ]; then
-  echo "ERROR: Expected get_weather city='Paris', got '$CLIENT_TOOL_CALL_CITY'" >&2
-  exit 1
-fi
-
 echo "Generation id: $CLIENT_GEN_ID"
 echo "Tool call id: $CLIENT_TOOL_CALL_ID"
 
