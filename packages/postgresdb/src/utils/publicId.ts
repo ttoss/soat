@@ -25,6 +25,9 @@ export const PUBLIC_ID_PREFIXES = {
   session: 'sess_',
   memory: 'mem_',
   memoryEntry: 'me_',
+  agentFormation: 'af_',
+  agentFormationResource: 'afr_',
+  agentFormationOperation: 'afo_',
 } as const;
 
 /**

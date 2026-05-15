@@ -88,7 +88,7 @@
 
   /* Cards */
   --ifm-card-background-color: var(--ifm-background-surface-color);
-  --ifm-card-border-radius: 0.75rem;
+  --ifm-card-border-radius: 0.5rem;
 
   /* Code Blocks */
   --ifm-code-background: #f5f7fa;
@@ -189,6 +189,11 @@ html[data-theme='dark'] {
   padding: 1rem;
 }
 
+html,
+body {
+  overflow-x: clip;
+}
+
 html[data-theme='dark'] body {
   background-image: radial-gradient(
     circle at 50% 0%,
@@ -212,15 +217,16 @@ h6 {
 .hero.hero--primary {
   background:
     linear-gradient(
-      135deg,
-      rgba(142, 68, 173, 0.5) 0%,
-      rgba(26, 115, 232, 0.4) 100%
+      90deg,
+      rgba(8, 12, 20, 0.96) 0%,
+      rgba(8, 12, 20, 0.86) 34%,
+      rgba(8, 12, 20, 0.32) 66%,
+      rgba(8, 12, 20, 0.08) 100%
     ),
-    url('/img/hero.jpg');
+    url('/img/hero.png');
   background-size: cover;
   background-position: center;
   border-bottom: 1px solid var(--ifm-border-color);
-  padding: 10rem 0;
   margin-left: calc(-50vw + 50%);
   margin-right: calc(-50vw + 50%);
   width: 100vw;
@@ -234,11 +240,13 @@ h6 {
 html[data-theme='dark'] .hero.hero--primary {
   background:
     linear-gradient(
-      180deg,
-      rgba(8, 12, 20, 0.6) 0%,
-      rgba(22, 27, 34, 0.95) 100%
+      90deg,
+      rgba(8, 12, 20, 0.98) 0%,
+      rgba(8, 12, 20, 0.9) 34%,
+      rgba(8, 12, 20, 0.36) 66%,
+      rgba(8, 12, 20, 0.1) 100%
     ),
-    url('/img/hero.jpg');
+    url('/img/hero.png');
   background-size: cover;
   background-position: center;
   border-bottom: 1px solid rgba(0, 229, 255, 0.08);
@@ -274,6 +282,34 @@ html[data-theme='dark'] .hero.hero--primary .hero__title {
   filter: drop-shadow(0 0 20px rgba(0, 229, 255, 0.3));
   position: relative;
   z-index: 1;
+}
+
+@media screen and (max-width: 996px) {
+  .hero.hero--primary {
+    background:
+      linear-gradient(
+        90deg,
+        rgba(8, 12, 20, 0.98) 0%,
+        rgba(8, 12, 20, 0.9) 52%,
+        rgba(8, 12, 20, 0.46) 100%
+      ),
+      url('/img/hero.png');
+    background-position: 28% center;
+    background-size: cover;
+  }
+
+  html[data-theme='dark'] .hero.hero--primary {
+    background:
+      linear-gradient(
+        90deg,
+        rgba(8, 12, 20, 0.99) 0%,
+        rgba(8, 12, 20, 0.92) 52%,
+        rgba(8, 12, 20, 0.52) 100%
+      ),
+      url('/img/hero.png');
+    background-position: 28% center;
+    background-size: cover;
+  }
 }
 
 /* ===================================================================

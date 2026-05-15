@@ -1,46 +1,124 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 520" fill="none">
+  <defs>
+    <radialGradient id="archGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(360 260) scale(320 240)">
+      <stop stop-color="#00E5FF" stop-opacity="0.18"/>
+      <stop offset="0.45" stop-color="#8E44AD" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#080C14" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="archStroke" x1="72" y1="42" x2="648" y2="478" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8E44AD"/>
+      <stop offset="0.5" stop-color="#00E5FF"/>
+      <stop offset="1" stop-color="#8E44AD"/>
+    </linearGradient>
+    <linearGradient id="cyanViolet" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#00E5FF"/>
+      <stop offset="1" stop-color="#8E44AD"/>
+    </linearGradient>
+    <filter id="glowSm" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowLg" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
   <!-- Background -->
-  <rect width="720" height="520" rx="12" fill="#0a0a0f"/>
+  <rect width="720" height="520" rx="12" fill="#080C14"/>
+  <rect width="720" height="520" rx="12" fill="url(#archGlow)"/>
 
-  <!-- Clients Layer -->
-  <rect x="60" y="30" width="600" height="70" rx="12" fill="#1a1a2e" stroke="#6c63ff" stroke-width="1.5"/>
-  <text x="360" y="58" text-anchor="middle" fill="#e0e0e0" font-family="system-ui, sans-serif" font-size="13" font-weight="600">Clients</text>
-  <text x="360" y="80" text-anchor="middle" fill="#a0a0b0" font-family="system-ui, sans-serif" font-size="12">REST API · MCP · CLI (soat) · TypeScript SDK</text>
+  <!-- Faint orbital arcs -->
+  <ellipse cx="360" cy="260" rx="310" ry="60" stroke="#00E5FF" stroke-width="0.6" opacity="0.1" fill="none"/>
+  <ellipse cx="360" cy="260" rx="260" ry="180" stroke="#8E44AD" stroke-width="0.6" opacity="0.08" fill="none"/>
+  <ellipse cx="360" cy="260" rx="200" ry="120" stroke="#00E5FF" stroke-width="0.5" opacity="0.06" fill="none"/>
 
-  <!-- Arrow down -->
-  <line x1="360" y1="100" x2="360" y2="140" stroke="#6c63ff" stroke-width="1.5" stroke-dasharray="4,3"/>
-  <polygon points="354,136 360,146 366,136" fill="#6c63ff"/>
+  <!-- ─── Top: Client Surfaces ─── -->
+  <rect x="72" y="36" width="576" height="68" rx="10" fill="#161B22" stroke="url(#archStroke)" stroke-width="1.4"/>
+  <text x="360" y="64" text-anchor="middle" fill="#F0F8FF" font-family="Inter,system-ui,sans-serif" font-size="13" font-weight="700" letter-spacing="0.5">CLIENT SURFACES</text>
+  <text x="360" y="86" text-anchor="middle" fill="#8F9BB3" font-family="Inter,system-ui,sans-serif" font-size="11">REST API · MCP · CLI · TypeScript SDK</text>
 
-  <!-- SOAT Server Layer -->
-  <rect x="60" y="150" width="600" height="220" rx="12" fill="#12122a" stroke="#6c63ff" stroke-width="1.5"/>
-  <text x="360" y="175" text-anchor="middle" fill="#e0e0e0" font-family="system-ui, sans-serif" font-size="14" font-weight="700">SOAT Server</text>
+  <!-- Dashed connector: clients → control plane -->
+  <line x1="360" y1="104" x2="360" y2="148" stroke="url(#cyanViolet)" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <circle cx="360" cy="126" r="3" fill="#00E5FF" opacity="0.7"/>
 
-  <!-- REST Router -->
-  <rect x="110" y="195" width="220" height="55" rx="8" fill="#1e1e3a" stroke="#8b5cf6" stroke-width="1"/>
-  <text x="220" y="227" text-anchor="middle" fill="#c4b5fd" font-family="system-ui, sans-serif" font-size="13" font-weight="500">REST Router</text>
+  <!-- ─── Middle: Control Plane ─── -->
+  <rect x="72" y="148" width="576" height="220" rx="12" fill="#101722" stroke="#00E5FF" stroke-opacity="0.2" stroke-width="1.4"/>
+  <text x="360" y="176" text-anchor="middle" fill="#F0F8FF" font-family="Inter,system-ui,sans-serif" font-size="14" font-weight="700" letter-spacing="0.4">SOAT CONTROL PLANE</text>
 
-  <!-- MCP Server -->
-  <rect x="390" y="195" width="220" height="55" rx="8" fill="#1e1e3a" stroke="#8b5cf6" stroke-width="1"/>
-  <text x="500" y="227" text-anchor="middle" fill="#c4b5fd" font-family="system-ui, sans-serif" font-size="13" font-weight="500">MCP Server</text>
-
-  <!-- Arrows from REST and MCP to Business Logic -->
-  <line x1="220" y1="250" x2="220" y2="280" stroke="#4c4c6c" stroke-width="1.2"/>
-  <line x1="500" y1="250" x2="500" y2="280" stroke="#4c4c6c" stroke-width="1.2"/>
-  <line x1="220" y1="280" x2="500" y2="280" stroke="#4c4c6c" stroke-width="1.2"/>
-  <line x1="360" y1="280" x2="360" y2="300" stroke="#4c4c6c" stroke-width="1.2"/>
-  <polygon points="354,296 360,306 366,296" fill="#4c4c6c"/>
+  <!-- Row 1: Three module panels -->
+  <!-- API Layer -->
+  <rect x="104" y="196" width="148" height="58" rx="8" fill="#161B22" stroke="#8E44AD" stroke-opacity="0.7" stroke-width="1.2"/>
+  <text x="178" y="220" text-anchor="middle" fill="#F0F8FF" font-family="Inter,system-ui,sans-serif" font-size="11" font-weight="600">API Layer</text>
+  <text x="178" y="238" text-anchor="middle" fill="#8F9BB3" font-family="Inter,system-ui,sans-serif" font-size="10">Routes · Auth · MCP</text>
 
   <!-- Business Logic -->
-  <rect x="160" y="305" width="400" height="55" rx="8" fill="#1e1e3a" stroke="#10b981" stroke-width="1"/>
-  <text x="360" y="330" text-anchor="middle" fill="#6ee7b7" font-family="system-ui, sans-serif" font-size="13" font-weight="500">Business Logic</text>
-  <text x="360" y="348" text-anchor="middle" fill="#6ee7b7" font-family="system-ui, sans-serif" font-size="11" opacity="0.8">(lib/ · permissions)</text>
+  <rect x="286" y="196" width="148" height="58" rx="8" fill="#161B22" stroke="#00E5FF" stroke-opacity="0.7" stroke-width="1.2"/>
+  <text x="360" y="220" text-anchor="middle" fill="#F0F8FF" font-family="Inter,system-ui,sans-serif" font-size="11" font-weight="600">Business Logic</text>
+  <text x="360" y="238" text-anchor="middle" fill="#8F9BB3" font-family="Inter,system-ui,sans-serif" font-size="10">Lib · Policies · IAM</text>
 
-  <!-- Arrow down to PostgreSQL -->
-  <line x1="360" y1="370" x2="360" y2="420" stroke="#6c63ff" stroke-width="1.5" stroke-dasharray="4,3"/>
-  <polygon points="354,416 360,426 366,416" fill="#6c63ff"/>
+  <!-- Agent Runtime -->
+  <rect x="468" y="196" width="148" height="58" rx="8" fill="#161B22" stroke="#8E44AD" stroke-opacity="0.7" stroke-width="1.2"/>
+  <text x="542" y="220" text-anchor="middle" fill="#F0F8FF" font-family="Inter,system-ui,sans-serif" font-size="11" font-weight="600">Agent Runtime</text>
+  <text x="542" y="238" text-anchor="middle" fill="#8F9BB3" font-family="Inter,system-ui,sans-serif" font-size="10">Tools · Traces · RAG</text>
 
-  <!-- PostgreSQL Layer -->
-  <rect x="60" y="430" width="600" height="70" rx="12" fill="#1a1a2e" stroke="#6c63ff" stroke-width="1.5"/>
-  <text x="360" y="460" text-anchor="middle" fill="#e0e0e0" font-family="system-ui, sans-serif" font-size="14" font-weight="600">PostgreSQL</text>
-  <text x="360" y="482" text-anchor="middle" fill="#a0a0b0" font-family="system-ui, sans-serif" font-size="12">(pgvector for embeddings)</text>
+  <!-- Connectors between panels -->
+  <line x1="252" y1="225" x2="286" y2="225" stroke="#F0F8FF" stroke-opacity="0.25" stroke-width="1.2"/>
+  <line x1="434" y1="225" x2="468" y2="225" stroke="#F0F8FF" stroke-opacity="0.25" stroke-width="1.2"/>
+
+  <!-- Row 2: Resource modules (smaller) -->
+  <rect x="104" y="274" width="96" height="42" rx="6" fill="#161B22" stroke="#00E5FF" stroke-opacity="0.4" stroke-width="1"/>
+  <text x="152" y="299" text-anchor="middle" fill="#8F9BB3" font-family="Inter,system-ui,sans-serif" font-size="9.5">Projects</text>
+
+  <rect x="216" y="274" width="96" height="42" rx="6" fill="#161B22" stroke="#8E44AD" stroke-opacity="0.4" stroke-width="1"/>
+  <text x="264" y="299" text-anchor="middle" fill="#8F9BB3" font-family="Inter,system-ui,sans-serif" font-size="9.5">Files &amp; Docs</text>
+
+  <rect x="328" y="274" width="96" height="42" rx="6" fill="#161B22" stroke="#00E5FF" stroke-opacity="0.4" stroke-width="1"/>
+  <text x="376" y="299" text-anchor="middle" fill="#8F9BB3" font-family="Inter,system-ui,sans-serif" font-size="9.5">Secrets</text>
+
+  <rect x="440" y="274" width="96" height="42" rx="6" fill="#161B22" stroke="#8E44AD" stroke-opacity="0.4" stroke-width="1"/>
+  <text x="488" y="299" text-anchor="middle" fill="#8F9BB3" font-family="Inter,system-ui,sans-serif" font-size="9.5">Knowledge</text>
+
+  <rect x="552" y="274" width="96" height="42" rx="6" fill="#161B22" stroke="#00E5FF" stroke-opacity="0.4" stroke-width="1"/>
+  <text x="600" y="299" text-anchor="middle" fill="#8F9BB3" font-family="Inter,system-ui,sans-serif" font-size="9.5">Memories</text>
+
+  <!-- Row 2 thin connectors to row 1 -->
+  <line x1="152" y1="274" x2="168" y2="254" stroke="#F0F8FF" stroke-opacity="0.12" stroke-width="0.8"/>
+  <line x1="264" y1="274" x2="290" y2="254" stroke="#F0F8FF" stroke-opacity="0.12" stroke-width="0.8"/>
+  <line x1="376" y1="274" x2="360" y2="254" stroke="#F0F8FF" stroke-opacity="0.12" stroke-width="0.8"/>
+  <line x1="488" y1="274" x2="480" y2="254" stroke="#F0F8FF" stroke-opacity="0.12" stroke-width="0.8"/>
+  <line x1="600" y1="274" x2="560" y2="254" stroke="#F0F8FF" stroke-opacity="0.12" stroke-width="0.8"/>
+
+  <!-- Central glowing node -->
+  <circle cx="360" cy="340" r="8" fill="#00E5FF" opacity="0.9" filter="url(#glowSm)"/>
+  <circle cx="360" cy="340" r="18" stroke="#00E5FF" stroke-opacity="0.18" stroke-width="1" fill="none"/>
+
+  <!-- Dashed connector: control plane → database -->
+  <line x1="360" y1="368" x2="360" y2="410" stroke="url(#cyanViolet)" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <circle cx="360" cy="390" r="3" fill="#8E44AD" opacity="0.7"/>
+
+  <!-- ─── Bottom: PostgreSQL ─── -->
+  <rect x="72" y="410" width="576" height="68" rx="10" fill="#161B22" stroke="url(#archStroke)" stroke-width="1.4"/>
+  <text x="360" y="438" text-anchor="middle" fill="#F0F8FF" font-family="Inter,system-ui,sans-serif" font-size="13" font-weight="700" letter-spacing="0.5">POSTGRESQL + PGVECTOR</text>
+  <text x="360" y="460" text-anchor="middle" fill="#8F9BB3" font-family="Inter,system-ui,sans-serif" font-size="11">Resources · Files · Policies · Embeddings · Traces</text>
+
+  <!-- Corner accent nodes -->
+  <circle cx="88" cy="52" r="2.5" fill="#00E5FF" opacity="0.6"/>
+  <circle cx="632" cy="52" r="2.5" fill="#8E44AD" opacity="0.6"/>
+  <circle cx="88" cy="462" r="2.5" fill="#8E44AD" opacity="0.6"/>
+  <circle cx="632" cy="462" r="2.5" fill="#00E5FF" opacity="0.6"/>
+
+  <!-- Scattered micro-nodes for galaxy feel -->
+  <circle cx="140" cy="140" r="1.5" fill="#00E5FF" opacity="0.3"/>
+  <circle cx="580" cy="140" r="1.5" fill="#8E44AD" opacity="0.3"/>
+  <circle cx="200" cy="380" r="1.5" fill="#8E44AD" opacity="0.25"/>
+  <circle cx="520" cy="380" r="1.5" fill="#00E5FF" opacity="0.25"/>
+  <circle cx="460" cy="140" r="1" fill="#00E5FF" opacity="0.2"/>
+  <circle cx="260" cy="390" r="1" fill="#8E44AD" opacity="0.2"/>
+
+  <!-- Faint graph lines between scattered nodes -->
+  <line x1="140" y1="140" x2="200" y2="196" stroke="#00E5FF" stroke-opacity="0.06" stroke-width="0.6"/>
+  <line x1="580" y1="140" x2="540" y2="196" stroke="#8E44AD" stroke-opacity="0.06" stroke-width="0.6"/>
+  <line x1="200" y1="380" x2="270" y2="340" stroke="#8E44AD" stroke-opacity="0.06" stroke-width="0.6"/>
+  <line x1="520" y1="380" x2="450" y2="340" stroke="#00E5FF" stroke-opacity="0.06" stroke-width="0.6"/>
 </svg>

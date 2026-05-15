@@ -1,15 +1,15 @@
-# SOAT — The complete backend for AI apps
+# SOAT — Infrastructure for production-ready AI agents
 
 <p align="center">
-  <img src="./packages/website/static/img/hero.jpg" alt="SOAT Banner" width="100%">
+  <img src="./packages/website/static/img/soat-architecture.png" alt="SOAT Architecture" width="100%">
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![SafeSkill 92/100](https://img.shields.io/badge/SafeSkill-92%2F100_Verified%20Safe-brightgreen)](https://safeskill.dev/scan/ttoss-soat)
 
-**SOAT** is open-source infrastructure for building AI applications. One self-hostable Node.js server gives you IAM, file and document storage with vector search, conversational memory, agent orchestration, multi-agent workflows, retrieval-augmented generation, and a full Model Context Protocol server — backed by PostgreSQL.
+**SOAT** is open-source infrastructure for building AI applications. One self-hostable Node.js server gives you IAM, file and document storage with vector search, conversational memory, agent orchestration, multi-agent workflows, retrieval-augmented generation, declarative stack deployment, and a full Model Context Protocol server — backed by PostgreSQL.
 
-You bring the product. SOAT handles the plumbing.
+You bring the product. SOAT handles the infrastructure layer.
 
 ## Why SOAT?
 
@@ -17,17 +17,18 @@ Shipping AI applications means rebuilding the same infrastructure on every proje
 
 ## Highlights
 
-- **Identity & access** — users, projects, project memberships, JWTs, project keys, personal API keys, and reusable IAM policy documents enforced consistently on every surface.
-- **Files, documents & RAG** — pgvector-backed semantic search, plus _memories_ (named, reusable retrieval configurations) that let any agent do RAG without bespoke tool wiring.
-- **Agents that actually do things** — tool-calling reasoning loops with HTTP, MCP, client-side, and SOAT-platform tools, including multi-agent workflows where agents invoke other agents.
-- **Sessions** — a 1-user ↔ 1-agent interface that hides actors and conversations. Two API calls take a user from message to answer.
+- **Identity & access** — users, projects, JWTs, project keys, personal API keys, and reusable [IAM policy documents](https://soat.ttoss.dev/docs/modules/iam) enforced consistently on every surface.
+- **Files, documents, memories & knowledge** — pgvector-backed semantic search across documents and memory entries, with memory containers that keep durable context for agents. See [Files](https://soat.ttoss.dev/docs/modules/files), [Documents](https://soat.ttoss.dev/docs/modules/documents), [Memories](https://soat.ttoss.dev/docs/modules/memories), and [Knowledge](https://soat.ttoss.dev/docs/modules/knowledge).
+- **Agents that actually do things** — tool-calling reasoning loops with HTTP, MCP, client-side, and SOAT-platform tools, including multi-agent workflows where agents invoke other agents. See [Agents](https://soat.ttoss.dev/docs/modules/agents).
+- **Declarative deployments** — [Agent Formations](https://soat.ttoss.dev/docs/modules/agent-formations) let you define providers, memories, tools, and agents in a single template and deploy in dependency order.
+- **Sessions** — a 1-user ↔ 1-agent interface that hides actors and conversations. Two API calls take a user from message to answer. See [Sessions](https://soat.ttoss.dev/docs/modules/sessions).
 - **Async generations** — kick off long-running agent runs, poll for status, or fire a webhook on completion.
-- **Operations** — encrypted secrets, HMAC-signed webhooks with event-pattern subscriptions, and trace records for every generation.
-- **MCP native** — every operation is automatically available as an MCP tool. Plug SOAT into Claude Desktop, Cursor, or any MCP-compatible runtime.
+- **Operations** — encrypted secrets, HMAC-signed webhooks with event-pattern subscriptions, and trace records for every generation. See [Webhooks](https://soat.ttoss.dev/docs/modules/webhooks) and [Traces](https://soat.ttoss.dev/docs/modules/traces).
+- **MCP native** — every operation is automatically available as an MCP tool. Plug SOAT into Claude Desktop, Cursor, or any MCP-compatible runtime. See [MCP docs](https://soat.ttoss.dev/docs/mcp).
 
 ## Documentation
 
-**[Read the full documentation](https://soat.ttoss.dev)** — quick start, key concepts, module reference, API, MCP, CLI, and SDK guides.
+**[Read the full documentation](https://soat.ttoss.dev/docs/introduction)** — quick start, key concepts, module reference, API, MCP, CLI, and SDK guides.
 
 ## Getting Started
 
@@ -42,12 +43,12 @@ Follow the **[Getting Started Guide](https://soat.ttoss.dev/docs/getting-started
 
 ## Client surfaces
 
-| Surface               | Best for                                                |
-| --------------------- | ------------------------------------------------------- |
-| **REST API**          | Backend services and custom integrations                |
-| **MCP server**        | Claude Desktop, Cursor, and other MCP-aware AI runtimes |
-| **CLI** (`soat`)      | Scripts, CI pipelines, and local exploration            |
-| **SDK** (`@soat/sdk`) | TypeScript and JavaScript applications                  |
+| Surface               | Best for                                                | Docs                            |
+| --------------------- | ------------------------------------------------------- | ------------------------------- |
+| **REST API**          | Backend services and custom integrations                | https://soat.ttoss.dev/docs/api |
+| **MCP server**        | Claude Desktop, Cursor, and other MCP-aware AI runtimes | https://soat.ttoss.dev/docs/mcp |
+| **CLI** (`soat`)      | Scripts, CI pipelines, and local exploration            | https://soat.ttoss.dev/docs/cli |
+| **SDK** (`@soat/sdk`) | TypeScript and JavaScript applications                  | https://soat.ttoss.dev/docs/sdk |
 
 All four hit the same business logic and the same permission engine.
 

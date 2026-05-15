@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 
 import { actorsRouter } from './actors';
 import { actorTagsRouter } from './actorTags';
+import { agentFormationsRouter } from './agentFormations';
 import { agentsRouter } from './agents';
 import { aiProvidersRouter } from './aiProviders';
 import { apiKeysRouter } from './apiKeys';
@@ -20,6 +21,7 @@ import { webhooksRouter } from './webhooks';
 
 const v1Router = new Router();
 
+v1Router.use(agentFormationsRouter.routes());
 v1Router.use(agentsRouter.routes());
 v1Router.use(chatsRouter.routes());
 v1Router.use(actorsRouter.routes());

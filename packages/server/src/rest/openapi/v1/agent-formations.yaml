@@ -1,0 +1,553 @@
+openapi: 3.0.3
+info:
+  title: SOAT Agent Formations API
+  version: 1.0.0
+  description: >
+    API for managing Agent Formations — a CloudFormation-inspired declarative
+    deployment layer that lets you describe an entire AI agent stack in a
+    single template and deploy it with one API call.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: AgentFormations
+    description: Manage declarative agent formation stacks
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/agent-formations/validate:
+    post:
+      tags:
+        - AgentFormations
+      summary: Validate a formation template
+      description: >
+        Validates a formation template without creating any resources.
+        Returns a list of errors and warnings.
+      operationId: validateAgentFormation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - template
+              properties:
+                template:
+                  $ref: '#/components/schemas/FormationTemplate'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+        '401':
+          description: Unauthorized
+
+  /api/v1/agent-formations/plan:
+    post:
+      tags:
+        - AgentFormations
+      summary: Plan a formation deployment
+      description: >
+        Computes a diff between the desired template and the current stack state
+        without making any changes. Returns the list of planned actions.
+      operationId: planAgentFormation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - project_id
+                - template
+              properties:
+                project_id:
+                  type: string
+                  description: Project ID
+                  example: proj_V1StGXR8Z5jdHi6B
+                formation_id:
+                  type: string
+                  description: >
+                    Existing formation ID to compare against. Omit for new
+                    formation planning.
+                template:
+                  $ref: '#/components/schemas/FormationTemplate'
+      responses:
+        '200':
+          description: Plan result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanResult'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/agent-formations:
+    get:
+      tags:
+        - AgentFormations
+      summary: List agent formations
+      description: Returns all formation stacks for a project
+      operationId: listAgentFormations
+      parameters:
+        - name: project_id
+          in: query
+          description: Project ID (required if not using project key auth)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: List of formations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentFormation'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+    post:
+      tags:
+        - AgentFormations
+      summary: Create a new agent formation
+      description: >
+        Validates the template, creates the formation record, then provisions
+        all declared resources in dependency order.
+      operationId: createAgentFormation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - project_id
+                - name
+                - template
+              properties:
+                project_id:
+                  type: string
+                  description: Project ID
+                  example: proj_V1StGXR8Z5jdHi6B
+                name:
+                  type: string
+                  description: Human-readable name for the formation stack
+                  example: my-agent-stack
+                template:
+                  $ref: '#/components/schemas/FormationTemplate'
+                metadata:
+                  type: object
+                  additionalProperties: true
+                  nullable: true
+      responses:
+        '201':
+          description: Formation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentFormation'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: Formation with this name already exists
+
+  /api/v1/agent-formations/{formation_id}:
+    get:
+      tags:
+        - AgentFormations
+      summary: Get a specific agent formation
+      description: Returns the formation stack including its current resources.
+      operationId: getAgentFormation
+      parameters:
+        - name: formation_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: af_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: Formation details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentFormation'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+
+    put:
+      tags:
+        - AgentFormations
+      summary: Update an agent formation
+      description: >
+        Applies a new template to the formation. Resources are created,
+        updated, or deleted to reconcile the current state with the desired
+        state.
+      operationId: updateAgentFormation
+      parameters:
+        - name: formation_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: af_V1StGXR8Z5jdHi6B
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                template:
+                  $ref: '#/components/schemas/FormationTemplate'
+                metadata:
+                  type: object
+                  additionalProperties: true
+                  nullable: true
+      responses:
+        '200':
+          description: Updated formation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentFormation'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+
+    delete:
+      tags:
+        - AgentFormations
+      summary: Delete an agent formation
+      description: >
+        Deletes the formation stack and all its managed resources in reverse
+        dependency order.
+      operationId: deleteAgentFormation
+      parameters:
+        - name: formation_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: af_V1StGXR8Z5jdHi6B
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+
+  /api/v1/agent-formations/{formation_id}/events:
+    get:
+      tags:
+        - AgentFormations
+      summary: List formation operation events
+      description: >
+        Returns all operations (create, update, delete) with their event logs
+        for the formation, ordered chronologically.
+      operationId: listAgentFormationEvents
+      parameters:
+        - name: formation_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: af_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: List of operations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FormationOperation'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    FormationTemplate:
+      type: object
+      required:
+        - resources
+      properties:
+        resources:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ResourceDeclaration'
+          description: Map of logical resource IDs to resource declarations
+        outputs:
+          type: object
+          additionalProperties: true
+          description: >
+            Map of output names to values. Values may use `{ "ref": "logicalId" }`
+            to reference physical IDs of created resources.
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+
+    ResourceDeclaration:
+      type: object
+      required:
+        - type
+        - properties
+      properties:
+        type:
+          type: string
+          enum:
+            - ai_provider
+            - agent_tool
+            - agent
+            - document
+            - memory
+            - memory_entry
+            - webhook
+          description: Resource type
+        properties:
+          type: object
+          additionalProperties: true
+          description: >
+            Resource properties. Values may use `{ "ref": "logicalId" }` to
+            reference physical IDs of other resources in the template.
+        depends_on:
+          type: array
+          items:
+            type: string
+          description: Explicit dependency list. In addition to implicit `ref` dependencies.
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+
+    AgentFormationResource:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public ID of the resource record
+        logical_id:
+          type: string
+          description: Logical identifier from the template
+        resource_type:
+          type: string
+          description: Resource type (e.g. agent, memory)
+        physical_resource_id:
+          type: string
+          nullable: true
+          description: Public ID of the physical SOAT resource
+        status:
+          type: string
+          enum:
+            - pending
+            - created
+            - updated
+            - deleted
+            - failed
+          description: Current resource status
+
+    AgentFormation:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public ID of the formation
+          example: af_V1StGXR8Z5jdHi6B
+        project_id:
+          type: string
+          description: Project public ID
+        name:
+          type: string
+          description: Human-readable formation name
+        template:
+          $ref: '#/components/schemas/FormationTemplate'
+        outputs:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+          description: Resolved output values after stack deployment
+        status:
+          type: string
+          enum:
+            - creating
+            - active
+            - updating
+            - failed
+            - deleting
+            - deleted
+            - delete_failed
+          description: Formation status
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+        resources:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentFormationResource'
+          description: Resources managed by this formation (present on get/create/update)
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ValidationError:
+      type: object
+      properties:
+        path:
+          type: string
+          description: JSON path to the field with the error
+        message:
+          type: string
+          description: Error description
+
+    ValidationResult:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationError'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationError'
+
+    PlanChange:
+      type: object
+      properties:
+        logical_id:
+          type: string
+        resource_type:
+          type: string
+        action:
+          type: string
+          enum:
+            - create
+            - update
+            - delete
+            - no-op
+
+    PlanResult:
+      type: object
+      properties:
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanChange'
+
+    FormationEvent:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        logical_id:
+          type: string
+        resource_type:
+          type: string
+        action:
+          type: string
+        status:
+          type: string
+          enum:
+            - succeeded
+            - failed
+        physical_resource_id:
+          type: string
+          nullable: true
+        error:
+          type: string
+          nullable: true
+
+    FormationOperation:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public ID of the operation
+        operation_type:
+          type: string
+          enum:
+            - validate
+            - plan
+            - create
+            - update
+            - delete
+        status:
+          type: string
+          enum:
+            - pending
+            - running
+            - succeeded
+            - failed
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/FormationEvent'
+          nullable: true
+        plan:
+          allOf:
+            - $ref: '#/components/schemas/PlanResult'
+          nullable: true
+        error:
+          type: object
+          additionalProperties: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time

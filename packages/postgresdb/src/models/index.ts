@@ -1,5 +1,8 @@
 export { Actor } from './Actor';
 export { Agent } from './Agent';
+export { AgentFormation } from './AgentFormation';
+export { AgentFormationOperation } from './AgentFormationOperation';
+export { AgentFormationResource } from './AgentFormationResource';
 export { AgentTool } from './AgentTool';
 export { AiProvider } from './AiProvider';
 export { ApiKey } from './ApiKey';

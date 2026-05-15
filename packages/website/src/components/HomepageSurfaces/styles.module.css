@@ -1,0 +1,63 @@
+.surfaces {
+  padding: 4rem 0;
+  border-top: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--ifm-color-emphasis-100);
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  margin-left: -50vw;
+}
+
+.surfacesLead {
+  max-width: 720px;
+  margin: 0.5rem auto 2.5rem;
+  opacity: 0.85;
+}
+
+.surfaceCard {
+  text-align: center;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.surfaceCard:hover {
+  border-color: rgba(0, 229, 255, 0.35);
+  box-shadow:
+    0 0 24px rgba(0, 229, 255, 0.12),
+    0 0 48px rgba(142, 68, 173, 0.08);
+}
+
+.surfaceCard h3 {
+  margin-bottom: 0.5rem;
+}
+
+.surfacesRow {
+  justify-content: center;
+}
+
+.surfaceIcon {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 0.75rem;
+  color: var(--ifm-color-primary);
+}
+
+.surfaceLink {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.15s ease;
+}
+
+.surfaceLink:hover {
+  text-decoration: none;
+  color: inherit;
+  transform: translateY(-2px);
+}
