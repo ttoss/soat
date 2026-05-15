@@ -192,18 +192,14 @@ const CodeShowcase = () => {
               {`TEMPLATE=$(cat agent-stack.json)
 
 soat plan-agent-formation \\
-  --project_id "$PROJECT_ID" \\
   --template "$TEMPLATE"
 
-FORMATION=$(soat create-agent-formation \\
-  --project_id "$PROJECT_ID" \\
+soat create-agent-formation \\
   --name "support-stack" \\
-  --template "$TEMPLATE")
-
-FORMATION_ID=$(echo "$FORMATION" | jq -r '.id')
+  --template "$TEMPLATE"
 
 soat list-agent-formation-events \\
-  --formation_id "$FORMATION_ID"`}
+  --formation_id "af_V1StGXR8Z5jdHi6B"`}
             </CodeBlock>
           </div>
         </div>
