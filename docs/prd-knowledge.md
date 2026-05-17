@@ -15,7 +15,9 @@
 | Memory source integration          | ✅ Implemented | `memory_ids`, `memory_tags` filters; `resolveMemorySearch()`; `source_type: "memory"` in results |
 | `document_filters` parameter       | ✅ Implemented | Flat `document_paths` and `document_ids` fields in OpenAPI spec                                  |
 | Memory entry ranking/merge         | ✅ Implemented | Document + memory results interleaved by score in `searchKnowledge()`                            |
-| Knowledge ↔ Entities integration   | ❌ Future      | `traverseEntities()` as third source; `source_type: "entity"` in results                         |
+| Entity graph queries               | ❌ Future      | `entity_ids`, `entity_names`, `actor_ids` filters; `resolveEntitySearch()`                       |
+| Hybrid vector + entity search      | ❌ Future      | Entity filter narrows candidates, vector search ranks within                                     |
+| Graph traversal queries            | ❌ Future      | `relationship` and `direction` filters for edge-based traversal                                  |
 | Post-conversation extraction       | ❌ Future      | Async trigger on conversation turn; facts written via `writeMemoryEntry()`                       |
 
 ## Implementation Phases
@@ -52,26 +54,74 @@
 
 ---
 
-### Phase 5 — Knowledge ↔ Entities Integration ❌ Future
+### Phase 3 — Entity Graph Queries ❌ Future
 
-**Goal:** Add entity/relationship graph traversal as a third knowledge source alongside documents and memories.
+**Goal:** Extend `searchKnowledge()` with entity-based filters so callers can query knowledge by structured graph traversal — not just vector similarity. Enables precise queries like "everything about Pedro", "what does Company X own?", and "all knowledge linked to actor `act_01`".
 
-**Dependencies:** Entities module (all components in [prd-entities.md](./prd-entities.md)) must be complete first.
+**Dependencies:** Phase 2 of this PRD (memory integration) must be complete. Memory entity graph layer (prd-memories.md Phase 5) must be complete.
+
+**New parameters on `POST /api/v1/knowledge/search`:**
+
+| Parameter      | Type     | Description                                                                               |
+| -------------- | -------- | ----------------------------------------------------------------------------------------- |
+| `entity_ids`   | string[] | Filter entries linked to these entity IDs (`mey_...`)                                     |
+| `entity_names` | string[] | Filter entries linked to entities matching these names (case-insensitive substring match) |
+| `actor_ids`    | string[] | Filter entries linked to entities that have these actor IDs (`act_...`)                   |
+| `entity_types` | string[] | Filter entries linked to entities of these types (`person`, `organization`, etc.)         |
+| `relationship` | string   | Filter by relationship label (the verb: `owns`, `works_at`, `prefers`)                    |
+| `direction`    | string   | Filter by direction: `subject` (entity is the doer) or `object` (entity is the receiver)  |
+
+All entity parameters are optional and compose with existing vector/memory/document filters.
+
+**Query modes:**
+
+| Mode                   | Parameters                                  | Behavior                                                        |
+| ---------------------- | ------------------------------------------- | --------------------------------------------------------------- |
+| Vector-only (existing) | `query`                                     | Cosine similarity across all sources                            |
+| Entity-only            | `entity_ids` or `entity_names`              | All entries linked to those entities, ordered by `updated_at`   |
+| Actor-only             | `actor_ids`                                 | All entries linked to entities mapped to those actors           |
+| Hybrid (vector+entity) | `query` + entity filters                    | Entity filter narrows candidate set, vector search ranks within |
+| Graph traversal        | `entity_ids` + `relationship`               | Follow specific relationships from an entity                    |
+| Full graph             | `entity_ids` + `relationship` + `direction` | Directed edge traversal                                         |
 
 **Deliverables:**
 
-- `traverseEntities()` lib function in `knowledge.ts` — given a query and project scope, traverse the entity/relationship graph and return relevant entities/relationships with a score
-- `entity_filters` parameter on `POST /api/v1/knowledge/search` — scope graph traversal by entity type or relationship verb
-- `source_type: "entity"` added to `KnowledgeResult` — each entity result carries `entity_id`, `relationship_path`, `content` (serialized from entity properties), and `score`
-- Parallel execution: document search, memory search, and entity traversal run concurrently; results merged and re-ranked by score
-- OpenAPI spec update → SDK/CLI regeneration → `search_knowledge` soat-tool gains entity parameters automatically
-- Tests: entity-only search, mixed (document + memory + entity) search, relationship path filtering
+- `resolveEntitySearch()` lib function in `knowledge.ts` — resolves entities by ID/name/actor, joins through `MemoryEntryEntity` to find linked entries
+- Entity filters compose with memory filters: entity match narrows the entry set, memory/tag filters narrow the memory scope; intersection of both
+- When `query` is provided alongside entity filters: entity match produces candidate entries, then vector similarity ranks them
+- When `query` is absent and only entity filters are provided: return all matching entries ordered by `updated_at` descending (no ranking needed)
+- `relationship` and `direction` filters applied on the `MemoryEntryEntity` join — only entries connected via the specified edge
+- Response enrichment: memory-type results include an `entities` array showing linked entities and their relationships
+- OpenAPI spec updated → SDK/CLI regenerated → `search_knowledge` soat-tool gains entity parameters automatically
+- Tests: entity-only search, actor-only search, hybrid vector+entity, relationship traversal, direction filtering, entity+memory scope intersection
 
-**Unlocks:** Agents that can reason over structured domain knowledge — "What companies does actor_1 own? What is their MRR?"
+**Example queries:**
+
+```jsonc
+// "What do we know about Pedro?"
+{ "project_id": "prj_01", "entity_names": ["Pedro"] }
+
+// "What does Pedro own?" (graph traversal)
+{ "project_id": "prj_01", "entity_names": ["Pedro"], "relationship": "owns", "direction": "subject" }
+
+// "Everything about actor act_01" (actor-anchored)
+{ "project_id": "prj_01", "actor_ids": ["act_01"] }
+
+// "Pedro-related entries that mention billing" (hybrid: entity narrows, vector ranks)
+{ "project_id": "prj_01", "query": "billing", "entity_names": ["Pedro"] }
+
+// "All people connected to Company X"
+{ "project_id": "prj_01", "entity_names": ["Company X"], "entity_types": ["person"] }
+
+// "Actor act_01 relationships in CRM memories only" (entity + memory scope)
+{ "project_id": "prj_01", "actor_ids": ["act_01"], "memory_tags": ["crm"] }
+```
+
+**Unlocks:** Phase 5c of the Memory module (entity-based knowledge queries). Agents can answer structured questions about entities and relationships using the same `search_knowledge` tool.
 
 ---
 
-### Phase 6 — Post-Conversation Extraction (async) ❌ Future
+### Phase 5 — Post-Conversation Extraction (async) ❌ Future
 
 **Goal:** Wire the memory extraction algorithm (defined in prd-memories.md Phase 4) into the conversation/agent pipeline so facts are extracted automatically after each turn — with no changes needed to the caller.
 
@@ -92,7 +142,7 @@
 
 ## Overview
 
-The Knowledge module is the **unified retrieval layer** for agents. It searches across all knowledge sources — documents, memory entries, and (in the future) knowledge graphs — and returns ranked, merged results.
+The Knowledge module is the **unified retrieval layer** for agents. It searches across all knowledge sources — documents and memory entries — and returns ranked, merged results.
 
 The knowledge module does not own any data. It orchestrates queries against data modules (documents, memories) and merges the results into a single ranked list. This decouples agents from the specifics of how knowledge is stored.
 
@@ -107,10 +157,39 @@ A single endpoint accepts a query and optional filters that scope which sources 
 - **Memory IDs** — search entries within specific memories by ID
 - **Memory tags** — search entries in memories matching tag patterns (supports glob: `user*` matches `user`, `user-prefs`, `user-history`)
 - **Document paths/IDs** — filter documents by paths or document IDs
+- **Entity IDs/names** — search entries linked to specific entities (graph lookup)
+- **Actor IDs** — search entries linked to entities mapped to specific actors
+- **Relationship/direction** — traverse specific edges in the entity graph
 
 If no source filters are provided, the search runs across all accessible documents and memories in the project.
 
 Memory IDs and memory tags can be combined — the search includes entries from memories that match **either** filter (union).
+
+### Vector vs Graph Queries
+
+The knowledge endpoint supports two complementary query strategies that can be used independently or combined:
+
+| Strategy   | When to use                                            | Parameters                                                |
+| ---------- | ------------------------------------------------------ | --------------------------------------------------------- |
+| **Vector** | Semantic similarity — "find things related to billing" | `query` (required)                                        |
+| **Graph**  | Structural lookup — "what does Pedro own?"             | `entity_ids`, `entity_names`, `actor_ids`, `relationship` |
+| **Hybrid** | Narrowed similarity — "billing info about Pedro"       | `query` + entity filters                                  |
+
+**Vector-only:** `query` drives cosine similarity across all sources. No entity filters.
+
+**Graph-only:** Entity filters produce a set of matching entries via `MemoryEntryEntity` joins. No embedding needed — results are ordered by `updated_at`. This is the "database search" path: exact, exhaustive, no fuzzy ranking.
+
+**Hybrid:** Entity filters narrow the candidate set first, then `query` ranks within that set by cosine similarity. Useful when you know _who_ you're asking about but want semantic relevance within that scope.
+
+### Actor-Anchored Queries
+
+Actors are first-class citizens in the entity graph. Querying by `actor_ids` finds all entries linked to entities that represent those actors — across all memories in the project.
+
+This enables queries like:
+
+- "All knowledge about this customer" → `{ actor_ids: ["act_customer"] }`
+- "What has this user said about preferences?" → `{ actor_ids: ["act_user"], query: "preferences" }`
+- "All actors connected to Company X" → `{ entity_names: ["Company X"] }` → results include entity metadata with `actor_id` when available
 
 ### Source-Tagged Results
 
@@ -123,34 +202,72 @@ Results from all sources are ranked by cosine similarity score against the query
 ## Search Algorithm
 
 ```
-Input: query (string), project_id, memory_ids[]?, memory_tags[]?, document_paths[]?, document_ids[]?, min_score?, limit?
+Input: query (string)?, project_id, memory_ids[]?, memory_tags[]?, document_paths[]?,
+       document_ids[]?, entity_ids[]?, entity_names[]?, actor_ids[]?, entity_types[]?,
+       relationship?, direction?, min_score?, limit?
 
-STEP 1 — EMBED
+STEP 1 — DETERMINE MODE
+  has_query   = query is provided and non-empty
+  has_entity  = entity_ids or entity_names or actor_ids is provided
+  mode        = has_query && has_entity ? "hybrid"
+              : has_query               ? "vector"
+              : has_entity              ? "graph"
+              : "vector"  (default — query required if no entity filters)
+
+STEP 2 — EMBED (skip if mode = "graph")
   Generate embedding for the query.
 
-STEP 2 — RESOLVE MEMORY SCOPE
+STEP 3 — RESOLVE MEMORY SCOPE
   Collect target memories from:
     - memory_ids (if provided): memories matching these IDs
     - memory_tags (if provided): memories whose tags match any pattern (glob)
   Union the two sets. If neither is provided, use all memories in the project.
 
-STEP 3 — SEARCH SOURCES (parallel)
+STEP 4 — RESOLVE ENTITY SCOPE (skip if mode = "vector")
+  Collect candidate entry IDs:
+    a. Resolve entities:
+       - entity_ids → direct lookup
+       - entity_names → case-insensitive substring match on MemoryEntity.name within project
+       - actor_ids → lookup MemoryEntity where actorId IN actor_ids within project
+       - entity_types → filter resolved entities by entityType
+    b. Join through MemoryEntryEntity to get entry IDs:
+       - If relationship is provided, filter joins where relationship matches
+       - If direction is provided, filter joins where direction matches
+    c. Result: a set of entry_ids linked to the matched entities
 
-  IF target memories is non-empty:
-    Search memory entries within resolved memories by cosine similarity.
+STEP 5 — SEARCH SOURCES (parallel)
+
+  IF mode = "graph":
+    Fetch memory entries by ID set from step 4.
+    Intersect with memory scope from step 3 (if memory filters were provided).
+    Order by updated_at descending (no cosine ranking).
+    Enrich each result with linked entities and relationships.
     Tag each result with source_type = "memory".
 
-  IF document_paths or document_ids is provided (or no filters → all documents in project):
-    Search documents by cosine similarity (existing resolveDocumentSearch logic).
-    Tag each result with source_type = "document".
+  IF mode = "vector" or "hybrid":
+    IF target memories is non-empty:
+      Search memory entries within resolved memories by cosine similarity.
+      IF mode = "hybrid": intersect results with entry_ids from step 4.
+      Tag each result with source_type = "memory".
 
-STEP 4 — MERGE & RANK
+    IF document_paths or document_ids is provided (or no filters → all documents in project):
+      Search documents by cosine similarity (existing resolveDocumentSearch logic).
+      Tag each result with source_type = "document".
+      (Entity filters do not apply to documents — documents have no entity links.)
+
+STEP 6 — ENRICH ENTITY METADATA
+  For memory-type results (in any mode), attach linked entities:
+    Query MemoryEntryEntity + MemoryEntity for each result entry.
+    Add entities[] array with { entity_id, name, entity_type, actor_id, relationship, direction }.
+
+STEP 7 — MERGE & RANK
   Combine all results into a single list.
-  Sort by score descending.
-  Apply min_score filter.
+  IF mode = "graph": sort by updated_at descending.
+  ELSE: sort by score descending.
+  Apply min_score filter (only when query was provided).
   Apply limit.
 
-STEP 5 — RETURN
+STEP 8 — RETURN
   Return the merged, ranked list.
 ```
 
@@ -160,8 +277,9 @@ All body fields use `snake_case` per project convention.
 
 ### Search
 
-```
-POST /api/v1/knowledge/search
+#### Vector search (existing)
+
+```json
 {
   "query": "customer communication preferences",
   "project_id": "prj_01",
@@ -176,11 +294,59 @@ POST /api/v1/knowledge/search
 
 `memory_tags` supports glob patterns: `user*` matches memories tagged `user`, `user-prefs`, `user-history`, etc. When both `memory_ids` and `memory_tags` are provided, the search includes entries from the **union** of both sets.
 
+#### Graph search — entity lookup
+
+```jsonc
+// "What do we know about Pedro?"
+{
+  "project_id": "prj_01",
+  "entity_names": ["Pedro"]
+}
+
+// "What does Pedro own?" (directed graph traversal)
+{
+  "project_id": "prj_01",
+  "entity_names": ["Pedro"],
+  "relationship": "owns",
+  "direction": "subject"
+}
+
+// "Everything about this actor across all memories"
+{
+  "project_id": "prj_01",
+  "actor_ids": ["act_01"]
+}
+
+// "All people connected to Company X"
+{
+  "project_id": "prj_01",
+  "entity_names": ["Company X"],
+  "entity_types": ["person"]
+}
 ```
 
+#### Hybrid search — entity + vector
+
+```jsonc
+// "Billing info about Pedro" — entity narrows, vector ranks
+{
+  "project_id": "prj_01",
+  "query": "billing",
+  "entity_names": ["Pedro"]
+}
+
+// "Actor preferences in CRM memories" — entity + memory scope + vector
+{
+  "project_id": "prj_01",
+  "query": "preferences",
+  "actor_ids": ["act_01"],
+  "memory_tags": ["crm"]
+}
 ```
 
-Response:
+#### Response
+
+Vector/hybrid mode (results ranked by score):
 
 ```json
 {
@@ -190,7 +356,17 @@ Response:
       "memory_id": "mem_abc",
       "entry_id": "me_001",
       "content": "Customer prefers email over phone calls, especially for billing inquiries",
-      "score": 0.89
+      "score": 0.89,
+      "entities": [
+        {
+          "entity_id": "mey_pedro",
+          "name": "Pedro",
+          "entity_type": "person",
+          "actor_id": "act_01",
+          "relationship": "prefers",
+          "direction": "subject"
+        }
+      ]
     },
     {
       "source_type": "document",
@@ -204,7 +380,56 @@ Response:
       "memory_id": "mem_def",
       "entry_id": "me_003",
       "content": "Customer timezone is EST",
-      "score": 0.52
+      "score": 0.52,
+      "entities": []
+    }
+  ]
+}
+```
+
+Graph-only mode (results ordered by `updated_at`, no score):
+
+```json
+{
+  "results": [
+    {
+      "source_type": "memory",
+      "memory_id": "mem_abc",
+      "entry_id": "me_001",
+      "content": "Pedro owns Company X",
+      "entities": [
+        {
+          "entity_id": "mey_pedro",
+          "name": "Pedro",
+          "entity_type": "person",
+          "actor_id": "act_01",
+          "relationship": "owns",
+          "direction": "subject"
+        },
+        {
+          "entity_id": "mey_companyX",
+          "name": "Company X",
+          "entity_type": "organization",
+          "relationship": "owns",
+          "direction": "object"
+        }
+      ]
+    },
+    {
+      "source_type": "memory",
+      "memory_id": "mem_def",
+      "entry_id": "me_007",
+      "content": "Pedro prefers email communication",
+      "entities": [
+        {
+          "entity_id": "mey_pedro",
+          "name": "Pedro",
+          "entity_type": "person",
+          "actor_id": "act_01",
+          "relationship": "prefers",
+          "direction": "subject"
+        }
+      ]
     }
   ]
 }
@@ -228,6 +453,7 @@ Agents store a `knowledgeConfig` JSONB field that mirrors the `searchKnowledge` 
     "memory_ids": ["mem_abc"],
     "memory_tags": ["crm"],
     "document_paths": ["/sales/"],
+    "actor_ids": ["act_customer"],
     "min_score": 0.5,
     "limit": 10
   }
@@ -235,6 +461,8 @@ Agents store a `knowledgeConfig` JSONB field that mirrors the `searchKnowledge` 
 ```
 
 Simple case (one memory): `{ "knowledge_config": { "memory_ids": ["mem_abc"] } }`
+
+Actor-scoped case: `{ "knowledge_config": { "actor_ids": ["act_customer"] } }` — retrieves all knowledge about a specific actor across all memories
 
 ### Three Knowledge Retrieval Paths
 
@@ -248,13 +476,13 @@ Simple case (one memory): `{ "knowledge_config": { "memory_ids": ["mem_abc"] } }
 
 When both are provided, they **append** (not override):
 
-- **Array fields** (`memory_ids`, `memory_tags`, `document_paths`, `document_ids`) → union
-- **Scalar fields** (`min_score`, `limit`) → per-generation overrides agent config
+- **Array fields** (`memory_ids`, `memory_tags`, `document_paths`, `document_ids`, `entity_ids`, `entity_names`, `actor_ids`, `entity_types`) → union
+- **Scalar fields** (`min_score`, `limit`, `relationship`, `direction`) → per-generation overrides agent config
 
 ```
-Agent config:       { memory_ids: ["mem_abc"], limit: 5 }
+Agent config:       { memory_ids: ["mem_abc"], actor_ids: ["act_01"], limit: 5 }
 Per-generation:     { memory_ids: ["mem_xyz"], document_paths: ["/docs/"] }
-→ Merged:           { memory_ids: ["mem_abc", "mem_xyz"], document_paths: ["/docs/"], limit: 5 }
+→ Merged:           { memory_ids: ["mem_abc", "mem_xyz"], actor_ids: ["act_01"], document_paths: ["/docs/"], limit: 5 }
 ```
 
 ### Context Assembly
@@ -308,16 +536,18 @@ src/lib/knowledge.ts
 └── types                      — KnowledgeResult, DocumentQueryConfig, QueryDocumentResult
 ```
 
-### Planned state (after memory integration)
+### Planned state (after memory + entity integration)
 
 ```
 src/lib/knowledge.ts
-├── searchKnowledge()          — public: unified search orchestrator
+├── searchKnowledge()          — public: unified search orchestrator (vector, graph, hybrid modes)
 ├── resolveDocumentSearch()    — exported: existing document search logic
-├── searchMemoryEntries()      — private: cosine search against MemoryEntry table
-├── mergeAndRank()             — private: combine + sort + filter results
+├── resolveMemorySearch()      — exported: cosine search against MemoryEntry table
+├── resolveEntitySearch()      — private: entity/actor lookup → entry IDs via MemoryEntryEntity joins
+├── enrichEntityMetadata()     — private: attach linked entities to memory-type results
+├── mergeAndRank()             — private: combine + sort (by score or updated_at) + filter results
 ├── mapDocument()              — exported: shared mapper for document CRUD
-└── types                      — KnowledgeResult, DocumentQueryConfig, etc.
+└── types                      — KnowledgeResult, DocumentQueryConfig, EntityFilter, etc.
 ```
 
 ## Permissions
@@ -328,7 +558,7 @@ src/lib/knowledge.ts
 
 The caller must also have read access to the memories and documents being searched. The knowledge module delegates permission checks to the underlying data modules.
 
-## Future: Knowledge Graph
+## Future
 
 The knowledge module is designed to accommodate additional retrieval strategies:
 
@@ -336,10 +566,7 @@ The knowledge module is designed to accommodate additional retrieval strategies:
 | ---------------- | ---------- | --------------------------------------------------------------------------- |
 | Document search  | ✅ Done    | Cosine similarity on document embeddings                                    |
 | Memory search    | ❌ Planned | Cosine similarity on memory entry embeddings (depends on MemoryEntry model) |
-| Knowledge graph  | ❌ Future  | Build and traverse a graph of entities and relationships                    |
-| Hybrid retrieval | ❌ Future  | Combine embedding search with graph traversal for richer context            |
-
-When graph retrieval is added, it slots into the same `searchKnowledge` orchestrator as another parallel source, with results merged into the same ranked output.
+| Hybrid retrieval | ❌ Future  | Combine multiple retrieval strategies for richer context                    |
 
 ## Data Model
 

@@ -218,10 +218,10 @@ h6 {
   background:
     linear-gradient(
       90deg,
-      rgba(8, 12, 20, 0.96) 0%,
-      rgba(8, 12, 20, 0.86) 34%,
-      rgba(8, 12, 20, 0.32) 66%,
-      rgba(8, 12, 20, 0.08) 100%
+      rgba(8, 12, 20, 0.45) 0%,
+      rgba(8, 12, 20, 0.3) 34%,
+      rgba(8, 12, 20, 0.1) 66%,
+      rgba(8, 12, 20, 0.02) 100%
     ),
     url('/img/hero.png');
   background-size: cover;
@@ -235,16 +235,19 @@ h6 {
 .hero.hero--primary .hero__title,
 .hero.hero--primary .hero__subtitle {
   color: #ffffff;
+  text-shadow:
+    0 1px 8px rgba(0, 0, 0, 0.6),
+    0 2px 24px rgba(0, 0, 0, 0.45);
 }
 
 html[data-theme='dark'] .hero.hero--primary {
   background:
     linear-gradient(
       90deg,
-      rgba(8, 12, 20, 0.98) 0%,
-      rgba(8, 12, 20, 0.9) 34%,
-      rgba(8, 12, 20, 0.36) 66%,
-      rgba(8, 12, 20, 0.1) 100%
+      rgba(8, 12, 20, 0.55) 0%,
+      rgba(8, 12, 20, 0.4) 34%,
+      rgba(8, 12, 20, 0.14) 66%,
+      rgba(8, 12, 20, 0.03) 100%
     ),
     url('/img/hero.png');
   background-size: cover;

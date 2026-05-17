@@ -91,12 +91,15 @@
 
 .architectureLayout {
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(420px, 1.1fr);
-  gap: 3rem;
-  align-items: center;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
 }
 
-.architectureCopy h2 {
+.architectureIntro {
+  max-width: 880px;
+}
+
+.architectureIntro h2 {
   max-width: 680px;
   margin-bottom: 1rem;
 }
@@ -111,15 +114,15 @@
 }
 
 .architectureLead {
-  max-width: 680px;
-  margin-bottom: 1.75rem;
+  max-width: 760px;
+  margin-bottom: 0;
   color: var(--ifm-font-color-secondary);
   font-size: 1.05rem;
 }
 
 .platformPillars {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 0.875rem;
 }
 
@@ -145,28 +148,22 @@
 
 .architectureVisual {
   position: relative;
-  overflow: hidden;
-  border: 1px solid rgba(0, 229, 255, 0.16);
-  border-radius: 8px;
-  background: #080c14;
-  box-shadow: 0 24px 80px rgba(8, 12, 20, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0;
 }
 
 .architectureVisual::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(180deg, rgba(8, 12, 20, 0) 45%, #080c14 100%),
-    linear-gradient(90deg, rgba(8, 12, 20, 0.16) 0%, transparent 44%);
-  pointer-events: none;
+  content: none;
 }
 
 .architectureVisual img {
   display: block;
   width: 100%;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
+  height: auto;
+  object-fit: contain;
   object-position: center;
 }
 
@@ -186,9 +183,7 @@ html[data-theme='dark'] .platformPillar {
 }
 
 html[data-theme='dark'] .architectureVisual {
-  box-shadow:
-    0 24px 80px rgba(0, 0, 0, 0.42),
-    0 0 34px rgba(0, 229, 255, 0.08);
+  box-shadow: none;
 }
 
 @media screen and (max-width: 996px) {
@@ -197,12 +192,15 @@ html[data-theme='dark'] .architectureVisual {
   }
 
   .architectureLayout {
-    grid-template-columns: 1fr;
-    gap: 2rem;
+    gap: 1.25rem;
   }
 
   .platformPillars {
     grid-template-columns: 1fr;
+  }
+
+  .architectureVisual {
+    padding: 0;
   }
 }
 

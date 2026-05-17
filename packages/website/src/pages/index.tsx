@@ -94,7 +94,7 @@ const ArchitectureBand = () => {
     <section className={styles.architecture}>
       <div className="container">
         <div className={styles.architectureLayout}>
-          <div className={styles.architectureCopy}>
+          <div className={styles.architectureIntro}>
             <p className={styles.eyebrow}>What SOAT provides</p>
             <Heading as="h2">
               One self-hosted layer for the agent backend stack.
@@ -104,22 +104,22 @@ const ArchitectureBand = () => {
               control surface: storage, orchestration, retrieval, governance,
               and observability.
             </p>
-            <div className={styles.platformPillars}>
-              {platformPillars.map((pillar) => {
-                return (
-                  <div className={styles.platformPillar} key={pillar.title}>
-                    <Heading as="h3">{pillar.title}</Heading>
-                    <p>{pillar.description}</p>
-                  </div>
-                );
-              })}
-            </div>
           </div>
           <div className={styles.architectureVisual}>
             <img
               src="/img/soat-architecture.png"
               alt="SOAT architecture visualization with connected infrastructure panels and a central vector galaxy"
             />
+          </div>
+          <div className={styles.platformPillars}>
+            {platformPillars.map((pillar) => {
+              return (
+                <div className={styles.platformPillar} key={pillar.title}>
+                  <Heading as="h3">{pillar.title}</Heading>
+                  <p>{pillar.description}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
