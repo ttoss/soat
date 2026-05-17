@@ -29,7 +29,10 @@ export type {
   PlanChange,
   PlanResult,
 } from './agentFormationsTypes';
-export { validateFormationTemplate } from './agentFormationsValidation';
+export {
+  parseFormationTemplateInput,
+  validateFormationTemplate,
+} from './agentFormationsValidation';
 
 // ── Mapping ───────────────────────────────────────────────────────────────
 

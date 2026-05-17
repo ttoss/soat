@@ -8,6 +8,7 @@ import {
   getAgentFormation,
   listAgentFormationEvents,
   listAgentFormations,
+  parseFormationTemplateInput,
   planAgentFormation,
   updateAgentFormation,
   validateFormationTemplate,
@@ -28,33 +29,6 @@ const resolveProjectPublicId = (
   return null;
 };
 
-/**
- * @openapi
- * /api/v1/agent-formations/validate:
- *   post:
- *     summary: Validate a formation template
- *     operationId: validateAgentFormation
- *     tags: [AgentFormations]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [template]
- *             properties:
- *               template:
- *                 $ref: '#/components/schemas/FormationTemplate'
- *     responses:
- *       200:
- *         description: Validation result
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationResult'
- *       401:
- *         description: Unauthorized
- */
 agentFormationsRouter.post(
   '/agent-formations/validate',
   async (ctx: Context) => {
@@ -65,43 +39,11 @@ agentFormationsRouter.post(
     }
 
     const body = ctx.request.body as { template?: unknown };
-    ctx.body = validateFormationTemplate(body.template);
+    const parsedTemplate = parseFormationTemplateInput(body.template);
+    ctx.body = validateFormationTemplate(parsedTemplate);
   }
 );
 
-/**
- * @openapi
- * /api/v1/agent-formations/plan:
- *   post:
- *     summary: Plan a formation deployment
- *     operationId: planAgentFormation
- *     tags: [AgentFormations]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [project_id, template]
- *             properties:
- *               project_id:
- *                 type: string
- *               formation_id:
- *                 type: string
- *               template:
- *                 $ref: '#/components/schemas/FormationTemplate'
- *     responses:
- *       200:
- *         description: Plan result
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/PlanResult'
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden
- */
 agentFormationsRouter.post('/agent-formations/plan', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -135,7 +77,8 @@ agentFormationsRouter.post('/agent-formations/plan', async (ctx: Context) => {
     return;
   }
 
-  const validation = validateFormationTemplate(body.template);
+  const parsedTemplate = parseFormationTemplateInput(body.template);
+  const validation = validateFormationTemplate(parsedTemplate);
   if (!validation.valid) {
     ctx.status = 400;
     ctx.body = { error: 'Invalid template', details: validation.errors };
@@ -153,50 +96,11 @@ agentFormationsRouter.post('/agent-formations/plan', async (ctx: Context) => {
 
   ctx.body = await planAgentFormation({
     projectId: project.id,
-    template: body.template as FormationTemplate,
+    template: parsedTemplate as FormationTemplate,
     formationId: body.formationId,
   });
 });
 
-/**
- * @openapi
- * /api/v1/agent-formations:
- *   post:
- *     summary: Create a new agent formation
- *     operationId: createAgentFormation
- *     tags: [AgentFormations]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [project_id, name, template]
- *             properties:
- *               project_id:
- *                 type: string
- *               name:
- *                 type: string
- *               template:
- *                 $ref: '#/components/schemas/FormationTemplate'
- *               metadata:
- *                 type: object
- *     responses:
- *       201:
- *         description: Formation created
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AgentFormation'
- *       400:
- *         description: Bad Request
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden
- *       409:
- *         description: Conflict
- */
 agentFormationsRouter.post('/agent-formations', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -237,7 +141,8 @@ agentFormationsRouter.post('/agent-formations', async (ctx: Context) => {
     return;
   }
 
-  const validation = validateFormationTemplate(body.template);
+  const parsedTemplate = parseFormationTemplateInput(body.template);
+  const validation = validateFormationTemplate(parsedTemplate);
   if (!validation.valid) {
     ctx.status = 400;
     ctx.body = { error: 'Invalid template', details: validation.errors };
@@ -256,7 +161,7 @@ agentFormationsRouter.post('/agent-formations', async (ctx: Context) => {
   const result = await createAgentFormation({
     projectId: project.id,
     name: body.name,
-    template: body.template as FormationTemplate,
+    template: parsedTemplate as FormationTemplate,
     metadata: body.metadata,
   });
 
@@ -272,32 +177,6 @@ agentFormationsRouter.post('/agent-formations', async (ctx: Context) => {
   ctx.body = result;
 });
 
-/**
- * @openapi
- * /api/v1/agent-formations:
- *   get:
- *     summary: List agent formations
- *     operationId: listAgentFormations
- *     tags: [AgentFormations]
- *     parameters:
- *       - name: project_id
- *         in: query
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: List of formations
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/AgentFormation'
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden
- */
 agentFormationsRouter.get('/agent-formations', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -321,33 +200,6 @@ agentFormationsRouter.get('/agent-formations', async (ctx: Context) => {
   ctx.body = await listAgentFormations({ projectIds: projectIds ?? [] });
 });
 
-/**
- * @openapi
- * /api/v1/agent-formations/{formation_id}:
- *   get:
- *     summary: Get a specific agent formation
- *     operationId: getAgentFormation
- *     tags: [AgentFormations]
- *     parameters:
- *       - name: formation_id
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Formation details
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AgentFormation'
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden
- *       404:
- *         description: Not Found
- */
 agentFormationsRouter.get(
   '/agent-formations/:formation_id',
   async (ctx: Context) => {
@@ -378,46 +230,6 @@ agentFormationsRouter.get(
   }
 );
 
-/**
- * @openapi
- * /api/v1/agent-formations/{formation_id}:
- *   put:
- *     summary: Update an agent formation
- *     operationId: updateAgentFormation
- *     tags: [AgentFormations]
- *     parameters:
- *       - name: formation_id
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               template:
- *                 $ref: '#/components/schemas/FormationTemplate'
- *               metadata:
- *                 type: object
- *                 nullable: true
- *     responses:
- *       200:
- *         description: Updated formation
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AgentFormation'
- *       400:
- *         description: Bad Request
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden
- *       404:
- *         description: Not Found
- */
 agentFormationsRouter.put(
   '/agent-formations/:formation_id',
   async (ctx: Context) => {
@@ -449,8 +261,10 @@ agentFormationsRouter.put(
       metadata?: Record<string, unknown> | null;
     };
 
+    let parsedTemplate: unknown = undefined;
     if (body.template !== undefined) {
-      const validation = validateFormationTemplate(body.template);
+      parsedTemplate = parseFormationTemplateInput(body.template);
+      const validation = validateFormationTemplate(parsedTemplate);
       if (!validation.valid) {
         ctx.status = 400;
         ctx.body = { error: 'Invalid template', details: validation.errors };
@@ -460,7 +274,7 @@ agentFormationsRouter.put(
 
     const updated = await updateAgentFormation({
       id: ctx.params.formation_id,
-      template: body.template as FormationTemplate | undefined,
+      template: parsedTemplate as FormationTemplate | undefined,
       metadata: body.metadata,
     });
 
@@ -468,29 +282,6 @@ agentFormationsRouter.put(
   }
 );
 
-/**
- * @openapi
- * /api/v1/agent-formations/{formation_id}:
- *   delete:
- *     summary: Delete an agent formation and all its managed resources
- *     operationId: deleteAgentFormation
- *     tags: [AgentFormations]
- *     parameters:
- *       - name: formation_id
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       204:
- *         description: Deleted
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden
- *       404:
- *         description: Not Found
- */
 agentFormationsRouter.delete(
   '/agent-formations/:formation_id',
   async (ctx: Context) => {
@@ -522,35 +313,6 @@ agentFormationsRouter.delete(
   }
 );
 
-/**
- * @openapi
- * /api/v1/agent-formations/{formation_id}/events:
- *   get:
- *     summary: List operation events for a formation
- *     operationId: listAgentFormationEvents
- *     tags: [AgentFormations]
- *     parameters:
- *       - name: formation_id
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: List of operations with events
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/FormationOperation'
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden
- *       404:
- *         description: Not Found
- */
 agentFormationsRouter.get(
   '/agent-formations/:formation_id/events',
   async (ctx: Context) => {

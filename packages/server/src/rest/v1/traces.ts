@@ -4,9 +4,6 @@ import { getTrace, getTraceTree, listTraces } from 'src/lib/traces';
 
 export const tracesRouter = new Router<Context>();
 
-/**
- * @openapi GET /traces
- */
 tracesRouter.get('/traces', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -33,9 +30,6 @@ tracesRouter.get('/traces', async (ctx: Context) => {
   ctx.body = await listTraces({ projectIds, limit, offset });
 });
 
-/**
- * @openapi GET /traces/:trace_id
- */
 tracesRouter.get('/traces/:trace_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -67,9 +61,6 @@ tracesRouter.get('/traces/:trace_id', async (ctx: Context) => {
   ctx.body = result;
 });
 
-/**
- * @openapi GET /traces/:trace_id/tree
- */
 tracesRouter.get('/traces/:trace_id/tree', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;

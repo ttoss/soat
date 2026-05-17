@@ -1,3 +1,5 @@
+import yaml from 'js-yaml';
+
 import {
   buildDependencyGraph,
   collectRefs,
@@ -9,6 +11,24 @@ import type {
   ValidationResult,
 } from './agentFormationsTypes';
 import { SUPPORTED_RESOURCE_TYPES } from './agentFormationsTypes';
+
+// ── Template Input Parsing ────────────────────────────────────────────────
+
+/**
+ * Parses a formation template from either a JSON/YAML string or a plain
+ * object. Returns the parsed value, or the original input unchanged if it
+ * is neither a string nor an object (so that validation can report the
+ * appropriate error).
+ */
+export const parseFormationTemplateInput = (input: unknown): unknown => {
+  if (typeof input !== 'string') return input;
+  try {
+    return yaml.load(input);
+  } catch {
+    // Return the raw string so validateFormationTemplate reports a useful error
+    return input;
+  }
+};
 
 // ── Resource Declaration Validation ──────────────────────────────────────
 

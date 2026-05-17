@@ -12,13 +12,6 @@ import {
 
 export const memoryEntriesRouter = new Router<Context>();
 
-/**
- * @openapi
- * /api/v1/memories/{memory_id}/entries:
- *   get:
- *     operationId: listMemoryEntries
- *     x-iam-action: memories:ListMemoryEntries
- */
 memoryEntriesRouter.get(
   '/memories/:memory_id/entries',
   async (ctx: Context) => {
@@ -53,13 +46,6 @@ memoryEntriesRouter.get(
   }
 );
 
-/**
- * @openapi
- * /api/v1/memories/{memory_id}/entries:
- *   post:
- *     operationId: createMemoryEntry
- *     x-iam-action: memories:CreateMemoryEntry
- */
 memoryEntriesRouter.post(
   '/memories/:memory_id/entries',
   async (ctx: Context) => {
@@ -119,13 +105,6 @@ memoryEntriesRouter.post(
   }
 );
 
-/**
- * @openapi
- * /api/v1/memories/{memory_id}/entries/{entry_id}:
- *   get:
- *     operationId: getMemoryEntry
- *     x-iam-action: memories:GetMemoryEntry
- */
 memoryEntriesRouter.get(
   '/memories/:memory_id/entries/:entry_id',
   async (ctx: Context) => {
@@ -163,13 +142,6 @@ memoryEntriesRouter.get(
   }
 );
 
-/**
- * @openapi
- * /api/v1/memories/{memory_id}/entries/{entry_id}:
- *   put:
- *     operationId: updateMemoryEntry
- *     x-iam-action: memories:UpdateMemoryEntry
- */
 memoryEntriesRouter.put(
   '/memories/:memory_id/entries/:entry_id',
   async (ctx: Context) => {
@@ -214,13 +186,6 @@ memoryEntriesRouter.put(
   }
 );
 
-/**
- * @openapi
- * /api/v1/memories/{memory_id}/entries/{entry_id}:
- *   delete:
- *     operationId: deleteMemoryEntry
- *     x-iam-action: memories:DeleteMemoryEntry
- */
 memoryEntriesRouter.delete(
   '/memories/:memory_id/entries/:entry_id',
   async (ctx: Context) => {
