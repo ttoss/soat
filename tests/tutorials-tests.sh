@@ -86,6 +86,8 @@ CURRENT_CMD=""
 CURRENT_ANNOTATION=""   # annotation harvested from inline # → ... comment
 NEXT_ANNOTATION=""      # annotation waiting to be applied to the NEXT command
 PENDING_CONFIGURE=""    # profile name waiting to be saved after login
+HEREDOC_DELIM=""
+HEREDOC_PATTERN="<<-?[[:space:]]*['\"]?([A-Za-z_][A-Za-z0-9_]*)['\"]?$"
 
 _flush_cmd() {
   local cmd="$1"
@@ -101,6 +103,19 @@ _flush_cmd() {
 }
 
 while IFS= read -r line; do
+  if [[ -n "$HEREDOC_DELIM" ]]; then
+    CURRENT_CMD+="$line"
+    if [[ "$line" == "$HEREDOC_DELIM" ]]; then
+      _flush_cmd "$CURRENT_CMD" "$CURRENT_ANNOTATION"
+      CURRENT_CMD=""
+      CURRENT_ANNOTATION=""
+      HEREDOC_DELIM=""
+    else
+      CURRENT_CMD+=$'\n'
+    fi
+    continue
+  fi
+
   # Extract inline annotation from standalone comment lines like "# → 403"
   if [[ "$line" =~ ^[[:space:]]*#[[:space:]]*→[[:space:]]*(.*) ]]; then
     hint="${BASH_REMATCH[1]}"
@@ -141,6 +156,13 @@ while IFS= read -r line; do
     CURRENT_CMD+="${line%\\} "
   else
     CURRENT_CMD+="$line"
+
+    if [[ "$CURRENT_CMD" =~ $HEREDOC_PATTERN ]]; then
+      HEREDOC_DELIM="${BASH_REMATCH[1]}"
+      CURRENT_CMD+=$'\n'
+      continue
+    fi
+
     # If we're inside an unclosed single-quoted string, keep accumulating
     if (( $(_sq_open) % 2 == 1 )); then
       CURRENT_CMD+=$'\n'
