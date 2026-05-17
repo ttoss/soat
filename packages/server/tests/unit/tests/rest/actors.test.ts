@@ -351,4 +351,114 @@ describe('Actors', () => {
       expect(response.status).toBe(404);
     });
   });
+
+  describe('Memory linking', () => {
+    let memoryId: string;
+    let actorId: string;
+
+    beforeAll(async () => {
+      const memRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/memories')
+        .send({ project_id: projectId, name: 'Actor Memory' });
+      memoryId = memRes.body.id;
+
+      const actorRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'MemLinkedActor' });
+      actorId = actorRes.body.id;
+    });
+
+    test('POST /actors with auto_create_memory creates and links a memory', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({
+          project_id: projectId,
+          name: 'AutoMem',
+          auto_create_memory: true,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.memory_id).toBeDefined();
+      expect(res.body.memory_id).toMatch(/^mem_/);
+    });
+
+    test('POST /actors without auto_create_memory has null memory_id', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'NoMem' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.memory_id).toBeNull();
+    });
+
+    test('POST /actors with explicit memory_id links actor to that memory', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({
+          project_id: projectId,
+          name: 'ExplicitMem',
+          memory_id: memoryId,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.memory_id).toBe(memoryId);
+    });
+
+    test('POST /actors with external_id + auto_create_memory is idempotent — second call returns existing actor with same memory_id', async () => {
+      const first = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({
+          project_id: projectId,
+          name: 'IdempotentMem',
+          external_id: '+15557654321',
+          auto_create_memory: true,
+        });
+
+      expect(first.status).toBe(201);
+      expect(first.body.memory_id).toMatch(/^mem_/);
+
+      const second = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({
+          project_id: projectId,
+          name: 'IdempotentMem',
+          external_id: '+15557654321',
+          auto_create_memory: true,
+        });
+
+      expect(second.status).toBe(200);
+      expect(second.body.id).toBe(first.body.id);
+      expect(second.body.memory_id).toBe(first.body.memory_id);
+    });
+
+    test('PATCH /actors/:id with memory_id links actor to that memory', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/actors/${actorId}`)
+        .send({ memory_id: memoryId });
+
+      expect(res.status).toBe(200);
+      expect(res.body.memory_id).toBe(memoryId);
+    });
+
+    test('PATCH /actors/:id with memory_id null clears the link', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/actors/${actorId}`)
+        .send({ memory_id: null });
+
+      expect(res.status).toBe(200);
+      expect(res.body.memory_id).toBeNull();
+    });
+
+    test('POST /actors with invalid memory_id returns 400', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({
+          project_id: projectId,
+          name: 'BadMem',
+          memory_id: 'mem_nonexistent',
+        });
+
+      expect(res.status).toBe(400);
+    });
+  });
 });
