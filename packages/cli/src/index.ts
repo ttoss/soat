@@ -8,6 +8,10 @@ import * as sdk from '@soat/sdk';
 import { program } from 'commander';
 
 import pkg from '../package.json' with { type: 'json' };
+import {
+  applyWrapperForCommand,
+  parseUnknownWithRepeats,
+} from './cli-wrappers/index.js';
 import { resolveClient, writeProfile } from './config.js';
 import { routes } from './generated/routes.js';
 
@@ -24,25 +28,6 @@ const toCanonical = (s: string) => {
 /** Convert kebab-case to snake_case for body/query keys (e.g. project-id → project_id). */
 const kebabToSnake = (s: string) => {
   return s.replace(/-/g, '_');
-};
-
-/** Parse unknown args like --foo bar --baz 1 into a flat Record. */
-const parseUnknown = (args: string[]): Record<string, string> => {
-  const result: Record<string, string> = {};
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg?.startsWith('--')) {
-      const key = arg.slice(2);
-      const val = args[i + 1];
-      if (val !== undefined && !val.startsWith('--')) {
-        result[key] = val;
-        i++;
-      } else {
-        result[key] = 'true';
-      }
-    }
-  }
-  return result;
 };
 
 const parseFlagValue = (value: string): unknown => {
@@ -290,7 +275,8 @@ program
   .argument('[command]', 'API command in kebab-case (e.g. list-actors)')
   .argument('[args...]')
   .allowUnknownOption()
-  // eslint-disable-next-line complexity
+
+  // eslint-disable-next-line complexity, max-lines-per-function
   .action(async (commandName) => {
     if (!commandName) {
       program.help();
@@ -307,7 +293,13 @@ program
     // Collect flags from everything after the command name
     const rawIdx = process.argv.indexOf(commandName);
     const rawArgs = rawIdx >= 0 ? process.argv.slice(rawIdx + 1) : [];
-    const flags = parseUnknown(rawArgs);
+    const parsedFlags = parseUnknownWithRepeats({ cliArgs: rawArgs });
+    const wrapped = applyWrapperForCommand({
+      commandName,
+      route,
+      parsedFlags,
+    });
+    const flags = wrapped.flags.single;
 
     // Split flags into path / query / body
     const pathArgs: Record<string, unknown> = {};
@@ -353,6 +345,10 @@ program
     }
 
     const callOpts: Record<string, unknown> = { client };
+    if (Object.keys(wrapped.forcedBody).length) {
+      Object.assign(bodyArgs, wrapped.forcedBody);
+    }
+
     if (Object.keys(pathArgs).length) callOpts['path'] = pathArgs;
     if (Object.keys(queryArgs).length) callOpts['query'] = queryArgs;
     if (Object.keys(bodyArgs).length) callOpts['body'] = bodyArgs;
