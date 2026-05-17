@@ -48,13 +48,101 @@ SOAT detects that `MyAgent` depends on `MyProvider` and `MyMemory` through the `
 
 ### Formation Template
 
-A template has three top-level keys:
+A template has four top-level keys:
 
-| Key         | Required | Description                                                  |
-| ----------- | -------- | ------------------------------------------------------------ |
-| `resources` | Yes      | Map of logical resource ID → resource declaration            |
-| `outputs`   | No       | Map of output names → values (may contain `ref` expressions) |
-| `metadata`  | No       | Arbitrary metadata stored with the formation                 |
+| Key          | Required | Description                                                  |
+| ------------ | -------- | ------------------------------------------------------------ |
+| `parameters` | No       | Map of parameter names → parameter declarations              |
+| `resources`  | Yes      | Map of logical resource ID → resource declaration            |
+| `outputs`    | No       | Map of output names → values (may contain `ref` expressions) |
+| `metadata`   | No       | Arbitrary metadata stored with the formation                 |
+
+### Parameters
+
+Parameters make a template portable across environments by allowing deploy-time values to be injected without changing the template itself. Use the `parameters` key to declare them:
+
+```json
+{
+  "parameters": {
+    "AppUrl": {
+      "type": "string",
+      "default": "https://www.example.com",
+      "description": "Public base URL of the application"
+    },
+    "ApiKey": {
+      "type": "string",
+      "no_echo": true,
+      "description": "Bearer token for API requests"
+    },
+    "SecretId": {
+      "type": "string",
+      "description": "SOAT secret ID for the AI provider"
+    }
+  },
+  "resources": {
+    "MyProvider": {
+      "type": "ai_provider",
+      "properties": {
+        "name": "My Provider",
+        "provider": "xai",
+        "secret_id": { "param": "SecretId" }
+      }
+    },
+    "MyTool": {
+      "type": "agent_tool",
+      "properties": {
+        "name": "my-tool",
+        "execute": {
+          "url": { "sub": "${AppUrl}/api/endpoint" },
+          "headers": { "Authorization": { "sub": "Bearer ${ApiKey}" } }
+        }
+      }
+    }
+  }
+}
+```
+
+#### Parameter Declaration Fields
+
+| Field         | Required | Description                                                                     |
+| ------------- | -------- | ------------------------------------------------------------------------------- |
+| `type`        | No       | Parameter type; currently only `"string"` is supported                         |
+| `default`     | No       | Default value used when the parameter is not provided at deploy time            |
+| `description` | No       | Human-readable description of the parameter's purpose                          |
+| `no_echo`     | No       | When `true`, signals that the value is sensitive and should not be logged or displayed |
+
+Parameters without a `default` are **required** — they must be provided in the `parameters` field of the deploy request.
+
+#### Parameter Expressions
+
+Use these expressions anywhere in `properties` or `outputs` to reference a parameter:
+
+| Expression                    | Description                                         |
+| ----------------------------- | --------------------------------------------------- |
+| `{ "param": "ParamName" }`    | Replaced with the parameter's value as-is           |
+| `{ "sub": "text ${ParamName}" }` | String interpolation — embeds the parameter value inside a larger string |
+
+#### Providing Parameter Values
+
+Pass parameter values in the `parameters` field of the create or update request:
+
+```json
+{
+  "project_id": "proj_xxx",
+  "name": "my-stack",
+  "template": { ... },
+  "parameters": {
+    "AppUrl": "https://staging.example.com",
+    "ApiKey": "sk-secret",
+    "SecretId": "sec_abc123"
+  }
+}
+```
+
+- Values in `parameters` override any `default` declared in the template.
+- Parameters with a `default` are optional in the request.
+- Parameters without a `default` and not provided in the request cause a `400 Missing required parameters` error.
+- Parameter values are **never stored** in the database — provide them on every create/update call.
 
 ### Resource Declaration
 
@@ -160,3 +248,4 @@ Use `GET /api/v1/agent-formations/{formation_id}/events` to retrieve the full hi
 | `error`          | object   | Error details if operation failed |
 | `created_at`     | datetime |                                   |
 | `updated_at`     | datetime |                                   |
+

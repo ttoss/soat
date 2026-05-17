@@ -565,4 +565,203 @@ resources:
       expect(res.status).toBe(204);
     });
   });
+
+  // ── Parameters support ────────────────────────────────────────────────────
+
+  describe('Formation with parameters', () => {
+    let paramFormationId: string;
+
+    const templateWithParams = {
+      parameters: {
+        MemoryName: {
+          type: 'string',
+          default: 'Default Memory Name',
+          description: 'Name for the memory resource',
+        },
+        ToolUrl: {
+          type: 'string',
+          description: 'URL for the HTTP tool endpoint',
+        },
+        ApiKey: {
+          type: 'string',
+          no_echo: true,
+          description: 'API key for the tool',
+        },
+      },
+      resources: {
+        ParamMemory: {
+          type: 'memory',
+          properties: {
+            name: { param: 'MemoryName' },
+          },
+        },
+        ParamTool: {
+          type: 'agent_tool',
+          properties: {
+            name: 'param-tool',
+            execute: {
+              url: { sub: '${ToolUrl}/endpoint' },
+              headers: { Authorization: { sub: 'Bearer ${ApiKey}' } },
+            },
+          },
+        },
+      },
+      outputs: {
+        memoryId: { ref: 'ParamMemory' },
+      },
+    };
+
+    describe('POST /api/v1/agent-formations/validate', () => {
+      test('validates template with parameters section', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/agent-formations/validate')
+          .send({ template: templateWithParams });
+
+        expect(res.status).toBe(200);
+        expect(res.body.valid).toBe(true);
+        expect(res.body.errors).toHaveLength(0);
+        expect(res.body.warnings.length).toBeGreaterThan(0);
+      });
+
+      test('validates template with undefined param ref returns invalid', async () => {
+        const badTemplate = {
+          parameters: { KnownParam: { type: 'string' } },
+          resources: {
+            MyMemory: {
+              type: 'memory',
+              properties: { name: { param: 'UnknownParam' } },
+            },
+          },
+        };
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/agent-formations/validate')
+          .send({ template: badTemplate });
+
+        expect(res.status).toBe(200);
+        expect(res.body.valid).toBe(false);
+        expect(res.body.errors.length).toBeGreaterThan(0);
+      });
+    });
+
+    describe('POST /api/v1/agent-formations', () => {
+      test('creates formation with parameters provided at deploy time', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/agent-formations')
+          .send({
+            project_id: projectId,
+            name: `param-formation-${Date.now()}`,
+            template: templateWithParams,
+            parameters: {
+              ToolUrl: 'https://api.example.com',
+              ApiKey: 'secret-key-123',
+            },
+          });
+
+        expect(res.status).toBe(201);
+        expect(res.body.status).toBe('active');
+        expect(res.body.resources).toHaveLength(2);
+        paramFormationId = res.body.id;
+
+        const memoryResource = res.body.resources.find(
+          (r: { logical_id: string }) => r.logical_id === 'ParamMemory'
+        );
+        expect(memoryResource).toBeDefined();
+        expect(memoryResource.status).toBe('created');
+      });
+
+      test('returns 400 when required parameter without default is missing', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/agent-formations')
+          .send({
+            project_id: projectId,
+            name: `missing-params-${Date.now()}`,
+            template: templateWithParams,
+            // Missing ToolUrl and ApiKey (required, no default)
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe('Missing required parameters');
+        expect(Array.isArray(res.body.details)).toBe(true);
+      });
+
+      test('uses parameter default when no override provided', async () => {
+        const templateWithDefault = {
+          parameters: {
+            MemName: { type: 'string', default: 'Default Param Memory' },
+          },
+          resources: {
+            DefaultMem: {
+              type: 'memory',
+              properties: { name: { param: 'MemName' } },
+            },
+          },
+          outputs: { memoryId: { ref: 'DefaultMem' } },
+        };
+
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/agent-formations')
+          .send({
+            project_id: projectId,
+            name: `default-param-${Date.now()}`,
+            template: templateWithDefault,
+            // No parameters provided - should use default
+          });
+
+        expect(res.status).toBe(201);
+        expect(res.body.status).toBe('active');
+
+        // Clean up
+        await authenticatedTestClient(userToken).delete(
+          `/api/v1/agent-formations/${res.body.id}`
+        );
+      });
+    });
+
+    describe('PUT /api/v1/agent-formations/:formation_id', () => {
+      test('updates formation with new parameter values', async () => {
+        const updatedTemplate = {
+          ...templateWithParams,
+          resources: {
+            ParamMemory: {
+              type: 'memory',
+              properties: { name: { param: 'MemoryName' } },
+            },
+          },
+        };
+
+        const res = await authenticatedTestClient(userToken)
+          .put(`/api/v1/agent-formations/${paramFormationId}`)
+          .send({
+            template: updatedTemplate,
+            parameters: {
+              MemoryName: 'Updated Memory Name',
+              ToolUrl: 'https://api2.example.com',
+              ApiKey: 'new-secret-key',
+            },
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('active');
+      });
+
+      test('returns 400 when required parameter missing on update', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .put(`/api/v1/agent-formations/${paramFormationId}`)
+          .send({
+            template: templateWithParams,
+            // Missing required params ToolUrl and ApiKey
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe('Missing required parameters');
+      });
+    });
+
+    test('deletes param formation', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/agent-formations/${paramFormationId}`
+      );
+      expect(res.status).toBe(204);
+    });
+  });
 });

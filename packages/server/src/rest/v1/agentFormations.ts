@@ -6,6 +6,7 @@ import {
   deleteAgentFormation,
   type FormationTemplate,
   getAgentFormation,
+  getMissingParams,
   listAgentFormationEvents,
   listAgentFormations,
   parseFormationTemplateInput,
@@ -55,6 +56,7 @@ agentFormationsRouter.post('/agent-formations/plan', async (ctx: Context) => {
     projectId?: string;
     formationId?: string;
     template?: unknown;
+    parameters?: Record<string, string>;
   };
 
   const resolvedProjectPublicId = resolveProjectPublicId(
@@ -98,6 +100,7 @@ agentFormationsRouter.post('/agent-formations/plan', async (ctx: Context) => {
     projectId: project.id,
     template: parsedTemplate as FormationTemplate,
     formationId: body.formationId,
+    parameters: body.parameters,
   });
 });
 
@@ -113,6 +116,7 @@ agentFormationsRouter.post('/agent-formations', async (ctx: Context) => {
     name?: string;
     template?: unknown;
     metadata?: Record<string, unknown>;
+    parameters?: Record<string, string>;
   };
 
   if (!body.name) {
@@ -149,6 +153,24 @@ agentFormationsRouter.post('/agent-formations', async (ctx: Context) => {
     return;
   }
 
+  const missingParams = getMissingParams(
+    parsedTemplate as FormationTemplate,
+    body.parameters
+  );
+  if (missingParams.length > 0) {
+    ctx.status = 400;
+    ctx.body = {
+      error: 'Missing required parameters',
+      details: missingParams.map((name) => {
+        return {
+          path: `parameters.${name}`,
+          message: `Parameter '${name}' is required but was not provided`,
+        };
+      }),
+    };
+    return;
+  }
+
   const project = await db.Project.findOne({
     where: { publicId: resolvedProjectPublicId },
   });
@@ -163,6 +185,7 @@ agentFormationsRouter.post('/agent-formations', async (ctx: Context) => {
     name: body.name,
     template: parsedTemplate as FormationTemplate,
     metadata: body.metadata,
+    parameters: body.parameters,
   });
 
   if (result === 'name_conflict') {
@@ -259,6 +282,7 @@ agentFormationsRouter.put(
     const body = ctx.request.body as {
       template?: unknown;
       metadata?: Record<string, unknown> | null;
+      parameters?: Record<string, string>;
     };
 
     let parsedTemplate: unknown = undefined;
@@ -270,12 +294,31 @@ agentFormationsRouter.put(
         ctx.body = { error: 'Invalid template', details: validation.errors };
         return;
       }
+
+      const missingParams = getMissingParams(
+        parsedTemplate as FormationTemplate,
+        body.parameters
+      );
+      if (missingParams.length > 0) {
+        ctx.status = 400;
+        ctx.body = {
+          error: 'Missing required parameters',
+          details: missingParams.map((name) => {
+            return {
+              path: `parameters.${name}`,
+              message: `Parameter '${name}' is required but was not provided`,
+            };
+          }),
+        };
+        return;
+      }
     }
 
     const updated = await updateAgentFormation({
       id: ctx.params.formation_id,
       template: parsedTemplate as FormationTemplate | undefined,
       metadata: body.metadata,
+      parameters: body.parameters,
     });
 
     ctx.body = updated;

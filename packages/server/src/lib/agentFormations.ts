@@ -29,6 +29,7 @@ export type {
   PlanChange,
   PlanResult,
 } from './agentFormationsTypes';
+export { getMissingParams } from './agentFormationsHelpers';
 export {
   parseFormationTemplateInput,
   validateFormationTemplate,
@@ -88,6 +89,7 @@ export const planAgentFormation = async (args: {
   projectId: number;
   template: FormationTemplate;
   formationId?: string;
+  parameters?: Record<string, string>;
 }): Promise<PlanResult> => {
   const graph = buildDependencyGraph(args.template);
   const sortedOrder = topologicalSort(graph) ?? [];
@@ -128,6 +130,7 @@ export const createAgentFormation = async (args: {
   name: string;
   template: FormationTemplate;
   metadata?: Record<string, unknown>;
+  parameters?: Record<string, string>;
 }): Promise<MappedAgentFormation | 'name_conflict'> => {
   const existing = await db.AgentFormation.findOne({
     where: { projectId: args.projectId, name: args.name },
@@ -158,6 +161,7 @@ export const createAgentFormation = async (args: {
     existingResources: [],
     projectId: args.projectId,
     operation,
+    parameters: args.parameters,
   });
 
   const refreshed = await db.AgentFormation.findOne({
@@ -202,6 +206,7 @@ export const updateAgentFormation = async (args: {
   id: string;
   template?: FormationTemplate;
   metadata?: Record<string, unknown> | null;
+  parameters?: Record<string, string>;
 }): Promise<MappedAgentFormation | null> => {
   const formation = await db.AgentFormation.findOne({
     where: { publicId: args.id },
@@ -235,6 +240,7 @@ export const updateAgentFormation = async (args: {
     existingResources,
     projectId: formation.projectId,
     operation,
+    parameters: args.parameters,
   });
 
   const refreshed = await db.AgentFormation.findOne({

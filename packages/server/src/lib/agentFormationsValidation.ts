@@ -2,11 +2,13 @@ import yaml from 'js-yaml';
 
 import {
   buildDependencyGraph,
+  collectParamRefs,
   collectRefs,
   topologicalSort,
 } from './agentFormationsHelpers';
 import type {
   FormationTemplate,
+  ParameterDeclaration,
   ValidationError,
   ValidationResult,
 } from './agentFormationsTypes';
@@ -91,8 +93,9 @@ const validateResourceDeclaration = (args: {
   logicalId: string;
   declRaw: unknown;
   logicalIds: Set<string>;
+  paramNames: Set<string>;
 }): ValidationError[] => {
-  const { logicalId, declRaw, logicalIds } = args;
+  const { logicalId, declRaw, logicalIds, paramNames } = args;
   const errors: ValidationError[] = [];
   const basePath = `resources.${logicalId}`;
 
@@ -131,6 +134,16 @@ const validateResourceDeclaration = (args: {
     }
   }
 
+  const paramRefs = collectParamRefs(decl.properties);
+  for (const ref of paramRefs) {
+    if (!paramNames.has(ref)) {
+      errors.push({
+        path: `${basePath}.properties`,
+        message: `Parameter '${ref}' is not defined in the parameters section`,
+      });
+    }
+  }
+
   if (decl.depends_on !== undefined) {
     errors.push(
       ...validateDependsOn({ dependsOn: decl.depends_on, logicalIds, basePath })
@@ -144,7 +157,8 @@ const validateResourceDeclaration = (args: {
 
 const validateOutputRefs = (
   outputs: Record<string, unknown>,
-  logicalIds: Set<string>
+  logicalIds: Set<string>,
+  paramNames: Set<string>
 ): ValidationError[] => {
   const errors: ValidationError[] = [];
   for (const [outputName, outputValue] of Object.entries(outputs)) {
@@ -155,6 +169,39 @@ const validateOutputRefs = (
           message: `Referenced resource '${ref}' does not exist in template`,
         });
       }
+    }
+    for (const ref of collectParamRefs(outputValue)) {
+      if (!paramNames.has(ref)) {
+        errors.push({
+          path: `outputs.${outputName}`,
+          message: `Parameter '${ref}' is not defined in the parameters section`,
+        });
+      }
+    }
+  }
+  return errors;
+};
+
+// ── Parameters Section Validation ─────────────────────────────────────────
+
+const validateParametersSection = (
+  parameters: Record<string, unknown>
+): ValidationError[] => {
+  const errors: ValidationError[] = [];
+  for (const [name, decl] of Object.entries(parameters)) {
+    if (typeof decl !== 'object' || decl === null || Array.isArray(decl)) {
+      errors.push({
+        path: `parameters.${name}`,
+        message: 'Parameter declaration must be an object',
+      });
+      continue;
+    }
+    const declObj = decl as Record<string, unknown>;
+    if (declObj.type !== undefined && typeof declObj.type !== 'string') {
+      errors.push({
+        path: `parameters.${name}.type`,
+        message: '`type` must be a string',
+      });
     }
   }
   return errors;
@@ -224,15 +271,52 @@ export const validateFormationTemplate = (
   const logicalIds = new Set(Object.keys(resources));
   const errors: ValidationError[] = [];
 
+  // ── Validate parameters section ──────────────────────────────────────────
+  const paramNames = new Set<string>();
+  const paramDecls: Record<string, ParameterDeclaration> = {};
+
+  if (tmpl.parameters !== undefined) {
+    if (
+      typeof tmpl.parameters !== 'object' ||
+      Array.isArray(tmpl.parameters) ||
+      tmpl.parameters === null
+    ) {
+      errors.push({
+        path: 'parameters',
+        message: '`parameters` must be an object',
+      });
+    } else {
+      const params = tmpl.parameters as Record<string, unknown>;
+      errors.push(...validateParametersSection(params));
+      for (const [name, decl] of Object.entries(params)) {
+        paramNames.add(name);
+        if (typeof decl === 'object' && decl !== null) {
+          paramDecls[name] = decl as ParameterDeclaration;
+        }
+      }
+    }
+  }
+
+  // ── Warn about required parameters (no default) ──────────────────────────
+  for (const [name, decl] of Object.entries(paramDecls)) {
+    if (decl.default === undefined) {
+      warnings.push({
+        path: `parameters.${name}`,
+        message: `Parameter '${name}' has no default value and must be provided at deploy time`,
+      });
+    }
+  }
+
+  // ── Validate resources ───────────────────────────────────────────────────
   for (const [logicalId, declRaw] of Object.entries(resources)) {
     errors.push(
-      ...validateResourceDeclaration({ logicalId, declRaw, logicalIds })
+      ...validateResourceDeclaration({ logicalId, declRaw, logicalIds, paramNames })
     );
   }
 
   const outputs = getOutputsObject(tmpl);
   if (outputs) {
-    errors.push(...validateOutputRefs(outputs, logicalIds));
+    errors.push(...validateOutputRefs(outputs, logicalIds, paramNames));
   }
 
   if (errors.length > 0) {

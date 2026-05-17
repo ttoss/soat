@@ -2,6 +2,17 @@
 
 export type RefExpression = { ref: string };
 
+export type ParamExpression = { param: string };
+
+export type SubExpression = { sub: string };
+
+export type ParameterDeclaration = {
+  type?: string;
+  default?: string;
+  description?: string;
+  no_echo?: boolean;
+};
+
 export type ResourceDeclaration = {
   type: string;
   properties: Record<string, unknown>;
@@ -10,6 +21,7 @@ export type ResourceDeclaration = {
 };
 
 export type FormationTemplate = {
+  parameters?: Record<string, ParameterDeclaration>;
   resources: Record<string, ResourceDeclaration>;
   outputs?: Record<string, RefExpression | unknown>;
   metadata?: Record<string, unknown>;
