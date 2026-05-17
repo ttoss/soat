@@ -17,6 +17,12 @@ registerResourceFieldMap({
   tagsColumn: { column: 'tags' },
 });
 
+const getLinkedPublicId = (
+  linked: { publicId?: string } | null | undefined
+): string | null => {
+  return linked?.publicId ?? null;
+};
+
 const mapActor = (
   actor: InstanceType<(typeof db)['Actor']> & {
     project?: InstanceType<(typeof db)['Project']>;
@@ -31,9 +37,9 @@ const mapActor = (
     name: actor.name,
     externalId: actor.externalId ?? undefined,
     instructions: actor.instructions ?? null,
-    agentId: actor.agent?.publicId ?? null,
-    chatId: actor.chat?.publicId ?? null,
-    memoryId: actor.memory?.publicId ?? null,
+    agentId: getLinkedPublicId(actor.agent),
+    chatId: getLinkedPublicId(actor.chat),
+    memoryId: getLinkedPublicId(actor.memory),
     tags: actor.tags ?? undefined,
     createdAt: actor.createdAt,
     updatedAt: actor.updatedAt,
@@ -217,8 +223,26 @@ export const createActor = async (args: {
     include: actorIncludes(),
   });
 
-  log('createActor: created actor id=%s', actorWithProject?.publicId);
+  log('createActor: created actor id=%s', actorWithProject!.publicId);
   return mapActor(actorWithProject!);
+};
+
+const attachMemoryToActor = async (args: {
+  actor: InstanceType<(typeof db)['Actor']>;
+  projectId: number;
+  name: string;
+}) => {
+  log('attachMemoryToActor: auto-creating memory name=%s', args.name);
+  const { createMemory } = await import('./memories');
+  const memory = await createMemory({
+    projectId: args.projectId,
+    name: args.name,
+  });
+  log('attachMemoryToActor: created memory id=%s', memory.id);
+  const memoryRow = await db.Memory.findOne({ where: { publicId: memory.id } });
+  if (memoryRow) {
+    await args.actor.update({ memoryId: memoryRow.id as number });
+  }
 };
 
 export const findOrCreateActor = async (args: {
@@ -257,22 +281,11 @@ export const findOrCreateActor = async (args: {
   log('findOrCreateActor: actor=%s created=%s', actor.publicId, created);
 
   if (created && args.autoCreateMemory && !args.memoryId) {
-    log(
-      'findOrCreateActor: auto-creating memory for new actor name=%s',
-      args.name
-    );
-    const { createMemory } = await import('./memories');
-    const memory = await createMemory({
+    await attachMemoryToActor({
+      actor,
       projectId: args.projectId,
       name: args.name,
     });
-    log('findOrCreateActor: auto-created memory id=%s', memory.id);
-    const memoryRow = await db.Memory.findOne({
-      where: { publicId: memory.id },
-    });
-    if (memoryRow) {
-      await actor.update({ memoryId: memoryRow.id as number });
-    }
   }
 
   const actorWithProject = await db.Actor.findOne({

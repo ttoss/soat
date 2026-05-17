@@ -179,16 +179,20 @@ const performCreateActor = async (args: {
 }): Promise<
   { status: 200 | 201; actor: unknown } | { status: 400; error: string }
 > => {
+  const instructions = args.body.instructions ?? null;
+  const autoCreateMemory = args.body.autoCreateMemory ?? false;
+  const memoryId = args.memoryDbId ?? null;
+
   if (args.body.externalId !== undefined) {
     const result = await findOrCreateActor({
       projectId: args.project.id!,
       externalId: args.body.externalId,
       name: args.body.name,
-      instructions: args.body.instructions ?? null,
+      instructions,
       agentId: args.agentDbId,
       chatId: args.chatDbId,
-      memoryId: args.memoryDbId ?? null,
-      autoCreateMemory: args.body.autoCreateMemory ?? false,
+      memoryId,
+      autoCreateMemory,
     });
     if (result === 'agent_and_chat_exclusive') {
       return {
@@ -203,11 +207,11 @@ const performCreateActor = async (args: {
     projectId: args.project.id!,
     name: args.body.name,
     externalId: args.body.externalId,
-    instructions: args.body.instructions ?? null,
+    instructions,
     agentId: args.agentDbId,
     chatId: args.chatDbId,
-    memoryId: args.memoryDbId ?? null,
-    autoCreateMemory: args.body.autoCreateMemory ?? false,
+    memoryId,
+    autoCreateMemory,
   });
 
   if (actor === 'agent_and_chat_exclusive') {
