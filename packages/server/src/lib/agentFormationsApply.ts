@@ -249,13 +249,23 @@ export const applyFormationTemplate = async (args: {
   operation: InstanceType<(typeof db)['AgentFormationOperation']>;
   parameters?: Record<string, string>;
 }): Promise<void> => {
-  const { formation, template, existingResources, projectId, operation, parameters } = args;
+  const {
+    formation,
+    template,
+    existingResources,
+    projectId,
+    operation,
+    parameters,
+  } = args;
 
   // Resolve parameters (defaults + provided overrides) and apply to template
   const resolvedParamsMap = buildResolvedParamsMap(template, parameters);
   const workingTemplate =
     resolvedParamsMap.size > 0
-      ? (resolveParamExpressions(template, resolvedParamsMap) as FormationTemplate)
+      ? (resolveParamExpressions(
+          template,
+          resolvedParamsMap
+        ) as FormationTemplate)
       : template;
 
   const graph = buildDependencyGraph(workingTemplate);
@@ -309,7 +319,11 @@ export const applyFormationTemplate = async (args: {
     }
   }
 
-  await handleOrphanedDeletes({ template: workingTemplate, existingResources, events });
+  await handleOrphanedDeletes({
+    template: workingTemplate,
+    existingResources,
+    events,
+  });
 
   const outputs = resolveFormationOutputs(workingTemplate, resolvedIds);
   await operation.update({ status: 'succeeded', events });

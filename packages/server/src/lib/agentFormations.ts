@@ -20,6 +20,7 @@ import type {
   PlanResult,
 } from './agentFormationsTypes';
 
+export { getMissingParams } from './agentFormationsHelpers';
 export type {
   FormationEvent,
   FormationTemplate,
@@ -29,7 +30,6 @@ export type {
   PlanChange,
   PlanResult,
 } from './agentFormationsTypes';
-export { getMissingParams } from './agentFormationsHelpers';
 export {
   parseFormationTemplateInput,
   validateFormationTemplate,

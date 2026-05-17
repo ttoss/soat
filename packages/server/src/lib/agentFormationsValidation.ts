@@ -89,6 +89,50 @@ const validateDependsOn = (args: {
   return errors;
 };
 
+// ── Resource Properties Validation ───────────────────────────────────────
+
+const validateResourceProperties = (args: {
+  properties: unknown;
+  logicalIds: Set<string>;
+  paramNames: Set<string>;
+  basePath: string;
+}): ValidationError[] => {
+  const { properties, logicalIds, paramNames, basePath } = args;
+  const errors: ValidationError[] = [];
+
+  if (
+    !properties ||
+    typeof properties !== 'object' ||
+    Array.isArray(properties)
+  ) {
+    errors.push({
+      path: `${basePath}.properties`,
+      message: '`properties` is required and must be an object',
+    });
+    return errors;
+  }
+
+  for (const ref of collectRefs(properties)) {
+    if (!logicalIds.has(ref)) {
+      errors.push({
+        path: `${basePath}.properties`,
+        message: `Referenced resource '${ref}' does not exist in template`,
+      });
+    }
+  }
+
+  for (const ref of collectParamRefs(properties)) {
+    if (!paramNames.has(ref)) {
+      errors.push({
+        path: `${basePath}.properties`,
+        message: `Parameter '${ref}' is not defined in the parameters section`,
+      });
+    }
+  }
+
+  return errors;
+};
+
 const validateResourceDeclaration = (args: {
   logicalId: string;
   declRaw: unknown;
@@ -112,37 +156,14 @@ const validateResourceDeclaration = (args: {
   const decl = declRaw as Record<string, unknown>;
 
   errors.push(...validateResourceType({ type: decl.type, basePath }));
-
-  if (
-    !decl.properties ||
-    typeof decl.properties !== 'object' ||
-    Array.isArray(decl.properties)
-  ) {
-    errors.push({
-      path: `${basePath}.properties`,
-      message: '`properties` is required and must be an object',
-    });
-  }
-
-  const refs = collectRefs(decl.properties);
-  for (const ref of refs) {
-    if (!logicalIds.has(ref)) {
-      errors.push({
-        path: `${basePath}.properties`,
-        message: `Referenced resource '${ref}' does not exist in template`,
-      });
-    }
-  }
-
-  const paramRefs = collectParamRefs(decl.properties);
-  for (const ref of paramRefs) {
-    if (!paramNames.has(ref)) {
-      errors.push({
-        path: `${basePath}.properties`,
-        message: `Parameter '${ref}' is not defined in the parameters section`,
-      });
-    }
-  }
+  errors.push(
+    ...validateResourceProperties({
+      properties: decl.properties,
+      logicalIds,
+      paramNames,
+      basePath,
+    })
+  );
 
   if (decl.depends_on !== undefined) {
     errors.push(
@@ -245,17 +266,64 @@ const getOutputsObject = (
   return tmpl.outputs as Record<string, unknown>;
 };
 
+type ResolvedParams = {
+  errors: ValidationError[];
+  warnings: ValidationError[];
+  paramNames: Set<string>;
+};
+
+const resolveTemplateParams = (
+  tmpl: Record<string, unknown>
+): ResolvedParams => {
+  const errors: ValidationError[] = [];
+  const warnings: ValidationError[] = [];
+  const paramNames = new Set<string>();
+
+  if (tmpl.parameters === undefined) {
+    return { errors, warnings, paramNames };
+  }
+
+  if (
+    typeof tmpl.parameters !== 'object' ||
+    Array.isArray(tmpl.parameters) ||
+    tmpl.parameters === null
+  ) {
+    errors.push({
+      path: 'parameters',
+      message: '`parameters` must be an object',
+    });
+    return { errors, warnings, paramNames };
+  }
+
+  const params = tmpl.parameters as Record<string, unknown>;
+  errors.push(...validateParametersSection(params));
+
+  for (const [name, decl] of Object.entries(params)) {
+    paramNames.add(name);
+    const declObj =
+      typeof decl === 'object' && decl !== null
+        ? (decl as ParameterDeclaration)
+        : null;
+    if (declObj?.default === undefined) {
+      warnings.push({
+        path: `parameters.${name}`,
+        message: `Parameter '${name}' has no default value and must be provided at deploy time`,
+      });
+    }
+  }
+
+  return { errors, warnings, paramNames };
+};
+
 export const validateFormationTemplate = (
   template: unknown
 ): ValidationResult => {
-  const warnings: ValidationError[] = [];
-
   const tmpl = parseTemplateObject(template);
   if (!tmpl) {
     return {
       valid: false,
       errors: [{ path: '', message: 'Template must be an object' }],
-      warnings,
+      warnings: [],
     };
   }
 
@@ -264,53 +332,26 @@ export const validateFormationTemplate = (
     return {
       valid: false,
       errors: [{ path: 'resources', message: '`resources` must be an object' }],
-      warnings,
+      warnings: [],
     };
   }
 
+  const {
+    errors: paramErrors,
+    warnings,
+    paramNames,
+  } = resolveTemplateParams(tmpl);
+  const errors: ValidationError[] = [...paramErrors];
   const logicalIds = new Set(Object.keys(resources));
-  const errors: ValidationError[] = [];
 
-  // ── Validate parameters section ──────────────────────────────────────────
-  const paramNames = new Set<string>();
-  const paramDecls: Record<string, ParameterDeclaration> = {};
-
-  if (tmpl.parameters !== undefined) {
-    if (
-      typeof tmpl.parameters !== 'object' ||
-      Array.isArray(tmpl.parameters) ||
-      tmpl.parameters === null
-    ) {
-      errors.push({
-        path: 'parameters',
-        message: '`parameters` must be an object',
-      });
-    } else {
-      const params = tmpl.parameters as Record<string, unknown>;
-      errors.push(...validateParametersSection(params));
-      for (const [name, decl] of Object.entries(params)) {
-        paramNames.add(name);
-        if (typeof decl === 'object' && decl !== null) {
-          paramDecls[name] = decl as ParameterDeclaration;
-        }
-      }
-    }
-  }
-
-  // ── Warn about required parameters (no default) ──────────────────────────
-  for (const [name, decl] of Object.entries(paramDecls)) {
-    if (decl.default === undefined) {
-      warnings.push({
-        path: `parameters.${name}`,
-        message: `Parameter '${name}' has no default value and must be provided at deploy time`,
-      });
-    }
-  }
-
-  // ── Validate resources ───────────────────────────────────────────────────
   for (const [logicalId, declRaw] of Object.entries(resources)) {
     errors.push(
-      ...validateResourceDeclaration({ logicalId, declRaw, logicalIds, paramNames })
+      ...validateResourceDeclaration({
+        logicalId,
+        declRaw,
+        logicalIds,
+        paramNames,
+      })
     );
   }
 

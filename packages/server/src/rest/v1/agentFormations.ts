@@ -30,6 +30,23 @@ const resolveProjectPublicId = (
   return null;
 };
 
+const buildMissingParamsError = (
+  template: FormationTemplate,
+  provided: Record<string, string> | undefined
+): { error: string; details: { path: string; message: string }[] } | null => {
+  const missing = getMissingParams(template, provided);
+  if (missing.length === 0) return null;
+  return {
+    error: 'Missing required parameters',
+    details: missing.map((name) => {
+      return {
+        path: `parameters.${name}`,
+        message: `Parameter '${name}' is required but was not provided`,
+      };
+    }),
+  };
+};
+
 agentFormationsRouter.post(
   '/agent-formations/validate',
   async (ctx: Context) => {
@@ -153,21 +170,13 @@ agentFormationsRouter.post('/agent-formations', async (ctx: Context) => {
     return;
   }
 
-  const missingParams = getMissingParams(
+  const missingParamsError = buildMissingParamsError(
     parsedTemplate as FormationTemplate,
     body.parameters
   );
-  if (missingParams.length > 0) {
+  if (missingParamsError) {
     ctx.status = 400;
-    ctx.body = {
-      error: 'Missing required parameters',
-      details: missingParams.map((name) => {
-        return {
-          path: `parameters.${name}`,
-          message: `Parameter '${name}' is required but was not provided`,
-        };
-      }),
-    };
+    ctx.body = missingParamsError;
     return;
   }
 
@@ -295,21 +304,13 @@ agentFormationsRouter.put(
         return;
       }
 
-      const missingParams = getMissingParams(
+      const missingParamsError = buildMissingParamsError(
         parsedTemplate as FormationTemplate,
         body.parameters
       );
-      if (missingParams.length > 0) {
+      if (missingParamsError) {
         ctx.status = 400;
-        ctx.body = {
-          error: 'Missing required parameters',
-          details: missingParams.map((name) => {
-            return {
-              path: `parameters.${name}`,
-              message: `Parameter '${name}' is required but was not provided`,
-            };
-          }),
-        };
+        ctx.body = missingParamsError;
         return;
       }
     }
