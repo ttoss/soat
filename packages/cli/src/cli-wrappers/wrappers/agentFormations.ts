@@ -113,8 +113,8 @@ const resolveEnvRef = (args: {
   return value;
 };
 
-export const formationWrapper: Wrapper = {
-  id: 'formation-wrapper',
+export const agentFormationsWrapper: Wrapper = {
+  id: 'agent-formations-wrapper',
   commands: FORMATION_COMMANDS,
   // eslint-disable-next-line complexity
   apply: ({ context }) => {

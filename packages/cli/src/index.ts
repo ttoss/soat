@@ -1,9 +1,9 @@
 /* eslint-disable no-console */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
+import * as nodePath from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import input from '@inquirer/input';
-import password from '@inquirer/password';
 import * as sdk from '@soat/sdk';
 import { program } from 'commander';
 
@@ -91,6 +91,11 @@ program
   .description('Save credentials to a named profile (~/.soat/config.json)')
   .option('-p, --profile <name>', 'profile name', 'default')
   .action(async (opts) => {
+    const [{ default: input }, { default: password }] = await Promise.all([
+      import('@inquirer/input'),
+      import('@inquirer/password'),
+    ]);
+
     const baseUrl = await input({
       message: 'Base URL:',
     });
@@ -380,4 +385,23 @@ program
     console.log(JSON.stringify(result.data, null, 2));
   });
 
-program.parse();
+export const runCli = async (args: string[]) => {
+  const previousArgv = process.argv;
+  process.argv = args;
+
+  try {
+    await program.parseAsync(args);
+  } finally {
+    process.argv = previousArgv;
+  }
+};
+
+const isMainModule = (() => {
+  if (!process.argv[1]) return false;
+
+  return nodePath.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+})();
+
+if (isMainModule) {
+  void runCli(process.argv);
+}
