@@ -1,10 +1,13 @@
 import { Op } from '@ttoss/postgresdb';
+import createDebug from 'debug';
 
 import { db } from '../db';
 import {
   type CompiledPolicy,
   registerResourceFieldMap,
 } from './policyCompiler';
+
+const log = createDebug('soat:actors');
 
 export type { CompiledPolicy };
 
@@ -14,11 +17,18 @@ registerResourceFieldMap({
   tagsColumn: { column: 'tags' },
 });
 
+const getLinkedPublicId = (
+  linked: { publicId?: string } | null | undefined
+): string | null => {
+  return linked?.publicId ?? null;
+};
+
 const mapActor = (
   actor: InstanceType<(typeof db)['Actor']> & {
     project?: InstanceType<(typeof db)['Project']>;
     agent?: InstanceType<(typeof db)['Agent']> | null;
     chat?: InstanceType<(typeof db)['Chat']> | null;
+    memory?: InstanceType<(typeof db)['Memory']> | null;
   }
 ) => {
   return {
@@ -27,8 +37,9 @@ const mapActor = (
     name: actor.name,
     externalId: actor.externalId ?? undefined,
     instructions: actor.instructions ?? null,
-    agentId: actor.agent?.publicId ?? null,
-    chatId: actor.chat?.publicId ?? null,
+    agentId: getLinkedPublicId(actor.agent),
+    chatId: getLinkedPublicId(actor.chat),
+    memoryId: getLinkedPublicId(actor.memory),
     tags: actor.tags ?? undefined,
     createdAt: actor.createdAt,
     updatedAt: actor.updatedAt,
@@ -40,6 +51,7 @@ const actorIncludes = () => {
     { model: db.Project, as: 'project' },
     { model: db.Agent, as: 'agent' },
     { model: db.Chat, as: 'chat' },
+    { model: db.Memory, as: 'memory' },
   ];
 };
 
@@ -166,9 +178,34 @@ export const createActor = async (args: {
   instructions?: string | null;
   agentId?: number | null;
   chatId?: number | null;
+  memoryId?: number | null;
+  autoCreateMemory?: boolean;
 }) => {
+  log(
+    'createActor: projectId=%d name=%s externalId=%s autoCreateMemory=%s',
+    args.projectId,
+    args.name,
+    args.externalId,
+    args.autoCreateMemory
+  );
+
   if (args.agentId && args.chatId) {
     return 'agent_and_chat_exclusive' as const;
+  }
+
+  let resolvedMemoryId = args.memoryId ?? null;
+  if (args.autoCreateMemory && resolvedMemoryId === null) {
+    log('createActor: auto-creating memory for actor name=%s', args.name);
+    const { createMemory } = await import('./memories');
+    const memory = await createMemory({
+      projectId: args.projectId,
+      name: args.name,
+    });
+    log('createActor: auto-created memory id=%s', memory.id);
+    const memoryRow = await db.Memory.findOne({
+      where: { publicId: memory.id },
+    });
+    resolvedMemoryId = memoryRow ? (memoryRow.id as number) : null;
   }
 
   const actor = await db.Actor.create({
@@ -178,6 +215,7 @@ export const createActor = async (args: {
     instructions: args.instructions ?? null,
     agentId: args.agentId ?? null,
     chatId: args.chatId ?? null,
+    memoryId: resolvedMemoryId,
   });
 
   const actorWithProject = await db.Actor.findOne({
@@ -185,7 +223,26 @@ export const createActor = async (args: {
     include: actorIncludes(),
   });
 
+  log('createActor: created actor id=%s', actorWithProject!.publicId);
   return mapActor(actorWithProject!);
+};
+
+const attachMemoryToActor = async (args: {
+  actor: InstanceType<(typeof db)['Actor']>;
+  projectId: number;
+  name: string;
+}) => {
+  log('attachMemoryToActor: auto-creating memory name=%s', args.name);
+  const { createMemory } = await import('./memories');
+  const memory = await createMemory({
+    projectId: args.projectId,
+    name: args.name,
+  });
+  log('attachMemoryToActor: created memory id=%s', memory.id);
+  const memoryRow = await db.Memory.findOne({ where: { publicId: memory.id } });
+  if (memoryRow) {
+    await args.actor.update({ memoryId: memoryRow.id as number });
+  }
 };
 
 export const findOrCreateActor = async (args: {
@@ -195,7 +252,17 @@ export const findOrCreateActor = async (args: {
   instructions?: string | null;
   agentId?: number | null;
   chatId?: number | null;
+  memoryId?: number | null;
+  autoCreateMemory?: boolean;
 }) => {
+  log(
+    'findOrCreateActor: projectId=%d externalId=%s name=%s autoCreateMemory=%s',
+    args.projectId,
+    args.externalId,
+    args.name,
+    args.autoCreateMemory
+  );
+
   if (args.agentId && args.chatId) {
     return 'agent_and_chat_exclusive' as const;
   }
@@ -207,8 +274,19 @@ export const findOrCreateActor = async (args: {
       instructions: args.instructions ?? null,
       agentId: args.agentId ?? null,
       chatId: args.chatId ?? null,
+      memoryId: args.memoryId ?? null,
     },
   });
+
+  log('findOrCreateActor: actor=%s created=%s', actor.publicId, created);
+
+  if (created && args.autoCreateMemory && !args.memoryId) {
+    await attachMemoryToActor({
+      actor,
+      projectId: args.projectId,
+      name: args.name,
+    });
+  }
 
   const actorWithProject = await db.Actor.findOne({
     where: { id: actor.id },
@@ -219,6 +297,8 @@ export const findOrCreateActor = async (args: {
 };
 
 export const deleteActor = async (args: { id: string }) => {
+  log('deleteActor: id=%s', args.id);
+
   const actor = await db.Actor.findOne({ where: { publicId: args.id } });
 
   if (!actor) {
@@ -238,6 +318,22 @@ export const deleteActor = async (args: { id: string }) => {
   return { id: args.id };
 };
 
+const updateMemoryIdField = async (
+  memoryId: string | null | undefined,
+  updates: Record<string, unknown>
+): Promise<string | void> => {
+  if (memoryId === undefined) return;
+  if (memoryId === null) {
+    updates.memoryId = null;
+    return;
+  }
+  const memory = await db.Memory.findOne({
+    where: { publicId: memoryId },
+  });
+  if (!memory) return 'memory_not_found' as const;
+  updates.memoryId = memory.id;
+};
+
 export const updateActor = async (args: {
   id: string;
   name?: string;
@@ -245,7 +341,16 @@ export const updateActor = async (args: {
   instructions?: string | null;
   agentId?: string | null;
   chatId?: string | null;
+  memoryId?: string | null;
 }) => {
+  log(
+    'updateActor: id=%s name=%s externalId=%s memoryId=%s',
+    args.id,
+    args.name,
+    args.externalId,
+    args.memoryId
+  );
+
   const actor = await db.Actor.findOne({ where: { publicId: args.id } });
   if (!actor) {
     return null;
@@ -262,6 +367,9 @@ export const updateActor = async (args: {
 
   const chatError = await updateChatIdField(args.chatId, updates);
   if (chatError) return chatError;
+
+  const memoryError = await updateMemoryIdField(args.memoryId, updates);
+  if (memoryError) return memoryError;
 
   const finalAgent =
     args.agentId !== undefined ? updates.agentId : actor.agentId;

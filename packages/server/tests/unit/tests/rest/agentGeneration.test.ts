@@ -242,5 +242,75 @@ describe('Agent Generation Routes', () => {
       expect(response.status).toBe(200);
       expect(response.body.id).toBe('gen_ok');
     });
+
+    test('returns 200 with generation result on non-stream success', async () => {
+      const mockResult = {
+        id: 'gen_success',
+        traceId: 'trc_success',
+        status: 'completed',
+        output: { model: 'test', content: 'hi', finishReason: 'stop' },
+      };
+      mockCreateGeneration.mockResolvedValueOnce(mockResult as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'hello' }] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe('gen_success');
+    });
+
+    test('returns 404 when generate returns not_found', async () => {
+      mockCreateGeneration.mockResolvedValueOnce('not_found');
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'hello' }] });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe('Agent not found');
+    });
+
+    test('returns SSE stream when stream:true and result is a ReadableStream', async () => {
+      const chunks = ['hello ', 'world'];
+      let chunkIndex = 0;
+
+      const readable = new ReadableStream<string>({
+        pull: (controller) => {
+          if (chunkIndex < chunks.length) {
+            controller.enqueue(chunks[chunkIndex++]);
+          } else {
+            controller.close();
+          }
+        },
+      });
+
+      mockCreateGeneration.mockResolvedValueOnce(readable as ReadableStream);
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'hello' }], stream: true });
+
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toContain('text/event-stream');
+      expect(response.text).toContain('[DONE]');
+    });
+
+    test('SSE stream includes error event when ReadableStream errors', async () => {
+      const errorStream = new ReadableStream<string>({
+        start: (controller) => {
+          controller.error(new Error('stream read error'));
+        },
+      });
+
+      mockCreateGeneration.mockResolvedValueOnce(errorStream as ReadableStream);
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'hello' }], stream: true });
+
+      expect(response.status).toBe(200);
+      expect(response.text).toContain('stream read error');
+    });
   });
 });

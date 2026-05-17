@@ -104,6 +104,39 @@ describe('AgentFormations', () => {
       expect(res.body.errors).toHaveLength(0);
     });
 
+    test('valid YAML string template returns valid=true', async () => {
+      const yamlTemplate = `
+resources:
+  MyMemory:
+    type: memory
+    properties:
+      name: Formation YAML Test Memory
+outputs:
+  memoryId:
+    ref: MyMemory
+`.trim();
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/agent-formations/validate')
+        .send({ template: yamlTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(true);
+      expect(res.body.errors).toHaveLength(0);
+    });
+
+    test('valid JSON string template returns valid=true', async () => {
+      const jsonTemplate = JSON.stringify(simpleTemplate);
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/agent-formations/validate')
+        .send({ template: jsonTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(true);
+      expect(res.body.errors).toHaveLength(0);
+    });
+
     test('invalid ref returns valid=false', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/agent-formations/validate')
@@ -135,6 +168,24 @@ describe('AgentFormations', () => {
       expect(Array.isArray(res.body.changes)).toBe(true);
       expect(res.body.changes[0].action).toBe('create');
       expect(res.body.changes[0].logical_id).toBe('MyMemory');
+    });
+
+    test('accepts YAML string template', async () => {
+      const yamlTemplate = `
+resources:
+  MyMemory:
+    type: memory
+    properties:
+      name: Plan YAML Test Memory
+`.trim();
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/agent-formations/plan')
+        .send({ project_id: projectId, template: yamlTemplate });
+
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.changes)).toBe(true);
+      expect(res.body.changes[0].action).toBe('create');
     });
 
     test('unauthenticated returns 401', async () => {

@@ -43,9 +43,6 @@ const resolvePolicyWhere = async (
   return { forbidden: false, policyWhere: compiled.where };
 };
 
-/**
- * @openapi POST /api/v1/knowledge/search
- */
 knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;

@@ -21,18 +21,19 @@ The module covers:
 
 ## Data Model
 
-| Field          | Type           | Required | Description                                                                                     |
-| -------------- | -------------- | -------- | ----------------------------------------------------------------------------------------------- |
-| `id`           | string         | —        | Public identifier prefixed with `act_`                                                          |
-| `project_id`   | string         | —        | Public ID of the owning project (`proj_` prefix)                                                |
-| `name`         | string         | Yes      | Display name of the actor                                                                       |
-| `external_id`  | string         | No       | External identifier (e.g. WhatsApp phone number). Unique per project; `null` is never unique    |
-| `instructions` | string \| null | No       | Persona-specific instructions composed into the effective system prompt for generate calls      |
-| `agent_id`     | string \| null | No       | Public ID of the linked [Agent](./agents.md) (`agt_` prefix). Mutually exclusive with `chat_id` |
-| `chat_id`      | string \| null | No       | Public ID of the linked [Chat](./chats.md) (`chat_` prefix). Mutually exclusive with `agent_id` |
-| `tags`         | object         | No       | Key-value string pairs used for ABAC conditions (see [Tags](#tags))                             |
-| `created_at`   | string         | —        | ISO 8601 creation timestamp                                                                     |
-| `updated_at`   | string         | —        | ISO 8601 last-updated timestamp                                                                 |
+| Field          | Type           | Required | Description                                                                                                       |
+| -------------- | -------------- | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| `id`           | string         | —        | Public identifier prefixed with `act_`                                                                            |
+| `project_id`   | string         | —        | Public ID of the owning project (`proj_` prefix)                                                                  |
+| `name`         | string         | Yes      | Display name of the actor                                                                                         |
+| `external_id`  | string         | No       | External identifier (e.g. WhatsApp phone number). Unique per project; `null` is never unique                      |
+| `instructions` | string \| null | No       | Persona-specific instructions composed into the effective system prompt for generate calls                        |
+| `agent_id`     | string \| null | No       | Public ID of the linked [Agent](./agents.md) (`agt_` prefix). Mutually exclusive with `chat_id`                   |
+| `chat_id`      | string \| null | No       | Public ID of the linked [Chat](./chats.md) (`chat_` prefix). Mutually exclusive with `agent_id`                   |
+| `memory_id`    | string \| null | No       | Public ID of the linked [Memory](./memories.md) container (`mem_` prefix). Stores persistent facts for this actor |
+| `tags`         | object         | No       | Key-value string pairs used for ABAC conditions (see [Tags](#tags))                                               |
+| `created_at`   | string         | —        | ISO 8601 creation timestamp                                                                                       |
+| `updated_at`   | string         | —        | ISO 8601 last-updated timestamp                                                                                   |
 
 ## Key Concepts
 
@@ -73,6 +74,44 @@ An Actor can be linked to either an Agent or a Chat — not both simultaneously.
 - Set `chat_id` to link the actor to a specific Chat.
 - Pass `null` in a `PATCH /actors/:id` request to unlink either field.
 - Supplying both `agent_id` and `chat_id` in the same request returns `400 Bad Request`.
+
+### Memory Linking and Auto-Creation
+
+An Actor can be linked to a [Memory](./memories.md) container via `memory_id`. The memory container stores persistent facts about the actor (e.g. preferences, conversation history summaries) that can be injected into AI generation calls.
+
+**Manual linking** — supply `memory_id` in the `POST /actors` or `PATCH /actors/:id` request body:
+
+```json
+{ "memory_id": "mem_V1StGXR8Z5jdHi6B" }
+```
+
+**Auto-creation** — set `auto_create_memory: true` in the `POST /actors` body to automatically create a new memory container named after the actor and link it:
+
+```json
+{
+  "project_id": "proj_ABC",
+  "name": "Alice",
+  "external_id": "+15551234567",
+  "auto_create_memory": true
+}
+```
+
+The response will include `memory_id` pointing to the newly created memory. When combined with `external_id` (idempotent creation), the memory is only created the first time — repeat calls return the existing actor with its existing `memory_id` unchanged.
+
+Deleting an actor does **not** delete its linked memory. Memory data outlives the actor record and may contain valuable information.
+
+Once you have the actor's `memory_id`, use it in generation calls:
+
+```json
+{
+  "knowledge_config": {
+    "memory_ids": ["mem_V1StGXR8Z5jdHi6B"],
+    "write_memory_id": "mem_V1StGXR8Z5jdHi6B"
+  }
+}
+```
+
+To unlink a memory from an actor without deleting it, `PATCH` the actor with `"memory_id": null`.
 
 ### Instructions
 

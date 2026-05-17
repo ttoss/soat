@@ -21,6 +21,8 @@ type CreateActorBody = {
   instructions?: string | null;
   agentId?: string;
   chatId?: string;
+  memoryId?: string;
+  autoCreateMemory?: boolean;
 };
 
 const resolveActorProjectPublicId = (
@@ -54,6 +56,18 @@ const resolveActorChatDbId = async (
   });
   if (!chat) return null;
   return chat.id as number;
+};
+
+const resolveActorMemoryDbId = async (
+  memoryId: string | undefined,
+  projectDbId: number
+): Promise<number | null | undefined> => {
+  if (memoryId === undefined) return undefined;
+  const memory = await db.Memory.findOne({
+    where: { publicId: memoryId, projectId: projectDbId },
+  });
+  if (!memory) return null;
+  return memory.id as number;
 };
 
 actorsRouter.get('/actors', async (ctx: Context) => {
@@ -161,17 +175,24 @@ const performCreateActor = async (args: {
   body: CreateActorBody;
   agentDbId: number | undefined;
   chatDbId: number | undefined;
+  memoryDbId: number | undefined;
 }): Promise<
   { status: 200 | 201; actor: unknown } | { status: 400; error: string }
 > => {
+  const instructions = args.body.instructions ?? null;
+  const autoCreateMemory = args.body.autoCreateMemory ?? false;
+  const memoryId = args.memoryDbId ?? null;
+
   if (args.body.externalId !== undefined) {
     const result = await findOrCreateActor({
       projectId: args.project.id!,
       externalId: args.body.externalId,
       name: args.body.name,
-      instructions: args.body.instructions ?? null,
+      instructions,
       agentId: args.agentDbId,
       chatId: args.chatDbId,
+      memoryId,
+      autoCreateMemory,
     });
     if (result === 'agent_and_chat_exclusive') {
       return {
@@ -186,9 +207,11 @@ const performCreateActor = async (args: {
     projectId: args.project.id!,
     name: args.body.name,
     externalId: args.body.externalId,
-    instructions: args.body.instructions ?? null,
+    instructions,
     agentId: args.agentDbId,
     chatId: args.chatDbId,
+    memoryId,
+    autoCreateMemory,
   });
 
   if (actor === 'agent_and_chat_exclusive') {
@@ -264,11 +287,19 @@ actorsRouter.post('/actors', async (ctx: Context) => {
     return;
   }
 
+  const memoryDbId = await resolveActorMemoryDbId(body.memoryId, projectDbId);
+  if (memoryDbId === null) {
+    ctx.status = 400;
+    ctx.body = { error: 'Invalid memoryId' };
+    return;
+  }
+
   const result = await performCreateActor({
     project: { id: projectDbId },
     body,
     agentDbId,
     chatDbId,
+    memoryDbId,
   });
 
   if ('error' in result) {
@@ -375,6 +406,7 @@ actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
     instructions?: string | null;
     agentId?: string | null;
     chatId?: string | null;
+    memoryId?: string | null;
   };
 
   const updated = await updateActor({
@@ -384,6 +416,7 @@ actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
     instructions: body.instructions,
     agentId: body.agentId,
     chatId: body.chatId,
+    memoryId: body.memoryId,
   });
 
   if (updated === 'agent_not_found') {
@@ -394,6 +427,11 @@ actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
   if (updated === 'chat_not_found') {
     ctx.status = 400;
     ctx.body = { error: 'Invalid chatId' };
+    return;
+  }
+  if (updated === 'memory_not_found') {
+    ctx.status = 400;
+    ctx.body = { error: 'Invalid memoryId' };
     return;
   }
   if (updated === 'agent_and_chat_exclusive') {
