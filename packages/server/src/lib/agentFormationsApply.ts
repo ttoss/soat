@@ -2,6 +2,8 @@ import { db } from 'src/db';
 
 import {
   buildDependencyGraph,
+  buildResolvedParamsMap,
+  resolveParamExpressions,
   resolveRefs,
   topologicalSort,
 } from './agentFormationsHelpers';
@@ -245,10 +247,28 @@ export const applyFormationTemplate = async (args: {
   existingResources: InstanceType<(typeof db)['AgentFormationResource']>[];
   projectId: number;
   operation: InstanceType<(typeof db)['AgentFormationOperation']>;
+  parameters?: Record<string, string>;
 }): Promise<void> => {
-  const { formation, template, existingResources, projectId, operation } = args;
+  const {
+    formation,
+    template,
+    existingResources,
+    projectId,
+    operation,
+    parameters,
+  } = args;
 
-  const graph = buildDependencyGraph(template);
+  // Resolve parameters (defaults + provided overrides) and apply to template
+  const resolvedParamsMap = buildResolvedParamsMap(template, parameters);
+  const workingTemplate =
+    resolvedParamsMap.size > 0
+      ? (resolveParamExpressions(
+          template,
+          resolvedParamsMap
+        ) as FormationTemplate)
+      : template;
+
+  const graph = buildDependencyGraph(workingTemplate);
   const sortedOrder = topologicalSort(graph)!;
   const existingMap = new Map(
     existingResources.map((r) => {
@@ -259,7 +279,7 @@ export const applyFormationTemplate = async (args: {
   const formationId = (formation as unknown as { id: number }).id;
 
   for (const [lid, existing] of existingMap.entries()) {
-    if (existing.physicalResourceId && template.resources[lid]) {
+    if (existing.physicalResourceId && workingTemplate.resources[lid]) {
       resolvedIds.set(lid, existing.physicalResourceId);
     }
   }
@@ -267,7 +287,7 @@ export const applyFormationTemplate = async (args: {
   const events: FormationEvent[] = [];
 
   for (const logicalId of sortedOrder) {
-    const decl = template.resources[logicalId];
+    const decl = workingTemplate.resources[logicalId];
     const existing = existingMap.get(logicalId);
     try {
       await processResourceChange({
@@ -299,9 +319,13 @@ export const applyFormationTemplate = async (args: {
     }
   }
 
-  await handleOrphanedDeletes({ template, existingResources, events });
+  await handleOrphanedDeletes({
+    template: workingTemplate,
+    existingResources,
+    events,
+  });
 
-  const outputs = resolveFormationOutputs(template, resolvedIds);
+  const outputs = resolveFormationOutputs(workingTemplate, resolvedIds);
   await operation.update({ status: 'succeeded', events });
   await formation.update({ status: 'active', outputs, template });
 };

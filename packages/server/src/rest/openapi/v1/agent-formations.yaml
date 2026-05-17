@@ -83,6 +83,15 @@ paths:
                     formation planning.
                 template:
                   $ref: '#/components/schemas/FormationTemplateInput'
+                parameters:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: >
+                    Runtime parameter values that override or supply template
+                    parameter defaults. Keys must match parameter names declared
+                    in `template.parameters`.
+                  nullable: true
       responses:
         '200':
           description: Plan result
@@ -154,6 +163,16 @@ paths:
                   example: my-agent-stack
                 template:
                   $ref: '#/components/schemas/FormationTemplateInput'
+                parameters:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: >
+                    Runtime parameter values that override or supply template
+                    parameter defaults. Keys must match parameter names declared
+                    in `template.parameters`. Required parameters (those without
+                    a default) must be provided here.
+                  nullable: true
                 metadata:
                   type: object
                   additionalProperties: true
@@ -226,6 +245,16 @@ paths:
               properties:
                 template:
                   $ref: '#/components/schemas/FormationTemplateInput'
+                parameters:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: >
+                    Runtime parameter values that override or supply template
+                    parameter defaults. Keys must match parameter names declared
+                    in `template.parameters`. Required parameters (those without
+                    a default) must be provided here.
+                  nullable: true
                 metadata:
                   type: object
                   additionalProperties: true
@@ -326,6 +355,16 @@ components:
       required:
         - resources
       properties:
+        parameters:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ParameterDeclaration'
+          description: >
+            Declared parameters for this template. Each parameter may have a
+            default value and an optional description. Parameters without a
+            default must be supplied in the `parameters` field of the deploy
+            request.
+          nullable: true
         resources:
           type: object
           additionalProperties:
@@ -336,11 +375,34 @@ components:
           additionalProperties: true
           description: >
             Map of output names to values. Values may use `{ "ref": "logicalId" }`
-            to reference physical IDs of created resources.
+            to reference physical IDs of created resources, or `{ "param": "ParamName" }`
+            and `{ "sub": "text ${ParamName}" }` to embed parameter values.
           nullable: true
         metadata:
           type: object
           additionalProperties: true
+          nullable: true
+
+    ParameterDeclaration:
+      type: object
+      properties:
+        type:
+          type: string
+          description: Parameter type (currently only 'string' is supported)
+          example: string
+        default:
+          type: string
+          description: Default value used when the parameter is not supplied at deploy time
+          nullable: true
+        description:
+          type: string
+          description: Human-readable description of what this parameter represents
+          nullable: true
+        no_echo:
+          type: boolean
+          description: >
+            When true, the parameter value should be treated as sensitive and
+            not echoed in logs or UI. Analogous to NoEcho in CloudFormation.
           nullable: true
 
     ResourceDeclaration:
@@ -365,7 +427,10 @@ components:
           additionalProperties: true
           description: >
             Resource properties. Values may use `{ "ref": "logicalId" }` to
-            reference physical IDs of other resources in the template.
+            reference physical IDs of other resources in the template,
+            `{ "param": "ParamName" }` to substitute a parameter value, or
+            `{ "sub": "text ${ParamName}" }` to interpolate parameter values
+            into a string.
         depends_on:
           type: array
           items:

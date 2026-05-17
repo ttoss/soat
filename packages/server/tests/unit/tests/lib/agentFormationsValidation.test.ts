@@ -380,4 +380,177 @@ describe('validateFormationTemplate', () => {
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);
   });
+
+  // ── parameters section ─────────────────────────────────────────────────
+
+  test('returns invalid when parameters is not an object', () => {
+    const result = validateFormationTemplate({
+      parameters: 'not-an-object',
+      resources: {
+        MyMemory: { type: 'memory', properties: { name: 'test' } },
+      },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return e.path === 'parameters';
+      })
+    ).toBe(true);
+  });
+
+  test('returns invalid when a parameter declaration is not an object', () => {
+    const result = validateFormationTemplate({
+      parameters: { MyParam: 'not-an-object' },
+      resources: {
+        MyMemory: { type: 'memory', properties: { name: 'test' } },
+      },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return e.path === 'parameters.MyParam';
+      })
+    ).toBe(true);
+  });
+
+  test('returns invalid when parameter type field is not a string', () => {
+    const result = validateFormationTemplate({
+      parameters: { MyParam: { type: 42 } },
+      resources: {
+        MyMemory: { type: 'memory', properties: { name: 'test' } },
+      },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return e.path === 'parameters.MyParam.type';
+      })
+    ).toBe(true);
+  });
+
+  test('returns invalid when param ref in resource properties is not in parameters', () => {
+    const result = validateFormationTemplate({
+      parameters: { AppUrl: { type: 'string' } },
+      resources: {
+        MyMemory: {
+          type: 'memory',
+          properties: {
+            name: 'test',
+            config: { param: 'UndeclaredParam' },
+          },
+        },
+      },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return e.message.includes("'UndeclaredParam'");
+      })
+    ).toBe(true);
+  });
+
+  test('returns invalid when sub ref in resource properties uses undeclared parameter', () => {
+    const result = validateFormationTemplate({
+      parameters: { AppUrl: { type: 'string' } },
+      resources: {
+        MyMemory: {
+          type: 'memory',
+          properties: {
+            name: { sub: 'Bearer ${MissingKey}' },
+          },
+        },
+      },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return e.message.includes("'MissingKey'");
+      })
+    ).toBe(true);
+  });
+
+  test('returns invalid when param ref in outputs is not in parameters', () => {
+    const result = validateFormationTemplate({
+      parameters: {},
+      resources: {
+        MyMemory: { type: 'memory', properties: { name: 'test' } },
+      },
+      outputs: {
+        myOutput: { param: 'UndeclaredParam' },
+      },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return e.path.startsWith('outputs') && e.message.includes("'UndeclaredParam'");
+      })
+    ).toBe(true);
+  });
+
+  test('warns about parameters without defaults', () => {
+    const result = validateFormationTemplate({
+      parameters: {
+        RequiredParam: { type: 'string' },
+        OptionalParam: { type: 'string', default: 'default-value' },
+      },
+      resources: {
+        MyMemory: { type: 'memory', properties: { name: 'test' } },
+      },
+    });
+    expect(result.valid).toBe(true);
+    expect(
+      result.warnings.some((w) => {
+        return w.message.includes("'RequiredParam'") && w.message.includes('must be provided');
+      })
+    ).toBe(true);
+    expect(
+      result.warnings.every((w) => {
+        return !w.message.includes("'OptionalParam'");
+      })
+    ).toBe(true);
+  });
+
+  test('returns valid for a template with parameters, param expression, and sub expression', () => {
+    const result = validateFormationTemplate({
+      parameters: {
+        AppUrl: { type: 'string', default: 'https://example.com' },
+        ApiKey: { type: 'string', no_echo: true },
+      },
+      resources: {
+        MyTool: {
+          type: 'agent_tool',
+          properties: {
+            type: 'http',
+            name: 'my-tool',
+            execute: {
+              url: { sub: '${AppUrl}/api/endpoint' },
+              headers: { Authorization: { sub: 'Bearer ${ApiKey}' } },
+            },
+          },
+        },
+      },
+    });
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  test('returns valid for a template with param expression in resource properties', () => {
+    const result = validateFormationTemplate({
+      parameters: {
+        SecretId: { type: 'string' },
+      },
+      resources: {
+        MyProvider: {
+          type: 'ai_provider',
+          properties: {
+            name: 'xai',
+            provider: 'xai',
+            secret_id: { param: 'SecretId' },
+          },
+        },
+      },
+    });
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
 });
