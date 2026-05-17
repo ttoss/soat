@@ -623,7 +623,7 @@ resources:
         expect(res.body.warnings.length).toBeGreaterThan(0);
       });
 
-      test('validates template with undefined param ref returns invalid', async () => {
+      test('returns invalid for template with undefined param ref', async () => {
         const badTemplate = {
           parameters: { KnownParam: { type: 'string' } },
           resources: {
