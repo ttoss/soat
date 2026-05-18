@@ -22,10 +22,10 @@ The database must have the [pgvector](https://github.com/pgvector/pgvector) exte
 
 ### Server
 
-| Variable                  | Default | Description                                                                |
-| ------------------------- | ------- | -------------------------------------------------------------------------- |
-| `PORT`                    | `5047`  | HTTP port the server listens on                                            |
-| `SOAT_ERROR_LOGS_ENABLED` | `true`  | Enables request error logs from the global error middleware (`true/false`) |
+| Variable                  | Default | Description                                                  |
+| ------------------------- | ------- | ------------------------------------------------------------ |
+| `PORT`                    | `5047`  | HTTP port the server listens on                              |
+| `SOAT_ERROR_LOGS_ENABLED` | `true`  | Controls request error logs from the global error middleware |
 
 ### Debug Logging
 
@@ -54,19 +54,21 @@ services:
       DEBUG: soat:*
 ```
 
-Set `SOAT_ERROR_LOGS_ENABLED=false` if you want to suppress request error logs (for example, when log collection is handled externally).
-
-`SOAT_ERROR_LOGS_ENABLED=true` forces request error logs from the global error middleware, even when `DEBUG` does not include the middleware namespace.
-Use this when you want deterministic error logging independent of debug namespace filters.
+`SOAT_ERROR_LOGS_ENABLED` is independent from `DEBUG` namespaces.
+When unset, request error logs are enabled by default.
+To disable them, set the value to one of: `false`, `0`, `off`, or `no` (case-insensitive).
 
 Valid examples:
 
 ```bash
-# Force error logs independently from DEBUG namespace filters
-SOAT_ERROR_LOGS_ENABLED=true DEBUG=soat:*,-soat:server pnpm dev
+# Disable request error logs from the global middleware
+SOAT_ERROR_LOGS_ENABLED=false pnpm dev
 
-# Namespace-driven behavior (no force): only logs when namespace is enabled
-DEBUG=soat:server pnpm dev
+# Also disables (same behavior, case-insensitive)
+SOAT_ERROR_LOGS_ENABLED=OFF pnpm dev
+
+# Request error logs still remain enabled regardless of DEBUG filters
+SOAT_ERROR_LOGS_ENABLED=true DEBUG=soat:formations pnpm dev
 ```
 
 ### Admin Bootstrap
