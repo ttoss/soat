@@ -491,6 +491,35 @@ resources:
       );
       expect(res.status).toBe(401);
     });
+
+    test('deleted formation is excluded from list results', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/agent-formations?project_id=${projectId}`
+      );
+      expect(res.status).toBe(200);
+      const ids = res.body.map((f: { id: string }) => f.id);
+      expect(ids).not.toContain(formationId);
+    });
+
+    test('deleting an already-deleted formation returns 404', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/agent-formations/${formationId}`
+      );
+      expect(res.status).toBe(404);
+    });
+
+    test('can create a new formation with the same name as a deleted one', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/agent-formations')
+        .send({
+          project_id: projectId,
+          name: 'test-formation',
+          template: simpleTemplate,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.name).toBe('test-formation');
+    });
   });
 
   // ── Optional resource properties ──────────────────────────────────────────

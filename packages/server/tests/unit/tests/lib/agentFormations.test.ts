@@ -319,6 +319,7 @@ describe('agentFormations lib', () => {
       const mockFormation = {
         id: 1,
         publicId: 'af_test',
+        name: 'af_test',
         template: null,
         update: jest.fn().mockResolvedValue(undefined),
       };
@@ -340,7 +341,10 @@ describe('agentFormations lib', () => {
         status: 'succeeded',
         events: [],
       });
-      expect(mockFormation.update).toHaveBeenCalledWith({ status: 'deleted' });
+      expect(mockFormation.update).toHaveBeenCalledWith({
+        status: 'deleted',
+        name: 'af_test__deleted__af_test',
+      });
     });
   });
 

@@ -142,7 +142,11 @@ export const createAgentFormation = async (args: {
     Object.keys(args.template.resources).length
   );
   const existing = await db.AgentFormation.findOne({
-    where: { projectId: args.projectId, name: args.name },
+    where: {
+      projectId: args.projectId,
+      name: args.name,
+      status: { [Op.ne]: 'deleted' },
+    },
   });
   if (existing) {
     log(
@@ -213,7 +217,7 @@ export const listAgentFormations = async (args: {
   projectIds: number[];
 }): Promise<MappedAgentFormation[]> => {
   const formations = await db.AgentFormation.findAll({
-    where: { projectId: args.projectIds },
+    where: { projectId: args.projectIds, status: { [Op.ne]: 'deleted' } },
     include: getFormationIncludes(),
     order: [['createdAt', 'ASC']],
   });
@@ -248,7 +252,7 @@ export const updateAgentFormation = async (args: {
     !!args.template
   );
   const formation = await db.AgentFormation.findOne({
-    where: { publicId: args.id },
+    where: { publicId: args.id, status: { [Op.ne]: 'deleted' } },
   });
   if (!formation) {
     log('updateAgentFormation: formation not found formationId=%s', args.id);
@@ -305,7 +309,7 @@ export const deleteAgentFormation = async (args: {
   id: string;
 }): Promise<{ success: boolean } | null> => {
   const formation = await db.AgentFormation.findOne({
-    where: { publicId: args.id },
+    where: { publicId: args.id, status: { [Op.ne]: 'deleted' } },
   });
   if (!formation) return null;
 
@@ -337,7 +341,10 @@ export const deleteAgentFormation = async (args: {
   }
 
   await operation.update({ status: 'succeeded', events });
-  await formation.update({ status: 'deleted' });
+  await formation.update({
+    status: 'deleted',
+    name: `${formation.name}__deleted__${formation.publicId}`,
+  });
   return { success: true };
 };
 
