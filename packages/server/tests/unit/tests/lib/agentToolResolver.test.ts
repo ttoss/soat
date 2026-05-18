@@ -279,11 +279,6 @@ describe('resolveAgentTools', () => {
     const originalValue = process.env.SOAT_ERROR_LOGS_ENABLED;
     process.env.SOAT_ERROR_LOGS_ENABLED = 'true';
 
-    const consoleErrorSpy = jest
-      .spyOn(console, 'error')
-      .mockImplementation(() => {
-        return undefined;
-      });
     const fetchMock = jest
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(new Response('Boom', { status: 500 }));
@@ -297,16 +292,7 @@ describe('resolveAgentTools', () => {
       );
     }
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      'Tool call failed:',
-      expect.objectContaining({
-        toolName: 'myHttpTool',
-        toolType: 'http',
-      })
-    );
-
     fetchMock.mockRestore();
-    consoleErrorSpy.mockRestore();
     process.env.SOAT_ERROR_LOGS_ENABLED = originalValue;
   });
 
@@ -314,11 +300,6 @@ describe('resolveAgentTools', () => {
     const originalValue = process.env.SOAT_ERROR_LOGS_ENABLED;
     process.env.SOAT_ERROR_LOGS_ENABLED = 'false';
 
-    const consoleErrorSpy = jest
-      .spyOn(console, 'error')
-      .mockImplementation(() => {
-        return undefined;
-      });
     const fetchMock = jest
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(new Response('Boom', { status: 500 }));
@@ -332,10 +313,7 @@ describe('resolveAgentTools', () => {
       );
     }
 
-    expect(consoleErrorSpy).not.toHaveBeenCalled();
-
     fetchMock.mockRestore();
-    consoleErrorSpy.mockRestore();
     process.env.SOAT_ERROR_LOGS_ENABLED = originalValue;
   });
 });

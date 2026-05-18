@@ -9,16 +9,14 @@
     },
     "lint": {
       "dependsOn": ["^build", "build"],
-      "outputs": [],
-      "cache": false
+      "outputs": []
     },
     "typecheck": {
       "dependsOn": ["^build", "build"],
-      "outputs": [],
-      "cache": false
+      "outputs": []
     },
     "test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "build"],
       "outputs": []
     },
     "deploy": {

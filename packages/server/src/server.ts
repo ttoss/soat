@@ -1,8 +1,12 @@
 import 'dotenv/config';
 
+import createDebug from 'debug';
+
 import { app } from './app';
 import { initializeDatabase } from './db';
 import { createFirstAdminUser } from './lib/users';
+
+const log = createDebug('soat:server');
 
 /**
  * SOAT = 5047
@@ -14,8 +18,7 @@ const startServer = async () => {
     const database = await initializeDatabase(app);
     await database.sequelize.sync({ alter: true });
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Failed to connect to database:', error);
+    log('startServer: failed to connect to database error=%o', error);
     process.exit(1);
   }
 
@@ -30,13 +33,11 @@ const startServer = async () => {
       });
 
       if (user) {
-        // eslint-disable-next-line no-console
-        console.log('Admin user created from environment variables.');
+        log('startServer: admin user created from environment variables');
       }
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error(
-        'Failed to create admin user from environment variables:',
+      log(
+        'startServer: failed to create admin user from environment variables error=%o',
         error
       );
     }
@@ -44,7 +45,10 @@ const startServer = async () => {
 
   const server = app.listen(SOAT_PORT, () => {
     // eslint-disable-next-line no-console
-    console.log(`SOAT Server is running on http://localhost:${SOAT_PORT}`);
+    console.log(
+      'startServer: server running on http://localhost:%d',
+      SOAT_PORT
+    );
   });
 
   // Disable the default 5-minute requestTimeout so long-running LLM

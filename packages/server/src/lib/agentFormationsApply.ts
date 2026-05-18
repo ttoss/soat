@@ -1,5 +1,11 @@
+import createDebug from 'debug';
 import { db } from 'src/db';
 
+import {
+  applyCreateChange,
+  applyUpdateChange,
+  failFormationOperation,
+} from './agentFormationsApplyHelpers';
 import {
   buildDependencyGraph,
   buildResolvedParamsMap,
@@ -7,18 +13,14 @@ import {
   resolveRefs,
   topologicalSort,
 } from './agentFormationsHelpers';
-import {
-  applyCreateResource,
-  applyDeleteResource,
-  applyUpdateResource,
-} from './agentFormationsResourceHandlers';
+import { applyDeleteResource } from './agentFormationsResourceHandlers';
 import type {
   FormationEvent,
   FormationTemplate,
   ResourceDeclaration,
 } from './agentFormationsTypes';
 
-// ── Output Resolution ─────────────────────────────────────────────────────
+const log = createDebug('soat:formations');
 
 export const resolveFormationOutputs = (
   template: FormationTemplate,
@@ -36,8 +38,6 @@ export const resolveFormationOutputs = (
   }
   return outputs;
 };
-
-// ── Orphaned Resource Deletion ────────────────────────────────────────────
 
 export const handleOrphanedDeletes = async (args: {
   template: FormationTemplate;
@@ -78,103 +78,7 @@ export const handleOrphanedDeletes = async (args: {
   }
 };
 
-// ── Single Resource Processing ────────────────────────────────────────────
-
 type ResourceRow = InstanceType<(typeof db)['AgentFormationResource']>;
-
-const applyCreateChange = async (args: {
-  resourceRow: ResourceRow;
-  resourceType: string;
-  resolvedProperties: Record<string, unknown>;
-  projectId: number;
-  logicalId: string;
-  resolvedIds: Map<string, string>;
-  events: FormationEvent[];
-}): Promise<void> => {
-  const {
-    resourceRow,
-    resourceType,
-    resolvedProperties,
-    projectId,
-    logicalId,
-    resolvedIds,
-    events,
-  } = args;
-  const physicalId = await applyCreateResource({
-    resourceType,
-    resolvedProperties,
-    projectId,
-  });
-  resolvedIds.set(logicalId, physicalId);
-  await resourceRow.update({
-    physicalResourceId: physicalId,
-    status: 'created',
-    lastAppliedProperties: resolvedProperties,
-  });
-  events.push({
-    timestamp: new Date().toISOString(),
-    logicalId,
-    resourceType,
-    action: 'create',
-    status: 'succeeded',
-    physicalResourceId: physicalId,
-  });
-};
-
-const applyUpdateChange = async (args: {
-  resourceRow: ResourceRow;
-  existing: ResourceRow & { physicalResourceId: string };
-  resourceType: string;
-  resolvedProperties: Record<string, unknown>;
-  logicalId: string;
-  resolvedIds: Map<string, string>;
-  events: FormationEvent[];
-}): Promise<void> => {
-  const {
-    resourceRow,
-    existing,
-    resourceType,
-    resolvedProperties,
-    logicalId,
-    resolvedIds,
-    events,
-  } = args;
-  const lastProps = (existing.lastAppliedProperties ?? {}) as Record<
-    string,
-    unknown
-  >;
-  const propertiesChanged =
-    JSON.stringify(lastProps) !== JSON.stringify(resolvedProperties);
-  resolvedIds.set(logicalId, existing.physicalResourceId);
-  if (propertiesChanged) {
-    await applyUpdateResource({
-      resourceType,
-      physicalResourceId: existing.physicalResourceId,
-      resolvedProperties,
-    });
-    await resourceRow.update({
-      status: 'updated',
-      lastAppliedProperties: resolvedProperties,
-    });
-    events.push({
-      timestamp: new Date().toISOString(),
-      logicalId,
-      resourceType,
-      action: 'update',
-      status: 'succeeded',
-      physicalResourceId: existing.physicalResourceId,
-    });
-  } else {
-    events.push({
-      timestamp: new Date().toISOString(),
-      logicalId,
-      resourceType,
-      action: 'no-op',
-      status: 'succeeded',
-      physicalResourceId: existing.physicalResourceId,
-    });
-  }
-};
 
 export const processResourceChange = async (args: {
   logicalId: string;
@@ -198,6 +102,7 @@ export const processResourceChange = async (args: {
     decl.properties,
     resolvedIds
   ) as Record<string, unknown>;
+  log('processResourceChange: logicalId=%s type=%s', logicalId, decl.type);
 
   let resourceRow: ResourceRow;
   if (!existing) {
@@ -213,34 +118,46 @@ export const processResourceChange = async (args: {
     resourceRow = existing;
   }
 
-  if (!existing || !existing.physicalResourceId) {
-    await applyCreateChange({
-      resourceRow,
-      resourceType: decl.type,
-      resolvedProperties,
-      projectId,
+  try {
+    if (!existing || !existing.physicalResourceId) {
+      await applyCreateChange({
+        resourceRow,
+        resourceType: decl.type,
+        resolvedProperties,
+        projectId,
+        logicalId,
+        resolvedIds,
+        events,
+      });
+    } else {
+      const existingWithId = existing as ResourceRow & {
+        physicalResourceId: string;
+      };
+      await applyUpdateChange({
+        resourceRow,
+        existing: existingWithId,
+        resourceType: decl.type,
+        resolvedProperties,
+        logicalId,
+        resolvedIds,
+        events,
+      });
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    log(
+      'processResourceChange: error for logicalId=%s error=%s',
       logicalId,
-      resolvedIds,
-      events,
+      errorMsg
+    );
+    await resourceRow.update({
+      status: 'failed',
     });
-  } else {
-    const existingWithId = existing as ResourceRow & {
-      physicalResourceId: string;
-    };
-    await applyUpdateChange({
-      resourceRow,
-      existing: existingWithId,
-      resourceType: decl.type,
-      resolvedProperties,
-      logicalId,
-      resolvedIds,
-      events,
-    });
+    throw error;
   }
 };
 
-// ── Apply Formation Template ──────────────────────────────────────────────
-
+/* eslint-disable-next-line max-lines-per-function */
 export const applyFormationTemplate = async (args: {
   formation: InstanceType<(typeof db)['AgentFormation']>;
   template: FormationTemplate;
@@ -257,8 +174,6 @@ export const applyFormationTemplate = async (args: {
     operation,
     parameters,
   } = args;
-
-  // Resolve parameters (defaults + provided overrides) and apply to template
   const resolvedParamsMap = buildResolvedParamsMap(template, parameters);
   const workingTemplate =
     resolvedParamsMap.size > 0
@@ -278,13 +193,16 @@ export const applyFormationTemplate = async (args: {
   const resolvedIds = new Map<string, string>();
   const formationId = (formation as unknown as { id: number }).id;
 
-  for (const [lid, existing] of existingMap.entries()) {
-    if (existing.physicalResourceId && workingTemplate.resources[lid]) {
+  for (const [lid, existing] of existingMap.entries())
+    if (existing.physicalResourceId && workingTemplate.resources[lid])
       resolvedIds.set(lid, existing.physicalResourceId);
-    }
-  }
 
   const events: FormationEvent[] = [];
+  log(
+    'applyFormationTemplate: start formationId=%s resources=%d',
+    formation.publicId,
+    sortedOrder.length
+  );
 
   for (const logicalId of sortedOrder) {
     const decl = workingTemplate.resources[logicalId];
@@ -301,20 +219,20 @@ export const applyFormationTemplate = async (args: {
       });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      events.push({
-        timestamp: new Date().toISOString(),
+      log(
+        'applyFormationTemplate: failed logicalId=%s error=%s',
+        logicalId,
+        errorMsg
+      );
+      await failFormationOperation({
+        operation,
+        formation,
+        events,
         logicalId,
         resourceType: decl.type,
         action: existing ? 'update' : 'create',
-        status: 'failed',
-        error: errorMsg,
+        errorMessage: errorMsg,
       });
-      await operation.update({
-        status: 'failed',
-        events,
-        error: { message: errorMsg, logicalId },
-      });
-      await formation.update({ status: 'failed' });
       return;
     }
   }
@@ -328,9 +246,8 @@ export const applyFormationTemplate = async (args: {
   const outputs = resolveFormationOutputs(workingTemplate, resolvedIds);
   await operation.update({ status: 'succeeded', events });
   await formation.update({ status: 'active', outputs, template });
+  log('applyFormationTemplate: succeeded formationId=%s', formation.publicId);
 };
-
-// ── Ordered Delete Helpers ────────────────────────────────────────────────
 
 export const buildDeleteOrder = (
   template: FormationTemplate | null,

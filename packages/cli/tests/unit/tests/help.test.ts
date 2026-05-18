@@ -36,7 +36,9 @@ describe('command help output', () => {
   test('root --help mentions command-specific help usage', async () => {
     const stdoutWriteSpy = jest
       .spyOn(process.stdout, 'write')
-      .mockImplementation((() => true) as never);
+      .mockImplementation((() => {
+        return true;
+      }) as never);
     jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       throw new Error(`EXIT_${code ?? 0}`);
     }) as never);

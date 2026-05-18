@@ -215,16 +215,12 @@ describe('Actors', () => {
 
       const requestFailedCall = loggerSpy.mock.calls.find((call) => {
         return call[0] === 'Request failed:';
-      }) as [string, Record<string, unknown>] | undefined;
+      }) as [string, string] | undefined;
 
       expect(requestFailedCall).toBeDefined();
-      expect(requestFailedCall?.[1]).toEqual(
-        expect.objectContaining({
-          method: 'GET',
-          path: '/api/v1/actors',
-          status: 500,
-        })
-      );
+      expect(requestFailedCall?.[1]).toContain("method: 'GET'");
+      expect(requestFailedCall?.[1]).toContain("path: '/api/v1/actors'");
+      expect(requestFailedCall?.[1]).toContain('status: 500');
 
       listActorsSpy.mockRestore();
       loggerSpy.mockReset();

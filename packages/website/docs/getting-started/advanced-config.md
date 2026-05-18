@@ -22,12 +22,54 @@ The database must have the [pgvector](https://github.com/pgvector/pgvector) exte
 
 ### Server
 
-| Variable                  | Default | Description                                                                |
-| ------------------------- | ------- | -------------------------------------------------------------------------- |
-| `PORT`                    | `5047`  | HTTP port the server listens on                                            |
-| `SOAT_ERROR_LOGS_ENABLED` | `true`  | Enables request error logs from the global error middleware (`true/false`) |
+| Variable                  | Default | Description                                                  |
+| ------------------------- | ------- | ------------------------------------------------------------ |
+| `PORT`                    | `5047`  | HTTP port the server listens on                              |
+| `SOAT_ERROR_LOGS_ENABLED` | `true`  | Controls request error logs from the global error middleware |
 
-Set `SOAT_ERROR_LOGS_ENABLED=false` if you want to suppress request error logs (for example, when log collection is handled externally).
+### Debug Logging
+
+SOAT uses the [`debug`](https://www.npmjs.com/package/debug) package internally. Enable debug logs with the standard `DEBUG` environment variable.
+
+| Variable | Default | Description                                                           |
+| -------- | ------- | --------------------------------------------------------------------- |
+| `DEBUG`  | _(off)_ | Enables debug namespaces (for example, `soat:*` or `soat:formations`) |
+
+Examples:
+
+```bash
+# Enable all SOAT debug namespaces
+DEBUG=soat:* pnpm dev
+
+# Enable only formation-related logs
+DEBUG=soat:formations pnpm dev
+```
+
+In Docker Compose:
+
+```yaml
+services:
+  server:
+    environment:
+      DEBUG: soat:*
+```
+
+`SOAT_ERROR_LOGS_ENABLED` is independent from `DEBUG` namespaces.
+When unset, request error logs are enabled by default.
+To disable them, set the value to one of: `false`, `0`, `off`, or `no` (case-insensitive).
+
+Valid examples:
+
+```bash
+# Disable request error logs from the global middleware
+SOAT_ERROR_LOGS_ENABLED=false pnpm dev
+
+# Also disables (same behavior, case-insensitive)
+SOAT_ERROR_LOGS_ENABLED=OFF pnpm dev
+
+# Request error logs still remain enabled regardless of DEBUG filters
+SOAT_ERROR_LOGS_ENABLED=true DEBUG=soat:formations pnpm dev
+```
 
 ### Admin Bootstrap
 

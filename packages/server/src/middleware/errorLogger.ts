@@ -1,3 +1,5 @@
+import { inspect } from 'node:util';
+
 import { DatabaseError } from '@ttoss/postgresdb';
 import { APICallError } from 'ai';
 
@@ -79,6 +81,33 @@ const getErrorStatus = (args: { error: unknown }) => {
   return 500;
 };
 
+const writeErrorLog = (args: {
+  ctx: Context;
+  status: number;
+  error: unknown;
+}) => {
+  const payload = {
+    method: args.ctx.method,
+    path: args.ctx.path,
+    status: args.status,
+    userAgent: args.ctx.get('user-agent') || undefined,
+    error: toErrorText({ error: args.error }),
+    ...toApiCallErrorDetails(args.error),
+    ...toDatabaseErrorDetails(args.error),
+  };
+
+  // eslint-disable-next-line no-console
+  console.error(
+    'Request failed:',
+    inspect(payload, {
+      depth: null,
+      compact: false,
+      breakLength: 120,
+      maxArrayLength: 200,
+    })
+  );
+};
+
 const errorLoggerMiddleware = async (ctx: Context, next: Next) => {
   try {
     await next();
@@ -88,15 +117,10 @@ const errorLoggerMiddleware = async (ctx: Context, next: Next) => {
     if (isErrorLoggingEnabled()) {
       const causeToLog =
         error instanceof AppError ? (error.cause ?? error) : error;
-      // eslint-disable-next-line no-console
-      console.error('Request failed:', {
-        method: ctx.method,
-        path: ctx.path,
+      writeErrorLog({
+        ctx,
         status,
-        userAgent: ctx.get('user-agent') || undefined,
-        error: toErrorText({ error: causeToLog }),
-        ...toApiCallErrorDetails(causeToLog),
-        ...toDatabaseErrorDetails(causeToLog),
+        error: causeToLog,
       });
     }
 
