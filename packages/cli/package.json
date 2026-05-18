@@ -5,7 +5,7 @@
   "scripts": {
     "generate": "tsx scripts/generate.ts",
     "lint": "eslint src tests",
-    "test": "pnpm --filter @soat/sdk build && jest --config tests/unit/jest.config.ts --coverage=false",
+    "test": "jest --config tests/unit/jest.config.ts --coverage=false",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
     "build": "pnpm generate && tsup"
   },
