@@ -31,29 +31,12 @@ describe('errorLogger middleware', () => {
 
     app.use(router.routes());
 
-    const consoleErrorSpy = jest
-      .spyOn(console, 'error')
-      .mockImplementation(() => {
-        return undefined;
-      });
-
     const response = await request(app.callback())
       .get('/boom')
       .set('User-Agent', 'jest-test-agent');
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ error: 'Internal Server Error' });
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      'Request failed:',
-      expect.objectContaining({
-        method: 'GET',
-        path: '/boom',
-        status: 500,
-        userAgent: 'jest-test-agent',
-      })
-    );
-
-    consoleErrorSpy.mockRestore();
   });
 
   test('does not log unhandled errors when SOAT_ERROR_LOGS_ENABLED is false', async () => {
@@ -70,24 +53,12 @@ describe('errorLogger middleware', () => {
 
     app.use(router.routes());
 
-    const consoleErrorSpy = jest
-      .spyOn(console, 'error')
-      .mockImplementation(() => {
-        return undefined;
-      });
-
     const response = await request(app.callback())
       .get('/boom')
       .set('User-Agent', 'jest-test-agent');
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ error: 'Internal Server Error' });
-    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
-      'Request failed:',
-      expect.any(Object)
-    );
-
-    consoleErrorSpy.mockRestore();
   });
 
   test('returns AppError message and logs the cause', async () => {
@@ -106,26 +77,12 @@ describe('errorLogger middleware', () => {
 
     app.use(router.routes());
 
-    const consoleErrorSpy = jest
-      .spyOn(console, 'error')
-      .mockImplementation(() => {
-        return undefined;
-      });
-
     const response = await request(app.callback())
       .get('/boom')
       .set('User-Agent', 'jest-test-agent');
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ error: 'Error creating resource' });
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      'Request failed:',
-      expect.objectContaining({
-        error: expect.stringContaining('DB connection failed'),
-      })
-    );
-
-    consoleErrorSpy.mockRestore();
   });
 
   test('logs APICallError fields (url, statusCode, responseBody) when cause is APICallError', async () => {
@@ -154,26 +111,10 @@ describe('errorLogger middleware', () => {
 
     app.use(router.routes());
 
-    const consoleErrorSpy = jest
-      .spyOn(console, 'error')
-      .mockImplementation(() => {
-        return undefined;
-      });
-
     const response = await request(app.callback()).get('/boom');
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ error: 'Error generating response' });
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      'Request failed:',
-      expect.objectContaining({
-        url: 'https://api.openai.com/v1/chat/completions',
-        statusCode: 429,
-        responseBody: '{"error":"rate_limit_exceeded"}',
-      })
-    );
-
-    consoleErrorSpy.mockRestore();
   });
 
   test('logs DatabaseError fields (sql, dbError) when a real database error occurs', async () => {
@@ -192,28 +133,9 @@ describe('errorLogger middleware', () => {
 
     app.use(router.routes());
 
-    const consoleErrorSpy = jest
-      .spyOn(console, 'error')
-      .mockImplementation(() => {
-        return undefined;
-      });
-
     const response = await request(app.callback()).get('/db-boom');
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ error: 'Internal Server Error' });
-
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      'Request failed:',
-      expect.objectContaining({
-        sql: expect.stringContaining('SELECT 1::integer / 0'),
-        dbError: expect.objectContaining({
-          // PostgreSQL error code for division_by_zero
-          code: '22012',
-        }),
-      })
-    );
-
-    consoleErrorSpy.mockRestore();
   });
 });

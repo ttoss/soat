@@ -56,6 +56,19 @@ services:
 
 Set `SOAT_ERROR_LOGS_ENABLED=false` if you want to suppress request error logs (for example, when log collection is handled externally).
 
+`SOAT_ERROR_LOGS_ENABLED=true` forces request error logs from the global error middleware, even when `DEBUG` does not include the middleware namespace.
+Use this when you want deterministic error logging independent of debug namespace filters.
+
+Valid examples:
+
+```bash
+# Force error logs independently from DEBUG namespace filters
+SOAT_ERROR_LOGS_ENABLED=true DEBUG=soat:*,-soat:server pnpm dev
+
+# Namespace-driven behavior (no force): only logs when namespace is enabled
+DEBUG=soat:server pnpm dev
+```
+
 ### Admin Bootstrap
 
 | Variable              | Required | Description                                                                     |

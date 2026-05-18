@@ -1,5 +1,6 @@
 import type { Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
+import createDebug from 'debug';
 import {
   evaluatePolicies,
   type PolicyDocument,
@@ -11,6 +12,8 @@ import {
   resolveMcpTools,
   resolveSoatTools,
 } from './agentToolResolverExternalTools';
+
+const log = createDebug('soat:toolResolver');
 
 // ── Path Parameter Interpolation ─────────────────────────────────────────
 
@@ -136,14 +139,14 @@ const logToolCallingError = (args: {
     return;
   }
 
-  // eslint-disable-next-line no-console
-  console.error('Tool call failed:', {
-    toolName: args.toolName,
-    toolType: args.toolType,
-    url: args.url,
-    method: args.method,
-    error: toToolErrorText({ error: args.error }),
-  });
+  log(
+    'logToolCallError: tool call failed toolName=%s toolType=%s url=%s method=%s error=%s',
+    args.toolName,
+    args.toolType,
+    args.url,
+    args.method,
+    toToolErrorText({ error: args.error })
+  );
 };
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
