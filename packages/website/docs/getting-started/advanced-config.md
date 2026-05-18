@@ -27,6 +27,33 @@ The database must have the [pgvector](https://github.com/pgvector/pgvector) exte
 | `PORT`                    | `5047`  | HTTP port the server listens on                                            |
 | `SOAT_ERROR_LOGS_ENABLED` | `true`  | Enables request error logs from the global error middleware (`true/false`) |
 
+### Debug Logging
+
+SOAT uses the [`debug`](https://www.npmjs.com/package/debug) package internally. Enable debug logs with the standard `DEBUG` environment variable.
+
+| Variable | Default | Description                                                           |
+| -------- | ------- | --------------------------------------------------------------------- |
+| `DEBUG`  | _(off)_ | Enables debug namespaces (for example, `soat:*` or `soat:formations`) |
+
+Examples:
+
+```bash
+# Enable all SOAT debug namespaces
+DEBUG=soat:* pnpm dev
+
+# Enable only formation-related logs
+DEBUG=soat:formations pnpm dev
+```
+
+In Docker Compose:
+
+```yaml
+services:
+  server:
+    environment:
+      DEBUG: soat:*
+```
+
 Set `SOAT_ERROR_LOGS_ENABLED=false` if you want to suppress request error logs (for example, when log collection is handled externally).
 
 ### Admin Bootstrap

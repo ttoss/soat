@@ -1,9 +1,9 @@
 import { db } from 'src/db';
-
 import {
   buildDeleteOrder,
   handleOrphanedDeletes,
   performResourceDeletions,
+  processResourceChange,
   resolveFormationOutputs,
 } from 'src/lib/agentFormationsApply';
 import * as resourceHandlers from 'src/lib/agentFormationsResourceHandlers';
@@ -78,7 +78,11 @@ describe('agentFormationsApply', () => {
 
     const order = buildDeleteOrder(template, [provider, agent, orphan]);
 
-    expect(order.map((r) => r.logicalId)).toEqual(['agent', 'provider', 'orphan']);
+    expect(
+      order.map((r) => {
+        return r.logicalId;
+      })
+    ).toEqual(['agent', 'provider', 'orphan']);
   });
 
   test('performResourceDeletions skips missing ids and records both success and failure events', async () => {
@@ -98,8 +102,12 @@ describe('agentFormationsApply', () => {
       physicalResourceId: 'mem_1',
     });
 
-    const successUpdate = jest.spyOn(success, 'update').mockResolvedValue(success);
-    const failureUpdate = jest.spyOn(failure, 'update').mockResolvedValue(failure);
+    const successUpdate = jest
+      .spyOn(success, 'update')
+      .mockResolvedValue(success);
+    const failureUpdate = jest
+      .spyOn(failure, 'update')
+      .mockResolvedValue(failure);
 
     jest
       .spyOn(resourceHandlers, 'applyDeleteResource')
@@ -111,10 +119,11 @@ describe('agentFormationsApply', () => {
     expect(successUpdate).toHaveBeenCalledWith({ status: 'deleted' });
     expect(failureUpdate).not.toHaveBeenCalled();
     expect(result.hasError).toBe(true);
-    expect(result.events.map((event) => event.status)).toEqual([
-      'succeeded',
-      'failed',
-    ]);
+    expect(
+      result.events.map((event) => {
+        return event.status;
+      })
+    ).toEqual(['succeeded', 'failed']);
   });
 
   test('handleOrphanedDeletes records delete success and failure events', async () => {
@@ -133,7 +142,9 @@ describe('agentFormationsApply', () => {
       resourceType: 'webhook',
       physicalResourceId: 'whk_1',
     });
-    const deleteUpdate = jest.spyOn(deleted, 'update').mockResolvedValue(deleted);
+    const deleteUpdate = jest
+      .spyOn(deleted, 'update')
+      .mockResolvedValue(deleted);
     const failedUpdate = jest.spyOn(failed, 'update').mockResolvedValue(failed);
     const events: FormationEvent[] = [];
 
@@ -154,6 +165,53 @@ describe('agentFormationsApply', () => {
 
     expect(deleteUpdate).toHaveBeenCalledWith({ status: 'deleted' });
     expect(failedUpdate).not.toHaveBeenCalled();
-    expect(events.map((event) => event.status)).toEqual(['succeeded', 'failed']);
+    expect(
+      events.map((event) => {
+        return event.status;
+      })
+    ).toEqual(['succeeded', 'failed']);
+  });
+
+  test('processResourceChange marks resource as failed when create handler throws', async () => {
+    const resourceRow = db.AgentFormationResource.build({
+      publicId: 'afr_failure',
+      agentFormationId: 1,
+      logicalId: 'xaiProvider',
+      resourceType: 'ai_provider',
+      status: 'pending',
+      physicalResourceId: null,
+      lastAppliedProperties: null,
+    });
+    const updateSpy = jest
+      .spyOn(resourceRow, 'update')
+      .mockResolvedValue(resourceRow);
+    jest
+      .spyOn(db.AgentFormationResource, 'create')
+      .mockResolvedValue(resourceRow as never);
+    jest
+      .spyOn(resourceHandlers, 'applyCreateResource')
+      .mockRejectedValueOnce(new Error('Secret not found'));
+
+    await expect(
+      processResourceChange({
+        logicalId: 'xaiProvider',
+        decl: {
+          type: 'ai_provider',
+          properties: {
+            name: 'xai',
+            provider: 'xai',
+            secret_id: 'sec_missing',
+            default_model: 'grok-4',
+          },
+        },
+        existing: undefined,
+        resolvedIds: new Map<string, string>(),
+        events: [],
+        projectId: 1,
+        formationId: 1,
+      })
+    ).rejects.toThrow('Secret not found');
+
+    expect(updateSpy).toHaveBeenCalledWith({ status: 'failed' });
   });
 });

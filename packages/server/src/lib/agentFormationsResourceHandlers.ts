@@ -1,3 +1,4 @@
+import createDebug from 'debug';
 import { db } from 'src/db';
 
 import {
@@ -20,6 +21,8 @@ import { createMemory, deleteMemory, updateMemory } from './memories';
 import { createMemoryEntry, deleteMemoryEntry } from './memoryEntries';
 import { createWebhook, deleteWebhook, updateWebhook } from './webhooks';
 
+const log = createDebug('soat:formations');
+
 // ── Handler Types ─────────────────────────────────────────────────────────
 
 type P = Record<string, unknown>;
@@ -35,9 +38,22 @@ type DeleteHandler = (args: DeleteHandlerArgs) => Promise<void>;
 // ── Create Handlers ───────────────────────────────────────────────────────
 
 const createAiProviderHandler: CreateHandler = async ({ p, projectId }) => {
+  log(
+    'createAiProviderHandler: creating ai_provider projectId=%d name=%s provider=%s secretId=%s',
+    projectId,
+    p.name,
+    p.provider,
+    p.secret_id
+  );
   let secretId: number | undefined;
   if (p.secret_id && typeof p.secret_id === 'string') {
+    log('createAiProviderHandler: resolving secret publicId=%s', p.secret_id);
     secretId = await lookupSecretInternalId(p.secret_id);
+    log(
+      'createAiProviderHandler: resolved secret publicId=%s to internalId=%d',
+      p.secret_id,
+      secretId
+    );
   }
   const created = await createAiProvider({
     projectId,
@@ -48,6 +64,11 @@ const createAiProviderHandler: CreateHandler = async ({ p, projectId }) => {
     baseUrl: p.base_url as string | undefined,
     config: p.config as Record<string, unknown> | undefined,
   });
+  log(
+    'createAiProviderHandler: created ai_provider id=%s publicId=%s',
+    created.id,
+    created.id
+  );
   return created.id;
 };
 

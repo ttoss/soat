@@ -1,4 +1,5 @@
 import { Op } from '@ttoss/postgresdb';
+import createDebug from 'debug';
 import { db } from 'src/db';
 
 import {
@@ -19,6 +20,8 @@ import type {
   PlanChange,
   PlanResult,
 } from './agentFormationsTypes';
+
+const log = createDebug('soat:formations');
 
 export { getMissingParams } from './agentFormationsHelpers';
 export type {
@@ -132,10 +135,23 @@ export const createAgentFormation = async (args: {
   metadata?: Record<string, unknown>;
   parameters?: Record<string, string>;
 }): Promise<MappedAgentFormation | 'name_conflict'> => {
+  log(
+    'createAgentFormation: projectId=%d name=%s resources=%d',
+    args.projectId,
+    args.name,
+    Object.keys(args.template.resources).length
+  );
   const existing = await db.AgentFormation.findOne({
     where: { projectId: args.projectId, name: args.name },
   });
-  if (existing) return 'name_conflict';
+  if (existing) {
+    log(
+      'createAgentFormation: name conflict projectId=%d name=%s',
+      args.projectId,
+      args.name
+    );
+    return 'name_conflict';
+  }
 
   const formation = await db.AgentFormation.create({
     projectId: args.projectId,
@@ -146,6 +162,12 @@ export const createAgentFormation = async (args: {
     metadata: args.metadata ?? null,
   });
 
+  log(
+    'createAgentFormation: created formation formationId=%s status=%s',
+    formation.publicId,
+    formation.status
+  );
+
   const operation = await db.AgentFormationOperation.create({
     agentFormationId: (formation as unknown as { id: number }).id,
     operationType: 'create',
@@ -154,6 +176,12 @@ export const createAgentFormation = async (args: {
     plan: null,
     error: null,
   });
+
+  log(
+    'createAgentFormation: created operation operationId=%s status=%s',
+    operation.publicId,
+    operation.status
+  );
 
   await applyFormationTemplate({
     formation,
@@ -168,6 +196,12 @@ export const createAgentFormation = async (args: {
     where: { id: (formation as unknown as { id: number }).id },
     include: getFormationIncludes(true),
   });
+
+  log(
+    'createAgentFormation: formation completed formationId=%s status=%s',
+    formation.publicId,
+    refreshed?.status
+  );
 
   return mapFormation(
     refreshed as unknown as Parameters<typeof mapFormation>[0],
@@ -208,10 +242,18 @@ export const updateAgentFormation = async (args: {
   metadata?: Record<string, unknown> | null;
   parameters?: Record<string, string>;
 }): Promise<MappedAgentFormation | null> => {
+  log(
+    'updateAgentFormation: formationId=%s updateTemplate=%s',
+    args.id,
+    !!args.template
+  );
   const formation = await db.AgentFormation.findOne({
     where: { publicId: args.id },
   });
-  if (!formation) return null;
+  if (!formation) {
+    log('updateAgentFormation: formation not found formationId=%s', args.id);
+    return null;
+  }
 
   const newTemplate =
     args.template ?? (formation.template as FormationTemplate);
@@ -224,6 +266,11 @@ export const updateAgentFormation = async (args: {
     plan: null,
     error: null,
   });
+
+  log(
+    'updateAgentFormation: created operation operationId=%s',
+    operation.publicId
+  );
 
   await formation.update({ status: 'updating' });
   if (args.metadata !== undefined) {

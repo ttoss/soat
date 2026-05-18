@@ -272,6 +272,39 @@ resources:
 
       expect(res.status).toBe(403);
     });
+
+    test('ai_provider resource with non-existent secret sets resource status to failed', async () => {
+      const failingTemplate = {
+        resources: {
+          MyProvider: {
+            type: 'ai_provider',
+            properties: {
+              name: 'test-provider',
+              provider: 'openai',
+              default_model: 'gpt-4o',
+              secret_id: 'sec_nonexistent',
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/agent-formations')
+        .send({
+          project_id: projectId,
+          name: `failing-provider-${Date.now()}`,
+          template: failingTemplate,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('failed');
+      expect(Array.isArray(res.body.resources)).toBe(true);
+      expect(res.body.resources).toHaveLength(1);
+      const resource = res.body.resources[0];
+      expect(resource.logical_id).toBe('MyProvider');
+      expect(resource.status).toBe('failed');
+      expect(resource.physical_resource_id).toBeNull();
+    });
   });
 
   // ── List ──────────────────────────────────────────────────────────────────
