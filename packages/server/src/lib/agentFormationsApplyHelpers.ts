@@ -3,11 +3,10 @@
  * Handles resource creation, update, and deletion during formation application.
  */
 
-import { db } from 'src/db';
+import type { db } from 'src/db';
 
 import {
   applyCreateResource,
-  applyDeleteResource,
   applyUpdateResource,
 } from './agentFormationsResourceHandlers';
 import type { FormationEvent } from './agentFormationsTypes';
