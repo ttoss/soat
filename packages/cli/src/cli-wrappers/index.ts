@@ -1,4 +1,4 @@
-import type { ParsedFlags, RouteLike, Wrapper } from './types.js';
+import type { HelpFlag, ParsedFlags, RouteLike, Wrapper } from './types.js';
 import { agentFormationsWrapper } from './wrappers/agentFormations.js';
 
 const WRAPPERS: Wrapper[] = [agentFormationsWrapper];
@@ -34,5 +34,12 @@ export const applyWrapperForCommand = (args: {
   });
 };
 
+export const getWrapperHelpFlags = (commandName: string): HelpFlag[] => {
+  const wrapper = WRAPPERS.find((w) => {
+    return w.commands.includes(commandName);
+  });
+  return wrapper?.helpFlags ?? [];
+};
+
 export { parseUnknownWithRepeats } from './flagParser.js';
-export type { ParsedFlags, Wrapper } from './types.js';
+export type { HelpFlag, ParsedFlags, Wrapper } from './types.js';

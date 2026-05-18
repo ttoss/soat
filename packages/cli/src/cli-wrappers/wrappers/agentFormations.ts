@@ -116,6 +116,28 @@ const resolveEnvRef = (args: {
 export const agentFormationsWrapper: Wrapper = {
   id: 'agent-formations-wrapper',
   commands: FORMATION_COMMANDS,
+  helpFlags: [
+    {
+      name: 'template-path',
+      description:
+        'Path to template file (JSON or YAML). Alias: --template-file',
+      required: false,
+      type: 'string',
+    },
+    {
+      name: 'parameter',
+      description:
+        'Template parameter in key=value format (repeatable). Values may reference env vars ($VAR)',
+      required: false,
+      type: 'string',
+    },
+    {
+      name: 'env-file',
+      description: 'Path to .env file for parameter variable substitution',
+      required: false,
+      type: 'string',
+    },
+  ],
   // eslint-disable-next-line complexity
   apply: ({ context }) => {
     const forcedBody: Record<string, unknown> = {};

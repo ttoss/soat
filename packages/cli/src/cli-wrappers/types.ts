@@ -25,5 +25,13 @@ export type WrapperContext = {
 export interface Wrapper {
   id: string;
   commands: string[];
+  helpFlags?: HelpFlag[];
   apply(args: { context: WrapperContext }): WrapperResult;
 }
+
+export type HelpFlag = {
+  name: string;
+  description: string;
+  required: boolean;
+  type: string;
+};

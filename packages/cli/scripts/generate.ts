@@ -1,3 +1,4 @@
+/* eslint-disable max-depth */
 /**
  * Reads all OpenAPI YAML specs and generates src/generated/routes.ts —
  * a typed manifest mapping kebab-case CLI command names to their SDK
@@ -15,11 +16,42 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const SPECS_DIR = path.resolve(__dirname, '../../server/src/rest/openapi/v1');
 const OUT_FILE = path.resolve(__dirname, '../src/generated/routes.ts');
+const MODULE_DOCS_BASE_URL = 'https://soat.ttoss.dev/docs/modules';
 
 interface OpenApiParameter {
   name: string;
   in: 'path' | 'query' | 'header' | 'cookie';
   $ref?: string;
+}
+interface OpenApiSchema {
+  type?: string;
+  default?: unknown;
+}
+
+interface OpenApiParameterFull extends OpenApiParameter {
+  description?: string;
+  required?: boolean;
+  schema?: OpenApiSchema;
+}
+
+interface OpenApiRequestBodyProperty {
+  type?: string;
+  description?: string;
+  nullable?: boolean;
+}
+
+interface OpenApiRequestBodySchema {
+  required?: string[];
+  properties?: Record<string, OpenApiRequestBodyProperty>;
+}
+
+interface OpenApiRequestBody {
+  required?: boolean;
+  content?: {
+    'application/json'?: {
+      schema?: OpenApiRequestBodySchema;
+    };
+  };
 }
 
 interface OpenApiOperation {
@@ -27,7 +59,8 @@ interface OpenApiOperation {
   tags?: string[];
   summary?: string;
   description?: string;
-  parameters?: OpenApiParameter[];
+  parameters?: OpenApiParameterFull[];
+  requestBody?: OpenApiRequestBody;
 }
 
 interface OpenApiPathItem {
@@ -36,11 +69,11 @@ interface OpenApiPathItem {
   put?: OpenApiOperation;
   patch?: OpenApiOperation;
   delete?: OpenApiOperation;
-  parameters?: OpenApiParameter[];
+  parameters?: OpenApiParameterFull[];
 }
 
 interface OpenApiComponents {
-  parameters?: Record<string, OpenApiParameter>;
+  parameters?: Record<string, OpenApiParameterFull>;
 }
 
 interface OpenApiSpec {
@@ -74,11 +107,27 @@ interface Route {
   serviceClass: string;
   operationId: string;
   description: string;
+  moduleDocsUrl: string;
   pathParams: string[];
   queryParams: string[];
 }
 
-const routes: Record<string, Route> = {};
+/** Metadata for a single CLI flag, used to render --help output. */
+export interface Flag {
+  /** flag name in snake_case (e.g. project_id) */
+  name: string;
+  description: string;
+  required: boolean;
+  type: string;
+  /** where the value is sent: path, query, or body */
+  in: 'path' | 'query' | 'body';
+}
+
+interface RouteWithFlags extends Route {
+  flags: Flag[];
+}
+
+const routes: Record<string, RouteWithFlags> = {};
 
 const files = fs
   .readdirSync(SPECS_DIR)
@@ -91,11 +140,13 @@ for (const file of files) {
   const spec = yaml.load(
     fs.readFileSync(path.join(SPECS_DIR, file), 'utf8')
   ) as OpenApiSpec;
+  const moduleSlug = path.basename(file, '.yaml');
+  const moduleDocsUrl = `${MODULE_DOCS_BASE_URL}/${moduleSlug}`;
 
   const moduleTag = spec.tags?.[0]?.name;
 
   /** Resolve a parameter that may be a $ref to components/parameters. */
-  const resolveParam = (p: OpenApiParameter): OpenApiParameter => {
+  const resolveParam = (p: OpenApiParameterFull): OpenApiParameterFull => {
     if (p.$ref) {
       const refKey = p.$ref.replace('#/components/parameters/', '');
       return spec.components?.parameters?.[refKey] ?? p;
@@ -131,12 +182,43 @@ for (const file of files) {
         ...opParams,
       ];
 
+      // Build the flags array from path/query params + requestBody properties
+      const flags: Flag[] = [];
+
+      for (const p of params) {
+        if (p.in !== 'path' && p.in !== 'query') continue;
+        flags.push({
+          name: p.name,
+          description: p.description ?? '',
+          required: p.required ?? p.in === 'path',
+          type: p.schema?.type ?? 'string',
+          in: p.in,
+        });
+      }
+
+      const bodySchema = op.requestBody?.content?.['application/json']?.schema;
+      if (bodySchema?.properties) {
+        const requiredBodyFields = new Set(bodySchema.required ?? []);
+        for (const [propName, propSchema] of Object.entries(
+          bodySchema.properties
+        )) {
+          flags.push({
+            name: propName,
+            description: propSchema.description ?? '',
+            required: requiredBodyFields.has(propName),
+            type: propSchema.type ?? 'string',
+            in: 'body',
+          });
+        }
+      }
+
       routes[kebab] = {
         serviceClass: toClassName(tag),
         operationId: op.operationId,
-        description: (op.summary ?? op.description ?? op.operationId)
+        description: (op.description ?? op.summary ?? op.operationId)
           .replace(/\s+/g, ' ')
           .trim(),
+        moduleDocsUrl,
         pathParams: params
           .filter((p) => {
             return p.in === 'path';
@@ -151,6 +233,7 @@ for (const file of files) {
           .map((p) => {
             return p.name;
           }),
+        flags,
       };
     }
   }
@@ -164,15 +247,29 @@ const lines = [
   '  operationId: string;',
   '  /** operation summary/description */',
   '  description: string;',
+  '  /** URL to module documentation page */',
+  '  moduleDocsUrl: string;',
   '  /** snake_case path parameter names */',
   '  pathParams: string[];',
   '  /** snake_case query parameter names */',
   '  queryParams: string[];',
+  '  /** snake_case flags (path, query, body) with metadata for --help. */',
+  '  flags: Flag[];',
+  '}',
+  '',
+  '/** Metadata for a single CLI flag, used to render --help output. */',
+  'export interface Flag {',
+  '  name: string;',
+  '  description: string;',
+  '  required: boolean;',
+  '  type: string;',
+  "  in: 'path' | 'query' | 'body';",
   '}',
   '',
   'export const routes: Record<string, Route> = {',
   ...Object.entries(routes).map(([cmd, r]) => {
-    return `  '${cmd}': { serviceClass: '${r.serviceClass}', operationId: '${r.operationId}', description: ${JSON.stringify(r.description)}, pathParams: ${JSON.stringify(r.pathParams)}, queryParams: ${JSON.stringify(r.queryParams)} },`;
+    const flags = JSON.stringify(r.flags);
+    return `  '${cmd}': { serviceClass: '${r.serviceClass}', operationId: '${r.operationId}', description: ${JSON.stringify(r.description)}, moduleDocsUrl: ${JSON.stringify(r.moduleDocsUrl)}, pathParams: ${JSON.stringify(r.pathParams)}, queryParams: ${JSON.stringify(r.queryParams)}, flags: ${flags} },`;
   }),
   '};',
   '',

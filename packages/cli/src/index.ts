@@ -10,6 +10,7 @@ import { program } from 'commander';
 import pkg from '../package.json' with { type: 'json' };
 import {
   applyWrapperForCommand,
+  getWrapperHelpFlags,
   parseUnknownWithRepeats,
 } from './cli-wrappers/index.js';
 import { resolveClient, writeProfile } from './config.js';
@@ -83,6 +84,11 @@ program
   .description('SOAT CLI')
   .version(pkg.version)
   .option('-p, --profile <name>', 'config profile to use');
+
+program.addHelpText(
+  'after',
+  '\nTip: Run `soat <command> --help` to see command-specific flags and docs.'
+);
 
 // ── configure ────────────────────────────────────────────────────────────────
 
@@ -280,6 +286,7 @@ program
   .argument('[command]', 'API command in kebab-case (e.g. list-actors)')
   .argument('[args...]')
   .allowUnknownOption()
+  .passThroughOptions()
 
   // eslint-disable-next-line complexity, max-lines-per-function
   .action(async (commandName) => {
@@ -298,6 +305,27 @@ program
     // Collect flags from everything after the command name
     const rawIdx = process.argv.indexOf(commandName);
     const rawArgs = rawIdx >= 0 ? process.argv.slice(rawIdx + 1) : [];
+    if (rawArgs.includes('--help') || rawArgs.includes('-h')) {
+      const wrapperFlags = getWrapperHelpFlags(commandName);
+      const allFlags = [
+        ...route.flags,
+        ...wrapperFlags.map((f) => {
+          return { ...f, in: 'wrapper' as const };
+        }),
+      ];
+      console.log(`\nUsage: soat ${commandName} [flags]\n`);
+      console.log(`  ${route.description}\n`);
+      console.log(`  Module docs: ${route.moduleDocsUrl}\n`);
+      if (allFlags.length > 0) {
+        console.log('Flags:');
+        for (const f of allFlags) {
+          const req = f.required ? ' [required]' : '';
+          const desc = f.description ? `  ${f.description}` : '';
+          console.log(`  --${f.name}  <${f.type}>${req}${desc}`);
+        }
+      }
+      process.exit(0);
+    }
     const parsedFlags = parseUnknownWithRepeats({ cliArgs: rawArgs });
     const wrapped = applyWrapperForCommand({
       commandName,
