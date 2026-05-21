@@ -60,14 +60,14 @@ describe('AgentFormations', () => {
             {
               effect: 'Allow',
               action: [
-                'agent-formations:ValidateAgentFormation',
-                'agent-formations:PlanAgentFormation',
-                'agent-formations:CreateAgentFormation',
-                'agent-formations:ListAgentFormations',
-                'agent-formations:GetAgentFormation',
-                'agent-formations:UpdateAgentFormation',
-                'agent-formations:DeleteAgentFormation',
-                'agent-formations:ListAgentFormationEvents',
+                'formations:ValidateFormation',
+                'formations:PlanFormation',
+                'formations:CreateFormation',
+                'formations:ListFormations',
+                'formations:GetFormation',
+                'formations:UpdateFormation',
+                'formations:DeleteFormation',
+                'formations:ListFormationEvents',
                 'memories:CreateMemory',
                 'memories:DeleteMemory',
               ],
@@ -93,10 +93,10 @@ describe('AgentFormations', () => {
 
   // ── Validate ──────────────────────────────────────────────────────────────
 
-  describe('POST /api/v1/agent-formations/validate', () => {
+  describe('POST /api/v1/formations/validate', () => {
     test('valid template returns valid=true', async () => {
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/agent-formations/validate')
+        .post('/api/v1/formations/validate')
         .send({ template: simpleTemplate });
 
       expect(res.status).toBe(200);
@@ -117,7 +117,7 @@ outputs:
 `.trim();
 
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/agent-formations/validate')
+        .post('/api/v1/formations/validate')
         .send({ template: yamlTemplate });
 
       expect(res.status).toBe(200);
@@ -129,7 +129,7 @@ outputs:
       const jsonTemplate = JSON.stringify(simpleTemplate);
 
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/agent-formations/validate')
+        .post('/api/v1/formations/validate')
         .send({ template: jsonTemplate });
 
       expect(res.status).toBe(200);
@@ -139,7 +139,7 @@ outputs:
 
     test('invalid ref returns valid=false', async () => {
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/agent-formations/validate')
+        .post('/api/v1/formations/validate')
         .send({ template: invalidTemplate });
 
       expect(res.status).toBe(200);
@@ -149,7 +149,7 @@ outputs:
 
     test('unauthenticated returns 401', async () => {
       const res = await testClient
-        .post('/api/v1/agent-formations/validate')
+        .post('/api/v1/formations/validate')
         .send({ template: simpleTemplate });
 
       expect(res.status).toBe(401);
@@ -158,10 +158,10 @@ outputs:
 
   // ── Plan ──────────────────────────────────────────────────────────────────
 
-  describe('POST /api/v1/agent-formations/plan', () => {
+  describe('POST /api/v1/formations/plan', () => {
     test('returns plan with create actions', async () => {
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/agent-formations/plan')
+        .post('/api/v1/formations/plan')
         .send({ project_id: projectId, template: simpleTemplate });
 
       expect(res.status).toBe(200);
@@ -180,7 +180,7 @@ resources:
 `.trim();
 
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/agent-formations/plan')
+        .post('/api/v1/formations/plan')
         .send({ project_id: projectId, template: yamlTemplate });
 
       expect(res.status).toBe(200);
@@ -190,7 +190,7 @@ resources:
 
     test('unauthenticated returns 401', async () => {
       const res = await testClient
-        .post('/api/v1/agent-formations/plan')
+        .post('/api/v1/formations/plan')
         .send({ project_id: projectId, template: simpleTemplate });
 
       expect(res.status).toBe(401);
@@ -198,7 +198,7 @@ resources:
 
     test('no permission returns 403', async () => {
       const res = await authenticatedTestClient(noPermToken)
-        .post('/api/v1/agent-formations/plan')
+        .post('/api/v1/formations/plan')
         .send({ project_id: projectId, template: simpleTemplate });
 
       expect(res.status).toBe(403);
@@ -207,10 +207,10 @@ resources:
 
   // ── Create ────────────────────────────────────────────────────────────────
 
-  describe('POST /api/v1/agent-formations', () => {
+  describe('POST /api/v1/formations', () => {
     test('creates a formation and provisions resources', async () => {
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/agent-formations')
+        .post('/api/v1/formations')
         .send({
           project_id: projectId,
           name: 'test-formation',
@@ -235,7 +235,7 @@ resources:
 
     test('duplicate name returns 409', async () => {
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/agent-formations')
+        .post('/api/v1/formations')
         .send({
           project_id: projectId,
           name: 'test-formation',
@@ -247,7 +247,7 @@ resources:
 
     test('invalid template returns 400', async () => {
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/agent-formations')
+        .post('/api/v1/formations')
         .send({
           project_id: projectId,
           name: 'bad-formation',
@@ -259,7 +259,7 @@ resources:
 
     test('unauthenticated returns 401', async () => {
       const res = await testClient
-        .post('/api/v1/agent-formations')
+        .post('/api/v1/formations')
         .send({ project_id: projectId, name: 'x', template: simpleTemplate });
 
       expect(res.status).toBe(401);
@@ -267,7 +267,7 @@ resources:
 
     test('no permission returns 403', async () => {
       const res = await authenticatedTestClient(noPermToken)
-        .post('/api/v1/agent-formations')
+        .post('/api/v1/formations')
         .send({ project_id: projectId, name: 'x', template: simpleTemplate });
 
       expect(res.status).toBe(403);
@@ -289,7 +289,7 @@ resources:
       };
 
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/agent-formations')
+        .post('/api/v1/formations')
         .send({
           project_id: projectId,
           name: `failing-provider-${Date.now()}`,
@@ -309,10 +309,10 @@ resources:
 
   // ── List ──────────────────────────────────────────────────────────────────
 
-  describe('GET /api/v1/agent-formations', () => {
+  describe('GET /api/v1/formations', () => {
     test('returns list of formations', async () => {
       const res = await authenticatedTestClient(userToken)
-        .get('/api/v1/agent-formations')
+        .get('/api/v1/formations')
         .query({ project_id: projectId });
 
       expect(res.status).toBe(200);
@@ -323,7 +323,7 @@ resources:
 
     test('unauthenticated returns 401', async () => {
       const res = await testClient
-        .get('/api/v1/agent-formations')
+        .get('/api/v1/formations')
         .query({ project_id: projectId });
 
       expect(res.status).toBe(401);
@@ -332,10 +332,10 @@ resources:
 
   // ── Get ───────────────────────────────────────────────────────────────────
 
-  describe('GET /api/v1/agent-formations/:formation_id', () => {
+  describe('GET /api/v1/formations/:formation_id', () => {
     test('returns formation details', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/agent-formations/${formationId}`
+        `/api/v1/formations/${formationId}`
       );
 
       expect(res.status).toBe(200);
@@ -346,7 +346,7 @@ resources:
 
     test('unknown id returns 404', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        '/api/v1/agent-formations/af_nonexistent'
+        '/api/v1/formations/af_nonexistent'
       );
 
       expect(res.status).toBe(404);
@@ -354,14 +354,14 @@ resources:
 
     test('unauthenticated returns 401', async () => {
       const res = await testClient.get(
-        `/api/v1/agent-formations/${formationId}`
+        `/api/v1/formations/${formationId}`
       );
       expect(res.status).toBe(401);
     });
 
     test('no permission returns 403', async () => {
       const res = await authenticatedTestClient(noPermToken).get(
-        `/api/v1/agent-formations/${formationId}`
+        `/api/v1/formations/${formationId}`
       );
       expect(res.status).toBe(403);
     });
@@ -369,7 +369,7 @@ resources:
 
   // ── Update ────────────────────────────────────────────────────────────────
 
-  describe('PUT /api/v1/agent-formations/:formation_id', () => {
+  describe('PUT /api/v1/formations/:formation_id', () => {
     test('updates a formation', async () => {
       const updatedTemplate = {
         resources: {
@@ -389,7 +389,7 @@ resources:
       };
 
       const res = await authenticatedTestClient(userToken)
-        .put(`/api/v1/agent-formations/${formationId}`)
+        .put(`/api/v1/formations/${formationId}`)
         .send({ template: updatedTemplate });
 
       expect(res.status).toBe(200);
@@ -399,7 +399,7 @@ resources:
 
     test('invalid template returns 400', async () => {
       const res = await authenticatedTestClient(userToken)
-        .put(`/api/v1/agent-formations/${formationId}`)
+        .put(`/api/v1/formations/${formationId}`)
         .send({ template: invalidTemplate });
 
       expect(res.status).toBe(400);
@@ -407,7 +407,7 @@ resources:
 
     test('unknown id returns 404', async () => {
       const res = await authenticatedTestClient(userToken)
-        .put('/api/v1/agent-formations/af_nonexistent')
+        .put('/api/v1/formations/af_nonexistent')
         .send({ template: simpleTemplate });
 
       expect(res.status).toBe(404);
@@ -415,7 +415,7 @@ resources:
 
     test('unauthenticated returns 401', async () => {
       const res = await testClient
-        .put(`/api/v1/agent-formations/${formationId}`)
+        .put(`/api/v1/formations/${formationId}`)
         .send({ template: simpleTemplate });
 
       expect(res.status).toBe(401);
@@ -423,7 +423,7 @@ resources:
 
     test('no permission returns 403', async () => {
       const res = await authenticatedTestClient(noPermToken)
-        .put(`/api/v1/agent-formations/${formationId}`)
+        .put(`/api/v1/formations/${formationId}`)
         .send({ template: simpleTemplate });
 
       expect(res.status).toBe(403);
@@ -432,10 +432,10 @@ resources:
 
   // ── Events ────────────────────────────────────────────────────────────────
 
-  describe('GET /api/v1/agent-formations/:formation_id/events', () => {
+  describe('GET /api/v1/formations/:formation_id/events', () => {
     test('returns operation events', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/agent-formations/${formationId}/events`
+        `/api/v1/formations/${formationId}/events`
       );
 
       expect(res.status).toBe(200);
@@ -447,14 +447,14 @@ resources:
 
     test('unknown formation returns 404', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        '/api/v1/agent-formations/af_nonexistent/events'
+        '/api/v1/formations/af_nonexistent/events'
       );
       expect(res.status).toBe(404);
     });
 
     test('unauthenticated returns 401', async () => {
       const res = await testClient.get(
-        `/api/v1/agent-formations/${formationId}/events`
+        `/api/v1/formations/${formationId}/events`
       );
       expect(res.status).toBe(401);
     });
@@ -462,10 +462,10 @@ resources:
 
   // ── Delete ────────────────────────────────────────────────────────────────
 
-  describe('DELETE /api/v1/agent-formations/:formation_id', () => {
+  describe('DELETE /api/v1/formations/:formation_id', () => {
     test('deletes the formation and returns 204', async () => {
       const res = await authenticatedTestClient(userToken).delete(
-        `/api/v1/agent-formations/${formationId}`
+        `/api/v1/formations/${formationId}`
       );
 
       expect(res.status).toBe(204);
@@ -473,28 +473,28 @@ resources:
 
     test('deleted formation is no longer found', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/agent-formations/${formationId}`
+        `/api/v1/formations/${formationId}`
       );
       expect(res.status).toBe(404);
     });
 
     test('unknown id returns 404', async () => {
       const res = await authenticatedTestClient(userToken).delete(
-        '/api/v1/agent-formations/af_nonexistent'
+        '/api/v1/formations/af_nonexistent'
       );
       expect(res.status).toBe(404);
     });
 
     test('unauthenticated returns 401', async () => {
       const res = await testClient.delete(
-        `/api/v1/agent-formations/${formationId}`
+        `/api/v1/formations/${formationId}`
       );
       expect(res.status).toBe(401);
     });
 
     test('deleted formation is excluded from list results', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/agent-formations?project_id=${projectId}`
+        `/api/v1/formations?project_id=${projectId}`
       );
       expect(res.status).toBe(200);
       const ids = res.body.map((f: { id: string }) => f.id);
@@ -503,14 +503,14 @@ resources:
 
     test('deleting an already-deleted formation returns 404', async () => {
       const res = await authenticatedTestClient(userToken).delete(
-        `/api/v1/agent-formations/${formationId}`
+        `/api/v1/formations/${formationId}`
       );
       expect(res.status).toBe(404);
     });
 
     test('can create a new formation with the same name as a deleted one', async () => {
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/agent-formations')
+        .post('/api/v1/formations')
         .send({
           project_id: projectId,
           name: 'test-formation',
@@ -564,7 +564,7 @@ resources:
 
     test('creates formation with resources having optional properties', async () => {
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/agent-formations')
+        .post('/api/v1/formations')
         .send({
           project_id: projectId,
           name: `optional-props-${Date.now()}`,
@@ -582,7 +582,7 @@ resources:
 
     test('retrieves formation and includes the stored template', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/agent-formations/${optionalPropsFormationId}`
+        `/api/v1/formations/${optionalPropsFormationId}`
       );
       expect(res.status).toBe(200);
       expect(res.body.template).toBeDefined();
@@ -608,7 +608,7 @@ resources:
       };
 
       const res = await authenticatedTestClient(userToken)
-        .put(`/api/v1/agent-formations/${optionalPropsFormationId}`)
+        .put(`/api/v1/formations/${optionalPropsFormationId}`)
         .send({ template: updateTemplate });
 
       expect(res.status).toBe(200);
@@ -622,7 +622,7 @@ resources:
 
     test('deletes formation with optional properties', async () => {
       const res = await authenticatedTestClient(userToken).delete(
-        `/api/v1/agent-formations/${optionalPropsFormationId}`
+        `/api/v1/formations/${optionalPropsFormationId}`
       );
       expect(res.status).toBe(204);
     });
@@ -673,10 +673,10 @@ resources:
       },
     };
 
-    describe('POST /api/v1/agent-formations/validate', () => {
+    describe('POST /api/v1/formations/validate', () => {
       test('validates template with parameters section', async () => {
         const res = await authenticatedTestClient(userToken)
-          .post('/api/v1/agent-formations/validate')
+          .post('/api/v1/formations/validate')
           .send({ template: templateWithParams });
 
         expect(res.status).toBe(200);
@@ -696,7 +696,7 @@ resources:
           },
         };
         const res = await authenticatedTestClient(userToken)
-          .post('/api/v1/agent-formations/validate')
+          .post('/api/v1/formations/validate')
           .send({ template: badTemplate });
 
         expect(res.status).toBe(200);
@@ -705,10 +705,10 @@ resources:
       });
     });
 
-    describe('POST /api/v1/agent-formations', () => {
+    describe('POST /api/v1/formations', () => {
       test('creates formation with parameters provided at deploy time', async () => {
         const res = await authenticatedTestClient(userToken)
-          .post('/api/v1/agent-formations')
+          .post('/api/v1/formations')
           .send({
             project_id: projectId,
             name: `param-formation-${Date.now()}`,
@@ -733,7 +733,7 @@ resources:
 
       test('returns 400 when required parameter without default is missing', async () => {
         const res = await authenticatedTestClient(userToken)
-          .post('/api/v1/agent-formations')
+          .post('/api/v1/formations')
           .send({
             project_id: projectId,
             name: `missing-params-${Date.now()}`,
@@ -761,7 +761,7 @@ resources:
         };
 
         const res = await authenticatedTestClient(userToken)
-          .post('/api/v1/agent-formations')
+          .post('/api/v1/formations')
           .send({
             project_id: projectId,
             name: `default-param-${Date.now()}`,
@@ -774,12 +774,12 @@ resources:
 
         // Clean up
         await authenticatedTestClient(userToken).delete(
-          `/api/v1/agent-formations/${res.body.id}`
+          `/api/v1/formations/${res.body.id}`
         );
       });
     });
 
-    describe('PUT /api/v1/agent-formations/:formation_id', () => {
+    describe('PUT /api/v1/formations/:formation_id', () => {
       test('updates formation with new parameter values', async () => {
         const updatedTemplate = {
           ...templateWithParams,
@@ -792,7 +792,7 @@ resources:
         };
 
         const res = await authenticatedTestClient(userToken)
-          .put(`/api/v1/agent-formations/${paramFormationId}`)
+          .put(`/api/v1/formations/${paramFormationId}`)
           .send({
             template: updatedTemplate,
             parameters: {
@@ -808,7 +808,7 @@ resources:
 
       test('returns 400 when required parameter missing on update', async () => {
         const res = await authenticatedTestClient(userToken)
-          .put(`/api/v1/agent-formations/${paramFormationId}`)
+          .put(`/api/v1/formations/${paramFormationId}`)
           .send({
             template: templateWithParams,
             // Missing required params ToolUrl and ApiKey
@@ -821,7 +821,7 @@ resources:
 
     test('deletes param formation', async () => {
       const res = await authenticatedTestClient(userToken).delete(
-        `/api/v1/agent-formations/${paramFormationId}`
+        `/api/v1/formations/${paramFormationId}`
       );
       expect(res.status).toBe(204);
     });

@@ -1,6 +1,6 @@
-# Agent Formations
+# Formations
 
-Agent Formations is a CloudFormation-inspired declarative deployment layer that lets you describe an entire AI agent stack in a single JSON/YAML template and deploy it with one API call. SOAT resolves resource dependencies automatically, provisions resources in the correct order, and tracks every change in an immutable event log.
+Formations is a CloudFormation-inspired declarative deployment layer that lets you describe an entire AI agent stack in a single JSON/YAML template and deploy it with one API call. SOAT resolves resource dependencies automatically, provisions resources in the correct order, and tracks every change in an immutable event log.
 
 > **Note:** Creating a formation also creates underlying resources (agents, memories, etc.). The calling identity must also have the relevant `agents:CreateAgent`, `memories:CreateMemory`, etc. permissions.
 
@@ -104,11 +104,11 @@ Parameters make a template portable across environments by allowing deploy-time 
 
 #### Parameter Declaration Fields
 
-| Field         | Required | Description                                                                     |
-| ------------- | -------- | ------------------------------------------------------------------------------- |
-| `type`        | No       | Parameter type; currently only `"string"` is supported                         |
-| `default`     | No       | Default value used when the parameter is not provided at deploy time            |
-| `description` | No       | Human-readable description of the parameter's purpose                          |
+| Field         | Required | Description                                                                            |
+| ------------- | -------- | -------------------------------------------------------------------------------------- |
+| `type`        | No       | Parameter type; currently only `"string"` is supported                                 |
+| `default`     | No       | Default value used when the parameter is not provided at deploy time                   |
+| `description` | No       | Human-readable description of the parameter's purpose                                  |
 | `no_echo`     | No       | When `true`, signals that the value is sensitive and should not be logged or displayed |
 
 Parameters without a `default` are **required** — they must be provided in the `parameters` field of the deploy request.
@@ -117,9 +117,9 @@ Parameters without a `default` are **required** — they must be provided in the
 
 Use these expressions anywhere in `properties` or `outputs` to reference a parameter:
 
-| Expression                    | Description                                         |
-| ----------------------------- | --------------------------------------------------- |
-| `{ "param": "ParamName" }`    | Replaced with the parameter's value as-is           |
+| Expression                       | Description                                                              |
+| -------------------------------- | ------------------------------------------------------------------------ |
+| `{ "param": "ParamName" }`       | Replaced with the parameter's value as-is                                |
 | `{ "sub": "text ${ParamName}" }` | String interpolation — embeds the parameter value inside a larger string |
 
 #### Providing Parameter Values
@@ -155,7 +155,7 @@ Pass parameter values in the `parameters` field of the create or update request:
 }
 ```
 
-- **`type`** — one of: `ai_provider`, `agent_tool`, `agent`, `document`, `memory`, `memory_entry`, `webhook`
+- **`type`** — one of: `ai_provider`, `agent_tool`, `agent`, `actor`, `document`, `memory`, `memory_entry`, `webhook`. See [Formations Types](/docs/formations-types) for the full properties reference.
 - **`properties`** — resource-specific properties (snake_case, matching the REST API body fields)
 - **`depends_on`** — explicit dependency list in addition to implicit `ref` dependencies
 - **`metadata`** — arbitrary key/value stored on the resource record
@@ -207,11 +207,11 @@ Every deploy (create, update, delete) creates a `FormationOperation` record with
 - `plan` — the planned changes computed before execution
 - `events` — ordered list of per-resource events with timestamp, action, status, and error (if any)
 
-Use `GET /api/v1/agent-formations/{formation_id}/events` to retrieve the full history.
+Use `GET /api/v1/formations/{formation_id}/events` to retrieve the full history.
 
 ## Data Model
 
-### AgentFormation
+### Formation
 
 | Field        | Type     | Description                         |
 | ------------ | -------- | ----------------------------------- |
@@ -248,4 +248,3 @@ Use `GET /api/v1/agent-formations/{formation_id}/events` to retrieve the full hi
 | `error`          | object   | Error details if operation failed |
 | `created_at`     | datetime |                                   |
 | `updated_at`     | datetime |                                   |
-

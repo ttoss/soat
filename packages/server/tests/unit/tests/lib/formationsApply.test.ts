@@ -5,19 +5,19 @@ import {
   performResourceDeletions,
   processResourceChange,
   resolveFormationOutputs,
-} from 'src/lib/agentFormationsApply';
-import * as resourceHandlers from 'src/lib/agentFormationsResourceHandlers';
+} from 'src/lib/formationsApply';
+import * as resourceHandlers from 'src/lib/formationsResourceHandlers';
 import type {
   FormationEvent,
   FormationTemplate,
-} from 'src/lib/agentFormationsTypes';
+} from 'src/lib/formationsTypes';
 
 const buildResource = (args: {
   logicalId: string;
   resourceType: string;
   physicalResourceId: string | null;
 }) => {
-  return db.AgentFormationResource.build({
+  return db.FormationResource.build({
     publicId: `afr_${args.logicalId}`,
     agentFormationId: 1,
     logicalId: args.logicalId,
@@ -27,7 +27,7 @@ const buildResource = (args: {
   });
 };
 
-describe('agentFormationsApply', () => {
+describe('formationsApply', () => {
   afterEach(() => {
     jest.restoreAllMocks();
   });
@@ -173,7 +173,7 @@ describe('agentFormationsApply', () => {
   });
 
   test('processResourceChange marks resource as failed when create handler throws', async () => {
-    const resourceRow = db.AgentFormationResource.build({
+    const resourceRow = db.FormationResource.build({
       publicId: 'afr_failure',
       agentFormationId: 1,
       logicalId: 'xaiProvider',
@@ -186,7 +186,7 @@ describe('agentFormationsApply', () => {
       .spyOn(resourceRow, 'update')
       .mockResolvedValue(resourceRow);
     jest
-      .spyOn(db.AgentFormationResource, 'create')
+      .spyOn(db.FormationResource, 'create')
       .mockResolvedValue(resourceRow as never);
     jest
       .spyOn(resourceHandlers, 'applyCreateResource')

@@ -3,17 +3,17 @@ import {
   applyCreateChange,
   applyUpdateChange,
   failFormationOperation,
-} from 'src/lib/agentFormationsApplyHelpers';
-import * as resourceHandlers from 'src/lib/agentFormationsResourceHandlers';
-import type { FormationEvent } from 'src/lib/agentFormationsTypes';
+} from 'src/lib/formationsApplyHelpers';
+import * as resourceHandlers from 'src/lib/formationsResourceHandlers';
+import type { FormationEvent } from 'src/lib/formationsTypes';
 
-describe('agentFormationsApplyHelpers', () => {
+describe('formationsApplyHelpers', () => {
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
   test('applyCreateChange creates resource, updates row, and tracks event', async () => {
-    const resourceRow = db.AgentFormationResource.build({
+    const resourceRow = db.FormationResource.build({
       publicId: 'afr_create',
       agentFormationId: 1,
       logicalId: 'provider',
@@ -60,7 +60,7 @@ describe('agentFormationsApplyHelpers', () => {
   });
 
   test('applyUpdateChange updates resource when properties changed', async () => {
-    const existing = db.AgentFormationResource.build({
+    const existing = db.FormationResource.build({
       publicId: 'afr_existing',
       agentFormationId: 1,
       logicalId: 'memory',
@@ -84,7 +84,7 @@ describe('agentFormationsApplyHelpers', () => {
     await applyUpdateChange({
       resourceRow,
       existing: existing as InstanceType<
-        (typeof db)['AgentFormationResource']
+        (typeof db)['FormationResource']
       > & { physicalResourceId: string },
       resourceType: 'memory',
       resolvedProperties: { name: 'New Name' },
@@ -112,7 +112,7 @@ describe('agentFormationsApplyHelpers', () => {
   });
 
   test('applyUpdateChange records no-op when properties did not change', async () => {
-    const existing = db.AgentFormationResource.build({
+    const existing = db.FormationResource.build({
       publicId: 'afr_noop',
       agentFormationId: 1,
       logicalId: 'agent',
@@ -131,7 +131,7 @@ describe('agentFormationsApplyHelpers', () => {
     await applyUpdateChange({
       resourceRow: existing,
       existing: existing as InstanceType<
-        (typeof db)['AgentFormationResource']
+        (typeof db)['FormationResource']
       > & { physicalResourceId: string },
       resourceType: 'agent',
       resolvedProperties: { name: 'Agent' },
@@ -154,10 +154,10 @@ describe('agentFormationsApplyHelpers', () => {
   test('failFormationOperation records event and marks operation/formation as failed', async () => {
     const operation = {
       update: jest.fn().mockResolvedValue(undefined),
-    } as unknown as InstanceType<(typeof db)['AgentFormationOperation']>;
+    } as unknown as InstanceType<(typeof db)['FormationOperation']>;
     const formation = {
       update: jest.fn().mockResolvedValue(undefined),
-    } as unknown as InstanceType<(typeof db)['AgentFormation']>;
+    } as unknown as InstanceType<(typeof db)['Formation']>;
     const events: FormationEvent[] = [];
 
     await failFormationOperation({

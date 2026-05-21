@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
-  title: SOAT Agent Formations API
+  title: SOAT Formations API
   version: 1.0.0
   description: >
-    API for managing Agent Formations — a CloudFormation-inspired declarative
+    API for managing Formations — a CloudFormation-inspired declarative
     deployment layer that lets you describe an entire AI agent stack in a
     single template and deploy it with one API call.
   contact:
@@ -17,21 +17,21 @@ servers:
         description: The base URL of your SOAT deployment
         default: http://localhost:5047
 tags:
-  - name: AgentFormations
-    description: Manage declarative agent formation stacks
+  - name: Formations
+    description: Manage declarative formation stacks
 security:
   - bearerAuth: []
 paths:
-  /api/v1/agent-formations/validate:
+  /api/v1/formations/validate:
     post:
       tags:
-        - AgentFormations
+        - Formations
       summary: Validate a formation template
       description: >
         Validates a formation template without creating any resources.
         Returns a list of errors and warnings. Accepts the template as a
         JSON object or as a YAML/JSON string.
-      operationId: validateAgentFormation
+      operationId: validateFormation
       requestBody:
         required: true
         content:
@@ -53,15 +53,15 @@ paths:
         '401':
           description: Unauthorized
 
-  /api/v1/agent-formations/plan:
+  /api/v1/formations/plan:
     post:
       tags:
-        - AgentFormations
+        - Formations
       summary: Plan a formation deployment
       description: >
         Computes a diff between the desired template and the current stack state
         without making any changes. Returns the list of planned actions.
-      operationId: planAgentFormation
+      operationId: planFormation
       requestBody:
         required: true
         content:
@@ -106,13 +106,13 @@ paths:
         '403':
           description: Forbidden
 
-  /api/v1/agent-formations:
+  /api/v1/formations:
     get:
       tags:
-        - AgentFormations
-      summary: List agent formations
+        - Formations
+      summary: List formations
       description: Returns all formation stacks for a project
-      operationId: listAgentFormations
+      operationId: listFormations
       parameters:
         - name: project_id
           in: query
@@ -128,7 +128,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/AgentFormation'
+                  $ref: '#/components/schemas/Formation'
         '401':
           description: Unauthorized
         '403':
@@ -136,12 +136,12 @@ paths:
 
     post:
       tags:
-        - AgentFormations
-      summary: Create a new agent formation
+        - Formations
+      summary: Create a new formation
       description: >
         Validates the template, creates the formation record, then provisions
         all declared resources in dependency order.
-      operationId: createAgentFormation
+      operationId: createFormation
       requestBody:
         required: true
         content:
@@ -183,7 +183,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AgentFormation'
+                $ref: '#/components/schemas/Formation'
         '400':
           description: Bad Request
         '401':
@@ -193,13 +193,13 @@ paths:
         '409':
           description: Formation with this name already exists
 
-  /api/v1/agent-formations/{formation_id}:
+  /api/v1/formations/{formation_id}:
     get:
       tags:
-        - AgentFormations
-      summary: Get a specific agent formation
+        - Formations
+      summary: Get a specific formation
       description: Returns the formation stack including its current resources.
-      operationId: getAgentFormation
+      operationId: getFormation
       parameters:
         - name: formation_id
           in: path
@@ -213,7 +213,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AgentFormation'
+                $ref: '#/components/schemas/Formation'
         '401':
           description: Unauthorized
         '403':
@@ -223,13 +223,13 @@ paths:
 
     put:
       tags:
-        - AgentFormations
-      summary: Update an agent formation
+        - Formations
+      summary: Update an formation
       description: >
         Applies a new template to the formation. Resources are created,
         updated, or deleted to reconcile the current state with the desired
         state.
-      operationId: updateAgentFormation
+      operationId: updateFormation
       parameters:
         - name: formation_id
           in: path
@@ -265,7 +265,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AgentFormation'
+                $ref: '#/components/schemas/Formation'
         '400':
           description: Bad Request
         '401':
@@ -277,12 +277,12 @@ paths:
 
     delete:
       tags:
-        - AgentFormations
-      summary: Delete an agent formation
+        - Formations
+      summary: Delete an formation
       description: >
         Deletes the formation stack and all its managed resources in reverse
         dependency order.
-      operationId: deleteAgentFormation
+      operationId: deleteFormation
       parameters:
         - name: formation_id
           in: path
@@ -300,15 +300,15 @@ paths:
         '404':
           description: Not Found
 
-  /api/v1/agent-formations/{formation_id}/events:
+  /api/v1/formations/{formation_id}/events:
     get:
       tags:
-        - AgentFormations
+        - Formations
       summary: List formation operation events
       description: >
         Returns all operations (create, update, delete) with their event logs
         for the formation, ordered chronologically.
-      operationId: listAgentFormationEvents
+      operationId: listFormationEvents
       parameters:
         - name: formation_id
           in: path
@@ -405,6 +405,383 @@ components:
             not echoed in logs or UI. Analogous to NoEcho in CloudFormation.
           nullable: true
 
+    AgentResourceProperties:
+      description: >-
+        Creates an AI agent backed by a provider. The agent handles requests,
+        runs tools, and can be attached to actors.
+      type: object
+      additionalProperties: false
+      required:
+        - ai_provider_id
+      properties:
+        ai_provider_id:
+          type: string
+          description: Public ID of the AI provider
+        name:
+          type: string
+          nullable: true
+          description: Agent display name
+        instructions:
+          type: string
+          nullable: true
+          description: System instructions for the agent
+        model:
+          type: string
+          nullable: true
+          description: Model identifier (overrides provider default)
+        tool_ids:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: Agent tool IDs to attach
+        max_steps:
+          type: integer
+          nullable: true
+          description: Maximum number of agentic steps per generation
+        tool_choice:
+          type: object
+          nullable: true
+          description: 'Controls how the model selects tools. Examples: `{ "type": "auto" }`, `{ "type": "none" }`, `{ "type": "required" }`, or `{ "type": "tool", "name": "my_tool" }`.'
+        stop_conditions:
+          type: array
+          nullable: true
+          description: Conditions that stop multi-step generation early. The loop stops when any condition is met.
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                description: 'Condition type — currently `hasToolCall`'
+              tool_name:
+                type: string
+                nullable: true
+                description: Tool name to match when type is `hasToolCall`
+        active_tool_ids:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: Subset of tool_ids that are active
+        step_rules:
+          type: array
+          nullable: true
+          description: Per-step overrides applied during multi-step generation. Steps not covered by a rule use the agent defaults.
+          items:
+            type: object
+            properties:
+              step:
+                type: integer
+                description: 1-indexed step number this rule applies to
+              tool_choice:
+                type: object
+                nullable: true
+                description: 'Tool choice override for this step, e.g. `auto`, `required`, or `{ type: tool, tool_name: search }`'
+              active_tool_ids:
+                type: array
+                nullable: true
+                items:
+                  type: string
+                description: Tool IDs active on this step
+        boundary_policy:
+          type: object
+          nullable: true
+          description: Restricts which SOAT actions the agent may invoke. Evaluated as the intersection with the caller's own policy.
+          properties:
+            statement:
+              type: array
+              description: List of IAM policy statements
+              items:
+                type: object
+                properties:
+                  effect:
+                    type: string
+                    description: 'Effect — `Allow` or `Deny`'
+                  action:
+                    type: array
+                    items:
+                      type: string
+                    description: IAM action strings, e.g. `memories:*` or `agents:DeleteAgent`
+                  resource:
+                    type: array
+                    nullable: true
+                    items:
+                      type: string
+                    description: Resource SRN patterns (optional; omit to match all resources)
+        temperature:
+          type: number
+          nullable: true
+          description: Sampling temperature
+        knowledge_config:
+          type: object
+          nullable: true
+          description: Knowledge retrieval configuration. When set, relevant documents and memory entries are injected into every generation.
+          properties:
+            memory_ids:
+              type: array
+              items:
+                type: string
+              description: Public IDs of memories to retrieve from
+            memory_tags:
+              type: array
+              items:
+                type: string
+              description: Retrieve from all memories matching these tags
+            document_ids:
+              type: array
+              items:
+                type: string
+              description: Public IDs of documents to retrieve from
+            document_paths:
+              type: array
+              items:
+                type: string
+              description: Retrieve from all documents matching these path prefixes
+            min_score:
+              type: number
+              description: Minimum similarity score (0–1) for retrieved chunks
+            limit:
+              type: integer
+              description: Maximum number of chunks to inject
+            write_memory_id:
+              type: string
+              nullable: true
+              description: Public ID of the memory the agent can write to. When set, a `write_memory` tool is automatically available to the agent.
+
+    ActorResourceProperties:
+      description: >-
+        Creates a stateful conversation actor that wraps an agent or chat
+        session and optionally links to a memory store.
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Actor display name
+        external_id:
+          type: string
+          nullable: true
+          description: External identifier for idempotent actor creation
+        instructions:
+          type: string
+          nullable: true
+          description: Persona-specific instructions
+        agent_id:
+          type: string
+          nullable: true
+          description: Linked agent ID (mutually exclusive with chat_id)
+        chat_id:
+          type: string
+          nullable: true
+          description: Linked chat ID (mutually exclusive with agent_id)
+        memory_id:
+          type: string
+          nullable: true
+          description: Linked memory ID
+        auto_create_memory:
+          type: boolean
+          description: Whether to auto-create memory when actor is created
+
+    AiProviderResourceProperties:
+      description: >-
+        Configures an LLM provider connection (API key, model, endpoint)
+        that agents use to generate responses.
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - provider
+        - default_model
+      properties:
+        name:
+          type: string
+          description: Provider display name
+        provider:
+          type: string
+          description: Provider type (e.g. openai, anthropic)
+        default_model:
+          type: string
+          description: Default model identifier (e.g. gpt-4o, claude-3-7-sonnet)
+        secret_id:
+          type: string
+          nullable: true
+          description: Public ID of the secret containing the API key
+        base_url:
+          type: string
+          nullable: true
+          description: Custom base URL for the provider API (self-hosted or proxy)
+        config:
+          type: object
+          nullable: true
+          description: Provider-specific extra configuration
+
+    AgentToolResourceProperties:
+      description: >-
+        Defines a tool (HTTP endpoint, MCP server, or SOAT action) that
+        agents can invoke during a generation.
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Tool display name
+        type:
+          type: string
+          nullable: true
+          description: Tool type hint (e.g. http, mcp, soat)
+        description:
+          type: string
+          nullable: true
+          description: Tool description shown to the model
+        parameters:
+          type: object
+          nullable: true
+          description: JSON Schema describing the tool's input parameters (free-form, user-defined)
+        execute:
+          type: object
+          nullable: true
+          description: HTTP execution configuration. Required for `http` tools.
+          properties:
+            url:
+              type: string
+              description: 'Endpoint URL. Supports `{param}` placeholders resolved from tool arguments.'
+            method:
+              type: string
+              nullable: true
+              description: 'HTTP method (default: `POST`)'
+            headers:
+              type: object
+              nullable: true
+              description: Static headers included in every request
+        mcp:
+          type: object
+          nullable: true
+          description: MCP server connection configuration. Required for `mcp` tools.
+          properties:
+            url:
+              type: string
+              description: MCP server URL
+            headers:
+              type: object
+              nullable: true
+              description: Headers included in every MCP request
+        actions:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: IAM action strings the tool is permitted to call
+        preset_parameters:
+          type: object
+          nullable: true
+          description: Pre-filled parameter values injected at execution time
+
+    DocumentResourceProperties:
+      description: >-
+        Stores a text document in a project, optionally indexing it for
+        knowledge retrieval.
+      type: object
+      additionalProperties: false
+      required:
+        - content
+      properties:
+        content:
+          type: string
+          description: Document text content
+        path:
+          type: string
+          nullable: true
+          description: Virtual path for organising the document
+        filename:
+          type: string
+          nullable: true
+          description: Original filename
+        title:
+          type: string
+          nullable: true
+          description: Document title
+        metadata:
+          type: object
+          nullable: true
+          description: Arbitrary metadata key-value pairs
+        tags:
+          type: object
+          nullable: true
+          description: Tag key-value pairs for filtering
+
+    MemoryResourceProperties:
+      description: >-
+        Creates a named memory store that actors can read from and write to
+        across conversations.
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Memory display name
+        description:
+          type: string
+          nullable: true
+          description: What this memory stores
+        tags:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: Tag strings for filtering
+
+    MemoryEntryResourceProperties:
+      description: Adds a single text entry to a memory store.
+      type: object
+      additionalProperties: false
+      required:
+        - memory_id
+        - content
+      properties:
+        memory_id:
+          type: string
+          description: Public ID of the parent memory (or ref expression)
+        content:
+          type: string
+          description: Text content of the memory entry
+        source:
+          type: string
+          nullable: true
+          description: Origin label (e.g. manual, document, import)
+
+    WebhookResourceProperties:
+      description: >-
+        Registers an HTTPS endpoint to receive SOAT platform event
+        notifications.
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - url
+        - events
+      properties:
+        name:
+          type: string
+          description: Webhook display name
+        description:
+          type: string
+          nullable: true
+          description: Optional description
+        url:
+          type: string
+          description: HTTPS endpoint that receives event payloads
+        events:
+          type: array
+          items:
+            type: string
+          description: Event types to subscribe to (e.g. memory.updated)
+
     ResourceDeclaration:
       type: object
       required:
@@ -417,6 +794,7 @@ components:
             - ai_provider
             - agent_tool
             - agent
+            - actor
             - document
             - memory
             - memory_entry
@@ -468,7 +846,7 @@ components:
             - failed
           description: Current resource status
 
-    AgentFormation:
+    Formation:
       type: object
       properties:
         id:

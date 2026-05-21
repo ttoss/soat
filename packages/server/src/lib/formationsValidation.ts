@@ -5,14 +5,15 @@ import {
   collectParamRefs,
   collectRefs,
   topologicalSort,
-} from './agentFormationsHelpers';
+} from './formationsHelpers';
+import { getFormationModule } from './formationsRegistry';
 import type {
   FormationTemplate,
   ParameterDeclaration,
   ValidationError,
   ValidationResult,
-} from './agentFormationsTypes';
-import { SUPPORTED_RESOURCE_TYPES } from './agentFormationsTypes';
+} from './formationsTypes';
+import { SUPPORTED_RESOURCE_TYPES } from './formationsTypes';
 
 // ── Template Input Parsing ────────────────────────────────────────────────
 
@@ -164,6 +165,20 @@ const validateResourceDeclaration = (args: {
       basePath,
     })
   );
+
+  if (typeof decl.type === 'string') {
+    const formationModule = getFormationModule({
+      resourceType: decl.type,
+    });
+    if (formationModule?.validateProperties) {
+      errors.push(
+        ...formationModule.validateProperties({
+          properties: decl.properties,
+          basePath: `${basePath}.properties`,
+        })
+      );
+    }
+  }
 
   if (decl.depends_on !== undefined) {
     errors.push(

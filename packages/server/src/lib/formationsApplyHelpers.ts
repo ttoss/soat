@@ -1,5 +1,5 @@
 /**
- * Helper functions for agent formation application.
+ * Helper functions for formation application.
  * Handles resource creation, update, and deletion during formation application.
  */
 
@@ -8,10 +8,10 @@ import type { db } from 'src/db';
 import {
   applyCreateResource,
   applyUpdateResource,
-} from './agentFormationsResourceHandlers';
-import type { FormationEvent } from './agentFormationsTypes';
+} from './formationsResourceHandlers';
+import type { FormationEvent } from './formationsTypes';
 
-type ResourceRow = InstanceType<(typeof db)['AgentFormationResource']>;
+type ResourceRow = InstanceType<(typeof db)['FormationResource']>;
 
 export const applyCreateChange = async (args: {
   resourceRow: ResourceRow;
@@ -108,8 +108,8 @@ export const applyUpdateChange = async (args: {
 };
 
 export const failFormationOperation = async (args: {
-  operation: InstanceType<(typeof db)['AgentFormationOperation']>;
-  formation: InstanceType<(typeof db)['AgentFormation']>;
+  operation: InstanceType<(typeof db)['FormationOperation']>;
+  formation: InstanceType<(typeof db)['Formation']>;
   events: FormationEvent[];
   logicalId: string;
   resourceType: string;

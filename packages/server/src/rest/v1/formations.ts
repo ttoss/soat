@@ -2,20 +2,20 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import {
-  createAgentFormation,
-  deleteAgentFormation,
+  createFormation,
+  deleteFormation,
   type FormationTemplate,
-  getAgentFormation,
+  getFormation,
   getMissingParams,
-  listAgentFormationEvents,
-  listAgentFormations,
+  listFormationEvents,
+  listFormations,
   parseFormationTemplateInput,
-  planAgentFormation,
-  updateAgentFormation,
+  planFormation,
+  updateFormation,
   validateFormationTemplate,
-} from 'src/lib/agentFormations';
+} from 'src/lib/formations';
 
-export const agentFormationsRouter = new Router<Context>();
+export const formationsRouter = new Router<Context>();
 
 const resolveProjectPublicId = (
   body: { projectId?: string },
@@ -47,22 +47,19 @@ const buildMissingParamsError = (
   };
 };
 
-agentFormationsRouter.post(
-  '/agent-formations/validate',
-  async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
-
-    const body = ctx.request.body as { template?: unknown };
-    const parsedTemplate = parseFormationTemplateInput(body.template);
-    ctx.body = validateFormationTemplate(parsedTemplate);
+formationsRouter.post('/formations/validate', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
   }
-);
 
-agentFormationsRouter.post('/agent-formations/plan', async (ctx: Context) => {
+  const body = ctx.request.body as { template?: unknown };
+  const parsedTemplate = parseFormationTemplateInput(body.template);
+  ctx.body = validateFormationTemplate(parsedTemplate);
+});
+
+formationsRouter.post('/formations/plan', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -88,7 +85,7 @@ agentFormationsRouter.post('/agent-formations/plan', async (ctx: Context) => {
 
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: resolvedProjectPublicId,
-    action: 'agent-formations:PlanAgentFormation',
+    action: 'formations:PlanFormation',
   });
   if (!allowed) {
     ctx.status = 403;
@@ -113,7 +110,7 @@ agentFormationsRouter.post('/agent-formations/plan', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await planAgentFormation({
+  ctx.body = await planFormation({
     projectId: project.id,
     template: parsedTemplate as FormationTemplate,
     formationId: body.formationId,
@@ -121,7 +118,7 @@ agentFormationsRouter.post('/agent-formations/plan', async (ctx: Context) => {
   });
 });
 
-agentFormationsRouter.post('/agent-formations', async (ctx: Context) => {
+formationsRouter.post('/formations', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -154,7 +151,7 @@ agentFormationsRouter.post('/agent-formations', async (ctx: Context) => {
 
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: resolvedProjectPublicId,
-    action: 'agent-formations:CreateAgentFormation',
+    action: 'formations:CreateFormation',
   });
   if (!allowed) {
     ctx.status = 403;
@@ -189,7 +186,7 @@ agentFormationsRouter.post('/agent-formations', async (ctx: Context) => {
     return;
   }
 
-  const result = await createAgentFormation({
+  const result = await createFormation({
     projectId: project.id,
     name: body.name,
     template: parsedTemplate as FormationTemplate,
@@ -209,7 +206,7 @@ agentFormationsRouter.post('/agent-formations', async (ctx: Context) => {
   ctx.body = result;
 });
 
-agentFormationsRouter.get('/agent-formations', async (ctx: Context) => {
+formationsRouter.get('/formations', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -220,7 +217,7 @@ agentFormationsRouter.get('/agent-formations', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
-    action: 'agent-formations:ListAgentFormations',
+    action: 'formations:ListFormations',
   });
 
   if (projectIds === null) {
@@ -229,136 +226,127 @@ agentFormationsRouter.get('/agent-formations', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listAgentFormations({ projectIds: projectIds ?? [] });
+  ctx.body = await listFormations({ projectIds: projectIds ?? [] });
 });
 
-agentFormationsRouter.get(
-  '/agent-formations/:formation_id',
-  async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
-
-    const formation = await getAgentFormation({ id: ctx.params.formation_id });
-    if (!formation) {
-      ctx.status = 404;
-      ctx.body = { error: 'Agent formation not found' };
-      return;
-    }
-
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: formation.projectId,
-      action: 'agent-formations:GetAgentFormation',
-    });
-    if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
-
-    ctx.body = formation;
+formationsRouter.get('/formations/:formation_id', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
   }
-);
 
-agentFormationsRouter.put(
-  '/agent-formations/:formation_id',
-  async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
-
-    const formation = await getAgentFormation({ id: ctx.params.formation_id });
-    if (!formation) {
-      ctx.status = 404;
-      ctx.body = { error: 'Agent formation not found' };
-      return;
-    }
-
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: formation.projectId,
-      action: 'agent-formations:UpdateAgentFormation',
-    });
-    if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
-
-    const body = ctx.request.body as {
-      template?: unknown;
-      metadata?: Record<string, unknown> | null;
-      parameters?: Record<string, string>;
-    };
-
-    let parsedTemplate: unknown = undefined;
-    if (body.template !== undefined) {
-      parsedTemplate = parseFormationTemplateInput(body.template);
-      const validation = validateFormationTemplate(parsedTemplate);
-      if (!validation.valid) {
-        ctx.status = 400;
-        ctx.body = { error: 'Invalid template', details: validation.errors };
-        return;
-      }
-
-      const missingParamsError = buildMissingParamsError(
-        parsedTemplate as FormationTemplate,
-        body.parameters
-      );
-      if (missingParamsError) {
-        ctx.status = 400;
-        ctx.body = missingParamsError;
-        return;
-      }
-    }
-
-    const updated = await updateAgentFormation({
-      id: ctx.params.formation_id,
-      template: parsedTemplate as FormationTemplate | undefined,
-      metadata: body.metadata,
-      parameters: body.parameters,
-    });
-
-    ctx.body = updated;
+  const formation = await getFormation({ id: ctx.params.formation_id });
+  if (!formation) {
+    ctx.status = 404;
+    ctx.body = { error: 'Formation not found' };
+    return;
   }
-);
 
-agentFormationsRouter.delete(
-  '/agent-formations/:formation_id',
-  async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
-
-    const formation = await getAgentFormation({ id: ctx.params.formation_id });
-    if (!formation) {
-      ctx.status = 404;
-      ctx.body = { error: 'Agent formation not found' };
-      return;
-    }
-
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: formation.projectId,
-      action: 'agent-formations:DeleteAgentFormation',
-    });
-    if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
-
-    await deleteAgentFormation({ id: ctx.params.formation_id });
-    ctx.status = 204;
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: formation.projectId,
+    action: 'formations:GetFormation',
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
   }
-);
 
-agentFormationsRouter.get(
-  '/agent-formations/:formation_id/events',
+  ctx.body = formation;
+});
+
+formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const formation = await getFormation({ id: ctx.params.formation_id });
+  if (!formation) {
+    ctx.status = 404;
+    ctx.body = { error: 'Formation not found' };
+    return;
+  }
+
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: formation.projectId,
+    action: 'formations:UpdateFormation',
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const body = ctx.request.body as {
+    template?: unknown;
+    metadata?: Record<string, unknown> | null;
+    parameters?: Record<string, string>;
+  };
+
+  let parsedTemplate: unknown = undefined;
+  if (body.template !== undefined) {
+    parsedTemplate = parseFormationTemplateInput(body.template);
+    const validation = validateFormationTemplate(parsedTemplate);
+    if (!validation.valid) {
+      ctx.status = 400;
+      ctx.body = { error: 'Invalid template', details: validation.errors };
+      return;
+    }
+
+    const missingParamsError = buildMissingParamsError(
+      parsedTemplate as FormationTemplate,
+      body.parameters
+    );
+    if (missingParamsError) {
+      ctx.status = 400;
+      ctx.body = missingParamsError;
+      return;
+    }
+  }
+
+  const updated = await updateFormation({
+    id: ctx.params.formation_id,
+    template: parsedTemplate as FormationTemplate | undefined,
+    metadata: body.metadata,
+    parameters: body.parameters,
+  });
+
+  ctx.body = updated;
+});
+
+formationsRouter.delete('/formations/:formation_id', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const formation = await getFormation({ id: ctx.params.formation_id });
+  if (!formation) {
+    ctx.status = 404;
+    ctx.body = { error: 'Formation not found' };
+    return;
+  }
+
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: formation.projectId,
+    action: 'formations:DeleteFormation',
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  await deleteFormation({ id: ctx.params.formation_id });
+  ctx.status = 204;
+});
+
+formationsRouter.get(
+  '/formations/:formation_id/events',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -366,16 +354,16 @@ agentFormationsRouter.get(
       return;
     }
 
-    const formation = await getAgentFormation({ id: ctx.params.formation_id });
+    const formation = await getFormation({ id: ctx.params.formation_id });
     if (!formation) {
       ctx.status = 404;
-      ctx.body = { error: 'Agent formation not found' };
+      ctx.body = { error: 'Formation not found' };
       return;
     }
 
     const allowed = await ctx.authUser.isAllowed({
       projectPublicId: formation.projectId,
-      action: 'agent-formations:ListAgentFormationEvents',
+      action: 'formations:ListFormationEvents',
     });
     if (!allowed) {
       ctx.status = 403;
@@ -383,7 +371,7 @@ agentFormationsRouter.get(
       return;
     }
 
-    ctx.body = await listAgentFormationEvents({
+    ctx.body = await listFormationEvents({
       formationId: ctx.params.formation_id,
     });
   }

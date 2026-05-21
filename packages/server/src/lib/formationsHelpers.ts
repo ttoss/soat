@@ -5,7 +5,7 @@ import type {
   ParamExpression,
   RefExpression,
   SubExpression,
-} from './agentFormationsTypes';
+} from './formationsTypes';
 
 // ── Ref Utilities ─────────────────────────────────────────────────────────
 
@@ -235,4 +235,20 @@ export const lookupMemoryInternalId = async (
   const memory = await db.Memory.findOne({ where: { publicId } });
   if (!memory) throw new Error(`Memory not found: ${publicId}`);
   return (memory as unknown as { id: number }).id;
+};
+
+export const lookupAgentInternalId = async (
+  publicId: string
+): Promise<number> => {
+  const agent = await db.Agent.findOne({ where: { publicId } });
+  if (!agent) throw new Error(`Agent not found: ${publicId}`);
+  return (agent as unknown as { id: number }).id;
+};
+
+export const lookupChatInternalId = async (
+  publicId: string
+): Promise<number> => {
+  const chat = await db.Chat.findOne({ where: { publicId } });
+  if (!chat) throw new Error(`Chat not found: ${publicId}`);
+  return (chat as unknown as { id: number }).id;
 };

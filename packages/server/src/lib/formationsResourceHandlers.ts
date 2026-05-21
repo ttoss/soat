@@ -4,7 +4,8 @@ import { db } from 'src/db';
 import {
   lookupMemoryInternalId,
   lookupSecretInternalId,
-} from './agentFormationsHelpers';
+} from './formationsHelpers';
+import { getFormationModule } from './formationsRegistry';
 import { createAgent, deleteAgent } from './agents';
 import {
   createAgentTool,
@@ -315,6 +316,16 @@ export type ApplyArgs = {
 };
 
 export const applyCreateResource = async (args: ApplyArgs): Promise<string> => {
+  const formationModule = getFormationModule({
+    resourceType: args.resourceType,
+  });
+  if (formationModule) {
+    return formationModule.create({
+      properties: args.resolvedProperties,
+      projectId: args.projectId,
+    });
+  }
+
   const handler = CREATE_HANDLERS[args.resourceType];
   if (!handler)
     throw new Error(`Unsupported resource type: ${args.resourceType}`);
@@ -326,6 +337,16 @@ export const applyUpdateResource = async (args: {
   physicalResourceId: string;
   resolvedProperties: Record<string, unknown>;
 }): Promise<void> => {
+  const formationModule = getFormationModule({
+    resourceType: args.resourceType,
+  });
+  if (formationModule) {
+    return formationModule.update({
+      physicalResourceId: args.physicalResourceId,
+      properties: args.resolvedProperties,
+    });
+  }
+
   const handler = UPDATE_HANDLERS[args.resourceType];
   if (!handler)
     throw new Error(
@@ -341,6 +362,15 @@ export const applyDeleteResource = async (args: {
   resourceType: string;
   physicalResourceId: string;
 }): Promise<void> => {
+  const formationModule = getFormationModule({
+    resourceType: args.resourceType,
+  });
+  if (formationModule) {
+    return formationModule.delete({
+      physicalResourceId: args.physicalResourceId,
+    });
+  }
+
   const handler = DELETE_HANDLERS[args.resourceType];
   if (!handler)
     throw new Error(

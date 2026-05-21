@@ -43,7 +43,7 @@ If you have ever shipped an AI product, you know the pattern: half the codebase 
 
 ### Declarative deployment
 
-- [Agent formations](/docs/modules/agent-formations) to define full agent stacks (providers, memories, tools, agents) in JSON/YAML
+- [Agent formations](/docs/modules/formations) to define full agent stacks (providers, memories, tools, agents) in JSON/YAML
 - Dependency-aware provisioning with operation history and event logs for each deployment
 
 ## Architecture

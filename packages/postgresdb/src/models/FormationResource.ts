@@ -8,22 +8,22 @@ import {
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
-import { AgentFormation } from './AgentFormation';
+import { Formation } from './Formation';
 
 @Table({
-  tableName: 'agent_formation_resources',
+  tableName: 'formation_resources',
   hooks: {
-    beforeValidate: (instance: AgentFormationResource) => {
+    beforeValidate: (instance: FormationResource) => {
       if (!instance.publicId) {
         instance.publicId = generatePublicId(
-          PUBLIC_ID_PREFIXES.agentFormationResource
+          PUBLIC_ID_PREFIXES.formationResource
         );
       }
     },
   },
-  indexes: [{ unique: true, fields: ['agent_formation_id', 'logical_id'] }],
+  indexes: [{ unique: true, fields: ['formation_id', 'logical_id'] }],
 })
-export class AgentFormationResource extends Model {
+export class FormationResource extends Model {
   @Column({
     type: DataType.STRING(32),
     unique: true,
@@ -32,15 +32,15 @@ export class AgentFormationResource extends Model {
   declare publicId: string;
 
   @ForeignKey(() => {
-    return AgentFormation;
+    return Formation;
   })
   @Column({ type: DataType.INTEGER, allowNull: false })
-  declare agentFormationId: number;
+  declare formationId: number;
 
   @BelongsTo(() => {
-    return AgentFormation;
+    return Formation;
   })
-  declare agentFormation: AgentFormation;
+  declare formation: Formation;
 
   @Column({ type: DataType.STRING, allowNull: false })
   declare logicalId: string;

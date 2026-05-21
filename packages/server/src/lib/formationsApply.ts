@@ -5,20 +5,20 @@ import {
   applyCreateChange,
   applyUpdateChange,
   failFormationOperation,
-} from './agentFormationsApplyHelpers';
+} from './formationsApplyHelpers';
 import {
   buildDependencyGraph,
   buildResolvedParamsMap,
   resolveParamExpressions,
   resolveRefs,
   topologicalSort,
-} from './agentFormationsHelpers';
-import { applyDeleteResource } from './agentFormationsResourceHandlers';
+} from './formationsHelpers';
+import { applyDeleteResource } from './formationsResourceHandlers';
 import type {
   FormationEvent,
   FormationTemplate,
   ResourceDeclaration,
-} from './agentFormationsTypes';
+} from './formationsTypes';
 
 const log = createDebug('soat:formations');
 
@@ -41,7 +41,7 @@ export const resolveFormationOutputs = (
 
 export const handleOrphanedDeletes = async (args: {
   template: FormationTemplate;
-  existingResources: InstanceType<(typeof db)['AgentFormationResource']>[];
+  existingResources: InstanceType<(typeof db)['FormationResource']>[];
   events: FormationEvent[];
 }): Promise<void> => {
   const { template, existingResources, events } = args;
@@ -78,7 +78,7 @@ export const handleOrphanedDeletes = async (args: {
   }
 };
 
-type ResourceRow = InstanceType<(typeof db)['AgentFormationResource']>;
+type ResourceRow = InstanceType<(typeof db)['FormationResource']>;
 
 export const processResourceChange = async (args: {
   logicalId: string;
@@ -106,8 +106,8 @@ export const processResourceChange = async (args: {
 
   let resourceRow: ResourceRow;
   if (!existing) {
-    resourceRow = await db.AgentFormationResource.create({
-      agentFormationId: formationId,
+    resourceRow = await db.FormationResource.create({
+      formationId,
       logicalId,
       resourceType: decl.type,
       status: 'pending',
@@ -159,11 +159,11 @@ export const processResourceChange = async (args: {
 
 /* eslint-disable-next-line max-lines-per-function */
 export const applyFormationTemplate = async (args: {
-  formation: InstanceType<(typeof db)['AgentFormation']>;
+  formation: InstanceType<(typeof db)['Formation']>;
   template: FormationTemplate;
-  existingResources: InstanceType<(typeof db)['AgentFormationResource']>[];
+  existingResources: InstanceType<(typeof db)['FormationResource']>[];
   projectId: number;
-  operation: InstanceType<(typeof db)['AgentFormationOperation']>;
+  operation: InstanceType<(typeof db)['FormationOperation']>;
   parameters?: Record<string, string>;
 }): Promise<void> => {
   const {
@@ -251,8 +251,8 @@ export const applyFormationTemplate = async (args: {
 
 export const buildDeleteOrder = (
   template: FormationTemplate | null,
-  existingResources: InstanceType<(typeof db)['AgentFormationResource']>[]
-): InstanceType<(typeof db)['AgentFormationResource']>[] => {
+  existingResources: InstanceType<(typeof db)['FormationResource']>[]
+): InstanceType<(typeof db)['FormationResource']>[] => {
   let deleteOrder: string[] = [];
   if (template?.resources) {
     const graph = buildDependencyGraph(template);
@@ -265,7 +265,7 @@ export const buildDeleteOrder = (
       return [r.logicalId, r];
     })
   );
-  const ordered: InstanceType<(typeof db)['AgentFormationResource']>[] = [];
+  const ordered: InstanceType<(typeof db)['FormationResource']>[] = [];
 
   for (const logicalId of deleteOrder) {
     const r = resourceMap.get(logicalId);
@@ -279,7 +279,7 @@ export const buildDeleteOrder = (
 };
 
 export const performResourceDeletions = async (
-  orderedResources: InstanceType<(typeof db)['AgentFormationResource']>[]
+  orderedResources: InstanceType<(typeof db)['FormationResource']>[]
 ): Promise<{ events: FormationEvent[]; hasError: boolean }> => {
   const events: FormationEvent[] = [];
   let hasError = false;

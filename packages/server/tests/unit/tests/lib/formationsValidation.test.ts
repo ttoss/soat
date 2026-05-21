@@ -2,7 +2,7 @@
 import {
   parseFormationTemplateInput,
   validateFormationTemplate,
-} from 'src/lib/agentFormationsValidation';
+} from 'src/lib/formationsValidation';
 
 // ── parseFormationTemplateInput ────────────────────────────────────────────
 
@@ -220,6 +220,53 @@ describe('validateFormationTemplate', () => {
     expect(
       result.errors.some((e) => {
         return e.message.includes("'NonExistent'");
+      })
+    ).toBe(true);
+  });
+
+  test('returns invalid when actor properties include unknown fields', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyActor: {
+          type: 'actor',
+          properties: {
+            name: 'Actor 01',
+            invalid_field: 'x',
+          },
+        },
+      },
+    });
+
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return e.path === 'resources.MyActor.properties.invalid_field';
+      })
+    ).toBe(true);
+  });
+
+  test('returns invalid when actor properties have wrong types', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyActor: {
+          type: 'actor',
+          properties: {
+            name: 123,
+            auto_create_memory: 'yes',
+          },
+        },
+      },
+    });
+
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return e.path === 'resources.MyActor.properties.name';
+      })
+    ).toBe(true);
+    expect(
+      result.errors.some((e) => {
+        return e.path === 'resources.MyActor.properties.auto_create_memory';
       })
     ).toBe(true);
   });
@@ -482,7 +529,10 @@ describe('validateFormationTemplate', () => {
     expect(result.valid).toBe(false);
     expect(
       result.errors.some((e) => {
-        return e.path.startsWith('outputs') && e.message.includes("'UndeclaredParam'");
+        return (
+          e.path.startsWith('outputs') &&
+          e.message.includes("'UndeclaredParam'")
+        );
       })
     ).toBe(true);
   });
@@ -500,7 +550,10 @@ describe('validateFormationTemplate', () => {
     expect(result.valid).toBe(true);
     expect(
       result.warnings.some((w) => {
-        return w.message.includes("'RequiredParam'") && w.message.includes('must be provided');
+        return (
+          w.message.includes("'RequiredParam'") &&
+          w.message.includes('must be provided')
+        );
       })
     ).toBe(true);
     expect(

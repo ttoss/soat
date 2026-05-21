@@ -9,21 +9,21 @@ import {
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
-import { AgentFormationResource } from './AgentFormationResource';
+import { FormationResource } from './FormationResource';
 import { Project } from './Project';
 
 @Table({
-  tableName: 'agent_formations',
+  tableName: 'formations',
   hooks: {
-    beforeValidate: (instance: AgentFormation) => {
+    beforeValidate: (instance: Formation) => {
       if (!instance.publicId) {
-        instance.publicId = generatePublicId(PUBLIC_ID_PREFIXES.agentFormation);
+        instance.publicId = generatePublicId(PUBLIC_ID_PREFIXES.formation);
       }
     },
   },
   indexes: [{ unique: true, fields: ['project_id', 'name'] }],
 })
-export class AgentFormation extends Model {
+export class Formation extends Model {
   @Column({
     type: DataType.STRING(32),
     unique: true,
@@ -43,9 +43,9 @@ export class AgentFormation extends Model {
   declare project: Project;
 
   @HasMany(() => {
-    return AgentFormationResource;
+    return FormationResource;
   })
-  declare agentFormationResources: AgentFormationResource[];
+  declare formationResources: FormationResource[];
 
   @Column({ type: DataType.STRING, allowNull: false })
   declare name: string;

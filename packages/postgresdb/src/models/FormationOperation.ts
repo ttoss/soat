@@ -8,21 +8,21 @@ import {
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
-import { AgentFormation } from './AgentFormation';
+import { Formation } from './Formation';
 
 @Table({
-  tableName: 'agent_formation_operations',
+  tableName: 'formation_operations',
   hooks: {
-    beforeValidate: (instance: AgentFormationOperation) => {
+    beforeValidate: (instance: FormationOperation) => {
       if (!instance.publicId) {
         instance.publicId = generatePublicId(
-          PUBLIC_ID_PREFIXES.agentFormationOperation
+          PUBLIC_ID_PREFIXES.formationOperation
         );
       }
     },
   },
 })
-export class AgentFormationOperation extends Model {
+export class FormationOperation extends Model {
   @Column({
     type: DataType.STRING(32),
     unique: true,
@@ -31,15 +31,15 @@ export class AgentFormationOperation extends Model {
   declare publicId: string;
 
   @ForeignKey(() => {
-    return AgentFormation;
+    return Formation;
   })
   @Column({ type: DataType.INTEGER, allowNull: true })
-  declare agentFormationId: number | null;
+  declare formationId: number | null;
 
   @BelongsTo(() => {
-    return AgentFormation;
+    return Formation;
   })
-  declare agentFormation: AgentFormation | null;
+  declare formation: Formation | null;
 
   @Column({ type: DataType.STRING, allowNull: false })
   declare operationType: string;

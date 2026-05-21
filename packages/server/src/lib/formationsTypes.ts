@@ -38,6 +38,23 @@ export type ValidationResult = {
   warnings: ValidationError[];
 };
 
+export type FormationModule = {
+  resourceType: string;
+  validateProperties?: (args: {
+    properties: unknown;
+    basePath: string;
+  }) => ValidationError[];
+  create: (args: {
+    properties: Record<string, unknown>;
+    projectId: number;
+  }) => Promise<string>;
+  update: (args: {
+    properties: Record<string, unknown>;
+    physicalResourceId: string;
+  }) => Promise<void>;
+  delete: (args: { physicalResourceId: string }) => Promise<void>;
+};
+
 export type PlanChange = {
   logicalId: string;
   resourceType: string;
@@ -60,7 +77,7 @@ export type FormationEvent = {
 
 // ── Mapped Types ──────────────────────────────────────────────────────────
 
-export type MappedAgentFormationResource = {
+export type MappedFormationResource = {
   id: string;
   logicalId: string;
   resourceType: string;
@@ -68,7 +85,7 @@ export type MappedAgentFormationResource = {
   status: string;
 };
 
-export type MappedAgentFormation = {
+export type MappedFormation = {
   id: string;
   projectId: string;
   name: string;
@@ -76,7 +93,7 @@ export type MappedAgentFormation = {
   outputs: Record<string, string> | null;
   status: string;
   metadata: Record<string, unknown> | null;
-  resources?: MappedAgentFormationResource[];
+  resources?: MappedFormationResource[];
   createdAt: Date;
   updatedAt: Date;
 };
@@ -98,6 +115,7 @@ export const SUPPORTED_RESOURCE_TYPES = new Set([
   'ai_provider',
   'agent_tool',
   'agent',
+  'actor',
   'document',
   'memory',
   'memory_entry',

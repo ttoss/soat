@@ -7,7 +7,7 @@ import TabItem from '@theme/TabItem';
 
 # Deploy an Agent App with Agent Formation
 
-This tutorial shows how to use [Agent Formation](/docs/modules/agent-formations) to deploy a complete AI agent application — including an AI provider, memory, and agent — with a single declarative template instead of many ordered API calls.
+This tutorial shows how to use [Agent Formation](/docs/modules/formations) to deploy a complete AI agent application — including an AI provider, memory, and agent — with a single declarative template instead of many ordered API calls.
 
 You will:
 
@@ -146,7 +146,7 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Write the formation template
 
-A [formation template](/docs/modules/agent-formations) is a JSON object with a `resources` map and an optional `outputs` map. Each resource has a `type`, `properties`, and optional `depends_on`. References between resources use `{ "ref": "logicalId" }` expressions.
+A [formation template](/docs/modules/formations) is a JSON object with a `resources` map and an optional `outputs` map. Each resource has a `type`, `properties`, and optional `depends_on`. References between resources use `{ "ref": "logicalId" }` expressions.
 
 This template creates a local Ollama AI provider, a memory for the agent to read from, and an agent that wires them together:
 
@@ -255,7 +255,7 @@ TEMPLATE=$(cat formation.json)
 
 ## Step 4 — Validate the template
 
-The validate endpoint checks structure without creating any resources. It is safe to call as many times as needed. See [Agent Formation](/docs/modules/agent-formations) for the full validation rules.
+The validate endpoint checks structure without creating any resources. It is safe to call as many times as needed. See [Agent Formation](/docs/modules/formations) for the full validation rules.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -309,7 +309,7 @@ Expected output:
 
 ## Step 5 — Preview the deployment plan
 
-The plan endpoint computes what would happen if you deployed the template now — which resources would be created, updated, or deleted. No resources are touched. See [Agent Formation — Planning](/docs/modules/agent-formations) for details.
+The plan endpoint computes what would happen if you deployed the template now — which resources would be created, updated, or deleted. No resources are touched. See [Agent Formation — Planning](/docs/modules/formations) for details.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -497,7 +497,7 @@ curl -s -X PUT "$SOAT_URL/api/v1/agent-formations/$FORMATION_ID" \
 
 ## Step 9 — View operation events
 
-Each mutating operation records events you can inspect to understand what happened, especially useful when a deployment partially fails. See [Agent Formation — Operations](/docs/modules/agent-formations) for the event schema.
+Each mutating operation records events you can inspect to understand what happened, especially useful when a deployment partially fails. See [Agent Formation — Operations](/docs/modules/formations) for the event schema.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -600,4 +600,4 @@ You deployed a multi-resource AI agent application using a single formation temp
 - **Update** reruns the apply logic and only changes what differs.
 - **Delete** tears down all managed resources in one call.
 
-For the full API reference, see [Agent Formation](/docs/modules/agent-formations).
+For the full API reference, see [Agent Formation](/docs/modules/formations).

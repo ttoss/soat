@@ -1,15 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { db } from 'src/db';
 import {
-  createAgentFormation,
-  deleteAgentFormation,
-  getAgentFormation,
-  listAgentFormationEvents,
-  listAgentFormations,
-  planAgentFormation,
-  updateAgentFormation,
-} from 'src/lib/agentFormations';
-import * as agentFormationsApply from 'src/lib/agentFormationsApply';
+  createFormation,
+  deleteFormation,
+  getFormation,
+  listFormationEvents,
+  listFormations,
+  planFormation,
+  updateFormation,
+} from 'src/lib/formations';
+import * as formationsApply from 'src/lib/formationsApply';
 
 const simpleTemplate = {
   resources: {
@@ -17,16 +17,16 @@ const simpleTemplate = {
   },
 };
 
-describe('agentFormations lib', () => {
+describe('formations lib', () => {
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
-  // ── planAgentFormation ─────────────────────────────────────────────────────
+  // ── planFormation ─────────────────────────────────────────────────────
 
-  describe('planAgentFormation', () => {
+  describe('planFormation', () => {
     test('returns create action when no formationId provided', async () => {
-      const result = await planAgentFormation({
+      const result = await planFormation({
         projectId: 1,
         template: simpleTemplate,
       });
@@ -37,15 +37,15 @@ describe('agentFormations lib', () => {
 
     test('returns update action when formationId matches existing resource', async () => {
       jest
-        .spyOn(db.AgentFormation, 'findOne')
+        .spyOn(db.Formation, 'findOne')
         .mockResolvedValue({ id: 1 } as any);
       jest
-        .spyOn(db.AgentFormationResource, 'findAll')
+        .spyOn(db.FormationResource, 'findAll')
         .mockResolvedValue([
           { logicalId: 'MyMemory', physicalResourceId: 'mem_1' } as any,
         ]);
 
-      const result = await planAgentFormation({
+      const result = await planFormation({
         projectId: 1,
         template: simpleTemplate,
         formationId: 'af_exists',
@@ -54,9 +54,9 @@ describe('agentFormations lib', () => {
     });
 
     test('returns create action when formationId not found in DB', async () => {
-      jest.spyOn(db.AgentFormation, 'findOne').mockResolvedValue(null);
+      jest.spyOn(db.Formation, 'findOne').mockResolvedValue(null);
 
-      const result = await planAgentFormation({
+      const result = await planFormation({
         projectId: 1,
         template: simpleTemplate,
         formationId: 'af_missing',
@@ -66,15 +66,15 @@ describe('agentFormations lib', () => {
 
     test('treats resource without physicalResourceId as create', async () => {
       jest
-        .spyOn(db.AgentFormation, 'findOne')
+        .spyOn(db.Formation, 'findOne')
         .mockResolvedValue({ id: 1 } as any);
       jest
-        .spyOn(db.AgentFormationResource, 'findAll')
+        .spyOn(db.FormationResource, 'findAll')
         .mockResolvedValue([
           { logicalId: 'MyMemory', physicalResourceId: null } as any,
         ]);
 
-      const result = await planAgentFormation({
+      const result = await planFormation({
         projectId: 1,
         template: simpleTemplate,
         formationId: 'af_nophysical',
@@ -83,15 +83,15 @@ describe('agentFormations lib', () => {
     });
   });
 
-  // ── createAgentFormation ───────────────────────────────────────────────────
+  // ── createFormation ───────────────────────────────────────────────────
 
-  describe('createAgentFormation', () => {
+  describe('createFormation', () => {
     test('returns name_conflict when a formation with the same name exists', async () => {
       jest
-        .spyOn(db.AgentFormation, 'findOne')
+        .spyOn(db.Formation, 'findOne')
         .mockResolvedValue({ id: 1, name: 'dupe' } as any);
 
-      const result = await createAgentFormation({
+      const result = await createFormation({
         projectId: 1,
         name: 'dupe',
         template: simpleTemplate,
@@ -100,17 +100,17 @@ describe('agentFormations lib', () => {
     });
   });
 
-  // ── listAgentFormations ────────────────────────────────────────────────────
+  // ── listFormations ────────────────────────────────────────────────────
 
-  describe('listAgentFormations', () => {
+  describe('listFormations', () => {
     test('returns empty array when no formations exist', async () => {
-      jest.spyOn(db.AgentFormation, 'findAll').mockResolvedValue([]);
-      const result = await listAgentFormations({ projectIds: [9999] });
+      jest.spyOn(db.Formation, 'findAll').mockResolvedValue([]);
+      const result = await listFormations({ projectIds: [9999] });
       expect(result).toEqual([]);
     });
 
     test('maps formation without resources when includeResources is false', async () => {
-      jest.spyOn(db.AgentFormation, 'findAll').mockResolvedValue([
+      jest.spyOn(db.Formation, 'findAll').mockResolvedValue([
         {
           publicId: 'af_1',
           project: { publicId: 'proj_1' },
@@ -124,27 +124,27 @@ describe('agentFormations lib', () => {
         } as any,
       ]);
 
-      const result = await listAgentFormations({ projectIds: [1] });
+      const result = await listFormations({ projectIds: [1] });
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('af_1');
       expect(result[0].resources).toBeUndefined();
     });
   });
 
-  // ── getAgentFormation ──────────────────────────────────────────────────────
+  // ── getFormation ──────────────────────────────────────────────────────
 
-  describe('getAgentFormation', () => {
+  describe('getFormation', () => {
     test('returns null when formation not found', async () => {
-      jest.spyOn(db.AgentFormation, 'findOne').mockResolvedValue(null);
-      const result = await getAgentFormation({ id: 'af_missing' });
+      jest.spyOn(db.Formation, 'findOne').mockResolvedValue(null);
+      const result = await getFormation({ id: 'af_missing' });
       expect(result).toBeNull();
     });
 
     test('returns formation with resources when found', async () => {
-      jest.spyOn(db.AgentFormation, 'findOne').mockResolvedValue({
+      jest.spyOn(db.Formation, 'findOne').mockResolvedValue({
         publicId: 'af_1',
         project: { publicId: 'proj_1' },
-        agentFormationResources: [
+        formationResources: [
           {
             publicId: 'afr_1',
             logicalId: 'MyMemory',
@@ -162,7 +162,7 @@ describe('agentFormations lib', () => {
         updatedAt: new Date(),
       } as any);
 
-      const result = await getAgentFormation({ id: 'af_1' });
+      const result = await getFormation({ id: 'af_1' });
       expect(result).not.toBeNull();
       expect(result!.id).toBe('af_1');
       expect(result!.resources).toHaveLength(1);
@@ -170,12 +170,12 @@ describe('agentFormations lib', () => {
     });
   });
 
-  // ── updateAgentFormation ───────────────────────────────────────────────────
+  // ── updateFormation ───────────────────────────────────────────────────
 
-  describe('updateAgentFormation', () => {
+  describe('updateFormation', () => {
     test('returns null when formation not found', async () => {
-      jest.spyOn(db.AgentFormation, 'findOne').mockResolvedValue(null);
-      const result = await updateAgentFormation({
+      jest.spyOn(db.Formation, 'findOne').mockResolvedValue(null);
+      const result = await updateFormation({
         id: 'af_missing',
         template: simpleTemplate,
       });
@@ -193,7 +193,7 @@ describe('agentFormations lib', () => {
       const refreshed = {
         publicId: 'af_test',
         project: { publicId: 'proj_1' },
-        agentFormationResources: [],
+        formationResources: [],
         name: 'test',
         template: null,
         outputs: null,
@@ -204,19 +204,19 @@ describe('agentFormations lib', () => {
       };
 
       jest
-        .spyOn(db.AgentFormation, 'findOne')
+        .spyOn(db.Formation, 'findOne')
         .mockResolvedValueOnce(mockFormation as any)
         .mockResolvedValueOnce(refreshed as any);
-      jest.spyOn(db.AgentFormationOperation, 'create').mockResolvedValue({
+      jest.spyOn(db.FormationOperation, 'create').mockResolvedValue({
         id: 1,
         update: jest.fn().mockResolvedValue(undefined),
       } as any);
-      jest.spyOn(db.AgentFormationResource, 'findAll').mockResolvedValue([]);
+      jest.spyOn(db.FormationResource, 'findAll').mockResolvedValue([]);
       jest
-        .spyOn(agentFormationsApply, 'applyFormationTemplate')
+        .spyOn(formationsApply, 'applyFormationTemplate')
         .mockResolvedValue(undefined);
 
-      const result = await updateAgentFormation({
+      const result = await updateFormation({
         id: 'af_test',
         template: simpleTemplate,
         metadata: { env: 'test' },
@@ -240,7 +240,7 @@ describe('agentFormations lib', () => {
       const refreshed = {
         publicId: 'af_test',
         project: { publicId: 'proj_1' },
-        agentFormationResources: [],
+        formationResources: [],
         name: 'test',
         template: null,
         outputs: null,
@@ -251,19 +251,19 @@ describe('agentFormations lib', () => {
       };
 
       jest
-        .spyOn(db.AgentFormation, 'findOne')
+        .spyOn(db.Formation, 'findOne')
         .mockResolvedValueOnce(mockFormation as any)
         .mockResolvedValueOnce(refreshed as any);
-      jest.spyOn(db.AgentFormationOperation, 'create').mockResolvedValue({
+      jest.spyOn(db.FormationOperation, 'create').mockResolvedValue({
         id: 1,
         update: jest.fn().mockResolvedValue(undefined),
       } as any);
-      jest.spyOn(db.AgentFormationResource, 'findAll').mockResolvedValue([]);
+      jest.spyOn(db.FormationResource, 'findAll').mockResolvedValue([]);
       jest
-        .spyOn(agentFormationsApply, 'applyFormationTemplate')
+        .spyOn(formationsApply, 'applyFormationTemplate')
         .mockResolvedValue(undefined);
 
-      await updateAgentFormation({ id: 'af_test', template: simpleTemplate });
+      await updateFormation({ id: 'af_test', template: simpleTemplate });
 
       const metadataUpdateCalls = mockFormation.update.mock.calls.filter(
         (call: any[]) => {
@@ -274,12 +274,12 @@ describe('agentFormations lib', () => {
     });
   });
 
-  // ── deleteAgentFormation ───────────────────────────────────────────────────
+  // ── deleteFormation ───────────────────────────────────────────────────
 
-  describe('deleteAgentFormation', () => {
+  describe('deleteFormation', () => {
     test('returns null when formation not found', async () => {
-      jest.spyOn(db.AgentFormation, 'findOne').mockResolvedValue(null);
-      const result = await deleteAgentFormation({ id: 'af_missing' });
+      jest.spyOn(db.Formation, 'findOne').mockResolvedValue(null);
+      const result = await deleteFormation({ id: 'af_missing' });
       expect(result).toBeNull();
     });
 
@@ -293,17 +293,17 @@ describe('agentFormations lib', () => {
       };
 
       jest
-        .spyOn(db.AgentFormation, 'findOne')
+        .spyOn(db.Formation, 'findOne')
         .mockResolvedValue(mockFormation as any);
       jest
-        .spyOn(db.AgentFormationOperation, 'create')
+        .spyOn(db.FormationOperation, 'create')
         .mockResolvedValue(mockOperation as any);
-      jest.spyOn(db.AgentFormationResource, 'findAll').mockResolvedValue([]);
+      jest.spyOn(db.FormationResource, 'findAll').mockResolvedValue([]);
       jest
-        .spyOn(agentFormationsApply, 'performResourceDeletions')
+        .spyOn(formationsApply, 'performResourceDeletions')
         .mockResolvedValue({ events: [], hasError: true });
 
-      const result = await deleteAgentFormation({ id: 'af_test' });
+      const result = await deleteFormation({ id: 'af_test' });
       expect(result).toEqual({ success: false });
       expect(mockOperation.update).toHaveBeenCalledWith({
         status: 'failed',
@@ -325,17 +325,17 @@ describe('agentFormations lib', () => {
       };
 
       jest
-        .spyOn(db.AgentFormation, 'findOne')
+        .spyOn(db.Formation, 'findOne')
         .mockResolvedValue(mockFormation as any);
       jest
-        .spyOn(db.AgentFormationOperation, 'create')
+        .spyOn(db.FormationOperation, 'create')
         .mockResolvedValue(mockOperation as any);
-      jest.spyOn(db.AgentFormationResource, 'findAll').mockResolvedValue([]);
+      jest.spyOn(db.FormationResource, 'findAll').mockResolvedValue([]);
       jest
-        .spyOn(agentFormationsApply, 'performResourceDeletions')
+        .spyOn(formationsApply, 'performResourceDeletions')
         .mockResolvedValue({ events: [], hasError: false });
 
-      const result = await deleteAgentFormation({ id: 'af_test' });
+      const result = await deleteFormation({ id: 'af_test' });
       expect(result).toEqual({ success: true });
       expect(mockOperation.update).toHaveBeenCalledWith({
         status: 'succeeded',
@@ -348,12 +348,12 @@ describe('agentFormations lib', () => {
     });
   });
 
-  // ── listAgentFormationEvents ───────────────────────────────────────────────
+  // ── listFormationEvents ───────────────────────────────────────────────
 
-  describe('listAgentFormationEvents', () => {
+  describe('listFormationEvents', () => {
     test('returns empty array when formation not found', async () => {
-      jest.spyOn(db.AgentFormation, 'findOne').mockResolvedValue(null);
-      const result = await listAgentFormationEvents({
+      jest.spyOn(db.Formation, 'findOne').mockResolvedValue(null);
+      const result = await listFormationEvents({
         formationId: 'af_missing',
       });
       expect(result).toEqual([]);
@@ -361,9 +361,9 @@ describe('agentFormations lib', () => {
 
     test('returns mapped operations for existing formation', async () => {
       jest
-        .spyOn(db.AgentFormation, 'findOne')
+        .spyOn(db.Formation, 'findOne')
         .mockResolvedValue({ id: 1 } as any);
-      jest.spyOn(db.AgentFormationOperation, 'findAll').mockResolvedValue([
+      jest.spyOn(db.FormationOperation, 'findAll').mockResolvedValue([
         {
           publicId: 'op_1',
           operationType: 'create',
@@ -376,7 +376,7 @@ describe('agentFormations lib', () => {
         } as any,
       ]);
 
-      const result = await listAgentFormationEvents({ formationId: 'af_1' });
+      const result = await listFormationEvents({ formationId: 'af_1' });
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('op_1');
       expect(result[0].operationType).toBe('create');

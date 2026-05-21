@@ -6,51 +6,46 @@ import {
   applyFormationTemplate,
   buildDeleteOrder,
   performResourceDeletions,
-} from './agentFormationsApply';
-import {
-  buildDependencyGraph,
-  topologicalSort,
-} from './agentFormationsHelpers';
+} from './formationsApply';
+import { buildDependencyGraph, topologicalSort } from './formationsHelpers';
 import type {
   FormationEvent,
   FormationTemplate,
-  MappedAgentFormation,
-  MappedAgentFormationResource,
+  MappedFormation,
+  MappedFormationResource,
   MappedFormationOperation,
   PlanChange,
   PlanResult,
-} from './agentFormationsTypes';
+} from './formationsTypes';
 
 const log = createDebug('soat:formations');
 
-export { getMissingParams } from './agentFormationsHelpers';
+export { getMissingParams } from './formationsHelpers';
 export type {
   FormationEvent,
   FormationTemplate,
-  MappedAgentFormation,
-  MappedAgentFormationResource,
+  MappedFormation,
+  MappedFormationResource,
   MappedFormationOperation,
   PlanChange,
   PlanResult,
-} from './agentFormationsTypes';
+} from './formationsTypes';
 export {
   parseFormationTemplateInput,
   validateFormationTemplate,
-} from './agentFormationsValidation';
+} from './formationsValidation';
 
 // ── Mapping ───────────────────────────────────────────────────────────────
 
 const mapFormation = (
-  instance: InstanceType<(typeof db)['AgentFormation']> & {
+  instance: InstanceType<(typeof db)['Formation']> & {
     project?: InstanceType<(typeof db)['Project']>;
-    agentFormationResources?: InstanceType<
-      (typeof db)['AgentFormationResource']
-    >[];
+    formationResources?: InstanceType<(typeof db)['FormationResource']>[];
   },
   includeResources = false
-): MappedAgentFormation => {
-  const resources: MappedAgentFormationResource[] | undefined = includeResources
-    ? (instance.agentFormationResources ?? []).map((r) => {
+): MappedFormation => {
+  const resources: MappedFormationResource[] | undefined = includeResources
+    ? (instance.formationResources ?? []).map((r) => {
         return {
           id: r.publicId,
           logicalId: r.logicalId,
@@ -79,8 +74,8 @@ const getFormationIncludes = (includeResources = false) => {
   const includes: object[] = [{ model: db.Project, as: 'project' }];
   if (includeResources) {
     includes.push({
-      model: db.AgentFormationResource,
-      as: 'agentFormationResources',
+      model: db.FormationResource,
+      as: 'formationResources',
     });
   }
   return includes;
@@ -88,7 +83,7 @@ const getFormationIncludes = (includeResources = false) => {
 
 // ── Public API ────────────────────────────────────────────────────────────
 
-export const planAgentFormation = async (args: {
+export const planFormation = async (args: {
   projectId: number;
   template: FormationTemplate;
   formationId?: string;
@@ -99,13 +94,13 @@ export const planAgentFormation = async (args: {
 
   const existingMap = new Map<string, string>();
   if (args.formationId) {
-    const formation = await db.AgentFormation.findOne({
+    const formation = await db.Formation.findOne({
       where: { publicId: args.formationId },
     });
     if (formation) {
-      const existingResources = await db.AgentFormationResource.findAll({
+      const existingResources = await db.FormationResource.findAll({
         where: {
-          agentFormationId: (formation as unknown as { id: number }).id,
+          formationId: (formation as unknown as { id: number }).id,
         },
       });
       for (const r of existingResources) {
@@ -128,20 +123,20 @@ export const planAgentFormation = async (args: {
   return { changes };
 };
 
-export const createAgentFormation = async (args: {
+export const createFormation = async (args: {
   projectId: number;
   name: string;
   template: FormationTemplate;
   metadata?: Record<string, unknown>;
   parameters?: Record<string, string>;
-}): Promise<MappedAgentFormation | 'name_conflict'> => {
+}): Promise<MappedFormation | 'name_conflict'> => {
   log(
-    'createAgentFormation: projectId=%d name=%s resources=%d',
+    'createFormation: projectId=%d name=%s resources=%d',
     args.projectId,
     args.name,
     Object.keys(args.template.resources).length
   );
-  const existing = await db.AgentFormation.findOne({
+  const existing = await db.Formation.findOne({
     where: {
       projectId: args.projectId,
       name: args.name,
@@ -150,14 +145,14 @@ export const createAgentFormation = async (args: {
   });
   if (existing) {
     log(
-      'createAgentFormation: name conflict projectId=%d name=%s',
+      'createFormation: name conflict projectId=%d name=%s',
       args.projectId,
       args.name
     );
     return 'name_conflict';
   }
 
-  const formation = await db.AgentFormation.create({
+  const formation = await db.Formation.create({
     projectId: args.projectId,
     name: args.name,
     template: args.template,
@@ -167,13 +162,13 @@ export const createAgentFormation = async (args: {
   });
 
   log(
-    'createAgentFormation: created formation formationId=%s status=%s',
+    'createFormation: created formation formationId=%s status=%s',
     formation.publicId,
     formation.status
   );
 
-  const operation = await db.AgentFormationOperation.create({
-    agentFormationId: (formation as unknown as { id: number }).id,
+  const operation = await db.FormationOperation.create({
+    formationId: (formation as unknown as { id: number }).id,
     operationType: 'create',
     status: 'running',
     events: null,
@@ -182,7 +177,7 @@ export const createAgentFormation = async (args: {
   });
 
   log(
-    'createAgentFormation: created operation operationId=%s status=%s',
+    'createFormation: created operation operationId=%s status=%s',
     operation.publicId,
     operation.status
   );
@@ -196,13 +191,13 @@ export const createAgentFormation = async (args: {
     parameters: args.parameters,
   });
 
-  const refreshed = await db.AgentFormation.findOne({
+  const refreshed = await db.Formation.findOne({
     where: { id: (formation as unknown as { id: number }).id },
     include: getFormationIncludes(true),
   });
 
   log(
-    'createAgentFormation: formation completed formationId=%s status=%s',
+    'createFormation: formation completed formationId=%s status=%s',
     formation.publicId,
     refreshed?.status
   );
@@ -213,10 +208,10 @@ export const createAgentFormation = async (args: {
   );
 };
 
-export const listAgentFormations = async (args: {
+export const listFormations = async (args: {
   projectIds: number[];
-}): Promise<MappedAgentFormation[]> => {
-  const formations = await db.AgentFormation.findAll({
+}): Promise<MappedFormation[]> => {
+  const formations = await db.Formation.findAll({
     where: { projectId: args.projectIds, status: { [Op.ne]: 'deleted' } },
     include: getFormationIncludes(),
     order: [['createdAt', 'ASC']],
@@ -226,10 +221,10 @@ export const listAgentFormations = async (args: {
   });
 };
 
-export const getAgentFormation = async (args: {
+export const getFormation = async (args: {
   id: string;
-}): Promise<MappedAgentFormation | null> => {
-  const formation = await db.AgentFormation.findOne({
+}): Promise<MappedFormation | null> => {
+  const formation = await db.Formation.findOne({
     where: { publicId: args.id, status: { [Op.ne]: 'deleted' } },
     include: getFormationIncludes(true),
   });
@@ -240,30 +235,30 @@ export const getAgentFormation = async (args: {
   );
 };
 
-export const updateAgentFormation = async (args: {
+export const updateFormation = async (args: {
   id: string;
   template?: FormationTemplate;
   metadata?: Record<string, unknown> | null;
   parameters?: Record<string, string>;
-}): Promise<MappedAgentFormation | null> => {
+}): Promise<MappedFormation | null> => {
   log(
-    'updateAgentFormation: formationId=%s updateTemplate=%s',
+    'updateFormation: formationId=%s updateTemplate=%s',
     args.id,
     !!args.template
   );
-  const formation = await db.AgentFormation.findOne({
+  const formation = await db.Formation.findOne({
     where: { publicId: args.id, status: { [Op.ne]: 'deleted' } },
   });
   if (!formation) {
-    log('updateAgentFormation: formation not found formationId=%s', args.id);
+    log('updateFormation: formation not found formationId=%s', args.id);
     return null;
   }
 
   const newTemplate =
     args.template ?? (formation.template as FormationTemplate);
 
-  const operation = await db.AgentFormationOperation.create({
-    agentFormationId: (formation as unknown as { id: number }).id,
+  const operation = await db.FormationOperation.create({
+    formationId: (formation as unknown as { id: number }).id,
     operationType: 'update',
     status: 'running',
     events: null,
@@ -271,18 +266,15 @@ export const updateAgentFormation = async (args: {
     error: null,
   });
 
-  log(
-    'updateAgentFormation: created operation operationId=%s',
-    operation.publicId
-  );
+  log('updateFormation: created operation operationId=%s', operation.publicId);
 
   await formation.update({ status: 'updating' });
   if (args.metadata !== undefined) {
     await formation.update({ metadata: args.metadata });
   }
 
-  const existingResources = await db.AgentFormationResource.findAll({
-    where: { agentFormationId: (formation as unknown as { id: number }).id },
+  const existingResources = await db.FormationResource.findAll({
+    where: { formationId: (formation as unknown as { id: number }).id },
   });
 
   await applyFormationTemplate({
@@ -294,7 +286,7 @@ export const updateAgentFormation = async (args: {
     parameters: args.parameters,
   });
 
-  const refreshed = await db.AgentFormation.findOne({
+  const refreshed = await db.Formation.findOne({
     where: { id: (formation as unknown as { id: number }).id },
     include: getFormationIncludes(true),
   });
@@ -305,18 +297,18 @@ export const updateAgentFormation = async (args: {
   );
 };
 
-export const deleteAgentFormation = async (args: {
+export const deleteFormation = async (args: {
   id: string;
 }): Promise<{ success: boolean } | null> => {
-  const formation = await db.AgentFormation.findOne({
+  const formation = await db.Formation.findOne({
     where: { publicId: args.id, status: { [Op.ne]: 'deleted' } },
   });
   if (!formation) return null;
 
   await formation.update({ status: 'deleting' });
 
-  const operation = await db.AgentFormationOperation.create({
-    agentFormationId: (formation as unknown as { id: number }).id,
+  const operation = await db.FormationOperation.create({
+    formationId: (formation as unknown as { id: number }).id,
     operationType: 'delete',
     status: 'running',
     events: null,
@@ -324,8 +316,8 @@ export const deleteAgentFormation = async (args: {
     error: null,
   });
 
-  const existingResources = await db.AgentFormationResource.findAll({
-    where: { agentFormationId: (formation as unknown as { id: number }).id },
+  const existingResources = await db.FormationResource.findAll({
+    where: { formationId: (formation as unknown as { id: number }).id },
   });
 
   const orderedResources = buildDeleteOrder(
@@ -348,16 +340,16 @@ export const deleteAgentFormation = async (args: {
   return { success: true };
 };
 
-export const listAgentFormationEvents = async (args: {
+export const listFormationEvents = async (args: {
   formationId: string;
 }): Promise<MappedFormationOperation[]> => {
-  const formation = await db.AgentFormation.findOne({
+  const formation = await db.Formation.findOne({
     where: { publicId: args.formationId },
   });
   if (!formation) return [];
 
-  const operations = await db.AgentFormationOperation.findAll({
-    where: { agentFormationId: (formation as unknown as { id: number }).id },
+  const operations = await db.FormationOperation.findAll({
+    where: { formationId: (formation as unknown as { id: number }).id },
     order: [['createdAt', 'ASC']],
   });
 

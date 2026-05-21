@@ -3,8 +3,9 @@ import {
   applyCreateResource,
   applyDeleteResource,
   applyUpdateResource,
-} from 'src/lib/agentFormationsResourceHandlers';
-import * as helpersModule from 'src/lib/agentFormationsHelpers';
+} from 'src/lib/formationsResourceHandlers';
+import * as actorsModule from 'src/lib/actors';
+import * as helpersModule from 'src/lib/formationsHelpers';
 import * as agentsModule from 'src/lib/agents';
 import * as agentToolsCrudModule from 'src/lib/agentToolsCrud';
 import * as aiProvidersModule from 'src/lib/aiProviders';
@@ -17,11 +18,19 @@ const mockLookupMemoryInternalId = jest.spyOn(
   helpersModule,
   'lookupMemoryInternalId'
 );
+const mockLookupAgentInternalId = jest.spyOn(
+  helpersModule,
+  'lookupAgentInternalId'
+);
 const mockLookupSecretInternalId = jest.spyOn(
   helpersModule,
   'lookupSecretInternalId'
 );
+const mockCreateActor = jest.spyOn(actorsModule, 'createActor');
+const mockUpdateActor = jest.spyOn(actorsModule, 'updateActor');
+const mockDeleteActor = jest.spyOn(actorsModule, 'deleteActor');
 const mockCreateAgent = jest.spyOn(agentsModule, 'createAgent');
+const mockUpdateAgent = jest.spyOn(agentsModule, 'updateAgent');
 const mockDeleteAgent = jest.spyOn(agentsModule, 'deleteAgent');
 const mockCreateAgentTool = jest.spyOn(agentToolsCrudModule, 'createAgentTool');
 const mockDeleteAgentTool = jest.spyOn(agentToolsCrudModule, 'deleteAgentTool');
@@ -50,9 +59,9 @@ afterEach(() => {
   jest.clearAllMocks();
 });
 
-describe('agentFormationsResourceHandlers', () => {
+describe('formationsResourceHandlers', () => {
   describe('applyCreateResource', () => {
-    test('creates ai_provider with resolved secret, agent tool, agent, document, memory, memory_entry, and webhook', async () => {
+    test('creates ai_provider with resolved secret, agent tool, actor, agent, document, memory, memory_entry, and webhook', async () => {
       mockLookupSecretInternalId.mockResolvedValueOnce(42);
       mockCreateAiProvider.mockResolvedValueOnce({
         id: 'aip_1',
@@ -60,6 +69,11 @@ describe('agentFormationsResourceHandlers', () => {
       mockCreateAgentTool.mockResolvedValueOnce({
         id: 'at_1',
       } as Awaited<ReturnType<typeof agentToolsCrudModule.createAgentTool>>);
+      mockLookupAgentInternalId.mockResolvedValueOnce(10);
+      mockLookupMemoryInternalId.mockResolvedValueOnce(9);
+      mockCreateActor.mockResolvedValueOnce({
+        id: 'act_1',
+      } as Awaited<ReturnType<typeof actorsModule.createActor>>);
       mockCreateAgent.mockResolvedValueOnce({
         id: 'agt_1',
       } as Awaited<ReturnType<typeof agentsModule.createAgent>>);
@@ -108,6 +122,21 @@ describe('agentFormationsResourceHandlers', () => {
           },
         })
       ).resolves.toBe('at_1');
+
+      await expect(
+        applyCreateResource({
+          resourceType: 'actor',
+          projectId: 1,
+          resolvedProperties: {
+            name: 'Customer Actor',
+            external_id: 'whatsapp:+5511999999999',
+            instructions: 'Talk like support',
+            agent_id: 'agt_ref',
+            memory_id: 'mem_ref',
+            auto_create_memory: false,
+          },
+        })
+      ).resolves.toBe('act_1');
 
       await expect(
         applyCreateResource({
@@ -204,6 +233,18 @@ describe('agentFormationsResourceHandlers', () => {
         actions: ['read'],
         presetParameters: { limit: 5 },
       });
+      expect(mockLookupAgentInternalId).toHaveBeenCalledWith('agt_ref');
+      expect(mockLookupMemoryInternalId).toHaveBeenCalledWith('mem_ref');
+      expect(mockCreateActor).toHaveBeenCalledWith({
+        projectId: 1,
+        name: 'Customer Actor',
+        externalId: 'whatsapp:+5511999999999',
+        instructions: 'Talk like support',
+        agentId: 10,
+        chatId: undefined,
+        memoryId: 9,
+        autoCreateMemory: false,
+      });
       expect(mockCreateAgent).toHaveBeenCalledWith({
         projectId: 1,
         aiProviderId: 'aip_1',
@@ -235,7 +276,7 @@ describe('agentFormationsResourceHandlers', () => {
         description: 'Important facts',
         tags: ['core', 'shared'],
       });
-      expect(mockLookupMemoryInternalId).toHaveBeenCalledWith('mem_public');
+      expect(mockLookupMemoryInternalId).toHaveBeenLastCalledWith('mem_public');
       expect(mockCreateMemoryEntry).toHaveBeenCalledWith({
         memoryId: 7,
         content: 'Remember this',
@@ -277,16 +318,14 @@ describe('agentFormationsResourceHandlers', () => {
   });
 
   describe('applyUpdateResource', () => {
-    test('updates ai_provider, agent_tool, agent, memory, memory_entry, webhook, and ignores document', async () => {
+    test('updates ai_provider, agent_tool, actor, agent, memory, memory_entry, webhook, and ignores document', async () => {
       mockLookupSecretInternalId.mockResolvedValueOnce(84);
-      const agentInstance = db.Agent.build({
-        publicId: 'agt_1',
-        projectId: 1,
-        aiProviderId: 1,
-      });
-      const agentUpdate = jest
-        .spyOn(agentInstance, 'update')
-        .mockResolvedValue(agentInstance);
+      mockUpdateActor.mockResolvedValueOnce({
+        id: 'act_1',
+      } as Awaited<ReturnType<typeof actorsModule.updateActor>>);
+      mockUpdateAgent.mockResolvedValueOnce({
+        id: 'agt_1',
+      } as Awaited<ReturnType<typeof agentsModule.updateAgent>>);
       const memoryEntryInstance = db.MemoryEntry.build({
         publicId: 'men_1',
         memoryId: 1,
@@ -296,8 +335,6 @@ describe('agentFormationsResourceHandlers', () => {
       const entrySave = jest
         .spyOn(memoryEntryInstance, 'save')
         .mockResolvedValue(memoryEntryInstance);
-
-      jest.spyOn(db.Agent, 'findOne').mockResolvedValueOnce(agentInstance);
       jest
         .spyOn(db.MemoryEntry, 'findOne')
         .mockResolvedValueOnce(memoryEntryInstance);
@@ -329,6 +366,18 @@ describe('agentFormationsResourceHandlers', () => {
             mcp: null,
             actions: null,
             preset_parameters: null,
+          },
+        })
+      ).resolves.toBeUndefined();
+
+      await expect(
+        applyUpdateResource({
+          resourceType: 'actor',
+          physicalResourceId: 'act_1',
+          resolvedProperties: {
+            name: 'Actor Updated',
+            instructions: null,
+            agent_id: 'agt_2',
           },
         })
       ).resolves.toBeUndefined();
@@ -419,7 +468,18 @@ describe('agentFormationsResourceHandlers', () => {
         actions: null,
         presetParameters: null,
       });
-      expect(agentUpdate).toHaveBeenCalledWith({
+      expect(mockUpdateActor).toHaveBeenCalledWith({
+        id: 'act_1',
+        name: 'Actor Updated',
+        externalId: undefined,
+        instructions: null,
+        agentId: 'agt_2',
+        chatId: undefined,
+        memoryId: undefined,
+      });
+      expect(mockUpdateAgent).toHaveBeenCalledWith({
+        id: 'agt_1',
+        aiProviderId: undefined,
         name: 'Agent Updated',
         instructions: 'New instructions',
         model: 'gpt-4.1-mini',
@@ -451,7 +511,7 @@ describe('agentFormationsResourceHandlers', () => {
     });
 
     test('throws when agent or memory entry is missing and for unsupported update resource type', async () => {
-      jest.spyOn(db.Agent, 'findOne').mockResolvedValueOnce(null);
+      mockUpdateAgent.mockResolvedValueOnce('not_found');
       await expect(
         applyUpdateResource({
           resourceType: 'agent',
@@ -484,6 +544,7 @@ describe('agentFormationsResourceHandlers', () => {
       ['ai_provider', mockDeleteAiProvider],
       ['agent_tool', mockDeleteAgentTool],
       ['agent', mockDeleteAgent],
+      ['actor', mockDeleteActor],
       ['document', mockDeleteDocument],
       ['memory', mockDeleteMemory],
       ['memory_entry', mockDeleteMemoryEntry],
@@ -491,6 +552,11 @@ describe('agentFormationsResourceHandlers', () => {
     ])(
       'deletes %s resources through the matching handler',
       async (resourceType, spy) => {
+        mockDeleteActor.mockResolvedValue({
+          id: 'res_1',
+        } as Awaited<ReturnType<typeof actorsModule.deleteActor>>);
+        mockDeleteAgent.mockResolvedValue('ok');
+
         await applyDeleteResource({
           resourceType,
           physicalResourceId: 'res_1',
