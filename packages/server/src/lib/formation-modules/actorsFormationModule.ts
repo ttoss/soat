@@ -1,11 +1,12 @@
 import createDebug from 'debug';
 
-import { createActor, deleteActor, updateActor } from '../actors';
 import {
-  lookupAgentInternalId,
-  lookupChatInternalId,
-  lookupMemoryInternalId,
-} from '../formationsHelpers';
+  createActor,
+  deleteActor,
+  resolveActorLinkedIds,
+  updateActor,
+  validateActorExclusivity,
+} from '../actors';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
   toNullableString,
@@ -31,11 +32,12 @@ const pushBusinessRuleErrors = (args: {
   basePath: string;
   errors: ValidationError[];
 }): void => {
-  if (args.properties.agent_id && args.properties.chat_id) {
-    args.errors.push({
-      path: args.basePath,
-      message: '`agent_id` and `chat_id` are mutually exclusive',
-    });
+  const msg = validateActorExclusivity({
+    agentId: args.properties.agent_id,
+    chatId: args.properties.chat_id,
+  });
+  if (msg) {
+    args.errors.push({ path: args.basePath, message: msg });
   }
 };
 
@@ -97,26 +99,12 @@ export const actorsFormationModule: FormationModule = {
 
     const name = requireString({ value: properties.name, fieldName: 'name' });
 
-    let agentId: number | null | undefined;
-    if (properties.agent_id === null) {
-      agentId = null;
-    } else if (typeof properties.agent_id === 'string') {
-      agentId = await lookupAgentInternalId(properties.agent_id);
-    }
-
-    let chatId: number | null | undefined;
-    if (properties.chat_id === null) {
-      chatId = null;
-    } else if (typeof properties.chat_id === 'string') {
-      chatId = await lookupChatInternalId(properties.chat_id);
-    }
-
-    let memoryId: number | null | undefined;
-    if (properties.memory_id === null) {
-      memoryId = null;
-    } else if (typeof properties.memory_id === 'string') {
-      memoryId = await lookupMemoryInternalId(properties.memory_id);
-    }
+    const { agentId, chatId, memoryId } = await resolveActorLinkedIds({
+      agentId: toNullableString(properties.agent_id),
+      chatId: toNullableString(properties.chat_id),
+      memoryId: toNullableString(properties.memory_id),
+      projectId,
+    });
 
     const created = await createActor({
       projectId,

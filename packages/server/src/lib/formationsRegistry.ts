@@ -6,6 +6,7 @@ const registeredModules = new Map<string, FormationModule>();
 
 const registerFormationModule = (args: { module: FormationModule }): void => {
   const existing = registeredModules.get(args.module.resourceType);
+  /* istanbul ignore next */
   if (existing) {
     throw new Error(
       `Duplicate formation module registration for resource type: ${args.module.resourceType}`

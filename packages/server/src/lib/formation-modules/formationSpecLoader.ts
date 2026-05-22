@@ -118,6 +118,7 @@ const resolveFormationSpecPath = (): string => {
     }
   }
 
+  /* istanbul ignore next */
   throw new Error(
     'Could not locate formations OpenAPI spec file to load formation fields'
   );
@@ -143,6 +144,7 @@ export const loadModuleSpec = (args: {
   const spec = yaml.load(raw) as OpenApiSpec;
   const schema = spec.components?.schemas?.[args.schemaName];
 
+  /* istanbul ignore next */
   if (!schema || !schema.properties) {
     throw new Error(
       `${args.schemaName} schema is missing in formations OpenAPI spec`

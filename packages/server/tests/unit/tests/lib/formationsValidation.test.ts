@@ -606,4 +606,101 @@ describe('validateFormationTemplate', () => {
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);
   });
+
+  // ── actorsFormationModule: non-object properties ───────────────────────
+
+  test('returns invalid when actor resource properties is null', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyActor: {
+          type: 'actor',
+          properties: null,
+        },
+      },
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.message.includes('object'))).toBe(true);
+  });
+
+  // ── formationSpecLoader: integer/number/array/object type validators ───
+
+  test('returns invalid when agent max_steps is not an integer', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyAgent: {
+          type: 'agent',
+          properties: {
+            ai_provider_id: 'aip_1',
+            max_steps: 'five',
+          },
+        },
+      },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some(
+        (e) => e.path === 'resources.MyAgent.properties.max_steps'
+      )
+    ).toBe(true);
+  });
+
+  test('returns invalid when agent temperature is not a number', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyAgent: {
+          type: 'agent',
+          properties: {
+            ai_provider_id: 'aip_1',
+            temperature: 'hot',
+          },
+        },
+      },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some(
+        (e) => e.path === 'resources.MyAgent.properties.temperature'
+      )
+    ).toBe(true);
+  });
+
+  test('returns invalid when agent tool_ids is not an array', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyAgent: {
+          type: 'agent',
+          properties: {
+            ai_provider_id: 'aip_1',
+            tool_ids: 'tool1',
+          },
+        },
+      },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some(
+        (e) => e.path === 'resources.MyAgent.properties.tool_ids'
+      )
+    ).toBe(true);
+  });
+
+  test('returns invalid when agent tool_choice is not an object', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyAgent: {
+          type: 'agent',
+          properties: {
+            ai_provider_id: 'aip_1',
+            tool_choice: 'auto',
+          },
+        },
+      },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some(
+        (e) => e.path === 'resources.MyAgent.properties.tool_choice'
+      )
+    ).toBe(true);
+  });
 });

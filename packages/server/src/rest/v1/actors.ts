@@ -7,7 +7,9 @@ import {
   findOrCreateActor,
   getActor,
   listActors,
+  resolveActorLinkedIds,
   updateActor,
+  validateActorExclusivity,
 } from 'src/lib/actors';
 import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
@@ -32,42 +34,6 @@ const resolveActorProjectPublicId = (
   if (body.projectId) return body.projectId;
   if (authUser.apiKeyProjectPublicId) return authUser.apiKeyProjectPublicId;
   return null;
-};
-
-const resolveActorAgentDbId = async (
-  agentId: string | undefined,
-  projectDbId: number
-): Promise<number | null | undefined> => {
-  if (agentId === undefined) return undefined;
-  const agent = await db.Agent.findOne({
-    where: { publicId: agentId, projectId: projectDbId },
-  });
-  if (!agent) return null;
-  return agent.id as number;
-};
-
-const resolveActorChatDbId = async (
-  chatId: string | undefined,
-  projectDbId: number
-): Promise<number | null | undefined> => {
-  if (chatId === undefined) return undefined;
-  const chat = await db.Chat.findOne({
-    where: { publicId: chatId, projectId: projectDbId },
-  });
-  if (!chat) return null;
-  return chat.id as number;
-};
-
-const resolveActorMemoryDbId = async (
-  memoryId: string | undefined,
-  projectDbId: number
-): Promise<number | null | undefined> => {
-  if (memoryId === undefined) return undefined;
-  const memory = await db.Memory.findOne({
-    where: { publicId: memoryId, projectId: projectDbId },
-  });
-  if (!memory) return null;
-  return memory.id as number;
 };
 
 actorsRouter.get('/actors', async (ctx: Context) => {
@@ -205,9 +171,10 @@ const performCreateActor = async (args: {
 
 const validateCreateActorBody = (body: CreateActorBody): string | null => {
   if (!body.name) return 'name is required';
-  if (body.agentId && body.chatId)
-    return 'agentId and chatId are mutually exclusive';
-  return null;
+  return validateActorExclusivity({
+    agentId: body.agentId,
+    chatId: body.chatId,
+  });
 };
 
 actorsRouter.post('/actors', async (ctx: Context) => {
@@ -255,33 +222,19 @@ actorsRouter.post('/actors', async (ctx: Context) => {
   }
 
   const projectDbId = project.id as number;
-  const agentDbId = await resolveActorAgentDbId(body.agentId, projectDbId);
-  if (agentDbId === null) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid agentId' };
-    return;
-  }
-
-  const chatDbId = await resolveActorChatDbId(body.chatId, projectDbId);
-  if (chatDbId === null) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid chatId' };
-    return;
-  }
-
-  const memoryDbId = await resolveActorMemoryDbId(body.memoryId, projectDbId);
-  if (memoryDbId === null) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid memoryId' };
-    return;
-  }
+  const resolved = await resolveActorLinkedIds({
+    agentId: body.agentId,
+    chatId: body.chatId,
+    memoryId: body.memoryId,
+    projectId: projectDbId,
+  });
 
   const result = await performCreateActor({
     project: { id: projectDbId },
     body,
-    agentDbId,
-    chatDbId,
-    memoryDbId,
+    agentDbId: resolved.agentId ?? undefined,
+    chatDbId: resolved.chatId ?? undefined,
+    memoryDbId: resolved.memoryId ?? undefined,
   });
 
   ctx.status = result.status;

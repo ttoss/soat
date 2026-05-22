@@ -19,13 +19,13 @@ const mockLookupMemoryInternalId = jest.spyOn(
   helpersModule,
   'lookupMemoryInternalId'
 );
-const mockLookupAgentInternalId = jest.spyOn(
-  helpersModule,
-  'lookupAgentInternalId'
-);
 const mockLookupSecretInternalId = jest.spyOn(
   helpersModule,
   'lookupSecretInternalId'
+);
+const mockResolveActorLinkedIds = jest.spyOn(
+  actorsModule,
+  'resolveActorLinkedIds'
 );
 const mockCreateActor = jest.spyOn(actorsModule, 'createActor');
 const mockUpdateActor = jest.spyOn(actorsModule, 'updateActor');
@@ -70,8 +70,10 @@ describe('formationsResourceHandlers', () => {
       mockCreateAgentTool.mockResolvedValueOnce({
         id: 'at_1',
       } as Awaited<ReturnType<typeof agentToolsCrudModule.createAgentTool>>);
-      mockLookupAgentInternalId.mockResolvedValueOnce(10);
-      mockLookupMemoryInternalId.mockResolvedValueOnce(9);
+      mockResolveActorLinkedIds.mockResolvedValueOnce({
+        agentId: 10,
+        memoryId: 9,
+      });
       mockCreateActor.mockResolvedValueOnce({
         id: 'act_1',
       } as Awaited<ReturnType<typeof actorsModule.createActor>>);
@@ -234,8 +236,12 @@ describe('formationsResourceHandlers', () => {
         actions: ['read'],
         presetParameters: { limit: 5 },
       });
-      expect(mockLookupAgentInternalId).toHaveBeenCalledWith('agt_ref');
-      expect(mockLookupMemoryInternalId).toHaveBeenCalledWith('mem_ref');
+      expect(mockResolveActorLinkedIds).toHaveBeenCalledWith({
+        agentId: 'agt_ref',
+        chatId: undefined,
+        memoryId: 'mem_ref',
+        projectId: 1,
+      });
       expect(mockCreateActor).toHaveBeenCalledWith({
         projectId: 1,
         name: 'Customer Actor',
@@ -320,6 +326,32 @@ describe('formationsResourceHandlers', () => {
           resolvedProperties: {},
         })
       ).rejects.toThrow('Unsupported resource type: unsupported');
+    });
+
+    test('throws when actor create has both agent_id and chat_id', async () => {
+      await expect(
+        applyCreateResource({
+          resourceType: 'actor',
+          projectId: 1,
+          resolvedProperties: {
+            name: 'Test Actor',
+            agent_id: 'agt_1',
+            chat_id: 'chat_1',
+          },
+        })
+      ).rejects.toThrow('agentId and chatId are mutually exclusive');
+    });
+
+    test('throws when actor create name is empty string', async () => {
+      await expect(
+        applyCreateResource({
+          resourceType: 'actor',
+          projectId: 1,
+          resolvedProperties: {
+            name: '',
+          },
+        })
+      ).rejects.toThrow("Actor field 'name' must be a non-empty string");
     });
   });
 
@@ -552,6 +584,20 @@ describe('formationsResourceHandlers', () => {
           resolvedProperties: {},
         })
       ).rejects.toThrow('Unsupported resource type for update: unsupported');
+    });
+
+    test('throws when actor update has both agent_id and chat_id', async () => {
+      await expect(
+        applyUpdateResource({
+          resourceType: 'actor',
+          physicalResourceId: 'act_1',
+          resolvedProperties: {
+            name: 'Test Actor',
+            agent_id: 'agt_1',
+            chat_id: 'chat_1',
+          },
+        })
+      ).rejects.toThrow('agentId and chatId are mutually exclusive');
     });
   });
 

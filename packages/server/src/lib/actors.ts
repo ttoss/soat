@@ -74,38 +74,89 @@ const buildActorListWhere = (args: {
   return where;
 };
 
-const updateAgentIdField = async (
-  agentId: string | null | undefined,
-  updates: Record<string, unknown>
-): Promise<void> => {
-  if (agentId === undefined) return;
-  if (agentId === null) {
-    updates.agentId = null;
-    return;
+export const validateActorExclusivity = (args: {
+  agentId: unknown;
+  chatId: unknown;
+}): string | null => {
+  if (args.agentId && args.chatId) {
+    return 'agentId and chatId are mutually exclusive';
   }
-  const agent = await db.Agent.findOne({
-    where: { publicId: agentId },
-  });
-  if (!agent)
-    throw new DomainError('AGENT_NOT_FOUND', `Agent '${agentId}' not found.`);
-  updates.agentId = agent.id;
+  return null;
 };
 
-const updateChatIdField = async (
-  chatId: string | null | undefined,
-  updates: Record<string, unknown>
-): Promise<void> => {
-  if (chatId === undefined) return;
-  if (chatId === null) {
-    updates.chatId = null;
-    return;
+export const resolveActorLinkedIds = async (args: {
+  agentId?: string | null;
+  chatId?: string | null;
+  memoryId?: string | null;
+  projectId?: number;
+}): Promise<{
+  agentId?: number | null;
+  chatId?: number | null;
+  memoryId?: number | null;
+}> => {
+  log(
+    'resolveActorLinkedIds: agentId=%s chatId=%s memoryId=%s projectId=%s',
+    args.agentId,
+    args.chatId,
+    args.memoryId,
+    args.projectId
+  );
+
+  const result: {
+    agentId?: number | null;
+    chatId?: number | null;
+    memoryId?: number | null;
+  } = {};
+
+  if (args.agentId !== undefined) {
+    if (args.agentId === null) {
+      result.agentId = null;
+    } else {
+      const where: Record<string, unknown> = { publicId: args.agentId };
+      if (args.projectId !== undefined) where.projectId = args.projectId;
+      const agent = await db.Agent.findOne({ where });
+      if (!agent)
+        throw new DomainError(
+          'AGENT_NOT_FOUND',
+          `Agent '${args.agentId}' not found.`
+        );
+      result.agentId = agent.id as number;
+    }
   }
-  const chat = await db.Chat.findOne({
-    where: { publicId: chatId },
-  });
-  if (!chat)
-    throw new DomainError('CHAT_NOT_FOUND', `Chat '${chatId}' not found.`);
-  updates.chatId = chat.id;
+
+  if (args.chatId !== undefined) {
+    if (args.chatId === null) {
+      result.chatId = null;
+    } else {
+      const where: Record<string, unknown> = { publicId: args.chatId };
+      if (args.projectId !== undefined) where.projectId = args.projectId;
+      const chat = await db.Chat.findOne({ where });
+      if (!chat)
+        throw new DomainError(
+          'CHAT_NOT_FOUND',
+          `Chat '${args.chatId}' not found.`
+        );
+      result.chatId = chat.id as number;
+    }
+  }
+
+  if (args.memoryId !== undefined) {
+    if (args.memoryId === null) {
+      result.memoryId = null;
+    } else {
+      const where: Record<string, unknown> = { publicId: args.memoryId };
+      if (args.projectId !== undefined) where.projectId = args.projectId;
+      const memory = await db.Memory.findOne({ where });
+      if (!memory)
+        throw new DomainError(
+          'MEMORY_NOT_FOUND',
+          `Memory '${args.memoryId}' not found.`
+        );
+      result.memoryId = memory.id as number;
+    }
+  }
+
+  return result;
 };
 
 const buildActorUpdates = (args: {
@@ -334,26 +385,6 @@ export const deleteActor = async (args: { id: string }) => {
   await actor.destroy();
 };
 
-const updateMemoryIdField = async (
-  memoryId: string | null | undefined,
-  updates: Record<string, unknown>
-): Promise<void> => {
-  if (memoryId === undefined) return;
-  if (memoryId === null) {
-    updates.memoryId = null;
-    return;
-  }
-  const memory = await db.Memory.findOne({
-    where: { publicId: memoryId },
-  });
-  if (!memory)
-    throw new DomainError(
-      'MEMORY_NOT_FOUND',
-      `Memory '${memoryId}' not found.`
-    );
-  updates.memoryId = memory.id;
-};
-
 export const updateActor = async (args: {
   id: string;
   name?: string;
@@ -385,13 +416,19 @@ export const updateActor = async (args: {
     instructions: args.instructions,
   });
 
-  await updateAgentIdField(args.agentId, updates);
-  await updateChatIdField(args.chatId, updates);
-  await updateMemoryIdField(args.memoryId, updates);
+  const resolved = await resolveActorLinkedIds({
+    agentId: args.agentId,
+    chatId: args.chatId,
+    memoryId: args.memoryId,
+  });
+
+  if (resolved.agentId !== undefined) updates.agentId = resolved.agentId;
+  if (resolved.chatId !== undefined) updates.chatId = resolved.chatId;
+  if (resolved.memoryId !== undefined) updates.memoryId = resolved.memoryId;
 
   const finalAgent =
-    args.agentId !== undefined ? updates.agentId : actor.agentId;
-  const finalChat = args.chatId !== undefined ? updates.chatId : actor.chatId;
+    args.agentId !== undefined ? resolved.agentId : actor.agentId;
+  const finalChat = args.chatId !== undefined ? resolved.chatId : actor.chatId;
   if (finalAgent && finalChat) {
     throw new DomainError(
       'AGENT_AND_CHAT_EXCLUSIVE',
