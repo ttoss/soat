@@ -1,11 +1,6 @@
 import createDebug from 'debug';
 import { db } from 'src/db';
 
-import {
-  lookupMemoryInternalId,
-  lookupSecretInternalId,
-} from './formationsHelpers';
-import { getFormationModule } from './formationsRegistry';
 import { createAgent, deleteAgent } from './agents';
 import {
   createAgentTool,
@@ -18,6 +13,11 @@ import {
   updateAiProvider,
 } from './aiProviders';
 import { createDocument, deleteDocument } from './documents';
+import {
+  lookupMemoryInternalId,
+  lookupSecretInternalId,
+} from './formationsHelpers';
+import { getFormationModule } from './formationsRegistry';
 import { createMemory, deleteMemory, updateMemory } from './memories';
 import { createMemoryEntry, deleteMemoryEntry } from './memoryEntries';
 import { createWebhook, deleteWebhook, updateWebhook } from './webhooks';

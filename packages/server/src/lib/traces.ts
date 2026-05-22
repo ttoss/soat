@@ -195,7 +195,11 @@ export const getTrace = async (args: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: Record<string, any> = { publicId: args.traceId };
   if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0) throw new DomainError('RESOURCE_NOT_FOUND', `Trace '${args.traceId}' not found.`);
+    if (args.projectIds.length === 0)
+      throw new DomainError(
+        'RESOURCE_NOT_FOUND',
+        `Trace '${args.traceId}' not found.`
+      );
     where.projectId = args.projectIds;
   }
 
@@ -203,7 +207,11 @@ export const getTrace = async (args: {
     where,
     include: [{ model: db.Project, as: 'project' }],
   });
-  if (!row) throw new DomainError('RESOURCE_NOT_FOUND', `Trace '${args.traceId}' not found.`);
+  if (!row)
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Trace '${args.traceId}' not found.`
+    );
 
   return mapTrace(row);
 };
@@ -246,7 +254,11 @@ export const getTraceTree = async (args: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: Record<string, any> = { publicId: args.traceId };
   if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0) throw new DomainError('RESOURCE_NOT_FOUND', `Trace '${args.traceId}' not found.`);
+    if (args.projectIds.length === 0)
+      throw new DomainError(
+        'RESOURCE_NOT_FOUND',
+        `Trace '${args.traceId}' not found.`
+      );
     where.projectId = args.projectIds;
   }
 
@@ -254,7 +266,11 @@ export const getTraceTree = async (args: {
     where,
     include: [{ model: db.Project, as: 'project' }],
   });
-  if (!targetRow) throw new DomainError('RESOURCE_NOT_FOUND', `Trace '${args.traceId}' not found.`);
+  if (!targetRow)
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Trace '${args.traceId}' not found.`
+    );
 
   // Determine root publicId
   const rootPublicId = targetRow.rootTraceId ?? targetRow.publicId;
@@ -276,6 +292,10 @@ export const getTraceTree = async (args: {
 
   const allTraces = allRows.map(mapTrace);
   const tree = buildTraceTree(allTraces);
-  if (!tree) throw new DomainError('RESOURCE_NOT_FOUND', `Trace tree for '${args.traceId}' not found.`);
+  if (!tree)
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Trace tree for '${args.traceId}' not found.`
+    );
   return tree;
 };

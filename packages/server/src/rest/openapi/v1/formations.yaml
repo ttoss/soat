@@ -801,8 +801,15 @@ components:
             - webhook
           description: Resource type
         properties:
-          type: object
-          additionalProperties: true
+          oneOf:
+            - $ref: '#/components/schemas/AgentResourceProperties'
+            - $ref: '#/components/schemas/ActorResourceProperties'
+            - $ref: '#/components/schemas/AiProviderResourceProperties'
+            - $ref: '#/components/schemas/AgentToolResourceProperties'
+            - $ref: '#/components/schemas/DocumentResourceProperties'
+            - $ref: '#/components/schemas/MemoryResourceProperties'
+            - $ref: '#/components/schemas/MemoryEntryResourceProperties'
+            - $ref: '#/components/schemas/WebhookResourceProperties'
           description: >
             Resource properties. Values may use `{ "ref": "logicalId" }` to
             reference physical IDs of other resources in the template,

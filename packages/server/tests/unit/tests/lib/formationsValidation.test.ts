@@ -619,7 +619,11 @@ describe('validateFormationTemplate', () => {
       },
     });
     expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.message.includes('object'))).toBe(true);
+    expect(
+      result.errors.some((e) => {
+        return e.message.includes('object');
+      })
+    ).toBe(true);
   });
 
   // ── formationSpecLoader: integer/number/array/object type validators ───
@@ -638,9 +642,9 @@ describe('validateFormationTemplate', () => {
     });
     expect(result.valid).toBe(false);
     expect(
-      result.errors.some(
-        (e) => e.path === 'resources.MyAgent.properties.max_steps'
-      )
+      result.errors.some((e) => {
+        return e.path === 'resources.MyAgent.properties.max_steps';
+      })
     ).toBe(true);
   });
 
@@ -658,9 +662,9 @@ describe('validateFormationTemplate', () => {
     });
     expect(result.valid).toBe(false);
     expect(
-      result.errors.some(
-        (e) => e.path === 'resources.MyAgent.properties.temperature'
-      )
+      result.errors.some((e) => {
+        return e.path === 'resources.MyAgent.properties.temperature';
+      })
     ).toBe(true);
   });
 
@@ -678,9 +682,9 @@ describe('validateFormationTemplate', () => {
     });
     expect(result.valid).toBe(false);
     expect(
-      result.errors.some(
-        (e) => e.path === 'resources.MyAgent.properties.tool_ids'
-      )
+      result.errors.some((e) => {
+        return e.path === 'resources.MyAgent.properties.tool_ids';
+      })
     ).toBe(true);
   });
 
@@ -698,9 +702,9 @@ describe('validateFormationTemplate', () => {
     });
     expect(result.valid).toBe(false);
     expect(
-      result.errors.some(
-        (e) => e.path === 'resources.MyAgent.properties.tool_choice'
-      )
+      result.errors.some((e) => {
+        return e.path === 'resources.MyAgent.properties.tool_choice';
+      })
     ).toBe(true);
   });
 });

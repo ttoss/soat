@@ -376,7 +376,10 @@ export const createChatCompletionForChat = async (args: {
   });
 
   if (!resolved) {
-    throw new DomainError('AI_PROVIDER_NOT_FOUND', 'AI provider not found or not configured.');
+    throw new DomainError(
+      'AI_PROVIDER_NOT_FOUND',
+      'AI provider not found or not configured.'
+    );
   }
 
   const resolvedMessages = await resolveMessages(args.messages);
@@ -430,7 +433,10 @@ export const streamChatCompletionForChat = async (args: {
   });
 
   if (!resolved) {
-    throw new DomainError('AI_PROVIDER_NOT_FOUND', 'AI provider not found or not configured.');
+    throw new DomainError(
+      'AI_PROVIDER_NOT_FOUND',
+      'AI provider not found or not configured.'
+    );
   }
 
   const resolvedMessages = await resolveMessages(args.messages);

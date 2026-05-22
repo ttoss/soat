@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { db } from 'src/db';
+
 import { DomainError } from '../errors';
 
 const ALGORITHM = 'aes-256-gcm';

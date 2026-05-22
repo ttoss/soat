@@ -1,5 +1,5 @@
-import { DomainError } from '../errors';
 import { db } from '../db';
+import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 
 export const getSessionTags = async (args: {

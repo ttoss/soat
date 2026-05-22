@@ -1,6 +1,6 @@
+import { DomainError } from 'src/errors';
 import * as agentsModule from 'src/lib/agents';
 
-import { DomainError } from 'src/errors';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 

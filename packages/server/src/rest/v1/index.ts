@@ -2,7 +2,6 @@ import { Router } from '@ttoss/http-server';
 
 import { actorsRouter } from './actors';
 import { actorTagsRouter } from './actorTags';
-import { formationsRouter } from './formations';
 import { agentsRouter } from './agents';
 import { aiProvidersRouter } from './aiProviders';
 import { apiKeysRouter } from './apiKeys';
@@ -10,6 +9,7 @@ import { chatsRouter } from './chats';
 import { conversationsRouter } from './conversations';
 import { documentsRouter } from './documents';
 import { filesRouter } from './files';
+import { formationsRouter } from './formations';
 import { knowledgeRouter } from './knowledge';
 import { memoriesRouter } from './memories';
 import { policiesRouter } from './policies';

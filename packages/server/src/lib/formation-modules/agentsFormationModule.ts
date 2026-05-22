@@ -55,6 +55,32 @@ const validateAgentProperties = (args: {
 
 // ── Module export ────────────────────────────────────────────────────────
 
+const buildCreateAgentArgs = (args: {
+  properties: Record<string, unknown>;
+  projectId: number;
+}) => {
+  return {
+    projectId: args.projectId,
+    aiProviderId: args.properties.ai_provider_id as string,
+    name: toOptionalString(args.properties.name),
+    instructions: toOptionalString(args.properties.instructions),
+    model: toOptionalString(args.properties.model),
+    toolIds: toNullableArray<string>(args.properties.tool_ids) ?? undefined,
+    maxSteps: toNullableNumber(args.properties.max_steps) ?? undefined,
+    toolChoice: toNullableObject(args.properties.tool_choice) ?? undefined,
+    stopConditions:
+      toNullableArray<object>(args.properties.stop_conditions) ?? undefined,
+    activeToolIds:
+      toNullableArray<string>(args.properties.active_tool_ids) ?? undefined,
+    stepRules: toNullableArray<object>(args.properties.step_rules) ?? undefined,
+    boundaryPolicy:
+      toNullableObject(args.properties.boundary_policy) ?? undefined,
+    temperature: toNullableNumber(args.properties.temperature) ?? undefined,
+    knowledgeConfig:
+      toNullableObject(args.properties.knowledge_config) ?? undefined,
+  };
+};
+
 export const agentsFormationModule: FormationModule = {
   resourceType: 'agent',
 
@@ -70,27 +96,9 @@ export const agentsFormationModule: FormationModule = {
     if (errors.length > 0) {
       throw new Error(errors[0].message);
     }
-
-    const result = await createAgent({
-      projectId,
-      aiProviderId: properties.ai_provider_id as string,
-      name: toOptionalString(properties.name) ?? undefined,
-      instructions: toOptionalString(properties.instructions),
-      model: toOptionalString(properties.model),
-      toolIds: toNullableArray<string>(properties.tool_ids) ?? undefined,
-      maxSteps: toNullableNumber(properties.max_steps) ?? undefined,
-      toolChoice: toNullableObject(properties.tool_choice) ?? undefined,
-      stopConditions:
-        toNullableArray<object>(properties.stop_conditions) ?? undefined,
-      activeToolIds:
-        toNullableArray<string>(properties.active_tool_ids) ?? undefined,
-      stepRules: toNullableArray<object>(properties.step_rules) ?? undefined,
-      boundaryPolicy: toNullableObject(properties.boundary_policy) ?? undefined,
-      temperature: toNullableNumber(properties.temperature) ?? undefined,
-      knowledgeConfig:
-        toNullableObject(properties.knowledge_config) ?? undefined,
-    });
-
+    const result = await createAgent(
+      buildCreateAgentArgs({ properties, projectId })
+    );
     log(
       'created agent from formation: projectId=%d agentId=%s',
       projectId,

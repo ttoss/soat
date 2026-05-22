@@ -1,16 +1,16 @@
-import { DomainError } from 'src/errors';
 import { db } from 'src/db';
+import { DomainError } from 'src/errors';
+import * as actorsModule from 'src/lib/actors';
+import * as agentsModule from 'src/lib/agents';
+import * as agentToolsCrudModule from 'src/lib/agentToolsCrud';
+import * as aiProvidersModule from 'src/lib/aiProviders';
+import * as documentsModule from 'src/lib/documents';
+import * as helpersModule from 'src/lib/formationsHelpers';
 import {
   applyCreateResource,
   applyDeleteResource,
   applyUpdateResource,
 } from 'src/lib/formationsResourceHandlers';
-import * as actorsModule from 'src/lib/actors';
-import * as helpersModule from 'src/lib/formationsHelpers';
-import * as agentsModule from 'src/lib/agents';
-import * as agentToolsCrudModule from 'src/lib/agentToolsCrud';
-import * as aiProvidersModule from 'src/lib/aiProviders';
-import * as documentsModule from 'src/lib/documents';
 import * as memoriesModule from 'src/lib/memories';
 import * as memoryEntriesModule from 'src/lib/memoryEntries';
 import * as webhooksModule from 'src/lib/webhooks';

@@ -353,9 +353,7 @@ resources:
     });
 
     test('unauthenticated returns 401', async () => {
-      const res = await testClient.get(
-        `/api/v1/formations/${formationId}`
-      );
+      const res = await testClient.get(`/api/v1/formations/${formationId}`);
       expect(res.status).toBe(401);
     });
 
@@ -486,9 +484,7 @@ resources:
     });
 
     test('unauthenticated returns 401', async () => {
-      const res = await testClient.delete(
-        `/api/v1/formations/${formationId}`
-      );
+      const res = await testClient.delete(`/api/v1/formations/${formationId}`);
       expect(res.status).toBe(401);
     });
 
@@ -497,7 +493,9 @@ resources:
         `/api/v1/formations?project_id=${projectId}`
       );
       expect(res.status).toBe(200);
-      const ids = res.body.map((f: { id: string }) => f.id);
+      const ids = res.body.map((f: { id: string }) => {
+        return f.id;
+      });
       expect(ids).not.toContain(formationId);
     });
 
@@ -614,7 +612,9 @@ resources:
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('active');
       const memoryResource = res.body.resources.find(
-        (r: any) => r.logical_id === 'MemoryWithDescription'
+        (r: { logical_id: string }) => {
+          return r.logical_id === 'MemoryWithDescription';
+        }
       );
       expect(memoryResource).toBeDefined();
       expect(memoryResource.status).toBe('updated');
@@ -725,7 +725,9 @@ resources:
         paramFormationId = res.body.id;
 
         const memoryResource = res.body.resources.find(
-          (r: { logical_id: string }) => r.logical_id === 'ParamMemory'
+          (r: { logical_id: string }) => {
+            return r.logical_id === 'ParamMemory';
+          }
         );
         expect(memoryResource).toBeDefined();
         expect(memoryResource.status).toBe('created');

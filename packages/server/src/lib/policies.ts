@@ -50,7 +50,9 @@ export const updatePolicy = async (args: {
   name?: string;
   description?: string;
   document: PolicyDocument;
-}): Promise<ReturnType<typeof mapPolicy> | { invalid: true; errors: string[] }> => {
+}): Promise<
+  ReturnType<typeof mapPolicy> | { invalid: true; errors: string[] }
+> => {
   const validation = validatePolicyDocument(args.document);
   if (!validation.valid) {
     return { invalid: true, errors: validation.errors };
@@ -60,7 +62,10 @@ export const updatePolicy = async (args: {
     where: { publicId: args.policyId },
   });
   if (!policy) {
-    throw new DomainError('RESOURCE_NOT_FOUND', `Policy '${args.policyId}' not found.`);
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Policy '${args.policyId}' not found.`
+    );
   }
 
   await policy.update({
@@ -79,7 +84,10 @@ export const deletePolicy = async (args: {
     where: { publicId: args.policyId },
   });
   if (!policy) {
-    throw new DomainError('RESOURCE_NOT_FOUND', `Policy '${args.policyId}' not found.`);
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Policy '${args.policyId}' not found.`
+    );
   }
 
   await policy.destroy();

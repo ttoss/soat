@@ -25,7 +25,9 @@ describe('getTrace', () => {
   });
 
   test('throws when projectIds array is empty', async () => {
-    await expect(getTrace({ traceId: 'trace-1', projectIds: [] })).rejects.toThrow();
+    await expect(
+      getTrace({ traceId: 'trace-1', projectIds: [] })
+    ).rejects.toThrow();
   });
 });
 

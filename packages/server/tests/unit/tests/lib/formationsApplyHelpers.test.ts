@@ -83,9 +83,9 @@ describe('formationsApplyHelpers', () => {
 
     await applyUpdateChange({
       resourceRow,
-      existing: existing as InstanceType<
-        (typeof db)['FormationResource']
-      > & { physicalResourceId: string },
+      existing: existing as InstanceType<(typeof db)['FormationResource']> & {
+        physicalResourceId: string;
+      },
       resourceType: 'memory',
       resolvedProperties: { name: 'New Name' },
       logicalId: 'memory',
@@ -130,9 +130,9 @@ describe('formationsApplyHelpers', () => {
 
     await applyUpdateChange({
       resourceRow: existing,
-      existing: existing as InstanceType<
-        (typeof db)['FormationResource']
-      > & { physicalResourceId: string },
+      existing: existing as InstanceType<(typeof db)['FormationResource']> & {
+        physicalResourceId: string;
+      },
       resourceType: 'agent',
       resolvedProperties: { name: 'Agent' },
       logicalId: 'agent',
