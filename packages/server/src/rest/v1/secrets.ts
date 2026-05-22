@@ -43,12 +43,6 @@ secretsRouter.get('/secrets/:secret_id', async (ctx: Context) => {
 
   const secret = await getSecret({ id: ctx.params.secret_id });
 
-  if (!secret) {
-    ctx.status = 404;
-    ctx.body = { error: 'Secret not found' };
-    return;
-  }
-
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: secret.projectId!,
     action: 'secrets:GetSecret',
@@ -129,11 +123,6 @@ secretsRouter.patch('/secrets/:secret_id', async (ctx: Context) => {
   }
 
   const secret = await getSecret({ id: ctx.params.secret_id });
-  if (!secret) {
-    ctx.status = 404;
-    ctx.body = { error: 'Secret not found' };
-    return;
-  }
 
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: secret.projectId!,
@@ -164,11 +153,6 @@ secretsRouter.delete('/secrets/:secret_id', async (ctx: Context) => {
   }
 
   const secret = await getSecret({ id: ctx.params.secret_id });
-  if (!secret) {
-    ctx.status = 404;
-    ctx.body = { error: 'Secret not found' };
-    return;
-  }
 
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: secret.projectId!,
@@ -181,16 +165,7 @@ secretsRouter.delete('/secrets/:secret_id', async (ctx: Context) => {
   }
 
   const force = ctx.query.force === 'true';
-  const result = await deleteSecret({ id: ctx.params.secret_id, force });
-
-  if (result === 'conflict') {
-    ctx.status = 409;
-    ctx.body = {
-      error:
-        'Secret is referenced by one or more AI providers. Use force=true to delete them as well.',
-    };
-    return;
-  }
+  await deleteSecret({ id: ctx.params.secret_id, force });
 
   ctx.status = 204;
 });

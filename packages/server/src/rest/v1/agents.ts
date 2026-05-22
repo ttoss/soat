@@ -161,12 +161,6 @@ agentsRouter.post('/agents', async (ctx: Context) => {
     buildCreateAgentArgs(targetProjectId, reqBody)
   );
 
-  if (result === 'ai_provider_not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'AI provider not found' };
-    return;
-  }
-
   ctx.status = 201;
   ctx.body = result;
 });
@@ -216,12 +210,6 @@ agentsRouter.get('/agents/:agent_id', async (ctx: Context) => {
     id: ctx.params.agent_id,
   });
 
-  if (result === 'not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'Agent not found' };
-    return;
-  }
-
   ctx.body = result;
 });
 
@@ -250,18 +238,6 @@ agentsRouter.put('/agents/:agent_id', async (ctx: Context) => {
     ...parseUpdateAgentBody(body),
   });
 
-  if (result === 'not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'Agent not found' };
-    return;
-  }
-
-  if (result === 'ai_provider_not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'AI provider not found' };
-    return;
-  }
-
   ctx.body = result;
 });
 
@@ -282,16 +258,10 @@ agentsRouter.delete('/agents/:agent_id', async (ctx: Context) => {
     return;
   }
 
-  const result = await deleteAgent({
+  await deleteAgent({
     projectIds,
     id: ctx.params.agent_id,
   });
-
-  if (result === 'not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'Agent not found' };
-    return;
-  }
 
   ctx.status = 204;
 });
@@ -361,12 +331,6 @@ agentsRouter.post('/agents/:agent_id/actors', async (ctx: Context) => {
     instructions: body.instructions ?? null,
     agentId: agent.id as number,
   });
-
-  if (actor === 'agent_and_chat_exclusive') {
-    ctx.status = 400;
-    ctx.body = { error: 'agentId and chatId are mutually exclusive' };
-    return;
-  }
 
   ctx.status = 201;
   ctx.body = actor;

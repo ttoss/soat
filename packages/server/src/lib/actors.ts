@@ -2,6 +2,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { DomainError } from '../errors';
 import {
   type CompiledPolicy,
   registerResourceFieldMap,
@@ -76,7 +77,7 @@ const buildActorListWhere = (args: {
 const updateAgentIdField = async (
   agentId: string | null | undefined,
   updates: Record<string, unknown>
-): Promise<string | void> => {
+): Promise<void> => {
   if (agentId === undefined) return;
   if (agentId === null) {
     updates.agentId = null;
@@ -85,14 +86,15 @@ const updateAgentIdField = async (
   const agent = await db.Agent.findOne({
     where: { publicId: agentId },
   });
-  if (!agent) return 'agent_not_found' as const;
+  if (!agent)
+    throw new DomainError('AGENT_NOT_FOUND', `Agent '${agentId}' not found.`);
   updates.agentId = agent.id;
 };
 
 const updateChatIdField = async (
   chatId: string | null | undefined,
   updates: Record<string, unknown>
-): Promise<string | void> => {
+): Promise<void> => {
   if (chatId === undefined) return;
   if (chatId === null) {
     updates.chatId = null;
@@ -101,7 +103,8 @@ const updateChatIdField = async (
   const chat = await db.Chat.findOne({
     where: { publicId: chatId },
   });
-  if (!chat) return 'chat_not_found' as const;
+  if (!chat)
+    throw new DomainError('CHAT_NOT_FOUND', `Chat '${chatId}' not found.`);
   updates.chatId = chat.id;
 };
 
@@ -165,7 +168,10 @@ export const getActor = async (args: { id: string }) => {
   });
 
   if (!actor) {
-    return null;
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Actor '${args.id}' not found.`
+    );
   }
 
   return mapActor(actor);
@@ -190,7 +196,10 @@ export const createActor = async (args: {
   );
 
   if (args.agentId && args.chatId) {
-    return 'agent_and_chat_exclusive' as const;
+    throw new DomainError(
+      'AGENT_AND_CHAT_EXCLUSIVE',
+      'An actor cannot have both an agent_id and a chat_id.'
+    );
   }
 
   let resolvedMemoryId = args.memoryId ?? null;
@@ -264,7 +273,10 @@ export const findOrCreateActor = async (args: {
   );
 
   if (args.agentId && args.chatId) {
-    return 'agent_and_chat_exclusive' as const;
+    throw new DomainError(
+      'AGENT_AND_CHAT_EXCLUSIVE',
+      'An actor cannot have both an agent_id and a chat_id.'
+    );
   }
 
   const [actor, created] = await db.Actor.findOrCreate({
@@ -302,7 +314,10 @@ export const deleteActor = async (args: { id: string }) => {
   const actor = await db.Actor.findOne({ where: { publicId: args.id } });
 
   if (!actor) {
-    return null;
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Actor '${args.id}' not found.`
+    );
   }
 
   const messageCount = await db.ConversationMessage.count({
@@ -310,18 +325,19 @@ export const deleteActor = async (args: { id: string }) => {
   });
 
   if (messageCount > 0) {
-    return 'has_messages' as const;
+    throw new DomainError(
+      'ACTOR_HAS_MESSAGES',
+      `Actor '${args.id}' has linked session messages and cannot be deleted.`
+    );
   }
 
   await actor.destroy();
-
-  return { id: args.id };
 };
 
 const updateMemoryIdField = async (
   memoryId: string | null | undefined,
   updates: Record<string, unknown>
-): Promise<string | void> => {
+): Promise<void> => {
   if (memoryId === undefined) return;
   if (memoryId === null) {
     updates.memoryId = null;
@@ -330,7 +346,11 @@ const updateMemoryIdField = async (
   const memory = await db.Memory.findOne({
     where: { publicId: memoryId },
   });
-  if (!memory) return 'memory_not_found' as const;
+  if (!memory)
+    throw new DomainError(
+      'MEMORY_NOT_FOUND',
+      `Memory '${memoryId}' not found.`
+    );
   updates.memoryId = memory.id;
 };
 
@@ -353,7 +373,10 @@ export const updateActor = async (args: {
 
   const actor = await db.Actor.findOne({ where: { publicId: args.id } });
   if (!actor) {
-    return null;
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Actor '${args.id}' not found.`
+    );
   }
 
   const updates = buildActorUpdates({
@@ -362,20 +385,18 @@ export const updateActor = async (args: {
     instructions: args.instructions,
   });
 
-  const agentError = await updateAgentIdField(args.agentId, updates);
-  if (agentError) return agentError;
-
-  const chatError = await updateChatIdField(args.chatId, updates);
-  if (chatError) return chatError;
-
-  const memoryError = await updateMemoryIdField(args.memoryId, updates);
-  if (memoryError) return memoryError;
+  await updateAgentIdField(args.agentId, updates);
+  await updateChatIdField(args.chatId, updates);
+  await updateMemoryIdField(args.memoryId, updates);
 
   const finalAgent =
     args.agentId !== undefined ? updates.agentId : actor.agentId;
   const finalChat = args.chatId !== undefined ? updates.chatId : actor.chatId;
   if (finalAgent && finalChat) {
-    return 'agent_and_chat_exclusive' as const;
+    throw new DomainError(
+      'AGENT_AND_CHAT_EXCLUSIVE',
+      'An actor cannot have both an agent_id and a chat_id.'
+    );
   }
 
   await actor.update(updates);
@@ -390,7 +411,10 @@ export const getActorTags = async (args: { id: string }) => {
   const actor = await db.Actor.findOne({ where: { publicId: args.id } });
 
   if (!actor) {
-    return null;
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Actor '${args.id}' not found.`
+    );
   }
 
   return actor.tags ?? {};
@@ -404,7 +428,10 @@ export const updateActorTags = async (args: {
   const actor = await db.Actor.findOne({ where: { publicId: args.id } });
 
   if (!actor) {
-    return null;
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Actor '${args.id}' not found.`
+    );
   }
 
   const newTags = args.merge

@@ -1,3 +1,4 @@
+import { DomainError } from 'src/errors';
 import { db } from 'src/db';
 import {
   applyCreateResource,
@@ -292,7 +293,12 @@ describe('formationsResourceHandlers', () => {
     });
 
     test('throws when agent creation reports missing ai provider', async () => {
-      mockCreateAgent.mockResolvedValueOnce('ai_provider_not_found');
+      mockCreateAgent.mockRejectedValueOnce(
+        new DomainError(
+          'AI_PROVIDER_NOT_FOUND',
+          'AI provider not found: aip_missing'
+        )
+      );
 
       await expect(
         applyCreateResource({
@@ -323,9 +329,17 @@ describe('formationsResourceHandlers', () => {
       mockUpdateActor.mockResolvedValueOnce({
         id: 'act_1',
       } as Awaited<ReturnType<typeof actorsModule.updateActor>>);
-      mockUpdateAgent.mockResolvedValueOnce({
-        id: 'agt_1',
-      } as Awaited<ReturnType<typeof agentsModule.updateAgent>>);
+      mockUpdateAgentTool.mockResolvedValue(
+        undefined as unknown as Awaited<
+          ReturnType<typeof agentToolsCrudModule.updateAgentTool>
+        >
+      );
+      mockUpdateAgent.mockResolvedValue(
+        undefined as unknown as Awaited<
+          ReturnType<typeof agentsModule.updateAgent>
+        >
+      );
+
       const memoryEntryInstance = db.MemoryEntry.build({
         publicId: 'men_1',
         memoryId: 1,
@@ -511,14 +525,16 @@ describe('formationsResourceHandlers', () => {
     });
 
     test('throws when agent or memory entry is missing and for unsupported update resource type', async () => {
-      mockUpdateAgent.mockResolvedValueOnce('not_found');
+      mockUpdateAgent.mockRejectedValueOnce(
+        new DomainError('RESOURCE_NOT_FOUND', "Agent 'agt_missing' not found.")
+      );
       await expect(
         applyUpdateResource({
           resourceType: 'agent',
           physicalResourceId: 'agt_missing',
           resolvedProperties: {},
         })
-      ).rejects.toThrow('Agent not found: agt_missing');
+      ).rejects.toThrow("Agent 'agt_missing' not found.");
 
       jest.spyOn(db.MemoryEntry, 'findOne').mockResolvedValueOnce(null);
       await expect(
@@ -552,10 +568,9 @@ describe('formationsResourceHandlers', () => {
     ])(
       'deletes %s resources through the matching handler',
       async (resourceType, spy) => {
-        mockDeleteActor.mockResolvedValue({
-          id: 'res_1',
-        } as Awaited<ReturnType<typeof actorsModule.deleteActor>>);
-        mockDeleteAgent.mockResolvedValue('ok');
+        mockDeleteActor.mockResolvedValue(undefined);
+        mockDeleteAgent.mockResolvedValue(undefined);
+        mockDeleteAgentTool.mockResolvedValue(undefined);
 
         await applyDeleteResource({
           resourceType,

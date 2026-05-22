@@ -59,18 +59,6 @@ projectsRouter.get('/projects/:project_id', async (ctx: Context) => {
     authUser: ctx.authUser,
   });
 
-  if (result === 'not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'Project not found' };
-    return;
-  }
-
-  if (result === 'forbidden') {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
   ctx.body = result;
 });
 
@@ -87,13 +75,7 @@ projectsRouter.delete('/projects/:project_id', async (ctx: Context) => {
     return;
   }
 
-  const result = await deleteProject({ id: ctx.params.project_id });
-
-  if (!result) {
-    ctx.status = 404;
-    ctx.body = { error: 'Project not found' };
-    return;
-  }
+  await deleteProject({ id: ctx.params.project_id });
 
   ctx.status = 204;
 });

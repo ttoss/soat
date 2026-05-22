@@ -132,12 +132,6 @@ export const actorsFormationModule: FormationModule = {
           : undefined,
     });
 
-    if (created === 'agent_and_chat_exclusive') {
-      throw new Error(
-        'Actor create failed: agent_id and chat_id are mutually exclusive'
-      );
-    }
-
     log(
       'create actor from formation: projectId=%d actorId=%s',
       projectId,
@@ -155,7 +149,7 @@ export const actorsFormationModule: FormationModule = {
       throw new Error(errors[0].message);
     }
 
-    const updated = await updateActor({
+    await updateActor({
       id: physicalResourceId,
       name: toOptionalString(properties.name),
       externalId: toOptionalString(properties.external_id),
@@ -164,30 +158,9 @@ export const actorsFormationModule: FormationModule = {
       chatId: toNullableString(properties.chat_id),
       memoryId: toNullableString(properties.memory_id),
     });
-
-    if (updated === null) {
-      throw new Error(`Actor not found: ${physicalResourceId}`);
-    }
-    if (updated === 'agent_not_found') {
-      throw new Error(`Agent not found: ${properties.agent_id}`);
-    }
-    if (updated === 'chat_not_found') {
-      throw new Error(`Chat not found: ${properties.chat_id}`);
-    }
-    if (updated === 'memory_not_found') {
-      throw new Error(`Memory not found: ${properties.memory_id}`);
-    }
-    if (updated === 'agent_and_chat_exclusive') {
-      throw new Error(
-        'Actor update failed: agent_id and chat_id are mutually exclusive'
-      );
-    }
   },
 
   delete: async ({ physicalResourceId }) => {
-    const deleted = await deleteActor({ id: physicalResourceId });
-    if (deleted === null) {
-      throw new Error(`Actor not found: ${physicalResourceId}`);
-    }
+    await deleteActor({ id: physicalResourceId });
   },
 };

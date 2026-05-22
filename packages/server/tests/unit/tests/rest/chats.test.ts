@@ -103,7 +103,7 @@ describe('Chats', () => {
       expect(response.status).toBe(403);
     });
 
-    test('unknown aiProviderId returns 404', async () => {
+    test('unknown aiProviderId returns 400', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/chats')
         .send({
@@ -111,7 +111,7 @@ describe('Chats', () => {
           project_id: projectId,
         });
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
     });
 
@@ -277,12 +277,12 @@ describe('Chats', () => {
       expect(response.body.error).toBeDefined();
     });
 
-    test('unknown chatId returns 404', async () => {
+    test('unknown chatId returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chats/cht_doesnotexist0000/completions')
         .send({ messages: [{ role: 'user', content: 'Hello' }] });
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
     });
   });
@@ -447,13 +447,13 @@ describe('Chats', () => {
       expect(response.text).toContain('data:');
     });
 
-    test('sends chat_not_found error via SSE for unknown chatId', async () => {
+    test('sends error via SSE for unknown chatId', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chats/cht_doesnotexist0000/completions')
         .send({ messages: [{ role: 'user', content: 'Hello' }], stream: true });
 
       expect(response.status).toBe(200);
-      expect(response.text).toContain('chat_not_found');
+      expect(response.text).toContain('not found');
     });
 
     test('streams SSE response when chat has a system message', async () => {

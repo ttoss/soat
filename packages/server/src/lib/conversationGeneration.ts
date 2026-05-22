@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 
+import { DomainError } from '../errors';
 import { db } from '../db';
 import { createGeneration, type GenerationResult } from './agents';
 import { addConversationMessage } from './conversationMessages';
@@ -79,9 +80,7 @@ type InternalGenerationResult =
       generationId: string;
       traceId: string;
       requiredAction: NonNullable<GenerationResult['requiredAction']>;
-    }
-  | 'agent_or_chat_not_found'
-  | 'ai_provider_not_found';
+    };
 
 const runAgentGeneration = async (args: {
   agent: InstanceType<(typeof db)['Agent']>;
@@ -96,12 +95,11 @@ const runAgentGeneration = async (args: {
     abortSignal: args.abortSignal,
   });
 
-  if (result === 'not_found' || result instanceof ReadableStream) {
-    return 'agent_or_chat_not_found';
-  }
-
-  if (result === 'ai_provider_not_found') {
-    return 'ai_provider_not_found';
+  if (result instanceof ReadableStream) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      'Unexpected streaming response'
+    );
   }
 
   if (result.status === 'requires_action') {
@@ -128,7 +126,7 @@ const runGenerationForAgent = async (args: {
   model?: string;
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
-}): Promise<InternalGenerationResult | 'agent_or_chat_not_found'> => {
+}): Promise<InternalGenerationResult> => {
   return runAgentGeneration({
     agent: args.generatingAgent,
     messagesForModel: args.messagesForModel,
@@ -140,15 +138,13 @@ const runGenerationForAgent = async (args: {
 const loadGenerationContext = async (args: {
   conversationId: string;
   agentId: string;
-}): Promise<
-  GenerationContext | 'conversation_not_found' | 'agent_not_found'
-> => {
+}): Promise<GenerationContext> => {
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.conversationId },
   });
 
   if (!conversation) {
-    return 'conversation_not_found';
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
   }
 
   const generatingAgent = await db.Agent.findOne({
@@ -156,7 +152,7 @@ const loadGenerationContext = async (args: {
   });
 
   if (!generatingAgent) {
-    return 'agent_not_found';
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Agent not found');
   }
 
   const messages = await db.ConversationMessage.findAll({
@@ -210,11 +206,7 @@ export type GenerateConversationMessageResult =
       generationId: string;
       traceId: string;
       requiredAction: NonNullable<GenerationResult['requiredAction']>;
-    }
-  | 'conversation_not_found'
-  | 'agent_not_found'
-  | 'ai_provider_not_found'
-  | 'agent_or_chat_not_found';
+    };
 
 export const generateConversationMessage = async (args: {
   conversationId: string;
@@ -227,10 +219,6 @@ export const generateConversationMessage = async (args: {
     conversationId: args.conversationId,
     agentId: args.agentId,
   });
-
-  if (typeof ctx === 'string') {
-    return ctx;
-  }
 
   const { conversation, generatingAgent, messages, snapshotPosition } = ctx;
 
@@ -248,10 +236,6 @@ export const generateConversationMessage = async (args: {
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
   });
-
-  if (typeof genResult === 'string') {
-    return genResult;
-  }
 
   if (genResult.status !== 'completed') {
     return genResult;
@@ -273,7 +257,7 @@ export const generateConversationMessage = async (args: {
   });
 
   if (!persisted) {
-    return 'conversation_not_found';
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
   }
 
   resolveProjectPublicId({ projectId: conversation.projectId }).then(

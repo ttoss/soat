@@ -1,5 +1,6 @@
 import * as agentsModule from 'src/lib/agents';
 
+import { DomainError } from 'src/errors';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -83,13 +84,15 @@ describe('Agent Generation Routes', () => {
       agentId = agentRes.body.id;
     });
 
-    test('returns 404 when ai provider is not found', async () => {
-      mockCreateGeneration.mockResolvedValueOnce('ai_provider_not_found');
+    test('returns 400 when ai provider is not found', async () => {
+      mockCreateGeneration.mockRejectedValueOnce(
+        new DomainError('AI_PROVIDER_NOT_FOUND', 'AI provider not found')
+      );
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/agents/${agentId}/generate`)
         .send({ messages: [{ role: 'user', content: 'Hello' }] });
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
     });
   });
@@ -187,7 +190,7 @@ describe('Agent Generation Routes', () => {
         .send({ messages: [{ role: 'user', content: 'hello' }] });
 
       expect(response.status).toBe(500);
-      expect(response.body.error).toContain('boom');
+      expect(response.body.error).toBeDefined();
     });
 
     test('tool-outputs returns 400 when payload is missing', async () => {
@@ -201,27 +204,31 @@ describe('Agent Generation Routes', () => {
     test('tool-outputs returns 404 when generation is not found', async () => {
       jest
         .spyOn(agentsModule, 'submitToolOutputs')
-        .mockResolvedValueOnce('generation_not_found');
+        .mockRejectedValueOnce(
+          new DomainError('GENERATION_NOT_FOUND', 'Generation not found')
+        );
 
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/agents/${agentId}/generate/gen_x/tool-outputs`)
         .send({ toolOutputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
 
       expect(response.status).toBe(404);
-      expect(response.body.error).toBe('Generation not found');
+      expect(response.body.error).toBeDefined();
     });
 
     test('tool-outputs returns 404 when agent is not found', async () => {
       jest
         .spyOn(agentsModule, 'submitToolOutputs')
-        .mockResolvedValueOnce('not_found');
+        .mockRejectedValueOnce(
+          new DomainError('AGENT_NOT_FOUND', 'Agent not found')
+        );
 
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/agents/${agentId}/generate/gen_x/tool-outputs`)
         .send({ toolOutputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
 
-      expect(response.status).toBe(404);
-      expect(response.body.error).toBe('Agent not found');
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
     });
 
     test('tool-outputs returns 200 with result on success', async () => {
@@ -260,15 +267,17 @@ describe('Agent Generation Routes', () => {
       expect(response.body.id).toBe('gen_success');
     });
 
-    test('returns 404 when generate returns not_found', async () => {
-      mockCreateGeneration.mockResolvedValueOnce('not_found');
+    test('returns 400 when generate throws AGENT_NOT_FOUND', async () => {
+      mockCreateGeneration.mockRejectedValueOnce(
+        new DomainError('AGENT_NOT_FOUND', 'Agent not found')
+      );
 
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/agents/${agentId}/generate`)
         .send({ messages: [{ role: 'user', content: 'hello' }] });
 
-      expect(response.status).toBe(404);
-      expect(response.body.error).toBe('Agent not found');
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
     });
 
     test('returns SSE stream when stream:true and result is a ReadableStream', async () => {

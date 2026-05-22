@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { createSessionTransaction } from './sessionTransaction';
 
@@ -63,7 +64,10 @@ export const createSession = async (args: {
 }) => {
   const agent = await db.Agent.findByPk(args.agentId);
   if (!agent) {
-    return 'agent_not_found' as const;
+    throw new DomainError(
+      'AGENT_NOT_FOUND',
+      `Agent with id '${args.agentId}' not found.`
+    );
   }
 
   // If actorId provided, verify the actor exists in the project
@@ -73,7 +77,10 @@ export const createSession = async (args: {
       where: { publicId: args.actorId, projectId: args.projectId },
     });
     if (!existingActor) {
-      return 'actor_not_found' as const;
+      throw new DomainError(
+        'ACTOR_NOT_FOUND',
+        `Actor '${args.actorId}' not found.`
+      );
     }
     existingActorId = existingActor.id;
   }
@@ -172,7 +179,10 @@ export const getSession = async (args: {
   });
 
   if (!session) {
-    return null;
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Session '${args.sessionId}' not found.`
+    );
   }
 
   return mapSession(session);
@@ -191,7 +201,10 @@ export const updateSession = async (args: {
   });
 
   if (!session) {
-    return null;
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Session '${args.sessionId}' not found.`
+    );
   }
 
   if (args.name !== undefined) {
@@ -245,7 +258,10 @@ export const deleteSession = async (args: {
   });
 
   if (!session) {
-    return null;
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Session '${args.sessionId}' not found.`
+    );
   }
 
   const sequelize = db.sequelize;
@@ -273,8 +289,6 @@ export const deleteSession = async (args: {
       });
     }
   );
-
-  return { id: session.publicId };
 };
 
 export {

@@ -194,14 +194,6 @@ formationsRouter.post('/formations', async (ctx: Context) => {
     parameters: body.parameters,
   });
 
-  if (result === 'name_conflict') {
-    ctx.status = 409;
-    ctx.body = {
-      error: 'A formation with this name already exists in the project',
-    };
-    return;
-  }
-
   ctx.status = 201;
   ctx.body = result;
 });
@@ -237,11 +229,6 @@ formationsRouter.get('/formations/:formation_id', async (ctx: Context) => {
   }
 
   const formation = await getFormation({ id: ctx.params.formation_id });
-  if (!formation) {
-    ctx.status = 404;
-    ctx.body = { error: 'Formation not found' };
-    return;
-  }
 
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: formation.projectId,
@@ -264,11 +251,6 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
   }
 
   const formation = await getFormation({ id: ctx.params.formation_id });
-  if (!formation) {
-    ctx.status = 404;
-    ctx.body = { error: 'Formation not found' };
-    return;
-  }
 
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: formation.projectId,
@@ -325,11 +307,6 @@ formationsRouter.delete('/formations/:formation_id', async (ctx: Context) => {
   }
 
   const formation = await getFormation({ id: ctx.params.formation_id });
-  if (!formation) {
-    ctx.status = 404;
-    ctx.body = { error: 'Formation not found' };
-    return;
-  }
 
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: formation.projectId,
@@ -355,11 +332,6 @@ formationsRouter.get(
     }
 
     const formation = await getFormation({ id: ctx.params.formation_id });
-    if (!formation) {
-      ctx.status = 404;
-      ctx.body = { error: 'Formation not found' };
-      return;
-    }
 
     const allowed = await ctx.authUser.isAllowed({
       projectPublicId: formation.projectId,

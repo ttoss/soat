@@ -384,7 +384,7 @@ describe('Agents', () => {
       expect(response.status).toBe(403);
     });
 
-    test('unknown aiProviderId returns 404', async () => {
+    test('unknown aiProviderId returns 400', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/agents')
         .send({
@@ -392,7 +392,7 @@ describe('Agents', () => {
           project_id: projectId,
         });
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
     });
 

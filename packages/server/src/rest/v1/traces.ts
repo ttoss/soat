@@ -52,12 +52,6 @@ tracesRouter.get('/traces/:trace_id', async (ctx: Context) => {
     traceId: ctx.params.trace_id,
   });
 
-  if (result === 'not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'Trace not found' };
-    return;
-  }
-
   ctx.body = result;
 });
 
@@ -82,12 +76,6 @@ tracesRouter.get('/traces/:trace_id/tree', async (ctx: Context) => {
     projectIds,
     traceId: ctx.params.trace_id,
   });
-
-  if (result === 'not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'Trace not found' };
-    return;
-  }
 
   ctx.body = result;
 });

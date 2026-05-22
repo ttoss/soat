@@ -105,9 +105,6 @@ const createAgentHandler: CreateHandler = async ({ p, projectId }) => {
     temperature: p.temperature as number | undefined,
     knowledgeConfig: p.knowledge_config as object | undefined,
   });
-  if (created === 'ai_provider_not_found') {
-    throw new Error(`AI provider not found: ${p.ai_provider_id}`);
-  }
   return created.id;
 };
 

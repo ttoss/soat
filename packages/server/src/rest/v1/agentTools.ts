@@ -214,12 +214,6 @@ agentToolsRouter.get('/agents/tools/:tool_id', async (ctx: Context) => {
     id: ctx.params.tool_id,
   });
 
-  if (result === 'not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'Agent tool not found' };
-    return;
-  }
-
   ctx.body = result;
 });
 
@@ -269,12 +263,6 @@ agentToolsRouter.put('/agents/tools/:tool_id', async (ctx: Context) => {
     presetParameters: parsedPresetParameters,
   });
 
-  if (result === 'not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'Agent tool not found' };
-    return;
-  }
-
   ctx.body = result;
 });
 
@@ -295,16 +283,10 @@ agentToolsRouter.delete('/agents/tools/:tool_id', async (ctx: Context) => {
     return;
   }
 
-  const result = await deleteAgentTool({
+  await deleteAgentTool({
     projectIds,
     id: ctx.params.tool_id,
   });
-
-  if (result === 'not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'Agent tool not found' };
-    return;
-  }
 
   ctx.status = 204;
 });

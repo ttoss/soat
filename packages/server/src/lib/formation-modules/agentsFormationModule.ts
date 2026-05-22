@@ -91,10 +91,6 @@ export const agentsFormationModule: FormationModule = {
         toNullableObject(properties.knowledge_config) ?? undefined,
     });
 
-    if (result === 'ai_provider_not_found') {
-      throw new Error(`AI provider not found: ${properties.ai_provider_id}`);
-    }
-
     log(
       'created agent from formation: projectId=%d agentId=%s',
       projectId,
@@ -113,7 +109,7 @@ export const agentsFormationModule: FormationModule = {
       throw new Error(errors[0].message);
     }
 
-    const result = await updateAgent({
+    await updateAgent({
       id: physicalResourceId,
       aiProviderId: toOptionalString(properties.ai_provider_id),
       name: toNullableString(properties.name),
@@ -129,19 +125,9 @@ export const agentsFormationModule: FormationModule = {
       temperature: toNullableNumber(properties.temperature),
       knowledgeConfig: toNullableObject(properties.knowledge_config),
     });
-
-    if (result === 'not_found') {
-      throw new Error(`Agent not found: ${physicalResourceId}`);
-    }
-    if (result === 'ai_provider_not_found') {
-      throw new Error(`AI provider not found: ${properties.ai_provider_id}`);
-    }
   },
 
   delete: async ({ physicalResourceId }) => {
-    const result = await deleteAgent({ id: physicalResourceId });
-    if (result === 'not_found') {
-      throw new Error(`Agent not found: ${physicalResourceId}`);
-    }
+    await deleteAgent({ id: physicalResourceId });
   },
 };

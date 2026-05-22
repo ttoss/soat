@@ -111,18 +111,6 @@ sessionsRouter.post('/', async (ctx: Context) => {
     toolContext: body.toolContext,
   });
 
-  if (result === 'agent_not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'Agent not found' };
-    return;
-  }
-
-  if (result === 'actor_not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'Actor not found' };
-    return;
-  }
-
   ctx.status = 201;
   ctx.body = result;
 });
@@ -191,12 +179,6 @@ sessionsRouter.get('/:session_id', async (ctx: Context) => {
     sessionId: ctx.params.session_id,
   });
 
-  if (!result) {
-    ctx.status = 404;
-    ctx.body = { error: 'Session not found' };
-    return;
-  }
-
   ctx.body = result;
 });
 
@@ -223,12 +205,6 @@ sessionsRouter.patch('/:session_id', async (ctx: Context) => {
     toolContext: body.toolContext,
   });
 
-  if (!result) {
-    ctx.status = 404;
-    ctx.body = { error: 'Session not found' };
-    return;
-  }
-
   ctx.body = result;
 });
 
@@ -239,16 +215,10 @@ sessionsRouter.delete('/:session_id', async (ctx: Context) => {
   if (!agentAccess) return;
   const { agent } = agentAccess;
 
-  const result = await deleteSession({
+  await deleteSession({
     agentId: agent.id as number,
     sessionId: ctx.params.session_id,
   });
-
-  if (!result) {
-    ctx.status = 404;
-    ctx.body = { error: 'Session not found' };
-    return;
-  }
 
   ctx.status = 204;
 });

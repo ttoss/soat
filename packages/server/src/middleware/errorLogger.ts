@@ -3,8 +3,8 @@ import { inspect } from 'node:util';
 import { DatabaseError } from '@ttoss/postgresdb';
 import { APICallError } from 'ai';
 
-import { AppError } from '../AppError';
 import type { Context } from '../Context';
+import { DomainError } from '../errors';
 
 type Next = () => Promise<void>;
 
@@ -69,13 +69,8 @@ const toDatabaseErrorDetails = (
 };
 
 const getErrorStatus = (args: { error: unknown }) => {
-  if (
-    typeof args.error === 'object' &&
-    args.error !== null &&
-    'status' in args.error &&
-    typeof args.error.status === 'number'
-  ) {
-    return args.error.status;
+  if (args.error instanceof DomainError) {
+    return args.error.httpStatus;
   }
 
   return 500;
@@ -115,20 +110,27 @@ const errorLoggerMiddleware = async (ctx: Context, next: Next) => {
     const status = getErrorStatus({ error });
 
     if (isErrorLoggingEnabled()) {
-      const causeToLog =
-        error instanceof AppError ? (error.cause ?? error) : error;
       writeErrorLog({
         ctx,
         status,
-        error: causeToLog,
+        error,
       });
     }
 
     ctx.status = status;
-    ctx.body = {
-      error:
-        error instanceof AppError ? error.message : 'Internal Server Error',
-    };
+
+    if (error instanceof DomainError) {
+      ctx.body = {
+        error: {
+          code: error.code,
+          message: error.message,
+          ...(error.meta !== undefined && { meta: error.meta }),
+        },
+      };
+      return;
+    }
+
+    ctx.body = { error: 'Internal Server Error' };
   }
 };
 

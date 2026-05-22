@@ -88,12 +88,6 @@ chatsRouter.post('/chats', async (ctx: Context) => {
     model: validated.model,
   });
 
-  if (result === 'ai_provider_not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'AI provider not found' };
-    return;
-  }
-
   ctx.status = 201;
   ctx.body = result;
 });
@@ -125,12 +119,6 @@ chatsRouter.get('/chats/:chat_id', async (ctx: Context) => {
 
   const chat = await getChat({ id: chatId });
 
-  if (!chat) {
-    ctx.status = 404;
-    ctx.body = { error: 'Chat not found' };
-    return;
-  }
-
   ctx.body = chat;
 });
 
@@ -143,13 +131,7 @@ chatsRouter.delete('/chats/:chat_id', async (ctx: Context) => {
 
   const { chat_id: chatId } = ctx.params;
 
-  const result = await deleteChat({ id: chatId });
-
-  if (result === 'not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'Chat not found' };
-    return;
-  }
+  await deleteChat({ id: chatId });
 
   ctx.status = 204;
 });
@@ -176,12 +158,6 @@ const handleStreamingCompletion = async (args: {
       messages: args.messages,
       model: args.model,
     });
-
-    if (typeof textStream === 'string') {
-      args.ctx.res.write(`data: ${JSON.stringify({ error: textStream })}\n\n`);
-      args.ctx.res.end();
-      return;
-    }
 
     for await (const chunk of textStream) {
       args.ctx.res.write(
@@ -233,18 +209,6 @@ chatsRouter.post('/chats/:chat_id/completions', async (ctx: Context) => {
     messages: chatMessages,
     model,
   });
-
-  if (result === 'chat_not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'Chat not found' };
-    return;
-  }
-
-  if (result === 'ai_provider_not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'AI provider not found' };
-    return;
-  }
 
   ctx.body = {
     object: 'chat.completion',
@@ -430,12 +394,6 @@ chatsRouter.post('/chats/:chat_id/actors', async (ctx: Context) => {
     instructions: body.instructions ?? null,
     chatId: chat.id as number,
   });
-
-  if (actor === 'agent_and_chat_exclusive') {
-    ctx.status = 400;
-    ctx.body = { error: 'agentId and chatId are mutually exclusive' };
-    return;
-  }
 
   ctx.status = 201;
   ctx.body = actor;

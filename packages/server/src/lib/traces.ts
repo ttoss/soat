@@ -1,6 +1,7 @@
 import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
+import { DomainError } from '../errors';
 import { upsertFileByPath } from './files';
 
 export type Trace = {
@@ -190,11 +191,11 @@ export const listTraces = async (args: {
 export const getTrace = async (args: {
   projectIds?: number[];
   traceId: string;
-}): Promise<Trace | 'not_found'> => {
+}): Promise<Trace> => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: Record<string, any> = { publicId: args.traceId };
   if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0) return 'not_found';
+    if (args.projectIds.length === 0) throw new DomainError('RESOURCE_NOT_FOUND', `Trace '${args.traceId}' not found.`);
     where.projectId = args.projectIds;
   }
 
@@ -202,7 +203,7 @@ export const getTrace = async (args: {
     where,
     include: [{ model: db.Project, as: 'project' }],
   });
-  if (!row) return 'not_found';
+  if (!row) throw new DomainError('RESOURCE_NOT_FOUND', `Trace '${args.traceId}' not found.`);
 
   return mapTrace(row);
 };
@@ -241,11 +242,11 @@ const buildTraceTree = (traces: Trace[]): TraceTreeNode | undefined => {
 export const getTraceTree = async (args: {
   projectIds?: number[];
   traceId: string;
-}): Promise<TraceTreeNode | 'not_found'> => {
+}): Promise<TraceTreeNode> => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: Record<string, any> = { publicId: args.traceId };
   if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0) return 'not_found';
+    if (args.projectIds.length === 0) throw new DomainError('RESOURCE_NOT_FOUND', `Trace '${args.traceId}' not found.`);
     where.projectId = args.projectIds;
   }
 
@@ -253,7 +254,7 @@ export const getTraceTree = async (args: {
     where,
     include: [{ model: db.Project, as: 'project' }],
   });
-  if (!targetRow) return 'not_found';
+  if (!targetRow) throw new DomainError('RESOURCE_NOT_FOUND', `Trace '${args.traceId}' not found.`);
 
   // Determine root publicId
   const rootPublicId = targetRow.rootTraceId ?? targetRow.publicId;
@@ -274,5 +275,7 @@ export const getTraceTree = async (args: {
   });
 
   const allTraces = allRows.map(mapTrace);
-  return buildTraceTree(allTraces) ?? 'not_found';
+  const tree = buildTraceTree(allTraces);
+  if (!tree) throw new DomainError('RESOURCE_NOT_FOUND', `Trace tree for '${args.traceId}' not found.`);
+  return tree;
 };

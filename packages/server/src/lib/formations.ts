@@ -2,6 +2,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 
+import { DomainError } from '../errors';
 import {
   applyFormationTemplate,
   buildDeleteOrder,
@@ -12,8 +13,8 @@ import type {
   FormationEvent,
   FormationTemplate,
   MappedFormation,
-  MappedFormationResource,
   MappedFormationOperation,
+  MappedFormationResource,
   PlanChange,
   PlanResult,
 } from './formationsTypes';
@@ -25,8 +26,8 @@ export type {
   FormationEvent,
   FormationTemplate,
   MappedFormation,
-  MappedFormationResource,
   MappedFormationOperation,
+  MappedFormationResource,
   PlanChange,
   PlanResult,
 } from './formationsTypes';
@@ -129,7 +130,7 @@ export const createFormation = async (args: {
   template: FormationTemplate;
   metadata?: Record<string, unknown>;
   parameters?: Record<string, string>;
-}): Promise<MappedFormation | 'name_conflict'> => {
+}): Promise<MappedFormation> => {
   log(
     'createFormation: projectId=%d name=%s resources=%d',
     args.projectId,
@@ -149,7 +150,10 @@ export const createFormation = async (args: {
       args.projectId,
       args.name
     );
-    return 'name_conflict';
+    throw new DomainError(
+      'NAME_CONFLICT',
+      `A formation with the name '${args.name}' already exists.`
+    );
   }
 
   const formation = await db.Formation.create({
@@ -223,12 +227,16 @@ export const listFormations = async (args: {
 
 export const getFormation = async (args: {
   id: string;
-}): Promise<MappedFormation | null> => {
+}): Promise<MappedFormation> => {
   const formation = await db.Formation.findOne({
     where: { publicId: args.id, status: { [Op.ne]: 'deleted' } },
     include: getFormationIncludes(true),
   });
-  if (!formation) return null;
+  if (!formation)
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Formation '${args.id}' not found.`
+    );
   return mapFormation(
     formation as unknown as Parameters<typeof mapFormation>[0],
     true
@@ -240,7 +248,7 @@ export const updateFormation = async (args: {
   template?: FormationTemplate;
   metadata?: Record<string, unknown> | null;
   parameters?: Record<string, string>;
-}): Promise<MappedFormation | null> => {
+}): Promise<MappedFormation> => {
   log(
     'updateFormation: formationId=%s updateTemplate=%s',
     args.id,
@@ -251,7 +259,10 @@ export const updateFormation = async (args: {
   });
   if (!formation) {
     log('updateFormation: formation not found formationId=%s', args.id);
-    return null;
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Formation '${args.id}' not found.`
+    );
   }
 
   const newTemplate =
@@ -299,11 +310,15 @@ export const updateFormation = async (args: {
 
 export const deleteFormation = async (args: {
   id: string;
-}): Promise<{ success: boolean } | null> => {
+}): Promise<{ success: boolean }> => {
   const formation = await db.Formation.findOne({
     where: { publicId: args.id, status: { [Op.ne]: 'deleted' } },
   });
-  if (!formation) return null;
+  if (!formation)
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Formation '${args.id}' not found.`
+    );
 
   await formation.update({ status: 'deleting' });
 

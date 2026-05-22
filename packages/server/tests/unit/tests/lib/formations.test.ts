@@ -36,9 +36,7 @@ describe('formations lib', () => {
     });
 
     test('returns update action when formationId matches existing resource', async () => {
-      jest
-        .spyOn(db.Formation, 'findOne')
-        .mockResolvedValue({ id: 1 } as any);
+      jest.spyOn(db.Formation, 'findOne').mockResolvedValue({ id: 1 } as any);
       jest
         .spyOn(db.FormationResource, 'findAll')
         .mockResolvedValue([
@@ -65,9 +63,7 @@ describe('formations lib', () => {
     });
 
     test('treats resource without physicalResourceId as create', async () => {
-      jest
-        .spyOn(db.Formation, 'findOne')
-        .mockResolvedValue({ id: 1 } as any);
+      jest.spyOn(db.Formation, 'findOne').mockResolvedValue({ id: 1 } as any);
       jest
         .spyOn(db.FormationResource, 'findAll')
         .mockResolvedValue([
@@ -86,17 +82,18 @@ describe('formations lib', () => {
   // ── createFormation ───────────────────────────────────────────────────
 
   describe('createFormation', () => {
-    test('returns name_conflict when a formation with the same name exists', async () => {
+    test('throws DomainError on name conflict', async () => {
       jest
         .spyOn(db.Formation, 'findOne')
         .mockResolvedValue({ id: 1, name: 'dupe' } as any);
 
-      const result = await createFormation({
-        projectId: 1,
-        name: 'dupe',
-        template: simpleTemplate,
-      });
-      expect(result).toBe('name_conflict');
+      await expect(
+        createFormation({
+          projectId: 1,
+          name: 'dupe',
+          template: simpleTemplate,
+        })
+      ).rejects.toThrow('already exists');
     });
   });
 
@@ -134,10 +131,11 @@ describe('formations lib', () => {
   // ── getFormation ──────────────────────────────────────────────────────
 
   describe('getFormation', () => {
-    test('returns null when formation not found', async () => {
+    test('throws DomainError when formation not found', async () => {
       jest.spyOn(db.Formation, 'findOne').mockResolvedValue(null);
-      const result = await getFormation({ id: 'af_missing' });
-      expect(result).toBeNull();
+      await expect(getFormation({ id: 'af_missing' })).rejects.toThrow(
+        'not found'
+      );
     });
 
     test('returns formation with resources when found', async () => {
@@ -173,13 +171,14 @@ describe('formations lib', () => {
   // ── updateFormation ───────────────────────────────────────────────────
 
   describe('updateFormation', () => {
-    test('returns null when formation not found', async () => {
+    test('throws DomainError when formation not found', async () => {
       jest.spyOn(db.Formation, 'findOne').mockResolvedValue(null);
-      const result = await updateFormation({
-        id: 'af_missing',
-        template: simpleTemplate,
-      });
-      expect(result).toBeNull();
+      await expect(
+        updateFormation({
+          id: 'af_missing',
+          template: simpleTemplate,
+        })
+      ).rejects.toThrow('not found');
     });
 
     test('updates metadata when provided alongside template', async () => {
@@ -277,10 +276,11 @@ describe('formations lib', () => {
   // ── deleteFormation ───────────────────────────────────────────────────
 
   describe('deleteFormation', () => {
-    test('returns null when formation not found', async () => {
+    test('throws DomainError when formation not found', async () => {
       jest.spyOn(db.Formation, 'findOne').mockResolvedValue(null);
-      const result = await deleteFormation({ id: 'af_missing' });
-      expect(result).toBeNull();
+      await expect(deleteFormation({ id: 'af_missing' })).rejects.toThrow(
+        'not found'
+      );
     });
 
     test('returns success: false and marks operation failed when deletion has errors', async () => {
@@ -360,9 +360,7 @@ describe('formations lib', () => {
     });
 
     test('returns mapped operations for existing formation', async () => {
-      jest
-        .spyOn(db.Formation, 'findOne')
-        .mockResolvedValue({ id: 1 } as any);
+      jest.spyOn(db.Formation, 'findOne').mockResolvedValue({ id: 1 } as any);
       jest.spyOn(db.FormationOperation, 'findAll').mockResolvedValue([
         {
           publicId: 'op_1',

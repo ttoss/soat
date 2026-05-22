@@ -1,6 +1,7 @@
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 
 import { db } from '../db';
+import { DomainError } from '../errors';
 import type { PolicyDocument } from './iam';
 import { validatePolicyDocument } from './iam';
 
@@ -49,11 +50,7 @@ export const updatePolicy = async (args: {
   name?: string;
   description?: string;
   document: PolicyDocument;
-}): Promise<
-  | ReturnType<typeof mapPolicy>
-  | 'not_found'
-  | { invalid: true; errors: string[] }
-> => {
+}): Promise<ReturnType<typeof mapPolicy> | { invalid: true; errors: string[] }> => {
   const validation = validatePolicyDocument(args.document);
   if (!validation.valid) {
     return { invalid: true, errors: validation.errors };
@@ -63,7 +60,7 @@ export const updatePolicy = async (args: {
     where: { publicId: args.policyId },
   });
   if (!policy) {
-    return 'not_found';
+    throw new DomainError('RESOURCE_NOT_FOUND', `Policy '${args.policyId}' not found.`);
   }
 
   await policy.update({
@@ -77,16 +74,15 @@ export const updatePolicy = async (args: {
 
 export const deletePolicy = async (args: {
   policyId: string;
-}): Promise<'not_found' | true> => {
+}): Promise<void> => {
   const policy = await db.Policy.findOne({
     where: { publicId: args.policyId },
   });
   if (!policy) {
-    return 'not_found';
+    throw new DomainError('RESOURCE_NOT_FOUND', `Policy '${args.policyId}' not found.`);
   }
 
   await policy.destroy();
-  return true;
 };
 
 export const getPolicy = async (args: { policyId: string }) => {

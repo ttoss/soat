@@ -1,5 +1,6 @@
 import type { AuthUser } from '../Context';
 import { db } from '../db';
+import { DomainError } from '../errors';
 
 const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
   return {
@@ -37,7 +38,10 @@ export const getProject = async (args: { id: string; authUser: AuthUser }) => {
   const project = await db.Project.findOne({ where: { publicId: args.id } });
 
   if (!project) {
-    return 'not_found' as const;
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Project '${args.id}' not found.`
+    );
   }
 
   if (args.authUser.role === 'admin') {
@@ -50,7 +54,10 @@ export const getProject = async (args: { id: string; authUser: AuthUser }) => {
   });
 
   if (!allowed) {
-    return 'forbidden' as const;
+    throw new DomainError(
+      'FORBIDDEN',
+      `You do not have permission to access project '${args.id}'.`
+    );
   }
 
   return mapProject(project);
@@ -61,13 +68,15 @@ export const createProject = async (args: { name: string }) => {
   return mapProject(project);
 };
 
-export const deleteProject = async (args: { id: string }) => {
+export const deleteProject = async (args: { id: string }): Promise<void> => {
   const project = await db.Project.findOne({ where: { publicId: args.id } });
 
   if (!project) {
-    return null;
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Project '${args.id}' not found.`
+    );
   }
 
   await project.destroy();
-  return true;
 };
