@@ -1,4 +1,4 @@
-import { isDeepStrictEqual } from 'util';
+import { isDeepStrictEqual } from 'node:util';
 
 import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
@@ -142,7 +142,9 @@ export const planFormation = async (args: {
             ) as Record<string, unknown>;
 
             const needsUpdate = Object.entries(resolvedProperties).some(
-              ([key, value]) => !isDeepStrictEqual(liveProperties[key], value)
+              ([key, value]) => {
+                return !isDeepStrictEqual(liveProperties[key], value);
+              }
             );
 
             return {
