@@ -1,12 +1,14 @@
 import createDebug from 'debug';
 
+import { db } from '../../db';
+import { lookupAgentInternalId } from '../formationsHelpers';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
-  toNullableArray,
+  toNullableObject,
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
-import { createWebhook, deleteWebhook, updateWebhook } from '../webhooks';
+import { createSession, deleteSession, updateSession } from '../sessions';
 import {
   isObjectRecord,
   loadModuleSpec,
@@ -15,10 +17,10 @@ import {
   pushUnknownFieldErrors,
 } from './formationSpecLoader';
 
-const log = createDebug('soat:formations:webhooks');
+const log = createDebug('soat:formations:sessions');
 
-const SCHEMA_NAME = 'WebhookResourceProperties';
-const RESOURCE_LABEL = 'webhook';
+const SCHEMA_NAME = 'SessionResourceProperties';
+const RESOURCE_LABEL = 'session';
 
 // ── Key normalization ────────────────────────────────────────────────────
 
@@ -40,7 +42,7 @@ const normalizePropertyKeys = (
 
 // ── Property validation ──────────────────────────────────────────────────
 
-const validateWebhookProperties = (args: {
+const validateSessionProperties = (args: {
   properties: unknown;
   basePath: string;
   forUpdate?: boolean;
@@ -50,7 +52,7 @@ const validateWebhookProperties = (args: {
     return [
       {
         path: basePath,
-        message: 'Webhook `properties` must be an object',
+        message: 'Session `properties` must be an object',
       },
     ];
   }
@@ -73,19 +75,33 @@ const validateWebhookProperties = (args: {
   return errors;
 };
 
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+const getSessionAgentInternalId = async (
+  sessionPublicId: string
+): Promise<number> => {
+  const session = await db.Session.findOne({
+    where: { publicId: sessionPublicId },
+  });
+  if (!session) {
+    throw new Error(`Session not found: ${sessionPublicId}`);
+  }
+  return (session as unknown as { agentId: number }).agentId;
+};
+
 // ── Module export ────────────────────────────────────────────────────────
 
-export const webhooksFormationModule: FormationModule = {
-  resourceType: 'webhook',
+export const sessionsFormationModule: FormationModule = {
+  resourceType: 'session',
 
   validateProperties: ({ properties, basePath }) => {
-    return validateWebhookProperties({ properties, basePath });
+    return validateSessionProperties({ properties, basePath });
   },
 
   create: async ({ properties: rawProperties, projectId }) => {
-    const errors = validateWebhookProperties({
+    const errors = validateSessionProperties({
       properties: rawProperties,
-      basePath: 'resources.<webhook>.properties',
+      basePath: 'resources.<session>.properties',
     });
     if (errors.length > 0) {
       throw new Error(errors[0].message);
@@ -95,16 +111,26 @@ export const webhooksFormationModule: FormationModule = {
       ? normalizePropertyKeys(rawProperties)
       : rawProperties;
 
-    const result = await createWebhook({
+    const agentId = await lookupAgentInternalId(properties.agent_id as string);
+
+    const result = await createSession({
       projectId,
-      name: properties.name as string,
-      url: properties.url as string,
-      events: properties.events as string[],
-      description: toOptionalString(properties.description) ?? undefined,
+      agentId,
+      name: toNullableString(properties.name),
+      actorId: toNullableString(properties.actor_id),
+      autoGenerate:
+        typeof properties.auto_generate === 'boolean'
+          ? properties.auto_generate
+          : undefined,
+      toolContext:
+        (toNullableObject(properties.tool_context) as Record<
+          string,
+          string
+        > | null) ?? undefined,
     });
 
     log(
-      'created webhook from formation: projectId=%d webhookId=%s',
+      'created session from formation: projectId=%d sessionId=%s',
       projectId,
       result.id
     );
@@ -112,9 +138,9 @@ export const webhooksFormationModule: FormationModule = {
   },
 
   update: async ({ properties: rawProperties, physicalResourceId }) => {
-    const errors = validateWebhookProperties({
+    const errors = validateSessionProperties({
       properties: rawProperties,
-      basePath: 'resources.<webhook>.properties',
+      basePath: 'resources.<session>.properties',
       forUpdate: true,
     });
     if (errors.length > 0) {
@@ -125,21 +151,30 @@ export const webhooksFormationModule: FormationModule = {
       ? normalizePropertyKeys(rawProperties)
       : rawProperties;
 
-    await updateWebhook({
-      id: physicalResourceId,
-      name: toOptionalString(properties.name) ?? undefined,
-      description: toNullableString(properties.description) ?? undefined,
-      url: toOptionalString(properties.url) ?? undefined,
-      events: (toNullableArray(properties.events) ?? undefined) as
-        | string[]
-        | undefined,
+    const agentId = await getSessionAgentInternalId(physicalResourceId);
+
+    await updateSession({
+      agentId,
+      sessionId: physicalResourceId,
+      name: toNullableString(properties.name),
+      status: toOptionalString(properties.status) ?? undefined,
+      autoGenerate:
+        typeof properties.auto_generate === 'boolean'
+          ? properties.auto_generate
+          : undefined,
+      toolContext:
+        (toNullableObject(properties.tool_context) as Record<
+          string,
+          string
+        > | null) ?? undefined,
     });
 
-    log('updated webhook from formation: id=%s', physicalResourceId);
+    log('updated session from formation: id=%s', physicalResourceId);
   },
 
   delete: async ({ physicalResourceId }) => {
-    await deleteWebhook({ id: physicalResourceId });
-    log('deleted webhook from formation: id=%s', physicalResourceId);
+    const agentId = await getSessionAgentInternalId(physicalResourceId);
+    await deleteSession({ agentId, sessionId: physicalResourceId });
+    log('deleted session from formation: id=%s', physicalResourceId);
   },
 };

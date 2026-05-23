@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
-import { createMemory, deleteMemory, updateMemory } from '../memories';
 import type { FormationModule, ValidationError } from '../formationsTypes';
+import { createMemory, deleteMemory, updateMemory } from '../memories';
 import {
   toNullableArray,
   toNullableString,

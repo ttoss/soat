@@ -46,7 +46,7 @@ import {
   SoatClient,
   createClient,
   createConfig,
-  AgentFormations,
+  Formations,
 } from '@soat/sdk';
 ```
 
@@ -261,7 +261,7 @@ The validate endpoint checks structure without creating any resources. It is saf
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat validate-agent-formation --template "$TEMPLATE"
+soat validate-formation --template "$TEMPLATE"
 ```
 
 </TabItem>
@@ -278,7 +278,7 @@ const authClient = createClient(
   })
 );
 
-const { data: validation } = await AgentFormations.validateAgentFormation({
+const { data: validation } = await Formations.validateFormation({
   client: authClient,
   body: { template },
 });
@@ -290,7 +290,7 @@ console.log(validation.valid); // true
 
 ```bash
 TEMPLATE=$(cat formation.json)
-curl -s -X POST "$SOAT_URL/api/v1/agent-formations/validate" \
+curl -s -X POST "$SOAT_URL/api/v1/formations/validate" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"template\": $TEMPLATE}"
@@ -315,14 +315,14 @@ The plan endpoint computes what would happen if you deployed the template now â€
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat plan-agent-formation --project_id "$PROJECT_ID" --template "$TEMPLATE"
+soat plan-formation --project_id "$PROJECT_ID" --template "$TEMPLATE"
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: plan } = await AgentFormations.planAgentFormation({
+const { data: plan } = await Formations.planFormation({
   client: authClient,
   body: { project_id: PROJECT_ID, template },
 });
@@ -334,7 +334,7 @@ console.log(plan.actions);
 
 ```bash
 TEMPLATE=$(cat formation.json)
-curl -s -X POST "$SOAT_URL/api/v1/agent-formations/plan" \
+curl -s -X POST "$SOAT_URL/api/v1/formations/plan" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\": \"$PROJECT_ID\", \"template\": $TEMPLATE}"
@@ -355,7 +355,7 @@ Create the formation to provision all resources in dependency order. SOAT resolv
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-FORMATION=$(soat create-agent-formation \
+FORMATION=$(soat create-formation \
   --project_id "$PROJECT_ID" \
   --name "my-agent-app" \
   --template "$TEMPLATE")
@@ -368,7 +368,7 @@ echo "Outputs: $(echo "$FORMATION" | jq '.outputs')"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: formation } = await AgentFormations.createAgentFormation({
+const { data: formation } = await Formations.createFormation({
   client: authClient,
   body: {
     project_id: PROJECT_ID,
@@ -385,7 +385,7 @@ console.log('Outputs:', formation.outputs);
 
 ```bash
 TEMPLATE=$(cat formation.json)
-FORMATION=$(curl -s -X POST "$SOAT_URL/api/v1/agent-formations" \
+FORMATION=$(curl -s -X POST "$SOAT_URL/api/v1/formations" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\": \"$PROJECT_ID\", \"name\": \"my-agent-app\", \"template\": $TEMPLATE}")
@@ -409,14 +409,14 @@ Retrieve the formation to see its current status, managed resources, and resolve
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-agent-formation --formation_id "$FORMATION_ID"
+soat get-formation --formation_id "$FORMATION_ID"
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: stack } = await AgentFormations.getAgentFormation({
+const { data: stack } = await Formations.getFormation({
   client: authClient,
   path: { formation_id: FORMATION_ID },
 });
@@ -428,7 +428,7 @@ console.log(stack.resources); // array of provisioned resources
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_URL/api/v1/agent-formations/$FORMATION_ID" \
+curl -s "$SOAT_URL/api/v1/formations/$FORMATION_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
@@ -448,7 +448,7 @@ Change the agent instructions and redeploy. SOAT computes a diff and updates onl
 
 ```bash
 UPDATED_TEMPLATE=$(printf '%s' "$TEMPLATE" | jq '.resources.assistant.properties.instructions = "Answer concisely from the knowledge base."')
-soat update-agent-formation \
+soat update-formation \
   --formation_id "$FORMATION_ID" \
   --template "$UPDATED_TEMPLATE"
 ```
@@ -471,7 +471,7 @@ const updatedTemplate = {
   },
 };
 
-const { data: updated } = await AgentFormations.updateAgentFormation({
+const { data: updated } = await Formations.updateFormation({
   client: authClient,
   path: { formation_id: FORMATION_ID },
   body: { template: updatedTemplate },
@@ -484,7 +484,7 @@ console.log(updated.status); // "active"
 
 ```bash
 UPDATED_TEMPLATE=$(cat formation.json | jq '.resources.assistant.properties.instructions = "Answer concisely from the knowledge base."')
-curl -s -X PUT "$SOAT_URL/api/v1/agent-formations/$FORMATION_ID" \
+curl -s -X PUT "$SOAT_URL/api/v1/formations/$FORMATION_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"template\": $UPDATED_TEMPLATE}"
@@ -503,14 +503,14 @@ Each mutating operation records events you can inspect to understand what happen
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat list-agent-formation-events --formation_id "$FORMATION_ID"
+soat list-formation-events --formation_id "$FORMATION_ID"
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: events } = await AgentFormations.listAgentFormationEvents({
+const { data: events } = await Formations.listFormationEvents({
   client: authClient,
   path: { formation_id: FORMATION_ID },
 });
@@ -523,7 +523,7 @@ events.forEach((op) => {
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_URL/api/v1/agent-formations/$FORMATION_ID/events" \
+curl -s "$SOAT_URL/api/v1/formations/$FORMATION_ID/events" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
@@ -540,14 +540,14 @@ Deleting a formation removes the formation record and all SOAT resources it crea
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat delete-agent-formation --formation_id "$FORMATION_ID"
+soat delete-formation --formation_id "$FORMATION_ID"
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-await AgentFormations.deleteAgentFormation({
+await Formations.deleteFormation({
   client: authClient,
   path: { formation_id: FORMATION_ID },
 });
@@ -557,7 +557,7 @@ await AgentFormations.deleteAgentFormation({
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X DELETE "$SOAT_URL/api/v1/agent-formations/$FORMATION_ID" \
+curl -s -X DELETE "$SOAT_URL/api/v1/formations/$FORMATION_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
@@ -571,7 +571,7 @@ Confirm the formation is gone:
 
 ```bash
 # â†’ expect-fail
-soat get-agent-formation --formation_id "$FORMATION_ID"
+soat get-formation --formation_id "$FORMATION_ID"
 ```
 
 </TabItem>
@@ -579,7 +579,7 @@ soat get-agent-formation --formation_id "$FORMATION_ID"
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}" \
-  "$SOAT_URL/api/v1/agent-formations/$FORMATION_ID" \
+  "$SOAT_URL/api/v1/formations/$FORMATION_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 # Prints 404
 ```

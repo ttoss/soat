@@ -5,10 +5,10 @@ import yaml from 'js-yaml';
 import type { Wrapper } from '../types.js';
 
 const FORMATION_COMMANDS = [
-  'validate-agent-formation',
-  'plan-agent-formation',
-  'create-agent-formation',
-  'update-agent-formation',
+  'validate-formation',
+  'plan-formation',
+  'create-formation',
+  'update-formation',
 ];
 
 const TEMPLATE_PATH_FLAG = 'template-path';
@@ -113,8 +113,8 @@ const resolveEnvRef = (args: {
   return value;
 };
 
-export const agentFormationsWrapper: Wrapper = {
-  id: 'agent-formations-wrapper',
+export const formationsWrapper: Wrapper = {
+  id: 'formations-wrapper',
   commands: FORMATION_COMMANDS,
   helpFlags: [
     {

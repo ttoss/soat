@@ -1,9 +1,8 @@
 import createDebug from 'debug';
-import { db } from 'src/db';
 
-import { lookupMemoryInternalId } from '../formationsHelpers';
 import type { FormationModule, ValidationError } from '../formationsTypes';
-import { createMemoryEntry, deleteMemoryEntry } from '../memoryEntries';
+import type { PolicyDocument } from '../iam';
+import { createPolicy, deletePolicy, updatePolicy } from '../policies';
 import { toOptionalString } from '../resource-inputs/normalizers';
 import {
   isObjectRecord,
@@ -13,10 +12,10 @@ import {
   pushUnknownFieldErrors,
 } from './formationSpecLoader';
 
-const log = createDebug('soat:formations:memoryEntries');
+const log = createDebug('soat:formations:policies');
 
-const SCHEMA_NAME = 'MemoryEntryResourceProperties';
-const RESOURCE_LABEL = 'memory_entry';
+const SCHEMA_NAME = 'PolicyResourceProperties';
+const RESOURCE_LABEL = 'policy';
 
 // ── Key normalization ────────────────────────────────────────────────────
 
@@ -38,7 +37,7 @@ const normalizePropertyKeys = (
 
 // ── Property validation ──────────────────────────────────────────────────
 
-const validateMemoryEntryProperties = (args: {
+const validatePolicyProperties = (args: {
   properties: unknown;
   basePath: string;
   forUpdate?: boolean;
@@ -48,7 +47,7 @@ const validateMemoryEntryProperties = (args: {
     return [
       {
         path: basePath,
-        message: 'MemoryEntry `properties` must be an object',
+        message: 'Policy `properties` must be an object',
       },
     ];
   }
@@ -73,17 +72,17 @@ const validateMemoryEntryProperties = (args: {
 
 // ── Module export ────────────────────────────────────────────────────────
 
-export const memoryEntriesFormationModule: FormationModule = {
-  resourceType: 'memory_entry',
+export const policiesFormationModule: FormationModule = {
+  resourceType: 'policy',
 
   validateProperties: ({ properties, basePath }) => {
-    return validateMemoryEntryProperties({ properties, basePath });
+    return validatePolicyProperties({ properties, basePath });
   },
 
   create: async ({ properties: rawProperties }) => {
-    const errors = validateMemoryEntryProperties({
+    const errors = validatePolicyProperties({
       properties: rawProperties,
-      basePath: 'resources.<memory_entry>.properties',
+      basePath: 'resources.<policy>.properties',
     });
     if (errors.length > 0) {
       throw new Error(errors[0].message);
@@ -93,31 +92,26 @@ export const memoryEntriesFormationModule: FormationModule = {
       ? normalizePropertyKeys(rawProperties)
       : rawProperties;
 
-    const memoryId = await lookupMemoryInternalId(
-      properties.memory_id as string
-    );
-
-    const result = await createMemoryEntry({
-      memoryId,
-      content: properties.content as string,
-      source: toOptionalString(properties.source) as
-        | 'manual'
-        | 'agent'
-        | undefined,
+    const result = await createPolicy({
+      name: toOptionalString(properties.name) ?? undefined,
+      description: toOptionalString(properties.description) ?? undefined,
+      document: properties.document as PolicyDocument,
     });
 
-    log(
-      'created memory entry from formation: memoryId=%d entryId=%s',
-      memoryId,
-      result.id
-    );
+    if ('invalid' in result) {
+      throw new Error(
+        `Policy document is invalid: ${result.errors.join(', ')}`
+      );
+    }
+
+    log('created policy from formation: id=%s', result.id);
     return result.id;
   },
 
   update: async ({ properties: rawProperties, physicalResourceId }) => {
-    const errors = validateMemoryEntryProperties({
+    const errors = validatePolicyProperties({
       properties: rawProperties,
-      basePath: 'resources.<memory_entry>.properties',
+      basePath: 'resources.<policy>.properties',
       forUpdate: true,
     });
     if (errors.length > 0) {
@@ -128,26 +122,24 @@ export const memoryEntriesFormationModule: FormationModule = {
       ? normalizePropertyKeys(rawProperties)
       : rawProperties;
 
-    const entry = await db.MemoryEntry.findOne({
-      where: { publicId: physicalResourceId },
+    const result = await updatePolicy({
+      policyId: physicalResourceId,
+      name: toOptionalString(properties.name) ?? undefined,
+      description: toOptionalString(properties.description) ?? undefined,
+      document: properties.document as PolicyDocument,
     });
 
-    if (!entry) {
-      throw new Error(`MemoryEntry not found: ${physicalResourceId}`);
+    if ('invalid' in result) {
+      throw new Error(
+        `Policy document is invalid: ${result.errors.join(', ')}`
+      );
     }
 
-    const content = toOptionalString(properties.content);
-    if (content !== undefined) {
-      entry.content = content;
-    }
-
-    await entry.save();
-
-    log('updated memory entry from formation: id=%s', physicalResourceId);
+    log('updated policy from formation: id=%s', physicalResourceId);
   },
 
   delete: async ({ physicalResourceId }) => {
-    await deleteMemoryEntry({ id: physicalResourceId });
-    log('deleted memory entry from formation: id=%s', physicalResourceId);
+    await deletePolicy({ policyId: physicalResourceId });
+    log('deleted policy from formation: id=%s', physicalResourceId);
   },
 };

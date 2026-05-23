@@ -1,22 +1,27 @@
 import createDebug from 'debug';
-import { db } from 'src/db';
 
-import { lookupMemoryInternalId } from '../formationsHelpers';
+import {
+  createConversation,
+  deleteConversation,
+  updateConversation,
+} from '../conversations';
+import { lookupActorInternalId } from '../formationsHelpers';
 import type { FormationModule, ValidationError } from '../formationsTypes';
-import { createMemoryEntry, deleteMemoryEntry } from '../memoryEntries';
-import { toOptionalString } from '../resource-inputs/normalizers';
+import {
+  toNullableString,
+  toOptionalString,
+} from '../resource-inputs/normalizers';
 import {
   isObjectRecord,
   loadModuleSpec,
   pushFieldTypeErrors,
-  pushRequiredFieldErrors,
   pushUnknownFieldErrors,
 } from './formationSpecLoader';
 
-const log = createDebug('soat:formations:memoryEntries');
+const log = createDebug('soat:formations:conversations');
 
-const SCHEMA_NAME = 'MemoryEntryResourceProperties';
-const RESOURCE_LABEL = 'memory_entry';
+const SCHEMA_NAME = 'ConversationResourceProperties';
+const RESOURCE_LABEL = 'conversation';
 
 // ── Key normalization ────────────────────────────────────────────────────
 
@@ -38,17 +43,16 @@ const normalizePropertyKeys = (
 
 // ── Property validation ──────────────────────────────────────────────────
 
-const validateMemoryEntryProperties = (args: {
+const validateConversationProperties = (args: {
   properties: unknown;
   basePath: string;
-  forUpdate?: boolean;
 }): ValidationError[] => {
-  const { basePath, forUpdate } = args;
+  const { basePath } = args;
   if (!isObjectRecord(args.properties)) {
     return [
       {
         path: basePath,
-        message: 'MemoryEntry `properties` must be an object',
+        message: 'Conversation `properties` must be an object',
       },
     ];
   }
@@ -63,9 +67,6 @@ const validateMemoryEntryProperties = (args: {
     basePath,
     errors,
   });
-  if (!forUpdate) {
-    pushRequiredFieldErrors({ spec, properties, basePath, errors });
-  }
   pushFieldTypeErrors({ spec, properties, basePath, errors });
 
   return errors;
@@ -73,17 +74,17 @@ const validateMemoryEntryProperties = (args: {
 
 // ── Module export ────────────────────────────────────────────────────────
 
-export const memoryEntriesFormationModule: FormationModule = {
-  resourceType: 'memory_entry',
+export const conversationsFormationModule: FormationModule = {
+  resourceType: 'conversation',
 
   validateProperties: ({ properties, basePath }) => {
-    return validateMemoryEntryProperties({ properties, basePath });
+    return validateConversationProperties({ properties, basePath });
   },
 
-  create: async ({ properties: rawProperties }) => {
-    const errors = validateMemoryEntryProperties({
+  create: async ({ properties: rawProperties, projectId }) => {
+    const errors = validateConversationProperties({
       properties: rawProperties,
-      basePath: 'resources.<memory_entry>.properties',
+      basePath: 'resources.<conversation>.properties',
     });
     if (errors.length > 0) {
       throw new Error(errors[0].message);
@@ -93,32 +94,31 @@ export const memoryEntriesFormationModule: FormationModule = {
       ? normalizePropertyKeys(rawProperties)
       : rawProperties;
 
-    const memoryId = await lookupMemoryInternalId(
-      properties.memory_id as string
-    );
+    const actorPublicId = toNullableString(properties.actor_id);
+    let actorId: number | null = null;
+    if (actorPublicId) {
+      actorId = await lookupActorInternalId(actorPublicId);
+    }
 
-    const result = await createMemoryEntry({
-      memoryId,
-      content: properties.content as string,
-      source: toOptionalString(properties.source) as
-        | 'manual'
-        | 'agent'
-        | undefined,
+    const result = await createConversation({
+      projectId,
+      name: toNullableString(properties.name),
+      status: toOptionalString(properties.status) ?? undefined,
+      actorId,
     });
 
     log(
-      'created memory entry from formation: memoryId=%d entryId=%s',
-      memoryId,
+      'created conversation from formation: projectId=%d conversationId=%s',
+      projectId,
       result.id
     );
     return result.id;
   },
 
   update: async ({ properties: rawProperties, physicalResourceId }) => {
-    const errors = validateMemoryEntryProperties({
+    const errors = validateConversationProperties({
       properties: rawProperties,
-      basePath: 'resources.<memory_entry>.properties',
-      forUpdate: true,
+      basePath: 'resources.<conversation>.properties',
     });
     if (errors.length > 0) {
       throw new Error(errors[0].message);
@@ -128,26 +128,17 @@ export const memoryEntriesFormationModule: FormationModule = {
       ? normalizePropertyKeys(rawProperties)
       : rawProperties;
 
-    const entry = await db.MemoryEntry.findOne({
-      where: { publicId: physicalResourceId },
+    await updateConversation({
+      id: physicalResourceId,
+      name: toNullableString(properties.name),
+      status: toOptionalString(properties.status) ?? undefined,
     });
 
-    if (!entry) {
-      throw new Error(`MemoryEntry not found: ${physicalResourceId}`);
-    }
-
-    const content = toOptionalString(properties.content);
-    if (content !== undefined) {
-      entry.content = content;
-    }
-
-    await entry.save();
-
-    log('updated memory entry from formation: id=%s', physicalResourceId);
+    log('updated conversation from formation: id=%s', physicalResourceId);
   },
 
   delete: async ({ physicalResourceId }) => {
-    await deleteMemoryEntry({ id: physicalResourceId });
-    log('deleted memory entry from formation: id=%s', physicalResourceId);
+    await deleteConversation({ id: physicalResourceId });
+    log('deleted conversation from formation: id=%s', physicalResourceId);
   },
 };

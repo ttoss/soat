@@ -375,24 +375,25 @@ export const validateFormationTemplate = (
     errors.push(...validateOutputRefs(outputs, logicalIds, paramNames));
   }
 
-  if (errors.length > 0) {
-    return { valid: false, errors, warnings };
+  // Check for circular dependencies only when all declarations are valid
+  // objects (otherwise buildDependencyGraph would crash on null/array entries).
+  const allDeclsAreObjects = Object.values(resources).every((decl) => {
+    return typeof decl === 'object' && decl !== null && !Array.isArray(decl);
+  });
+  if (allDeclsAreObjects) {
+    const castTemplate = template as FormationTemplate;
+    const graph = buildDependencyGraph(castTemplate);
+    const sorted = topologicalSort(graph);
+    if (!sorted) {
+      errors.push({
+        path: 'resources',
+        message: 'Circular dependency detected in resources',
+      });
+    }
   }
 
-  const castTemplate = template as FormationTemplate;
-  const graph = buildDependencyGraph(castTemplate);
-  const sorted = topologicalSort(graph);
-  if (!sorted) {
-    return {
-      valid: false,
-      errors: [
-        {
-          path: 'resources',
-          message: 'Circular dependency detected in resources',
-        },
-      ],
-      warnings,
-    };
+  if (errors.length > 0) {
+    return { valid: false, errors, warnings };
   }
 
   return { valid: true, errors, warnings };

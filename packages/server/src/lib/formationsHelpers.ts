@@ -237,6 +237,14 @@ export const lookupMemoryInternalId = async (
   return (memory as unknown as { id: number }).id;
 };
 
+export const lookupActorInternalId = async (
+  publicId: string
+): Promise<number> => {
+  const actor = await db.Actor.findOne({ where: { publicId } });
+  if (!actor) throw new Error(`Actor not found: ${publicId}`);
+  return (actor as unknown as { id: number }).id;
+};
+
 export const lookupAgentInternalId = async (
   publicId: string
 ): Promise<number> => {
@@ -275,10 +283,16 @@ export const lookupPolicyInternalIds = async (
   const policies = await db.Policy.findAll({ where: { publicId: publicIds } });
   if (policies.length !== publicIds.length) {
     const foundIds = new Set(
-      policies.map((p) => (p as unknown as { publicId: string }).publicId)
+      policies.map((p) => {
+        return (p as unknown as { publicId: string }).publicId;
+      })
     );
-    const missing = publicIds.find((id) => !foundIds.has(id));
+    const missing = publicIds.find((id) => {
+      return !foundIds.has(id);
+    });
     throw new Error(`Policy not found: ${missing}`);
   }
-  return policies.map((p) => (p as unknown as { id: number }).id);
+  return policies.map((p) => {
+    return (p as unknown as { id: number }).id;
+  });
 };

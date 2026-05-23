@@ -53,21 +53,21 @@ describe('command help output', () => {
     expect(cliTestClient.fetchMock).toHaveBeenCalledTimes(0);
   });
 
-  test('create-agent-formation --help includes wrapper flags', async () => {
+  test('create-formation --help includes wrapper flags', async () => {
     const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
     jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       throw new Error(`EXIT_${code ?? 0}`);
     }) as never);
 
     await expect(
-      cliTestClient.call(['create-agent-formation', '--help'])
+      cliTestClient.call(['create-formation', '--help'])
     ).rejects.toThrow('EXIT_0');
 
     const output = logSpy.mock.calls.flat().join('\n');
 
-    expect(output).toContain('Usage: soat create-agent-formation [flags]');
+    expect(output).toContain('Usage: soat create-formation [flags]');
     expect(output).toContain(
-      'Module docs: https://soat.ttoss.dev/docs/modules/agent-formations'
+      'Module docs: https://soat.ttoss.dev/docs/modules/formations'
     );
     expect(output).toContain('--project_id  <string> [required]');
     expect(output).toContain('--template-path  <string>');

@@ -1,10 +1,11 @@
 import createDebug from 'debug';
-import { db } from 'src/db';
 
-import { lookupMemoryInternalId } from '../formationsHelpers';
+import { createChat, deleteChat } from '../chats';
 import type { FormationModule, ValidationError } from '../formationsTypes';
-import { createMemoryEntry, deleteMemoryEntry } from '../memoryEntries';
-import { toOptionalString } from '../resource-inputs/normalizers';
+import {
+  toNullableString,
+  toOptionalString,
+} from '../resource-inputs/normalizers';
 import {
   isObjectRecord,
   loadModuleSpec,
@@ -13,10 +14,10 @@ import {
   pushUnknownFieldErrors,
 } from './formationSpecLoader';
 
-const log = createDebug('soat:formations:memoryEntries');
+const log = createDebug('soat:formations:chats');
 
-const SCHEMA_NAME = 'MemoryEntryResourceProperties';
-const RESOURCE_LABEL = 'memory_entry';
+const SCHEMA_NAME = 'ChatResourceProperties';
+const RESOURCE_LABEL = 'chat';
 
 // ── Key normalization ────────────────────────────────────────────────────
 
@@ -38,7 +39,7 @@ const normalizePropertyKeys = (
 
 // ── Property validation ──────────────────────────────────────────────────
 
-const validateMemoryEntryProperties = (args: {
+const validateChatProperties = (args: {
   properties: unknown;
   basePath: string;
   forUpdate?: boolean;
@@ -48,7 +49,7 @@ const validateMemoryEntryProperties = (args: {
     return [
       {
         path: basePath,
-        message: 'MemoryEntry `properties` must be an object',
+        message: 'Chat `properties` must be an object',
       },
     ];
   }
@@ -73,17 +74,17 @@ const validateMemoryEntryProperties = (args: {
 
 // ── Module export ────────────────────────────────────────────────────────
 
-export const memoryEntriesFormationModule: FormationModule = {
-  resourceType: 'memory_entry',
+export const chatsFormationModule: FormationModule = {
+  resourceType: 'chat',
 
   validateProperties: ({ properties, basePath }) => {
-    return validateMemoryEntryProperties({ properties, basePath });
+    return validateChatProperties({ properties, basePath });
   },
 
-  create: async ({ properties: rawProperties }) => {
-    const errors = validateMemoryEntryProperties({
+  create: async ({ properties: rawProperties, projectId }) => {
+    const errors = validateChatProperties({
       properties: rawProperties,
-      basePath: 'resources.<memory_entry>.properties',
+      basePath: 'resources.<chat>.properties',
     });
     if (errors.length > 0) {
       throw new Error(errors[0].message);
@@ -93,61 +94,38 @@ export const memoryEntriesFormationModule: FormationModule = {
       ? normalizePropertyKeys(rawProperties)
       : rawProperties;
 
-    const memoryId = await lookupMemoryInternalId(
-      properties.memory_id as string
-    );
-
-    const result = await createMemoryEntry({
-      memoryId,
-      content: properties.content as string,
-      source: toOptionalString(properties.source) as
-        | 'manual'
-        | 'agent'
-        | undefined,
+    const result = await createChat({
+      projectId,
+      aiProviderId: properties.ai_provider_id as string,
+      name: toOptionalString(properties.name) ?? undefined,
+      systemMessage: toNullableString(properties.system_message) ?? undefined,
+      model: toNullableString(properties.model) ?? undefined,
     });
 
     log(
-      'created memory entry from formation: memoryId=%d entryId=%s',
-      memoryId,
+      'created chat from formation: projectId=%d chatId=%s',
+      projectId,
       result.id
     );
     return result.id;
   },
 
   update: async ({ properties: rawProperties, physicalResourceId }) => {
-    const errors = validateMemoryEntryProperties({
+    // Chats do not support updates — validate properties but skip the operation.
+    const errors = validateChatProperties({
       properties: rawProperties,
-      basePath: 'resources.<memory_entry>.properties',
+      basePath: 'resources.<chat>.properties',
       forUpdate: true,
     });
     if (errors.length > 0) {
       throw new Error(errors[0].message);
     }
 
-    const properties = isObjectRecord(rawProperties)
-      ? normalizePropertyKeys(rawProperties)
-      : rawProperties;
-
-    const entry = await db.MemoryEntry.findOne({
-      where: { publicId: physicalResourceId },
-    });
-
-    if (!entry) {
-      throw new Error(`MemoryEntry not found: ${physicalResourceId}`);
-    }
-
-    const content = toOptionalString(properties.content);
-    if (content !== undefined) {
-      entry.content = content;
-    }
-
-    await entry.save();
-
-    log('updated memory entry from formation: id=%s', physicalResourceId);
+    log('update chat from formation (no-op): id=%s', physicalResourceId);
   },
 
   delete: async ({ physicalResourceId }) => {
-    await deleteMemoryEntry({ id: physicalResourceId });
-    log('deleted memory entry from formation: id=%s', physicalResourceId);
+    await deleteChat({ id: physicalResourceId });
+    log('deleted chat from formation: id=%s', physicalResourceId);
   },
 };

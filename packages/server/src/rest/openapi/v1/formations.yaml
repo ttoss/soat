@@ -802,6 +802,150 @@ components:
             Optional list of policy public IDs that further restrict the key's
             permissions
 
+    ChatResourceProperties:
+      description: >-
+        Creates a chat connected to an AI provider within the formation's project.
+      type: object
+      additionalProperties: false
+      required:
+        - ai_provider_id
+      properties:
+        ai_provider_id:
+          type: string
+          description: Public ID of the AI provider to use for this chat
+        name:
+          type: string
+          nullable: true
+          description: Human-readable label for the chat
+        system_message:
+          type: string
+          nullable: true
+          description: System message to set the assistant behaviour
+        model:
+          type: string
+          nullable: true
+          description: Model override; defaults to the AI provider's default model
+
+    ConversationResourceProperties:
+      description: >-
+        Creates a conversation within the formation's project.
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          nullable: true
+          description: Human-readable label for the conversation
+        status:
+          type: string
+          description: Initial status of the conversation (open or closed)
+        actor_id:
+          type: string
+          nullable: true
+          description: Public ID of an actor to associate with this conversation
+
+    FileResourceProperties:
+      description: >-
+        Registers a file record within the formation's project.
+      type: object
+      additionalProperties: false
+      required:
+        - storage_type
+        - storage_path
+      properties:
+        storage_type:
+          type: string
+          enum: [local, s3, gcs]
+          description: Storage backend type
+        storage_path:
+          type: string
+          description: Path where the file is stored in the storage backend
+        path:
+          type: string
+          nullable: true
+          description: Logical path of the file within the project
+        filename:
+          type: string
+          nullable: true
+          description: Name of the file
+        content_type:
+          type: string
+          nullable: true
+          description: MIME type of the file
+        size:
+          type: integer
+          nullable: true
+          description: File size in bytes
+        metadata:
+          type: string
+          nullable: true
+          description: JSON string with additional metadata
+
+    PolicyResourceProperties:
+      description: >-
+        Creates an access-control policy within the formation's project.
+      type: object
+      additionalProperties: false
+      required:
+        - document
+      properties:
+        name:
+          type: string
+          nullable: true
+          description: Human-readable label for the policy
+        description:
+          type: string
+          nullable: true
+          description: Description of what the policy grants
+        document:
+          type: object
+          additionalProperties: true
+          description: Policy document containing an array of statements
+
+    SecretResourceProperties:
+      description: >-
+        Creates an encrypted secret within the formation's project.
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Human-readable label for the secret
+        value:
+          type: string
+          nullable: true
+          description: The secret value to encrypt and store
+
+    SessionResourceProperties:
+      description: >-
+        Creates a session attached to an agent within the formation's project.
+      type: object
+      additionalProperties: false
+      required:
+        - agent_id
+      properties:
+        agent_id:
+          type: string
+          description: Public ID of the agent that owns this session
+        name:
+          type: string
+          nullable: true
+          description: Human-readable label for the session
+        actor_id:
+          type: string
+          nullable: true
+          description: Public ID of an actor to associate with this session
+        auto_generate:
+          type: boolean
+          description: Whether to automatically generate a response when messages are sent
+        tool_context:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: Optional context object passed to tool calls
+
     ResourceDeclaration:
       type: object
       required:
@@ -816,9 +960,15 @@ components:
             - agent
             - actor
             - api_key
+            - chat
+            - conversation
             - document
+            - file
             - memory
             - memory_entry
+            - policy
+            - secret
+            - session
             - webhook
           description: Resource type
         properties:
@@ -828,9 +978,15 @@ components:
             - $ref: '#/components/schemas/AiProviderResourceProperties'
             - $ref: '#/components/schemas/AgentToolResourceProperties'
             - $ref: '#/components/schemas/ApiKeyResourceProperties'
+            - $ref: '#/components/schemas/ChatResourceProperties'
+            - $ref: '#/components/schemas/ConversationResourceProperties'
             - $ref: '#/components/schemas/DocumentResourceProperties'
+            - $ref: '#/components/schemas/FileResourceProperties'
             - $ref: '#/components/schemas/MemoryResourceProperties'
             - $ref: '#/components/schemas/MemoryEntryResourceProperties'
+            - $ref: '#/components/schemas/PolicyResourceProperties'
+            - $ref: '#/components/schemas/SecretResourceProperties'
+            - $ref: '#/components/schemas/SessionResourceProperties'
             - $ref: '#/components/schemas/WebhookResourceProperties'
           description: >
             Resource properties. Values may use `{ "ref": "logicalId" }` to
@@ -849,7 +1005,7 @@ components:
           additionalProperties: true
           nullable: true
 
-    AgentFormationResource:
+    FormationResource:
       type: object
       properties:
         id:
@@ -914,7 +1070,7 @@ components:
         resources:
           type: array
           items:
-            $ref: '#/components/schemas/AgentFormationResource'
+            $ref: '#/components/schemas/FormationResource'
           description: Resources managed by this formation (present on get/create/update)
         created_at:
           type: string

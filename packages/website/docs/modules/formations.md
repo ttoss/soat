@@ -226,7 +226,7 @@ Use `GET /api/v1/formations/{formation_id}/events` to retrieve the full history.
 | `created_at` | datetime |                                     |
 | `updated_at` | datetime |                                     |
 
-### AgentFormationResource
+### FormationResource
 
 | Field                  | Type   | Description                             |
 | ---------------------- | ------ | --------------------------------------- |

@@ -1,10 +1,8 @@
 import createDebug from 'debug';
-import { db } from 'src/db';
 
-import { lookupMemoryInternalId } from '../formationsHelpers';
 import type { FormationModule, ValidationError } from '../formationsTypes';
-import { createMemoryEntry, deleteMemoryEntry } from '../memoryEntries';
 import { toOptionalString } from '../resource-inputs/normalizers';
+import { createSecret, deleteSecret, updateSecret } from '../secrets';
 import {
   isObjectRecord,
   loadModuleSpec,
@@ -13,10 +11,10 @@ import {
   pushUnknownFieldErrors,
 } from './formationSpecLoader';
 
-const log = createDebug('soat:formations:memoryEntries');
+const log = createDebug('soat:formations:secrets');
 
-const SCHEMA_NAME = 'MemoryEntryResourceProperties';
-const RESOURCE_LABEL = 'memory_entry';
+const SCHEMA_NAME = 'SecretResourceProperties';
+const RESOURCE_LABEL = 'secret';
 
 // ── Key normalization ────────────────────────────────────────────────────
 
@@ -38,7 +36,7 @@ const normalizePropertyKeys = (
 
 // ── Property validation ──────────────────────────────────────────────────
 
-const validateMemoryEntryProperties = (args: {
+const validateSecretProperties = (args: {
   properties: unknown;
   basePath: string;
   forUpdate?: boolean;
@@ -48,7 +46,7 @@ const validateMemoryEntryProperties = (args: {
     return [
       {
         path: basePath,
-        message: 'MemoryEntry `properties` must be an object',
+        message: 'Secret `properties` must be an object',
       },
     ];
   }
@@ -73,17 +71,17 @@ const validateMemoryEntryProperties = (args: {
 
 // ── Module export ────────────────────────────────────────────────────────
 
-export const memoryEntriesFormationModule: FormationModule = {
-  resourceType: 'memory_entry',
+export const secretsFormationModule: FormationModule = {
+  resourceType: 'secret',
 
   validateProperties: ({ properties, basePath }) => {
-    return validateMemoryEntryProperties({ properties, basePath });
+    return validateSecretProperties({ properties, basePath });
   },
 
-  create: async ({ properties: rawProperties }) => {
-    const errors = validateMemoryEntryProperties({
+  create: async ({ properties: rawProperties, projectId }) => {
+    const errors = validateSecretProperties({
       properties: rawProperties,
-      basePath: 'resources.<memory_entry>.properties',
+      basePath: 'resources.<secret>.properties',
     });
     if (errors.length > 0) {
       throw new Error(errors[0].message);
@@ -93,31 +91,24 @@ export const memoryEntriesFormationModule: FormationModule = {
       ? normalizePropertyKeys(rawProperties)
       : rawProperties;
 
-    const memoryId = await lookupMemoryInternalId(
-      properties.memory_id as string
-    );
-
-    const result = await createMemoryEntry({
-      memoryId,
-      content: properties.content as string,
-      source: toOptionalString(properties.source) as
-        | 'manual'
-        | 'agent'
-        | undefined,
+    const result = await createSecret({
+      projectId,
+      name: properties.name as string,
+      value: toOptionalString(properties.value) ?? undefined,
     });
 
     log(
-      'created memory entry from formation: memoryId=%d entryId=%s',
-      memoryId,
+      'created secret from formation: projectId=%d secretId=%s',
+      projectId,
       result.id
     );
     return result.id;
   },
 
   update: async ({ properties: rawProperties, physicalResourceId }) => {
-    const errors = validateMemoryEntryProperties({
+    const errors = validateSecretProperties({
       properties: rawProperties,
-      basePath: 'resources.<memory_entry>.properties',
+      basePath: 'resources.<secret>.properties',
       forUpdate: true,
     });
     if (errors.length > 0) {
@@ -128,26 +119,17 @@ export const memoryEntriesFormationModule: FormationModule = {
       ? normalizePropertyKeys(rawProperties)
       : rawProperties;
 
-    const entry = await db.MemoryEntry.findOne({
-      where: { publicId: physicalResourceId },
+    await updateSecret({
+      id: physicalResourceId,
+      name: toOptionalString(properties.name) ?? undefined,
+      value: toOptionalString(properties.value) ?? undefined,
     });
 
-    if (!entry) {
-      throw new Error(`MemoryEntry not found: ${physicalResourceId}`);
-    }
-
-    const content = toOptionalString(properties.content);
-    if (content !== undefined) {
-      entry.content = content;
-    }
-
-    await entry.save();
-
-    log('updated memory entry from formation: id=%s', physicalResourceId);
+    log('updated secret from formation: id=%s', physicalResourceId);
   },
 
   delete: async ({ physicalResourceId }) => {
-    await deleteMemoryEntry({ id: physicalResourceId });
-    log('deleted memory entry from formation: id=%s', physicalResourceId);
+    await deleteSecret({ id: physicalResourceId, force: true });
+    log('deleted secret from formation: id=%s', physicalResourceId);
   },
 };

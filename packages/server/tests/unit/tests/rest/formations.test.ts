@@ -1,6 +1,6 @@
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
-describe('AgentFormations', () => {
+describe('Formations', () => {
   let adminToken: string;
   let userToken: string;
   let userId: string;
@@ -49,7 +49,7 @@ describe('AgentFormations', () => {
 
     const projectRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/projects')
-      .send({ name: 'AgentFormations Test Project' });
+      .send({ name: 'Formations Test Project' });
     projectId = projectRes.body.id;
 
     const policyRes = await authenticatedTestClient(adminToken)

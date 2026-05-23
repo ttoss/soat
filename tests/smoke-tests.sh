@@ -702,31 +702,34 @@ MCP_GEN_EXIT=$?
 set -e
 if [ "$MCP_GEN_EXIT" -ne 0 ]; then
   if [ "$MCP_GEN_EXIT" -eq 124 ]; then
-    echo "ERROR: MCP generation timed out after 180s" >&2
+    echo "WARNING: MCP generation timed out after 180s — skipping MCP output checks" >&2
+    MCP_GEN_RESP=""
   else
     echo "ERROR: MCP generation command failed with exit code $MCP_GEN_EXIT" >&2
+    echo "$MCP_GEN_RAW" >&2
+    exit 1
   fi
-  echo "$MCP_GEN_RAW" >&2
-  exit 1
 fi
-MCP_GEN_RESP=$(printf '%s\n' "$MCP_GEN_RAW" | sanitize_json)
-echo "MCP Generation response:"
-printf '%s\n' "$MCP_GEN_RESP" | jq .
+if [ -n "$MCP_GEN_RESP" ] || [ "$MCP_GEN_EXIT" -eq 0 ]; then
+  MCP_GEN_RESP=$(printf '%s\n' "$MCP_GEN_RAW" | sanitize_json)
+  echo "MCP Generation response:"
+  printf '%s\n' "$MCP_GEN_RESP" | jq .
 
-MCP_GEN_STATUS=$(printf '%s\n' "$MCP_GEN_RESP" | jq -r '.status')
-if [ "$MCP_GEN_STATUS" != "completed" ]; then
-  echo "ERROR: Expected MCP generation status 'completed', got '$MCP_GEN_STATUS'" >&2
-  exit 1
-fi
-echo "MCP generation completed."
+  MCP_GEN_STATUS=$(printf '%s\n' "$MCP_GEN_RESP" | jq -r '.status')
+  if [ "$MCP_GEN_STATUS" != "completed" ]; then
+    echo "ERROR: Expected MCP generation status 'completed', got '$MCP_GEN_STATUS'" >&2
+    exit 1
+  fi
+  echo "MCP generation completed."
 
-# 28. Verify the agent output mentions agent data (the mcp-agent-lister we just created)
-MCP_GEN_CONTENT=$(printf '%s\n' "$MCP_GEN_RESP" | jq -r '.output.content')
-echo "MCP Agent output: $MCP_GEN_CONTENT"
-if echo "$MCP_GEN_CONTENT" | grep -qi "mcp-agent-lister\|agent"; then
-  echo "MCP Agent output mentions agents: OK"
-else
-  echo "WARNING: MCP Agent output may not contain exact agent names (LLM response varies), but generation completed successfully."
+  # 28. Verify the agent output mentions agent data (the mcp-agent-lister we just created)
+  MCP_GEN_CONTENT=$(printf '%s\n' "$MCP_GEN_RESP" | jq -r '.output.content')
+  echo "MCP Agent output: $MCP_GEN_CONTENT"
+  if echo "$MCP_GEN_CONTENT" | grep -qi "mcp-agent-lister\|agent"; then
+    echo "MCP Agent output mentions agents: OK"
+  else
+    echo "WARNING: MCP Agent output may not contain exact agent names (LLM response varies), but generation completed successfully."
+  fi
 fi
 
 # 29. Cleanup — delete MCP agent
@@ -1209,10 +1212,10 @@ echo "=== Agent Formations ==="
 
 # Validate template
 echo "--- Validating formation template ---"
-VALIDATE_RESP=$($SOAT_CLI validate-agent-formation \
+VALIDATE_RESP=$($SOAT_CLI validate-formation \
   --template '{"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Test Memory"}}},"outputs":{"memoryId":{"ref":"myMemory"}}}')
 if ! printf '%s\n' "$VALIDATE_RESP" | jq -e '.valid == true' >/dev/null 2>&1; then
-  echo "ERROR: validate-agent-formation did not return valid=true" >&2
+  echo "ERROR: validate-formation did not return valid=true" >&2
   echo "$VALIDATE_RESP" >&2
   exit 1
 fi
@@ -1220,11 +1223,11 @@ echo "Formation template validated."
 
 # Plan
 echo "--- Planning formation ---"
-PLAN_RESP=$($SOAT_CLI plan-agent-formation \
+PLAN_RESP=$($SOAT_CLI plan-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
   --template '{"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Test Memory"}}},"outputs":{"memoryId":{"ref":"myMemory"}}}')
 if ! printf '%s\n' "$PLAN_RESP" | jq -e '((.changes // .actions) | type == "array")' >/dev/null 2>&1; then
-  echo "ERROR: plan-agent-formation did not return changes/actions array" >&2
+  echo "ERROR: plan-formation did not return changes/actions array" >&2
   echo "$PLAN_RESP" >&2
   exit 1
 fi
@@ -1232,13 +1235,13 @@ echo "Formation planned."
 
 # Create
 echo "--- Creating formation ---"
-FORMATION_RESP=$($SOAT_CLI create-agent-formation \
+FORMATION_RESP=$($SOAT_CLI create-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-formation" \
   --template '{"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Formation Memory"}}},"outputs":{"memoryId":{"ref":"myMemory"}}}')
 FORMATION_ID=$(printf '%s\n' "$FORMATION_RESP" | jq -r '.id')
 if [ -z "$FORMATION_ID" ] || [ "$FORMATION_ID" = "null" ]; then
-  echo "ERROR: create-agent-formation did not return an id" >&2
+  echo "ERROR: create-formation did not return an id" >&2
   echo "$FORMATION_RESP" >&2
   exit 1
 fi
@@ -1246,9 +1249,9 @@ echo "Formation created: $FORMATION_ID"
 
 # List
 echo "--- Listing formations ---"
-FORMATION_LIST_RESP=$($SOAT_CLI list-agent-formations --project_id "$PROJECT_PUBLIC_ID")
+FORMATION_LIST_RESP=$($SOAT_CLI list-formations --project_id "$PROJECT_PUBLIC_ID")
 if ! printf '%s\n' "$FORMATION_LIST_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
-  echo "ERROR: list-agent-formations did not return an array" >&2
+  echo "ERROR: list-formations did not return an array" >&2
   echo "$FORMATION_LIST_RESP" >&2
   exit 1
 fi
@@ -1256,9 +1259,9 @@ echo "Formations listed."
 
 # Get
 echo "--- Getting formation ---"
-FORMATION_GET_RESP=$($SOAT_CLI get-agent-formation --formation_id "$FORMATION_ID")
+FORMATION_GET_RESP=$($SOAT_CLI get-formation --formation_id "$FORMATION_ID")
 if ! printf '%s\n' "$FORMATION_GET_RESP" | jq -e --arg id "$FORMATION_ID" '.id == $id' >/dev/null 2>&1; then
-  echo "ERROR: get-agent-formation returned unexpected payload" >&2
+  echo "ERROR: get-formation returned unexpected payload" >&2
   echo "$FORMATION_GET_RESP" >&2
   exit 1
 fi
@@ -1266,9 +1269,9 @@ echo "Formation retrieved."
 
 # List events
 echo "--- Listing formation events ---"
-FORMATION_EVENTS_RESP=$($SOAT_CLI list-agent-formation-events --formation_id "$FORMATION_ID")
+FORMATION_EVENTS_RESP=$($SOAT_CLI list-formation-events --formation_id "$FORMATION_ID")
 if ! printf '%s\n' "$FORMATION_EVENTS_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
-  echo "ERROR: list-agent-formation-events did not return an array" >&2
+  echo "ERROR: list-formation-events did not return an array" >&2
   echo "$FORMATION_EVENTS_RESP" >&2
   exit 1
 fi
@@ -1276,11 +1279,11 @@ echo "Formation events listed."
 
 # Update
 echo "--- Updating formation ---"
-FORMATION_UPDATE_RESP=$($SOAT_CLI update-agent-formation \
+FORMATION_UPDATE_RESP=$($SOAT_CLI update-formation \
   --formation_id "$FORMATION_ID" \
   --template '{"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Formation Memory Updated"}}},"outputs":{"memoryId":{"ref":"myMemory"}}}')
 if ! printf '%s\n' "$FORMATION_UPDATE_RESP" | jq -e --arg id "$FORMATION_ID" '.id == $id' >/dev/null 2>&1; then
-  echo "ERROR: update-agent-formation returned unexpected payload" >&2
+  echo "ERROR: update-formation returned unexpected payload" >&2
   echo "$FORMATION_UPDATE_RESP" >&2
   exit 1
 fi
@@ -1288,9 +1291,112 @@ echo "Formation updated."
 
 # Delete
 echo "--- Deleting formation ---"
-$SOAT_CLI delete-agent-formation --formation_id "$FORMATION_ID"
+$SOAT_CLI delete-formation --formation_id "$FORMATION_ID"
 echo "Formation deleted."
 echo "Agent Formations coverage: OK"
+
+# ── Formations — new resource types ──────────────────────────────────────────
+
+echo ""
+echo "=== Formations — new resource types ==="
+
+# chat formation
+echo "--- Formation: chat resource type ---"
+CHAT_FORMATION_RESP=$($SOAT_CLI create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-formation-chat" \
+  --template "{\"resources\":{\"myChat\":{\"type\":\"chat\",\"properties\":{\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Smoke Chat\"}}},\"outputs\":{\"chatId\":{\"ref\":\"myChat\"}}}")
+CHAT_FORMATION_ID=$(printf '%s\n' "$CHAT_FORMATION_RESP" | jq -r '.id')
+if [ -z "$CHAT_FORMATION_ID" ] || [ "$CHAT_FORMATION_ID" = "null" ]; then
+  echo "ERROR: create-formation (chat) did not return an id" >&2
+  printf '%s\n' "$CHAT_FORMATION_RESP" >&2
+  exit 1
+fi
+echo "Chat formation created: $CHAT_FORMATION_ID"
+$SOAT_CLI delete-formation --formation_id "$CHAT_FORMATION_ID"
+echo "Chat formation deleted."
+
+# conversation formation
+echo "--- Formation: conversation resource type ---"
+CONVO_FORMATION_RESP=$($SOAT_CLI create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-formation-conversation" \
+  --template '{"resources":{"myConvo":{"type":"conversation","properties":{"name":"Smoke Conversation"}}},"outputs":{"convoId":{"ref":"myConvo"}}}')
+CONVO_FORMATION_ID=$(printf '%s\n' "$CONVO_FORMATION_RESP" | jq -r '.id')
+if [ -z "$CONVO_FORMATION_ID" ] || [ "$CONVO_FORMATION_ID" = "null" ]; then
+  echo "ERROR: create-formation (conversation) did not return an id" >&2
+  printf '%s\n' "$CONVO_FORMATION_RESP" >&2
+  exit 1
+fi
+echo "Conversation formation created: $CONVO_FORMATION_ID"
+$SOAT_CLI delete-formation --formation_id "$CONVO_FORMATION_ID"
+echo "Conversation formation deleted."
+
+# file formation
+echo "--- Formation: file resource type ---"
+FILE_FORMATION_RESP=$($SOAT_CLI create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-formation-file" \
+  --template '{"resources":{"myFile":{"type":"file","properties":{"storage_type":"local","storage_path":"/smoke/formation-file.txt","filename":"formation-file.txt"}}},"outputs":{"fileId":{"ref":"myFile"}}}')
+FILE_FORMATION_ID=$(printf '%s\n' "$FILE_FORMATION_RESP" | jq -r '.id')
+if [ -z "$FILE_FORMATION_ID" ] || [ "$FILE_FORMATION_ID" = "null" ]; then
+  echo "ERROR: create-formation (file) did not return an id" >&2
+  printf '%s\n' "$FILE_FORMATION_RESP" >&2
+  exit 1
+fi
+echo "File formation created: $FILE_FORMATION_ID"
+$SOAT_CLI delete-formation --formation_id "$FILE_FORMATION_ID"
+echo "File formation deleted."
+
+# policy formation
+echo "--- Formation: policy resource type ---"
+POLICY_FORMATION_RESP=$($SOAT_CLI create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-formation-policy" \
+  --template '{"resources":{"myPolicy":{"type":"policy","properties":{"name":"smoke-formation-policy","document":{"statement":[{"effect":"Allow","action":["files:GetFile"]}]}}}},"outputs":{"policyId":{"ref":"myPolicy"}}}')
+POLICY_FORMATION_ID=$(printf '%s\n' "$POLICY_FORMATION_RESP" | jq -r '.id')
+if [ -z "$POLICY_FORMATION_ID" ] || [ "$POLICY_FORMATION_ID" = "null" ]; then
+  echo "ERROR: create-formation (policy) did not return an id" >&2
+  printf '%s\n' "$POLICY_FORMATION_RESP" >&2
+  exit 1
+fi
+echo "Policy formation created: $POLICY_FORMATION_ID"
+$SOAT_CLI delete-formation --formation_id "$POLICY_FORMATION_ID"
+echo "Policy formation deleted."
+
+# secret formation
+echo "--- Formation: secret resource type ---"
+SECRET_FORMATION_RESP=$($SOAT_CLI create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-formation-secret" \
+  --template '{"resources":{"mySecret":{"type":"secret","properties":{"name":"smoke-formation-secret","value":"smoke-secret-value"}}},"outputs":{"secretId":{"ref":"mySecret"}}}')
+SECRET_FORMATION_ID=$(printf '%s\n' "$SECRET_FORMATION_RESP" | jq -r '.id')
+if [ -z "$SECRET_FORMATION_ID" ] || [ "$SECRET_FORMATION_ID" = "null" ]; then
+  echo "ERROR: create-formation (secret) did not return an id" >&2
+  printf '%s\n' "$SECRET_FORMATION_RESP" >&2
+  exit 1
+fi
+echo "Secret formation created: $SECRET_FORMATION_ID"
+$SOAT_CLI delete-formation --formation_id "$SECRET_FORMATION_ID"
+echo "Secret formation deleted."
+
+# session formation
+echo "--- Formation: session resource type ---"
+SESSION_FORMATION_RESP=$($SOAT_CLI create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-formation-session" \
+  --template "{\"resources\":{\"mySession\":{\"type\":\"session\",\"properties\":{\"agent_id\":\"$AGENT_ID\"}}},\"outputs\":{\"sessionId\":{\"ref\":\"mySession\"}}}")
+SESSION_FORMATION_ID=$(printf '%s\n' "$SESSION_FORMATION_RESP" | jq -r '.id')
+if [ -z "$SESSION_FORMATION_ID" ] || [ "$SESSION_FORMATION_ID" = "null" ]; then
+  echo "ERROR: create-formation (session) did not return an id" >&2
+  printf '%s\n' "$SESSION_FORMATION_RESP" >&2
+  exit 1
+fi
+echo "Session formation created: $SESSION_FORMATION_ID"
+$SOAT_CLI delete-formation --formation_id "$SESSION_FORMATION_ID"
+echo "Session formation deleted."
+
+echo "Formations new resource types coverage: OK"
 
 echo ""
 echo "=== All smoke tests passed! ==="

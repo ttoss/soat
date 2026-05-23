@@ -38,9 +38,9 @@ describe('formation wrapper endpoint integration', () => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
   });
 
-  test('validate-agent-formation hits validate endpoint', async () => {
+  test('validate-formation hits validate endpoint', async () => {
     const requests = await cliTestClient.call([
-      'validate-agent-formation',
+      'validate-formation',
       '--template-path',
       templatePath,
     ]);
@@ -48,16 +48,16 @@ describe('formation wrapper endpoint integration', () => {
     expect(cliTestClient.fetchMock).toHaveBeenCalledTimes(1);
     expect(requests).toHaveLength(1);
     expect(requests[0]?.method).toBe('POST');
-    expect(requests[0]?.path).toBe('/api/v1/agent-formations/validate');
+    expect(requests[0]?.path).toBe('/api/v1/formations/validate');
 
     const body = requests[0]?.body as { template?: { resources?: unknown } };
     expect(body.template).toBeDefined();
     expect(body.template?.resources).toBeDefined();
   });
 
-  test('plan-agent-formation hits plan endpoint and resolves env-backed parameter', async () => {
+  test('plan-formation hits plan endpoint and resolves env-backed parameter', async () => {
     const requests = await cliTestClient.call([
-      'plan-agent-formation',
+      'plan-formation',
       '--project-id',
       'proj_test',
       '--template-path',
@@ -71,7 +71,7 @@ describe('formation wrapper endpoint integration', () => {
     expect(cliTestClient.fetchMock).toHaveBeenCalledTimes(1);
     expect(requests).toHaveLength(1);
     expect(requests[0]?.method).toBe('POST');
-    expect(requests[0]?.path).toBe('/api/v1/agent-formations/plan');
+    expect(requests[0]?.path).toBe('/api/v1/formations/plan');
 
     const body = requests[0]?.body as {
       project_id?: string;
@@ -81,9 +81,9 @@ describe('formation wrapper endpoint integration', () => {
     expect(body.parameters?.appUrl).toBe('https://from-env-file.test');
   });
 
-  test('create-agent-formation hits create endpoint with parameters from repeated --parameter', async () => {
+  test('create-formation hits create endpoint with parameters from repeated --parameter', async () => {
     const requests = await cliTestClient.call([
-      'create-agent-formation',
+      'create-formation',
       '--project-id',
       'proj_test',
       '--name',
@@ -99,7 +99,7 @@ describe('formation wrapper endpoint integration', () => {
     expect(cliTestClient.fetchMock).toHaveBeenCalledTimes(1);
     expect(requests).toHaveLength(1);
     expect(requests[0]?.method).toBe('POST');
-    expect(requests[0]?.path).toBe('/api/v1/agent-formations');
+    expect(requests[0]?.path).toBe('/api/v1/formations');
 
     const body = requests[0]?.body as {
       project_id?: string;
@@ -112,9 +112,9 @@ describe('formation wrapper endpoint integration', () => {
     expect(body.parameters?.xaiSecretId).toBe('sec_001');
   });
 
-  test('update-agent-formation hits update endpoint', async () => {
+  test('update-formation hits update endpoint', async () => {
     const requests = await cliTestClient.call([
-      'update-agent-formation',
+      'update-formation',
       '--formation-id',
       'af_existing',
       '--template-path',
@@ -126,7 +126,7 @@ describe('formation wrapper endpoint integration', () => {
     expect(cliTestClient.fetchMock).toHaveBeenCalledTimes(1);
     expect(requests).toHaveLength(1);
     expect(requests[0]?.method).toBe('PUT');
-    expect(requests[0]?.path).toBe('/api/v1/agent-formations/af_existing');
+    expect(requests[0]?.path).toBe('/api/v1/formations/af_existing');
 
     const body = requests[0]?.body as {
       parameters?: Record<string, string>;

@@ -19,7 +19,7 @@ const buildResource = (args: {
 }) => {
   return db.FormationResource.build({
     publicId: `afr_${args.logicalId}`,
-    agentFormationId: 1,
+    formationId: 1,
     logicalId: args.logicalId,
     resourceType: args.resourceType,
     physicalResourceId: args.physicalResourceId,
@@ -175,7 +175,7 @@ describe('formationsApply', () => {
   test('processResourceChange marks resource as failed when create handler throws', async () => {
     const resourceRow = db.FormationResource.build({
       publicId: 'afr_failure',
-      agentFormationId: 1,
+      formationId: 1,
       logicalId: 'xaiProvider',
       resourceType: 'ai_provider',
       status: 'pending',

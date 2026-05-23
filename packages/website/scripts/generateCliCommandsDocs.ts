@@ -122,7 +122,7 @@ const DOC_OVERRIDES: Record<string, string> = {
 };
 
 const WRAPPER_FLAG_OVERRIDES: Record<string, CommandFlag[]> = {
-  'validate-agent-formation': [
+  'validate-formation': [
     {
       flag: '--template-path',
       source: 'wrapper',
@@ -141,43 +141,7 @@ const WRAPPER_FLAG_OVERRIDES: Record<string, CommandFlag[]> = {
       notes: 'Mutually exclusive with --template and --template-path.',
     },
   ],
-  'plan-agent-formation': [
-    {
-      flag: '--template-path',
-      source: 'wrapper',
-      required: false,
-      type: 'string',
-      description:
-        'Read template from a local JSON/YAML file and map it to body.template.',
-      notes: 'Mutually exclusive with --template and --template-file.',
-    },
-    {
-      flag: '--template-file',
-      source: 'wrapper',
-      required: false,
-      type: 'string',
-      description: 'Alias of --template-path.',
-      notes: 'Mutually exclusive with --template and --template-path.',
-    },
-    {
-      flag: '--parameter',
-      source: 'wrapper',
-      required: false,
-      type: 'string (repeatable key=value)',
-      description:
-        'Repeatable parameter assignment merged into body.parameters.',
-      notes: 'Mutually exclusive with --parameters.',
-    },
-    {
-      flag: '--env-file',
-      source: 'wrapper',
-      required: false,
-      type: 'string',
-      description:
-        'Load environment variables from file for resolving $VAR and ${VAR} in --parameter values.',
-    },
-  ],
-  'create-agent-formation': [
+  'plan-formation': [
     {
       flag: '--template-path',
       source: 'wrapper',
@@ -213,7 +177,43 @@ const WRAPPER_FLAG_OVERRIDES: Record<string, CommandFlag[]> = {
         'Load environment variables from file for resolving $VAR and ${VAR} in --parameter values.',
     },
   ],
-  'update-agent-formation': [
+  'create-formation': [
+    {
+      flag: '--template-path',
+      source: 'wrapper',
+      required: false,
+      type: 'string',
+      description:
+        'Read template from a local JSON/YAML file and map it to body.template.',
+      notes: 'Mutually exclusive with --template and --template-file.',
+    },
+    {
+      flag: '--template-file',
+      source: 'wrapper',
+      required: false,
+      type: 'string',
+      description: 'Alias of --template-path.',
+      notes: 'Mutually exclusive with --template and --template-path.',
+    },
+    {
+      flag: '--parameter',
+      source: 'wrapper',
+      required: false,
+      type: 'string (repeatable key=value)',
+      description:
+        'Repeatable parameter assignment merged into body.parameters.',
+      notes: 'Mutually exclusive with --parameters.',
+    },
+    {
+      flag: '--env-file',
+      source: 'wrapper',
+      required: false,
+      type: 'string',
+      description:
+        'Load environment variables from file for resolving $VAR and ${VAR} in --parameter values.',
+    },
+  ],
+  'update-formation': [
     {
       flag: '--template-path',
       source: 'wrapper',

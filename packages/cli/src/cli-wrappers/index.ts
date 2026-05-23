@@ -1,7 +1,7 @@
 import type { HelpFlag, ParsedFlags, RouteLike, Wrapper } from './types.js';
-import { agentFormationsWrapper } from './wrappers/agentFormations.js';
+import { formationsWrapper } from './wrappers/formations.js';
 
-const WRAPPERS: Wrapper[] = [agentFormationsWrapper];
+const WRAPPERS: Wrapper[] = [formationsWrapper];
 
 const resolveWrapperForCommand = (args: {
   commandName: string;
