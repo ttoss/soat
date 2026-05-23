@@ -132,4 +132,10 @@ export const secretsFormationModule: FormationModule = {
     await deleteSecret({ id: physicalResourceId, force: true });
     log('deleted secret from formation: id=%s', physicalResourceId);
   },
+
+  // Secrets are write-only: the value cannot be read back. Always return null
+  // so the planner treats any existing secret as needing an update.
+  read: async () => {
+    return null;
+  },
 };

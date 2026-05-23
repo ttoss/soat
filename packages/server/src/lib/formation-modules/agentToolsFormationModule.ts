@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import {
   createAgentTool,
   deleteAgentTool,
+  getAgentTool,
   updateAgentTool,
 } from '../agentToolsCrud';
 import type { FormationModule, ValidationError } from '../formationsTypes';
@@ -123,5 +124,23 @@ export const agentToolsFormationModule: FormationModule = {
 
   delete: async ({ physicalResourceId }) => {
     await deleteAgentTool({ id: physicalResourceId });
+  },
+
+  read: async ({ physicalResourceId }) => {
+    try {
+      const tool = await getAgentTool({ id: physicalResourceId });
+      return {
+        name: tool.name,
+        type: tool.type,
+        description: tool.description,
+        parameters: tool.parameters,
+        execute: tool.execute,
+        mcp: tool.mcp,
+        actions: tool.actions,
+        preset_parameters: tool.presetParameters,
+      };
+    } catch {
+      return null;
+    }
   },
 };

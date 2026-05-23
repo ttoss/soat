@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import {
   createActor,
   deleteActor,
+  getActor,
   resolveActorLinkedIds,
   updateActor,
   validateActorExclusivity,
@@ -150,5 +151,21 @@ export const actorsFormationModule: FormationModule = {
 
   delete: async ({ physicalResourceId }) => {
     await deleteActor({ id: physicalResourceId });
+  },
+
+  read: async ({ physicalResourceId }) => {
+    try {
+      const actor = await getActor({ id: physicalResourceId });
+      return {
+        name: actor.name,
+        external_id: actor.externalId,
+        instructions: actor.instructions,
+        agent_id: actor.agentId,
+        chat_id: actor.chatId,
+        memory_id: actor.memoryId,
+      };
+    } catch {
+      return null;
+    }
   },
 };

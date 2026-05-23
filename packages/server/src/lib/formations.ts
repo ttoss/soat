@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'util';
+
 import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
@@ -8,7 +10,13 @@ import {
   buildDeleteOrder,
   performResourceDeletions,
 } from './formationsApply';
-import { buildDependencyGraph, topologicalSort } from './formationsHelpers';
+import {
+  buildDependencyGraph,
+  buildResolvedParamsMap,
+  resolveParamExpressions,
+  topologicalSort,
+} from './formationsHelpers';
+import { getFormationModule } from './formationsRegistry';
 import type {
   FormationEvent,
   FormationTemplate,
@@ -111,15 +119,52 @@ export const planFormation = async (args: {
     }
   }
 
-  const changes: PlanChange[] = sortedOrder.map((logicalId) => {
-    const decl = args.template.resources[logicalId];
-    const exists = existingMap.has(logicalId);
-    return {
-      logicalId,
-      resourceType: decl.type,
-      action: exists ? 'update' : 'create',
-    };
-  });
+  const resolvedParams = buildResolvedParamsMap(args.template, args.parameters);
+
+  const changes: PlanChange[] = await Promise.all(
+    sortedOrder.map(async (logicalId): Promise<PlanChange> => {
+      const decl = args.template.resources[logicalId];
+      const physicalResourceId = existingMap.get(logicalId);
+
+      if (!physicalResourceId) {
+        return { logicalId, resourceType: decl.type, action: 'create' };
+      }
+
+      // Attempt a property-level diff using the module's read method.
+      const module = getFormationModule({ resourceType: decl.type });
+      if (module?.read) {
+        try {
+          const liveProperties = await module.read({ physicalResourceId });
+          if (liveProperties !== null) {
+            const resolvedProperties = resolveParamExpressions(
+              decl.properties ?? {},
+              resolvedParams
+            ) as Record<string, unknown>;
+
+            const needsUpdate = Object.entries(resolvedProperties).some(
+              ([key, value]) => !isDeepStrictEqual(liveProperties[key], value)
+            );
+
+            return {
+              logicalId,
+              resourceType: decl.type,
+              physicalResourceId,
+              action: needsUpdate ? 'update' : 'no-op',
+            };
+          }
+        } catch {
+          // read failed — fall through to 'update'
+        }
+      }
+
+      return {
+        logicalId,
+        resourceType: decl.type,
+        physicalResourceId,
+        action: 'update',
+      };
+    })
+  );
 
   return { changes };
 };

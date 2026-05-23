@@ -53,12 +53,22 @@ export type FormationModule = {
     physicalResourceId: string;
   }) => Promise<void>;
   delete: (args: { physicalResourceId: string }) => Promise<void>;
+  /**
+   * Read the current live state of a resource and return its properties in
+   * the same snake_case format used by the formation template. Returns null
+   * if the resource no longer exists (drift).
+   */
+  read?: (args: {
+    physicalResourceId: string;
+  }) => Promise<Record<string, unknown> | null>;
 };
 
 export type PlanChange = {
   logicalId: string;
   resourceType: string;
   action: 'create' | 'update' | 'delete' | 'no-op';
+  /** The physical resource ID for existing resources (update / no-op / delete). */
+  physicalResourceId?: string;
 };
 
 export type PlanResult = {

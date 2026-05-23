@@ -1,6 +1,6 @@
 import createDebug from 'debug';
 
-import { createDocument, deleteDocument } from '../documents';
+import { createDocument, deleteDocument, getDocument } from '../documents';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
   toNullableObject,
@@ -124,5 +124,22 @@ export const documentsFormationModule: FormationModule = {
   delete: async ({ physicalResourceId }) => {
     await deleteDocument({ id: physicalResourceId });
     log('deleted document from formation: id=%s', physicalResourceId);
+  },
+
+  read: async ({ physicalResourceId }) => {
+    try {
+      const doc = await getDocument({ id: physicalResourceId });
+      if (!doc) return null;
+      return {
+        content: doc.content,
+        path: doc.path,
+        filename: doc.filename,
+        title: doc.title,
+        metadata: doc.metadata,
+        tags: doc.tags,
+      };
+    } catch {
+      return null;
+    }
   },
 };

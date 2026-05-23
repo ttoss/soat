@@ -8,7 +8,12 @@ import {
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
-import { createSession, deleteSession, updateSession } from '../sessions';
+import {
+  createSession,
+  deleteSession,
+  getSession,
+  updateSession,
+} from '../sessions';
 import {
   isObjectRecord,
   loadModuleSpec,
@@ -176,5 +181,24 @@ export const sessionsFormationModule: FormationModule = {
     const agentId = await getSessionAgentInternalId(physicalResourceId);
     await deleteSession({ agentId, sessionId: physicalResourceId });
     log('deleted session from formation: id=%s', physicalResourceId);
+  },
+
+  read: async ({ physicalResourceId }) => {
+    try {
+      const agentId = await getSessionAgentInternalId(physicalResourceId);
+      const session = await getSession({
+        agentId,
+        sessionId: physicalResourceId,
+      });
+      return {
+        agent_id: session.agentId,
+        name: session.name,
+        actor_id: session.actorId,
+        auto_generate: session.autoGenerate,
+        tool_context: session.toolContext,
+      };
+    } catch {
+      return null;
+    }
   },
 };

@@ -2,7 +2,12 @@ import createDebug from 'debug';
 
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import type { PolicyDocument } from '../iam';
-import { createPolicy, deletePolicy, updatePolicy } from '../policies';
+import {
+  createPolicy,
+  deletePolicy,
+  getPolicy,
+  updatePolicy,
+} from '../policies';
 import { toOptionalString } from '../resource-inputs/normalizers';
 import {
   isObjectRecord,
@@ -141,5 +146,19 @@ export const policiesFormationModule: FormationModule = {
   delete: async ({ physicalResourceId }) => {
     await deletePolicy({ policyId: physicalResourceId });
     log('deleted policy from formation: id=%s', physicalResourceId);
+  },
+
+  read: async ({ physicalResourceId }) => {
+    try {
+      const policy = await getPolicy({ policyId: physicalResourceId });
+      if (!policy) return null;
+      return {
+        name: policy.name,
+        description: policy.description,
+        document: policy.document,
+      };
+    } catch {
+      return null;
+    }
   },
 };

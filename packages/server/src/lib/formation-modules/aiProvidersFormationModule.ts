@@ -4,6 +4,7 @@ import createDebug from 'debug';
 import {
   createAiProvider,
   deleteAiProvider,
+  getAiProvider,
   updateAiProvider,
 } from '../aiProviders';
 import { lookupSecretInternalId } from '../formationsHelpers';
@@ -179,5 +180,22 @@ export const aiProvidersFormationModule: FormationModule = {
       'deleted AI provider from formation: providerId=%s',
       physicalResourceId
     );
+  },
+
+  read: async ({ physicalResourceId }) => {
+    try {
+      const provider = await getAiProvider({ id: physicalResourceId });
+      if (!provider) return null;
+      return {
+        name: provider.name,
+        provider: provider.provider,
+        default_model: provider.defaultModel,
+        base_url: provider.baseUrl,
+        config: provider.config,
+        secret_id: provider.secretId,
+      };
+    } catch {
+      return null;
+    }
   },
 };

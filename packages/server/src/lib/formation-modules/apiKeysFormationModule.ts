@@ -1,6 +1,11 @@
 import createDebug from 'debug';
 
-import { createApiKey, deleteApiKey, updateApiKey } from '../apiKeys';
+import {
+  createApiKey,
+  deleteApiKey,
+  getApiKey,
+  updateApiKey,
+} from '../apiKeys';
 import {
   lookupPolicyInternalIds,
   lookupProjectOwnerUserId,
@@ -159,5 +164,18 @@ export const apiKeysFormationModule: FormationModule = {
   delete: async ({ physicalResourceId }) => {
     await deleteApiKey({ id: physicalResourceId });
     log('deleted API key from formation: keyId=%s', physicalResourceId);
+  },
+
+  read: async ({ physicalResourceId }) => {
+    try {
+      const key = await getApiKey({ id: physicalResourceId });
+      if (!key) return null;
+      return {
+        name: key.name,
+        policy_ids: key.policyIds,
+      };
+    } catch {
+      return null;
+    }
   },
 };

@@ -1,6 +1,6 @@
 import createDebug from 'debug';
 
-import { createAgent, deleteAgent, updateAgent } from '../agents';
+import { createAgent, deleteAgent, getAgent, updateAgent } from '../agents';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
   toNullableArray,
@@ -137,5 +137,28 @@ export const agentsFormationModule: FormationModule = {
 
   delete: async ({ physicalResourceId }) => {
     await deleteAgent({ id: physicalResourceId });
+  },
+
+  read: async ({ physicalResourceId }) => {
+    try {
+      const agent = await getAgent({ id: physicalResourceId });
+      return {
+        ai_provider_id: agent.aiProviderId,
+        name: agent.name,
+        instructions: agent.instructions,
+        model: agent.model,
+        tool_ids: agent.toolIds,
+        max_steps: agent.maxSteps,
+        tool_choice: agent.toolChoice,
+        stop_conditions: agent.stopConditions,
+        active_tool_ids: agent.activeToolIds,
+        step_rules: agent.stepRules,
+        boundary_policy: agent.boundaryPolicy,
+        temperature: agent.temperature,
+        knowledge_config: agent.knowledgeConfig,
+      };
+    } catch {
+      return null;
+    }
   },
 };

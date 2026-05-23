@@ -3,7 +3,11 @@ import { db } from 'src/db';
 
 import { lookupMemoryInternalId } from '../formationsHelpers';
 import type { FormationModule, ValidationError } from '../formationsTypes';
-import { createMemoryEntry, deleteMemoryEntry } from '../memoryEntries';
+import {
+  createMemoryEntry,
+  deleteMemoryEntry,
+  getMemoryEntry,
+} from '../memoryEntries';
 import { toOptionalString } from '../resource-inputs/normalizers';
 import {
   isObjectRecord,
@@ -149,5 +153,19 @@ export const memoryEntriesFormationModule: FormationModule = {
   delete: async ({ physicalResourceId }) => {
     await deleteMemoryEntry({ id: physicalResourceId });
     log('deleted memory entry from formation: id=%s', physicalResourceId);
+  },
+
+  read: async ({ physicalResourceId }) => {
+    try {
+      const entry = await getMemoryEntry({ id: physicalResourceId });
+      if (!entry) return null;
+      return {
+        memory_id: entry.memoryId,
+        content: entry.content,
+        source: entry.source,
+      };
+    } catch {
+      return null;
+    }
   },
 };

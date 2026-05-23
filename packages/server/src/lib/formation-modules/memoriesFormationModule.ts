@@ -1,7 +1,12 @@
 import createDebug from 'debug';
 
 import type { FormationModule, ValidationError } from '../formationsTypes';
-import { createMemory, deleteMemory, updateMemory } from '../memories';
+import {
+  createMemory,
+  deleteMemory,
+  getMemory,
+  updateMemory,
+} from '../memories';
 import {
   toNullableArray,
   toNullableString,
@@ -137,5 +142,19 @@ export const memoriesFormationModule: FormationModule = {
   delete: async ({ physicalResourceId }) => {
     await deleteMemory({ id: physicalResourceId });
     log('deleted memory from formation: id=%s', physicalResourceId);
+  },
+
+  read: async ({ physicalResourceId }) => {
+    try {
+      const memory = await getMemory({ id: physicalResourceId });
+      if (!memory) return null;
+      return {
+        name: memory.name,
+        description: memory.description,
+        tags: memory.tags,
+      };
+    } catch {
+      return null;
+    }
   },
 };

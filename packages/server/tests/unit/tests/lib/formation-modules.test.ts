@@ -1,4 +1,7 @@
 import { db } from 'src/db';
+import * as actorsModule from 'src/lib/actors';
+import * as agentsModule from 'src/lib/agents';
+import * as aiProvidersModule from 'src/lib/aiProviders';
 import * as apiKeysModule from 'src/lib/apiKeys';
 import * as chatsModule from 'src/lib/chats';
 import * as conversationsModule from 'src/lib/conversations';
@@ -7,6 +10,7 @@ import * as helpersModule from 'src/lib/formationsHelpers';
 import * as policiesModule from 'src/lib/policies';
 import * as secretsModule from 'src/lib/secrets';
 import * as sessionsModule from 'src/lib/sessions';
+import * as webhooksModule from 'src/lib/webhooks';
 import {
   applyCreateResource,
   applyDeleteResource,
@@ -855,5 +859,203 @@ describe('sessionsFormationModule', () => {
         physicalResourceId: 'sess_notfound',
       })
     ).rejects.toThrow('Session not found: sess_notfound');
+  });
+});
+
+// ── agentsFormationModule.read ────────────────────────────────────────────
+
+describe('agentsFormationModule - read', () => {
+  const mockGetAgent = jest.spyOn(agentsModule, 'getAgent');
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('returns snake_case properties matching live agent state', async () => {
+    mockGetAgent.mockResolvedValueOnce({
+      id: 'agt_1',
+      projectId: 'prj_1',
+      aiProviderId: 'aip_1',
+      name: 'My Agent',
+      instructions: 'Do stuff',
+      model: 'gpt-4o',
+      toolIds: ['tool_1'],
+      maxSteps: 10,
+      toolChoice: 'auto',
+      stopConditions: [],
+      activeToolIds: [],
+      stepRules: [],
+      boundaryPolicy: null,
+      temperature: 0.5,
+      knowledgeConfig: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any);
+
+    const module = getFormationModule({ resourceType: 'agent' });
+    expect(module?.read).toBeDefined();
+
+    const result = await module!.read!({ physicalResourceId: 'agt_1' });
+
+    expect(result).toMatchObject({
+      ai_provider_id: 'aip_1',
+      name: 'My Agent',
+      instructions: 'Do stuff',
+      model: 'gpt-4o',
+      tool_ids: ['tool_1'],
+      max_steps: 10,
+      tool_choice: 'auto',
+    });
+  });
+
+  test('returns null when agent is not found', async () => {
+    mockGetAgent.mockRejectedValueOnce(new Error('RESOURCE_NOT_FOUND'));
+
+    const module = getFormationModule({ resourceType: 'agent' });
+    const result = await module!.read!({ physicalResourceId: 'agt_missing' });
+
+    expect(result).toBeNull();
+  });
+});
+
+// ── actorsFormationModule.read ────────────────────────────────────────────
+
+describe('actorsFormationModule - read', () => {
+  const mockGetActor = jest.spyOn(actorsModule, 'getActor');
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('returns snake_case properties matching live actor state', async () => {
+    mockGetActor.mockResolvedValueOnce({
+      id: 'act_1',
+      projectId: 'prj_1',
+      name: 'My Actor',
+      externalId: 'ext_123',
+      instructions: 'Be helpful',
+      agentId: 'agt_1',
+      chatId: undefined,
+      memoryId: 'mem_1',
+      tags: undefined,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any);
+
+    const module = getFormationModule({ resourceType: 'actor' });
+    expect(module?.read).toBeDefined();
+
+    const result = await module!.read!({ physicalResourceId: 'act_1' });
+
+    expect(result).toMatchObject({
+      name: 'My Actor',
+      external_id: 'ext_123',
+      instructions: 'Be helpful',
+      agent_id: 'agt_1',
+      memory_id: 'mem_1',
+    });
+  });
+
+  test('returns null when actor is not found', async () => {
+    mockGetActor.mockRejectedValueOnce(new Error('RESOURCE_NOT_FOUND'));
+
+    const module = getFormationModule({ resourceType: 'actor' });
+    const result = await module!.read!({ physicalResourceId: 'act_missing' });
+
+    expect(result).toBeNull();
+  });
+});
+
+// ── aiProvidersFormationModule.read ───────────────────────────────────────
+
+describe('aiProvidersFormationModule - read', () => {
+  const mockGetAiProvider = jest.spyOn(aiProvidersModule, 'getAiProvider');
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('returns snake_case properties matching live ai provider state', async () => {
+    mockGetAiProvider.mockResolvedValueOnce({
+      id: 'aip_1',
+      projectId: 'prj_1',
+      name: 'My Provider',
+      provider: 'openai',
+      defaultModel: 'gpt-4o',
+      baseUrl: 'https://api.openai.com',
+      config: {},
+      secretId: 'sec_1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any);
+
+    const module = getFormationModule({ resourceType: 'ai_provider' });
+    expect(module?.read).toBeDefined();
+
+    const result = await module!.read!({ physicalResourceId: 'aip_1' });
+
+    expect(result).toMatchObject({
+      name: 'My Provider',
+      provider: 'openai',
+      default_model: 'gpt-4o',
+      base_url: 'https://api.openai.com',
+      config: {},
+      secret_id: 'sec_1',
+    });
+  });
+
+  test('returns null when ai provider is not found', async () => {
+    mockGetAiProvider.mockResolvedValueOnce(null as any);
+
+    const module = getFormationModule({ resourceType: 'ai_provider' });
+    const result = await module!.read!({ physicalResourceId: 'aip_missing' });
+
+    expect(result).toBeNull();
+  });
+});
+
+// ── webhooksFormationModule.read ──────────────────────────────────────────
+
+describe('webhooksFormationModule - read', () => {
+  const mockGetWebhook = jest.spyOn(webhooksModule, 'getWebhook');
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('returns snake_case properties matching live webhook state', async () => {
+    mockGetWebhook.mockResolvedValueOnce({
+      id: 'wh_1',
+      projectId: 'prj_1',
+      name: 'My Webhook',
+      url: 'https://example.com/hook',
+      events: ['conversation.created'],
+      description: 'A test webhook',
+      active: true,
+      policyId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any);
+
+    const module = getFormationModule({ resourceType: 'webhook' });
+    expect(module?.read).toBeDefined();
+
+    const result = await module!.read!({ physicalResourceId: 'wh_1' });
+
+    expect(result).toMatchObject({
+      name: 'My Webhook',
+      url: 'https://example.com/hook',
+      events: ['conversation.created'],
+      description: 'A test webhook',
+    });
+  });
+
+  test('returns null when webhook is not found', async () => {
+    mockGetWebhook.mockResolvedValueOnce(null as any);
+
+    const module = getFormationModule({ resourceType: 'webhook' });
+    const result = await module!.read!({ physicalResourceId: 'wh_missing' });
+
+    expect(result).toBeNull();
   });
 });

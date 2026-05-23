@@ -6,7 +6,12 @@ import {
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
-import { createWebhook, deleteWebhook, updateWebhook } from '../webhooks';
+import {
+  createWebhook,
+  deleteWebhook,
+  getWebhook,
+  updateWebhook,
+} from '../webhooks';
 import {
   isObjectRecord,
   loadModuleSpec,
@@ -141,5 +146,20 @@ export const webhooksFormationModule: FormationModule = {
   delete: async ({ physicalResourceId }) => {
     await deleteWebhook({ id: physicalResourceId });
     log('deleted webhook from formation: id=%s', physicalResourceId);
+  },
+
+  read: async ({ physicalResourceId }) => {
+    try {
+      const webhook = await getWebhook({ id: physicalResourceId });
+      if (!webhook) return null;
+      return {
+        name: webhook.name,
+        url: webhook.url,
+        events: webhook.events,
+        description: webhook.description,
+      };
+    } catch {
+      return null;
+    }
   },
 };

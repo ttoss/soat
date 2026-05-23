@@ -1,6 +1,6 @@
 import createDebug from 'debug';
 
-import { createChat, deleteChat } from '../chats';
+import { createChat, deleteChat, getChat } from '../chats';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
   toNullableString,
@@ -127,5 +127,19 @@ export const chatsFormationModule: FormationModule = {
   delete: async ({ physicalResourceId }) => {
     await deleteChat({ id: physicalResourceId });
     log('deleted chat from formation: id=%s', physicalResourceId);
+  },
+
+  read: async ({ physicalResourceId }) => {
+    try {
+      const chat = await getChat({ id: physicalResourceId });
+      return {
+        ai_provider_id: chat.aiProviderId,
+        name: chat.name,
+        system_message: chat.systemMessage,
+        model: chat.model,
+      };
+    } catch {
+      return null;
+    }
   },
 };

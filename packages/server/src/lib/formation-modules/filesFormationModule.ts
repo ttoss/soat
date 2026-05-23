@@ -1,6 +1,6 @@
 import createDebug from 'debug';
 
-import { createFile, deleteFile, updateFileMetadata } from '../files';
+import { createFile, deleteFile, getFile, updateFileMetadata } from '../files';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import { toOptionalString } from '../resource-inputs/normalizers';
 import {
@@ -136,5 +136,23 @@ export const filesFormationModule: FormationModule = {
   delete: async ({ physicalResourceId }) => {
     await deleteFile({ id: physicalResourceId });
     log('deleted file from formation: id=%s', physicalResourceId);
+  },
+
+  read: async ({ physicalResourceId }) => {
+    try {
+      const file = await getFile({ id: physicalResourceId });
+      if (!file) return null;
+      return {
+        storage_type: file.storageType,
+        storage_path: file.storagePath,
+        path: file.path,
+        filename: file.filename,
+        content_type: file.contentType,
+        size: file.size,
+        metadata: file.metadata,
+      };
+    } catch {
+      return null;
+    }
   },
 };

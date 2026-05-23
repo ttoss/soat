@@ -10,6 +10,7 @@ import {
   updateFormation,
 } from 'src/lib/formations';
 import * as formationsApply from 'src/lib/formationsApply';
+import * as formationsRegistry from 'src/lib/formationsRegistry';
 
 const simpleTemplate = {
   resources: {
@@ -76,6 +77,93 @@ describe('formations lib', () => {
         formationId: 'af_nophysical',
       });
       expect(result.changes[0].action).toBe('create');
+    });
+
+    test('returns no-op when module.read matches template properties', async () => {
+      jest.spyOn(db.Formation, 'findOne').mockResolvedValue({ id: 1 } as any);
+      jest
+        .spyOn(db.FormationResource, 'findAll')
+        .mockResolvedValue([
+          { logicalId: 'MyMemory', physicalResourceId: 'mem_1' } as any,
+        ]);
+      jest.spyOn(formationsRegistry, 'getFormationModule').mockReturnValue({
+        resourceType: 'memory',
+        create: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+        read: jest.fn().mockResolvedValue({ name: 'Test' }),
+      });
+
+      const result = await planFormation({
+        projectId: 1,
+        template: simpleTemplate,
+        formationId: 'af_noop',
+      });
+      expect(result.changes[0].action).toBe('no-op');
+      expect(result.changes[0].physicalResourceId).toBe('mem_1');
+    });
+
+    test('returns update when module.read differs from template properties', async () => {
+      jest.spyOn(db.Formation, 'findOne').mockResolvedValue({ id: 1 } as any);
+      jest
+        .spyOn(db.FormationResource, 'findAll')
+        .mockResolvedValue([
+          { logicalId: 'MyMemory', physicalResourceId: 'mem_1' } as any,
+        ]);
+      jest.spyOn(formationsRegistry, 'getFormationModule').mockReturnValue({
+        resourceType: 'memory',
+        create: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+        read: jest.fn().mockResolvedValue({ name: 'OldName' }),
+      });
+
+      const result = await planFormation({
+        projectId: 1,
+        template: simpleTemplate,
+        formationId: 'af_diff',
+      });
+      expect(result.changes[0].action).toBe('update');
+      expect(result.changes[0].physicalResourceId).toBe('mem_1');
+    });
+
+    test('returns update when module.read returns null (drift)', async () => {
+      jest.spyOn(db.Formation, 'findOne').mockResolvedValue({ id: 1 } as any);
+      jest
+        .spyOn(db.FormationResource, 'findAll')
+        .mockResolvedValue([
+          { logicalId: 'MyMemory', physicalResourceId: 'mem_1' } as any,
+        ]);
+      jest.spyOn(formationsRegistry, 'getFormationModule').mockReturnValue({
+        resourceType: 'memory',
+        create: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+        read: jest.fn().mockResolvedValue(null),
+      });
+
+      const result = await planFormation({
+        projectId: 1,
+        template: simpleTemplate,
+        formationId: 'af_drift',
+      });
+      expect(result.changes[0].action).toBe('update');
+    });
+
+    test('includes physicalResourceId on update when no read method', async () => {
+      jest.spyOn(db.Formation, 'findOne').mockResolvedValue({ id: 1 } as any);
+      jest
+        .spyOn(db.FormationResource, 'findAll')
+        .mockResolvedValue([
+          { logicalId: 'MyMemory', physicalResourceId: 'mem_1' } as any,
+        ]);
+
+      const result = await planFormation({
+        projectId: 1,
+        template: simpleTemplate,
+        formationId: 'af_exists',
+      });
+      expect(result.changes[0].physicalResourceId).toBe('mem_1');
     });
   });
 

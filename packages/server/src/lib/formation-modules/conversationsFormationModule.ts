@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import {
   createConversation,
   deleteConversation,
+  getConversation,
   updateConversation,
 } from '../conversations';
 import { lookupActorInternalId } from '../formationsHelpers';
@@ -140,5 +141,19 @@ export const conversationsFormationModule: FormationModule = {
   delete: async ({ physicalResourceId }) => {
     await deleteConversation({ id: physicalResourceId });
     log('deleted conversation from formation: id=%s', physicalResourceId);
+  },
+
+  read: async ({ physicalResourceId }) => {
+    try {
+      const conv = await getConversation({ id: physicalResourceId });
+      if (!conv) return null;
+      return {
+        name: conv.name,
+        status: conv.status,
+        actor_id: conv.actorId,
+      };
+    } catch {
+      return null;
+    }
   },
 };
