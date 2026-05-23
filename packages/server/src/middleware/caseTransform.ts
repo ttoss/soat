@@ -23,17 +23,25 @@ const snakeToCamel = (str: string): string => {
 
 const transformKeys = (
   obj: unknown,
-  transform: (key: string) => string
+  transform: (key: string) => string,
+  skipKeys: Set<string> = new Set()
 ): unknown => {
   if (Array.isArray(obj)) {
     return obj.map((item) => {
-      return transformKeys(item, transform);
+      return transformKeys(item, transform, skipKeys);
     });
   }
   if (isPlainObject(obj)) {
     return Object.fromEntries(
       Object.entries(obj).map(([key, value]) => {
-        return [transform(key), transformKeys(value, transform)];
+        const newKey = transform(key);
+        if (skipKeys.has(newKey)) {
+          // Pass-through fields (e.g. formation templates) must not be
+          // recursively transformed — their inner keys are validated against
+          // the OpenAPI spec which uses snake_case.
+          return [newKey, value];
+        }
+        return [newKey, transformKeys(value, transform, skipKeys)];
       })
     );
   }
@@ -47,10 +55,14 @@ export const caseTransformMiddleware = async (ctx: Context, next: Next) => {
   }
 
   // Transform incoming request body from snake_case to camelCase
+  // The 'template' key is a pass-through user document (formation templates)
+  // whose inner keys must not be transformed.
+  const BODY_SKIP_KEYS = new Set(['template']);
   if (isPlainObject(ctx.request.body) || Array.isArray(ctx.request.body)) {
     ctx.request.body = transformKeys(
       ctx.request.body,
-      snakeToCamel
+      snakeToCamel,
+      BODY_SKIP_KEYS
     ) as typeof ctx.request.body;
   }
 

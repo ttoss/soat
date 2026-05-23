@@ -1181,7 +1181,7 @@ describe('Sessions', () => {
         });
 
       expect(response.status).toBe(404);
-      expect(response.body.error).toMatch(/generation/i);
+      expect(response.body.error.message).toMatch(/generation/i);
     });
 
     test('returns 404 when session does not exist', async () => {

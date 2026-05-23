@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 
 // Re-export symbols that callers expect from this module.
@@ -144,9 +145,13 @@ export const createAgent = async (args: {
   boundaryPolicy?: object;
   temperature?: number;
   knowledgeConfig?: object;
-}): Promise<MappedAgent | 'ai_provider_not_found'> => {
+}): Promise<MappedAgent> => {
   const aiProviderId = await resolveAiProviderDbId(args.aiProviderId);
-  if (!aiProviderId) return 'ai_provider_not_found';
+  if (!aiProviderId)
+    throw new DomainError(
+      'AI_PROVIDER_NOT_FOUND',
+      `AI provider '${args.aiProviderId}' not found.`
+    );
 
   const defaults = {
     name: null,
@@ -209,12 +214,16 @@ export const listAgents = async (args: {
 export const getAgent = async (args: {
   projectIds?: number[];
   id: string;
-}): Promise<MappedAgent | 'not_found'> => {
+}): Promise<MappedAgent> => {
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
 
   const agent = await db.Agent.findOne({ where, include: getAgentIncludes() });
-  if (!agent) return 'not_found';
+  if (!agent)
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Agent '${args.id}' not found.`
+    );
 
   return mapAgent(agent as unknown as Parameters<typeof mapAgent>[0]);
 };
@@ -224,18 +233,26 @@ export const updateAgent = async (
     projectIds?: number[];
     id: string;
   } & AgentUpdateFields
-): Promise<MappedAgent | 'not_found' | 'ai_provider_not_found'> => {
+): Promise<MappedAgent> => {
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
 
   const agent = await db.Agent.findOne({ where });
-  if (!agent) return 'not_found';
+  if (!agent)
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Agent '${args.id}' not found.`
+    );
 
   const updates = buildAgentUpdates(args);
 
   if (args.aiProviderId !== undefined) {
     const dbId = await resolveAiProviderDbId(args.aiProviderId);
-    if (!dbId) return 'ai_provider_not_found';
+    if (!dbId)
+      throw new DomainError(
+        'AI_PROVIDER_NOT_FOUND',
+        `AI provider '${args.aiProviderId}' not found.`
+      );
     updates.aiProviderId = dbId;
   }
 
@@ -265,12 +282,16 @@ export const updateAgent = async (
 export const deleteAgent = async (args: {
   projectIds?: number[];
   id: string;
-}): Promise<'ok' | 'not_found'> => {
+}): Promise<void> => {
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
 
   const agent = await db.Agent.findOne({ where });
-  if (!agent) return 'not_found';
+  if (!agent)
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Agent '${args.id}' not found.`
+    );
 
   await db.Actor.update(
     { agentId: null },
@@ -293,6 +314,4 @@ export const deleteAgent = async (args: {
       });
     }
   );
-
-  return 'ok';
 };

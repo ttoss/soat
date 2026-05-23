@@ -12,6 +12,7 @@ import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 import { getDocument } from 'src/lib/documents';
 
 import { db } from '../db';
+import { DomainError } from '../errors';
 
 const buildBedrockModel = (
   apiKey: string,
@@ -184,13 +185,16 @@ export const createChat = async (args: {
   name?: string;
   systemMessage?: string;
   model?: string;
-}): Promise<MappedChat | 'ai_provider_not_found'> => {
+}): Promise<MappedChat> => {
   const aiProvider = await db.AiProvider.findOne({
     where: { publicId: args.aiProviderId },
   });
 
   if (!aiProvider) {
-    return 'ai_provider_not_found';
+    throw new DomainError(
+      'AI_PROVIDER_NOT_FOUND',
+      `AI provider '${args.aiProviderId}' not found.`
+    );
   }
 
   const chat = await db.Chat.create({
@@ -209,16 +213,14 @@ export const createChat = async (args: {
   return mapChat(created as unknown as Parameters<typeof mapChat>[0]);
 };
 
-export const getChat = async (args: {
-  id: string;
-}): Promise<MappedChat | null> => {
+export const getChat = async (args: { id: string }): Promise<MappedChat> => {
   const chat = await db.Chat.findOne({
     where: { publicId: args.id },
     include: getChatIncludes(),
   });
 
   if (!chat) {
-    return null;
+    throw new DomainError('RESOURCE_NOT_FOUND', `Chat '${args.id}' not found.`);
   }
 
   return mapChat(chat as unknown as Parameters<typeof mapChat>[0]);
@@ -238,13 +240,11 @@ export const listChats = async (args: {
   });
 };
 
-export const deleteChat = async (args: {
-  id: string;
-}): Promise<'deleted' | 'not_found'> => {
+export const deleteChat = async (args: { id: string }): Promise<void> => {
   const chat = await db.Chat.findOne({ where: { publicId: args.id } });
 
   if (!chat) {
-    return 'not_found';
+    throw new DomainError('RESOURCE_NOT_FOUND', `Chat '${args.id}' not found.`);
   }
 
   // Null out chatId on any actors linked to this chat before destroying.
@@ -254,7 +254,6 @@ export const deleteChat = async (args: {
   );
 
   await chat.destroy();
-  return 'deleted';
 };
 
 const resolveMessages = async (
@@ -360,18 +359,14 @@ export const createChatCompletionForChat = async (args: {
   chatId: string;
   messages: ChatMessageInput[];
   model?: string;
-}): Promise<
-  | { model: string; content: string; finishReason: string }
-  | 'chat_not_found'
-  | 'ai_provider_not_found'
-> => {
+}): Promise<{ model: string; content: string; finishReason: string }> => {
   const chat = await db.Chat.findOne({
     where: { publicId: args.chatId },
     include: getChatIncludes(),
   });
 
   if (!chat) {
-    return 'chat_not_found';
+    throw new DomainError('CHAT_NOT_FOUND', `Chat '${args.chatId}' not found.`);
   }
 
   const typedChat = chat as unknown as Parameters<typeof mapChat>[0];
@@ -381,7 +376,10 @@ export const createChatCompletionForChat = async (args: {
   });
 
   if (!resolved) {
-    return 'ai_provider_not_found';
+    throw new DomainError(
+      'AI_PROVIDER_NOT_FOUND',
+      'AI provider not found or not configured.'
+    );
   }
 
   const resolvedMessages = await resolveMessages(args.messages);
@@ -425,7 +423,7 @@ export const streamChatCompletionForChat = async (args: {
   });
 
   if (!chat) {
-    return 'chat_not_found' as const;
+    throw new DomainError('CHAT_NOT_FOUND', `Chat '${args.chatId}' not found.`);
   }
 
   const typedChat = chat as unknown as Parameters<typeof mapChat>[0];
@@ -435,7 +433,10 @@ export const streamChatCompletionForChat = async (args: {
   });
 
   if (!resolved) {
-    return 'ai_provider_not_found' as const;
+    throw new DomainError(
+      'AI_PROVIDER_NOT_FOUND',
+      'AI provider not found or not configured.'
+    );
   }
 
   const resolvedMessages = await resolveMessages(args.messages);

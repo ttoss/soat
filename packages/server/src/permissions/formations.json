@@ -1,0 +1,45 @@
+{
+  "module": "formations",
+  "operations": [
+    {
+      "operationId": "validateFormation",
+      "action": "formations:ValidateFormation",
+      "description": "Validate a formation template"
+    },
+    {
+      "operationId": "planFormation",
+      "action": "formations:PlanFormation",
+      "description": "Plan a formation deployment"
+    },
+    {
+      "operationId": "createFormation",
+      "action": "formations:CreateFormation",
+      "description": "Create a new agent formation stack"
+    },
+    {
+      "operationId": "listFormations",
+      "action": "formations:ListFormations",
+      "description": "List formation stacks in a project"
+    },
+    {
+      "operationId": "getFormation",
+      "action": "formations:GetFormation",
+      "description": "Get a formation stack by ID"
+    },
+    {
+      "operationId": "updateFormation",
+      "action": "formations:UpdateFormation",
+      "description": "Update a formation stack by applying a new template"
+    },
+    {
+      "operationId": "deleteFormation",
+      "action": "formations:DeleteFormation",
+      "description": "Delete a formation stack and all its managed resources"
+    },
+    {
+      "operationId": "listFormationEvents",
+      "action": "formations:ListFormationEvents",
+      "description": "List operation events for a formation stack"
+    }
+  ]
+}

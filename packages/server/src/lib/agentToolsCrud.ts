@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { DomainError } from '../errors';
 
 // ── Mapped Types ─────────────────────────────────────────────────────────
 
@@ -99,7 +100,7 @@ export const listAgentTools = async (args: {
 export const getAgentTool = async (args: {
   projectIds?: number[];
   id: string;
-}): Promise<MappedAgentTool | 'not_found'> => {
+}): Promise<MappedAgentTool> => {
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) {
     where.projectId = args.projectIds;
@@ -110,7 +111,11 @@ export const getAgentTool = async (args: {
     include: getAgentToolIncludes(),
   });
 
-  if (!agentTool) return 'not_found';
+  if (!agentTool)
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Agent tool '${args.id}' not found.`
+    );
 
   return mapAgentTool(
     agentTool as unknown as Parameters<typeof mapAgentTool>[0]
@@ -155,7 +160,7 @@ export const updateAgentTool = async (args: {
   mcp?: object | null;
   actions?: string[] | null;
   presetParameters?: object | null;
-}): Promise<MappedAgentTool | 'not_found'> => {
+}): Promise<MappedAgentTool> => {
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) {
     where.projectId = args.projectIds;
@@ -163,7 +168,11 @@ export const updateAgentTool = async (args: {
 
   const agentTool = await db.AgentTool.findOne({ where });
 
-  if (!agentTool) return 'not_found';
+  if (!agentTool)
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Agent tool '${args.id}' not found.`
+    );
 
   await agentTool.update(buildAgentToolUpdates(args));
 
@@ -178,7 +187,7 @@ export const updateAgentTool = async (args: {
 export const deleteAgentTool = async (args: {
   projectIds?: number[];
   id: string;
-}): Promise<'ok' | 'not_found'> => {
+}): Promise<void> => {
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) {
     where.projectId = args.projectIds;
@@ -186,8 +195,11 @@ export const deleteAgentTool = async (args: {
 
   const agentTool = await db.AgentTool.findOne({ where });
 
-  if (!agentTool) return 'not_found';
+  if (!agentTool)
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Agent tool '${args.id}' not found.`
+    );
 
   await agentTool.destroy();
-  return 'ok';
 };

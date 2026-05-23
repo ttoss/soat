@@ -14,7 +14,9 @@ describe('soatTools', () => {
   test('returns empty list when OpenAPI spec directory does not exist', async () => {
     jest.doMock('node:fs', () => {
       return {
-        existsSync: jest.fn(() => false),
+        existsSync: jest.fn(() => {
+          return false;
+        }),
         readdirSync: jest.fn(),
         readFileSync: jest.fn(),
       };
@@ -38,9 +40,15 @@ describe('soatTools', () => {
 
     jest.doMock('node:fs', () => {
       return {
-        existsSync: jest.fn(() => true),
-        readdirSync: jest.fn(() => ['b.yaml', 'ignore.json', 'a.yaml']),
-        readFileSync: jest.fn((filePath: string) => filePath),
+        existsSync: jest.fn(() => {
+          return true;
+        }),
+        readdirSync: jest.fn(() => {
+          return ['b.yaml', 'ignore.json', 'a.yaml'];
+        }),
+        readFileSync: jest.fn((filePath: string) => {
+          return filePath;
+        }),
       };
     });
 
@@ -84,9 +92,15 @@ describe('soatTools', () => {
 
     jest.doMock('node:fs', () => {
       return {
-        existsSync: jest.fn(() => true),
-        readdirSync: jest.fn(() => ['broken.yaml', 'good.yaml']),
-        readFileSync: jest.fn((filePath: string) => filePath),
+        existsSync: jest.fn(() => {
+          return true;
+        }),
+        readdirSync: jest.fn(() => {
+          return ['broken.yaml', 'good.yaml'];
+        }),
+        readFileSync: jest.fn((filePath: string) => {
+          return filePath;
+        }),
       };
     });
 

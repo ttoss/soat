@@ -384,7 +384,7 @@ describe('Agents', () => {
       expect(response.status).toBe(403);
     });
 
-    test('unknown aiProviderId returns 404', async () => {
+    test('unknown aiProviderId returns 400', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/agents')
         .send({
@@ -392,7 +392,7 @@ describe('Agents', () => {
           project_id: projectId,
         });
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
     });
 
@@ -794,6 +794,61 @@ describe('Agents', () => {
 
       // noPermToken has no policies → projectIds=[] → agent not found in empty scope
       expect(response.status).toBe(404);
+    });
+  });
+
+  // ── Create Actor for Agent ─────────────────────────────────────────────
+
+  describe('POST /api/v1/agents/:agentId/actors', () => {
+    let agentId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Actor Test Agent',
+        });
+      agentId = res.body.id;
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient
+        .post(`/api/v1/agents/${agentId}/actors`)
+        .send({ name: 'Actor 1' });
+      expect(response.status).toBe(401);
+    });
+
+    test('agent not found returns 404', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents/agt_doesnotexist0000/actors')
+        .send({ name: 'Actor 1' });
+      expect(response.status).toBe(404);
+    });
+
+    test('user without actors:CreateActor permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .post(`/api/v1/agents/${agentId}/actors`)
+        .send({ name: 'Actor 1' });
+      expect(response.status).toBe(403);
+    });
+
+    test('missing name returns 400', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/agents/${agentId}/actors`)
+        .send({});
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
+    });
+
+    test('creates actor and returns 201', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/agents/${agentId}/actors`)
+        .send({ name: 'Test Actor for Agent' });
+      expect(response.status).toBe(201);
+      expect(response.body.id).toBeDefined();
+      expect(response.body.name).toBe('Test Actor for Agent');
     });
   });
 });

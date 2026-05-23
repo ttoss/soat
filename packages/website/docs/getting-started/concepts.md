@@ -77,7 +77,7 @@ Generations are **asynchronous by default**: kick one off, poll for status, or h
 
 ## Agent Formations
 
-When you need reproducible deployments, use [Agent Formations](/docs/modules/agent-formations). A formation template declares providers, memories, tools, agents, and related resources in one place. SOAT resolves references, provisions resources in dependency order, and stores an operation/event log for each create, update, or delete.
+When you need reproducible deployments, use [Agent Formations](/docs/modules/formations). A formation template declares providers, memories, tools, agents, and related resources in one place. SOAT resolves references, provisions resources in dependency order, and stores an operation/event log for each create, update, or delete.
 
 ## Observability
 

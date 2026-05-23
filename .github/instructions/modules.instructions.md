@@ -53,3 +53,50 @@ Do **not** document REST endpoints in the module docs — those are covered in t
 ## Tests
 
 Tests live in `packages/server/tests/unit/tests/<module>.test.ts`. Every public lib function and every REST route must have at least one test. Follow the patterns already established in `files.test.ts` and `users.test.ts`.
+
+## Shared Business Rules
+
+Business rules that apply to a resource **must be defined once in `src/lib/<module>.ts`** and reused by both the REST route handler and the formation module. Never duplicate a business rule across the two layers.
+
+A business rule is any constraint that is independent of the transport layer: mutual exclusivity of fields, invariants on combinations of values, domain-specific preconditions.
+
+**Pattern**: export a pure validation function from the lib module and import it in both places.
+
+```ts
+// src/lib/actors.ts — single source of truth
+export const validateActorExclusivity = (args: {
+  agentId: unknown;
+  chatId: unknown;
+}): string | null => {
+  if (args.agentId && args.chatId) {
+    return 'agentId and chatId are mutually exclusive';
+  }
+  return null;
+};
+```
+
+```ts
+// src/rest/v1/actors.ts — REST route uses it
+import { validateActorExclusivity } from 'src/lib/actors';
+const error = validateActorExclusivity({
+  agentId: body.agentId,
+  chatId: body.chatId,
+});
+if (error) {
+  ctx.status = 400;
+  ctx.body = { error };
+  return;
+}
+```
+
+```ts
+// src/lib/formation-modules/actorsFormationModule.ts — formation module uses it
+import { validateActorExclusivity } from '../actors';
+const msg = validateActorExclusivity({
+  agentId: properties.agent_id,
+  chatId: properties.chat_id,
+});
+if (msg) errors.push({ path: basePath, message: msg });
+```
+
+**What is NOT shared**: schema-driven formation validation (`pushUnknownFieldErrors`, `pushRequiredFieldErrors`, `pushFieldTypeErrors`) is formation-specific infrastructure for validating untyped template properties. REST handlers rely on TypeScript types for those same checks and do not need to share that layer.

@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 
 export const getSessionTags = async (args: {
@@ -10,7 +11,7 @@ export const getSessionTags = async (args: {
   });
 
   if (!session) {
-    return null;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
   }
 
   return session.tags ?? {};
@@ -27,7 +28,7 @@ export const updateSessionTags = async (args: {
   });
 
   if (!session) {
-    return null;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
   }
 
   if (args.merge) {

@@ -124,12 +124,6 @@ policiesRouter.put('/policies/:policy_id', async (ctx: Context) => {
     document: document as PolicyDocument,
   });
 
-  if (result === 'not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'Policy not found' };
-    return;
-  }
-
   if ('invalid' in result) {
     ctx.status = 400;
     ctx.body = { error: 'Invalid policy document', details: result.errors };
@@ -152,13 +146,7 @@ policiesRouter.delete('/policies/:policy_id', async (ctx: Context) => {
     return;
   }
 
-  const result = await deletePolicy({ policyId: ctx.params.policy_id });
-
-  if (result === 'not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'Policy not found' };
-    return;
-  }
+  await deletePolicy({ policyId: ctx.params.policy_id });
 
   ctx.status = 204;
 });

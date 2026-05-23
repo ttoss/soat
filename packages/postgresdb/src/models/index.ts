@@ -1,8 +1,5 @@
 export { Actor } from './Actor';
 export { Agent } from './Agent';
-export { AgentFormation } from './AgentFormation';
-export { AgentFormationOperation } from './AgentFormationOperation';
-export { AgentFormationResource } from './AgentFormationResource';
 export { AgentTool } from './AgentTool';
 export { AiProvider } from './AiProvider';
 export { ApiKey } from './ApiKey';
@@ -11,6 +8,9 @@ export { Conversation } from './Conversation';
 export { ConversationMessage } from './ConversationMessage';
 export { Document } from './Document';
 export { File } from './File';
+export { Formation } from './Formation';
+export { FormationOperation } from './FormationOperation';
+export { FormationResource } from './FormationResource';
 export { Generation } from './Generation';
 export { Memory } from './Memory';
 export { MemoryEntry } from './MemoryEntry';

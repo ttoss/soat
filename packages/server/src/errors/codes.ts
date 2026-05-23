@@ -1,0 +1,73 @@
+export const ERROR_CODES = {
+  RESOURCE_NOT_FOUND: {
+    httpStatus: 404,
+    description: 'The requested resource does not exist or is not accessible.',
+  },
+  AGENT_NOT_FOUND: {
+    httpStatus: 400,
+    description: 'A referenced agent does not exist.',
+  },
+  ACTOR_NOT_FOUND: {
+    httpStatus: 400,
+    description: 'A referenced actor does not exist.',
+  },
+  CHAT_NOT_FOUND: {
+    httpStatus: 400,
+    description: 'A referenced chat does not exist.',
+  },
+  MEMORY_NOT_FOUND: {
+    httpStatus: 400,
+    description: 'A referenced memory does not exist.',
+  },
+  AI_PROVIDER_NOT_FOUND: {
+    httpStatus: 400,
+    description: 'A referenced AI provider does not exist.',
+  },
+  GENERATION_NOT_FOUND: {
+    httpStatus: 404,
+    description:
+      'The generation does not exist or is not in a pending state for tool output submission.',
+  },
+  GENERATION_ALREADY_IN_PROGRESS: {
+    httpStatus: 409,
+    description:
+      'A generation is already in progress for this session. Wait for it to complete before starting a new one.',
+  },
+  AGENT_AND_CHAT_EXCLUSIVE: {
+    httpStatus: 400,
+    description:
+      'An actor cannot have both an agent_id and a chat_id assigned simultaneously. Set one or the other, not both.',
+  },
+  NAME_CONFLICT: {
+    httpStatus: 409,
+    description:
+      'A resource with this name already exists in the project. Use a different name.',
+  },
+  SECRET_HAS_DEPENDENTS: {
+    httpStatus: 409,
+    description:
+      'The secret is referenced by one or more AI providers and cannot be deleted. Use force=true to delete dependents as well.',
+  },
+  ACTOR_HAS_MESSAGES: {
+    httpStatus: 409,
+    description: 'The actor has linked session messages and cannot be deleted.',
+  },
+  FORBIDDEN: {
+    httpStatus: 403,
+    description:
+      'The authenticated user does not have permission to perform this action.',
+  },
+  UNAUTHORIZED: {
+    httpStatus: 401,
+    description: 'Authentication is required or the token is invalid.',
+  },
+  VALIDATION_FAILED: {
+    httpStatus: 400,
+    description: 'The request body failed validation.',
+  },
+} as const satisfies Record<
+  string,
+  { httpStatus: number; description: string }
+>;
+
+export type ErrorCode = keyof typeof ERROR_CODES;

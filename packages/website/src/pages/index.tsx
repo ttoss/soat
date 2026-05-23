@@ -182,7 +182,7 @@ const CodeShowcase = () => {
             </ul>
             <Link
               className="button button--primary button--lg"
-              to="/docs/modules/agent-formations"
+              to="/docs/modules/formations"
             >
               Read Agent Formations
             </Link>

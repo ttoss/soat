@@ -1,0 +1,1399 @@
+import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
+
+describe('Formations', () => {
+  let adminToken: string;
+  let userToken: string;
+  let userId: string;
+  let projectId: string;
+  let noPermToken: string;
+  let formationId: string;
+
+  const simpleTemplate = {
+    resources: {
+      MyMemory: {
+        type: 'memory',
+        properties: {
+          name: 'Formation Test Memory',
+        },
+      },
+    },
+    outputs: {
+      memoryId: { ref: 'MyMemory' },
+    },
+  };
+
+  const invalidTemplate = {
+    resources: {
+      BadAgent: {
+        type: 'agent',
+        properties: {
+          name: 'Bad Agent',
+          ai_provider_id: { ref: 'NonExistent' },
+        },
+      },
+    },
+  };
+
+  beforeAll(async () => {
+    await testClient
+      .post('/api/v1/users/bootstrap')
+      .send({ username: 'afadmin', password: 'supersecret' });
+
+    adminToken = await loginAs('afadmin', 'supersecret');
+
+    const createUserRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'afuser', password: 'afpass' });
+    userId = createUserRes.body.id;
+    userToken = await loginAs('afuser', 'afpass');
+
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'Formations Test Project' });
+    projectId = projectRes.body.id;
+
+    const policyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: [
+                'formations:ValidateFormation',
+                'formations:PlanFormation',
+                'formations:CreateFormation',
+                'formations:ListFormations',
+                'formations:GetFormation',
+                'formations:UpdateFormation',
+                'formations:DeleteFormation',
+                'formations:ListFormationEvents',
+                'memories:CreateMemory',
+                'memories:DeleteMemory',
+                'memories:CreateMemoryEntry',
+                'memories:UpdateMemoryEntry',
+                'memories:DeleteMemoryEntry',
+              ],
+            },
+          ],
+        },
+      });
+
+    await authenticatedTestClient(adminToken)
+      .put(`/api/v1/users/${userId}/policies`)
+      .send({ policy_ids: [policyRes.body.id] });
+
+    const noPermRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'afnoperm', password: 'nopass' });
+    noPermToken = await loginAs(
+      'afnoperm',
+      noPermRes.body.username ?? 'nopass'
+    );
+    await loginAs('afnoperm', 'nopass');
+    noPermToken = await loginAs('afnoperm', 'nopass');
+  });
+
+  // ── Validate ──────────────────────────────────────────────────────────────
+
+  describe('POST /api/v1/formations/validate', () => {
+    test('valid template returns valid=true', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: simpleTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(true);
+      expect(res.body.errors).toHaveLength(0);
+    });
+
+    test('valid YAML string template returns valid=true', async () => {
+      const yamlTemplate = `
+resources:
+  MyMemory:
+    type: memory
+    properties:
+      name: Formation YAML Test Memory
+outputs:
+  memoryId:
+    ref: MyMemory
+`.trim();
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: yamlTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(true);
+      expect(res.body.errors).toHaveLength(0);
+    });
+
+    test('valid JSON string template returns valid=true', async () => {
+      const jsonTemplate = JSON.stringify(simpleTemplate);
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: jsonTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(true);
+      expect(res.body.errors).toHaveLength(0);
+    });
+
+    test('invalid ref returns valid=false', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: invalidTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors.length).toBeGreaterThan(0);
+    });
+
+    test('unauthenticated returns 401', async () => {
+      const res = await testClient
+        .post('/api/v1/formations/validate')
+        .send({ template: simpleTemplate });
+
+      expect(res.status).toBe(401);
+    });
+  });
+
+  // ── Plan ──────────────────────────────────────────────────────────────────
+
+  describe('POST /api/v1/formations/plan', () => {
+    test('returns plan with create actions', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({ project_id: projectId, template: simpleTemplate });
+
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.changes)).toBe(true);
+      expect(res.body.changes[0].action).toBe('create');
+      expect(res.body.changes[0].logical_id).toBe('MyMemory');
+    });
+
+    test('accepts YAML string template', async () => {
+      const yamlTemplate = `
+resources:
+  MyMemory:
+    type: memory
+    properties:
+      name: Plan YAML Test Memory
+`.trim();
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({ project_id: projectId, template: yamlTemplate });
+
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.changes)).toBe(true);
+      expect(res.body.changes[0].action).toBe('create');
+    });
+
+    test('unauthenticated returns 401', async () => {
+      const res = await testClient
+        .post('/api/v1/formations/plan')
+        .send({ project_id: projectId, template: simpleTemplate });
+
+      expect(res.status).toBe(401);
+    });
+
+    test('no permission returns 403', async () => {
+      const res = await authenticatedTestClient(noPermToken)
+        .post('/api/v1/formations/plan')
+        .send({ project_id: projectId, template: simpleTemplate });
+
+      expect(res.status).toBe(403);
+    });
+  });
+
+  // ── Create ────────────────────────────────────────────────────────────────
+
+  describe('POST /api/v1/formations', () => {
+    test('creates a formation and provisions resources', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: 'test-formation',
+          template: simpleTemplate,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.id).toBeDefined();
+      expect(res.body.id).toMatch(/^af_/);
+      expect(res.body.name).toBe('test-formation');
+      expect(res.body.status).toBe('active');
+      expect(res.body.project_id).toBe(projectId);
+      expect(Array.isArray(res.body.resources)).toBe(true);
+      expect(res.body.resources).toHaveLength(1);
+      expect(res.body.resources[0].logical_id).toBe('MyMemory');
+      expect(res.body.resources[0].status).toBe('created');
+      expect(res.body.resources[0].physical_resource_id).toBeDefined();
+      expect(res.body.outputs).toBeDefined();
+
+      formationId = res.body.id;
+    });
+
+    test('duplicate name returns 409', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: 'test-formation',
+          template: simpleTemplate,
+        });
+
+      expect(res.status).toBe(409);
+    });
+
+    test('invalid template returns 400', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: 'bad-formation',
+          template: invalidTemplate,
+        });
+
+      expect(res.status).toBe(400);
+    });
+
+    test('unauthenticated returns 401', async () => {
+      const res = await testClient
+        .post('/api/v1/formations')
+        .send({ project_id: projectId, name: 'x', template: simpleTemplate });
+
+      expect(res.status).toBe(401);
+    });
+
+    test('no permission returns 403', async () => {
+      const res = await authenticatedTestClient(noPermToken)
+        .post('/api/v1/formations')
+        .send({ project_id: projectId, name: 'x', template: simpleTemplate });
+
+      expect(res.status).toBe(403);
+    });
+
+    test('ai_provider resource with non-existent secret sets resource status to failed', async () => {
+      const failingTemplate = {
+        resources: {
+          MyProvider: {
+            type: 'ai_provider',
+            properties: {
+              name: 'test-provider',
+              provider: 'openai',
+              default_model: 'gpt-4o',
+              secret_id: 'sec_nonexistent',
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `failing-provider-${Date.now()}`,
+          template: failingTemplate,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('failed');
+      expect(Array.isArray(res.body.resources)).toBe(true);
+      expect(res.body.resources).toHaveLength(1);
+      const resource = res.body.resources[0];
+      expect(resource.logical_id).toBe('MyProvider');
+      expect(resource.status).toBe('failed');
+      expect(resource.physical_resource_id).toBeNull();
+    });
+  });
+
+  // ── List ──────────────────────────────────────────────────────────────────
+
+  describe('GET /api/v1/formations', () => {
+    test('returns list of formations', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .get('/api/v1/formations')
+        .query({ project_id: projectId });
+
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBeGreaterThan(0);
+      expect(res.body[0].id).toBeDefined();
+    });
+
+    test('unauthenticated returns 401', async () => {
+      const res = await testClient
+        .get('/api/v1/formations')
+        .query({ project_id: projectId });
+
+      expect(res.status).toBe(401);
+    });
+  });
+
+  // ── Get ───────────────────────────────────────────────────────────────────
+
+  describe('GET /api/v1/formations/:formation_id', () => {
+    test('returns formation details', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${formationId}`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(formationId);
+      expect(res.body.name).toBe('test-formation');
+      expect(Array.isArray(res.body.resources)).toBe(true);
+    });
+
+    test('unknown id returns 404', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/formations/af_nonexistent'
+      );
+
+      expect(res.status).toBe(404);
+    });
+
+    test('unauthenticated returns 401', async () => {
+      const res = await testClient.get(`/api/v1/formations/${formationId}`);
+      expect(res.status).toBe(401);
+    });
+
+    test('no permission returns 403', async () => {
+      const res = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/formations/${formationId}`
+      );
+      expect(res.status).toBe(403);
+    });
+  });
+
+  // ── Update ────────────────────────────────────────────────────────────────
+
+  describe('PUT /api/v1/formations/:formation_id', () => {
+    test('updates a formation', async () => {
+      const updatedTemplate = {
+        resources: {
+          MyMemory: {
+            type: 'memory',
+            properties: {
+              name: 'Updated Memory Name',
+            },
+          },
+          MyMemory2: {
+            type: 'memory',
+            properties: {
+              name: 'Second Memory',
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${formationId}`)
+        .send({ template: updatedTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('active');
+      expect(res.body.resources).toHaveLength(2);
+    });
+
+    test('invalid template returns 400', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${formationId}`)
+        .send({ template: invalidTemplate });
+
+      expect(res.status).toBe(400);
+    });
+
+    test('unknown id returns 404', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .put('/api/v1/formations/af_nonexistent')
+        .send({ template: simpleTemplate });
+
+      expect(res.status).toBe(404);
+    });
+
+    test('unauthenticated returns 401', async () => {
+      const res = await testClient
+        .put(`/api/v1/formations/${formationId}`)
+        .send({ template: simpleTemplate });
+
+      expect(res.status).toBe(401);
+    });
+
+    test('no permission returns 403', async () => {
+      const res = await authenticatedTestClient(noPermToken)
+        .put(`/api/v1/formations/${formationId}`)
+        .send({ template: simpleTemplate });
+
+      expect(res.status).toBe(403);
+    });
+  });
+
+  // ── Events ────────────────────────────────────────────────────────────────
+
+  describe('GET /api/v1/formations/:formation_id/events', () => {
+    test('returns operation events', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${formationId}/events`
+      );
+
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBeGreaterThan(0);
+      expect(res.body[0].id).toBeDefined();
+      expect(res.body[0].operation_type).toBeDefined();
+    });
+
+    test('unknown formation returns 404', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/formations/af_nonexistent/events'
+      );
+      expect(res.status).toBe(404);
+    });
+
+    test('unauthenticated returns 401', async () => {
+      const res = await testClient.get(
+        `/api/v1/formations/${formationId}/events`
+      );
+      expect(res.status).toBe(401);
+    });
+  });
+
+  // ── Delete ────────────────────────────────────────────────────────────────
+
+  describe('DELETE /api/v1/formations/:formation_id', () => {
+    test('deletes the formation and returns 204', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${formationId}`
+      );
+
+      expect(res.status).toBe(204);
+    });
+
+    test('deleted formation is no longer found', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${formationId}`
+      );
+      expect(res.status).toBe(404);
+    });
+
+    test('unknown id returns 404', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        '/api/v1/formations/af_nonexistent'
+      );
+      expect(res.status).toBe(404);
+    });
+
+    test('unauthenticated returns 401', async () => {
+      const res = await testClient.delete(`/api/v1/formations/${formationId}`);
+      expect(res.status).toBe(401);
+    });
+
+    test('deleted formation is excluded from list results', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations?project_id=${projectId}`
+      );
+      expect(res.status).toBe(200);
+      const ids = res.body.map((f: { id: string }) => {
+        return f.id;
+      });
+      expect(ids).not.toContain(formationId);
+    });
+
+    test('deleting an already-deleted formation returns 404', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${formationId}`
+      );
+      expect(res.status).toBe(404);
+    });
+
+    test('can create a new formation with the same name as a deleted one', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: 'test-formation',
+          template: simpleTemplate,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.name).toBe('test-formation');
+    });
+  });
+
+  // ── Optional resource properties ──────────────────────────────────────────
+
+  describe('Formation with optional resource properties', () => {
+    let optionalPropsFormationId: string;
+
+    const templateWithOptionalProps = {
+      resources: {
+        MemoryWithDescription: {
+          type: 'memory',
+          properties: {
+            name: 'Memory With Metadata',
+            description: 'This is a memory with description',
+            tags: ['important', 'core'],
+          },
+        },
+        ToolWithOptions: {
+          type: 'agent_tool',
+          properties: {
+            name: 'Tool With Full Options',
+            description: 'Tool with description and parameters',
+            parameters: {
+              type: 'object',
+              properties: {
+                query: { type: 'string', description: 'Search query' },
+              },
+            },
+          },
+        },
+        WebhookWithEvents: {
+          type: 'webhook',
+          properties: {
+            name: 'Webhook With Events',
+            url: 'https://example.com/webhook',
+            events: ['memory.created', 'memory.updated'],
+            description: 'Webhook with description and events',
+          },
+        },
+      },
+    };
+
+    test('creates formation with resources having optional properties', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `optional-props-${Date.now()}`,
+          template: templateWithOptionalProps,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      expect(res.body.resources).toHaveLength(3);
+      expect(res.body.resources[0].logical_id).toBe('MemoryWithDescription');
+      expect(res.body.resources[1].logical_id).toBe('ToolWithOptions');
+      expect(res.body.resources[2].logical_id).toBe('WebhookWithEvents');
+      optionalPropsFormationId = res.body.id;
+    });
+
+    test('retrieves formation and includes the stored template', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${optionalPropsFormationId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.template).toBeDefined();
+      expect(res.body.template.resources).toBeDefined();
+      expect(Object.keys(res.body.template.resources)).toHaveLength(3);
+    });
+
+    test('updates memory resource with modified optional properties', async () => {
+      const updateTemplate = {
+        resources: {
+          MemoryWithDescription: {
+            type: 'memory',
+            properties: {
+              name: 'Memory Updated',
+              description: 'Updated description for memory',
+              tags: ['updated', 'modified'],
+            },
+          },
+          ToolWithOptions: templateWithOptionalProps.resources.ToolWithOptions,
+          WebhookWithEvents:
+            templateWithOptionalProps.resources.WebhookWithEvents,
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${optionalPropsFormationId}`)
+        .send({ template: updateTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('active');
+      const memoryResource = res.body.resources.find(
+        (r: { logical_id: string }) => {
+          return r.logical_id === 'MemoryWithDescription';
+        }
+      );
+      expect(memoryResource).toBeDefined();
+      expect(memoryResource.status).toBe('updated');
+    });
+
+    test('deletes formation with optional properties', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${optionalPropsFormationId}`
+      );
+      expect(res.status).toBe(204);
+    });
+  });
+
+  // ── Parameters support ────────────────────────────────────────────────────
+
+  describe('Formation with parameters', () => {
+    let paramFormationId: string;
+
+    const templateWithParams = {
+      parameters: {
+        MemoryName: {
+          type: 'string',
+          default: 'Default Memory Name',
+          description: 'Name for the memory resource',
+        },
+        ToolUrl: {
+          type: 'string',
+          description: 'URL for the HTTP tool endpoint',
+        },
+        ApiKey: {
+          type: 'string',
+          no_echo: true,
+          description: 'API key for the tool',
+        },
+      },
+      resources: {
+        ParamMemory: {
+          type: 'memory',
+          properties: {
+            name: { param: 'MemoryName' },
+          },
+        },
+        ParamTool: {
+          type: 'agent_tool',
+          properties: {
+            name: 'param-tool',
+            execute: {
+              url: { sub: '${ToolUrl}/endpoint' },
+              headers: { Authorization: { sub: 'Bearer ${ApiKey}' } },
+            },
+          },
+        },
+      },
+      outputs: {
+        memoryId: { ref: 'ParamMemory' },
+      },
+    };
+
+    describe('POST /api/v1/formations/validate', () => {
+      test('validates template with parameters section', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/formations/validate')
+          .send({ template: templateWithParams });
+
+        expect(res.status).toBe(200);
+        expect(res.body.valid).toBe(true);
+        expect(res.body.errors).toHaveLength(0);
+        expect(res.body.warnings.length).toBeGreaterThan(0);
+      });
+
+      test('returns invalid for template with undefined param ref', async () => {
+        const badTemplate = {
+          parameters: { KnownParam: { type: 'string' } },
+          resources: {
+            MyMemory: {
+              type: 'memory',
+              properties: { name: { param: 'UnknownParam' } },
+            },
+          },
+        };
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/formations/validate')
+          .send({ template: badTemplate });
+
+        expect(res.status).toBe(200);
+        expect(res.body.valid).toBe(false);
+        expect(res.body.errors.length).toBeGreaterThan(0);
+      });
+    });
+
+    describe('POST /api/v1/formations', () => {
+      test('creates formation with parameters provided at deploy time', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/formations')
+          .send({
+            project_id: projectId,
+            name: `param-formation-${Date.now()}`,
+            template: templateWithParams,
+            parameters: {
+              ToolUrl: 'https://api.example.com',
+              ApiKey: 'secret-key-123',
+            },
+          });
+
+        expect(res.status).toBe(201);
+        expect(res.body.status).toBe('active');
+        expect(res.body.resources).toHaveLength(2);
+        paramFormationId = res.body.id;
+
+        const memoryResource = res.body.resources.find(
+          (r: { logical_id: string }) => {
+            return r.logical_id === 'ParamMemory';
+          }
+        );
+        expect(memoryResource).toBeDefined();
+        expect(memoryResource.status).toBe('created');
+      });
+
+      test('returns 400 when required parameter without default is missing', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/formations')
+          .send({
+            project_id: projectId,
+            name: `missing-params-${Date.now()}`,
+            template: templateWithParams,
+            // Missing ToolUrl and ApiKey (required, no default)
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe('Missing required parameters');
+        expect(Array.isArray(res.body.details)).toBe(true);
+      });
+
+      test('uses parameter default when no override provided', async () => {
+        const templateWithDefault = {
+          parameters: {
+            MemName: { type: 'string', default: 'Default Param Memory' },
+          },
+          resources: {
+            DefaultMem: {
+              type: 'memory',
+              properties: { name: { param: 'MemName' } },
+            },
+          },
+          outputs: { memoryId: { ref: 'DefaultMem' } },
+        };
+
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/formations')
+          .send({
+            project_id: projectId,
+            name: `default-param-${Date.now()}`,
+            template: templateWithDefault,
+            // No parameters provided - should use default
+          });
+
+        expect(res.status).toBe(201);
+        expect(res.body.status).toBe('active');
+
+        // Clean up
+        await authenticatedTestClient(userToken).delete(
+          `/api/v1/formations/${res.body.id}`
+        );
+      });
+    });
+
+    describe('PUT /api/v1/formations/:formation_id', () => {
+      test('updates formation with new parameter values', async () => {
+        const updatedTemplate = {
+          ...templateWithParams,
+          resources: {
+            ParamMemory: {
+              type: 'memory',
+              properties: { name: { param: 'MemoryName' } },
+            },
+          },
+        };
+
+        const res = await authenticatedTestClient(userToken)
+          .put(`/api/v1/formations/${paramFormationId}`)
+          .send({
+            template: updatedTemplate,
+            parameters: {
+              MemoryName: 'Updated Memory Name',
+              ToolUrl: 'https://api2.example.com',
+              ApiKey: 'new-secret-key',
+            },
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('active');
+      });
+
+      test('returns 400 when required parameter missing on update', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .put(`/api/v1/formations/${paramFormationId}`)
+          .send({
+            template: templateWithParams,
+            // Missing required params ToolUrl and ApiKey
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe('Missing required parameters');
+      });
+    });
+
+    test('deletes param formation', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${paramFormationId}`
+      );
+      expect(res.status).toBe(204);
+    });
+  });
+
+  // ── agent_tool resource type ───────────────────────────────────────────────
+
+  describe('Formation with agent_tool resources', () => {
+    let agentToolFormationId: string;
+
+    const agentToolTemplate = {
+      resources: {
+        MyTool: {
+          type: 'agent_tool',
+          properties: {
+            name: 'my-http-tool',
+            type: 'http',
+            description: 'A simple HTTP tool',
+            parameters: {
+              type: 'object',
+              properties: {
+                query: { type: 'string', description: 'Search query' },
+              },
+              required: ['query'],
+            },
+            execute: {
+              url: 'https://api.example.com/search',
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+            },
+          },
+        },
+      },
+    };
+
+    test('creates a formation with an agent_tool resource', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `agent-tool-formation-${Date.now()}`,
+          template: agentToolTemplate,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      expect(res.body.resources).toHaveLength(1);
+      expect(res.body.resources[0].logical_id).toBe('MyTool');
+      expect(res.body.resources[0].status).toBe('created');
+      expect(res.body.resources[0].physical_resource_id).toBeDefined();
+      expect(res.body.resources[0].physical_resource_id).toMatch(/^agt_tool_/);
+
+      agentToolFormationId = res.body.id;
+    });
+
+    test('updates the agent_tool resource in the formation', async () => {
+      const updatedTemplate = {
+        resources: {
+          MyTool: {
+            type: 'agent_tool',
+            properties: {
+              name: 'my-http-tool-updated',
+              description: 'Updated description',
+              execute: {
+                url: 'https://api.example.com/v2/search',
+                method: 'GET',
+              },
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${agentToolFormationId}`)
+        .send({ template: updatedTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('active');
+      const toolResource = res.body.resources.find(
+        (r: { logical_id: string }) => {
+          return r.logical_id === 'MyTool';
+        }
+      );
+      expect(toolResource).toBeDefined();
+      expect(toolResource.status).toBe('updated');
+    });
+
+    test('validates template with agent_tool missing required name', async () => {
+      const invalidToolTemplate = {
+        resources: {
+          BadTool: {
+            type: 'agent_tool',
+            properties: {
+              description: 'missing name',
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: invalidToolTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors.length).toBeGreaterThan(0);
+    });
+
+    test('creates formation with mcp tool type', async () => {
+      const mcpTemplate = {
+        resources: {
+          MyMcpTool: {
+            type: 'agent_tool',
+            properties: {
+              name: 'my-mcp-tool',
+              type: 'mcp',
+              mcp: {
+                url: 'https://mcp.example.com/sse',
+                headers: { Authorization: 'Bearer token' },
+              },
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `mcp-tool-formation-${Date.now()}`,
+          template: mcpTemplate,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      expect(res.body.resources[0].logical_id).toBe('MyMcpTool');
+      expect(res.body.resources[0].status).toBe('created');
+
+      // Clean up
+      await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${res.body.id}`
+      );
+    });
+
+    test('deletes formation and cleans up agent_tool resource', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${agentToolFormationId}`
+      );
+      expect(res.status).toBe(204);
+    });
+
+    test('deleted agent_tool formation no longer found', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${agentToolFormationId}`
+      );
+      expect(res.status).toBe(404);
+    });
+  });
+
+  // ── ai_provider resource type ──────────────────────────────────────────────
+
+  describe('Formation with ai_provider resources', () => {
+    let aiProviderFormationId: string;
+
+    const aiProviderTemplate = {
+      resources: {
+        MyProvider: {
+          type: 'ai_provider',
+          properties: {
+            name: 'my-openai-provider',
+            provider: 'openai',
+            default_model: 'gpt-4o',
+          },
+        },
+      },
+    };
+
+    test('creates a formation with an ai_provider resource', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `ai-provider-formation-${Date.now()}`,
+          template: aiProviderTemplate,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      expect(res.body.resources).toHaveLength(1);
+      expect(res.body.resources[0].logical_id).toBe('MyProvider');
+      expect(res.body.resources[0].status).toBe('created');
+      expect(res.body.resources[0].physical_resource_id).toBeDefined();
+      expect(res.body.resources[0].physical_resource_id).toMatch(/^aip_/);
+
+      aiProviderFormationId = res.body.id;
+    });
+
+    test('updates the ai_provider resource in the formation', async () => {
+      const updatedTemplate = {
+        resources: {
+          MyProvider: {
+            type: 'ai_provider',
+            properties: {
+              name: 'my-openai-provider-updated',
+              provider: 'openai',
+              default_model: 'gpt-4o-mini',
+              base_url: 'https://custom.openai.example.com/v1',
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${aiProviderFormationId}`)
+        .send({ template: updatedTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('active');
+      const providerResource = res.body.resources.find(
+        (r: { logical_id: string }) => {
+          return r.logical_id === 'MyProvider';
+        }
+      );
+      expect(providerResource).toBeDefined();
+      expect(providerResource.status).toBe('updated');
+    });
+
+    test('validates template with ai_provider missing required fields', async () => {
+      const invalidTemplate = {
+        resources: {
+          BadProvider: {
+            type: 'ai_provider',
+            properties: {
+              name: 'incomplete-provider',
+              // missing provider and default_model
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: invalidTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors.length).toBeGreaterThan(0);
+    });
+
+    test('deletes formation and cleans up ai_provider resource', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${aiProviderFormationId}`
+      );
+      expect(res.status).toBe(204);
+    });
+
+    test('deleted ai_provider formation no longer found', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${aiProviderFormationId}`
+      );
+      expect(res.status).toBe(404);
+    });
+  });
+
+  // ── document resource type ────────────────────────────────────────────────
+
+  describe('Formation with document resources', () => {
+    let documentFormationId: string;
+
+    const documentTemplate = {
+      resources: {
+        MyDoc: {
+          type: 'document',
+          properties: {
+            content: 'Hello from formation document',
+          },
+        },
+      },
+    };
+
+    test('creates a formation with a document resource', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `document-formation-${Date.now()}`,
+          template: documentTemplate,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      expect(res.body.resources).toHaveLength(1);
+      expect(res.body.resources[0].logical_id).toBe('MyDoc');
+      expect(res.body.resources[0].status).toBe('created');
+      expect(res.body.resources[0].physical_resource_id).toBeDefined();
+      expect(res.body.resources[0].physical_resource_id).toMatch(/^doc_/);
+
+      documentFormationId = res.body.id;
+    });
+
+    test('updating a formation with a document resource is a no-op (documents are immutable)', async () => {
+      const updatedTemplate = {
+        resources: {
+          MyDoc: {
+            type: 'document',
+            properties: {
+              content: 'Updated content (should not change)',
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${documentFormationId}`)
+        .send({ template: updatedTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('active');
+      const docResource = res.body.resources.find(
+        (r: { logical_id: string }) => r.logical_id === 'MyDoc'
+      );
+      expect(docResource).toBeDefined();
+      // update is a no-op, so status should reflect no-op/updated
+      expect(['updated', 'no-op']).toContain(docResource.status);
+    });
+
+    test('validates template with document missing required content', async () => {
+      const invalidTemplate = {
+        resources: {
+          BadDoc: {
+            type: 'document',
+            properties: {
+              title: 'Missing content field',
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: invalidTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors.length).toBeGreaterThan(0);
+    });
+
+    test('deletes formation and cleans up document resource', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${documentFormationId}`
+      );
+      expect(res.status).toBe(204);
+    });
+
+    test('deleted document formation no longer found', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${documentFormationId}`
+      );
+      expect(res.status).toBe(404);
+    });
+  });
+
+  // ── memory_entry resource type ────────────────────────────────────────────
+
+  describe('Formation with memory_entry resources', () => {
+    let memoryEntryFormationId: string;
+    let standaloneMemoryId: string;
+
+    beforeAll(async () => {
+      // Create a standalone memory to use as the container for memory entries
+      const memRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/memories')
+        .send({
+          project_id: projectId,
+          name: `formation-me-container-${Date.now()}`,
+        });
+      expect(memRes.status).toBe(201);
+      standaloneMemoryId = memRes.body.id;
+    });
+
+    test('creates a formation with a memory_entry resource', async () => {
+      const template = {
+        resources: {
+          MyEntry: {
+            type: 'memory_entry',
+            properties: {
+              memory_id: standaloneMemoryId,
+              content: 'Initial entry content from formation',
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `memory-entry-formation-${Date.now()}`,
+          template,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      expect(res.body.resources).toHaveLength(1);
+      expect(res.body.resources[0].logical_id).toBe('MyEntry');
+      expect(res.body.resources[0].status).toBe('created');
+      expect(res.body.resources[0].physical_resource_id).toBeDefined();
+      expect(res.body.resources[0].physical_resource_id).toMatch(/^me_/);
+
+      memoryEntryFormationId = res.body.id;
+    });
+
+    test('updates the memory_entry content in the formation', async () => {
+      const updatedTemplate = {
+        resources: {
+          MyEntry: {
+            type: 'memory_entry',
+            properties: {
+              memory_id: standaloneMemoryId,
+              content: 'Updated entry content from formation',
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${memoryEntryFormationId}`)
+        .send({ template: updatedTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('active');
+      const entryResource = res.body.resources.find(
+        (r: { logical_id: string }) => r.logical_id === 'MyEntry'
+      );
+      expect(entryResource).toBeDefined();
+      expect(entryResource.status).toBe('updated');
+    });
+
+    test('validates template with memory_entry missing required fields', async () => {
+      const invalidTemplate = {
+        resources: {
+          BadEntry: {
+            type: 'memory_entry',
+            properties: {
+              // missing memory_id and content
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: invalidTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors.length).toBeGreaterThan(0);
+    });
+
+    test('deletes formation and cleans up memory_entry resource', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${memoryEntryFormationId}`
+      );
+      expect(res.status).toBe(204);
+    });
+
+    test('deleted memory_entry formation no longer found', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${memoryEntryFormationId}`
+      );
+      expect(res.status).toBe(404);
+    });
+  });
+
+  // ── api_key resource type ─────────────────────────────────────────────────
+
+  describe('Formation with api_key resources', () => {
+    let apiKeyFormationId: string;
+
+    const apiKeyTemplate = {
+      resources: {
+        MyKey: {
+          type: 'api_key',
+          properties: {
+            name: 'formation-api-key',
+          },
+        },
+      },
+    };
+
+    test('creates a formation with an api_key resource', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `api-key-formation-${Date.now()}`,
+          template: apiKeyTemplate,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      expect(res.body.resources).toHaveLength(1);
+      expect(res.body.resources[0].logical_id).toBe('MyKey');
+      expect(res.body.resources[0].status).toBe('created');
+      expect(res.body.resources[0].physical_resource_id).toBeDefined();
+
+      apiKeyFormationId = res.body.id;
+    });
+
+    test('updates the api_key name in the formation', async () => {
+      const updatedTemplate = {
+        resources: {
+          MyKey: {
+            type: 'api_key',
+            properties: {
+              name: 'formation-api-key-updated',
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${apiKeyFormationId}`)
+        .send({ template: updatedTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('active');
+      const keyResource = res.body.resources.find(
+        (r: { logical_id: string }) => r.logical_id === 'MyKey'
+      );
+      expect(keyResource).toBeDefined();
+      expect(keyResource.status).toBe('updated');
+    });
+
+    test('validates template with api_key missing required name', async () => {
+      const invalidTemplate = {
+        resources: {
+          BadKey: {
+            type: 'api_key',
+            properties: {
+              // missing name
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: invalidTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors.length).toBeGreaterThan(0);
+    });
+
+    test('deletes formation and cleans up api_key resource', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${apiKeyFormationId}`
+      );
+      expect(res.status).toBe(204);
+    });
+
+    test('deleted api_key formation no longer found', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${apiKeyFormationId}`
+      );
+      expect(res.status).toBe(404);
+    });
+  });
+});

@@ -1,11 +1,9 @@
 import type { ServerResponse } from 'node:http';
 
 import { Router } from '@ttoss/http-server';
-import createDebug from 'debug';
 import type { Context } from 'src/Context';
+import type { GenerationResult } from 'src/lib/agentGeneration';
 import { createGeneration, submitToolOutputs } from 'src/lib/agents';
-
-const log = createDebug('soat:agentGeneration');
 
 const pipeStreamToResponse = async (
   stream: ReadableStream,
@@ -48,19 +46,9 @@ const sendStreamResponse = async (
 
 const handleGenerationResult = async (
   ctx: Context,
-  result: unknown,
+  result: GenerationResult | ReadableStream,
   stream: boolean | undefined
 ): Promise<void> => {
-  if (result === 'not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'Agent not found' };
-    return;
-  }
-  if (result === 'ai_provider_not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'AI provider not found' };
-    return;
-  }
   if (stream && result && typeof result === 'object' && 'getReader' in result) {
     await sendStreamResponse(ctx, result as ReadableStream);
     return;
@@ -115,29 +103,19 @@ agentGenerationRouter.post(
       return;
     }
 
-    let result;
-    try {
-      result = await createGeneration({
-        projectIds,
-        agentId: ctx.params.agent_id,
-        messages: messages as Array<{ role: string; content: string }>,
-        stream: stream === true,
-        traceId,
-        parentTraceId,
-        rootTraceId,
-        remainingDepth:
-          typeof maxCallDepth === 'number' ? maxCallDepth : undefined,
-        authHeader: (ctx.headers.authorization as string) ?? '',
-        toolContext,
-      });
-    } catch (error) {
-      log('createGeneration threw agentId=%s %O', ctx.params.agent_id, error);
-      ctx.status = 500;
-      ctx.body = {
-        error: error instanceof Error ? error.message : 'Generation failed',
-      };
-      return;
-    }
+    const result = await createGeneration({
+      projectIds,
+      agentId: ctx.params.agent_id,
+      messages: messages as Array<{ role: string; content: string }>,
+      stream: stream === true,
+      traceId,
+      parentTraceId,
+      rootTraceId,
+      remainingDepth:
+        typeof maxCallDepth === 'number' ? maxCallDepth : undefined,
+      authHeader: (ctx.headers.authorization as string) ?? '',
+      toolContext,
+    });
 
     await handleGenerationResult(ctx, result, stream);
   }
@@ -183,18 +161,6 @@ agentGenerationRouter.post(
         output: unknown;
       }>,
     });
-
-    if (result === 'not_found') {
-      ctx.status = 404;
-      ctx.body = { error: 'Agent not found' };
-      return;
-    }
-
-    if (result === 'generation_not_found') {
-      ctx.status = 404;
-      ctx.body = { error: 'Generation not found' };
-      return;
-    }
 
     ctx.body = result;
   }

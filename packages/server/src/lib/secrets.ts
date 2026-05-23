@@ -2,6 +2,8 @@ import crypto from 'node:crypto';
 
 import { db } from 'src/db';
 
+import { DomainError } from '../errors';
+
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
@@ -75,7 +77,11 @@ export const getSecret = async (args: { id: string }) => {
     where: { publicId: args.id },
     include: [{ model: db.Project, as: 'project' }],
   });
-  if (!secret) return null;
+  if (!secret)
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Secret '${args.id}' not found.`
+    );
   return mapSecret(secret);
 };
 
@@ -105,7 +111,11 @@ export const updateSecret = async (args: {
     where: { publicId: args.id },
     include: [{ model: db.Project, as: 'project' }],
   });
-  if (!secret) return null;
+  if (!secret)
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Secret '${args.id}' not found.`
+    );
 
   if (args.name !== undefined) {
     secret.name = args.name;
@@ -117,16 +127,27 @@ export const updateSecret = async (args: {
   return mapSecret(secret);
 };
 
-export const deleteSecret = async (args: { id: string; force?: boolean }) => {
+export const deleteSecret = async (args: {
+  id: string;
+  force?: boolean;
+}): Promise<void> => {
   const secret = await db.Secret.findOne({ where: { publicId: args.id } });
-  if (!secret) return null;
+  if (!secret)
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Secret '${args.id}' not found.`
+    );
 
   const dependentCount = await db.AiProvider.count({
     where: { secretId: secret.id },
   });
 
   if (dependentCount > 0 && !args.force) {
-    return 'conflict' as const;
+    throw new DomainError(
+      'SECRET_HAS_DEPENDENTS',
+      `Secret '${args.id}' is in use by ${dependentCount} AI provider(s) and cannot be deleted without force.`,
+      { dependentCount }
+    );
   }
 
   if (args.force) {
@@ -134,5 +155,4 @@ export const deleteSecret = async (args: { id: string; force?: boolean }) => {
   }
 
   await secret.destroy();
-  return 'deleted' as const;
 };

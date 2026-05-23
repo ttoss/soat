@@ -5,6 +5,7 @@ import createDebug from 'debug';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 
 import { db } from '../db';
+import { DomainError } from '../errors';
 import {
   buildAllMessages,
   buildDepthGuardResult,
@@ -68,19 +69,27 @@ const buildGenerationContext = async (args: {
   traceId?: string;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
-}): Promise<GenerationContext | 'not_found' | 'ai_provider_not_found'> => {
+}): Promise<GenerationContext> => {
   const typedAgent = await resolveAgentForGeneration({
     agentId: args.agentId,
     projectIds: args.projectIds,
   });
 
-  if (!typedAgent) return 'not_found';
+  if (!typedAgent)
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Agent '${args.agentId}' not found.`
+    );
 
   const resolved = await resolveAiProviderSecret({
     aiProviderId: typedAgent.aiProvider.publicId,
   });
 
-  if (!resolved) return 'ai_provider_not_found';
+  if (!resolved)
+    throw new DomainError(
+      'AI_PROVIDER_NOT_FOUND',
+      `AI provider for agent '${args.agentId}' could not be resolved.`
+    );
 
   const model = buildModel({
     provider: resolved.provider,
@@ -190,7 +199,7 @@ const resolveContextAndRecord = async (args: {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
   initiatorGenerationId?: string | null;
-}): Promise<GenerationContext | 'not_found' | 'ai_provider_not_found'> => {
+}): Promise<GenerationContext> => {
   const ctx = await buildGenerationContext({
     agentId: args.agentId,
     projectIds: args.projectIds,
@@ -201,8 +210,6 @@ const resolveContextAndRecord = async (args: {
     parentTraceId: args.parentTraceId,
     rootTraceId: args.rootTraceId,
   });
-
-  if (ctx === 'not_found' || ctx === 'ai_provider_not_found') return ctx;
 
   createGenerationRecord({
     publicId: ctx.generationId,
@@ -230,9 +237,7 @@ export const createGeneration = async (args: {
   authHeader?: string;
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
-}): Promise<
-  GenerationResult | 'not_found' | 'ai_provider_not_found' | ReadableStream
-> => {
+}): Promise<GenerationResult | ReadableStream> => {
   const maxDepth = args.remainingDepth ?? 10;
   const traceId = args.traceId ?? generatePublicId(PUBLIC_ID_PREFIXES.trace);
 
@@ -262,8 +267,6 @@ export const createGeneration = async (args: {
   });
 
   log('createGeneration: agentId=%s stream=%s', args.agentId, args.stream);
-
-  if (ctx === 'not_found' || ctx === 'ai_provider_not_found') return ctx;
 
   return dispatchGeneration({
     stream: args.stream,
@@ -319,11 +322,14 @@ export const submitToolOutputs = async (args: {
   agentId: string;
   generationId: string;
   toolOutputs: Array<{ toolCallId: string; output: unknown }>;
-}): Promise<GenerationResult | 'not_found' | 'generation_not_found'> => {
+}): Promise<GenerationResult> => {
   const pending = pendingGenerations.get(args.generationId);
 
   if (!pending || pending.agentId !== args.agentId) {
-    return 'generation_not_found';
+    throw new DomainError(
+      'GENERATION_NOT_FOUND',
+      `Generation '${args.generationId}' not found or does not belong to agent '${args.agentId}'.`
+    );
   }
 
   pendingGenerations.delete(args.generationId);

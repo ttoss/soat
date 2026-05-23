@@ -1,7 +1,6 @@
 import { models } from '@soat/postgresdb';
 import { App, Router } from '@ttoss/http-server';
 import { APICallError } from 'ai';
-import { AppError } from 'src/AppError';
 import { errorLoggerMiddleware } from 'src/middleware/errorLogger';
 import request from 'supertest';
 
@@ -61,31 +60,7 @@ describe('errorLogger middleware', () => {
     expect(response.body).toEqual({ error: 'Internal Server Error' });
   });
 
-  test('returns AppError message and logs the cause', async () => {
-    delete process.env.SOAT_ERROR_LOGS_ENABLED;
-
-    const app = new App();
-    const router = new Router();
-
-    app.use(errorLoggerMiddleware);
-
-    const cause = new Error('DB connection failed');
-
-    router.get('/boom', async () => {
-      throw new AppError({ message: 'Error creating resource', cause });
-    });
-
-    app.use(router.routes());
-
-    const response = await request(app.callback())
-      .get('/boom')
-      .set('User-Agent', 'jest-test-agent');
-
-    expect(response.status).toBe(500);
-    expect(response.body).toEqual({ error: 'Error creating resource' });
-  });
-
-  test('logs APICallError fields (url, statusCode, responseBody) when cause is APICallError', async () => {
+  test('logs APICallError fields (url, statusCode, responseBody) when error is APICallError', async () => {
     delete process.env.SOAT_ERROR_LOGS_ENABLED;
 
     const app = new App();
@@ -103,10 +78,7 @@ describe('errorLogger middleware', () => {
     });
 
     router.get('/boom', async () => {
-      throw new AppError({
-        message: 'Error generating response',
-        cause: apiCallError,
-      });
+      throw apiCallError;
     });
 
     app.use(router.routes());
@@ -114,7 +86,7 @@ describe('errorLogger middleware', () => {
     const response = await request(app.callback()).get('/boom');
 
     expect(response.status).toBe(500);
-    expect(response.body).toEqual({ error: 'Error generating response' });
+    expect(response.body).toEqual({ error: 'Internal Server Error' });
   });
 
   test('logs DatabaseError fields (sql, dbError) when a real database error occurs', async () => {

@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { DomainError } from '../errors';
 import { type GenerationResult, submitToolOutputs } from './agents';
 import { generateConversationMessage } from './conversationGeneration';
 import { addConversationMessage } from './conversationMessages';
@@ -155,9 +156,6 @@ const buildGenerationResult = (
   session: InstanceType<(typeof db)['Session']>,
   result: Awaited<ReturnType<typeof generateConversationMessage>>
 ) => {
-  if (typeof result === 'string') {
-    return result;
-  }
   if (result.status === 'requires_action') {
     emitGenerationRequiresAction(session, result.generationId, result.traceId);
     return {
@@ -192,13 +190,16 @@ export const generateSessionResponse = async (args: {
   });
 
   if (!session) {
-    return 'session_not_found' as const;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
   }
 
   const sessionKey = `${args.agentId}#${args.sessionId}`;
   const concurrencyResult = checkConcurrency({ sessionKey, session });
   if (concurrencyResult) {
-    return concurrencyResult;
+    throw new DomainError(
+      'GENERATION_ALREADY_IN_PROGRESS',
+      'Generation already in progress'
+    );
   }
 
   const conversation = session.conversation as InstanceType<
@@ -209,7 +210,7 @@ export const generateSessionResponse = async (args: {
   ).agent;
 
   if (!agent) {
-    return 'session_not_found' as const;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
   }
 
   const mergedToolContext = {
@@ -257,7 +258,7 @@ export const listSessionMessages = async (args: {
   });
 
   if (!session) {
-    return null;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
   }
 
   const conversation = session.conversation as InstanceType<
@@ -300,7 +301,7 @@ export const addSessionMessage = async (args: {
   });
 
   if (!session) {
-    return 'session_not_found' as const;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
   }
 
   const conversation = session.conversation as InstanceType<
@@ -320,7 +321,7 @@ export const addSessionMessage = async (args: {
   });
 
   if (!userMsg) {
-    return 'session_not_found' as const;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
   }
 
   if (session.autoGenerate && !session.generatingAt) {
@@ -341,16 +342,12 @@ export const sendSessionMessage = async (args: {
   model?: string;
   toolContext?: Record<string, string>;
 }) => {
-  const saveResult = await addSessionMessage({
+  await addSessionMessage({
     agentId: args.agentId,
     sessionId: args.sessionId,
     message: args.message,
     toolContext: args.toolContext,
   });
-
-  if (typeof saveResult === 'string') {
-    return saveResult;
-  }
 
   return generateSessionResponse({
     agentId: args.agentId,
@@ -370,7 +367,7 @@ const fetchSessionAndConversation = async (args: {
   });
 
   if (!session) {
-    return null;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
   }
 
   const conversation = session.conversation as InstanceType<
@@ -383,7 +380,7 @@ const fetchSessionAndConversation = async (args: {
   ).agent;
 
   if (!agent) {
-    return null;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
   }
 
   return { session, conversation, agent };
@@ -438,7 +435,7 @@ export const submitSessionToolOutputs = async (args: {
   });
 
   if (!sessionData) {
-    return 'session_not_found' as const;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
   }
 
   const result = await submitToolOutputs({
@@ -446,10 +443,6 @@ export const submitSessionToolOutputs = async (args: {
     generationId: args.generationId,
     toolOutputs: args.toolOutputs,
   });
-
-  if (result === 'not_found' || result === 'generation_not_found') {
-    return result;
-  }
 
   return processToolOutputResult({
     result,

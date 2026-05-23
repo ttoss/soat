@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { DomainError } from '../errors';
 import {
   comparePassword,
   hashPassword,
@@ -107,16 +108,19 @@ export const deleteUser = async (args: { id: string }) => {
 export const attachUserPolicies = async (args: {
   userId: string;
   policyIds: string[];
-}) => {
+}): Promise<void> => {
   const user = await db.User.findOne({ where: { publicId: args.userId } });
 
   if (!user) {
-    return 'not_found' as const;
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `User '${args.userId}' not found.`
+    );
   }
 
   if (args.policyIds.length === 0) {
     await user.update({ policyIds: [] });
-    return true;
+    return;
   }
 
   const policies = await db.Policy.findAll({
@@ -124,7 +128,10 @@ export const attachUserPolicies = async (args: {
   });
 
   if (policies.length !== args.policyIds.length) {
-    return 'not_found' as const;
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      'One or more of the specified policies was not found.'
+    );
   }
 
   await user.update({
@@ -132,15 +139,16 @@ export const attachUserPolicies = async (args: {
       return p.id as number;
     }),
   });
-
-  return true;
 };
 
 export const getUserPolicies = async (args: { userId: string }) => {
   const user = await db.User.findOne({ where: { publicId: args.userId } });
 
   if (!user) {
-    return null;
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `User '${args.userId}' not found.`
+    );
   }
 
   const policyIds = (user.policyIds as number[]) ?? [];

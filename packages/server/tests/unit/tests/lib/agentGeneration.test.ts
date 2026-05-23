@@ -15,13 +15,14 @@ describe('createGeneration', () => {
     jest.clearAllMocks();
   });
 
-  test('returns not_found when agent does not exist', async () => {
+  test('throws DomainError when agent does not exist', async () => {
     const { createGeneration } = await loadAgentGenerationModule();
-    const result = await createGeneration({
-      agentId: 'nonexistent_agent_id',
-      messages: [{ role: 'user', content: 'hello' }],
-    });
-    expect(result).toBe('not_found');
+    await expect(
+      createGeneration({
+        agentId: 'nonexistent_agent_id',
+        messages: [{ role: 'user', content: 'hello' }],
+      })
+    ).rejects.toThrow('not found');
   });
 
   test('returns depth guard result when remainingDepth is 0', async () => {
@@ -49,15 +50,15 @@ describe('submitToolOutputs', () => {
     jest.clearAllMocks();
   });
 
-  test('returns generation_not_found when generation does not exist', async () => {
+  test('throws DomainError when generation does not exist', async () => {
     const { submitToolOutputs } = await loadAgentGenerationModule();
-    const result = await submitToolOutputs({
-      agentId: 'agent_id',
-      generationId: 'gen_nonexistent_0000',
-      toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }],
-    });
-
-    expect(result).toBe('generation_not_found');
+    await expect(
+      submitToolOutputs({
+        agentId: 'agent_id',
+        generationId: 'gen_nonexistent_0000',
+        toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }],
+      })
+    ).rejects.toThrow('not found');
   });
 
   test('processes pending tool outputs and returns completed result', async () => {

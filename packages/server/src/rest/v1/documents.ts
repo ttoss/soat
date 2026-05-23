@@ -1,5 +1,4 @@
 import { Router } from '@ttoss/http-server';
-import { AppError } from 'src/AppError';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import {
@@ -215,21 +214,17 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     return;
   }
 
-  try {
-    const doc = await createDocument({
-      projectId: project.id,
-      content: body.content,
-      path: body.path,
-      filename: body.filename,
-      title: body.title,
-      metadata: body.metadata,
-      tags: body.tags,
-    });
-    ctx.status = 201;
-    ctx.body = doc;
-  } catch (error) {
-    throw new AppError({ message: 'Error creating document', cause: error });
-  }
+  const doc = await createDocument({
+    projectId: project.id,
+    content: body.content,
+    path: body.path,
+    filename: body.filename,
+    title: body.title,
+    metadata: body.metadata,
+    tags: body.tags,
+  });
+  ctx.status = 201;
+  ctx.body = doc;
 });
 
 documentsRouter.delete('/documents/:document_id', async (ctx: Context) => {
@@ -286,19 +281,15 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     tags?: Record<string, string>;
   };
 
-  try {
-    const updated = await updateDocument({
-      id: ctx.params.document_id,
-      content: body.content,
-      title: body.title,
-      path: body.path,
-      metadata: body.metadata,
-      tags: body.tags,
-    });
-    ctx.body = updated;
-  } catch (error) {
-    throw new AppError({ message: 'Error updating document', cause: error });
-  }
+  const updated = await updateDocument({
+    id: ctx.params.document_id,
+    content: body.content,
+    title: body.title,
+    path: body.path,
+    metadata: body.metadata,
+    tags: body.tags,
+  });
+  ctx.body = updated;
 });
 
 documentsRouter.get('/documents/:document_id/tags', async (ctx: Context) => {

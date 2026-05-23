@@ -20,14 +20,14 @@ describe('listTraces', () => {
 });
 
 describe('getTrace', () => {
-  test('returns not_found for non-existent trace', async () => {
-    const result = await getTrace({ traceId: 'nonexistent' });
-    expect(result).toBe('not_found');
+  test('throws for non-existent trace', async () => {
+    await expect(getTrace({ traceId: 'nonexistent' })).rejects.toThrow();
   });
 
-  test('returns not_found when projectIds array is empty', async () => {
-    const result = await getTrace({ traceId: 'trace-1', projectIds: [] });
-    expect(result).toBe('not_found');
+  test('throws when projectIds array is empty', async () => {
+    await expect(
+      getTrace({ traceId: 'trace-1', projectIds: [] })
+    ).rejects.toThrow();
   });
 });
 
@@ -52,13 +52,10 @@ describe('saveTrace and upsertTraceRecord', () => {
     });
 
     const result = await getTrace({ traceId });
-    expect(result).not.toBe('not_found');
-    if (result !== 'not_found') {
-      expect(result.id).toBe(traceId);
-      expect(result.projectId).toBe(projectPublicId);
-      expect(result.agentId).toBe('agt_trace_lib_001');
-      expect(result.stepCount).toBe(1);
-    }
+    expect(result.id).toBe(traceId);
+    expect(result.projectId).toBe(projectPublicId);
+    expect(result.agentId).toBe('agt_trace_lib_001');
+    expect(result.stepCount).toBe(1);
   });
 
   test('updates an existing Trace row on second save', async () => {
@@ -81,10 +78,7 @@ describe('saveTrace and upsertTraceRecord', () => {
     });
 
     const result = await getTrace({ traceId });
-    expect(result).not.toBe('not_found');
-    if (result !== 'not_found') {
-      expect(result.stepCount).toBe(3);
-    }
+    expect(result.stepCount).toBe(3);
   });
 
   test('saves a trace with empty steps', async () => {
@@ -98,10 +92,7 @@ describe('saveTrace and upsertTraceRecord', () => {
     });
 
     const result = await getTrace({ traceId });
-    expect(result).not.toBe('not_found');
-    if (result !== 'not_found') {
-      expect(result.stepCount).toBe(0);
-    }
+    expect(result.stepCount).toBe(0);
   });
 
   test('listTraces returns created traces for a given projectId', async () => {
@@ -134,11 +125,8 @@ describe('saveTrace and upsertTraceRecord', () => {
     });
 
     const result = await getTrace({ traceId, projectIds: [projectId] });
-    expect(result).not.toBe('not_found');
-    if (result !== 'not_found') {
-      expect(result.id).toBe(traceId);
-      expect(result.fileId).toBeDefined();
-    }
+    expect(result.id).toBe(traceId);
+    expect(result.fileId).toBeDefined();
   });
 
   test('getTrace returns not_found when projectIds excludes the project', async () => {
@@ -151,8 +139,7 @@ describe('saveTrace and upsertTraceRecord', () => {
       steps: [],
     });
 
-    const result = await getTrace({ traceId, projectIds: [99999] });
-    expect(result).toBe('not_found');
+    await expect(getTrace({ traceId, projectIds: [99999] })).rejects.toThrow();
   });
 });
 

@@ -83,6 +83,10 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 COPY --from=builder /app/packages/server/dist ./packages/server/dist
 COPY --from=builder /app/packages/postgresdb/dist ./packages/postgresdb/dist
 
+# Copy OpenAPI specs needed at runtime by resolveFormationSpecPath() and other
+# spec loaders. The first candidate path is ../../rest/openapi/v1/ relative to dist/esm/.
+COPY --from=builder /app/packages/server/src/rest/openapi/v1/ ./packages/server/rest/openapi/v1/
+
 # Mark dist/esm as ESM so Node.js parses import statements correctly
 RUN echo '{"type":"module"}' > packages/server/dist/esm/package.json
 

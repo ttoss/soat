@@ -1,5 +1,4 @@
 import { Router } from '@ttoss/http-server';
-import { AppError } from 'src/AppError';
 import type { Context } from 'src/Context';
 import { searchKnowledge } from 'src/lib/knowledge';
 import { compilePolicy } from 'src/lib/policyCompiler';
@@ -78,22 +77,18 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     return;
   }
 
-  try {
-    const results = await searchKnowledge({
-      projectIds,
-      policyWhere,
-      query: body.query,
-      minScore: body.minScore,
-      limit: body.limit,
-      paths: body.documentPaths,
-      documentIds: body.documentIds,
-      memoryIds: body.memoryIds,
-      memoryTags: body.memoryTags,
-    });
-    ctx.body = { results };
-  } catch (error) {
-    throw new AppError({ message: 'Error searching knowledge', cause: error });
-  }
+  const results = await searchKnowledge({
+    projectIds,
+    policyWhere,
+    query: body.query,
+    minScore: body.minScore,
+    limit: body.limit,
+    paths: body.documentPaths,
+    documentIds: body.documentIds,
+    memoryIds: body.memoryIds,
+    memoryTags: body.memoryTags,
+  });
+  ctx.body = { results };
 });
 
 export { knowledgeRouter };

@@ -157,16 +157,10 @@ usersRouter.put('/users/:user_id/policies', async (ctx: Context) => {
     return;
   }
 
-  const result = await attachUserPolicies({
+  await attachUserPolicies({
     userId: ctx.params.user_id,
     policyIds,
   });
-
-  if (result === 'not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'User or policy not found' };
-    return;
-  }
 
   ctx.status = 204;
 });
@@ -185,12 +179,6 @@ usersRouter.get('/users/:user_id/policies', async (ctx: Context) => {
   }
 
   const policies = await getUserPolicies({ userId: ctx.params.user_id });
-
-  if (policies === null) {
-    ctx.status = 404;
-    ctx.body = { error: 'User not found' };
-    return;
-  }
 
   ctx.body = policies;
 });

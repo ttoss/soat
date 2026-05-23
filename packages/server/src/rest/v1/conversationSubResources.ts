@@ -1,5 +1,4 @@
 import { Router } from '@ttoss/http-server';
-import { AppError } from 'src/AppError';
 import type { Context } from 'src/Context';
 import { generateConversationMessage } from 'src/lib/conversationGeneration';
 import {
@@ -15,35 +14,6 @@ import {
 } from 'src/lib/conversations';
 
 import { checkConversationAccess } from './conversationHelpers';
-
-type GenerateResult = Awaited<ReturnType<typeof generateConversationMessage>>;
-
-const handleGenerateResult = (
-  ctx: Context,
-  result: GenerateResult
-): boolean => {
-  if (result === 'conversation_not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'Conversation not found' };
-    return false;
-  }
-  if (result === 'agent_not_found') {
-    ctx.status = 404;
-    ctx.body = { error: 'Agent not found in this project' };
-    return false;
-  }
-  if (result === 'ai_provider_not_found') {
-    ctx.status = 400;
-    ctx.body = { error: 'AI provider not found or not configured' };
-    return false;
-  }
-  if (result === 'agent_or_chat_not_found') {
-    ctx.status = 400;
-    ctx.body = { error: "The actor's linked agent or chat could not be found" };
-    return false;
-  }
-  return true;
-};
 
 const conversationSubResourcesRouter = new Router<Context>();
 
@@ -146,30 +116,23 @@ conversationSubResourcesRouter.post(
       return;
     }
 
-    try {
-      const message = await addConversationMessage({
-        conversationId: ctx.params.conversation_id,
-        message: body.message,
-        role: body.role,
-        actorId: body.actorId ?? null,
-        position: body.position,
-        metadata: body.metadata,
-      });
+    const message = await addConversationMessage({
+      conversationId: ctx.params.conversation_id,
+      message: body.message,
+      role: body.role,
+      actorId: body.actorId ?? null,
+      position: body.position,
+      metadata: body.metadata,
+    });
 
-      if (!message) {
-        ctx.status = 404;
-        ctx.body = { error: 'Conversation or actor not found' };
-        return;
-      }
-
-      ctx.status = 201;
-      ctx.body = message;
-    } catch (error) {
-      throw new AppError({
-        message: 'Error adding conversation message',
-        cause: error,
-      });
+    if (!message) {
+      ctx.status = 404;
+      ctx.body = { error: 'Conversation or actor not found' };
+      return;
     }
+
+    ctx.status = 201;
+    ctx.body = message;
   }
 );
 
@@ -423,26 +386,15 @@ conversationSubResourcesRouter.post(
       return;
     }
 
-    try {
-      const result = await generateConversationMessage({
-        conversationId: ctx.params.conversation_id,
-        agentId: body.agentId,
-        model: body.model,
-        toolContext: body.toolContext,
-      });
+    const result = await generateConversationMessage({
+      conversationId: ctx.params.conversation_id,
+      agentId: body.agentId,
+      model: body.model,
+      toolContext: body.toolContext,
+    });
 
-      if (!handleGenerateResult(ctx, result)) {
-        return;
-      }
-
-      ctx.status = 200;
-      ctx.body = result;
-    } catch (error) {
-      throw new AppError({
-        message: 'Error generating conversation response',
-        cause: error,
-      });
-    }
+    ctx.status = 200;
+    ctx.body = result;
   }
 );
 
