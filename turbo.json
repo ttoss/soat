@@ -7,6 +7,16 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**", "build/**", "src/generated/**"]
     },
+    "@soat/sdk#build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "../server/src/rest/openapi/v1/**"],
+      "outputs": ["dist/**", "src/generated/**"]
+    },
+    "@soat/cli#build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "../server/src/rest/openapi/v1/**"],
+      "outputs": ["dist/**", "src/generated/**"]
+    },
     "lint": {
       "dependsOn": ["^build", "build"],
       "outputs": []
