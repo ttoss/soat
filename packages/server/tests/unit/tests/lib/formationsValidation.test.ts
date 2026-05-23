@@ -330,7 +330,14 @@ describe('validateFormationTemplate', () => {
   test('accepts valid depends_on referencing an existing resource', () => {
     const result = validateFormationTemplate({
       resources: {
-        Provider: { type: 'ai_provider', properties: { name: 'gpt4' } },
+        Provider: {
+          type: 'ai_provider',
+          properties: {
+            name: 'gpt4',
+            provider: 'openai',
+            default_model: 'gpt-4o',
+          },
+        },
         MyAgent: {
           type: 'agent',
           properties: { name: 'bot', ai_provider_id: { ref: 'Provider' } },
@@ -394,7 +401,11 @@ describe('validateFormationTemplate', () => {
       resources: {
         MyProvider: {
           type: 'ai_provider',
-          properties: { name: 'openai', model: 'gpt-4o' },
+          properties: {
+            name: 'openai',
+            provider: 'openai',
+            default_model: 'gpt-4o',
+          },
         },
         MyMemory: {
           type: 'memory',
@@ -598,6 +609,7 @@ describe('validateFormationTemplate', () => {
           properties: {
             name: 'xai',
             provider: 'xai',
+            default_model: 'grok-1',
             secret_id: { param: 'SecretId' },
           },
         },

@@ -252,3 +252,33 @@ export const lookupChatInternalId = async (
   if (!chat) throw new Error(`Chat not found: ${publicId}`);
   return (chat as unknown as { id: number }).id;
 };
+
+export const lookupProjectOwnerUserId = async (
+  projectId: number
+): Promise<number> => {
+  // Projects do not have a direct owner. Look for an existing API key for
+  // this project to reuse its userId, or fall back to the first user in
+  // the system (the bootstrap admin).
+  const existingKey = await db.ApiKey.findOne({ where: { projectId } });
+  if (existingKey) {
+    return (existingKey as unknown as { userId: number }).userId;
+  }
+  const adminUser = await db.User.findOne({ order: [['id', 'ASC']] });
+  if (!adminUser) throw new Error('No users found in the system.');
+  return (adminUser as unknown as { id: number }).id;
+};
+
+export const lookupPolicyInternalIds = async (
+  publicIds: string[]
+): Promise<number[]> => {
+  if (publicIds.length === 0) return [];
+  const policies = await db.Policy.findAll({ where: { publicId: publicIds } });
+  if (policies.length !== publicIds.length) {
+    const foundIds = new Set(
+      policies.map((p) => (p as unknown as { publicId: string }).publicId)
+    );
+    const missing = publicIds.find((id) => !foundIds.has(id));
+    throw new Error(`Policy not found: ${missing}`);
+  }
+  return policies.map((p) => (p as unknown as { id: number }).id);
+};

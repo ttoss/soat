@@ -782,6 +782,26 @@ components:
             type: string
           description: Event types to subscribe to (e.g. memory.updated)
 
+    ApiKeyResourceProperties:
+      description: >-
+        Creates an API key scoped to the formation's project and optionally
+        restricted by a set of policies. The key is owned by the project owner.
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Human-readable label for the API key
+        policy_ids:
+          type: array
+          items:
+            type: string
+          description: >-
+            Optional list of policy public IDs that further restrict the key's
+            permissions
+
     ResourceDeclaration:
       type: object
       required:
@@ -795,6 +815,7 @@ components:
             - agent_tool
             - agent
             - actor
+            - api_key
             - document
             - memory
             - memory_entry
@@ -806,6 +827,7 @@ components:
             - $ref: '#/components/schemas/ActorResourceProperties'
             - $ref: '#/components/schemas/AiProviderResourceProperties'
             - $ref: '#/components/schemas/AgentToolResourceProperties'
+            - $ref: '#/components/schemas/ApiKeyResourceProperties'
             - $ref: '#/components/schemas/DocumentResourceProperties'
             - $ref: '#/components/schemas/MemoryResourceProperties'
             - $ref: '#/components/schemas/MemoryEntryResourceProperties'

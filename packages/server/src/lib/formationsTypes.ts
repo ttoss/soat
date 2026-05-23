@@ -116,6 +116,7 @@ export const SUPPORTED_RESOURCE_TYPES = new Set([
   'agent_tool',
   'agent',
   'actor',
+  'api_key',
   'document',
   'memory',
   'memory_entry',
