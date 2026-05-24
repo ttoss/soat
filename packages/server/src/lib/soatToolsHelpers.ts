@@ -5,6 +5,9 @@
 
 import type { JsonObjectSchema } from '@ttoss/http-server-mcp';
 import type { JSONSchema7 } from 'ai';
+import createDebug from 'debug';
+
+const log = createDebug('soat:tools');
 
 export interface ToolDefinition {
   name: string;
@@ -316,26 +319,44 @@ export const extractBodyProps = (args: {
 }> => {
   const rawBodySchema = args.requestBody?.content?.['application/json']?.schema;
   const bodySchema = resolveSchema(rawBodySchema, args.spec);
-  return bodySchema?.properties
-    ? Object.entries(bodySchema.properties).map(
-        ([key, value]: [string, unknown]) => {
-          const val = value as {
-            description?: unknown;
-            type?: unknown;
-            items?: unknown;
-          };
-          return {
-            snakeName: key,
-            camelName: snakeToCamel(key),
-            description:
-              typeof val.description === 'string' ? val.description : '',
-            required: (bodySchema.required || []).includes(key),
-            type: typeof val.type === 'string' ? val.type : 'string',
-            items: val.items,
-          };
-        }
-      )
-    : [];
+  if (!bodySchema?.properties) return [];
+  const allEntries = Object.entries(bodySchema.properties);
+  const filtered = allEntries.filter(([, value]: [string, unknown]) => {
+    const val = value as { 'x-soat-server-managed'?: unknown };
+    return !val['x-soat-server-managed'];
+  });
+  const excluded = allEntries.length - filtered.length;
+  if (excluded > 0) {
+    log(
+      'extractBodyProps: excluded %d server-managed field(s): %s',
+      excluded,
+      allEntries
+        .filter(([, v]: [string, unknown]) => {
+          return (v as { 'x-soat-server-managed'?: unknown })[
+            'x-soat-server-managed'
+          ];
+        })
+        .map(([k]) => {
+          return k;
+        })
+        .join(', ')
+    );
+  }
+  return filtered.map(([key, value]: [string, unknown]) => {
+    const val = value as {
+      description?: unknown;
+      type?: unknown;
+      items?: unknown;
+    };
+    return {
+      snakeName: key,
+      camelName: snakeToCamel(key),
+      description: typeof val.description === 'string' ? val.description : '',
+      required: (bodySchema.required || []).includes(key),
+      type: typeof val.type === 'string' ? val.type : 'string',
+      items: val.items,
+    };
+  });
 };
 
 export const processOperation = (args: {
@@ -352,6 +373,13 @@ export const processOperation = (args: {
   if (!args.operation.operationId) return null;
 
   const toolName = operationIdToToolName(args.operation.operationId);
+  log(
+    'processOperation: %s %s operationId=%s toolName=%s',
+    httpMethod,
+    args.pathTemplate,
+    args.operation.operationId,
+    toolName
+  );
 
   // Extract parameters
   const pathParams = extractPathParams({

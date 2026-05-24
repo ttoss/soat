@@ -1,8 +1,11 @@
 import { Op } from '@ttoss/postgresdb';
+import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { upsertFileByPath } from './files';
+
+const log = createDebug('soat:traces');
 
 export type Trace = {
   id: string;
@@ -84,6 +87,15 @@ const upsertTraceRecord = async (args: {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
 }): Promise<void> => {
+  log(
+    'upsertTraceRecord: traceId=%s agentId=%s parentTraceId=%s rootTraceId=%s stepCount=%d',
+    args.traceId,
+    args.agentId,
+    args.parentTraceId ?? 'null',
+    args.rootTraceId ?? 'null',
+    args.stepCount
+  );
+
   const existing = await db.Trace.findOne({
     where: { publicId: args.traceId },
   });
@@ -93,12 +105,14 @@ const upsertTraceRecord = async (args: {
   const rootTraceDbId = await findTraceDbId(args.rootTraceId);
 
   if (existing) {
+    log('upsertTraceRecord: updating existing trace traceId=%s', args.traceId);
     await existing.update({
       fileDbId,
       fileId: args.filePublicId ?? null,
       stepCount: args.stepCount,
     });
   } else {
+    log('upsertTraceRecord: creating new trace traceId=%s', args.traceId);
     await db.Trace.create({
       publicId: args.traceId,
       projectId: args.projectId,
@@ -132,6 +146,14 @@ export const saveTrace = async (args: {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
 }): Promise<void> => {
+  log(
+    'saveTrace: traceId=%s agentId=%s parentTraceId=%s rootTraceId=%s steps=%d',
+    args.traceId,
+    args.agentId,
+    args.parentTraceId ?? 'null',
+    args.rootTraceId ?? 'null',
+    args.steps.length
+  );
   const serializedSteps = serializeSteps(args.steps);
   const content = Buffer.from(JSON.stringify(serializedSteps), 'utf8');
   const filePath = `/traces/${args.traceId}.json`;

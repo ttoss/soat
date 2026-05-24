@@ -151,19 +151,24 @@ const buildSoatRequestBody = (args: {
   toolContext?: Record<string, string>;
   traceId?: string;
   rootTraceId?: string | null;
+  remainingDepth?: number;
 }) => {
   const soatBody = args.def.body ? args.def.body(args.rawArgs) : undefined;
   const soatBodyWithContext =
     soatBody && args.toolContext
       ? { ...soatBody, toolContext: args.toolContext }
       : soatBody;
-  return soatBodyWithContext && args.traceId
-    ? {
-        ...soatBodyWithContext,
-        parent_trace_id: args.traceId,
-        root_trace_id: args.rootTraceId ?? args.traceId,
-      }
-    : soatBodyWithContext;
+  const withTrace =
+    soatBodyWithContext && args.traceId
+      ? {
+          ...soatBodyWithContext,
+          parent_trace_id: args.traceId,
+          root_trace_id: args.rootTraceId ?? args.traceId,
+        }
+      : soatBodyWithContext;
+  return withTrace && args.remainingDepth !== undefined
+    ? { ...withTrace, max_call_depth: Math.max(0, args.remainingDepth - 1) }
+    : withTrace;
 };
 
 const executeSoatTool = async (args: {
@@ -175,6 +180,7 @@ const executeSoatTool = async (args: {
   toolContext?: Record<string, string>;
   traceId?: string;
   rootTraceId?: string | null;
+  remainingDepth?: number;
   buildContextHeaders: (
     toolContext?: Record<string, string>
   ) => Record<string, string>;
@@ -187,6 +193,7 @@ const executeSoatTool = async (args: {
     toolContext: args.toolContext,
     traceId: args.traceId,
     rootTraceId: args.rootTraceId,
+    remainingDepth: args.remainingDepth,
   });
   try {
     const url = `${args.base}${path}`;
@@ -228,6 +235,7 @@ const buildSoatActionTool = (args: {
   traceId?: string;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
+  remainingDepth?: number;
   buildContextHeaders: (
     toolContext?: Record<string, string>
   ) => Record<string, string>;
@@ -268,6 +276,7 @@ const buildSoatActionTool = (args: {
         toolContext: args.toolContext,
         traceId: args.traceId,
         rootTraceId: args.rootTraceId,
+        remainingDepth: args.remainingDepth,
         buildContextHeaders: args.buildContextHeaders,
         logToolCallingError: args.logToolCallingError,
       });
@@ -288,6 +297,7 @@ export const resolveSoatTools = (args: {
   traceId?: string;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
+  remainingDepth?: number;
   buildContextHeaders: (
     toolContext?: Record<string, string>
   ) => Record<string, string>;
@@ -315,6 +325,7 @@ export const resolveSoatTools = (args: {
       traceId: args.traceId,
       parentTraceId: args.parentTraceId,
       rootTraceId: args.rootTraceId,
+      remainingDepth: args.remainingDepth,
       buildContextHeaders: args.buildContextHeaders,
       isSoatActionAllowedByBoundary: args.isSoatActionAllowedByBoundary,
       logToolCallingError: args.logToolCallingError,

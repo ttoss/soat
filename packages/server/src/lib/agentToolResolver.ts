@@ -388,6 +388,7 @@ const resolveToolByType = async (
     traceId?: string;
     parentTraceId?: string | null;
     rootTraceId?: string | null;
+    remainingDepth?: number;
   }
 ): Promise<Record<string, Tool>> => {
   switch (typedTool.type) {
@@ -420,6 +421,7 @@ const resolveToolByType = async (
         traceId: args.traceId,
         parentTraceId: args.parentTraceId,
         rootTraceId: args.rootTraceId,
+        remainingDepth: args.remainingDepth,
         buildContextHeaders,
         isSoatActionAllowedByBoundary,
         logToolCallingError,
@@ -438,6 +440,7 @@ export const resolveAgentTools = async (args: {
   traceId?: string;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
+  remainingDepth?: number;
 }): Promise<Record<string, Tool>> => {
   const resolvedTools: Record<string, Tool> = {};
 

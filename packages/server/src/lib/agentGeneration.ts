@@ -69,6 +69,7 @@ const buildGenerationContext = async (args: {
   traceId?: string;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
+  remainingDepth?: number;
 }): Promise<GenerationContext> => {
   const typedAgent = await resolveAgentForGeneration({
     agentId: args.agentId,
@@ -109,6 +110,7 @@ const buildGenerationContext = async (args: {
         traceId: args.traceId,
         parentTraceId: args.parentTraceId,
         rootTraceId: args.rootTraceId,
+        remainingDepth: args.remainingDepth,
       })
     : {};
 
@@ -199,6 +201,7 @@ const resolveContextAndRecord = async (args: {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
   initiatorGenerationId?: string | null;
+  remainingDepth?: number;
 }): Promise<GenerationContext> => {
   const ctx = await buildGenerationContext({
     agentId: args.agentId,
@@ -209,6 +212,7 @@ const resolveContextAndRecord = async (args: {
     traceId: args.traceId,
     parentTraceId: args.parentTraceId,
     rootTraceId: args.rootTraceId,
+    remainingDepth: args.remainingDepth,
   });
 
   createGenerationRecord({
@@ -264,6 +268,7 @@ export const createGeneration = async (args: {
     parentTraceId: args.parentTraceId,
     rootTraceId: args.rootTraceId,
     initiatorGenerationId: args.initiatorGenerationId,
+    remainingDepth: maxDepth,
   });
 
   log('createGeneration: agentId=%s stream=%s', args.agentId, args.stream);

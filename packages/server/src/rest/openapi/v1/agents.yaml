@@ -1103,19 +1103,23 @@ components:
           description: When true the response is an SSE stream
         trace_id:
           type: string
+          x-soat-server-managed: true
           description: Optional trace ID to group generations
         parent_trace_id:
           type: string
           nullable: true
+          x-soat-server-managed: true
           description: The trace ID of the parent agent generation that triggered this one (for agent-to-agent calls)
         root_trace_id:
           type: string
           nullable: true
+          x-soat-server-managed: true
           description: The trace ID of the root generation in the call chain; if omitted, this generation is the root
         max_call_depth:
           type: integer
           minimum: 0
           default: 10
+          x-soat-server-managed: true
           description: Maximum nested agent-call depth; 0 short-circuits with a depth-guard response
         tool_context:
           type: object
