@@ -264,6 +264,8 @@ const storePendingGenerationState = (args: {
   result: { steps: unknown[]; response: { messages: unknown[] } };
   model: LanguageModel;
   resolvedTools: Record<string, Tool>;
+  toolContext?: Record<string, string> | null;
+  remainingDepth?: number | null;
 }): void => {
   pendingGenerations.set(args.generationId, {
     agentId: args.agentId,
@@ -294,6 +296,24 @@ const storePendingGenerationState = (args: {
     initiatorGenerationId: null,
     projectPublicId: args.typedAgent.project.publicId,
   });
+
+  // Persist pending state to DB so it can be recovered after a server restart.
+  const pendingState: Record<string, unknown> = {
+    pendingToolCalls: args.pendingToolCalls.map((tc) => ({
+      toolCallId: tc.toolCallId,
+      toolName: tc.toolName,
+      args: tc.input,
+    })),
+    messages: [...args.allMessages, ...args.result.response.messages],
+    parentTraceId: args.parentTraceId ?? null,
+    rootTraceId: args.rootTraceId ?? null,
+    toolContext: args.toolContext ?? null,
+    remainingDepth: args.remainingDepth ?? null,
+  };
+  updateGenerationRecord({
+    publicId: args.generationId,
+    metadata: { pendingState },
+  }).catch(() => {});
 };
 
 export const savePendingGeneration = (args: {
@@ -312,6 +332,8 @@ export const savePendingGeneration = (args: {
   typedAgent: TypedAgent;
   agentId: string;
   resolvedTools: Record<string, Tool>;
+  toolContext?: Record<string, string> | null;
+  remainingDepth?: number | null;
 }): GenerationResult => {
   const serializedStepsPending = serializeSteps(args.result.steps as unknown[]);
   saveTrace({

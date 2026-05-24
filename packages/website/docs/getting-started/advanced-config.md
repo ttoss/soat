@@ -106,6 +106,14 @@ Production requirement
 
 Mount a persistent volume to this path in Docker to prevent data loss between container restarts.
 
+### Agent Generation
+
+| Variable                    | Default  | Description                                                                                     |
+| --------------------------- | -------- | ----------------------------------------------------------------------------------------------- |
+| `SOAT_TOOL_CALL_TIMEOUT_MS` | `300000` | Maximum time in milliseconds to wait for a single external tool call (MCP, SOAT, or HTTP tools) |
+
+If an external tool server does not respond within this window, the call is aborted and the generation fails with an error. The default is 5 minutes. Set a lower value to fail fast in latency-sensitive environments.
+
 ### Embeddings
 
 SOAT uses [Ollama](https://ollama.com) by default for generating vector embeddings.

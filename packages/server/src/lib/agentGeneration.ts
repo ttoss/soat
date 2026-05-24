@@ -23,7 +23,11 @@ import {
 } from './agentNonStreamGeneration';
 import { resolveAgentTools } from './agentToolResolver';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
-import { createGenerationRecord, updateGenerationRecord } from './generations';
+import {
+  createGenerationRecord,
+  getGeneration,
+  updateGenerationRecord,
+} from './generations';
 import { saveTrace, serializeSteps } from './traces';
 
 const log = createDebug('soat:generation');
@@ -58,6 +62,8 @@ type GenerationContext = {
   resolvedTools: Record<string, Tool>;
   allMessages: Array<{ role: string; content: string }>;
   generationId: string;
+  toolContext?: Record<string, string> | null;
+  remainingDepth?: number | null;
 };
 
 const buildGenerationContext = async (args: {
@@ -150,6 +156,8 @@ const buildGenerationContext = async (args: {
     resolvedTools,
     allMessages,
     generationId: generatePublicId(PUBLIC_ID_PREFIXES.generation),
+    toolContext: args.toolContext ?? null,
+    remainingDepth: args.remainingDepth ?? null,
   };
 };
 
@@ -189,6 +197,8 @@ const dispatchGeneration = (args: {
     parentTraceId: args.parentTraceId ?? null,
     rootTraceId: args.rootTraceId ?? null,
     abortSignal: args.abortSignal,
+    toolContext: args.ctx.toolContext ?? null,
+    remainingDepth: args.ctx.remainingDepth ?? null,
   });
 };
 
@@ -338,9 +348,91 @@ export const submitToolOutputs = async (args: {
   agentId: string;
   generationId: string;
   toolOutputs: Array<{ toolCallId: string; output: unknown }>;
+  authHeader?: string;
 }): Promise<GenerationResult> => {
-  const pending = pendingGenerations.get(args.generationId);
+  let pending = pendingGenerations.get(args.generationId);
 
+  // If not in memory (e.g. server restarted), recover from DB.
+  if (!pending) {
+    const gen = await getGeneration({ publicId: args.generationId });
+    const pendingState = gen?.metadata?.pendingState as
+      | {
+          pendingToolCalls: Array<{
+            toolCallId: string;
+            toolName: string;
+            args: unknown;
+          }>;
+          messages: Array<{ role: string; content: string }>;
+          parentTraceId: string | null;
+          rootTraceId: string | null;
+          toolContext: Record<string, string> | null;
+          remainingDepth: number | null;
+        }
+      | undefined;
+
+    if (gen && pendingState && gen.agentId === args.agentId) {
+      // Re-resolve model and tools from the DB.
+      const typedAgent = await resolveAgentForGeneration({
+        agentId: args.agentId,
+        projectIds: args.projectIds,
+      });
+
+      if (typedAgent) {
+        const resolved = await resolveAiProviderSecret({
+          aiProviderId: typedAgent.aiProvider.publicId,
+        });
+
+        if (resolved) {
+          const model = buildModel({
+            provider: resolved.provider,
+            secretValue: resolved.secretValue,
+            model: typedAgent.model ?? resolved.defaultModel,
+            baseUrl: resolved.baseUrl,
+            config: resolved.config as Record<string, unknown> | undefined,
+          });
+
+          const resolvedTools = typedAgent.toolIds
+            ? await resolveAgentTools({
+                toolIds: typedAgent.toolIds as string[],
+                projectIds: args.projectIds,
+                boundaryPolicy: typedAgent.boundaryPolicy,
+                authHeader: args.authHeader,
+                toolContext: pendingState.toolContext ?? undefined,
+                remainingDepth: pendingState.remainingDepth ?? undefined,
+              })
+            : {};
+
+          pending = {
+            agentId: args.agentId,
+            projectId: typedAgent.project.id as number,
+            traceId: gen.traceId,
+            parentTraceId: pendingState.parentTraceId,
+            rootTraceId: pendingState.rootTraceId,
+            generationId: args.generationId,
+            pendingToolCalls: pendingState.pendingToolCalls.map((tc) => ({
+              toolCallId: tc.toolCallId,
+              toolName: tc.toolName,
+              args: tc.args,
+            })),
+            messages: pendingState.messages,
+            resolvedModel: model,
+            agentConfig: {
+              instructions: typedAgent.instructions,
+              maxSteps: (typedAgent.maxSteps as number) ?? 20,
+              toolChoice: typedAgent.toolChoice,
+              stopConditions: typedAgent.stopConditions,
+              activeToolIds: typedAgent.activeToolIds as string[] | null,
+              stepRules: typedAgent.stepRules,
+              temperature: typedAgent.temperature as number | null,
+            },
+            resolvedTools,
+            initiatorGenerationId: null,
+            projectPublicId: typedAgent.project.publicId,
+          };
+        }
+      }
+    }
+  }
   if (!pending || pending.agentId !== args.agentId) {
     throw new DomainError(
       'GENERATION_NOT_FOUND',

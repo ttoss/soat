@@ -62,6 +62,11 @@ describe('submitToolOutputs', () => {
   });
 
   test('throws DomainError when generation does not exist', async () => {
+    jest.doMock('src/lib/generations', () => ({
+      createGenerationRecord: jest.fn(),
+      getGeneration: jest.fn().mockResolvedValue(null),
+      updateGenerationRecord: jest.fn(),
+    }));
     const { submitToolOutputs } = await loadAgentGenerationModule();
     await expect(
       submitToolOutputs({
@@ -93,6 +98,11 @@ describe('submitToolOutputs', () => {
         emitEvent: jest.fn(),
       };
     });
+    jest.doMock('src/lib/generations', () => ({
+      createGenerationRecord: jest.fn().mockResolvedValue(undefined),
+      getGeneration: jest.fn().mockResolvedValue(null),
+      updateGenerationRecord: jest.fn().mockResolvedValue(undefined),
+    }));
 
     const { submitToolOutputs } = await loadAgentGenerationModule();
     const { pendingGenerations } = await loadGenerationHelpersModule();

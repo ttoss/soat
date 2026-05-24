@@ -160,6 +160,7 @@ agentGenerationRouter.post(
         toolCallId: string;
         output: unknown;
       }>,
+      authHeader: (ctx.headers.authorization as string) ?? undefined,
     });
 
     ctx.body = result;
