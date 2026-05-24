@@ -26,6 +26,17 @@ describe('createGeneration', () => {
   });
 
   test('returns depth guard result when remainingDepth is 0', async () => {
+    jest.doMock('src/db', () => ({
+      db: {
+        Agent: {
+          findOne: jest.fn().mockResolvedValue({
+            publicId: 'agt_depth_test',
+            project: { id: 42, publicId: 'proj_depth_test' },
+          }),
+        },
+      },
+      models: {},
+    }));
     const { createGeneration } = await loadAgentGenerationModule();
     const result = await createGeneration({
       agentId: 'any_agent_id',

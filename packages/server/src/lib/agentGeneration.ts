@@ -170,6 +170,7 @@ const dispatchGeneration = (args: {
       allMessages: args.ctx.allMessages,
       resolvedTools: args.ctx.resolvedTools,
       typedAgent: args.ctx.typedAgent,
+      generationId: args.ctx.generationId,
       traceId: args.traceId,
       agentId: args.agentId,
       parentTraceId: args.parentTraceId ?? null,
@@ -246,11 +247,21 @@ export const createGeneration = async (args: {
   const traceId = args.traceId ?? generatePublicId(PUBLIC_ID_PREFIXES.trace);
 
   if (maxDepth <= 0) {
+    const depthAgent = await resolveAgentForGeneration({
+      agentId: args.agentId,
+      projectIds: args.projectIds,
+    });
+    if (!depthAgent) {
+      throw new DomainError(
+        'RESOURCE_NOT_FOUND',
+        `Agent '${args.agentId}' not found.`
+      );
+    }
     const depthGenId = generatePublicId(PUBLIC_ID_PREFIXES.generation);
     return buildDepthGuardResult({
       traceId,
-      projectId: args.projectIds?.[0] ?? 0,
-      projectPublicId: '',
+      projectId: depthAgent.project.id as number,
+      projectPublicId: depthAgent.project.publicId,
       agentId: args.agentId,
       generationId: depthGenId,
       parentTraceId: args.parentTraceId ?? null,

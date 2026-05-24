@@ -172,6 +172,7 @@ export const runStreamGeneration = (args: {
   allMessages: Array<{ role: string; content: string }>;
   resolvedTools: Record<string, Tool>;
   typedAgent: TypedAgent;
+  generationId: string;
   traceId: string;
   agentId: string;
   parentTraceId?: string | null;
@@ -210,16 +211,24 @@ export const runStreamGeneration = (args: {
     prepareStep,
     stopWhen: stepCountIs((args.typedAgent.maxSteps as number) ?? 20),
     temperature: (args.typedAgent.temperature as number) ?? undefined,
+    onFinish: ({ steps, finishReason }) => {
+      saveTrace({
+        traceId: args.traceId,
+        projectId: args.typedAgent.project.id as number,
+        projectPublicId: args.typedAgent.project.publicId,
+        agentId: args.agentId,
+        steps: serializeSteps(steps as unknown[]),
+        parentTraceId: args.parentTraceId ?? null,
+        rootTraceId: args.rootTraceId ?? null,
+      }).catch(() => {});
+      updateGenerationRecord({
+        publicId: args.generationId,
+        status: 'completed',
+        completedAt: new Date(),
+        stopReason: finishReason,
+      }).catch(() => {});
+    },
   });
-  saveTrace({
-    traceId: args.traceId,
-    projectId: args.typedAgent.project.id as number,
-    projectPublicId: args.typedAgent.project.publicId,
-    agentId: args.agentId,
-    steps: [],
-    parentTraceId: args.parentTraceId ?? null,
-    rootTraceId: args.rootTraceId ?? null,
-  }).catch(() => {});
   return result.textStream as unknown as ReadableStream;
 };
 

@@ -307,6 +307,7 @@ describe('runStreamGeneration', () => {
           toolChoice: null,
           temperature: null,
         },
+        generationId: 'gen_stream_default',
         traceId: 'trc_stream_default',
         agentId: 'agt_stream_default',
       });
@@ -332,6 +333,7 @@ describe('runStreamGeneration', () => {
           toolChoice: 'required',
           temperature: 0.4,
         },
+        generationId: 'gen_stream_explicit',
         traceId: 'trc_stream_explicit',
         agentId: 'agt_stream_explicit',
       });
