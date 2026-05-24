@@ -204,16 +204,34 @@ export const runNonStreamGeneration = async (args: {
     args.agentId,
     args.typedAgent.maxSteps
   );
-  const result = await callGenerateText({
+
+  const callArgs = {
     agentId: args.agentId,
     model: args.model,
     system,
     nonSystemMessages,
-    resolvedTools: args.resolvedTools,
     typedAgent: args.typedAgent,
     prepareStep,
     abortSignal: args.abortSignal,
-  });
+  };
+
+  let result;
+  try {
+    result = await callGenerateText({
+      ...callArgs,
+      resolvedTools: args.resolvedTools,
+    });
+  } catch (error) {
+    if (Object.keys(args.resolvedTools).length === 0) {
+      throw error;
+    }
+    log(
+      'runNonStreamGeneration: tool call failed, retrying without tools agentId=%s error=%s',
+      args.agentId,
+      error instanceof Error ? error.message : String(error)
+    );
+    result = await callGenerateText({ ...callArgs, resolvedTools: {} });
+  }
 
   return resolveGenerationResult({
     ...args,

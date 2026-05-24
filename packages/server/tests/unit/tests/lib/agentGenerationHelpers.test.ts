@@ -1,13 +1,13 @@
 import {
   buildAllMessages,
   buildCompletedGenerationResult,
-  buildDepthGuardResult,
   findPendingClientTools,
   pendingGenerations,
   runStreamGeneration,
   savePendingGeneration,
   type TypedAgent,
 } from 'src/lib/agentGenerationHelpers';
+import { buildDepthGuardResult } from 'src/lib/agentGenerationRecovery';
 
 describe('buildAllMessages', () => {
   test('returns messages unchanged when instructions is null', () => {

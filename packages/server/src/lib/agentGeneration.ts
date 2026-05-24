@@ -4,16 +4,19 @@ import { generateText, stepCountIs } from 'ai';
 import createDebug from 'debug';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 
-import { db } from '../db';
 import { DomainError } from '../errors';
 import {
   buildAllMessages,
-  buildDepthGuardResult,
   type GenerationResult,
   pendingGenerations,
   runStreamGeneration,
   type TypedAgent,
 } from './agentGenerationHelpers';
+import {
+  buildDepthGuardResult,
+  recoverPendingFromDb,
+  resolveAgentForGeneration,
+} from './agentGenerationRecovery';
 import { buildKnowledgeMessages, buildWriteMemoryTool } from './agentKnowledge';
 import { buildModel } from './agentModel';
 import {
@@ -23,36 +26,12 @@ import {
 } from './agentNonStreamGeneration';
 import { resolveAgentTools } from './agentToolResolver';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
-import {
-  createGenerationRecord,
-  getGeneration,
-  updateGenerationRecord,
-} from './generations';
+import { createGenerationRecord, updateGenerationRecord } from './generations';
 import { saveTrace, serializeSteps } from './traces';
 
 const log = createDebug('soat:generation');
 
 export type { GenerationResult };
-
-// ── Resolve Agent ─────────────────────────────────────────────────────────
-
-const resolveAgentForGeneration = async (args: {
-  agentId: string;
-  projectIds?: number[];
-}): Promise<TypedAgent | null> => {
-  const where: Record<string, unknown> = { publicId: args.agentId };
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
-
-  const agent = await db.Agent.findOne({
-    where,
-    include: [
-      { model: db.Project, as: 'project' },
-      { model: db.AiProvider, as: 'aiProvider' },
-    ],
-  });
-
-  return agent as unknown as TypedAgent | null;
-};
 
 // ── Build Generation Context ──────────────────────────────────────────────
 
@@ -64,6 +43,21 @@ type GenerationContext = {
   generationId: string;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
+};
+
+const buildKnowledgeTools = (args: {
+  typedAgent: TypedAgent;
+  resolvedTools: Record<string, unknown>;
+}): void => {
+  const knowledgeConfig = args.typedAgent.knowledgeConfig as
+    | { writeMemoryId?: string }
+    | null
+    | undefined;
+  if (knowledgeConfig?.writeMemoryId) {
+    args.resolvedTools['write_memory'] = buildWriteMemoryTool({
+      writeMemoryId: knowledgeConfig.writeMemoryId,
+    });
+  }
 };
 
 const buildGenerationContext = async (args: {
@@ -120,15 +114,7 @@ const buildGenerationContext = async (args: {
       })
     : {};
 
-  const knowledgeConfig = typedAgent.knowledgeConfig as
-    | { writeMemoryId?: string }
-    | null
-    | undefined;
-  if (knowledgeConfig?.writeMemoryId) {
-    resolvedTools['write_memory'] = buildWriteMemoryTool({
-      writeMemoryId: knowledgeConfig.writeMemoryId,
-    });
-  }
+  buildKnowledgeTools({ typedAgent, resolvedTools });
 
   const knowledgeMessages = await buildKnowledgeMessages({
     knowledgeConfig: typedAgent.knowledgeConfig,
@@ -354,84 +340,12 @@ export const submitToolOutputs = async (args: {
 
   // If not in memory (e.g. server restarted), recover from DB.
   if (!pending) {
-    const gen = await getGeneration({ publicId: args.generationId });
-    const pendingState = gen?.metadata?.pendingState as
-      | {
-          pendingToolCalls: Array<{
-            toolCallId: string;
-            toolName: string;
-            args: unknown;
-          }>;
-          messages: Array<{ role: string; content: string }>;
-          parentTraceId: string | null;
-          rootTraceId: string | null;
-          toolContext: Record<string, string> | null;
-          remainingDepth: number | null;
-        }
-      | undefined;
-
-    if (gen && pendingState && gen.agentId === args.agentId) {
-      // Re-resolve model and tools from the DB.
-      const typedAgent = await resolveAgentForGeneration({
-        agentId: args.agentId,
-        projectIds: args.projectIds,
-      });
-
-      if (typedAgent) {
-        const resolved = await resolveAiProviderSecret({
-          aiProviderId: typedAgent.aiProvider.publicId,
-        });
-
-        if (resolved) {
-          const model = buildModel({
-            provider: resolved.provider,
-            secretValue: resolved.secretValue,
-            model: typedAgent.model ?? resolved.defaultModel,
-            baseUrl: resolved.baseUrl,
-            config: resolved.config as Record<string, unknown> | undefined,
-          });
-
-          const resolvedTools = typedAgent.toolIds
-            ? await resolveAgentTools({
-                toolIds: typedAgent.toolIds as string[],
-                projectIds: args.projectIds,
-                boundaryPolicy: typedAgent.boundaryPolicy,
-                authHeader: args.authHeader,
-                toolContext: pendingState.toolContext ?? undefined,
-                remainingDepth: pendingState.remainingDepth ?? undefined,
-              })
-            : {};
-
-          pending = {
-            agentId: args.agentId,
-            projectId: typedAgent.project.id as number,
-            traceId: gen.traceId,
-            parentTraceId: pendingState.parentTraceId,
-            rootTraceId: pendingState.rootTraceId,
-            generationId: args.generationId,
-            pendingToolCalls: pendingState.pendingToolCalls.map((tc) => ({
-              toolCallId: tc.toolCallId,
-              toolName: tc.toolName,
-              args: tc.args,
-            })),
-            messages: pendingState.messages,
-            resolvedModel: model,
-            agentConfig: {
-              instructions: typedAgent.instructions,
-              maxSteps: (typedAgent.maxSteps as number) ?? 20,
-              toolChoice: typedAgent.toolChoice,
-              stopConditions: typedAgent.stopConditions,
-              activeToolIds: typedAgent.activeToolIds as string[] | null,
-              stepRules: typedAgent.stepRules,
-              temperature: typedAgent.temperature as number | null,
-            },
-            resolvedTools,
-            initiatorGenerationId: null,
-            projectPublicId: typedAgent.project.publicId,
-          };
-        }
-      }
-    }
+    pending = await recoverPendingFromDb({
+      generationId: args.generationId,
+      agentId: args.agentId,
+      projectIds: args.projectIds,
+      authHeader: args.authHeader,
+    });
   }
   if (!pending || pending.agentId !== args.agentId) {
     throw new DomainError(

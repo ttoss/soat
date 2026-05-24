@@ -27,7 +27,11 @@ describe('extractBodyProps', () => {
     });
 
     expect(result).toHaveLength(2);
-    expect(result.map((p) => p.snakeName)).toEqual(['name', 'count']);
+    expect(
+      result.map((p) => {
+        return p.snakeName;
+      })
+    ).toEqual(['name', 'count']);
   });
 
   test('excludes fields marked with x-soat-server-managed', () => {
@@ -64,8 +68,20 @@ describe('extractBodyProps', () => {
 
     expect(result).toHaveLength(1);
     expect(result[0].snakeName).toBe('message');
-    expect(result.map((p) => p.snakeName)).not.toContain('trace_id');
-    expect(result.map((p) => p.snakeName)).not.toContain('parent_trace_id');
-    expect(result.map((p) => p.snakeName)).not.toContain('root_trace_id');
+    expect(
+      result.map((p) => {
+        return p.snakeName;
+      })
+    ).not.toContain('trace_id');
+    expect(
+      result.map((p) => {
+        return p.snakeName;
+      })
+    ).not.toContain('parent_trace_id');
+    expect(
+      result.map((p) => {
+        return p.snakeName;
+      })
+    ).not.toContain('root_trace_id');
   });
 });

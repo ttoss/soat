@@ -77,6 +77,56 @@ const findFileDbId = async (
     | null;
 };
 
+type CreateTraceArgs = {
+  traceId: string;
+  projectId: number;
+  agentId: string;
+  agentDbId: number | null;
+  fileDbId: number | null;
+  filePublicId: string | undefined | null;
+  stepCount: number;
+  parentTraceId: string | null;
+  parentTraceDbId: number | null;
+  rootTraceId: string | null;
+  rootTraceDbId: number | null;
+};
+
+const createTraceOrFallback = async (args: CreateTraceArgs): Promise<void> => {
+  try {
+    await db.Trace.create({
+      publicId: args.traceId,
+      projectId: args.projectId,
+      agentId: args.agentId,
+      agentDbId: args.agentDbId,
+      fileDbId: args.fileDbId,
+      fileId: args.filePublicId ?? null,
+      stepCount: args.stepCount,
+      parentTraceId: args.parentTraceId,
+      parentTraceDbId: args.parentTraceDbId,
+      rootTraceId: args.rootTraceId,
+      rootTraceDbId: args.rootTraceDbId,
+    });
+  } catch (createError) {
+    // Handle race condition: another process may have created the record concurrently.
+    const concurrent = await db.Trace.findOne({
+      where: { publicId: args.traceId },
+    });
+    if (concurrent) {
+      log(
+        'upsertTraceRecord: concurrent create detected, updating traceId=%s',
+        args.traceId
+      );
+      await concurrent.update({
+        fileDbId: args.fileDbId,
+        fileId: args.filePublicId ?? null,
+        stepCount: args.stepCount,
+      });
+    } else {
+      throw createError;
+    }
+  }
+};
+
 const upsertTraceRecord = async (args: {
   traceId: string;
   projectId: number;
@@ -113,39 +163,19 @@ const upsertTraceRecord = async (args: {
     });
   } else {
     log('upsertTraceRecord: creating new trace traceId=%s', args.traceId);
-    try {
-      await db.Trace.create({
-        publicId: args.traceId,
-        projectId: args.projectId,
-        agentId: args.agentId,
-        agentDbId: args.agentDbId ?? null,
-        fileDbId,
-        fileId: args.filePublicId ?? null,
-        stepCount: args.stepCount,
-        parentTraceId: args.parentTraceId ?? null,
-        parentTraceDbId,
-        rootTraceId: args.rootTraceId ?? null,
-        rootTraceDbId,
-      });
-    } catch (createError) {
-      // Handle race condition: another process may have created the record concurrently.
-      const concurrent = await db.Trace.findOne({
-        where: { publicId: args.traceId },
-      });
-      if (concurrent) {
-        log(
-          'upsertTraceRecord: concurrent create detected, updating traceId=%s',
-          args.traceId
-        );
-        await concurrent.update({
-          fileDbId,
-          fileId: args.filePublicId ?? null,
-          stepCount: args.stepCount,
-        });
-      } else {
-        throw createError;
-      }
-    }
+    await createTraceOrFallback({
+      traceId: args.traceId,
+      projectId: args.projectId,
+      agentId: args.agentId,
+      agentDbId: args.agentDbId ?? null,
+      fileDbId,
+      filePublicId: args.filePublicId,
+      stepCount: args.stepCount,
+      parentTraceId: args.parentTraceId ?? null,
+      parentTraceDbId,
+      rootTraceId: args.rootTraceId ?? null,
+      rootTraceDbId,
+    });
   }
 };
 

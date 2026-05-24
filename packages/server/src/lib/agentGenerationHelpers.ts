@@ -78,44 +78,6 @@ export type TypedAgent = {
 
 export const pendingGenerations = new Map<string, PendingGeneration>();
 
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-export const buildDepthGuardResult = (args: {
-  traceId: string;
-  projectId: number;
-  projectPublicId: string;
-  agentId: string;
-  generationId: string;
-  parentTraceId?: string | null;
-  rootTraceId?: string | null;
-}): GenerationResult => {
-  saveTrace({
-    traceId: args.traceId,
-    projectId: args.projectId,
-    projectPublicId: args.projectPublicId,
-    agentId: args.agentId,
-    steps: [{ type: 'depth_guard', message: 'Maximum call depth reached' }],
-    parentTraceId: args.parentTraceId ?? null,
-    rootTraceId: args.rootTraceId ?? null,
-  }).catch(() => {});
-  updateGenerationRecord({
-    publicId: args.generationId,
-    status: 'completed',
-    completedAt: new Date(),
-    stopReason: 'depth_guard',
-  }).catch(() => {});
-  return {
-    id: args.generationId,
-    traceId: args.traceId,
-    status: 'completed',
-    output: {
-      model: '',
-      content: 'Maximum call depth reached',
-      finishReason: 'stop',
-    },
-  };
-};
-
 export const buildAllMessages = (
   instructions: string | null,
   messages: Array<{ role: string; content: string }>
@@ -299,11 +261,13 @@ const storePendingGenerationState = (args: {
 
   // Persist pending state to DB so it can be recovered after a server restart.
   const pendingState: Record<string, unknown> = {
-    pendingToolCalls: args.pendingToolCalls.map((tc) => ({
-      toolCallId: tc.toolCallId,
-      toolName: tc.toolName,
-      args: tc.input,
-    })),
+    pendingToolCalls: args.pendingToolCalls.map((tc) => {
+      return {
+        toolCallId: tc.toolCallId,
+        toolName: tc.toolName,
+        args: tc.input,
+      };
+    }),
     messages: [...args.allMessages, ...args.result.response.messages],
     parentTraceId: args.parentTraceId ?? null,
     rootTraceId: args.rootTraceId ?? null,
