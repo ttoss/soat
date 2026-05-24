@@ -26,6 +26,19 @@ describe('createGeneration', () => {
   });
 
   test('returns depth guard result when remainingDepth is 0', async () => {
+    jest.doMock('src/db', () => {
+      return {
+        db: {
+          Agent: {
+            findOne: jest.fn().mockResolvedValue({
+              publicId: 'agt_depth_test',
+              project: { id: 42, publicId: 'proj_depth_test' },
+            }),
+          },
+        },
+        models: {},
+      };
+    });
     const { createGeneration } = await loadAgentGenerationModule();
     const result = await createGeneration({
       agentId: 'any_agent_id',
@@ -51,6 +64,13 @@ describe('submitToolOutputs', () => {
   });
 
   test('throws DomainError when generation does not exist', async () => {
+    jest.doMock('src/lib/generations', () => {
+      return {
+        createGenerationRecord: jest.fn(),
+        getGeneration: jest.fn().mockResolvedValue(null),
+        updateGenerationRecord: jest.fn(),
+      };
+    });
     const { submitToolOutputs } = await loadAgentGenerationModule();
     await expect(
       submitToolOutputs({
@@ -80,6 +100,13 @@ describe('submitToolOutputs', () => {
         ...actual,
         resolveProjectPublicId: jest.fn().mockResolvedValue('prj_test'),
         emitEvent: jest.fn(),
+      };
+    });
+    jest.doMock('src/lib/generations', () => {
+      return {
+        createGenerationRecord: jest.fn().mockResolvedValue(undefined),
+        getGeneration: jest.fn().mockResolvedValue(null),
+        updateGenerationRecord: jest.fn().mockResolvedValue(undefined),
       };
     });
 

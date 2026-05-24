@@ -1,8 +1,11 @@
 import { Op } from '@ttoss/postgresdb';
+import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { upsertFileByPath } from './files';
+
+const log = createDebug('soat:traces');
 
 export type Trace = {
   id: string;
@@ -74,6 +77,56 @@ const findFileDbId = async (
     | null;
 };
 
+type CreateTraceArgs = {
+  traceId: string;
+  projectId: number;
+  agentId: string;
+  agentDbId: number | null;
+  fileDbId: number | null;
+  filePublicId: string | undefined | null;
+  stepCount: number;
+  parentTraceId: string | null;
+  parentTraceDbId: number | null;
+  rootTraceId: string | null;
+  rootTraceDbId: number | null;
+};
+
+const createTraceOrFallback = async (args: CreateTraceArgs): Promise<void> => {
+  try {
+    await db.Trace.create({
+      publicId: args.traceId,
+      projectId: args.projectId,
+      agentId: args.agentId,
+      agentDbId: args.agentDbId,
+      fileDbId: args.fileDbId,
+      fileId: args.filePublicId ?? null,
+      stepCount: args.stepCount,
+      parentTraceId: args.parentTraceId,
+      parentTraceDbId: args.parentTraceDbId,
+      rootTraceId: args.rootTraceId,
+      rootTraceDbId: args.rootTraceDbId,
+    });
+  } catch (createError) {
+    // Handle race condition: another process may have created the record concurrently.
+    const concurrent = await db.Trace.findOne({
+      where: { publicId: args.traceId },
+    });
+    if (concurrent) {
+      log(
+        'upsertTraceRecord: concurrent create detected, updating traceId=%s',
+        args.traceId
+      );
+      await concurrent.update({
+        fileDbId: args.fileDbId,
+        fileId: args.filePublicId ?? null,
+        stepCount: args.stepCount,
+      });
+    } else {
+      throw createError;
+    }
+  }
+};
+
 const upsertTraceRecord = async (args: {
   traceId: string;
   projectId: number;
@@ -84,6 +137,15 @@ const upsertTraceRecord = async (args: {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
 }): Promise<void> => {
+  log(
+    'upsertTraceRecord: traceId=%s agentId=%s parentTraceId=%s rootTraceId=%s stepCount=%d',
+    args.traceId,
+    args.agentId,
+    args.parentTraceId ?? 'null',
+    args.rootTraceId ?? 'null',
+    args.stepCount
+  );
+
   const existing = await db.Trace.findOne({
     where: { publicId: args.traceId },
   });
@@ -93,19 +155,21 @@ const upsertTraceRecord = async (args: {
   const rootTraceDbId = await findTraceDbId(args.rootTraceId);
 
   if (existing) {
+    log('upsertTraceRecord: updating existing trace traceId=%s', args.traceId);
     await existing.update({
       fileDbId,
       fileId: args.filePublicId ?? null,
       stepCount: args.stepCount,
     });
   } else {
-    await db.Trace.create({
-      publicId: args.traceId,
+    log('upsertTraceRecord: creating new trace traceId=%s', args.traceId);
+    await createTraceOrFallback({
+      traceId: args.traceId,
       projectId: args.projectId,
       agentId: args.agentId,
       agentDbId: args.agentDbId ?? null,
       fileDbId,
-      fileId: args.filePublicId ?? null,
+      filePublicId: args.filePublicId,
       stepCount: args.stepCount,
       parentTraceId: args.parentTraceId ?? null,
       parentTraceDbId,
@@ -132,6 +196,14 @@ export const saveTrace = async (args: {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
 }): Promise<void> => {
+  log(
+    'saveTrace: traceId=%s agentId=%s parentTraceId=%s rootTraceId=%s steps=%d',
+    args.traceId,
+    args.agentId,
+    args.parentTraceId ?? 'null',
+    args.rootTraceId ?? 'null',
+    args.steps.length
+  );
   const serializedSteps = serializeSteps(args.steps);
   const content = Buffer.from(JSON.stringify(serializedSteps), 'utf8');
   const filePath = `/traces/${args.traceId}.json`;

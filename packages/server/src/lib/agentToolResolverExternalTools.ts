@@ -4,6 +4,10 @@ import createDebug from 'debug';
 
 import { soatTools } from './soatTools';
 
+const SOAT_TOOL_CALL_TIMEOUT_MS = process.env.SOAT_TOOL_CALL_TIMEOUT_MS
+  ? parseInt(process.env.SOAT_TOOL_CALL_TIMEOUT_MS, 10)
+  : 300_000;
+
 const log = createDebug('soat:tools');
 
 type LogToolCallingError = (args: {
@@ -25,6 +29,7 @@ const buildMcpToolExecute = (args: {
       const callResponse = await fetch(args.mcpUrl, {
         method: 'POST',
         headers: args.mcpHeaders,
+        signal: AbortSignal.timeout(SOAT_TOOL_CALL_TIMEOUT_MS),
         body: JSON.stringify({
           jsonrpc: '2.0',
           id: 2,
@@ -76,6 +81,7 @@ export const resolveMcpTools = async (args: {
     const listResponse = await fetch(mcpUrl, {
       method: 'POST',
       headers: mcpHeaders,
+      signal: AbortSignal.timeout(SOAT_TOOL_CALL_TIMEOUT_MS),
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
     });
 
@@ -151,19 +157,24 @@ const buildSoatRequestBody = (args: {
   toolContext?: Record<string, string>;
   traceId?: string;
   rootTraceId?: string | null;
+  remainingDepth?: number;
 }) => {
   const soatBody = args.def.body ? args.def.body(args.rawArgs) : undefined;
   const soatBodyWithContext =
     soatBody && args.toolContext
-      ? { ...soatBody, toolContext: args.toolContext }
+      ? { ...soatBody, tool_context: args.toolContext }
       : soatBody;
-  return soatBodyWithContext && args.traceId
-    ? {
-        ...soatBodyWithContext,
-        parent_trace_id: args.traceId,
-        root_trace_id: args.rootTraceId ?? args.traceId,
-      }
-    : soatBodyWithContext;
+  const withTrace =
+    soatBodyWithContext && args.traceId
+      ? {
+          ...soatBodyWithContext,
+          parent_trace_id: args.traceId,
+          root_trace_id: args.rootTraceId ?? args.traceId,
+        }
+      : soatBodyWithContext;
+  return withTrace && args.remainingDepth !== undefined
+    ? { ...withTrace, max_call_depth: Math.max(0, args.remainingDepth - 1) }
+    : withTrace;
 };
 
 const executeSoatTool = async (args: {
@@ -175,6 +186,7 @@ const executeSoatTool = async (args: {
   toolContext?: Record<string, string>;
   traceId?: string;
   rootTraceId?: string | null;
+  remainingDepth?: number;
   buildContextHeaders: (
     toolContext?: Record<string, string>
   ) => Record<string, string>;
@@ -187,6 +199,7 @@ const executeSoatTool = async (args: {
     toolContext: args.toolContext,
     traceId: args.traceId,
     rootTraceId: args.rootTraceId,
+    remainingDepth: args.remainingDepth,
   });
   try {
     const url = `${args.base}${path}`;
@@ -199,6 +212,7 @@ const executeSoatTool = async (args: {
         ...(args.authHeader ? { Authorization: args.authHeader } : {}),
         ...args.buildContextHeaders(args.toolContext),
       },
+      signal: AbortSignal.timeout(SOAT_TOOL_CALL_TIMEOUT_MS),
       body: body ? JSON.stringify(body) : undefined,
     });
     const responseBody = await response.json();
@@ -228,6 +242,7 @@ const buildSoatActionTool = (args: {
   traceId?: string;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
+  remainingDepth?: number;
   buildContextHeaders: (
     toolContext?: Record<string, string>
   ) => Record<string, string>;
@@ -268,6 +283,7 @@ const buildSoatActionTool = (args: {
         toolContext: args.toolContext,
         traceId: args.traceId,
         rootTraceId: args.rootTraceId,
+        remainingDepth: args.remainingDepth,
         buildContextHeaders: args.buildContextHeaders,
         logToolCallingError: args.logToolCallingError,
       });
@@ -288,6 +304,7 @@ export const resolveSoatTools = (args: {
   traceId?: string;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
+  remainingDepth?: number;
   buildContextHeaders: (
     toolContext?: Record<string, string>
   ) => Record<string, string>;
@@ -315,6 +332,7 @@ export const resolveSoatTools = (args: {
       traceId: args.traceId,
       parentTraceId: args.parentTraceId,
       rootTraceId: args.rootTraceId,
+      remainingDepth: args.remainingDepth,
       buildContextHeaders: args.buildContextHeaders,
       isSoatActionAllowedByBoundary: args.isSoatActionAllowedByBoundary,
       logToolCallingError: args.logToolCallingError,

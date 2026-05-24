@@ -321,5 +321,22 @@ describe('Agent Generation Routes', () => {
       expect(response.status).toBe(200);
       expect(response.text).toContain('stream read error');
     });
+
+    test('depth guard: returns completed with depth-guard message when max_call_depth is 0', async () => {
+      // Do NOT queue a mock — let the real createGeneration run so the
+      // depth-guard branch (with agent resolution) is exercised.
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: 'hello' }],
+          max_call_depth: 0,
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('completed');
+      expect(response.body.output.content).toBe('Maximum call depth reached');
+      expect(response.body.output.finish_reason).toBe('stop');
+      expect(response.body.trace_id).toBeDefined();
+    });
   });
 });

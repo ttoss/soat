@@ -1146,7 +1146,9 @@ resources:
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('active');
       const docResource = res.body.resources.find(
-        (r: { logical_id: string }) => r.logical_id === 'MyDoc'
+        (r: { logical_id: string }) => {
+          return r.logical_id === 'MyDoc';
+        }
       );
       expect(docResource).toBeDefined();
       // update is a no-op, so status should reflect no-op/updated
@@ -1259,7 +1261,9 @@ resources:
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('active');
       const entryResource = res.body.resources.find(
-        (r: { logical_id: string }) => r.logical_id === 'MyEntry'
+        (r: { logical_id: string }) => {
+          return r.logical_id === 'MyEntry';
+        }
       );
       expect(entryResource).toBeDefined();
       expect(entryResource.status).toBe('updated');
@@ -1355,7 +1359,9 @@ resources:
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('active');
       const keyResource = res.body.resources.find(
-        (r: { logical_id: string }) => r.logical_id === 'MyKey'
+        (r: { logical_id: string }) => {
+          return r.logical_id === 'MyKey';
+        }
       );
       expect(keyResource).toBeDefined();
       expect(keyResource.status).toBe('updated');

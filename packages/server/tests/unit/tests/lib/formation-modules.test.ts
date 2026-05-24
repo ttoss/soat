@@ -7,16 +7,16 @@ import * as chatsModule from 'src/lib/chats';
 import * as conversationsModule from 'src/lib/conversations';
 import * as filesModule from 'src/lib/files';
 import * as helpersModule from 'src/lib/formationsHelpers';
-import * as policiesModule from 'src/lib/policies';
-import * as secretsModule from 'src/lib/secrets';
-import * as sessionsModule from 'src/lib/sessions';
-import * as webhooksModule from 'src/lib/webhooks';
+import { getFormationModule } from 'src/lib/formationsRegistry';
 import {
   applyCreateResource,
   applyDeleteResource,
   applyUpdateResource,
 } from 'src/lib/formationsResourceHandlers';
-import { getFormationModule } from 'src/lib/formationsRegistry';
+import * as policiesModule from 'src/lib/policies';
+import * as secretsModule from 'src/lib/secrets';
+import * as sessionsModule from 'src/lib/sessions';
+import * as webhooksModule from 'src/lib/webhooks';
 
 const mockLookupProjectOwnerUserId = jest.spyOn(
   helpersModule,
@@ -890,7 +890,7 @@ describe('agentsFormationModule - read', () => {
       knowledgeConfig: null,
       createdAt: new Date(),
       updatedAt: new Date(),
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof agentsModule.getAgent>>);
 
     const module = getFormationModule({ resourceType: 'agent' });
     expect(module?.read).toBeDefined();
@@ -940,7 +940,7 @@ describe('actorsFormationModule - read', () => {
       tags: undefined,
       createdAt: new Date(),
       updatedAt: new Date(),
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof actorsModule.getActor>>);
 
     const module = getFormationModule({ resourceType: 'actor' });
     expect(module?.read).toBeDefined();
@@ -987,7 +987,9 @@ describe('aiProvidersFormationModule - read', () => {
       secretId: 'sec_1',
       createdAt: new Date(),
       updatedAt: new Date(),
-    } as any);
+    } as unknown as Awaited<
+      ReturnType<typeof aiProvidersModule.getAiProvider>
+    >);
 
     const module = getFormationModule({ resourceType: 'ai_provider' });
     expect(module?.read).toBeDefined();
@@ -1005,7 +1007,7 @@ describe('aiProvidersFormationModule - read', () => {
   });
 
   test('returns null when ai provider is not found', async () => {
-    mockGetAiProvider.mockResolvedValueOnce(null as any);
+    mockGetAiProvider.mockResolvedValueOnce(null);
 
     const module = getFormationModule({ resourceType: 'ai_provider' });
     const result = await module!.read!({ physicalResourceId: 'aip_missing' });
@@ -1035,7 +1037,7 @@ describe('webhooksFormationModule - read', () => {
       policyId: null,
       createdAt: new Date(),
       updatedAt: new Date(),
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof webhooksModule.getWebhook>>);
 
     const module = getFormationModule({ resourceType: 'webhook' });
     expect(module?.read).toBeDefined();
@@ -1051,7 +1053,7 @@ describe('webhooksFormationModule - read', () => {
   });
 
   test('returns null when webhook is not found', async () => {
-    mockGetWebhook.mockResolvedValueOnce(null as any);
+    mockGetWebhook.mockResolvedValueOnce(null);
 
     const module = getFormationModule({ resourceType: 'webhook' });
     const result = await module!.read!({ physicalResourceId: 'wh_missing' });

@@ -4,16 +4,19 @@ import { generateText, stepCountIs } from 'ai';
 import createDebug from 'debug';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 
-import { db } from '../db';
 import { DomainError } from '../errors';
 import {
   buildAllMessages,
-  buildDepthGuardResult,
   type GenerationResult,
   pendingGenerations,
   runStreamGeneration,
   type TypedAgent,
 } from './agentGenerationHelpers';
+import {
+  buildDepthGuardResult,
+  recoverPendingFromDb,
+  resolveAgentForGeneration,
+} from './agentGenerationRecovery';
 import { buildKnowledgeMessages, buildWriteMemoryTool } from './agentKnowledge';
 import { buildModel } from './agentModel';
 import {
@@ -30,26 +33,6 @@ const log = createDebug('soat:generation');
 
 export type { GenerationResult };
 
-// ── Resolve Agent ─────────────────────────────────────────────────────────
-
-const resolveAgentForGeneration = async (args: {
-  agentId: string;
-  projectIds?: number[];
-}): Promise<TypedAgent | null> => {
-  const where: Record<string, unknown> = { publicId: args.agentId };
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
-
-  const agent = await db.Agent.findOne({
-    where,
-    include: [
-      { model: db.Project, as: 'project' },
-      { model: db.AiProvider, as: 'aiProvider' },
-    ],
-  });
-
-  return agent as unknown as TypedAgent | null;
-};
-
 // ── Build Generation Context ──────────────────────────────────────────────
 
 type GenerationContext = {
@@ -58,6 +41,23 @@ type GenerationContext = {
   resolvedTools: Record<string, Tool>;
   allMessages: Array<{ role: string; content: string }>;
   generationId: string;
+  toolContext?: Record<string, string> | null;
+  remainingDepth?: number | null;
+};
+
+const buildKnowledgeTools = (args: {
+  typedAgent: TypedAgent;
+  resolvedTools: Record<string, unknown>;
+}): void => {
+  const knowledgeConfig = args.typedAgent.knowledgeConfig as
+    | { writeMemoryId?: string }
+    | null
+    | undefined;
+  if (knowledgeConfig?.writeMemoryId) {
+    args.resolvedTools['write_memory'] = buildWriteMemoryTool({
+      writeMemoryId: knowledgeConfig.writeMemoryId,
+    });
+  }
 };
 
 const buildGenerationContext = async (args: {
@@ -69,6 +69,7 @@ const buildGenerationContext = async (args: {
   traceId?: string;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
+  remainingDepth?: number;
 }): Promise<GenerationContext> => {
   const typedAgent = await resolveAgentForGeneration({
     agentId: args.agentId,
@@ -109,18 +110,11 @@ const buildGenerationContext = async (args: {
         traceId: args.traceId,
         parentTraceId: args.parentTraceId,
         rootTraceId: args.rootTraceId,
+        remainingDepth: args.remainingDepth,
       })
     : {};
 
-  const knowledgeConfig = typedAgent.knowledgeConfig as
-    | { writeMemoryId?: string }
-    | null
-    | undefined;
-  if (knowledgeConfig?.writeMemoryId) {
-    resolvedTools['write_memory'] = buildWriteMemoryTool({
-      writeMemoryId: knowledgeConfig.writeMemoryId,
-    });
-  }
+  buildKnowledgeTools({ typedAgent, resolvedTools });
 
   const knowledgeMessages = await buildKnowledgeMessages({
     knowledgeConfig: typedAgent.knowledgeConfig,
@@ -148,6 +142,8 @@ const buildGenerationContext = async (args: {
     resolvedTools,
     allMessages,
     generationId: generatePublicId(PUBLIC_ID_PREFIXES.generation),
+    toolContext: args.toolContext ?? null,
+    remainingDepth: args.remainingDepth ?? null,
   };
 };
 
@@ -168,6 +164,7 @@ const dispatchGeneration = (args: {
       allMessages: args.ctx.allMessages,
       resolvedTools: args.ctx.resolvedTools,
       typedAgent: args.ctx.typedAgent,
+      generationId: args.ctx.generationId,
       traceId: args.traceId,
       agentId: args.agentId,
       parentTraceId: args.parentTraceId ?? null,
@@ -186,6 +183,8 @@ const dispatchGeneration = (args: {
     parentTraceId: args.parentTraceId ?? null,
     rootTraceId: args.rootTraceId ?? null,
     abortSignal: args.abortSignal,
+    toolContext: args.ctx.toolContext ?? null,
+    remainingDepth: args.ctx.remainingDepth ?? null,
   });
 };
 
@@ -199,6 +198,7 @@ const resolveContextAndRecord = async (args: {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
   initiatorGenerationId?: string | null;
+  remainingDepth?: number;
 }): Promise<GenerationContext> => {
   const ctx = await buildGenerationContext({
     agentId: args.agentId,
@@ -209,6 +209,7 @@ const resolveContextAndRecord = async (args: {
     traceId: args.traceId,
     parentTraceId: args.parentTraceId,
     rootTraceId: args.rootTraceId,
+    remainingDepth: args.remainingDepth,
   });
 
   createGenerationRecord({
@@ -242,11 +243,21 @@ export const createGeneration = async (args: {
   const traceId = args.traceId ?? generatePublicId(PUBLIC_ID_PREFIXES.trace);
 
   if (maxDepth <= 0) {
+    const depthAgent = await resolveAgentForGeneration({
+      agentId: args.agentId,
+      projectIds: args.projectIds,
+    });
+    if (!depthAgent) {
+      throw new DomainError(
+        'RESOURCE_NOT_FOUND',
+        `Agent '${args.agentId}' not found.`
+      );
+    }
     const depthGenId = generatePublicId(PUBLIC_ID_PREFIXES.generation);
     return buildDepthGuardResult({
       traceId,
-      projectId: args.projectIds?.[0] ?? 0,
-      projectPublicId: '',
+      projectId: depthAgent.project.id as number,
+      projectPublicId: depthAgent.project.publicId,
       agentId: args.agentId,
       generationId: depthGenId,
       parentTraceId: args.parentTraceId ?? null,
@@ -264,6 +275,7 @@ export const createGeneration = async (args: {
     parentTraceId: args.parentTraceId,
     rootTraceId: args.rootTraceId,
     initiatorGenerationId: args.initiatorGenerationId,
+    remainingDepth: maxDepth,
   });
 
   log('createGeneration: agentId=%s stream=%s', args.agentId, args.stream);
@@ -322,9 +334,19 @@ export const submitToolOutputs = async (args: {
   agentId: string;
   generationId: string;
   toolOutputs: Array<{ toolCallId: string; output: unknown }>;
+  authHeader?: string;
 }): Promise<GenerationResult> => {
-  const pending = pendingGenerations.get(args.generationId);
+  let pending = pendingGenerations.get(args.generationId);
 
+  // If not in memory (e.g. server restarted), recover from DB.
+  if (!pending) {
+    pending = await recoverPendingFromDb({
+      generationId: args.generationId,
+      agentId: args.agentId,
+      projectIds: args.projectIds,
+      authHeader: args.authHeader,
+    });
+  }
   if (!pending || pending.agentId !== args.agentId) {
     throw new DomainError(
       'GENERATION_NOT_FOUND',

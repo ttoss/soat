@@ -65,35 +65,6 @@ export const buildPrepareStep = (args: {
   };
 };
 
-const retryWithoutTools = (args: {
-  agentId: string;
-  model: LanguageModel;
-  system: string | undefined;
-  nonSystemMessages: Array<{ role: string; content: string }>;
-  typedAgent: TypedAgent;
-  abortSignal?: AbortSignal;
-  error: unknown;
-}) => {
-  log(
-    'callGenerateText FAILED (has tools, retrying without) agentId=%s model=%s errorType=%s message=%s stack=%s',
-    args.agentId,
-    args.typedAgent.model,
-    args.error instanceof Error
-      ? args.error.constructor.name
-      : typeof args.error,
-    args.error instanceof Error ? args.error.message : String(args.error),
-    args.error instanceof Error ? args.error.stack : ''
-  );
-  return generateText({
-    model: args.model,
-    system: args.system,
-    messages: args.nonSystemMessages as ModelMessage[],
-    stopWhen: stepCountIs(1),
-    temperature: (args.typedAgent.temperature as number) ?? undefined,
-    abortSignal: args.abortSignal,
-  });
-};
-
 const callGenerateText = async (args: {
   agentId: string;
   model: LanguageModel;
@@ -124,17 +95,14 @@ const callGenerateText = async (args: {
       abortSignal: args.abortSignal,
     });
   } catch (error) {
-    if (!hasTools) {
-      log(
-        'callGenerateText FAILED (no tools) agentId=%s errorType=%s message=%s stack=%s',
-        args.agentId,
-        error instanceof Error ? error.constructor.name : typeof error,
-        error instanceof Error ? error.message : String(error),
-        error instanceof Error ? error.stack : ''
-      );
-      throw error;
-    }
-    return retryWithoutTools({ ...args, error });
+    log(
+      'callGenerateText FAILED agentId=%s errorType=%s message=%s stack=%s',
+      args.agentId,
+      error instanceof Error ? error.constructor.name : typeof error,
+      error instanceof Error ? error.message : String(error),
+      error instanceof Error ? error.stack : ''
+    );
+    throw error;
   }
 };
 
@@ -156,6 +124,8 @@ const resolveGenerationResult = (args: {
   typedAgent: TypedAgent;
   agentId: string;
   result: GenerateTextResult;
+  toolContext?: Record<string, string> | null;
+  remainingDepth?: number | null;
 }): GenerationResult => {
   const pendingToolCalls = findPendingClientTools(
     args.result.steps as Array<{
@@ -186,6 +156,8 @@ const resolveGenerationResult = (args: {
       typedAgent: args.typedAgent,
       agentId: args.agentId,
       resolvedTools: args.resolvedTools,
+      toolContext: args.toolContext ?? null,
+      remainingDepth: args.remainingDepth ?? null,
     });
   }
 
@@ -211,6 +183,8 @@ export const runNonStreamGeneration = async (args: {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
   abortSignal?: AbortSignal;
+  toolContext?: Record<string, string> | null;
+  remainingDepth?: number | null;
 }): Promise<GenerationResult> => {
   const system = args.allMessages.find((message) => {
     return message.role === 'system';
@@ -230,16 +204,34 @@ export const runNonStreamGeneration = async (args: {
     args.agentId,
     args.typedAgent.maxSteps
   );
-  const result = await callGenerateText({
+
+  const callArgs = {
     agentId: args.agentId,
     model: args.model,
     system,
     nonSystemMessages,
-    resolvedTools: args.resolvedTools,
     typedAgent: args.typedAgent,
     prepareStep,
     abortSignal: args.abortSignal,
-  });
+  };
+
+  let result;
+  try {
+    result = await callGenerateText({
+      ...callArgs,
+      resolvedTools: args.resolvedTools,
+    });
+  } catch (error) {
+    if (Object.keys(args.resolvedTools).length === 0) {
+      throw error;
+    }
+    log(
+      'runNonStreamGeneration: tool call failed, retrying without tools agentId=%s error=%s',
+      args.agentId,
+      error instanceof Error ? error.message : String(error)
+    );
+    result = await callGenerateText({ ...callArgs, resolvedTools: {} });
+  }
 
   return resolveGenerationResult({
     ...args,
