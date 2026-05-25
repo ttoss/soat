@@ -392,7 +392,7 @@ describe('AI Providers', () => {
         });
       const aiProviderId = providerRes.body.id;
 
-      await authenticatedTestClient(userToken)
+      await authenticatedTestClient(adminToken)
         .post('/api/v1/chats')
         .send({ ai_provider_id: aiProviderId, project_id: projectId });
 
