@@ -1,5 +1,14 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
+import {
+  buildHttpToolExecute,
+  parseHttpExecuteConfig,
+} from './agentToolResolver';
+import {
+  buildMcpToolExecute,
+  executeSoatTool,
+} from './agentToolResolverExternalTools';
+import { soatTools } from './soatTools';
 
 // ── Mapped Types ─────────────────────────────────────────────────────────
 
@@ -191,4 +200,109 @@ export const deleteTool = async (args: {
     throw new DomainError('RESOURCE_NOT_FOUND', `Tool '${args.id}' not found.`);
 
   await tool.destroy();
+};
+
+// ── Call ──────────────────────────────────────────────────────────────────
+
+const noopLogToolCallingError = () => {};
+
+export const callTool = async (args: {
+  projectIds?: number[];
+  id: string;
+  action?: string;
+  input?: Record<string, unknown>;
+  authHeader?: string;
+}): Promise<unknown> => {
+  const foundTool = await getTool({ projectIds: args.projectIds, id: args.id });
+  const input = args.input ?? {};
+  const mergedInput = { ...(foundTool.presetParameters ?? {}), ...input };
+
+  if (foundTool.type === 'http') {
+    const executeConfig = parseHttpExecuteConfig(
+      (foundTool.execute as
+        | { url: string; method?: string; headers?: Record<string, string> }
+        | string
+        | null) ?? null
+    );
+    if (!executeConfig) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        'HTTP tool has an invalid execute configuration.'
+      );
+    }
+    const execute = buildHttpToolExecute({
+      toolName: foundTool.name,
+      execute: executeConfig,
+    });
+    return execute(mergedInput);
+  }
+
+  if (foundTool.type === 'soat') {
+    if (!args.action) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        'action is required for soat tools.'
+      );
+    }
+    if (!foundTool.actions?.includes(args.action)) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        `action "${args.action}" is not available on this tool.`
+      );
+    }
+    const def = soatTools.find((t) => {
+      return t.name === args.action;
+    });
+    if (!def) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        `action "${args.action}" is not a known SOAT action.`
+      );
+    }
+    return executeSoatTool({
+      toolName: foundTool.name,
+      def,
+      rawArgs: mergedInput,
+      base: `http://localhost:${process.env.PORT ?? 5047}`,
+      authHeader: args.authHeader,
+      buildContextHeaders: () => ({}),
+      logToolCallingError: noopLogToolCallingError,
+    });
+  }
+
+  if (foundTool.type === 'mcp') {
+    if (!args.action) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        'action is required for mcp tools.'
+      );
+    }
+    const mcpConfig = foundTool.mcp as {
+      url: string;
+      headers?: Record<string, string>;
+    } | null;
+    if (!mcpConfig?.url) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        'MCP tool has an invalid mcp configuration.'
+      );
+    }
+    const execute = buildMcpToolExecute({
+      mcpUrl: mcpConfig.url,
+      mcpHeaders: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        ...(mcpConfig.headers ?? {}),
+      },
+      mcpToolName: args.action,
+      logToolCallingError: noopLogToolCallingError,
+    });
+    return execute(mergedInput);
+  }
+
+  // client tools (and any unknown type) cannot be invoked server-side
+  throw new DomainError(
+    'TOOL_CALL_NOT_SUPPORTED',
+    'Client tools cannot be invoked server-side; they must be executed by the calling client.'
+  );
 };

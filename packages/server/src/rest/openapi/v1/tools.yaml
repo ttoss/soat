@@ -250,6 +250,93 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/tools/{tool_id}/call:
+    post:
+      tags:
+        - Tools
+      summary: Call a tool
+      description: >
+        Directly invokes a tool and returns its output. Supported for `http`,
+        `soat`, and `mcp` tools. `client` tools cannot be invoked server-side
+        and will return 422.
+
+        For `soat` and `mcp` tools the `action` field is required and identifies
+        which action (SOAT) or tool name (MCP) to invoke. For `http` tools
+        `action` is ignored.
+
+        `preset_parameters` stored on the tool are merged with the caller-supplied
+        `input` before execution; preset keys take lower precedence.
+      operationId: callTool
+      parameters:
+        - name: tool_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CallToolRequest'
+            examples:
+              soat_list_documents:
+                summary: Call a SOAT list-documents action
+                value:
+                  action: list-documents
+                  input:
+                    project_id: proj_abc123
+              http_tool:
+                summary: Call an HTTP tool
+                value:
+                  input:
+                    city: London
+              mcp_tool:
+                summary: Call an MCP tool
+                value:
+                  action: get_weather
+                  input:
+                    location: Paris
+      responses:
+        '200':
+          description: Tool output
+          content:
+            application/json:
+              schema:
+                type: object
+                description: The raw output returned by the tool
+                additionalProperties: true
+        '400':
+          description: Bad Request — invalid input or unknown action
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tool not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Unprocessable — tool type cannot be invoked server-side
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -415,6 +502,23 @@ components:
             Fixed parameters merged into every soat tool call. Keys matching
             fields in the action's input schema are removed from the schema
             shown to the model and injected automatically at execution time.
+
+    CallToolRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          description: >
+            For `soat` tools: the action name (must be in the tool's `actions`
+            list). For `mcp` tools: the MCP tool name to invoke. Ignored for
+            `http` tools.
+        input:
+          type: object
+          description: >
+            Input parameters for the tool call. These are merged with the
+            tool's `preset_parameters` before execution (caller-supplied values
+            take precedence).
+          additionalProperties: true
 
     ErrorResponse:
       type: object

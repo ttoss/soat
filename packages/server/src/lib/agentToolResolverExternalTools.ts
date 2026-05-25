@@ -18,7 +18,7 @@ type LogToolCallingError = (args: {
   error: unknown;
 }) => void;
 
-const buildMcpToolExecute = (args: {
+export const buildMcpToolExecute = (args: {
   mcpUrl: string;
   mcpHeaders: Record<string, string>;
   mcpToolName: string;
@@ -177,7 +177,7 @@ const buildSoatRequestBody = (args: {
     : withTrace;
 };
 
-const executeSoatTool = async (args: {
+export const executeSoatTool = async (args: {
   toolName: string;
   def: (typeof soatTools)[number];
   rawArgs: Record<string, unknown>;

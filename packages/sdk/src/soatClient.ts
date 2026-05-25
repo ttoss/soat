@@ -3,17 +3,21 @@ import { createClient, createConfig } from './generated/client/index.js';
 import {
   Actors as ActorsSdk,
   Agents as AgentsSdk,
-  AgentTools as AgentToolsSdk,
   AiProviders as AiProvidersSdk,
   ApiKeys as ApiKeysSdk,
   Chats as ChatsSdk,
   Conversations as ConversationsSdk,
   Documents as DocumentsSdk,
   Files as FilesSdk,
+  Formations as FormationsSdk,
+  Knowledge as KnowledgeSdk,
+  Memories as MemoriesSdk,
+  MemoryEntries as MemoryEntriesSdk,
   Policies as PoliciesSdk,
   Projects as ProjectsSdk,
   Secrets as SecretsSdk,
   Sessions as SessionsSdk,
+  Tools as ToolsSdk,
   Traces as TracesSdk,
   Users as UsersSdk,
   Webhooks as WebhooksSdk,
@@ -88,7 +92,6 @@ export interface SoatClientOptions {
  */
 export class SoatClient {
   readonly actors: typeof ActorsSdk;
-  readonly agentTools: typeof AgentToolsSdk;
   readonly agents: typeof AgentsSdk;
   readonly aiProviders: typeof AiProvidersSdk;
   readonly apiKeys: typeof ApiKeysSdk;
@@ -96,10 +99,15 @@ export class SoatClient {
   readonly conversations: typeof ConversationsSdk;
   readonly documents: typeof DocumentsSdk;
   readonly files: typeof FilesSdk;
+  readonly formations: typeof FormationsSdk;
+  readonly knowledge: typeof KnowledgeSdk;
+  readonly memories: typeof MemoriesSdk;
+  readonly memoryEntries: typeof MemoryEntriesSdk;
   readonly policies: typeof PoliciesSdk;
   readonly projects: typeof ProjectsSdk;
   readonly secrets: typeof SecretsSdk;
   readonly sessions: typeof SessionsSdk;
+  readonly tools: typeof ToolsSdk;
   readonly traces: typeof TracesSdk;
   readonly users: typeof UsersSdk;
   readonly webhooks: typeof WebhooksSdk;
@@ -117,7 +125,6 @@ export class SoatClient {
     );
 
     this.actors = bindResource(ActorsSdk, httpClient);
-    this.agentTools = bindResource(AgentToolsSdk, httpClient);
     this.agents = bindResource(AgentsSdk, httpClient);
     this.aiProviders = bindResource(AiProvidersSdk, httpClient);
     this.apiKeys = bindResource(ApiKeysSdk, httpClient);
@@ -125,10 +132,15 @@ export class SoatClient {
     this.conversations = bindResource(ConversationsSdk, httpClient);
     this.documents = bindResource(DocumentsSdk, httpClient);
     this.files = bindResource(FilesSdk, httpClient);
+    this.formations = bindResource(FormationsSdk, httpClient);
+    this.knowledge = bindResource(KnowledgeSdk, httpClient);
+    this.memories = bindResource(MemoriesSdk, httpClient);
+    this.memoryEntries = bindResource(MemoryEntriesSdk, httpClient);
     this.policies = bindResource(PoliciesSdk, httpClient);
     this.projects = bindResource(ProjectsSdk, httpClient);
     this.secrets = bindResource(SecretsSdk, httpClient);
     this.sessions = bindResource(SessionsSdk, httpClient);
+    this.tools = bindResource(ToolsSdk, httpClient);
     this.traces = bindResource(TracesSdk, httpClient);
     this.users = bindResource(UsersSdk, httpClient);
     this.webhooks = bindResource(WebhooksSdk, httpClient);

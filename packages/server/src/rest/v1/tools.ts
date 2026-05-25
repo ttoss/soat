@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import {
+  callTool,
   createTool,
   deleteTool,
   getTool,
@@ -319,4 +320,53 @@ toolsRouter.delete('/tools/:tool_id', async (ctx: Context) => {
   });
 
   ctx.status = 204;
+});
+
+/**
+ * @openapi
+ * /api/v1/tools/{tool_id}/call:
+ *   post:
+ *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}~1call/post'
+ */
+toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    action: 'tools:CallTool',
+  });
+
+  if (projectIds === null) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const { action, input } = (ctx.request.body ?? {}) as {
+    action?: unknown;
+    input?: unknown;
+  };
+
+  const parsedInput =
+    input !== undefined &&
+    input !== null &&
+    typeof input === 'object' &&
+    !Array.isArray(input)
+      ? (input as Record<string, unknown>)
+      : undefined;
+
+  const authHeader = ctx.request.headers.authorization;
+
+  const result = await callTool({
+    projectIds,
+    id: ctx.params.tool_id,
+    action: typeof action === 'string' ? action : undefined,
+    input: parsedInput,
+    authHeader,
+  });
+
+  ctx.body = result;
 });

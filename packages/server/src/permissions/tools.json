@@ -25,6 +25,11 @@
       "operationId": "deleteTool",
       "action": "tools:DeleteTool",
       "description": "Delete a tool"
+    },
+    {
+      "operationId": "callTool",
+      "action": "tools:CallTool",
+      "description": "Call (invoke) a tool directly"
     }
   ]
 }

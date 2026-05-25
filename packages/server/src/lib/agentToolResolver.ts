@@ -104,7 +104,7 @@ type TypedHttpTool = {
     | null;
 };
 
-type HttpExecuteConfig = {
+export type HttpExecuteConfig = {
   url: string;
   method?: string;
   headers?: Record<string, string>;
@@ -163,7 +163,7 @@ const parseHeaders = (args: {
   return args.value as Record<string, string>;
 };
 
-const parseHttpExecuteConfig = (
+export const parseHttpExecuteConfig = (
   execute: TypedHttpTool['execute']
 ): HttpExecuteConfig | null => {
   const parsedExecute: unknown =
@@ -251,7 +251,7 @@ export class HttpToolError extends Error {
   }
 }
 
-const buildHttpToolExecute = (
+export const buildHttpToolExecute = (
   args: {
     toolName: string;
     execute: HttpExecuteConfig;

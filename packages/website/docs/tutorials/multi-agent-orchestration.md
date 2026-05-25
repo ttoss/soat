@@ -250,7 +250,7 @@ Both tools use `preset_parameters` with `documentId`, so the model never has to 
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-READ_POEM_TOOL_ID=$(soat create-agent-tool \
+READ_POEM_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "poem-read" \
   --type "soat" \
@@ -259,7 +259,7 @@ READ_POEM_TOOL_ID=$(soat create-agent-tool \
   --preset-parameters '{"documentId": "'"$POEM_DOC_ID"'"}' | jq -r '.id')
 echo "READ_POEM_TOOL_ID: $READ_POEM_TOOL_ID"
 
-WRITE_STANZA_TOOL_ID=$(soat create-agent-tool \
+WRITE_STANZA_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "poem-write" \
   --type "soat" \
@@ -481,7 +481,7 @@ The orchestrator should not choose `agentId` dynamically. Create one tool per st
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-CALL_STANZA1_TOOL_ID=$(soat create-agent-tool \
+CALL_STANZA1_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "call-stanza-1" \
   --type "soat" \
@@ -489,7 +489,7 @@ CALL_STANZA1_TOOL_ID=$(soat create-agent-tool \
   --actions '["create-agent-generation"]' \
   --preset-parameters '{"agentId": "'"$STANZA1_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 1 with title + first quatrain."}]}' | jq -r '.id')
 
-CALL_STANZA2_TOOL_ID=$(soat create-agent-tool \
+CALL_STANZA2_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "call-stanza-2" \
   --type "soat" \
@@ -497,7 +497,7 @@ CALL_STANZA2_TOOL_ID=$(soat create-agent-tool \
   --actions '["create-agent-generation"]' \
   --preset-parameters '{"agentId": "'"$STANZA2_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 2 (second quatrain)."}]}' | jq -r '.id')
 
-CALL_STANZA3_TOOL_ID=$(soat create-agent-tool \
+CALL_STANZA3_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "call-stanza-3" \
   --type "soat" \
@@ -505,7 +505,7 @@ CALL_STANZA3_TOOL_ID=$(soat create-agent-tool \
   --actions '["create-agent-generation"]' \
   --preset-parameters '{"agentId": "'"$STANZA3_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 3 (third quatrain)."}]}' | jq -r '.id')
 
-CALL_STANZA4_TOOL_ID=$(soat create-agent-tool \
+CALL_STANZA4_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "call-stanza-4" \
   --type "soat" \
@@ -513,7 +513,7 @@ CALL_STANZA4_TOOL_ID=$(soat create-agent-tool \
   --actions '["create-agent-generation"]' \
   --preset-parameters '{"agentId": "'"$STANZA4_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 4 (final couplet)."}]}' | jq -r '.id')
 
-READ_FINAL_POEM_TOOL_ID=$(soat create-agent-tool \
+READ_FINAL_POEM_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "read-final-poem" \
   --type "soat" \

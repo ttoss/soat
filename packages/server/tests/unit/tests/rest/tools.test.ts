@@ -8,6 +8,8 @@ describe('Tools', () => {
   let policyId: string;
   let noPermToken: string;
   let toolId: string;
+  let soatToolId: string;
+  let clientToolId: string;
 
   beforeAll(async () => {
     await testClient
@@ -40,6 +42,7 @@ describe('Tools', () => {
                 'tools:GetTool',
                 'tools:UpdateTool',
                 'tools:DeleteTool',
+                'tools:CallTool',
               ],
             },
           ],
@@ -56,6 +59,33 @@ describe('Tools', () => {
       .send({ username: 'toolsnoperm', password: 'nopassword' });
     expect(noPermRes.status).toBe(201);
     noPermToken = await loginAs('toolsnoperm', 'nopassword');
+
+    // Create a SOAT tool for call tests
+    const soatToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'soat-tools-list',
+        type: 'soat',
+        description: 'Lists tools via SOAT',
+        actions: ['list-tools'],
+      });
+    soatToolId = soatToolRes.body.id;
+
+    // Create a client tool for call tests
+    const clientToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'client-dialog',
+        type: 'client',
+        description: 'A client-side dialog tool',
+        parameters: {
+          type: 'object',
+          properties: { message: { type: 'string' } },
+        },
+      });
+    clientToolId = clientToolRes.body.id;
   });
 
   describe('POST /api/v1/tools', () => {
@@ -215,6 +245,43 @@ describe('Tools', () => {
         '/api/v1/tools/tool_nonexistent'
       );
       expect(response.status).toBe(404);
+    });
+  });
+
+  describe('POST /api/v1/tools/:tool_id/call', () => {
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient
+        .post(`/api/v1/tools/${soatToolId}/call`)
+        .send({ action: 'list-tools' });
+      expect(response.status).toBe(401);
+    });
+
+    test('user without permission returns 403 or 404', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .post(`/api/v1/tools/${soatToolId}/call`)
+        .send({ action: 'list-tools' });
+      expect([403, 404]).toContain(response.status);
+    });
+
+    test('non-existent tool returns 404', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools/tool_nonexistent/call')
+        .send({ action: 'list-tools' });
+      expect(response.status).toBe(404);
+    });
+
+    test('calling a client tool returns 422', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tools/${clientToolId}/call`)
+        .send({});
+      expect(response.status).toBe(422);
+    });
+
+    test('calling a soat tool without action returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tools/${soatToolId}/call`)
+        .send({});
+      expect(response.status).toBe(400);
     });
   });
 });
