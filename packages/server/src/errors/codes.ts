@@ -70,6 +70,11 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'The request body failed validation.',
   },
+  TOOL_CALL_NOT_SUPPORTED: {
+    httpStatus: 422,
+    description:
+      'This tool type cannot be invoked server-side. Client tools must be executed by the calling client.',
+  },
 } as const satisfies Record<
   string,
   { httpStatus: number; description: string }

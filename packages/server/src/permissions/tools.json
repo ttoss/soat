@@ -1,0 +1,35 @@
+{
+  "module": "tools",
+  "operations": [
+    {
+      "operationId": "createTool",
+      "action": "tools:CreateTool",
+      "description": "Create a tool"
+    },
+    {
+      "operationId": "listTools",
+      "action": "tools:ListTools",
+      "description": "List tools in a project"
+    },
+    {
+      "operationId": "getTool",
+      "action": "tools:GetTool",
+      "description": "Get a tool by ID"
+    },
+    {
+      "operationId": "updateTool",
+      "action": "tools:UpdateTool",
+      "description": "Update a tool"
+    },
+    {
+      "operationId": "deleteTool",
+      "action": "tools:DeleteTool",
+      "description": "Delete a tool"
+    },
+    {
+      "operationId": "callTool",
+      "action": "tools:CallTool",
+      "description": "Call (invoke) a tool directly"
+    }
+  ]
+}

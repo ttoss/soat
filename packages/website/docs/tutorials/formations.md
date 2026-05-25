@@ -180,7 +180,7 @@ cat > formation.json << 'EOF'
       }
     },
     "poemReadTool": {
-      "type": "agent_tool",
+      "type": "tool",
       "properties": {
         "name": "poem-read",
         "type": "soat",
@@ -190,7 +190,7 @@ cat > formation.json << 'EOF'
       }
     },
     "poemWriteTool": {
-      "type": "agent_tool",
+      "type": "tool",
       "properties": {
         "name": "poem-write",
         "type": "soat",
@@ -256,7 +256,7 @@ cat > formation.json << 'EOF'
       }
     },
     "callStanza1Tool": {
-      "type": "agent_tool",
+      "type": "tool",
       "properties": {
         "name": "call-stanza-1",
         "type": "soat",
@@ -269,7 +269,7 @@ cat > formation.json << 'EOF'
       }
     },
     "callStanza2Tool": {
-      "type": "agent_tool",
+      "type": "tool",
       "properties": {
         "name": "call-stanza-2",
         "type": "soat",
@@ -282,7 +282,7 @@ cat > formation.json << 'EOF'
       }
     },
     "callStanza3Tool": {
-      "type": "agent_tool",
+      "type": "tool",
       "properties": {
         "name": "call-stanza-3",
         "type": "soat",
@@ -295,7 +295,7 @@ cat > formation.json << 'EOF'
       }
     },
     "callStanza4Tool": {
-      "type": "agent_tool",
+      "type": "tool",
       "properties": {
         "name": "call-stanza-4",
         "type": "soat",
@@ -308,7 +308,7 @@ cat > formation.json << 'EOF'
       }
     },
     "readFinalPoemTool": {
-      "type": "agent_tool",
+      "type": "tool",
       "properties": {
         "name": "read-final-poem",
         "type": "soat",
@@ -372,7 +372,7 @@ const template = {
       },
     },
     poemReadTool: {
-      type: 'agent_tool',
+      type: 'tool',
       properties: {
         name: 'poem-read',
         type: 'soat',
@@ -382,7 +382,7 @@ const template = {
       },
     },
     poemWriteTool: {
-      type: 'agent_tool',
+      type: 'tool',
       properties: {
         name: 'poem-write',
         type: 'soat',
@@ -488,7 +488,7 @@ const template = {
       },
     },
     callStanza1Tool: {
-      type: 'agent_tool',
+      type: 'tool',
       properties: {
         name: 'call-stanza-1',
         type: 'soat',
@@ -507,7 +507,7 @@ const template = {
       },
     },
     callStanza2Tool: {
-      type: 'agent_tool',
+      type: 'tool',
       properties: {
         name: 'call-stanza-2',
         type: 'soat',
@@ -526,7 +526,7 @@ const template = {
       },
     },
     callStanza3Tool: {
-      type: 'agent_tool',
+      type: 'tool',
       properties: {
         name: 'call-stanza-3',
         type: 'soat',
@@ -545,7 +545,7 @@ const template = {
       },
     },
     callStanza4Tool: {
-      type: 'agent_tool',
+      type: 'tool',
       properties: {
         name: 'call-stanza-4',
         type: 'soat',
@@ -564,7 +564,7 @@ const template = {
       },
     },
     readFinalPoemTool: {
-      type: 'agent_tool',
+      type: 'tool',
       properties: {
         name: 'read-final-poem',
         type: 'soat',
@@ -658,7 +658,7 @@ cat > formation.json << 'EOF'
       }
     },
     "poemReadTool": {
-      "type": "agent_tool",
+      "type": "tool",
       "properties": {
         "name": "poem-read",
         "type": "soat",
@@ -668,7 +668,7 @@ cat > formation.json << 'EOF'
       }
     },
     "poemWriteTool": {
-      "type": "agent_tool",
+      "type": "tool",
       "properties": {
         "name": "poem-write",
         "type": "soat",
@@ -734,7 +734,7 @@ cat > formation.json << 'EOF'
       }
     },
     "callStanza1Tool": {
-      "type": "agent_tool",
+      "type": "tool",
       "properties": {
         "name": "call-stanza-1",
         "type": "soat",
@@ -747,7 +747,7 @@ cat > formation.json << 'EOF'
       }
     },
     "callStanza2Tool": {
-      "type": "agent_tool",
+      "type": "tool",
       "properties": {
         "name": "call-stanza-2",
         "type": "soat",
@@ -760,7 +760,7 @@ cat > formation.json << 'EOF'
       }
     },
     "callStanza3Tool": {
-      "type": "agent_tool",
+      "type": "tool",
       "properties": {
         "name": "call-stanza-3",
         "type": "soat",
@@ -773,7 +773,7 @@ cat > formation.json << 'EOF'
       }
     },
     "callStanza4Tool": {
-      "type": "agent_tool",
+      "type": "tool",
       "properties": {
         "name": "call-stanza-4",
         "type": "soat",
@@ -786,7 +786,7 @@ cat > formation.json << 'EOF'
       }
     },
     "readFinalPoemTool": {
-      "type": "agent_tool",
+      "type": "tool",
       "properties": {
         "name": "read-final-poem",
         "type": "soat",
@@ -892,20 +892,20 @@ Expected output — 14 resources all marked as `create`:
 [
   { "action": "create", "logical_id": "provider", "type": "ai_provider" },
   { "action": "create", "logical_id": "poemDoc", "type": "document" },
-  { "action": "create", "logical_id": "poemReadTool", "type": "agent_tool" },
-  { "action": "create", "logical_id": "poemWriteTool", "type": "agent_tool" },
+  { "action": "create", "logical_id": "poemReadTool", "type": "tool" },
+  { "action": "create", "logical_id": "poemWriteTool", "type": "tool" },
   { "action": "create", "logical_id": "stanza1Agent", "type": "agent" },
   { "action": "create", "logical_id": "stanza2Agent", "type": "agent" },
   { "action": "create", "logical_id": "stanza3Agent", "type": "agent" },
   { "action": "create", "logical_id": "stanza4Agent", "type": "agent" },
-  { "action": "create", "logical_id": "callStanza1Tool", "type": "agent_tool" },
-  { "action": "create", "logical_id": "callStanza2Tool", "type": "agent_tool" },
-  { "action": "create", "logical_id": "callStanza3Tool", "type": "agent_tool" },
-  { "action": "create", "logical_id": "callStanza4Tool", "type": "agent_tool" },
+  { "action": "create", "logical_id": "callStanza1Tool", "type": "tool" },
+  { "action": "create", "logical_id": "callStanza2Tool", "type": "tool" },
+  { "action": "create", "logical_id": "callStanza3Tool", "type": "tool" },
+  { "action": "create", "logical_id": "callStanza4Tool", "type": "tool" },
   {
     "action": "create",
     "logical_id": "readFinalPoemTool",
-    "type": "agent_tool"
+    "type": "tool"
   },
   { "action": "create", "logical_id": "orchestrator", "type": "agent" }
 ]

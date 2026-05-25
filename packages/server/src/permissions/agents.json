@@ -35,31 +35,6 @@
       "operationId": "submitAgentToolOutputs",
       "action": "agents:CreateAgentGeneration",
       "description": "Submit tool outputs to resume a paused generation"
-    },
-    {
-      "operationId": "createAgentTool",
-      "action": "agents:CreateAgentTool",
-      "description": "Create an agent tool"
-    },
-    {
-      "operationId": "listAgentTools",
-      "action": "agents:ListAgentTools",
-      "description": "List agent tools in a project"
-    },
-    {
-      "operationId": "getAgentTool",
-      "action": "agents:GetAgentTool",
-      "description": "Get an agent tool by ID"
-    },
-    {
-      "operationId": "updateAgentTool",
-      "action": "agents:UpdateAgentTool",
-      "description": "Update an agent tool"
-    },
-    {
-      "operationId": "deleteAgentTool",
-      "action": "agents:DeleteAgentTool",
-      "description": "Delete an agent tool"
     }
   ]
 }

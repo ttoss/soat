@@ -602,7 +602,7 @@ echo "$CHAT_SSE_RESP"
 
 # 19. Create an HTTP agent tool that calls GET /api/v1/projects on the SOAT server
 echo "--- Creating HTTP agent tool (list-projects) ---"
-TOOL_RESP=$($SOAT_CLI create-agent-tool \
+TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name list-projects \
   --type http \
@@ -666,12 +666,12 @@ echo "Agent deleted."
 
 # 24. Cleanup — delete agent tool
 echo "--- Deleting agent tool ---"
-$SOAT_CLI delete-agent-tool --tool-id "$TOOL_ID"
+$SOAT_CLI delete-tool --tool-id "$TOOL_ID"
 echo "Agent tool deleted."
 
 # 25. Create an MCP agent tool pointing at the SOAT MCP server
 echo "--- Creating MCP agent tool ---"
-MCP_TOOL_RESP=$($SOAT_CLI create-agent-tool \
+MCP_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name soat-mcp \
   --type mcp \
@@ -739,14 +739,14 @@ echo "MCP Agent deleted."
 
 # 30. Cleanup — delete MCP agent tool
 echo "--- Deleting MCP agent tool ---"
-$SOAT_CLI delete-agent-tool --tool-id "$MCP_TOOL_ID"
+$SOAT_CLI delete-tool --tool-id "$MCP_TOOL_ID"
 echo "MCP Agent tool deleted."
 
 # ── Client Tool Tests ────────────────────────────────────────────────────────
 
 # 31. Create a client-type agent tool
 echo "--- Creating client agent tool ---"
-CLIENT_TOOL_RESP=$($SOAT_CLI create-agent-tool \
+CLIENT_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name get_weather \
   --type client \
@@ -876,14 +876,14 @@ echo "Client-tool agent deleted."
 
 # 36. Cleanup — delete client agent tool
 echo "--- Deleting client agent tool ---"
-$SOAT_CLI delete-agent-tool --tool-id "$CLIENT_TOOL_ID"
+$SOAT_CLI delete-tool --tool-id "$CLIENT_TOOL_ID"
 echo "Client agent tool deleted."
 
 # ── SOAT Tool Tests ─────────────────────────────────────────────────────────
 
 # 37. Create a SOAT agent tool exposing list-projects action
 echo "--- Creating SOAT agent tool ---"
-SOAT_TOOL_RESP=$($SOAT_CLI create-agent-tool \
+SOAT_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name soat-platform \
   --type soat \
@@ -944,7 +944,7 @@ echo "SOAT agent deleted."
 
 # 42. Cleanup — delete SOAT agent tool
 echo "--- Deleting SOAT agent tool ---"
-$SOAT_CLI delete-agent-tool --tool-id "$SOAT_TOOL_ID"
+$SOAT_CLI delete-tool --tool-id "$SOAT_TOOL_ID"
 echo "SOAT agent tool deleted."
 
 # ── Conversations Generate Tests ─────────────────────────────────────────────

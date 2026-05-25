@@ -783,7 +783,7 @@ describe('validateFormationTemplate', () => {
       },
       resources: {
         MyTool: {
-          type: 'agent_tool',
+          type: 'tool',
           properties: {
             type: 'http',
             name: 'my-tool',

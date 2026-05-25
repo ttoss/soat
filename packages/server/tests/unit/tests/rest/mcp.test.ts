@@ -450,11 +450,11 @@ describe('MCP tools - happy path', () => {
 
   // ── Agents ──────────────────────────────────────────────────────────────
 
-  let agentToolId: string;
+  let toolId: string;
   let agentId: string;
 
-  test('create-agent-tool creates a tool', async () => {
-    const res = await mcpCall('create-agent-tool', {
+  test('create-tool creates a tool', async () => {
+    const res = await mcpCall('create-tool', {
       projectId,
       name: 'mcp-test-tool',
       type: 'http',
@@ -463,29 +463,29 @@ describe('MCP tools - happy path', () => {
     expect(res.status).toBe(200);
     const result = parseResult(res);
     expect(result.id).toBeDefined();
-    agentToolId = result.id;
+    toolId = result.id;
   });
 
-  test('list-agent-tools returns results', async () => {
-    const res = await mcpCall('list-agent-tools');
+  test('list-tools returns results', async () => {
+    const res = await mcpCall('list-tools');
     expect(res.status).toBe(200);
   });
 
-  test('get-agent-tool returns the tool', async () => {
-    const res = await mcpCall('get-agent-tool', { toolId: agentToolId });
+  test('get-tool returns the tool', async () => {
+    const res = await mcpCall('get-tool', { toolId });
     expect(res.status).toBe(200);
     const result = parseResult(res);
-    expect(result.id).toBe(agentToolId);
+    expect(result.id).toBe(toolId);
   });
 
-  test('update-agent-tool updates the tool', async () => {
-    const res = await mcpCall('update-agent-tool', {
-      toolId: agentToolId,
+  test('update-tool updates the tool', async () => {
+    const res = await mcpCall('update-tool', {
+      toolId,
       name: 'mcp-test-tool-renamed',
     });
     expect(res.status).toBe(200);
     const result = parseResult(res);
-    expect(result.id).toBe(agentToolId);
+    expect(result.id).toBe(toolId);
   });
 
   test('create-agent creates an agent', async () => {
@@ -532,8 +532,8 @@ describe('MCP tools - happy path', () => {
     expect(res.status).toBe(200);
   });
 
-  test('delete-agent-tool deletes the tool', async () => {
-    const res = await mcpCall('delete-agent-tool', { toolId: agentToolId });
+  test('delete-tool deletes the tool', async () => {
+    const res = await mcpCall('delete-tool', { toolId });
     expect(res.status).toBe(200);
     const text = res.body.result?.content?.[0]?.text;
     expect(typeof text).toBe('string');

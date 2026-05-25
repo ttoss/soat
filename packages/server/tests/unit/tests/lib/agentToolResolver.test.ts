@@ -28,7 +28,7 @@ describe('resolveAgentTools', () => {
     projectId = projectRes.body.id;
 
     const httpToolRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/agents/tools')
+      .post('/api/v1/tools')
       .send({
         project_id: projectId,
         name: 'myHttpTool',
@@ -49,7 +49,7 @@ describe('resolveAgentTools', () => {
     httpToolId = httpToolRes.body.id;
 
     const clientToolRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/agents/tools')
+      .post('/api/v1/tools')
       .send({
         project_id: projectId,
         name: 'myClientTool',
@@ -115,7 +115,7 @@ describe('resolveAgentTools', () => {
 
   test('http tool execute covers POST method branches', async () => {
     const postToolRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/agents/tools')
+      .post('/api/v1/tools')
       .send({
         project_id: projectId,
         name: 'myPostHttpTool',
@@ -215,7 +215,7 @@ describe('resolveAgentTools', () => {
 
   test('http tool execute supports legacy execute config stored as JSON string', async () => {
     const legacyToolRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/agents/tools')
+      .post('/api/v1/tools')
       .send({
         project_id: projectId,
         name: 'myLegacyHttpTool',
@@ -228,7 +228,7 @@ describe('resolveAgentTools', () => {
         },
       });
 
-    await db.AgentTool.update(
+    await db.Tool.update(
       {
         execute: {
           url: 'https://example.com/api/users/{user_id}',
@@ -239,7 +239,7 @@ describe('resolveAgentTools', () => {
     );
 
     await db.sequelize.query(
-      'UPDATE agent_tools SET execute = to_jsonb($1::text) WHERE public_id = $2',
+      'UPDATE tools SET execute = to_jsonb($1::text) WHERE public_id = $2',
       {
         bind: [
           JSON.stringify({
@@ -547,7 +547,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
     projectId = projectRes.body.id;
 
     const mcpToolRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/agents/tools')
+      .post('/api/v1/tools')
       .send({
         project_id: projectId,
         name: 'myMcpServer',
@@ -558,7 +558,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
     mcpToolId = mcpToolRes.body.id;
 
     const httpToolRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/agents/tools')
+      .post('/api/v1/tools')
       .send({
         project_id: projectId,
         name: 'resolverHttpTool',
@@ -623,7 +623,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
 
   test('http tool execute appends query params with & when URL already has ?', async () => {
     const urlWithQueryRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/agents/tools')
+      .post('/api/v1/tools')
       .send({
         project_id: projectId,
         name: 'toolWithExistingQuery',
@@ -800,7 +800,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
 
   test('soat tool resolves configured actions and executes through internal API', async () => {
     const soatToolRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/agents/tools')
+      .post('/api/v1/tools')
       .send({
         project_id: projectId,
         name: 'mySoatTool',
@@ -828,7 +828,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
 
   test('soat tool returns boundary error when action is denied', async () => {
     const deniedSoatRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/agents/tools')
+      .post('/api/v1/tools')
       .send({
         project_id: projectId,
         name: 'myDeniedSoatTool',
@@ -854,7 +854,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
 
   test('soat tool with preset_parameters strips preset keys from inputSchema', async () => {
     const soatToolRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/agents/tools')
+      .post('/api/v1/tools')
       .send({
         project_id: projectId,
         name: 'myPresetSoatTool',
@@ -880,7 +880,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
 
   test('soat tool with preset_parameters injects preset values into execution', async () => {
     const soatToolRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/agents/tools')
+      .post('/api/v1/tools')
       .send({
         project_id: projectId,
         name: 'myPresetExecTool',
@@ -909,7 +909,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
 
   test('soat tool without preset_parameters works as before', async () => {
     const soatToolRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/agents/tools')
+      .post('/api/v1/tools')
       .send({
         project_id: projectId,
         name: 'myNoPresetTool',

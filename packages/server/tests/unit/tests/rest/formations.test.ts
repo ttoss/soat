@@ -540,7 +540,7 @@ resources:
           },
         },
         ToolWithOptions: {
-          type: 'agent_tool',
+          type: 'tool',
           properties: {
             name: 'Tool With Full Options',
             description: 'Tool with description and parameters',
@@ -662,7 +662,7 @@ resources:
           },
         },
         ParamTool: {
-          type: 'agent_tool',
+          type: 'tool',
           properties: {
             name: 'param-tool',
             execute: {
@@ -898,15 +898,15 @@ resources:
     });
   });
 
-  // ── agent_tool resource type ───────────────────────────────────────────────
+  // ── tool resource type ───────────────────────────────────────────────
 
-  describe('Formation with agent_tool resources', () => {
+  describe('Formation with tool resources', () => {
     let agentToolFormationId: string;
 
     const agentToolTemplate = {
       resources: {
         MyTool: {
-          type: 'agent_tool',
+          type: 'tool',
           properties: {
             name: 'my-http-tool',
             type: 'http',
@@ -928,7 +928,7 @@ resources:
       },
     };
 
-    test('creates a formation with an agent_tool resource', async () => {
+    test('creates a formation with a tool resource', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')
         .send({
@@ -943,16 +943,16 @@ resources:
       expect(res.body.resources[0].logical_id).toBe('MyTool');
       expect(res.body.resources[0].status).toBe('created');
       expect(res.body.resources[0].physical_resource_id).toBeDefined();
-      expect(res.body.resources[0].physical_resource_id).toMatch(/^agt_tool_/);
+      expect(res.body.resources[0].physical_resource_id).toMatch(/^tool_/);
 
       agentToolFormationId = res.body.id;
     });
 
-    test('updates the agent_tool resource in the formation', async () => {
+    test('updates the tool resource in the formation', async () => {
       const updatedTemplate = {
         resources: {
           MyTool: {
-            type: 'agent_tool',
+            type: 'tool',
             properties: {
               name: 'my-http-tool-updated',
               description: 'Updated description',
@@ -980,11 +980,11 @@ resources:
       expect(toolResource.status).toBe('updated');
     });
 
-    test('validates template with agent_tool missing required name', async () => {
+    test('validates template with tool missing required name', async () => {
       const invalidToolTemplate = {
         resources: {
           BadTool: {
-            type: 'agent_tool',
+            type: 'tool',
             properties: {
               description: 'missing name',
             },
@@ -1005,7 +1005,7 @@ resources:
       const mcpTemplate = {
         resources: {
           MyMcpTool: {
-            type: 'agent_tool',
+            type: 'tool',
             properties: {
               name: 'my-mcp-tool',
               type: 'mcp',
@@ -1037,14 +1037,14 @@ resources:
       );
     });
 
-    test('deletes formation and cleans up agent_tool resource', async () => {
+    test('deletes formation and cleans up tool resource', async () => {
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${agentToolFormationId}`
       );
       expect(res.status).toBe(204);
     });
 
-    test('deleted agent_tool formation no longer found', async () => {
+    test('deleted tool formation no longer found', async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/formations/${agentToolFormationId}`
       );

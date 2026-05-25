@@ -1,6 +1,5 @@
 import { actorsFormationModule } from './formation-modules/actorsFormationModule';
 import { agentsFormationModule } from './formation-modules/agentsFormationModule';
-import { agentToolsFormationModule } from './formation-modules/agentToolsFormationModule';
 import { aiProvidersFormationModule } from './formation-modules/aiProvidersFormationModule';
 import { apiKeysFormationModule } from './formation-modules/apiKeysFormationModule';
 import { chatsFormationModule } from './formation-modules/chatsFormationModule';
@@ -12,6 +11,7 @@ import { memoryEntriesFormationModule } from './formation-modules/memoryEntriesF
 import { policiesFormationModule } from './formation-modules/policiesFormationModule';
 import { secretsFormationModule } from './formation-modules/secretsFormationModule';
 import { sessionsFormationModule } from './formation-modules/sessionsFormationModule';
+import { toolsFormationModule } from './formation-modules/toolsFormationModule';
 import { webhooksFormationModule } from './formation-modules/webhooksFormationModule';
 import type { FormationModule } from './formationsTypes';
 
@@ -30,7 +30,7 @@ const registerFormationModule = (args: { module: FormationModule }): void => {
 
 registerFormationModule({ module: actorsFormationModule });
 registerFormationModule({ module: agentsFormationModule });
-registerFormationModule({ module: agentToolsFormationModule });
+registerFormationModule({ module: toolsFormationModule });
 registerFormationModule({ module: aiProvidersFormationModule });
 registerFormationModule({ module: apiKeysFormationModule });
 registerFormationModule({ module: documentsFormationModule });

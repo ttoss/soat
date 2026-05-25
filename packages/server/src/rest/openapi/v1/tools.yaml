@@ -1,0 +1,527 @@
+openapi: 3.0.3
+info:
+  title: Tools API
+  version: 1.0.0
+  description: >
+    Standalone tool definitions that can be attached to agents. Supports HTTP,
+    MCP, client, and SOAT platform tools.
+  contact:
+    name: SOAT API Support
+
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+
+tags:
+  - name: Tools
+    description: Manage tools
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/tools:
+    post:
+      tags:
+        - Tools
+      summary: Create a tool
+      description: Creates a new tool in the project.
+      operationId: createTool
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateToolRequest'
+            examples:
+              http:
+                summary: HTTP tool
+                value:
+                  name: get-weather
+                  type: http
+                  description: Fetches current weather for a city
+                  parameters:
+                    type: object
+                    properties:
+                      city:
+                        type: string
+                    required:
+                      - city
+                  execute:
+                    url: https://api.weather.example/v1/current?city={{city}}
+              client:
+                summary: Client tool
+                value:
+                  name: show-dialog
+                  type: client
+                  description: Displays a confirmation dialog to the user
+                  parameters:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+              soat:
+                summary: SOAT platform tool
+                value:
+                  name: soat-files
+                  type: soat
+                  actions:
+                    - files:ListFiles
+                    - files:GetFile
+      responses:
+        '201':
+          description: Tool created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tool'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Tools
+      summary: List tools
+      description: Returns all tools in the project.
+      operationId: listTools
+      parameters:
+        - name: project_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Project public ID to filter by
+      responses:
+        '200':
+          description: List of tools
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Tool'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/tools/{tool_id}:
+    get:
+      tags:
+        - Tools
+      summary: Get a tool
+      description: Returns a single tool by ID.
+      operationId: getTool
+      parameters:
+        - name: tool_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tool
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tool'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - Tools
+      summary: Update a tool
+      description: Updates an existing tool.
+      operationId: updateTool
+      parameters:
+        - name: tool_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateToolRequest'
+      responses:
+        '200':
+          description: Tool updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tool'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Tools
+      summary: Delete a tool
+      description: Deletes a tool by ID.
+      operationId: deleteTool
+      parameters:
+        - name: tool_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/tools/{tool_id}/call:
+    post:
+      tags:
+        - Tools
+      summary: Call a tool
+      description: >
+        Directly invokes a tool and returns its output. Supported for `http`,
+        `soat`, and `mcp` tools. `client` tools cannot be invoked server-side
+        and will return 422.
+
+        For `soat` and `mcp` tools the `action` field is required and identifies
+        which action (SOAT) or tool name (MCP) to invoke. For `http` tools
+        `action` is ignored.
+
+        `preset_parameters` stored on the tool are merged with the caller-supplied
+        `input` before execution; preset keys take lower precedence.
+      operationId: callTool
+      parameters:
+        - name: tool_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CallToolRequest'
+            examples:
+              soat_list_documents:
+                summary: Call a SOAT list-documents action
+                value:
+                  action: list-documents
+                  input:
+                    project_id: proj_abc123
+              http_tool:
+                summary: Call an HTTP tool
+                value:
+                  input:
+                    city: London
+              mcp_tool:
+                summary: Call an MCP tool
+                value:
+                  action: get_weather
+                  input:
+                    location: Paris
+      responses:
+        '200':
+          description: Tool output
+          content:
+            application/json:
+              schema:
+                type: object
+                description: The raw output returned by the tool
+                additionalProperties: true
+        '400':
+          description: Bad Request — invalid input or unknown action
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tool not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Unprocessable — tool type cannot be invoked server-side
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT token or sk_ api key
+  schemas:
+    Tool:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public ID of the tool
+          example: tool_V1StGXR8Z5jdHi6B
+        project_id:
+          type: string
+          description: Public ID of the owning project
+          example: proj_V1StGXR8Z5jdHi6B
+        name:
+          type: string
+          description: Tool name
+          example: get-weather
+        type:
+          type: string
+          enum:
+            - http
+            - client
+            - mcp
+            - soat
+          description: Tool type
+          example: http
+        description:
+          type: string
+          nullable: true
+          description: What the tool does (sent to the model)
+        parameters:
+          type: object
+          nullable: true
+          description: JSON Schema for tool input
+        execute:
+          type: object
+          nullable: true
+          description: >
+            Execution config for http tools. Supported fields: `url` (required),
+            `method` (default `POST`), and `headers`. The `url` may contain
+            `{paramName}` placeholders (e.g. `/users/{userId}`) that are
+            replaced at call time with the corresponding tool argument value
+            (URL-encoded). Arguments consumed as path parameters are excluded
+            from the query string and request body.
+        mcp:
+          type: object
+          nullable: true
+          description: MCP server config (url, headers)
+        actions:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: SOAT platform actions to expose
+        preset_parameters:
+          type: object
+          nullable: true
+          description: >-
+            Fixed parameters merged into every soat tool call. Keys matching
+            fields in the action's input schema are removed from the schema
+            shown to the model and injected automatically at execution time.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateToolRequest:
+      type: object
+      required:
+        - name
+      properties:
+        project_id:
+          type: string
+          description: Public ID of the project
+        name:
+          type: string
+          description: Tool name
+        type:
+          type: string
+          enum:
+            - http
+            - client
+            - mcp
+            - soat
+          description: Tool type (default http)
+        description:
+          type: string
+          description: What the tool does
+        parameters:
+          type: object
+          description: JSON Schema for tool input
+        execute:
+          type: object
+          description: >
+            Execution config for http tools. Supported fields: `url` (required),
+            `method` (default `POST`), and `headers`. The `url` may contain
+            `{paramName}` placeholders (e.g. `/users/{userId}`) that are
+            replaced at call time with the corresponding tool argument value
+            (URL-encoded). Arguments consumed as path parameters are excluded
+            from the query string and request body.
+        mcp:
+          type: object
+          description: MCP server config (url, headers)
+        actions:
+          type: array
+          items:
+            type: string
+          description: SOAT platform actions
+        preset_parameters:
+          type: object
+          description: >-
+            Fixed parameters merged into every soat tool call. Keys matching
+            fields in the action's input schema are removed from the schema
+            shown to the model and injected automatically at execution time.
+
+    UpdateToolRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum:
+            - http
+            - client
+            - mcp
+            - soat
+        description:
+          type: string
+          nullable: true
+        parameters:
+          type: object
+          nullable: true
+        execute:
+          type: object
+          nullable: true
+          description: >
+            Execution config for http tools. Supported fields: `url` (required),
+            `method` (default `POST`), and `headers`. The `url` may contain
+            `{paramName}` placeholders (e.g. `/users/{userId}`) that are
+            replaced at call time with the corresponding tool argument value
+            (URL-encoded). Arguments consumed as path parameters are excluded
+            from the query string and request body.
+        mcp:
+          type: object
+          nullable: true
+        actions:
+          type: array
+          nullable: true
+          items:
+            type: string
+        preset_parameters:
+          type: object
+          nullable: true
+          description: >-
+            Fixed parameters merged into every soat tool call. Keys matching
+            fields in the action's input schema are removed from the schema
+            shown to the model and injected automatically at execution time.
+
+    CallToolRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          description: >
+            For `soat` tools: the action name (must be in the tool's `actions`
+            list). For `mcp` tools: the MCP tool name to invoke. Ignored for
+            `http` tools.
+        input:
+          type: object
+          description: >
+            Input parameters for the tool call. These are merged with the
+            tool's `preset_parameters` before execution (caller-supplied values
+            take precedence).
+          additionalProperties: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string

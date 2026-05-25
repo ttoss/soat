@@ -2,7 +2,7 @@ import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import * as actorsModule from 'src/lib/actors';
 import * as agentsModule from 'src/lib/agents';
-import * as agentToolsCrudModule from 'src/lib/agentToolsCrud';
+import * as toolsModule from 'src/lib/tools';
 import * as aiProvidersModule from 'src/lib/aiProviders';
 import * as documentsModule from 'src/lib/documents';
 import * as helpersModule from 'src/lib/formationsHelpers';
@@ -33,9 +33,9 @@ const mockDeleteActor = jest.spyOn(actorsModule, 'deleteActor');
 const mockCreateAgent = jest.spyOn(agentsModule, 'createAgent');
 const mockUpdateAgent = jest.spyOn(agentsModule, 'updateAgent');
 const mockDeleteAgent = jest.spyOn(agentsModule, 'deleteAgent');
-const mockCreateAgentTool = jest.spyOn(agentToolsCrudModule, 'createAgentTool');
-const mockDeleteAgentTool = jest.spyOn(agentToolsCrudModule, 'deleteAgentTool');
-const mockUpdateAgentTool = jest.spyOn(agentToolsCrudModule, 'updateAgentTool');
+const mockCreateTool = jest.spyOn(toolsModule, 'createTool');
+const mockDeleteTool = jest.spyOn(toolsModule, 'deleteTool');
+const mockUpdateTool = jest.spyOn(toolsModule, 'updateTool');
 const mockCreateAiProvider = jest.spyOn(aiProvidersModule, 'createAiProvider');
 const mockDeleteAiProvider = jest.spyOn(aiProvidersModule, 'deleteAiProvider');
 const mockUpdateAiProvider = jest.spyOn(aiProvidersModule, 'updateAiProvider');
@@ -67,9 +67,9 @@ describe('formationsResourceHandlers', () => {
       mockCreateAiProvider.mockResolvedValueOnce({
         id: 'aip_1',
       } as Awaited<ReturnType<typeof aiProvidersModule.createAiProvider>>);
-      mockCreateAgentTool.mockResolvedValueOnce({
+      mockCreateTool.mockResolvedValueOnce({
         id: 'at_1',
-      } as Awaited<ReturnType<typeof agentToolsCrudModule.createAgentTool>>);
+      } as Awaited<ReturnType<typeof toolsModule.createTool>>);
       mockResolveActorLinkedIds.mockResolvedValueOnce({
         agentId: 10,
         memoryId: 9,
@@ -111,7 +111,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyCreateResource({
-          resourceType: 'agent_tool',
+          resourceType: 'tool',
           projectId: 1,
           resolvedProperties: {
             type: 'http',
@@ -225,7 +225,7 @@ describe('formationsResourceHandlers', () => {
         baseUrl: 'https://api.example.com',
         config: { region: 'us' },
       });
-      expect(mockCreateAgentTool).toHaveBeenCalledWith({
+      expect(mockCreateTool).toHaveBeenCalledWith({
         projectId: 1,
         type: 'http',
         name: 'Search',
@@ -361,9 +361,9 @@ describe('formationsResourceHandlers', () => {
       mockUpdateActor.mockResolvedValueOnce({
         id: 'act_1',
       } as Awaited<ReturnType<typeof actorsModule.updateActor>>);
-      mockUpdateAgentTool.mockResolvedValue(
+      mockUpdateTool.mockResolvedValue(
         undefined as unknown as Awaited<
-          ReturnType<typeof agentToolsCrudModule.updateAgentTool>
+          ReturnType<typeof toolsModule.updateTool>
         >
       );
       mockUpdateAgent.mockResolvedValue(
@@ -402,7 +402,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
-          resourceType: 'agent_tool',
+          resourceType: 'tool',
           physicalResourceId: 'at_1',
           resolvedProperties: {
             name: 'Search Updated',
@@ -504,7 +504,7 @@ describe('formationsResourceHandlers', () => {
         baseUrl: null,
         config: null,
       });
-      expect(mockUpdateAgentTool).toHaveBeenCalledWith({
+      expect(mockUpdateTool).toHaveBeenCalledWith({
         id: 'at_1',
         name: 'Search Updated',
         description: null,
@@ -604,7 +604,7 @@ describe('formationsResourceHandlers', () => {
   describe('applyDeleteResource', () => {
     test.each([
       ['ai_provider', mockDeleteAiProvider],
-      ['agent_tool', mockDeleteAgentTool],
+      ['tool', mockDeleteTool],
       ['agent', mockDeleteAgent],
       ['actor', mockDeleteActor],
       ['document', mockDeleteDocument],
@@ -616,7 +616,7 @@ describe('formationsResourceHandlers', () => {
       async (resourceType, spy) => {
         mockDeleteActor.mockResolvedValue(undefined);
         mockDeleteAgent.mockResolvedValue(undefined);
-        mockDeleteAgentTool.mockResolvedValue(undefined);
+        mockDeleteTool.mockResolvedValue(undefined);
 
         await applyDeleteResource({
           resourceType,

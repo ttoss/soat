@@ -377,28 +377,28 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/policies/attach-user" \
 
 ## Step 6 — Create soat tools
 
-Create three [agent tools](/docs/modules/agents#agent-tool). Notice the third tool — `docs-write` — has `preset_parameters` containing the public document's ID. The key uses **camelCase** (`documentId`) because soat tool schemas use camelCase property names internally. The model will never see the `documentId` field; it will be injected automatically at call time.
+Create three [tools](/docs/modules/tools). Notice the third tool — `docs-write` — has `preset_parameters` containing the public document's ID. The key uses **camelCase** (`documentId`) because soat tool schemas use camelCase property names internally. The model will never see the `documentId` field; it will be injected automatically at call time.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
 # Tool 1 — list documents
-LIST_TOOL_ID=$(soat create-agent-tool \
+LIST_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "docs" \
   --type soat \
   --actions '["list-documents"]' | jq -r '.id')
 
 # Tool 2 — read any document (model supplies document_id)
-READ_TOOL_ID=$(soat create-agent-tool \
+READ_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "docs" \
   --type soat \
   --actions '["get-document"]' | jq -r '.id')
 
 # Tool 3 — update the public document (document_id is preset)
-WRITE_TOOL_ID=$(soat create-agent-tool \
+WRITE_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "docs" \
   --type soat \
@@ -414,7 +414,7 @@ echo "Write: $WRITE_TOOL_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: listTool } = await adminSoat.agents.createAgentTool({
+const { data: listTool } = await adminSoat.tools.createTool({
   body: {
     project_id: projectId,
     name: 'docs',
@@ -423,7 +423,7 @@ const { data: listTool } = await adminSoat.agents.createAgentTool({
   },
 });
 
-const { data: readTool } = await adminSoat.agents.createAgentTool({
+const { data: readTool } = await adminSoat.tools.createTool({
   body: {
     project_id: projectId,
     name: 'docs',
@@ -433,7 +433,7 @@ const { data: readTool } = await adminSoat.agents.createAgentTool({
 });
 
 // document_id is preset — the model never sees this parameter
-const { data: writeTool } = await adminSoat.agents.createAgentTool({
+const { data: writeTool } = await adminSoat.tools.createTool({
   body: {
     project_id: projectId,
     name: 'docs',
@@ -715,6 +715,52 @@ curl -s "$SOAT_BASE_URL/api/v1/documents/$PRIVATE_DOC_ID" \
 </Tabs>
 
 The private document is inaccessible. If you asked the agent to update the private note, it would receive a 403 when trying to call `docs_get-document` with the private document's ID, and would report back that it is not permitted.
+
+---
+
+## Step 10 — Call a tool directly via REST
+
+You can invoke any non-client tool directly without creating an agent or a generation — useful for testing tool configurations, building custom pipelines, or integrating tool execution into your own code.
+
+The `list-documents` SOAT tool you created in step 6 already has `project_id` preset, so no extra parameters are needed in the request body.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat call-tool \
+  --tool-id "$LIST_TOOL_ID" \
+  --action "list-documents"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: result } = await aliceSoat.tools.callTool({
+  params: { path: { tool_id: listToolId } },
+  body: {
+    action: 'list-documents',
+  },
+});
+
+console.log(result);
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s -X POST "$SOAT_BASE_URL/api/v1/tools/$LIST_TOOL_ID/call" \
+  -H "Authorization: Bearer $ALICE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"action": "list-documents"}'
+```
+
+</TabItem>
+</Tabs>
+
+The server merges `preset_parameters` into the call before dispatching — alice's IAM policy is still enforced. For `http` tools, omit the `action` field and pass parameters in `input`. For `mcp` tools, set `action` to the MCP tool name.
 
 ---
 
