@@ -57,6 +57,9 @@ export class FormationResource extends Model {
   @Column({ type: DataType.STRING, allowNull: false, defaultValue: 'pending' })
   declare status: string;
 
+  @Column({ type: DataType.STRING, allowNull: false, defaultValue: 'delete' })
+  declare deletionPolicy: string;
+
   @Column({ type: DataType.JSONB, allowNull: true })
   declare lastAppliedProperties: Record<string, unknown> | null;
 

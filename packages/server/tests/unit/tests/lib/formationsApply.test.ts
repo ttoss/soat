@@ -16,6 +16,7 @@ const buildResource = (args: {
   logicalId: string;
   resourceType: string;
   physicalResourceId: string | null;
+  deletionPolicy?: string;
 }) => {
   return db.FormationResource.build({
     publicId: `afr_${args.logicalId}`,
@@ -24,6 +25,7 @@ const buildResource = (args: {
     resourceType: args.resourceType,
     physicalResourceId: args.physicalResourceId,
     status: 'active',
+    deletionPolicy: args.deletionPolicy ?? 'delete',
   });
 };
 
@@ -126,6 +128,29 @@ describe('formationsApply', () => {
     ).toEqual(['succeeded', 'failed']);
   });
 
+  test('performResourceDeletions skips physical deletion for retain resources', async () => {
+    const retained = buildResource({
+      logicalId: 'keep',
+      resourceType: 'memory',
+      physicalResourceId: 'mem_1',
+      deletionPolicy: 'retain',
+    });
+
+    const retainedUpdate = jest
+      .spyOn(retained, 'update')
+      .mockResolvedValue(retained);
+    const applyDeleteSpy = jest.spyOn(resourceHandlers, 'applyDeleteResource');
+
+    const result = await performResourceDeletions([retained]);
+
+    expect(applyDeleteSpy).not.toHaveBeenCalled();
+    expect(retainedUpdate).toHaveBeenCalledWith({ status: 'deleted' });
+    expect(result.hasError).toBe(false);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].status).toBe('succeeded');
+    expect(result.events[0].physicalResourceId).toBe('mem_1');
+  });
+
   test('handleOrphanedDeletes records delete success and failure events', async () => {
     const retained = buildResource({
       logicalId: 'keep',
@@ -170,6 +195,32 @@ describe('formationsApply', () => {
         return event.status;
       })
     ).toEqual(['succeeded', 'failed']);
+  });
+
+  test('handleOrphanedDeletes skips physical deletion for retain resources', async () => {
+    const retainedOrphan = buildResource({
+      logicalId: 'orphan',
+      resourceType: 'memory',
+      physicalResourceId: 'mem_1',
+      deletionPolicy: 'retain',
+    });
+    const retainedOrphanUpdate = jest
+      .spyOn(retainedOrphan, 'update')
+      .mockResolvedValue(retainedOrphan);
+    const applyDeleteSpy = jest.spyOn(resourceHandlers, 'applyDeleteResource');
+    const events: FormationEvent[] = [];
+
+    await handleOrphanedDeletes({
+      template: { resources: {} },
+      existingResources: [retainedOrphan],
+      events,
+    });
+
+    expect(applyDeleteSpy).not.toHaveBeenCalled();
+    expect(retainedOrphanUpdate).toHaveBeenCalledWith({ status: 'deleted' });
+    expect(events).toHaveLength(1);
+    expect(events[0].status).toBe('succeeded');
+    expect(events[0].physicalResourceId).toBe('mem_1');
   });
 
   test('processResourceChange marks resource as failed when create handler throws', async () => {

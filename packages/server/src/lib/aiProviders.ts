@@ -1,5 +1,6 @@
 import type { AiProviderSlug } from '@soat/postgresdb';
 import { db } from 'src/db';
+import { DomainError } from 'src/errors';
 import { decryptValue } from 'src/lib/secrets';
 
 const getAiProviderIncludes = () => {
@@ -111,7 +112,18 @@ export const deleteAiProvider = async (args: {
   });
   if (!instance) return null;
 
-  // TODO: add cascade check against chats when that module is implemented
+  const chatCount = await db.Chat.count({
+    where: { aiProviderId: instance.id },
+  });
+
+  if (chatCount > 0) {
+    throw new DomainError(
+      'AI_PROVIDER_HAS_DEPENDENTS',
+      `AI provider '${args.id}' is referenced by ${chatCount} chat(s) and cannot be deleted. Delete the dependent chats first.`,
+      { chatCount }
+    );
+  }
+
   await instance.destroy();
   return 'deleted' as const;
 };
