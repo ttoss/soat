@@ -9,11 +9,13 @@ import {
 import {
   buildDependencyGraph,
   buildResolvedParamsMap,
+  isRefAttr,
   resolveParamExpressions,
   resolveRefs,
   topologicalSort,
 } from './formationsHelpers';
 import { applyDeleteResource } from './formationsResourceHandlers';
+import { getFormationModule } from './formationsRegistry';
 import type {
   FormationEvent,
   FormationTemplate,
@@ -22,16 +24,33 @@ import type {
 
 const log = createDebug('soat:formations');
 
-export const resolveFormationOutputs = (
+export const resolveFormationOutputs = async (
   template: FormationTemplate,
   resolvedIds: Map<string, string>
-): Record<string, string> => {
+): Promise<Record<string, string>> => {
   const outputs: Record<string, string> = {};
   if (!template.outputs) return outputs;
   for (const [outputName, outputValue] of Object.entries(template.outputs)) {
     try {
-      const resolved = resolveRefs(outputValue, resolvedIds);
-      if (typeof resolved === 'string') outputs[outputName] = resolved;
+      if (isRefAttr(outputValue)) {
+        const dotIndex = outputValue.ref_attr.indexOf('.');
+        if (dotIndex === -1) continue;
+        const logicalId = outputValue.ref_attr.slice(0, dotIndex);
+        const attrName = outputValue.ref_attr.slice(dotIndex + 1);
+        const physicalId = resolvedIds.get(logicalId);
+        if (physicalId === undefined) continue;
+        const resourceType = template.resources[logicalId]?.type;
+        if (!resourceType) continue;
+        const mod = getFormationModule({ resourceType });
+        if (!mod?.getAttributes) continue;
+        const attrs = await mod.getAttributes({ physicalResourceId: physicalId });
+        if (typeof attrs[attrName] === 'string') {
+          outputs[outputName] = attrs[attrName];
+        }
+      } else {
+        const resolved = resolveRefs(outputValue, resolvedIds);
+        if (typeof resolved === 'string') outputs[outputName] = resolved;
+      }
     } catch {
       // Skip unresolvable outputs
     }
@@ -243,7 +262,7 @@ export const applyFormationTemplate = async (args: {
     events,
   });
 
-  const outputs = resolveFormationOutputs(workingTemplate, resolvedIds);
+  const outputs = await resolveFormationOutputs(workingTemplate, resolvedIds);
   await operation.update({ status: 'succeeded', events });
   await formation.update({ status: 'active', outputs, template });
   log('applyFormationTemplate: succeeded formationId=%s', formation.publicId);

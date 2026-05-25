@@ -32,7 +32,7 @@ describe('formationsApply', () => {
     jest.restoreAllMocks();
   });
 
-  test('resolveFormationOutputs resolves valid refs and skips unresolvable values', () => {
+  test('resolveFormationOutputs resolves valid refs and skips unresolvable values', async () => {
     const template: FormationTemplate = {
       resources: {},
       outputs: {
@@ -43,10 +43,31 @@ describe('formationsApply', () => {
     };
     const resolvedIds = new Map<string, string>([['provider', 'aip_1']]);
 
-    expect(resolveFormationOutputs(template, resolvedIds)).toEqual({
+    await expect(resolveFormationOutputs(template, resolvedIds)).resolves.toEqual({
       providerId: 'aip_1',
       greeting: 'hello',
     });
+  });
+
+  test('resolveFormationOutputs resolves ref_attr expressions using getAttributes', async () => {
+    const template: FormationTemplate = {
+      resources: {
+        MyWebhook: { type: 'webhook', properties: { name: 'hook', url: 'https://example.com', events: ['*'] } },
+      },
+      outputs: {
+        webhookSecret: { ref_attr: 'MyWebhook.secret' },
+        unknownResource: { ref_attr: 'Unknown.secret' },
+        noDot: { ref_attr: 'nodothere' } as unknown as { ref_attr: string },
+      },
+    };
+    const resolvedIds = new Map<string, string>([['MyWebhook', 'whk_1']]);
+
+    // getWebhookSecret returns null for a non-existent webhook, so webhookSecret is skipped
+    const result = await resolveFormationOutputs(template, resolvedIds);
+    // The ref_attr for an unknown resource should be skipped (physicalId not in resolvedIds)
+    expect(result.unknownResource).toBeUndefined();
+    // noDot ref_attr expression (no '.' separator) should be skipped
+    expect(result.noDot).toBeUndefined();
   });
 
   test('buildDeleteOrder reverses dependency order and appends unknown resources', () => {

@@ -10,6 +10,7 @@ import {
   createWebhook,
   deleteWebhook,
   getWebhook,
+  getWebhookSecret,
   updateWebhook,
 } from '../webhooks';
 import {
@@ -161,5 +162,12 @@ export const webhooksFormationModule: FormationModule = {
     } catch {
       return null;
     }
+  },
+
+  getAttributes: async ({ physicalResourceId }) => {
+    const result = await getWebhookSecret({ id: physicalResourceId });
+    const attrs: Record<string, string> = {};
+    if (result) attrs.secret = result.secret;
+    return attrs;
   },
 };

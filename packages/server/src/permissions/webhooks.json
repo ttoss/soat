@@ -32,6 +32,11 @@
       "description": "Rotate the signing secret for a webhook"
     },
     {
+      "operationId": "getWebhookSecret",
+      "action": "webhooks:GetWebhookSecret",
+      "description": "Retrieve the signing secret for a webhook"
+    },
+    {
       "operationId": "listWebhookDeliveries",
       "action": "webhooks:ListWebhookDeliveries",
       "description": "List delivery attempts for a webhook"

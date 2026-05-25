@@ -454,6 +454,71 @@ describe('validateFormationTemplate', () => {
     ).toBe(true);
   });
 
+  test('returns valid for a ref_attr output referencing a known resource', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyWebhook: {
+          type: 'webhook',
+          properties: {
+            name: 'hook',
+            url: 'https://example.com',
+            events: ['*'],
+          },
+        },
+      },
+      outputs: { webhookSecret: { ref_attr: 'MyWebhook.secret' } },
+    });
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  test('returns invalid when ref_attr references an unknown resource', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyWebhook: {
+          type: 'webhook',
+          properties: {
+            name: 'hook',
+            url: 'https://example.com',
+            events: ['*'],
+          },
+        },
+      },
+      outputs: { webhookSecret: { ref_attr: 'NonExistent.secret' } },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return (
+          e.path.startsWith('outputs') &&
+          e.message.includes("'NonExistent'")
+        );
+      })
+    ).toBe(true);
+  });
+
+  test('returns invalid when ref_attr has no dot separator', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyWebhook: {
+          type: 'webhook',
+          properties: {
+            name: 'hook',
+            url: 'https://example.com',
+            events: ['*'],
+          },
+        },
+      },
+      outputs: { webhookSecret: { ref_attr: 'nodothere' } },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return e.path.startsWith('outputs') && e.message.includes('ref_attr');
+      })
+    ).toBe(true);
+  });
+
   test('skips outputs validation when outputs is not a plain object', () => {
     // outputs as array → getOutputsObject returns null → no output errors
     const result = validateFormationTemplate({

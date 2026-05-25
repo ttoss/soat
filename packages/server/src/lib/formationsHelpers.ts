@@ -3,6 +3,7 @@ import { db } from 'src/db';
 import type {
   FormationTemplate,
   ParamExpression,
+  RefAttrExpression,
   RefExpression,
   SubExpression,
 } from './formationsTypes';
@@ -53,6 +54,28 @@ export const resolveRefs = (
     return result;
   }
   return value;
+};
+
+export const isRefAttr = (value: unknown): value is RefAttrExpression => {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.keys(value).length === 1 &&
+    'ref_attr' in value &&
+    typeof (value as Record<string, unknown>).ref_attr === 'string'
+  );
+};
+
+export const collectRefAttrs = (value: unknown): string[] => {
+  if (isRefAttr(value)) return [value.ref_attr];
+  if (Array.isArray(value)) return value.flatMap(collectRefAttrs);
+  if (typeof value === 'object' && value !== null) {
+    return Object.values(value as Record<string, unknown>).flatMap(
+      collectRefAttrs
+    );
+  }
+  return [];
 };
 
 // ── Param Utilities ───────────────────────────────────────────────────────

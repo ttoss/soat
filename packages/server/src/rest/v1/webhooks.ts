@@ -6,6 +6,7 @@ import {
   deleteWebhook,
   getWebhook,
   getWebhookDelivery,
+  getWebhookSecret,
   listWebhookDeliveries,
   listWebhooks,
   rotateWebhookSecret,
@@ -316,6 +317,37 @@ webhooksRouter.get(
     }
 
     ctx.body = delivery;
+  }
+);
+
+webhooksRouter.get(
+  '/projects/:project_id/webhooks/:webhook_id/secret',
+  async (ctx: Context) => {
+    if (!ctx.authUser) {
+      ctx.status = 401;
+      ctx.body = { error: 'Unauthorized' };
+      return;
+    }
+
+    const allowed = await ctx.authUser.isAllowed({
+      projectPublicId: ctx.params.project_id,
+      action: 'webhooks:GetWebhookSecret',
+    });
+    if (!allowed) {
+      ctx.status = 403;
+      ctx.body = { error: 'Forbidden' };
+      return;
+    }
+
+    const webhook = await getWebhook({ id: ctx.params.webhook_id });
+    if (!webhook || webhook.projectId !== ctx.params.project_id) {
+      ctx.status = 404;
+      ctx.body = { error: 'Webhook not found' };
+      return;
+    }
+
+    const result = await getWebhookSecret({ id: ctx.params.webhook_id });
+    ctx.body = result;
   }
 );
 

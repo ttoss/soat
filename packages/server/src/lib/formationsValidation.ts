@@ -3,6 +3,7 @@ import yaml from 'js-yaml';
 import {
   buildDependencyGraph,
   collectParamRefs,
+  collectRefAttrs,
   collectRefs,
   topologicalSort,
 } from './formationsHelpers';
@@ -203,6 +204,23 @@ const validateOutputRefs = (
         errors.push({
           path: `outputs.${outputName}`,
           message: `Referenced resource '${ref}' does not exist in template`,
+        });
+      }
+    }
+    for (const refAttr of collectRefAttrs(outputValue)) {
+      const dotIndex = refAttr.indexOf('.');
+      if (dotIndex === -1) {
+        errors.push({
+          path: `outputs.${outputName}`,
+          message: `ref_attr '${refAttr}' must be in the form '<ResourceName>.<attribute>'`,
+        });
+        continue;
+      }
+      const logicalId = refAttr.slice(0, dotIndex);
+      if (!logicalIds.has(logicalId)) {
+        errors.push({
+          path: `outputs.${outputName}`,
+          message: `Referenced resource '${logicalId}' does not exist in template`,
         });
       }
     }
