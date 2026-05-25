@@ -3,7 +3,9 @@ import yaml from 'js-yaml';
 import {
   buildDependencyGraph,
   collectParamRefs,
+  collectRefAttrs,
   collectRefs,
+  parseRefAttr,
   topologicalSort,
 } from './formationsHelpers';
 import { getFormationModule } from './formationsRegistry';
@@ -212,6 +214,22 @@ const validateOutputRefs = (
         errors.push({
           path: `outputs.${outputName}`,
           message: `Referenced resource '${ref}' does not exist in template`,
+        });
+      }
+    }
+    for (const refAttr of collectRefAttrs(outputValue)) {
+      const parsed = parseRefAttr(refAttr);
+      if (!parsed) {
+        errors.push({
+          path: `outputs.${outputName}`,
+          message: `ref_attr '${refAttr}' must be in the form '<ResourceName>.<attribute>'`,
+        });
+        continue;
+      }
+      if (!logicalIds.has(parsed.logicalId)) {
+        errors.push({
+          path: `outputs.${outputName}`,
+          message: `Referenced resource '${parsed.logicalId}' does not exist in template`,
         });
       }
     }

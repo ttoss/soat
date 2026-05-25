@@ -37,7 +37,9 @@ Deliveries are retried up to three times. Each attempt and its outcome are recor
 
 ### Secret and Signature Verification
 
-Every webhook has a secret generated at creation time. To verify a delivery, compute the HMAC-SHA256 of the raw request body using the secret and compare it to the `X-Soat-Signature` header:
+Every webhook has a secret generated at creation time. The secret is returned in the response body when a webhook is created or when the secret is rotated. You can also retrieve it explicitly at any time using the `GET /api/v1/projects/{project_id}/webhooks/{webhook_id}/secret` endpoint (requires the `webhooks:GetWebhookSecret` permission).
+
+To verify a delivery, compute the HMAC-SHA256 of the raw request body using the secret and compare it to the `X-Soat-Signature` header:
 
 ```js
 const crypto = require('crypto');
@@ -142,3 +144,28 @@ curl -X POST https://api.example.com/api/v1/projects/proj_ABC/webhooks \
 
 </TabItem>
 </Tabs>
+
+## Formation Support
+
+Webhooks can be created as part of a [Formation](./formations.md). The webhook secret can be captured as a formation output using a `ref_attr` expression:
+
+```json
+{
+  "resources": {
+    "MyWebhook": {
+      "type": "webhook",
+      "properties": {
+        "name": "my-hook",
+        "url": "https://example.com/hook",
+        "events": ["*"]
+      }
+    }
+  },
+  "outputs": {
+    "webhookId": { "ref": "MyWebhook" },
+    "webhookSecret": { "ref_attr": "MyWebhook.secret" }
+  }
+}
+```
+
+The `ref_attr` expression resolves `<ResourceName>.<attribute>` where `attribute` is `secret` for webhooks. This lets you pass the signing secret to other resources or inspect it after deployment without calling the API separately.

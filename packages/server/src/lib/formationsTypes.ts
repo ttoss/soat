@@ -2,6 +2,8 @@
 
 export type RefExpression = { ref: string };
 
+export type RefAttrExpression = { ref_attr: string };
+
 export type ParamExpression = { param: string };
 
 export type SubExpression = { sub: string };
@@ -70,6 +72,13 @@ export type FormationModule = {
   sanitizeLastAppliedProperties?: (
     properties: Record<string, unknown>
   ) => Record<string, unknown>;
+  /**
+   * Return named attributes for a resource beyond its physical resource ID.
+   * Used to resolve `ref_attr` expressions in formation outputs.
+   */
+  getAttributes?: (args: {
+    physicalResourceId: string;
+  }) => Promise<Record<string, string>>;
 };
 
 export type PlanChange = {
