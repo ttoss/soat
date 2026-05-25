@@ -1000,6 +1000,17 @@ components:
             type: string
           description: Explicit dependency list. In addition to implicit `ref` dependencies.
           nullable: true
+        deletion_policy:
+          type: string
+          enum:
+            - delete
+            - retain
+          description: >
+            Controls what happens to the physical resource when it is removed
+            from the stack. `delete` (default) deletes the physical resource.
+            `retain` keeps the physical resource alive and only removes the
+            formation record.
+          nullable: true
         metadata:
           type: object
           additionalProperties: true

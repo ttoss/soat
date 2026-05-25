@@ -437,6 +437,54 @@ describe('validateFormationTemplate', () => {
     expect(result.errors).toHaveLength(0);
   });
 
+  // ── deletion_policy ────────────────────────────────────────────────────
+
+  test('returns invalid when deletion_policy is an unsupported value', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyMemory: {
+          type: 'memory',
+          properties: { name: 'test' },
+          deletion_policy: 'snapshot',
+        },
+      },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return e.path.endsWith('.deletion_policy');
+      })
+    ).toBe(true);
+  });
+
+  test('accepts deletion_policy: delete', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyMemory: {
+          type: 'memory',
+          properties: { name: 'test' },
+          deletion_policy: 'delete',
+        },
+      },
+    });
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  test('accepts deletion_policy: retain', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyMemory: {
+          type: 'memory',
+          properties: { name: 'test' },
+          deletion_policy: 'retain',
+        },
+      },
+    });
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
   // ── outputs ────────────────────────────────────────────────────────────
 
   test('returns invalid when outputs reference an unknown resource', () => {
