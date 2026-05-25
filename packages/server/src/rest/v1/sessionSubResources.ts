@@ -17,6 +17,16 @@ const resolveAgent = async (agentPublicId: string) => {
 
 type AgentModel = Awaited<ReturnType<typeof resolveAgent>>;
 
+/**
+ * Resolves the agent for the current request and verifies the authenticated
+ * user has access to it.
+ *
+ * Throws `DomainError` with codes:
+ *  - `UNAUTHORIZED`       – no authenticated user
+ *  - `FORBIDDEN`          – user has no project access or agent belongs to a
+ *                           project the user cannot access
+ *  - `RESOURCE_NOT_FOUND` – agent does not exist
+ */
 const checkAgentAccess = async (
   ctx: Context,
   action: string
