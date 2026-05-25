@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.5.7](https://github.com/ttoss/soat/compare/v0.5.6...v0.5.7) (2026-05-25)
+
+### Bug Fixes
+
+* agents bugs ([#95](https://github.com/ttoss/soat/issues/95)) ([1084467](https://github.com/ttoss/soat/commit/108446771a5e1b279f00610ea070d8a15b2ee6ef))
+* exclude deleted formations from list and allow name reuse after deletion ([#93](https://github.com/ttoss/soat/issues/93)) ([cdd33ec](https://github.com/ttoss/soat/commit/cdd33ecdd1c1e4dc53cf8ea263a90a4e3500d9ff))
+* formations ([#94](https://github.com/ttoss/soat/issues/94)) ([c4cee1f](https://github.com/ttoss/soat/commit/c4cee1f2ece14fd21d559f1ef55d506e01f88ae6))
+* secrets and formation ([c3687f8](https://github.com/ttoss/soat/commit/c3687f88336b9672d2e2dc33ea623e763cefc798))
+
 ## [0.5.6](https://github.com/ttoss/soat/compare/v0.5.5...v0.5.6) (2026-05-18)
 
 ### Bug Fixes
