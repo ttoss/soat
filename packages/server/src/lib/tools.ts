@@ -265,7 +265,9 @@ export const callTool = async (args: {
       rawArgs: mergedInput,
       base: `http://localhost:${process.env.PORT ?? 5047}`,
       authHeader: args.authHeader,
-      buildContextHeaders: () => ({}),
+      buildContextHeaders: () => {
+        return {};
+      },
       logToolCallingError: noopLogToolCallingError,
     });
   }

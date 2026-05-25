@@ -1,6 +1,5 @@
 import createDebug from 'debug';
 
-import { createTool, deleteTool, getTool, updateTool } from '../tools';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
   toNullableArray,
@@ -8,6 +7,7 @@ import {
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
+import { createTool, deleteTool, getTool, updateTool } from '../tools';
 import {
   isObjectRecord,
   loadModuleSpec,
