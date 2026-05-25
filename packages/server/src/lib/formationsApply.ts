@@ -51,6 +51,18 @@ export const handleOrphanedDeletes = async (args: {
   });
   for (const resource of toDelete) {
     try {
+      if (resource.deletionPolicy === 'retain') {
+        await resource.update({ status: 'deleted' });
+        events.push({
+          timestamp: new Date().toISOString(),
+          logicalId: resource.logicalId,
+          resourceType: resource.resourceType,
+          action: 'delete',
+          status: 'succeeded',
+          physicalResourceId: resource.physicalResourceId ?? undefined,
+        });
+        continue;
+      }
       await applyDeleteResource({
         resourceType: resource.resourceType,
         physicalResourceId: resource.physicalResourceId!,
@@ -104,6 +116,8 @@ export const processResourceChange = async (args: {
   ) as Record<string, unknown>;
   log('processResourceChange: logicalId=%s type=%s', logicalId, decl.type);
 
+  const deletionPolicy = decl.deletion_policy ?? 'delete';
+
   let resourceRow: ResourceRow;
   if (!existing) {
     resourceRow = await db.FormationResource.create({
@@ -113,8 +127,12 @@ export const processResourceChange = async (args: {
       status: 'pending',
       physicalResourceId: null,
       lastAppliedProperties: null,
+      deletionPolicy,
     });
   } else {
+    if (existing.deletionPolicy !== deletionPolicy) {
+      await existing.update({ deletionPolicy });
+    }
     resourceRow = existing;
   }
 
@@ -287,6 +305,18 @@ export const performResourceDeletions = async (
   for (const resource of orderedResources) {
     if (!resource.physicalResourceId) continue;
     try {
+      if (resource.deletionPolicy === 'retain') {
+        await resource.update({ status: 'deleted' });
+        events.push({
+          timestamp: new Date().toISOString(),
+          logicalId: resource.logicalId,
+          resourceType: resource.resourceType,
+          action: 'delete',
+          status: 'succeeded',
+          physicalResourceId: resource.physicalResourceId,
+        });
+        continue;
+      }
       await applyDeleteResource({
         resourceType: resource.resourceType,
         physicalResourceId: resource.physicalResourceId,

@@ -186,6 +186,15 @@ const validateResourceDeclaration = (args: {
     );
   }
 
+  if (decl.deletion_policy !== undefined) {
+    if (!['delete', 'retain'].includes(decl.deletion_policy as string)) {
+      errors.push({
+        path: `${basePath}.deletion_policy`,
+        message: '`deletion_policy` must be one of: delete, retain',
+      });
+    }
+  }
+
   return errors;
 };
 
