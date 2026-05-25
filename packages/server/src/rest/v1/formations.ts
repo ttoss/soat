@@ -41,7 +41,7 @@ const buildMissingParamsError = (
     details: missing.map((name) => {
       return {
         path: `parameters.${name}`,
-        message: `Parameter '${name}' is required but was not provided`,
+        message: `Parameter '${name}' is required and cannot be empty`,
       };
     }),
   };

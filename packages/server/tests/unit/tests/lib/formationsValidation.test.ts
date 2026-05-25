@@ -1,8 +1,98 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { getMissingParams } from 'src/lib/formationsHelpers';
 import {
   parseFormationTemplateInput,
   validateFormationTemplate,
 } from 'src/lib/formationsValidation';
+
+// ── getMissingParams ───────────────────────────────────────────────────────
+
+describe('getMissingParams', () => {
+  const templateWithRequiredParams = {
+    parameters: {
+      ApiKey: { type: 'string' },
+      ToolUrl: { type: 'string' },
+    },
+    resources: {
+      ParamSecret: {
+        type: 'secret',
+        properties: { name: 'test', value: { param: 'ApiKey' } },
+      },
+      ParamMemory: {
+        type: 'memory',
+        properties: {
+          name: { sub: '${ToolUrl}-memory' },
+        },
+      },
+    },
+  };
+
+  test('returns empty array when all required params are provided', () => {
+    const result = getMissingParams(templateWithRequiredParams, {
+      ApiKey: 'secret-key',
+      ToolUrl: 'https://api.example.com',
+    });
+    expect(result).toEqual([]);
+  });
+
+  test('returns missing param names when no params provided', () => {
+    const result = getMissingParams(templateWithRequiredParams, undefined);
+    expect(result).toContain('ApiKey');
+    expect(result).toContain('ToolUrl');
+  });
+
+  test('returns param name when provided value is empty string', () => {
+    const result = getMissingParams(templateWithRequiredParams, {
+      ApiKey: '',
+      ToolUrl: 'https://api.example.com',
+    });
+    expect(result).toContain('ApiKey');
+    expect(result).not.toContain('ToolUrl');
+  });
+
+  test('returns all params when all provided values are empty strings', () => {
+    const result = getMissingParams(templateWithRequiredParams, {
+      ApiKey: '',
+      ToolUrl: '',
+    });
+    expect(result).toContain('ApiKey');
+    expect(result).toContain('ToolUrl');
+  });
+
+  test('returns empty array when param has a default and no override provided', () => {
+    const templateWithDefault = {
+      parameters: {
+        MemName: { type: 'string', default: 'default-memory' },
+      },
+      resources: {
+        Mem: {
+          type: 'memory',
+          properties: { name: { param: 'MemName' } },
+        },
+      },
+    };
+    const result = getMissingParams(templateWithDefault, undefined);
+    expect(result).toEqual([]);
+  });
+
+  test('does not treat an empty-string default as missing', () => {
+    const templateWithEmptyDefault = {
+      parameters: {
+        OptionalParam: { type: 'string', default: '' },
+      },
+      resources: {
+        Mem: {
+          type: 'memory',
+          properties: { name: { param: 'OptionalParam' } },
+        },
+      },
+    };
+    const result = getMissingParams(templateWithEmptyDefault, undefined);
+    expect(result).toEqual([]);
+  });
+});
+
+
 
 // ── parseFormationTemplateInput ────────────────────────────────────────────
 
