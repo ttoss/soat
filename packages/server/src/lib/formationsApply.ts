@@ -130,7 +130,7 @@ export const processResourceChange = async (args: {
       deletionPolicy,
     });
   } else {
-    if (existing.deletionPolicy !== deletionPolicy) {
+    if ((existing.deletionPolicy ?? 'delete') !== deletionPolicy) {
       await existing.update({ deletionPolicy });
     }
     resourceRow = existing;
