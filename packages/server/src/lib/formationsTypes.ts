@@ -20,6 +20,7 @@ export type ResourceDeclaration = {
   properties: Record<string, unknown>;
   depends_on?: string[];
   metadata?: Record<string, unknown>;
+  deletion_policy?: 'delete' | 'retain';
 };
 
 export type FormationTemplate = {
