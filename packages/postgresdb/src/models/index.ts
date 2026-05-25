@@ -1,6 +1,5 @@
 export { Actor } from './Actor';
 export { Agent } from './Agent';
-export { Tool } from './Tool';
 export { AiProvider } from './AiProvider';
 export { ApiKey } from './ApiKey';
 export { Chat } from './Chat';
@@ -18,6 +17,7 @@ export { Policy } from './Policy';
 export { Project } from './Project';
 export { Secret } from './Secret';
 export { Session } from './Session';
+export { Tool } from './Tool';
 export { Trace } from './Trace';
 export { User } from './User';
 export { Webhook } from './Webhook';
