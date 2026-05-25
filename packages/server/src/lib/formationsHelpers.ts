@@ -164,8 +164,10 @@ export const getMissingParams = (
   const missing: string[] = [];
   for (const name of usedParams) {
     const decl = template.parameters?.[name];
+    const providedValue = provided?.[name];
     const hasValue =
-      provided?.[name] !== undefined || decl?.default !== undefined;
+      (providedValue !== undefined && providedValue !== '') ||
+      decl?.default !== undefined;
     if (!hasValue) {
       missing.push(name);
     }
