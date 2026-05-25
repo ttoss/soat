@@ -54,6 +54,8 @@ export class Generation extends Model {
   })
   declare project: Project;
 
+  // Intentionally denormalized for observability: retains the agent's public ID
+  // even after the agent is deleted (agentDbId will be set to NULL by the DB).
   @Column({ type: DataType.STRING(32), allowNull: false })
   declare agentId: string;
 
@@ -64,9 +66,12 @@ export class Generation extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare agentDbId: number | null;
 
-  @BelongsTo(() => {
-    return Agent;
-  })
+  @BelongsTo(
+    () => {
+      return Agent;
+    },
+    { onDelete: 'SET NULL' }
+  )
   declare agent: Agent | null;
 
   @Column({ type: DataType.STRING(32), allowNull: false })
@@ -104,9 +109,12 @@ export class Generation extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare startedByActorDbId: number | null;
 
-  @BelongsTo(() => {
-    return Actor;
-  })
+  @BelongsTo(
+    () => {
+      return Actor;
+    },
+    { onDelete: 'SET NULL' }
+  )
   declare startedByActor: Actor | null;
 
   // Denormalized principal info (set from JWT/API key context)

@@ -47,6 +47,8 @@ export class Trace extends Model {
   })
   declare project: Project;
 
+  // Intentionally denormalized for observability: retains the agent's public ID
+  // even after the agent is deleted (agentDbId will be set to NULL by the DB).
   @Column({ type: DataType.STRING(32), allowNull: false })
   declare agentId: string;
 
@@ -57,9 +59,12 @@ export class Trace extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare agentDbId: number | null;
 
-  @BelongsTo(() => {
-    return Agent;
-  })
+  @BelongsTo(
+    () => {
+      return Agent;
+    },
+    { onDelete: 'SET NULL' }
+  )
   declare agent: Agent | null;
 
   @ForeignKey(() => {
@@ -68,9 +73,12 @@ export class Trace extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare fileDbId: number | null;
 
-  @BelongsTo(() => {
-    return File;
-  })
+  @BelongsTo(
+    () => {
+      return File;
+    },
+    { onDelete: 'SET NULL' }
+  )
   declare file: File | null;
 
   // Denormalized for easy access without joining File

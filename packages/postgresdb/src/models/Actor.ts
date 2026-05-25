@@ -68,9 +68,12 @@ export class Actor extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare agentId: number | null;
 
-  @BelongsTo(() => {
-    return Agent;
-  })
+  @BelongsTo(
+    () => {
+      return Agent;
+    },
+    { onDelete: 'SET NULL' }
+  )
   declare agent: Agent | null;
 
   @ForeignKey(() => {
@@ -90,9 +93,12 @@ export class Actor extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare memoryId: number | null;
 
-  @BelongsTo(() => {
-    return Memory;
-  })
+  @BelongsTo(
+    () => {
+      return Memory;
+    },
+    { onDelete: 'SET NULL' }
+  )
   declare memory: Memory | null;
 
   @Column({
