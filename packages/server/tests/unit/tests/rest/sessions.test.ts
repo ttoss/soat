@@ -358,6 +358,35 @@ describe('Sessions', () => {
 
       expect(response.status).toBe(404);
     });
+
+    test('regression: RESOURCE_NOT_FOUND when session_id belongs to a different agent (no nested error.error)', async () => {
+      // Create a second agent in the same project
+      const agent2Res = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'Sessions Test Agent 2',
+        });
+      const agent2Id = agent2Res.body.id;
+
+      // Create a session for the FIRST agent
+      const sessRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'Cross-Agent Session' });
+      const crossSessionId = sessRes.body.id;
+
+      // Access the first agent's session through the SECOND agent's route
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agent2Id}/sessions/${crossSessionId}/messages`
+      );
+
+      expect(response.status).toBe(404);
+      // The error must be a structured object — not a nested error.error payload
+      expect(typeof response.body.error).toBe('object');
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      expect(typeof response.body.error.message).toBe('string');
+    });
   });
 
   // ── Add Session Message ────────────────────────────────────────────────
@@ -412,7 +441,8 @@ describe('Sessions', () => {
         .send({});
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBeDefined();
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/message/);
     });
   });
 
@@ -1042,7 +1072,7 @@ describe('Sessions', () => {
         .send({ toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }] });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toMatch(/generationId/);
+      expect(response.body.error.message).toMatch(/generationId/);
     });
 
     test('missing toolOutputs returns 400', async () => {
