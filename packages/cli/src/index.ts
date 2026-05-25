@@ -393,20 +393,20 @@ program
         result.response && 'status' in result.response
           ? result.response.status
           : undefined;
-      const errorPayload =
-        result.error instanceof Error
-          ? { name: result.error.name, message: result.error.message }
-          : result.error;
-      console.error(
-        JSON.stringify(
-          {
-            status,
-            error: errorPayload,
-          },
-          null,
-          2
-        )
-      );
+      const rawError = result.error;
+      // Spread the API error response body directly to avoid double-nesting.
+      // The API returns { error: ... } as the top-level body shape, so wrapping
+      // it again in { error: rawError } would produce { error: { error: ... } }.
+      const errorOutput =
+        rawError instanceof Error
+          ? {
+              status,
+              error: { name: rawError.name, message: rawError.message },
+            }
+          : typeof rawError === 'object' && rawError !== null
+            ? { status, ...(rawError as Record<string, unknown>) }
+            : { status, error: rawError };
+      console.error(JSON.stringify(errorOutput, null, 2));
       process.exit(1);
     }
 

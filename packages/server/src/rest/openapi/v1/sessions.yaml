@@ -469,9 +469,33 @@ components:
   schemas:
     ErrorResponse:
       type: object
+      description: >
+        Structured error envelope returned for all non-2xx responses.
+        For DomainErrors (business-logic failures) the `error` property is an
+        object with `code` and `message`; for other failures it is a string.
       properties:
         error:
-          type: string
+          oneOf:
+            - type: string
+              description: Generic error message (e.g. "Internal Server Error")
+            - type: object
+              description: Structured domain error
+              required:
+                - code
+                - message
+              properties:
+                code:
+                  type: string
+                  description: Machine-readable error code
+                  example: RESOURCE_NOT_FOUND
+                message:
+                  type: string
+                  description: Human-readable error description
+                  example: Session not found
+                meta:
+                  type: object
+                  additionalProperties: true
+                  description: Optional structured context
       required:
         - error
 
