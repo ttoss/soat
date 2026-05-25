@@ -36,9 +36,12 @@ export class FormationOperation extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare formationId: number | null;
 
-  @BelongsTo(() => {
-    return Formation;
-  })
+  @BelongsTo(
+    () => {
+      return Formation;
+    },
+    { onDelete: 'CASCADE' }
+  )
   declare formation: Formation | null;
 
   @Column({ type: DataType.STRING, allowNull: false })

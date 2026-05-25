@@ -37,9 +37,12 @@ export class MemoryEntry extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare memoryId: number;
 
-  @BelongsTo(() => {
-    return Memory;
-  })
+  @BelongsTo(
+    () => {
+      return Memory;
+    },
+    { onDelete: 'CASCADE' }
+  )
   declare memory: Memory;
 
   @Column({ type: DataType.TEXT, allowNull: false })
