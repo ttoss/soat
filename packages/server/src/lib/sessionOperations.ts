@@ -47,18 +47,28 @@ export const findSessionRecord = async (args: {
   });
 };
 
-const buildToolContext = (session: InstanceType<(typeof db)['Session']>) => {
+const buildToolContext = (
+  session: InstanceType<(typeof db)['Session']>
+): Record<string, string> => {
   const actor = (
     session as unknown as {
       actor?: InstanceType<(typeof db)['Actor']> | null;
     }
   ).actor;
 
-  return {
-    actorId: actor?.publicId ?? '',
-    actorExternalId: actor?.externalId ?? '',
+  const context: Record<string, string> = {
     sessionId: session.publicId,
   };
+
+  if (actor?.publicId) {
+    context.actorId = actor.publicId;
+  }
+
+  if (actor?.externalId) {
+    context.actorExternalId = actor.externalId;
+  }
+
+  return context;
 };
 
 const emitGenerationStarted = (

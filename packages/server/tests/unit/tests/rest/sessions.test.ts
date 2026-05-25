@@ -1262,4 +1262,113 @@ describe('Sessions', () => {
       );
     });
   });
+
+  // ── buildToolContext: actor keys in generation toolContext ────────────────
+
+  describe('actor context keys in generation toolContext', () => {
+    let noActorSessionId: string;
+    let withActorSessionId: string;
+    let testActorId: string;
+    const testActorExternalId = '+15559876543';
+
+    beforeAll(async () => {
+      // Session without an actor
+      const noActorRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'No Actor Context Test' });
+      noActorSessionId = noActorRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${noActorSessionId}/messages`)
+        .send({ message: 'test message' });
+
+      // Create an actor with an external ID, then a session using it
+      const actorRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/actors')
+        .send({
+          project_id: projectId,
+          name: 'Context Test Actor',
+          external_id: testActorExternalId,
+          type: 'human',
+        });
+      expect(actorRes.status).toBe(201);
+      testActorId = actorRes.body.id;
+
+      const withActorRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'With Actor Context Test', actor_id: testActorId });
+      withActorSessionId = withActorRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/sessions/${withActorSessionId}/messages`
+        )
+        .send({ message: 'test message with actor' });
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    test('actorId and actorExternalId are omitted from toolContext when session has no actor', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_no_actor_ctx_01',
+        traceId: 'trc_no_actor_ctx_01',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: 'Reply without actor',
+          finishReason: 'stop',
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${noActorSessionId}/generate`
+      );
+
+      expect(response.status).toBe(200);
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+
+      const callArgs = mockCreateGeneration.mock.calls[0][0] as {
+        toolContext?: Record<string, string>;
+      };
+      expect(callArgs.toolContext).toBeDefined();
+      // sessionId is always present
+      expect(callArgs.toolContext).toHaveProperty('sessionId');
+      // actor keys must be absent (not empty strings) when no actor is set
+      expect(callArgs.toolContext).not.toHaveProperty('actorId');
+      expect(callArgs.toolContext).not.toHaveProperty('actorExternalId');
+    });
+
+    test('actorId and actorExternalId are populated in toolContext when session has an actor', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_with_actor_ctx_01',
+        traceId: 'trc_with_actor_ctx_01',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: 'Reply with actor',
+          finishReason: 'stop',
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${withActorSessionId}/generate`
+      );
+
+      expect(response.status).toBe(200);
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+
+      const callArgs = mockCreateGeneration.mock.calls[0][0] as {
+        toolContext?: Record<string, string>;
+      };
+      expect(callArgs.toolContext).toBeDefined();
+      expect(callArgs.toolContext).toHaveProperty('sessionId');
+      expect(callArgs.toolContext).toHaveProperty('actorId', testActorId);
+      expect(callArgs.toolContext).toHaveProperty(
+        'actorExternalId',
+        testActorExternalId
+      );
+    });
+  });
 });
