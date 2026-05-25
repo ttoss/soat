@@ -89,7 +89,7 @@ Parameters make a template portable across environments by allowing deploy-time 
       }
     },
     "MyTool": {
-      "type": "agent_tool",
+      "type": "tool",
       "properties": {
         "name": "my-tool",
         "execute": {
@@ -156,7 +156,7 @@ Pass parameter values in the `parameters` field of the create or update request:
 }
 ```
 
-- **`type`** — one of: `ai_provider`, `agent_tool`, `agent`, `actor`, `document`, `memory`, `memory_entry`, `webhook`. See [Formations Types](/docs/formations-types) for the full properties reference.
+- **`type`** — one of: `ai_provider`, `tool`, `agent`, `actor`, `document`, `memory`, `memory_entry`, `webhook`. See [Formations Types](/docs/formations-types) for the full properties reference.
 - **`properties`** — resource-specific properties (snake_case, matching the REST API body fields)
 - **`depends_on`** — explicit dependency list in addition to implicit `ref` dependencies
 - **`deletion_policy`** — controls what happens to the physical resource when it is removed from the stack. `delete` (default) deletes the physical resource. `retain` keeps the physical resource alive and only removes the formation record.
