@@ -15,8 +15,8 @@ import {
   resolveRefs,
   topologicalSort,
 } from './formationsHelpers';
-import { applyDeleteResource } from './formationsResourceHandlers';
 import { getFormationModule } from './formationsRegistry';
+import { applyDeleteResource } from './formationsResourceHandlers';
 import type {
   FormationEvent,
   FormationTemplate,
@@ -24,6 +24,55 @@ import type {
 } from './formationsTypes';
 
 const log = createDebug('soat:formations');
+
+const resolveRefAttrOutput = async (
+  refAttrStr: string,
+  template: FormationTemplate,
+  resolvedIds: Map<string, string>
+): Promise<string | undefined> => {
+  const parsed = parseRefAttr(refAttrStr);
+  if (!parsed) {
+    log(
+      'resolveFormationOutputs: skipping ref_attr "%s" — missing dot separator',
+      refAttrStr
+    );
+    return undefined;
+  }
+  const { logicalId, attrName } = parsed;
+  const physicalId = resolvedIds.get(logicalId);
+  if (physicalId === undefined) {
+    log(
+      'resolveFormationOutputs: skipping ref_attr "%s" — no physical ID for "%s"',
+      refAttrStr,
+      logicalId
+    );
+    return undefined;
+  }
+  const resourceType = template.resources[logicalId]?.type;
+  if (!resourceType) return undefined;
+  const mod = getFormationModule({ resourceType });
+  if (!mod?.getAttributes) {
+    log(
+      'resolveFormationOutputs: skipping ref_attr "%s" — resource type "%s" has no getAttributes',
+      refAttrStr,
+      resourceType
+    );
+    return undefined;
+  }
+  const attrs = await mod.getAttributes({
+    physicalResourceId: physicalId,
+  });
+  if (typeof attrs[attrName] !== 'string') {
+    log(
+      'resolveFormationOutputs: skipping ref_attr "%s" — attribute "%s" not found in resource "%s"',
+      refAttrStr,
+      attrName,
+      logicalId
+    );
+    return undefined;
+  }
+  return attrs[attrName];
+};
 
 export const resolveFormationOutputs = async (
   template: FormationTemplate,
@@ -34,30 +83,12 @@ export const resolveFormationOutputs = async (
   for (const [outputName, outputValue] of Object.entries(template.outputs)) {
     try {
       if (isRefAttr(outputValue)) {
-        const parsed = parseRefAttr(outputValue.ref_attr);
-        if (!parsed) {
-          log('resolveFormationOutputs: skipping ref_attr "%s" — missing dot separator', outputValue.ref_attr);
-          continue;
-        }
-        const { logicalId, attrName } = parsed;
-        const physicalId = resolvedIds.get(logicalId);
-        if (physicalId === undefined) {
-          log('resolveFormationOutputs: skipping ref_attr "%s" — no physical ID for "%s"', outputValue.ref_attr, logicalId);
-          continue;
-        }
-        const resourceType = template.resources[logicalId]?.type;
-        if (!resourceType) continue;
-        const mod = getFormationModule({ resourceType });
-        if (!mod?.getAttributes) {
-          log('resolveFormationOutputs: skipping ref_attr "%s" — resource type "%s" has no getAttributes', outputValue.ref_attr, resourceType);
-          continue;
-        }
-        const attrs = await mod.getAttributes({ physicalResourceId: physicalId });
-        if (typeof attrs[attrName] === 'string') {
-          outputs[outputName] = attrs[attrName];
-        } else {
-          log('resolveFormationOutputs: skipping ref_attr "%s" — attribute "%s" not found in resource "%s"', outputValue.ref_attr, attrName, logicalId);
-        }
+        const value = await resolveRefAttrOutput(
+          outputValue.ref_attr,
+          template,
+          resolvedIds
+        );
+        if (value !== undefined) outputs[outputName] = value;
       } else {
         const resolved = resolveRefs(outputValue, resolvedIds);
         if (typeof resolved === 'string') outputs[outputName] = resolved;
