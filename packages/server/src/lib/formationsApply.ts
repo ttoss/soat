@@ -10,6 +10,7 @@ import {
   buildDependencyGraph,
   buildResolvedParamsMap,
   isRefAttr,
+  parseRefAttr,
   resolveParamExpressions,
   resolveRefs,
   topologicalSort,
@@ -33,19 +34,29 @@ export const resolveFormationOutputs = async (
   for (const [outputName, outputValue] of Object.entries(template.outputs)) {
     try {
       if (isRefAttr(outputValue)) {
-        const dotIndex = outputValue.ref_attr.indexOf('.');
-        if (dotIndex === -1) continue;
-        const logicalId = outputValue.ref_attr.slice(0, dotIndex);
-        const attrName = outputValue.ref_attr.slice(dotIndex + 1);
+        const parsed = parseRefAttr(outputValue.ref_attr);
+        if (!parsed) {
+          log('resolveFormationOutputs: skipping ref_attr "%s" — missing dot separator', outputValue.ref_attr);
+          continue;
+        }
+        const { logicalId, attrName } = parsed;
         const physicalId = resolvedIds.get(logicalId);
-        if (physicalId === undefined) continue;
+        if (physicalId === undefined) {
+          log('resolveFormationOutputs: skipping ref_attr "%s" — no physical ID for "%s"', outputValue.ref_attr, logicalId);
+          continue;
+        }
         const resourceType = template.resources[logicalId]?.type;
         if (!resourceType) continue;
         const mod = getFormationModule({ resourceType });
-        if (!mod?.getAttributes) continue;
+        if (!mod?.getAttributes) {
+          log('resolveFormationOutputs: skipping ref_attr "%s" — resource type "%s" has no getAttributes', outputValue.ref_attr, resourceType);
+          continue;
+        }
         const attrs = await mod.getAttributes({ physicalResourceId: physicalId });
         if (typeof attrs[attrName] === 'string') {
           outputs[outputName] = attrs[attrName];
+        } else {
+          log('resolveFormationOutputs: skipping ref_attr "%s" — attribute "%s" not found in resource "%s"', outputValue.ref_attr, attrName, logicalId);
         }
       } else {
         const resolved = resolveRefs(outputValue, resolvedIds);

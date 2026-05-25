@@ -1,12 +1,13 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
+import { DomainError } from 'src/errors';
 import {
   createWebhook,
   deleteWebhook,
+  findWebhookSecret,
   getWebhook,
   getWebhookDelivery,
-  getWebhookSecret,
   listWebhookDeliveries,
   listWebhooks,
   rotateWebhookSecret,
@@ -324,9 +325,7 @@ webhooksRouter.get(
   '/projects/:project_id/webhooks/:webhook_id/secret',
   async (ctx: Context) => {
     if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
+      throw new DomainError('UNAUTHORIZED', 'Unauthorized');
     }
 
     const allowed = await ctx.authUser.isAllowed({
@@ -334,20 +333,19 @@ webhooksRouter.get(
       action: 'webhooks:GetWebhookSecret',
     });
     if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     const webhook = await getWebhook({ id: ctx.params.webhook_id });
     if (!webhook || webhook.projectId !== ctx.params.project_id) {
-      ctx.status = 404;
-      ctx.body = { error: 'Webhook not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
     }
 
-    const result = await getWebhookSecret({ id: ctx.params.webhook_id });
-    ctx.body = result;
+    const secretData = await findWebhookSecret({ id: ctx.params.webhook_id });
+    if (!secretData) {
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
+    }
+    ctx.body = secretData;
   }
 );
 

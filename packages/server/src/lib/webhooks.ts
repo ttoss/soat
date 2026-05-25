@@ -54,7 +54,7 @@ export const getWebhook = async (args: { id: string }) => {
   return mapWebhook(webhook);
 };
 
-export const getWebhookSecret = async (args: { id: string }) => {
+export const findWebhookSecret = async (args: { id: string }) => {
   const webhook = await db.Webhook.findOne({
     where: { publicId: args.id },
   });

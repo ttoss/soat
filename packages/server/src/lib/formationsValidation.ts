@@ -5,6 +5,7 @@ import {
   collectParamRefs,
   collectRefAttrs,
   collectRefs,
+  parseRefAttr,
   topologicalSort,
 } from './formationsHelpers';
 import { getFormationModule } from './formationsRegistry';
@@ -217,19 +218,18 @@ const validateOutputRefs = (
       }
     }
     for (const refAttr of collectRefAttrs(outputValue)) {
-      const dotIndex = refAttr.indexOf('.');
-      if (dotIndex === -1) {
+      const parsed = parseRefAttr(refAttr);
+      if (!parsed) {
         errors.push({
           path: `outputs.${outputName}`,
           message: `ref_attr '${refAttr}' must be in the form '<ResourceName>.<attribute>'`,
         });
         continue;
       }
-      const logicalId = refAttr.slice(0, dotIndex);
-      if (!logicalIds.has(logicalId)) {
+      if (!logicalIds.has(parsed.logicalId)) {
         errors.push({
           path: `outputs.${outputName}`,
-          message: `Referenced resource '${logicalId}' does not exist in template`,
+          message: `Referenced resource '${parsed.logicalId}' does not exist in template`,
         });
       }
     }

@@ -78,6 +78,21 @@ export const collectRefAttrs = (value: unknown): string[] => {
   return [];
 };
 
+/**
+ * Parses a ref_attr string of the form `"<LogicalId>.<attributeName>"`.
+ * Returns `null` if the separator is missing or either part is empty.
+ */
+export const parseRefAttr = (
+  refAttr: string
+): { logicalId: string; attrName: string } | null => {
+  const dotIndex = refAttr.indexOf('.');
+  if (dotIndex <= 0) return null;
+  const logicalId = refAttr.slice(0, dotIndex);
+  const attrName = refAttr.slice(dotIndex + 1);
+  if (!attrName) return null;
+  return { logicalId, attrName };
+};
+
 // ── Param Utilities ───────────────────────────────────────────────────────
 
 export const isParam = (value: unknown): value is ParamExpression => {
