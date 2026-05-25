@@ -283,10 +283,7 @@ export const deleteAgent = async (args: {
       `Agent '${args.id}' not found.`
     );
 
-  await db.Actor.update(
-    { agentId: null },
-    { where: { agentId: agent.id as number } }
-  );
+  // Actor.agentId is cleared automatically by the DB via onDelete: 'SET NULL' on the FK.
   await agent.destroy();
 
   const agentProjectId = (agent as unknown as { projectId: number }).projectId;

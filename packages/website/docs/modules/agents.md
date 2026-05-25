@@ -352,20 +352,20 @@ Pass `stream: true` to receive results as Server-Sent Events (SSE). Each step's 
 ```json
 {
   "tool_context": {
-    "user_id": "usr_abc123",
-    "tenant_id": "tenant_xyz"
+    "userId": "usr_abc123",
+    "tenantId": "tenant_xyz"
   }
 }
 ```
 
 #### Header Naming
 
-Each key is title-cased and prefixed with `X-Soat-Context-`:
+Each key is title-cased (first character uppercased) and prefixed with `X-Soat-Context-`:
 
-| `tool_context` key | Forwarded header           |
-| ------------------ | -------------------------- |
-| `user_id`          | `X-Soat-Context-UserId`    |
-| `tenant_id`        | `X-Soat-Context-tenant_id` |
+| `tool_context` key | Forwarded header              |
+| ------------------ | ----------------------------- |
+| `userId`           | `X-Soat-Context-UserId`       |
+| `tenantId`         | `X-Soat-Context-TenantId`     |
 
 #### Supported Tool Types
 

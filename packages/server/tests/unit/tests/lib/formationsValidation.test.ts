@@ -1,8 +1,96 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { getMissingParams } from 'src/lib/formationsHelpers';
 import {
   parseFormationTemplateInput,
   validateFormationTemplate,
 } from 'src/lib/formationsValidation';
+
+// ── getMissingParams ───────────────────────────────────────────────────────
+
+describe('getMissingParams', () => {
+  const templateWithRequiredParams = {
+    parameters: {
+      ApiKey: { type: 'string' },
+      ToolUrl: { type: 'string' },
+    },
+    resources: {
+      ParamSecret: {
+        type: 'secret',
+        properties: { name: 'test', value: { param: 'ApiKey' } },
+      },
+      ParamMemory: {
+        type: 'memory',
+        properties: {
+          name: { sub: '${ToolUrl}-memory' },
+        },
+      },
+    },
+  };
+
+  test('returns empty array when all required params are provided', () => {
+    const result = getMissingParams(templateWithRequiredParams, {
+      ApiKey: 'secret-key',
+      ToolUrl: 'https://api.example.com',
+    });
+    expect(result).toEqual([]);
+  });
+
+  test('returns missing param names when no params provided', () => {
+    const result = getMissingParams(templateWithRequiredParams, undefined);
+    expect(result).toContain('ApiKey');
+    expect(result).toContain('ToolUrl');
+  });
+
+  test('returns param name when provided value is empty string', () => {
+    const result = getMissingParams(templateWithRequiredParams, {
+      ApiKey: '',
+      ToolUrl: 'https://api.example.com',
+    });
+    expect(result).toContain('ApiKey');
+    expect(result).not.toContain('ToolUrl');
+  });
+
+  test('returns all params when all provided values are empty strings', () => {
+    const result = getMissingParams(templateWithRequiredParams, {
+      ApiKey: '',
+      ToolUrl: '',
+    });
+    expect(result).toContain('ApiKey');
+    expect(result).toContain('ToolUrl');
+  });
+
+  test('returns empty array when param has a default and no override provided', () => {
+    const templateWithDefault = {
+      parameters: {
+        MemName: { type: 'string', default: 'default-memory' },
+      },
+      resources: {
+        Mem: {
+          type: 'memory',
+          properties: { name: { param: 'MemName' } },
+        },
+      },
+    };
+    const result = getMissingParams(templateWithDefault, undefined);
+    expect(result).toEqual([]);
+  });
+
+  test('does not treat an empty-string default as missing', () => {
+    const templateWithEmptyDefault = {
+      parameters: {
+        OptionalParam: { type: 'string', default: '' },
+      },
+      resources: {
+        Mem: {
+          type: 'memory',
+          properties: { name: { param: 'OptionalParam' } },
+        },
+      },
+    };
+    const result = getMissingParams(templateWithEmptyDefault, undefined);
+    expect(result).toEqual([]);
+  });
+});
 
 // ── parseFormationTemplateInput ────────────────────────────────────────────
 
@@ -349,6 +437,54 @@ describe('validateFormationTemplate', () => {
     expect(result.errors).toHaveLength(0);
   });
 
+  // ── deletion_policy ────────────────────────────────────────────────────
+
+  test('returns invalid when deletion_policy is an unsupported value', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyMemory: {
+          type: 'memory',
+          properties: { name: 'test' },
+          deletion_policy: 'snapshot',
+        },
+      },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return e.path.endsWith('.deletion_policy');
+      })
+    ).toBe(true);
+  });
+
+  test('accepts deletion_policy: delete', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyMemory: {
+          type: 'memory',
+          properties: { name: 'test' },
+          deletion_policy: 'delete',
+        },
+      },
+    });
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  test('accepts deletion_policy: retain', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyMemory: {
+          type: 'memory',
+          properties: { name: 'test' },
+          deletion_policy: 'retain',
+        },
+      },
+    });
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
   // ── outputs ────────────────────────────────────────────────────────────
 
   test('returns invalid when outputs reference an unknown resource', () => {
@@ -362,6 +498,71 @@ describe('validateFormationTemplate', () => {
     expect(
       result.errors.some((e) => {
         return e.path.startsWith('outputs');
+      })
+    ).toBe(true);
+  });
+
+  test('returns valid for a ref_attr output referencing a known resource', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyWebhook: {
+          type: 'webhook',
+          properties: {
+            name: 'hook',
+            url: 'https://example.com',
+            events: ['*'],
+          },
+        },
+      },
+      outputs: { webhookSecret: { ref_attr: 'MyWebhook.secret' } },
+    });
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  test('returns invalid when ref_attr references an unknown resource', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyWebhook: {
+          type: 'webhook',
+          properties: {
+            name: 'hook',
+            url: 'https://example.com',
+            events: ['*'],
+          },
+        },
+      },
+      outputs: { webhookSecret: { ref_attr: 'NonExistent.secret' } },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return (
+          e.path.startsWith('outputs') &&
+          e.message.includes("'NonExistent'")
+        );
+      })
+    ).toBe(true);
+  });
+
+  test('returns invalid when ref_attr has no dot separator', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyWebhook: {
+          type: 'webhook',
+          properties: {
+            name: 'hook',
+            url: 'https://example.com',
+            events: ['*'],
+          },
+        },
+      },
+      outputs: { webhookSecret: { ref_attr: 'nodothere' } },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return e.path.startsWith('outputs') && e.message.includes('ref_attr');
       })
     ).toBe(true);
   });

@@ -126,16 +126,39 @@ expect(response.status).toBe(500);
 expect(response.body.error).toBe('Internal Server Error');
 ```
 
+### CLI error display
+
+The CLI reads the SDK's `result.error` (which is the raw API response body) and
+spreads it directly into the output object:
+
+```
+{ status: 404, error: { code: 'RESOURCE_NOT_FOUND', message: 'Session not found' } }
+```
+
+This avoids the nested `error.error` pattern that would occur if the body were
+wrapped again. **Do not** wrap API error bodies in an extra `error` key in the CLI.
+
 ## Route handler rules
 
 1. **Do not wrap lib calls in try/catch** just to set `ctx.status` — let `DomainError` propagate.
-2. Only use try/catch when you need to perform cleanup (e.g., rolling back a transaction) and then re-throw.
+2. **Do not set `ctx.body = { error: '...' }` manually** — throw `DomainError` with the appropriate code instead.
+3. Only use try/catch when you need to perform cleanup (e.g., rolling back a transaction) and then re-throw.
 
 ```ts
 // ✅ correct — DomainError propagates to middleware
+if (!ctx.authUser) {
+  throw new DomainError('UNAUTHORIZED', 'Unauthorized');
+}
 const agent = await getAgent({ agentId, projectId });
 ctx.body = agent;
 ctx.status = 200;
+
+// ❌ wrong — manual error body creates an inconsistent string format
+if (!ctx.authUser) {
+  ctx.status = 401;
+  ctx.body = { error: 'Unauthorized' };
+  return;
+}
 
 // ❌ wrong — swallows the structured error
 try {

@@ -32,9 +32,12 @@ export class ConversationMessage extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare conversationId: number;
 
-  @BelongsTo(() => {
-    return Conversation;
-  })
+  @BelongsTo(
+    () => {
+      return Conversation;
+    },
+    { onDelete: 'CASCADE' }
+  )
   declare conversation: Conversation;
 
   @ForeignKey(() => {
@@ -57,9 +60,12 @@ export class ConversationMessage extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare actorId: number | null;
 
-  @BelongsTo(() => {
-    return Actor;
-  })
+  @BelongsTo(
+    () => {
+      return Actor;
+    },
+    { onDelete: 'SET NULL' }
+  )
   declare actor: Actor | null;
 
   @ForeignKey(() => {
@@ -68,9 +74,12 @@ export class ConversationMessage extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true, field: 'agent_id' })
   declare agentId: number | null;
 
-  @BelongsTo(() => {
-    return Agent;
-  })
+  @BelongsTo(
+    () => {
+      return Agent;
+    },
+    { onDelete: 'SET NULL' }
+  )
   declare agent: Agent | null;
 
   @Column({ type: DataType.INTEGER, allowNull: false })

@@ -16,6 +16,7 @@ const buildResource = (args: {
   logicalId: string;
   resourceType: string;
   physicalResourceId: string | null;
+  deletionPolicy?: string;
 }) => {
   return db.FormationResource.build({
     publicId: `afr_${args.logicalId}`,
@@ -24,6 +25,7 @@ const buildResource = (args: {
     resourceType: args.resourceType,
     physicalResourceId: args.physicalResourceId,
     status: 'active',
+    deletionPolicy: args.deletionPolicy ?? 'delete',
   });
 };
 
@@ -32,7 +34,7 @@ describe('formationsApply', () => {
     jest.restoreAllMocks();
   });
 
-  test('resolveFormationOutputs resolves valid refs and skips unresolvable values', () => {
+  test('resolveFormationOutputs resolves valid refs and skips unresolvable values', async () => {
     const template: FormationTemplate = {
       resources: {},
       outputs: {
@@ -43,10 +45,31 @@ describe('formationsApply', () => {
     };
     const resolvedIds = new Map<string, string>([['provider', 'aip_1']]);
 
-    expect(resolveFormationOutputs(template, resolvedIds)).toEqual({
+    await expect(resolveFormationOutputs(template, resolvedIds)).resolves.toEqual({
       providerId: 'aip_1',
       greeting: 'hello',
     });
+  });
+
+  test('resolveFormationOutputs resolves ref_attr expressions using getAttributes', async () => {
+    const template: FormationTemplate = {
+      resources: {
+        MyWebhook: { type: 'webhook', properties: { name: 'hook', url: 'https://example.com', events: ['*'] } },
+      },
+      outputs: {
+        webhookSecret: { ref_attr: 'MyWebhook.secret' },
+        unknownResource: { ref_attr: 'Unknown.secret' },
+        noDot: { ref_attr: 'nodothere' } as unknown as { ref_attr: string },
+      },
+    };
+    const resolvedIds = new Map<string, string>([['MyWebhook', 'whk_1']]);
+
+    // getWebhookSecret returns null for a non-existent webhook, so webhookSecret is skipped
+    const result = await resolveFormationOutputs(template, resolvedIds);
+    // The ref_attr for an unknown resource should be skipped (physicalId not in resolvedIds)
+    expect(result.unknownResource).toBeUndefined();
+    // noDot ref_attr expression (no '.' separator) should be skipped
+    expect(result.noDot).toBeUndefined();
   });
 
   test('buildDeleteOrder reverses dependency order and appends unknown resources', () => {
@@ -126,6 +149,29 @@ describe('formationsApply', () => {
     ).toEqual(['succeeded', 'failed']);
   });
 
+  test('performResourceDeletions skips physical deletion for retain resources', async () => {
+    const retained = buildResource({
+      logicalId: 'keep',
+      resourceType: 'memory',
+      physicalResourceId: 'mem_1',
+      deletionPolicy: 'retain',
+    });
+
+    const retainedUpdate = jest
+      .spyOn(retained, 'update')
+      .mockResolvedValue(retained);
+    const applyDeleteSpy = jest.spyOn(resourceHandlers, 'applyDeleteResource');
+
+    const result = await performResourceDeletions([retained]);
+
+    expect(applyDeleteSpy).not.toHaveBeenCalled();
+    expect(retainedUpdate).toHaveBeenCalledWith({ status: 'deleted' });
+    expect(result.hasError).toBe(false);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].status).toBe('succeeded');
+    expect(result.events[0].physicalResourceId).toBe('mem_1');
+  });
+
   test('handleOrphanedDeletes records delete success and failure events', async () => {
     const retained = buildResource({
       logicalId: 'keep',
@@ -170,6 +216,32 @@ describe('formationsApply', () => {
         return event.status;
       })
     ).toEqual(['succeeded', 'failed']);
+  });
+
+  test('handleOrphanedDeletes skips physical deletion for retain resources', async () => {
+    const retainedOrphan = buildResource({
+      logicalId: 'orphan',
+      resourceType: 'memory',
+      physicalResourceId: 'mem_1',
+      deletionPolicy: 'retain',
+    });
+    const retainedOrphanUpdate = jest
+      .spyOn(retainedOrphan, 'update')
+      .mockResolvedValue(retainedOrphan);
+    const applyDeleteSpy = jest.spyOn(resourceHandlers, 'applyDeleteResource');
+    const events: FormationEvent[] = [];
+
+    await handleOrphanedDeletes({
+      template: { resources: {} },
+      existingResources: [retainedOrphan],
+      events,
+    });
+
+    expect(applyDeleteSpy).not.toHaveBeenCalled();
+    expect(retainedOrphanUpdate).toHaveBeenCalledWith({ status: 'deleted' });
+    expect(events).toHaveLength(1);
+    expect(events[0].status).toBe('succeeded');
+    expect(events[0].physicalResourceId).toBe('mem_1');
   });
 
   test('processResourceChange marks resource as failed when create handler throws', async () => {

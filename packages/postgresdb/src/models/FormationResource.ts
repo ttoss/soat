@@ -37,9 +37,12 @@ export class FormationResource extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare formationId: number;
 
-  @BelongsTo(() => {
-    return Formation;
-  })
+  @BelongsTo(
+    () => {
+      return Formation;
+    },
+    { onDelete: 'CASCADE' }
+  )
   declare formation: Formation;
 
   @Column({ type: DataType.STRING, allowNull: false })
@@ -53,6 +56,9 @@ export class FormationResource extends Model {
 
   @Column({ type: DataType.STRING, allowNull: false, defaultValue: 'pending' })
   declare status: string;
+
+  @Column({ type: DataType.STRING, allowNull: false, defaultValue: 'delete' })
+  declare deletionPolicy: string;
 
   @Column({ type: DataType.JSONB, allowNull: true })
   declare lastAppliedProperties: Record<string, unknown> | null;

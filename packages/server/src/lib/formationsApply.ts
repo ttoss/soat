@@ -9,10 +9,13 @@ import {
 import {
   buildDependencyGraph,
   buildResolvedParamsMap,
+  isRefAttr,
+  parseRefAttr,
   resolveParamExpressions,
   resolveRefs,
   topologicalSort,
 } from './formationsHelpers';
+import { getFormationModule } from './formationsRegistry';
 import { applyDeleteResource } from './formationsResourceHandlers';
 import type {
   FormationEvent,
@@ -22,16 +25,74 @@ import type {
 
 const log = createDebug('soat:formations');
 
-export const resolveFormationOutputs = (
+const resolveRefAttrOutput = async (
+  refAttrStr: string,
   template: FormationTemplate,
   resolvedIds: Map<string, string>
-): Record<string, string> => {
+): Promise<string | undefined> => {
+  const parsed = parseRefAttr(refAttrStr);
+  if (!parsed) {
+    log(
+      'resolveFormationOutputs: skipping ref_attr "%s" — missing dot separator',
+      refAttrStr
+    );
+    return undefined;
+  }
+  const { logicalId, attrName } = parsed;
+  const physicalId = resolvedIds.get(logicalId);
+  if (physicalId === undefined) {
+    log(
+      'resolveFormationOutputs: skipping ref_attr "%s" — no physical ID for "%s"',
+      refAttrStr,
+      logicalId
+    );
+    return undefined;
+  }
+  const resourceType = template.resources[logicalId]?.type;
+  if (!resourceType) return undefined;
+  const mod = getFormationModule({ resourceType });
+  if (!mod?.getAttributes) {
+    log(
+      'resolveFormationOutputs: skipping ref_attr "%s" — resource type "%s" has no getAttributes',
+      refAttrStr,
+      resourceType
+    );
+    return undefined;
+  }
+  const attrs = await mod.getAttributes({
+    physicalResourceId: physicalId,
+  });
+  if (typeof attrs[attrName] !== 'string') {
+    log(
+      'resolveFormationOutputs: skipping ref_attr "%s" — attribute "%s" not found in resource "%s"',
+      refAttrStr,
+      attrName,
+      logicalId
+    );
+    return undefined;
+  }
+  return attrs[attrName];
+};
+
+export const resolveFormationOutputs = async (
+  template: FormationTemplate,
+  resolvedIds: Map<string, string>
+): Promise<Record<string, string>> => {
   const outputs: Record<string, string> = {};
   if (!template.outputs) return outputs;
   for (const [outputName, outputValue] of Object.entries(template.outputs)) {
     try {
-      const resolved = resolveRefs(outputValue, resolvedIds);
-      if (typeof resolved === 'string') outputs[outputName] = resolved;
+      if (isRefAttr(outputValue)) {
+        const value = await resolveRefAttrOutput(
+          outputValue.ref_attr,
+          template,
+          resolvedIds
+        );
+        if (value !== undefined) outputs[outputName] = value;
+      } else {
+        const resolved = resolveRefs(outputValue, resolvedIds);
+        if (typeof resolved === 'string') outputs[outputName] = resolved;
+      }
     } catch {
       // Skip unresolvable outputs
     }
@@ -51,6 +112,18 @@ export const handleOrphanedDeletes = async (args: {
   });
   for (const resource of toDelete) {
     try {
+      if (resource.deletionPolicy === 'retain') {
+        await resource.update({ status: 'deleted' });
+        events.push({
+          timestamp: new Date().toISOString(),
+          logicalId: resource.logicalId,
+          resourceType: resource.resourceType,
+          action: 'delete',
+          status: 'succeeded',
+          physicalResourceId: resource.physicalResourceId ?? undefined,
+        });
+        continue;
+      }
       await applyDeleteResource({
         resourceType: resource.resourceType,
         physicalResourceId: resource.physicalResourceId!,
@@ -104,6 +177,8 @@ export const processResourceChange = async (args: {
   ) as Record<string, unknown>;
   log('processResourceChange: logicalId=%s type=%s', logicalId, decl.type);
 
+  const deletionPolicy = decl.deletion_policy ?? 'delete';
+
   let resourceRow: ResourceRow;
   if (!existing) {
     resourceRow = await db.FormationResource.create({
@@ -113,8 +188,12 @@ export const processResourceChange = async (args: {
       status: 'pending',
       physicalResourceId: null,
       lastAppliedProperties: null,
+      deletionPolicy,
     });
   } else {
+    if ((existing.deletionPolicy ?? 'delete') !== deletionPolicy) {
+      await existing.update({ deletionPolicy });
+    }
     resourceRow = existing;
   }
 
@@ -243,7 +322,7 @@ export const applyFormationTemplate = async (args: {
     events,
   });
 
-  const outputs = resolveFormationOutputs(workingTemplate, resolvedIds);
+  const outputs = await resolveFormationOutputs(workingTemplate, resolvedIds);
   await operation.update({ status: 'succeeded', events });
   await formation.update({ status: 'active', outputs, template });
   log('applyFormationTemplate: succeeded formationId=%s', formation.publicId);
@@ -287,6 +366,18 @@ export const performResourceDeletions = async (
   for (const resource of orderedResources) {
     if (!resource.physicalResourceId) continue;
     try {
+      if (resource.deletionPolicy === 'retain') {
+        await resource.update({ status: 'deleted' });
+        events.push({
+          timestamp: new Date().toISOString(),
+          logicalId: resource.logicalId,
+          resourceType: resource.resourceType,
+          action: 'delete',
+          status: 'succeeded',
+          physicalResourceId: resource.physicalResourceId,
+        });
+        continue;
+      }
       await applyDeleteResource({
         resourceType: resource.resourceType,
         physicalResourceId: resource.physicalResourceId,

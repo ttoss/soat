@@ -1,9 +1,11 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
+import { DomainError } from 'src/errors';
 import {
   createWebhook,
   deleteWebhook,
+  findWebhookSecret,
   getWebhook,
   getWebhookDelivery,
   listWebhookDeliveries,
@@ -316,6 +318,34 @@ webhooksRouter.get(
     }
 
     ctx.body = delivery;
+  }
+);
+
+webhooksRouter.get(
+  '/projects/:project_id/webhooks/:webhook_id/secret',
+  async (ctx: Context) => {
+    if (!ctx.authUser) {
+      throw new DomainError('UNAUTHORIZED', 'Unauthorized');
+    }
+
+    const allowed = await ctx.authUser.isAllowed({
+      projectPublicId: ctx.params.project_id,
+      action: 'webhooks:GetWebhookSecret',
+    });
+    if (!allowed) {
+      throw new DomainError('FORBIDDEN', 'Forbidden');
+    }
+
+    const webhook = await getWebhook({ id: ctx.params.webhook_id });
+    if (!webhook || webhook.projectId !== ctx.params.project_id) {
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
+    }
+
+    const secretData = await findWebhookSecret({ id: ctx.params.webhook_id });
+    if (!secretData) {
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
+    }
+    ctx.body = secretData;
   }
 );
 

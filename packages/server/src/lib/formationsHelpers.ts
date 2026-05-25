@@ -3,6 +3,7 @@ import { db } from 'src/db';
 import type {
   FormationTemplate,
   ParamExpression,
+  RefAttrExpression,
   RefExpression,
   SubExpression,
 } from './formationsTypes';
@@ -53,6 +54,43 @@ export const resolveRefs = (
     return result;
   }
   return value;
+};
+
+export const isRefAttr = (value: unknown): value is RefAttrExpression => {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.keys(value).length === 1 &&
+    'ref_attr' in value &&
+    typeof (value as Record<string, unknown>).ref_attr === 'string'
+  );
+};
+
+export const collectRefAttrs = (value: unknown): string[] => {
+  if (isRefAttr(value)) return [value.ref_attr];
+  if (Array.isArray(value)) return value.flatMap(collectRefAttrs);
+  if (typeof value === 'object' && value !== null) {
+    return Object.values(value as Record<string, unknown>).flatMap(
+      collectRefAttrs
+    );
+  }
+  return [];
+};
+
+/**
+ * Parses a ref_attr string of the form `"<LogicalId>.<attributeName>"`.
+ * Returns `null` if the separator is missing or either part is empty.
+ */
+export const parseRefAttr = (
+  refAttr: string
+): { logicalId: string; attrName: string } | null => {
+  const dotIndex = refAttr.indexOf('.');
+  if (dotIndex <= 0) return null;
+  const logicalId = refAttr.slice(0, dotIndex);
+  const attrName = refAttr.slice(dotIndex + 1);
+  if (!attrName) return null;
+  return { logicalId, attrName };
 };
 
 // ── Param Utilities ───────────────────────────────────────────────────────
@@ -164,8 +202,10 @@ export const getMissingParams = (
   const missing: string[] = [];
   for (const name of usedParams) {
     const decl = template.parameters?.[name];
+    const providedValue = provided?.[name];
     const hasValue =
-      provided?.[name] !== undefined || decl?.default !== undefined;
+      (providedValue !== undefined && providedValue !== '') ||
+      decl?.default !== undefined;
     if (!hasValue) {
       missing.push(name);
     }

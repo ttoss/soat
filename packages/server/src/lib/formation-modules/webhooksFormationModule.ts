@@ -9,6 +9,7 @@ import {
 import {
   createWebhook,
   deleteWebhook,
+  findWebhookSecret,
   getWebhook,
   updateWebhook,
 } from '../webhooks';
@@ -161,5 +162,12 @@ export const webhooksFormationModule: FormationModule = {
     } catch {
       return null;
     }
+  },
+
+  getAttributes: async ({ physicalResourceId }) => {
+    const result = await findWebhookSecret({ id: physicalResourceId });
+    const attrs: Record<string, string> = {};
+    if (result) attrs.secret = result.secret;
+    return attrs;
   },
 };

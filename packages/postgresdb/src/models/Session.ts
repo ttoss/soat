@@ -48,9 +48,12 @@ export class Session extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare agentId: number;
 
-  @BelongsTo(() => {
-    return Agent;
-  })
+  @BelongsTo(
+    () => {
+      return Agent;
+    },
+    { onDelete: 'CASCADE' }
+  )
   declare agent: Agent;
 
   @ForeignKey(() => {
@@ -59,9 +62,12 @@ export class Session extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare conversationId: number;
 
-  @BelongsTo(() => {
-    return Conversation;
-  })
+  @BelongsTo(
+    () => {
+      return Conversation;
+    },
+    { onDelete: 'CASCADE' }
+  )
   declare conversation: Conversation;
 
   @ForeignKey(() => {
@@ -74,7 +80,7 @@ export class Session extends Model {
     () => {
       return Actor;
     },
-    { foreignKey: 'actorId', as: 'actor' }
+    { foreignKey: 'actorId', as: 'actor', onDelete: 'SET NULL' }
   )
   declare actor: Actor | null;
 

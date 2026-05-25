@@ -752,6 +752,51 @@ resources:
         expect(Array.isArray(res.body.details)).toBe(true);
       });
 
+      test('returns 400 when required parameter is provided as empty string', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/formations')
+          .send({
+            project_id: projectId,
+            name: `empty-params-${Date.now()}`,
+            template: templateWithParams,
+            parameters: {
+              ToolUrl: '',
+              ApiKey: '',
+            },
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe('Missing required parameters');
+        expect(Array.isArray(res.body.details)).toBe(true);
+        expect(
+          res.body.details.some((d: { message: string }) => {
+            return d.message.includes('cannot be empty');
+          })
+        ).toBe(true);
+      });
+
+      test('returns 400 when only some required parameters are empty strings', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/formations')
+          .send({
+            project_id: projectId,
+            name: `partial-empty-params-${Date.now()}`,
+            template: templateWithParams,
+            parameters: {
+              ToolUrl: 'https://api.example.com',
+              ApiKey: '',
+            },
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe('Missing required parameters');
+        expect(
+          res.body.details.some((d: { path: string }) => {
+            return d.path === 'parameters.ApiKey';
+          })
+        ).toBe(true);
+      });
+
       test('uses parameter default when no override provided', async () => {
         const templateWithDefault = {
           parameters: {
@@ -822,6 +867,26 @@ resources:
 
         expect(res.status).toBe(400);
         expect(res.body.error).toBe('Missing required parameters');
+      });
+
+      test('returns 400 when required parameter is empty string on update', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .put(`/api/v1/formations/${paramFormationId}`)
+          .send({
+            template: templateWithParams,
+            parameters: {
+              ToolUrl: 'https://api.example.com',
+              ApiKey: '',
+            },
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe('Missing required parameters');
+        expect(
+          res.body.details.some((d: { message: string }) => {
+            return d.message.includes('cannot be empty');
+          })
+        ).toBe(true);
       });
     });
 

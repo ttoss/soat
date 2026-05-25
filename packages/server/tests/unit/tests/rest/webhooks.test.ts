@@ -37,6 +37,7 @@ describe('Webhooks', () => {
                 'webhooks:ListWebhooks',
                 'webhooks:CreateWebhook',
                 'webhooks:GetWebhook',
+                'webhooks:GetWebhookSecret',
                 'webhooks:UpdateWebhook',
                 'webhooks:DeleteWebhook',
                 'webhooks:RotateWebhookSecret',
@@ -174,6 +175,80 @@ describe('Webhooks', () => {
       );
 
       expect(response.status).toBe(401);
+    });
+  });
+
+  describe('GET /api/v1/projects/:projectId/webhooks/:webhookId/secret', () => {
+    let webhookId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/projects/${projectId}/webhooks`)
+        .send({
+          name: 'Secret Test',
+          url: 'https://example.com/secret',
+          events: ['*'],
+        });
+      webhookId = res.body.id;
+    });
+
+    test('authenticated user can get the webhook secret', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/projects/${projectId}/webhooks/${webhookId}/secret`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.secret).toBeDefined();
+      expect(typeof response.body.secret).toBe('string');
+    });
+
+    test('returns 404 for non-existent webhook', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/projects/${projectId}/webhooks/nonexistent/secret`
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient.get(
+        `/api/v1/projects/${projectId}/webhooks/${webhookId}/secret`
+      );
+
+      expect(response.status).toBe(401);
+    });
+
+    test('user without GetWebhookSecret permission returns 403', async () => {
+      const noSecretPermUserRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'webhooksnosecrperm', password: 'pass123' });
+
+      expect(noSecretPermUserRes.status).toBe(201);
+
+      const noSecretPermToken = await loginAs('webhooksnosecrperm', 'pass123');
+
+      const limitedPolicyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['webhooks:GetWebhook'],
+              },
+            ],
+          },
+        });
+
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${noSecretPermUserRes.body.id}/policies`)
+        .send({ policy_ids: [limitedPolicyRes.body.id] });
+
+      const response = await authenticatedTestClient(noSecretPermToken).get(
+        `/api/v1/projects/${projectId}/webhooks/${webhookId}/secret`
+      );
+
+      expect(response.status).toBe(403);
     });
   });
 

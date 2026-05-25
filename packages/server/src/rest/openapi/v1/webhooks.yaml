@@ -254,6 +254,38 @@ paths:
         '404':
           description: Delivery not found
 
+  /api/v1/projects/{project_id}/webhooks/{webhook_id}/secret:
+    get:
+      description: Retrieves the signing secret for the specified webhook
+      tags:
+        - Webhooks
+      summary: Get webhook secret
+      operationId: getWebhookSecret
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: webhook_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Webhook secret
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookSecretResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Webhook not found
+
   /api/v1/projects/{project_id}/webhooks/{webhook_id}/rotate-secret:
     post:
       description: Rotates the secret key for the specified webhook
@@ -369,6 +401,12 @@ components:
         policy_id:
           type: string
           nullable: true
+
+    WebhookSecretResponse:
+      type: object
+      properties:
+        secret:
+          type: string
 
     Delivery:
       type: object

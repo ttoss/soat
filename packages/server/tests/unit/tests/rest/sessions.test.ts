@@ -358,6 +358,35 @@ describe('Sessions', () => {
 
       expect(response.status).toBe(404);
     });
+
+    test('regression: RESOURCE_NOT_FOUND when session_id belongs to a different agent (no nested error.error)', async () => {
+      // Create a second agent in the same project
+      const agent2Res = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'Sessions Test Agent 2',
+        });
+      const agent2Id = agent2Res.body.id;
+
+      // Create a session for the FIRST agent
+      const sessRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'Cross-Agent Session' });
+      const crossSessionId = sessRes.body.id;
+
+      // Access the first agent's session through the SECOND agent's route
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agent2Id}/sessions/${crossSessionId}/messages`
+      );
+
+      expect(response.status).toBe(404);
+      // The error must be a structured object — not a nested error.error payload
+      expect(typeof response.body.error).toBe('object');
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      expect(typeof response.body.error.message).toBe('string');
+    });
   });
 
   // ── Add Session Message ────────────────────────────────────────────────
@@ -412,7 +441,8 @@ describe('Sessions', () => {
         .send({});
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBeDefined();
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/message/);
     });
   });
 
@@ -1042,7 +1072,7 @@ describe('Sessions', () => {
         .send({ toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }] });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toMatch(/generationId/);
+      expect(response.body.error.message).toMatch(/generationId/);
     });
 
     test('missing toolOutputs returns 400', async () => {
@@ -1259,6 +1289,115 @@ describe('Sessions', () => {
       // Clean up the second session
       await authenticatedTestClient(userToken).delete(
         `/api/v1/agents/${agentId}/sessions/${secondSessionId}`
+      );
+    });
+  });
+
+  // ── buildToolContext: actor keys in generation toolContext ────────────────
+
+  describe('actor context keys in generation toolContext', () => {
+    let noActorSessionId: string;
+    let withActorSessionId: string;
+    let testActorId: string;
+    const testActorExternalId = '+15559876543';
+
+    beforeAll(async () => {
+      // Session without an actor
+      const noActorRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'No Actor Context Test' });
+      noActorSessionId = noActorRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${noActorSessionId}/messages`)
+        .send({ message: 'test message' });
+
+      // Create an actor with an external ID, then a session using it
+      const actorRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/actors')
+        .send({
+          project_id: projectId,
+          name: 'Context Test Actor',
+          external_id: testActorExternalId,
+          type: 'human',
+        });
+      expect(actorRes.status).toBe(201);
+      testActorId = actorRes.body.id;
+
+      const withActorRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'With Actor Context Test', actor_id: testActorId });
+      withActorSessionId = withActorRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/sessions/${withActorSessionId}/messages`
+        )
+        .send({ message: 'test message with actor' });
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    test('actorId and actorExternalId are omitted from toolContext when session has no actor', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_no_actor_ctx_01',
+        traceId: 'trc_no_actor_ctx_01',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: 'Reply without actor',
+          finishReason: 'stop',
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${noActorSessionId}/generate`
+      );
+
+      expect(response.status).toBe(200);
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+
+      const callArgs = mockCreateGeneration.mock.calls[0][0] as {
+        toolContext?: Record<string, string>;
+      };
+      expect(callArgs.toolContext).toBeDefined();
+      // sessionId is always present
+      expect(callArgs.toolContext).toHaveProperty('sessionId');
+      // actor keys must be absent (not empty strings) when no actor is set
+      expect(callArgs.toolContext).not.toHaveProperty('actorId');
+      expect(callArgs.toolContext).not.toHaveProperty('actorExternalId');
+    });
+
+    test('actorId and actorExternalId are populated in toolContext when session has an actor', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_with_actor_ctx_01',
+        traceId: 'trc_with_actor_ctx_01',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: 'Reply with actor',
+          finishReason: 'stop',
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${withActorSessionId}/generate`
+      );
+
+      expect(response.status).toBe(200);
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+
+      const callArgs = mockCreateGeneration.mock.calls[0][0] as {
+        toolContext?: Record<string, string>;
+      };
+      expect(callArgs.toolContext).toBeDefined();
+      expect(callArgs.toolContext).toHaveProperty('sessionId');
+      expect(callArgs.toolContext).toHaveProperty('actorId', testActorId);
+      expect(callArgs.toolContext).toHaveProperty(
+        'actorExternalId',
+        testActorExternalId
       );
     });
   });
