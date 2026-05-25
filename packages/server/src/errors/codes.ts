@@ -48,6 +48,11 @@ export const ERROR_CODES = {
     description:
       'The secret is referenced by one or more AI providers and cannot be deleted. Use force=true to delete dependents as well.',
   },
+  AI_PROVIDER_HAS_DEPENDENTS: {
+    httpStatus: 409,
+    description:
+      'The AI provider is referenced by one or more chats and cannot be deleted. Delete the dependent chats first.',
+  },
   ACTOR_HAS_MESSAGES: {
     httpStatus: 409,
     description: 'The actor has linked session messages and cannot be deleted.',

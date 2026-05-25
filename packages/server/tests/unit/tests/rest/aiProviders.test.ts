@@ -380,5 +380,28 @@ describe('AI Providers', () => {
       );
       expect(response.status).toBe(404);
     });
+
+    test('returns 409 when provider has dependent chats', async () => {
+      const providerRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'Provider With Chat',
+          provider: 'openai',
+          default_model: 'gpt-4o',
+        });
+      const aiProviderId = providerRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post('/api/v1/chats')
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
+
+      const response = await authenticatedTestClient(userToken).delete(
+        `/api/v1/ai-providers/${aiProviderId}`
+      );
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('AI_PROVIDER_HAS_DEPENDENTS');
+      expect(response.body.error.meta.chatCount).toBe(1);
+    });
   });
 });
