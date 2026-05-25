@@ -11,7 +11,6 @@ import {
 } from 'src/lib/agents';
 
 import { agentGenerationRouter } from './agentGeneration';
-import { agentToolsRouter } from './agentTools';
 import { sessionsRouter } from './sessions';
 
 export const agentsRouter = new Router<Context>();
@@ -23,11 +22,6 @@ agentsRouter.use(
   sessionsRouter.routes(),
   sessionsRouter.allowedMethods()
 );
-
-// ── Agent Tools (must be mounted before /agents/:agent_id) ────────────────
-
-agentsRouter.use(agentToolsRouter.routes());
-agentsRouter.use(agentToolsRouter.allowedMethods());
 
 // ── Agents CRUD ──────────────────────────────────────────────────────────
 

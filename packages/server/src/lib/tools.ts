@@ -3,7 +3,7 @@ import { DomainError } from '../errors';
 
 // ── Mapped Types ─────────────────────────────────────────────────────────
 
-export type MappedAgentTool = {
+export type MappedTool = {
   id: string;
   projectId: string;
   type: string;
@@ -20,15 +20,15 @@ export type MappedAgentTool = {
 
 // ── Map Helpers ───────────────────────────────────────────────────────────
 
-const getAgentToolIncludes = () => {
+const getToolIncludes = () => {
   return [{ model: db.Project, as: 'project' }];
 };
 
-const mapAgentTool = (
-  tool: InstanceType<typeof db.AgentTool> & {
+const mapTool = (
+  tool: InstanceType<typeof db.Tool> & {
     project: InstanceType<typeof db.Project>;
   }
-): MappedAgentTool => {
+): MappedTool => {
   return {
     id: tool.publicId,
     projectId: tool.project.publicId,
@@ -47,7 +47,7 @@ const mapAgentTool = (
 
 // ── CRUD ──────────────────────────────────────────────────────────────────
 
-export const createAgentTool = async (args: {
+export const createTool = async (args: {
   projectId: number;
   type?: string;
   name: string;
@@ -57,8 +57,8 @@ export const createAgentTool = async (args: {
   mcp?: object;
   actions?: string[];
   presetParameters?: object;
-}): Promise<MappedAgentTool> => {
-  const agentTool = await db.AgentTool.create({
+}): Promise<MappedTool> => {
+  const tool = await db.Tool.create({
     projectId: args.projectId,
     type: args.type ?? 'http',
     name: args.name,
@@ -70,59 +70,54 @@ export const createAgentTool = async (args: {
     presetParameters: args.presetParameters ?? null,
   });
 
-  const created = await db.AgentTool.findOne({
-    where: { id: (agentTool as unknown as { id: number }).id },
-    include: getAgentToolIncludes(),
+  const created = await db.Tool.findOne({
+    where: { id: (tool as unknown as { id: number }).id },
+    include: getToolIncludes(),
   });
 
-  return mapAgentTool(created as unknown as Parameters<typeof mapAgentTool>[0]);
+  return mapTool(created as unknown as Parameters<typeof mapTool>[0]);
 };
 
-export const listAgentTools = async (args: {
+export const listTools = async (args: {
   projectIds?: number[];
-}): Promise<MappedAgentTool[]> => {
+}): Promise<MappedTool[]> => {
   const where: Record<string, unknown> = {};
   if (args.projectIds !== undefined) {
     where.projectId = args.projectIds;
   }
 
-  const tools = await db.AgentTool.findAll({
+  const tools = await db.Tool.findAll({
     where,
-    include: getAgentToolIncludes(),
+    include: getToolIncludes(),
     order: [['createdAt', 'DESC']],
   });
 
   return tools.map((t) => {
-    return mapAgentTool(t as unknown as Parameters<typeof mapAgentTool>[0]);
+    return mapTool(t as unknown as Parameters<typeof mapTool>[0]);
   });
 };
 
-export const getAgentTool = async (args: {
+export const getTool = async (args: {
   projectIds?: number[];
   id: string;
-}): Promise<MappedAgentTool> => {
+}): Promise<MappedTool> => {
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) {
     where.projectId = args.projectIds;
   }
 
-  const agentTool = await db.AgentTool.findOne({
+  const tool = await db.Tool.findOne({
     where,
-    include: getAgentToolIncludes(),
+    include: getToolIncludes(),
   });
 
-  if (!agentTool)
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Agent tool '${args.id}' not found.`
-    );
+  if (!tool)
+    throw new DomainError('RESOURCE_NOT_FOUND', `Tool '${args.id}' not found.`);
 
-  return mapAgentTool(
-    agentTool as unknown as Parameters<typeof mapAgentTool>[0]
-  );
+  return mapTool(tool as unknown as Parameters<typeof mapTool>[0]);
 };
 
-const buildAgentToolUpdates = (args: {
+const buildToolUpdates = (args: {
   type?: string;
   name?: string;
   description?: string | null;
@@ -149,7 +144,7 @@ const buildAgentToolUpdates = (args: {
   return updates;
 };
 
-export const updateAgentTool = async (args: {
+export const updateTool = async (args: {
   projectIds?: number[];
   id: string;
   type?: string;
@@ -160,31 +155,28 @@ export const updateAgentTool = async (args: {
   mcp?: object | null;
   actions?: string[] | null;
   presetParameters?: object | null;
-}): Promise<MappedAgentTool> => {
+}): Promise<MappedTool> => {
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) {
     where.projectId = args.projectIds;
   }
 
-  const agentTool = await db.AgentTool.findOne({ where });
+  const tool = await db.Tool.findOne({ where });
 
-  if (!agentTool)
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Agent tool '${args.id}' not found.`
-    );
+  if (!tool)
+    throw new DomainError('RESOURCE_NOT_FOUND', `Tool '${args.id}' not found.`);
 
-  await agentTool.update(buildAgentToolUpdates(args));
+  await tool.update(buildToolUpdates(args));
 
-  const updated = await db.AgentTool.findOne({
-    where: { id: (agentTool as unknown as { id: number }).id },
-    include: getAgentToolIncludes(),
+  const updated = await db.Tool.findOne({
+    where: { id: (tool as unknown as { id: number }).id },
+    include: getToolIncludes(),
   });
 
-  return mapAgentTool(updated as unknown as Parameters<typeof mapAgentTool>[0]);
+  return mapTool(updated as unknown as Parameters<typeof mapTool>[0]);
 };
 
-export const deleteAgentTool = async (args: {
+export const deleteTool = async (args: {
   projectIds?: number[];
   id: string;
 }): Promise<void> => {
@@ -193,13 +185,10 @@ export const deleteAgentTool = async (args: {
     where.projectId = args.projectIds;
   }
 
-  const agentTool = await db.AgentTool.findOne({ where });
+  const tool = await db.Tool.findOne({ where });
 
-  if (!agentTool)
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Agent tool '${args.id}' not found.`
-    );
+  if (!tool)
+    throw new DomainError('RESOURCE_NOT_FOUND', `Tool '${args.id}' not found.`);
 
-  await agentTool.destroy();
+  await tool.destroy();
 };

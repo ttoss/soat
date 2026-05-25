@@ -131,7 +131,7 @@ export type MappedFormationOperation = {
 
 export const SUPPORTED_RESOURCE_TYPES = new Set([
   'ai_provider',
-  'agent_tool',
+  'tool',
   'agent',
   'actor',
   'api_key',

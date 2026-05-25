@@ -273,7 +273,7 @@ echo "WRITE_STANZA_TOOL_ID: $WRITE_STANZA_TOOL_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: readPoemTool } = await adminSoat.agentTools.createAgentTool({
+const { data: readPoemTool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'poem-read',
@@ -285,7 +285,7 @@ const { data: readPoemTool } = await adminSoat.agentTools.createAgentTool({
 });
 const READ_POEM_TOOL_ID = readPoemTool.id;
 
-const { data: writeStanzaTool } = await adminSoat.agentTools.createAgentTool({
+const { data: writeStanzaTool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'poem-write',
@@ -302,14 +302,14 @@ const WRITE_STANZA_TOOL_ID = writeStanzaTool.id;
 <TabItem value="curl" label="curl">
 
 ```bash
-READ_POEM_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agent-tools" \
+READ_POEM_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/tools" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"poem-read\",\"type\":\"soat\",\"description\":\"Read the shared poem document\",\"actions\":[\"get-document\"],\"preset_parameters\":{\"documentId\":\"$POEM_DOC_ID\"}}" \
   | jq -r '.id')
 echo "READ_POEM_TOOL_ID: $READ_POEM_TOOL_ID"
 
-WRITE_STANZA_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agent-tools" \
+WRITE_STANZA_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/tools" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"poem-write\",\"type\":\"soat\",\"description\":\"Update the shared poem document\",\"actions\":[\"update-document\"],\"preset_parameters\":{\"documentId\":\"$POEM_DOC_ID\"}}" \
@@ -532,7 +532,7 @@ echo "READ_FINAL_POEM_TOOL_ID: $READ_FINAL_POEM_TOOL_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: callStanza1Tool } = await adminSoat.agentTools.createAgentTool({
+const { data: callStanza1Tool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'call-stanza-1',
@@ -553,7 +553,7 @@ const { data: callStanza1Tool } = await adminSoat.agentTools.createAgentTool({
 });
 const CALL_STANZA1_TOOL_ID = callStanza1Tool.id;
 
-const { data: callStanza2Tool } = await adminSoat.agentTools.createAgentTool({
+const { data: callStanza2Tool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'call-stanza-2',
@@ -574,7 +574,7 @@ const { data: callStanza2Tool } = await adminSoat.agentTools.createAgentTool({
 });
 const CALL_STANZA2_TOOL_ID = callStanza2Tool.id;
 
-const { data: callStanza3Tool } = await adminSoat.agentTools.createAgentTool({
+const { data: callStanza3Tool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'call-stanza-3',
@@ -595,7 +595,7 @@ const { data: callStanza3Tool } = await adminSoat.agentTools.createAgentTool({
 });
 const CALL_STANZA3_TOOL_ID = callStanza3Tool.id;
 
-const { data: callStanza4Tool } = await adminSoat.agentTools.createAgentTool({
+const { data: callStanza4Tool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'call-stanza-4',
@@ -616,7 +616,7 @@ const { data: callStanza4Tool } = await adminSoat.agentTools.createAgentTool({
 });
 const CALL_STANZA4_TOOL_ID = callStanza4Tool.id;
 
-const { data: readFinalPoemTool } = await adminSoat.agentTools.createAgentTool({
+const { data: readFinalPoemTool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'read-final-poem',
@@ -633,27 +633,27 @@ const READ_FINAL_POEM_TOOL_ID = readFinalPoemTool.id;
 <TabItem value="curl" label="curl">
 
 ```bash
-CALL_STANZA1_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agent-tools" \
+CALL_STANZA1_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/tools" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"call-stanza-1\",\"type\":\"soat\",\"description\":\"Call stanza 1 agent\",\"actions\":[\"create-agent-generation\"],\"preset_parameters\":{\"agentId\":\"$STANZA1_AGENT_ID\",\"messages\":[{\"role\":\"user\",\"content\":\"Theme: artificial intelligence. Write stanza 1 with title + first quatrain.\"}]}}" | jq -r '.id')
 
-CALL_STANZA2_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agent-tools" \
+CALL_STANZA2_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/tools" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"call-stanza-2\",\"type\":\"soat\",\"description\":\"Call stanza 2 agent\",\"actions\":[\"create-agent-generation\"],\"preset_parameters\":{\"agentId\":\"$STANZA2_AGENT_ID\",\"messages\":[{\"role\":\"user\",\"content\":\"Theme: artificial intelligence. Write stanza 2 (second quatrain).\"}]}}" | jq -r '.id')
 
-CALL_STANZA3_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agent-tools" \
+CALL_STANZA3_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/tools" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"call-stanza-3\",\"type\":\"soat\",\"description\":\"Call stanza 3 agent\",\"actions\":[\"create-agent-generation\"],\"preset_parameters\":{\"agentId\":\"$STANZA3_AGENT_ID\",\"messages\":[{\"role\":\"user\",\"content\":\"Theme: artificial intelligence. Write stanza 3 (third quatrain).\"}]}}" | jq -r '.id')
 
-CALL_STANZA4_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agent-tools" \
+CALL_STANZA4_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/tools" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"call-stanza-4\",\"type\":\"soat\",\"description\":\"Call stanza 4 agent\",\"actions\":[\"create-agent-generation\"],\"preset_parameters\":{\"agentId\":\"$STANZA4_AGENT_ID\",\"messages\":[{\"role\":\"user\",\"content\":\"Theme: artificial intelligence. Write stanza 4 (final couplet).\"}]}}" | jq -r '.id')
 
-READ_FINAL_POEM_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agent-tools" \
+READ_FINAL_POEM_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/tools" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"read-final-poem\",\"type\":\"soat\",\"description\":\"Read the final poem from the shared document\",\"actions\":[\"get-document\"],\"preset_parameters\":{\"documentId\":\"$POEM_DOC_ID\"}}" | jq -r '.id')

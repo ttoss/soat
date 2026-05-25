@@ -11,16 +11,16 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Project } from './Project';
 
 @Table({
-  tableName: 'agent_tools',
+  tableName: 'tools',
   hooks: {
-    beforeValidate: (instance: AgentTool) => {
+    beforeValidate: (instance: Tool) => {
       if (!instance.publicId) {
-        instance.publicId = generatePublicId(PUBLIC_ID_PREFIXES.agentTool);
+        instance.publicId = generatePublicId(PUBLIC_ID_PREFIXES.tool);
       }
     },
   },
 })
-export class AgentTool extends Model {
+export class Tool extends Model {
   @Column({
     type: DataType.STRING(32),
     unique: true,

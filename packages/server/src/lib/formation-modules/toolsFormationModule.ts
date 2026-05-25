@@ -1,11 +1,6 @@
 import createDebug from 'debug';
 
-import {
-  createAgentTool,
-  deleteAgentTool,
-  getAgentTool,
-  updateAgentTool,
-} from '../agentToolsCrud';
+import { createTool, deleteTool, getTool, updateTool } from '../tools';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
   toNullableArray,
@@ -21,14 +16,14 @@ import {
   pushUnknownFieldErrors,
 } from './formationSpecLoader';
 
-const log = createDebug('soat:formations:agentTools');
+const log = createDebug('soat:formations:tools');
 
-const SCHEMA_NAME = 'AgentToolResourceProperties';
-const RESOURCE_LABEL = 'agent_tool';
+const SCHEMA_NAME = 'ToolResourceProperties';
+const RESOURCE_LABEL = 'tool';
 
 // ── Property validation ──────────────────────────────────────────────────
 
-const validateAgentToolProperties = (args: {
+const validateToolProperties = (args: {
   properties: unknown;
   basePath: string;
   forUpdate?: boolean;
@@ -38,7 +33,7 @@ const validateAgentToolProperties = (args: {
     return [
       {
         path: basePath,
-        message: 'Agent tool `properties` must be an object',
+        message: 'Tool `properties` must be an object',
       },
     ];
   }
@@ -62,23 +57,23 @@ const validateAgentToolProperties = (args: {
 
 // ── Module export ────────────────────────────────────────────────────────
 
-export const agentToolsFormationModule: FormationModule = {
-  resourceType: 'agent_tool',
+export const toolsFormationModule: FormationModule = {
+  resourceType: 'tool',
 
   validateProperties: ({ properties, basePath }) => {
-    return validateAgentToolProperties({ properties, basePath });
+    return validateToolProperties({ properties, basePath });
   },
 
   create: async ({ properties, projectId }) => {
-    const errors = validateAgentToolProperties({
+    const errors = validateToolProperties({
       properties,
-      basePath: 'resources.<agent_tool>.properties',
+      basePath: 'resources.<tool>.properties',
     });
     if (errors.length > 0) {
       throw new Error(errors[0].message);
     }
 
-    const result = await createAgentTool({
+    const result = await createTool({
       projectId,
       name: properties.name as string,
       type: toOptionalString(properties.type),
@@ -92,7 +87,7 @@ export const agentToolsFormationModule: FormationModule = {
     });
 
     log(
-      'created agent tool from formation: projectId=%d toolId=%s',
+      'created tool from formation: projectId=%d toolId=%s',
       projectId,
       result.id
     );
@@ -100,16 +95,16 @@ export const agentToolsFormationModule: FormationModule = {
   },
 
   update: async ({ properties, physicalResourceId }) => {
-    const errors = validateAgentToolProperties({
+    const errors = validateToolProperties({
       properties,
-      basePath: 'resources.<agent_tool>.properties',
+      basePath: 'resources.<tool>.properties',
       forUpdate: true,
     });
     if (errors.length > 0) {
       throw new Error(errors[0].message);
     }
 
-    await updateAgentTool({
+    await updateTool({
       id: physicalResourceId,
       name: toOptionalString(properties.name),
       type: toOptionalString(properties.type),
@@ -123,12 +118,12 @@ export const agentToolsFormationModule: FormationModule = {
   },
 
   delete: async ({ physicalResourceId }) => {
-    await deleteAgentTool({ id: physicalResourceId });
+    await deleteTool({ id: physicalResourceId });
   },
 
   read: async ({ physicalResourceId }) => {
     try {
-      const tool = await getAgentTool({ id: physicalResourceId });
+      const tool = await getTool({ id: physicalResourceId });
       return {
         name: tool.name,
         type: tool.type,

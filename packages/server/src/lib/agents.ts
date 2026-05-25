@@ -10,16 +10,6 @@ export {
 } from './agentGeneration';
 export { resolveUrlPathParams } from './agentToolResolver';
 
-// Re-export AgentTool CRUD and types.
-export {
-  createAgentTool,
-  deleteAgentTool,
-  getAgentTool,
-  listAgentTools,
-  type MappedAgentTool,
-  updateAgentTool,
-} from './agentToolsCrud';
-
 // ── Mapped Types ─────────────────────────────────────────────────────────
 
 export type MappedAgent = {

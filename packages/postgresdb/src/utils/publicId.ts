@@ -18,6 +18,7 @@ export const PUBLIC_ID_PREFIXES = {
   chat: 'cht_',
   agent: 'agt_',
   agentTool: 'agt_tool_',
+  tool: 'tool_',
   generation: 'agt_gen_',
   trace: 'agt_trace_',
   webhook: 'whk_',

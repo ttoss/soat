@@ -1,14 +1,14 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import {
-  createAgentTool,
-  deleteAgentTool,
-  getAgentTool,
-  listAgentTools,
-  updateAgentTool,
-} from 'src/lib/agents';
+  createTool,
+  deleteTool,
+  getTool,
+  listTools,
+  updateTool,
+} from 'src/lib/tools';
 
-export const agentToolsRouter = new Router<Context>();
+export const toolsRouter = new Router<Context>();
 
 const parseStringOrUndefined = (v: unknown): string | undefined => {
   return typeof v === 'string' ? v : undefined;
@@ -97,7 +97,13 @@ const checkToolsAccess = async (
   return projectIds;
 };
 
-agentToolsRouter.post('/agents/tools', async (ctx: Context) => {
+/**
+ * @openapi
+ * /api/v1/tools:
+ *   post:
+ *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools/post'
+ */
+toolsRouter.post('/tools', async (ctx: Context) => {
   const {
     name,
     type,
@@ -128,7 +134,7 @@ agentToolsRouter.post('/agents/tools', async (ctx: Context) => {
 
   const targetProjectId = await resolveToolProjectId(
     ctx,
-    'agents:CreateAgentTool',
+    'tools:CreateTool',
     projectPublicId
   );
   if (!targetProjectId) return;
@@ -153,7 +159,7 @@ agentToolsRouter.post('/agents/tools', async (ctx: Context) => {
     return;
   }
 
-  const result = await createAgentTool({
+  const result = await createTool({
     projectId: Number(targetProjectId),
     name,
     type: parseStringOrUndefined(type),
@@ -169,7 +175,13 @@ agentToolsRouter.post('/agents/tools', async (ctx: Context) => {
   ctx.body = result;
 });
 
-agentToolsRouter.get('/agents/tools', async (ctx: Context) => {
+/**
+ * @openapi
+ * /api/v1/tools:
+ *   get:
+ *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools/get'
+ */
+toolsRouter.get('/tools', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -180,7 +192,7 @@ agentToolsRouter.get('/agents/tools', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
-    action: 'agents:ListAgentTools',
+    action: 'tools:ListTools',
   });
 
   if (projectIds === null) {
@@ -189,10 +201,16 @@ agentToolsRouter.get('/agents/tools', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listAgentTools({ projectIds });
+  ctx.body = await listTools({ projectIds });
 });
 
-agentToolsRouter.get('/agents/tools/:tool_id', async (ctx: Context) => {
+/**
+ * @openapi
+ * /api/v1/tools/{tool_id}:
+ *   get:
+ *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}/get'
+ */
+toolsRouter.get('/tools/:tool_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -200,7 +218,7 @@ agentToolsRouter.get('/agents/tools/:tool_id', async (ctx: Context) => {
   }
 
   const projectIds = await ctx.authUser.resolveProjectIds({
-    action: 'agents:GetAgentTool',
+    action: 'tools:GetTool',
   });
 
   if (projectIds === null) {
@@ -209,7 +227,7 @@ agentToolsRouter.get('/agents/tools/:tool_id', async (ctx: Context) => {
     return;
   }
 
-  const result = await getAgentTool({
+  const result = await getTool({
     projectIds,
     id: ctx.params.tool_id,
   });
@@ -217,8 +235,14 @@ agentToolsRouter.get('/agents/tools/:tool_id', async (ctx: Context) => {
   ctx.body = result;
 });
 
-agentToolsRouter.put('/agents/tools/:tool_id', async (ctx: Context) => {
-  const projectIds = await checkToolsAccess(ctx, 'agents:UpdateAgentTool');
+/**
+ * @openapi
+ * /api/v1/tools/{tool_id}:
+ *   patch:
+ *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}/patch'
+ */
+toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
+  const projectIds = await checkToolsAccess(ctx, 'tools:UpdateTool');
   if (projectIds === null) return;
 
   const {
@@ -250,7 +274,7 @@ agentToolsRouter.put('/agents/tools/:tool_id', async (ctx: Context) => {
     return;
   }
 
-  const result = await updateAgentTool({
+  const result = await updateTool({
     projectIds,
     id: ctx.params.tool_id,
     name: parseStringOrUndefined(name),
@@ -266,7 +290,13 @@ agentToolsRouter.put('/agents/tools/:tool_id', async (ctx: Context) => {
   ctx.body = result;
 });
 
-agentToolsRouter.delete('/agents/tools/:tool_id', async (ctx: Context) => {
+/**
+ * @openapi
+ * /api/v1/tools/{tool_id}:
+ *   delete:
+ *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}/delete'
+ */
+toolsRouter.delete('/tools/:tool_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -274,7 +304,7 @@ agentToolsRouter.delete('/agents/tools/:tool_id', async (ctx: Context) => {
   }
 
   const projectIds = await ctx.authUser.resolveProjectIds({
-    action: 'agents:DeleteAgentTool',
+    action: 'tools:DeleteTool',
   });
 
   if (projectIds === null) {
@@ -283,7 +313,7 @@ agentToolsRouter.delete('/agents/tools/:tool_id', async (ctx: Context) => {
     return;
   }
 
-  await deleteAgentTool({
+  await deleteTool({
     projectIds,
     id: ctx.params.tool_id,
   });

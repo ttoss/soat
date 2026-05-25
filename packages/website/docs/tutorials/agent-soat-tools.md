@@ -414,7 +414,7 @@ echo "Write: $WRITE_TOOL_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: listTool } = await adminSoat.agents.createAgentTool({
+const { data: listTool } = await adminSoat.tools.createTool({
   body: {
     project_id: projectId,
     name: 'docs',
@@ -423,7 +423,7 @@ const { data: listTool } = await adminSoat.agents.createAgentTool({
   },
 });
 
-const { data: readTool } = await adminSoat.agents.createAgentTool({
+const { data: readTool } = await adminSoat.tools.createTool({
   body: {
     project_id: projectId,
     name: 'docs',
@@ -433,7 +433,7 @@ const { data: readTool } = await adminSoat.agents.createAgentTool({
 });
 
 // document_id is preset — the model never sees this parameter
-const { data: writeTool } = await adminSoat.agents.createAgentTool({
+const { data: writeTool } = await adminSoat.tools.createTool({
   body: {
     project_id: projectId,
     name: 'docs',

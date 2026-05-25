@@ -48,11 +48,11 @@ describe('Agents', () => {
                 'agents:UpdateAgent',
                 'agents:DeleteAgent',
                 'agents:CreateAgentGeneration',
-                'agents:CreateAgentTool',
-                'agents:ListAgentTools',
-                'agents:GetAgentTool',
-                'agents:UpdateAgentTool',
-                'agents:DeleteAgentTool',
+                'tools:CreateTool',
+                'tools:ListTools',
+                'tools:GetTool',
+                'tools:UpdateTool',
+                'tools:DeleteTool',
               ],
             },
           ],
@@ -83,10 +83,10 @@ describe('Agents', () => {
 
   // ── Agent Tools CRUD ─────────────────────────────────────────────────────
 
-  describe('POST /api/v1/agents/tools', () => {
+  describe('POST /api/v1/tools', () => {
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
-        .post('/api/v1/agents/tools')
+        .post('/api/v1/tools')
         .send({ name: 'test-tool' });
 
       expect(response.status).toBe(401);
@@ -94,7 +94,7 @@ describe('Agents', () => {
 
     test('missing name returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/agents/tools')
+        .post('/api/v1/tools')
         .send({ project_id: projectId });
 
       expect(response.status).toBe(400);
@@ -103,7 +103,7 @@ describe('Agents', () => {
 
     test('user without project access returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
-        .post('/api/v1/agents/tools')
+        .post('/api/v1/tools')
         .send({ name: 'test-tool', project_id: otherProjectId });
 
       expect(response.status).toBe(403);
@@ -111,7 +111,7 @@ describe('Agents', () => {
 
     test('returns 400 when parameters is a non-object string', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/agents/tools')
+        .post('/api/v1/tools')
         .send({
           name: 'bad-tool',
           project_id: projectId,
@@ -124,7 +124,7 @@ describe('Agents', () => {
 
     test('coerces JSON-encoded string parameters to an object', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/agents/tools')
+        .post('/api/v1/tools')
         .send({
           name: 'coerced-tool',
           project_id: projectId,
@@ -140,12 +140,12 @@ describe('Agents', () => {
 
     test('creates an agent tool with required fields', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/agents/tools')
+        .post('/api/v1/tools')
         .send({ name: 'my-http-tool', project_id: projectId });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
-      expect(response.body.id).toMatch(/^agt_tool_/);
+      expect(response.body.id).toMatch(/^tool_/);
       expect(response.body.name).toBe('my-http-tool');
       expect(response.body.type).toBe('http');
       expect(response.body.project_id).toBe(projectId);
@@ -153,7 +153,7 @@ describe('Agents', () => {
 
     test('creates an agent tool with optional fields', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/agents/tools')
+        .post('/api/v1/tools')
         .send({
           name: 'client-tool',
           type: 'client',
@@ -173,7 +173,7 @@ describe('Agents', () => {
 
     test('creates an http tool with execute.method set to GET', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/agents/tools')
+        .post('/api/v1/tools')
         .send({
           name: 'get-http-tool',
           type: 'http',
@@ -198,7 +198,7 @@ describe('Agents', () => {
 
     test('creates an agent tool of type mcp', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/agents/tools')
+        .post('/api/v1/tools')
         .send({
           name: 'soat-mcp-tool',
           type: 'mcp',
@@ -211,7 +211,7 @@ describe('Agents', () => {
         });
 
       expect(response.status).toBe(201);
-      expect(response.body.id).toMatch(/^agt_tool_/);
+      expect(response.body.id).toMatch(/^tool_/);
       expect(response.body.type).toBe('mcp');
       expect(response.body.description).toBe('SOAT MCP server');
       expect(response.body.mcp).toBeDefined();
@@ -221,15 +221,15 @@ describe('Agents', () => {
     });
   });
 
-  describe('GET /api/v1/agents/tools', () => {
+  describe('GET /api/v1/tools', () => {
     test('unauthenticated request returns 401', async () => {
-      const response = await testClient.get('/api/v1/agents/tools');
+      const response = await testClient.get('/api/v1/tools');
       expect(response.status).toBe(401);
     });
 
     test('user without project access returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
-        .get('/api/v1/agents/tools')
+        .get('/api/v1/tools')
         .query({ projectId: otherProjectId });
 
       expect(response.status).toBe(403);
@@ -237,34 +237,34 @@ describe('Agents', () => {
 
     test('authenticated user can list agent tools', async () => {
       const response = await authenticatedTestClient(userToken)
-        .get('/api/v1/agents/tools')
+        .get('/api/v1/tools')
         .query({ projectId });
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThanOrEqual(1);
-      expect(response.body[0].id).toMatch(/^agt_tool_/);
+      expect(response.body[0].id).toMatch(/^tool_/);
     });
   });
 
-  describe('GET /api/v1/agents/tools/:toolId', () => {
+  describe('GET /api/v1/tools/:toolId', () => {
     let toolId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/agents/tools')
+        .post('/api/v1/tools')
         .send({ name: 'get-tool-test', project_id: projectId });
       toolId = res.body.id;
     });
 
     test('unauthenticated request returns 401', async () => {
-      const response = await testClient.get(`/api/v1/agents/tools/${toolId}`);
+      const response = await testClient.get(`/api/v1/tools/${toolId}`);
       expect(response.status).toBe(401);
     });
 
     test('unknown toolId returns 404', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        '/api/v1/agents/tools/agt_tool_doesnotexist0000'
+        '/api/v1/tools/tool_doesnotexist0000'
       );
       expect(response.status).toBe(404);
       expect(response.body.error).toBeDefined();
@@ -272,7 +272,7 @@ describe('Agents', () => {
 
     test('authenticated user can get an agent tool', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/tools/${toolId}`
+        `/api/v1/tools/${toolId}`
       );
 
       expect(response.status).toBe(200);
@@ -281,33 +281,33 @@ describe('Agents', () => {
     });
   });
 
-  describe('PUT /api/v1/agents/tools/:toolId', () => {
+  describe('PATCH /api/v1/tools/:toolId', () => {
     let toolId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/agents/tools')
+        .post('/api/v1/tools')
         .send({ name: 'update-tool-test', project_id: projectId });
       toolId = res.body.id;
     });
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
-        .put(`/api/v1/agents/tools/${toolId}`)
+        .patch(`/api/v1/tools/${toolId}`)
         .send({ name: 'renamed' });
       expect(response.status).toBe(401);
     });
 
     test('unknown toolId returns 404', async () => {
       const response = await authenticatedTestClient(userToken)
-        .put('/api/v1/agents/tools/agt_tool_doesnotexist0000')
+        .patch('/api/v1/tools/tool_doesnotexist0000')
         .send({ name: 'renamed' });
       expect(response.status).toBe(404);
     });
 
     test('authenticated user can update an agent tool', async () => {
       const response = await authenticatedTestClient(userToken)
-        .put(`/api/v1/agents/tools/${toolId}`)
+        .patch(`/api/v1/tools/${toolId}`)
         .send({ name: 'renamed-tool', description: 'Updated desc' });
 
       expect(response.status).toBe(200);
@@ -317,40 +317,38 @@ describe('Agents', () => {
     });
   });
 
-  describe('DELETE /api/v1/agents/tools/:toolId', () => {
+  describe('DELETE /api/v1/tools/:toolId', () => {
     let toolId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/agents/tools')
+        .post('/api/v1/tools')
         .send({ name: 'delete-tool-test', project_id: projectId });
       toolId = res.body.id;
     });
 
     test('unauthenticated request returns 401', async () => {
-      const response = await testClient.delete(
-        `/api/v1/agents/tools/${toolId}`
-      );
+      const response = await testClient.delete(`/api/v1/tools/${toolId}`);
       expect(response.status).toBe(401);
     });
 
     test('unknown toolId returns 404', async () => {
       const response = await authenticatedTestClient(userToken).delete(
-        '/api/v1/agents/tools/agt_tool_doesnotexist0000'
+        '/api/v1/tools/tool_doesnotexist0000'
       );
       expect(response.status).toBe(404);
     });
 
     test('authenticated user can delete an agent tool', async () => {
       const response = await authenticatedTestClient(userToken).delete(
-        `/api/v1/agents/tools/${toolId}`
+        `/api/v1/tools/${toolId}`
       );
       expect(response.status).toBe(204);
     });
 
     test('deleted tool returns 404 on get', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/tools/${toolId}`
+        `/api/v1/tools/${toolId}`
       );
       expect(response.status).toBe(404);
     });
@@ -542,7 +540,7 @@ describe('Agents', () => {
 
     test('can update agent with toolIds', async () => {
       const toolRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/agents/tools')
+        .post('/api/v1/tools')
         .send({ name: 'tool-for-agent', project_id: projectId });
       const toolId = toolRes.body.id;
 

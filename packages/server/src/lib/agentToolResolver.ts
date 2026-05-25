@@ -450,7 +450,7 @@ export const resolveAgentTools = async (args: {
       toolWhere.projectId = args.projectIds;
     }
 
-    const agentTool = await db.AgentTool.findOne({ where: toolWhere });
+    const agentTool = await db.Tool.findOne({ where: toolWhere });
     if (!agentTool) continue;
 
     const typedTool = agentTool as unknown as AgentToolRow;

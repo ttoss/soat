@@ -1,6 +1,6 @@
 export { Actor } from './Actor';
 export { Agent } from './Agent';
-export { AgentTool } from './AgentTool';
+export { Tool } from './Tool';
 export { AiProvider } from './AiProvider';
 export { ApiKey } from './ApiKey';
 export { Chat } from './Chat';

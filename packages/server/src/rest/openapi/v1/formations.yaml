@@ -617,7 +617,7 @@ components:
           nullable: true
           description: Provider-specific extra configuration
 
-    AgentToolResourceProperties:
+    ToolResourceProperties:
       description: >-
         Defines a tool (HTTP endpoint, MCP server, or SOAT action) that
         agents can invoke during a generation.
@@ -956,7 +956,7 @@ components:
           type: string
           enum:
             - ai_provider
-            - agent_tool
+            - tool
             - agent
             - actor
             - api_key
@@ -976,7 +976,7 @@ components:
             - $ref: '#/components/schemas/AgentResourceProperties'
             - $ref: '#/components/schemas/ActorResourceProperties'
             - $ref: '#/components/schemas/AiProviderResourceProperties'
-            - $ref: '#/components/schemas/AgentToolResourceProperties'
+            - $ref: '#/components/schemas/ToolResourceProperties'
             - $ref: '#/components/schemas/ApiKeyResourceProperties'
             - $ref: '#/components/schemas/ChatResourceProperties'
             - $ref: '#/components/schemas/ConversationResourceProperties'
