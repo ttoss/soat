@@ -1,3 +1,4 @@
+import { db } from 'src/db';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Formations', () => {
@@ -1400,6 +1401,74 @@ resources:
         `/api/v1/formations/${apiKeyFormationId}`
       );
       expect(res.status).toBe(404);
+    });
+  });
+
+  // ── secret resource: lastAppliedProperties must not store plaintext value ──
+
+  describe('Formation with secret resources (security: sanitize lastAppliedProperties)', () => {
+    let secretFormationId: string;
+
+    test('creates formation with a secret resource', async () => {
+      const template = {
+        resources: {
+          MySecret: {
+            type: 'secret',
+            properties: {
+              name: 'test-secret-sanitize',
+              value: 'super-plaintext-value',
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `secret-formation-${Date.now()}`,
+          template,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      secretFormationId = res.body.id;
+
+      const secretResource = res.body.resources.find(
+        (r: { logical_id: string }) => r.logical_id === 'MySecret'
+      );
+      expect(secretResource).toBeDefined();
+      expect(secretResource.status).toBe('created');
+      expect(secretResource.physical_resource_id).toBeDefined();
+    });
+
+    test('lastAppliedProperties for secret resource does not contain plaintext value', async () => {
+      const formationRow = await db.Formation.findOne({
+        where: { publicId: secretFormationId },
+      });
+      expect(formationRow).not.toBeNull();
+
+      const resourceRow = await db.FormationResource.findOne({
+        where: {
+          formationId: formationRow!.id,
+          logicalId: 'MySecret',
+        },
+      });
+      expect(resourceRow).not.toBeNull();
+
+      const props = resourceRow!.lastAppliedProperties as Record<
+        string,
+        unknown
+      >;
+      expect(props).not.toHaveProperty('value');
+      expect(props).toHaveProperty('name', 'test-secret-sanitize');
+    });
+
+    test('deletes secret formation', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${secretFormationId}`
+      );
+      expect(res.status).toBe(204);
     });
   });
 });

@@ -5,11 +5,22 @@
 
 import type { db } from 'src/db';
 
+import { getFormationModule } from './formationsRegistry';
 import {
   applyCreateResource,
   applyUpdateResource,
 } from './formationsResourceHandlers';
 import type { FormationEvent } from './formationsTypes';
+
+const sanitize = (
+  resourceType: string,
+  properties: Record<string, unknown>
+): Record<string, unknown> => {
+  const mod = getFormationModule({ resourceType });
+  return mod?.sanitizeLastAppliedProperties
+    ? mod.sanitizeLastAppliedProperties(properties)
+    : properties;
+};
 
 type ResourceRow = InstanceType<(typeof db)['FormationResource']>;
 
@@ -40,7 +51,7 @@ export const applyCreateChange = async (args: {
   await resourceRow.update({
     physicalResourceId: physicalId,
     status: 'created',
-    lastAppliedProperties: resolvedProperties,
+    lastAppliedProperties: sanitize(resourceType, resolvedProperties),
   });
   events.push({
     timestamp: new Date().toISOString(),
@@ -85,7 +96,7 @@ export const applyUpdateChange = async (args: {
     });
     await resourceRow.update({
       status: 'updated',
-      lastAppliedProperties: resolvedProperties,
+      lastAppliedProperties: sanitize(resourceType, resolvedProperties),
     });
     events.push({
       timestamp: new Date().toISOString(),

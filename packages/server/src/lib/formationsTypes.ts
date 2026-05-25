@@ -61,6 +61,14 @@ export type FormationModule = {
   read?: (args: {
     physicalResourceId: string;
   }) => Promise<Record<string, unknown> | null>;
+  /**
+   * Strip sensitive fields before the resolved properties are persisted in
+   * `lastAppliedProperties`. Implement this for resources whose properties
+   * contain secrets or other values that must not be stored in plaintext.
+   */
+  sanitizeLastAppliedProperties?: (
+    properties: Record<string, unknown>
+  ) => Record<string, unknown>;
 };
 
 export type PlanChange = {
