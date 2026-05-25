@@ -246,7 +246,11 @@ describe('FK onDelete rules', () => {
 
       const actorRes = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ project_id: projectId, name: 'fkod-actor-agent', agent_id: agentId });
+        .send({
+          project_id: projectId,
+          name: 'fkod-actor-agent',
+          agent_id: agentId,
+        });
       expect(actorRes.status).toBe(201);
       const actorId = actorRes.body.id as string;
       expect(actorRes.body.agent_id).toBe(agentId);
