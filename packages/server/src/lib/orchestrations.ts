@@ -281,7 +281,35 @@ export const deleteOrchestration = async (args: {
       `Orchestration '${args.id}' not found.`
     );
 
-  await orch.destroy();
+  await db.sequelize.transaction(async (t) => {
+    const runs = await db.OrchestrationRun.findAll({
+      where: { orchestrationId: orch.id as number },
+      attributes: ['id'],
+      transaction: t,
+    });
+
+    const runIds = runs
+      .map((run) => {
+        return run.id as number;
+      })
+      .filter((runId) => {
+        return Number.isInteger(runId);
+      });
+
+    if (runIds.length > 0) {
+      await db.OrchestrationCheckpoint.destroy({
+        where: { runId: runIds },
+        transaction: t,
+      });
+
+      await db.OrchestrationRun.destroy({
+        where: { id: runIds },
+        transaction: t,
+      });
+    }
+
+    await orch.destroy({ transaction: t });
+  });
 };
 
 // ── CRUD: Orchestration Runs ──────────────────────────────────────────────

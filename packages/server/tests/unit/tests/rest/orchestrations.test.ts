@@ -910,6 +910,49 @@ describe('Orchestrations', () => {
       expect(getRes.status).toBe(404);
     });
 
+    test('authenticated user can delete an orchestration after a paused run created checkpoints', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Delete With Checkpoints',
+          nodes: [
+            {
+              id: 'approval',
+              type: 'human',
+              prompt: 'Approve or reject',
+              options: ['approve', 'reject'],
+              output_mapping: { choice: 'state.choice' },
+            },
+            {
+              id: 'finish',
+              type: 'transform',
+              expression: { var: 'choice' },
+              output_mapping: { result: 'state.result' },
+            },
+          ],
+          edges: [{ from: 'approval', to: 'finish' }],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+      const toDeleteId = createRes.body.id;
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${toDeleteId}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('paused');
+
+      const deleteRes = await authenticatedTestClient(userToken).delete(
+        `/api/v1/orchestrations/${toDeleteId}`
+      );
+      expect(deleteRes.status).toBe(204);
+
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestrations/${toDeleteId}`
+      );
+      expect(getRes.status).toBe(404);
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.delete(
         `/api/v1/orchestrations/${orchestrationId}`
