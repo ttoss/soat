@@ -223,7 +223,7 @@ resources:
 
       expect(res.status).toBe(201);
       expect(res.body.id).toBeDefined();
-      expect(res.body.id).toMatch(/^af_/);
+      expect(res.body.id).toMatch(/^form_/);
       expect(res.body.name).toBe('test-formation');
       expect(res.body.status).toBe('active');
       expect(res.body.project_id).toBe(projectId);
@@ -350,7 +350,7 @@ resources:
 
     test('unknown id returns 404', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        '/api/v1/formations/af_nonexistent'
+        '/api/v1/formations/form_nonexistent'
       );
 
       expect(res.status).toBe(404);
@@ -409,7 +409,7 @@ resources:
 
     test('unknown id returns 404', async () => {
       const res = await authenticatedTestClient(userToken)
-        .put('/api/v1/formations/af_nonexistent')
+        .put('/api/v1/formations/form_nonexistent')
         .send({ template: simpleTemplate });
 
       expect(res.status).toBe(404);
@@ -449,7 +449,7 @@ resources:
 
     test('unknown formation returns 404', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        '/api/v1/formations/af_nonexistent/events'
+        '/api/v1/formations/form_nonexistent/events'
       );
       expect(res.status).toBe(404);
     });
@@ -482,7 +482,7 @@ resources:
 
     test('unknown id returns 404', async () => {
       const res = await authenticatedTestClient(userToken).delete(
-        '/api/v1/formations/af_nonexistent'
+        '/api/v1/formations/form_nonexistent'
       );
       expect(res.status).toBe(404);
     });
