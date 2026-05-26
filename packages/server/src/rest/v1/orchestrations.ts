@@ -1,13 +1,16 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import {
+  cancelOrchestrationRun,
   createOrchestration,
   deleteOrchestration,
   findOrchestration,
   findOrchestrationRun,
   listOrchestrationRuns,
   listOrchestrations,
+  resumeOrchestrationRun,
   startOrchestrationRun,
+  submitHumanInput,
   updateOrchestration,
 } from 'src/lib/orchestrations';
 
@@ -434,6 +437,97 @@ orchestrationsRouter.get(
       ctx.body = { error: 'Orchestration run not found' };
       return;
     }
+
+    ctx.body = result;
+  }
+);
+
+/**
+ * @openapi
+ * /api/v1/orchestrations/{orchestration_id}/runs/{run_id}/cancel:
+ *   post:
+ *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestrations~1{orchestration_id}~1runs~1{run_id}~1cancel/post'
+ */
+orchestrationsRouter.post(
+  '/orchestrations/:orchestration_id/runs/:run_id/cancel',
+  async (ctx: Context) => {
+    const orchestrationId = ctx.params['orchestration_id'] as string;
+    const runId = ctx.params['run_id'] as string;
+    const auth = await resolveAuth(ctx, 'orchestrations:CancelRun');
+    if (!auth) return;
+
+    const result = await cancelOrchestrationRun({
+      runPublicId: runId,
+      orchestrationPublicId: orchestrationId,
+      projectIds: auth.projectIds,
+    });
+
+    ctx.body = result;
+  }
+);
+
+/**
+ * @openapi
+ * /api/v1/orchestrations/{orchestration_id}/runs/{run_id}/human-input:
+ *   post:
+ *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestrations~1{orchestration_id}~1runs~1{run_id}~1human-input/post'
+ */
+orchestrationsRouter.post(
+  '/orchestrations/:orchestration_id/runs/:run_id/human-input',
+  async (ctx: Context) => {
+    const orchestrationId = ctx.params['orchestration_id'] as string;
+    const runId = ctx.params['run_id'] as string;
+    const auth = await resolveAuth(ctx, 'orchestrations:SubmitHumanInput');
+    if (!auth) return;
+
+    const body = (ctx.request.body ?? {}) as {
+      nodeId?: unknown;
+      output?: unknown;
+    };
+
+    const nodeId = typeof body.nodeId === 'string' ? body.nodeId : undefined;
+    const output =
+      typeof body.output === 'object' && body.output !== null
+        ? (body.output as Record<string, unknown>)
+        : {};
+
+    if (!nodeId) {
+      ctx.status = 400;
+      ctx.body = { error: 'nodeId is required' };
+      return;
+    }
+
+    const result = await submitHumanInput({
+      runPublicId: runId,
+      orchestrationPublicId: orchestrationId,
+      projectIds: auth.projectIds,
+      nodeId,
+      output,
+    });
+
+    ctx.body = result;
+  }
+);
+
+/**
+ * @openapi
+ * /api/v1/orchestrations/{orchestration_id}/runs/{run_id}/resume:
+ *   post:
+ *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestrations~1{orchestration_id}~1runs~1{run_id}~1resume/post'
+ */
+orchestrationsRouter.post(
+  '/orchestrations/:orchestration_id/runs/:run_id/resume',
+  async (ctx: Context) => {
+    const orchestrationId = ctx.params['orchestration_id'] as string;
+    const runId = ctx.params['run_id'] as string;
+    const auth = await resolveAuth(ctx, 'orchestrations:ResumeRun');
+    if (!auth) return;
+
+    const result = await resumeOrchestrationRun({
+      runPublicId: runId,
+      orchestrationPublicId: orchestrationId,
+      projectIds: auth.projectIds,
+    });
 
     ctx.body = result;
   }

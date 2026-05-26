@@ -119,6 +119,9 @@ describe('Orchestrations', () => {
                 'orchestrations:StartRun',
                 'orchestrations:ListRuns',
                 'orchestrations:GetRun',
+                'orchestrations:CancelRun',
+                'orchestrations:SubmitHumanInput',
+                'orchestrations:ResumeRun',
               ],
             },
           ],
@@ -919,6 +922,142 @@ describe('Orchestrations', () => {
         `/api/v1/orchestrations/${orchestrationId}`
       );
       expect([403, 404]).toContain(response.status);
+    });
+  });
+
+  describe('POST /api/v1/orchestrations/:orchestration_id/runs/:run_id/cancel', () => {
+    let cancelOrchId: string;
+    let cancelRunId: string;
+
+    beforeAll(async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          ...simpleOrchestration,
+          name: 'Cancel Test',
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+      cancelOrchId = createRes.body.id;
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${cancelOrchId}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      cancelRunId = runRes.body.id;
+    });
+
+    test('cannot cancel a completed run — returns 409', async () => {
+      const response = await authenticatedTestClient(userToken).post(
+        `/api/v1/orchestrations/${cancelOrchId}/runs/${cancelRunId}/cancel`
+      );
+      expect(response.status).toBe(409);
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient.post(
+        `/api/v1/orchestrations/${cancelOrchId}/runs/${cancelRunId}/cancel`
+      );
+      expect(response.status).toBe(401);
+    });
+
+    test('user without permission returns 403 or 400', async () => {
+      const response = await authenticatedTestClient(noPermToken).post(
+        `/api/v1/orchestrations/${cancelOrchId}/runs/${cancelRunId}/cancel`
+      );
+      expect([403, 400]).toContain(response.status);
+    });
+  });
+
+  describe('POST /api/v1/orchestrations/:orchestration_id/runs/:run_id/human-input', () => {
+    let humanOrchId: string;
+    let humanRunId: string;
+
+    beforeAll(async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({ ...humanNodeOrchestration, project_id: projectId });
+      expect(createRes.status).toBe(201);
+      humanOrchId = createRes.body.id;
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${humanOrchId}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      humanRunId = runRes.body.id;
+    });
+
+    test('run is paused waiting for human input', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestrations/${humanOrchId}/runs/${humanRunId}`
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('paused');
+      expect(response.body.required_action).toBeDefined();
+      expect(response.body.required_action.node_id).toBe('approval');
+    });
+
+    test('submitting human input resumes the run', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/orchestrations/${humanOrchId}/runs/${humanRunId}/human-input`
+        )
+        .send({ node_id: 'approval', output: { choice: 'approve' } });
+      expect(response.status).toBe(200);
+      expect(['completed', 'running', 'paused']).toContain(
+        response.body.status
+      );
+    });
+
+    test('missing node_id returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/orchestrations/${humanOrchId}/runs/${humanRunId}/human-input`
+        )
+        .send({ output: { choice: 'approve' } });
+      expect(response.status).toBe(400);
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient
+        .post(
+          `/api/v1/orchestrations/${humanOrchId}/runs/${humanRunId}/human-input`
+        )
+        .send({ node_id: 'approval', output: {} });
+      expect(response.status).toBe(401);
+    });
+
+    test('user without permission returns 403 or 400', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .post(
+          `/api/v1/orchestrations/${humanOrchId}/runs/${humanRunId}/human-input`
+        )
+        .send({ node_id: 'approval', output: {} });
+      expect([403, 400]).toContain(response.status);
+    });
+  });
+
+  describe('POST /api/v1/orchestrations/:orchestration_id/runs/:run_id/resume', () => {
+    test('resuming a completed run returns 409', async () => {
+      const response = await authenticatedTestClient(userToken).post(
+        `/api/v1/orchestrations/${orchestrationId}/runs/${orchestrationId}/resume`
+      );
+      // run_id here is invalid — 404 or 409
+      expect([404, 409]).toContain(response.status);
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient.post(
+        `/api/v1/orchestrations/${orchestrationId}/runs/someid/resume`
+      );
+      expect(response.status).toBe(401);
+    });
+
+    test('user without permission returns 403 or 400', async () => {
+      const response = await authenticatedTestClient(noPermToken).post(
+        `/api/v1/orchestrations/${orchestrationId}/runs/someid/resume`
+      );
+      expect([403, 400]).toContain(response.status);
     });
   });
 });

@@ -286,6 +286,141 @@ const executeHumanNode = (args: {
   };
 };
 
+const parseIsoDuration = (duration: string): number => {
+  // Support PT<n>S, PT<n>M, PT<n>H, P<n>D patterns
+  const match =
+    /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(
+      duration
+    );
+  if (!match) return 0;
+  const days = parseFloat(match[1] ?? '0');
+  const hours = parseFloat(match[2] ?? '0');
+  const minutes = parseFloat(match[3] ?? '0');
+  const seconds = parseFloat(match[4] ?? '0');
+  return ((days * 24 + hours) * 60 + minutes) * 60000 + seconds * 1000;
+};
+
+const executeDelayNode = async (args: {
+  node: OrchestrationNode;
+}): Promise<NodeExecutionResult> => {
+  const { node } = args;
+  if (!node.duration)
+    throw new DomainError(
+      'ORCHESTRATION_NODE_FAILED',
+      `Delay node '${node.id}' missing duration.`
+    );
+  const ms = parseIsoDuration(node.duration);
+  await new Promise<void>((resolve) => setTimeout(resolve, ms));
+  return { kind: 'artifact', artifact: { waited: node.duration } };
+};
+
+const executeWebhookNode = (args: {
+  node: OrchestrationNode;
+  state: Record<string, unknown>;
+}): NodeExecutionResult => {
+  const { node, state } = args;
+  const mode = node.mode ?? 'emit';
+  if (mode === 'receive') {
+    const context = applyInputMapping(node.inputMapping, state);
+    return {
+      kind: 'requires_action',
+      nodeId: node.id,
+      prompt: 'Waiting for webhook callback.',
+      context,
+    };
+  }
+  // emit mode: fire-and-forget POST (best-effort, non-blocking)
+  if (node.webhookUrl) {
+    const payload = applyInputMapping(node.inputMapping, state);
+    // Fire without awaiting — failures are best-effort
+    fetch(node.webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => {
+      /* best-effort */
+    });
+  }
+  return { kind: 'artifact', artifact: { emitted: true } };
+};
+
+const executeLoopNode = async (args: {
+  node: OrchestrationNode;
+  state: Record<string, unknown>;
+  projectIds: number[];
+  traceId: string | null;
+  authHeader?: string;
+}): Promise<NodeExecutionResult> => {
+  const { node, state, projectIds, authHeader } = args;
+  if (!node.subGraph)
+    throw new DomainError(
+      'ORCHESTRATION_NODE_FAILED',
+      `Loop node '${node.id}' missing subGraph.`
+    );
+
+  const collectionPath = node.collection ?? 'state.items';
+  const itemVariable = node.itemVariable ?? 'item';
+  const parallelism = node.parallelism ?? 5;
+
+  const collection = resolveFromState(
+    collectionPath.startsWith('state.')
+      ? collectionPath
+      : `state.${collectionPath}`,
+    state
+  );
+  const items: unknown[] = Array.isArray(collection) ? collection : [];
+
+  const { startOrchestrationRun } = await import('./orchestrationEngine');
+
+  const results: unknown[] = [];
+  // Process in batches of `parallelism`
+  for (let i = 0; i < items.length; i += parallelism) {
+    const batch = items.slice(i, i + parallelism);
+    const batchResults = await Promise.all(
+      batch.map((item) => {
+        const itemInput: Record<string, unknown> = { [itemVariable]: item };
+        return startOrchestrationRun({
+          orchestrationPublicId: node.subGraph as string,
+          projectId: projectIds[0],
+          projectIds,
+          input: itemInput,
+          authHeader,
+        });
+      })
+    );
+    results.push(...batchResults.map((r) => r.output));
+  }
+
+  return { kind: 'artifact', artifact: { results } };
+};
+
+const executeSubOrchestrationNode = async (args: {
+  node: OrchestrationNode;
+  state: Record<string, unknown>;
+  projectIds: number[];
+  traceId: string | null;
+  authHeader?: string;
+}): Promise<NodeExecutionResult> => {
+  const { node, state, projectIds, authHeader } = args;
+  if (!node.orchestrationId)
+    throw new DomainError(
+      'ORCHESTRATION_NODE_FAILED',
+      `sub_orchestration node '${node.id}' missing orchestrationId.`
+    );
+
+  const input = applyInputMapping(node.inputMapping, state);
+  const { startOrchestrationRun } = await import('./orchestrationEngine');
+  const run = await startOrchestrationRun({
+    orchestrationPublicId: node.orchestrationId,
+    projectId: projectIds[0],
+    projectIds,
+    input,
+    authHeader,
+  });
+
+  return { kind: 'artifact', artifact: run.output ?? {} };
+};
+
 // ── Dispatch ──────────────────────────────────────────────────────────────
 
 export const executeNodeById = async (args: {
@@ -350,6 +485,30 @@ export const executeNodeById = async (args: {
       break;
     case 'human':
       execResult = executeHumanNode({ node: nodeDefn, state });
+      break;
+    case 'delay':
+      execResult = await executeDelayNode({ node: nodeDefn });
+      break;
+    case 'webhook':
+      execResult = executeWebhookNode({ node: nodeDefn, state });
+      break;
+    case 'loop':
+      execResult = await executeLoopNode({
+        node: nodeDefn,
+        state,
+        projectIds,
+        traceId,
+        authHeader,
+      });
+      break;
+    case 'sub_orchestration':
+      execResult = await executeSubOrchestrationNode({
+        node: nodeDefn,
+        state,
+        projectIds,
+        traceId,
+        authHeader,
+      });
       break;
     default:
       throw new DomainError(

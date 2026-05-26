@@ -40,6 +40,21 @@
       "operationId": "getRun",
       "action": "orchestrations:GetRun",
       "description": "Get an orchestration run by ID"
+    },
+    {
+      "operationId": "cancelRun",
+      "action": "orchestrations:CancelRun",
+      "description": "Cancel a running or paused orchestration run"
+    },
+    {
+      "operationId": "submitHumanInput",
+      "action": "orchestrations:SubmitHumanInput",
+      "description": "Submit human input to a paused orchestration run"
+    },
+    {
+      "operationId": "resumeRun",
+      "action": "orchestrations:ResumeRun",
+      "description": "Resume a paused orchestration run from its last checkpoint"
     }
   ]
 }

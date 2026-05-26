@@ -2,7 +2,7 @@ import { customAlphabet } from 'nanoid';
 
 /**
  * Public ID prefixes for each entity type (Stripe-style)
- * They can have 2 to 6 characters before the underscore.
+ * They can have 2 to 7 characters before the underscore.
  */
 export const PUBLIC_ID_PREFIXES = {
   file: 'file_',
@@ -30,7 +30,7 @@ export const PUBLIC_ID_PREFIXES = {
   formationResource: 'afr_',
   formationOperation: 'afo_',
   orchestration: 'orch_',
-  orchestrationRun: 'run_',
+  orchestrationRun: 'orch_run_',
 } as const;
 
 /**

@@ -203,6 +203,92 @@ paths:
         '404':
           description: Orchestration not found
 
+  /api/v1/orchestrations/{orchestration_id}/runs/{run_id}/cancel:
+    post:
+      tags:
+        - Orchestrations
+      summary: Cancel a run
+      description: Cancels a running or paused orchestration run.
+      operationId: cancelRun
+      parameters:
+        - $ref: '#/components/parameters/orchestration_id'
+        - $ref: '#/components/parameters/run_id'
+      responses:
+        '200':
+          description: Cancelled run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestrationRun'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '409':
+          description: Run is already in a terminal state
+
+  /api/v1/orchestrations/{orchestration_id}/runs/{run_id}/human-input:
+    post:
+      tags:
+        - Orchestrations
+      summary: Submit human input
+      description: Provides human input to a paused orchestration run waiting at a human node.
+      operationId: submitHumanInput
+      parameters:
+        - $ref: '#/components/parameters/orchestration_id'
+        - $ref: '#/components/parameters/run_id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HumanInputRequest'
+      responses:
+        '200':
+          description: Run after processing human input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestrationRun'
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '409':
+          description: Run is not paused
+
+  /api/v1/orchestrations/{orchestration_id}/runs/{run_id}/resume:
+    post:
+      tags:
+        - Orchestrations
+      summary: Resume a run
+      description: Resumes a paused orchestration run from its last checkpoint.
+      operationId: resumeRun
+      parameters:
+        - $ref: '#/components/parameters/orchestration_id'
+        - $ref: '#/components/parameters/run_id'
+      responses:
+        '200':
+          description: Resumed run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestrationRun'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '409':
+          description: Run is not paused
+
   /api/v1/orchestrations/{orchestration_id}/runs/{run_id}:
     get:
       tags:
@@ -264,7 +350,19 @@ components:
         type:
           type: string
           enum:
-            [agent, tool, transform, knowledge, memory_write, condition, human]
+            [
+              agent,
+              tool,
+              transform,
+              knowledge,
+              memory_write,
+              condition,
+              human,
+              loop,
+              delay,
+              webhook,
+              sub_orchestration,
+            ]
           description: Node execution type.
         agent_id:
           type: string
@@ -302,6 +400,34 @@ components:
         output_schema:
           type: object
           description: For agent nodes — JSON Schema for structured output parsing.
+        collection:
+          type: string
+          description: For loop nodes — state path to the collection to iterate over.
+        item_variable:
+          type: string
+          description: For loop nodes — variable name injected into state for each item.
+        sub_graph:
+          type: string
+          description: For loop nodes — sub-graph definition to run per item.
+        parallelism:
+          type: integer
+          description: For loop nodes — number of items to process in parallel.
+        duration:
+          type: string
+          description: For delay nodes — ISO 8601 duration (e.g. PT5S).
+        mode:
+          type: string
+          enum: [emit, receive]
+          description: For webhook nodes — whether to emit or receive.
+        webhook_url:
+          type: string
+          description: For webhook emit nodes — URL to POST to.
+        orchestration_id:
+          type: string
+          description: For sub_orchestration nodes — public ID of the child orchestration.
+        max_iterations:
+          type: integer
+          description: Maximum iterations before the node is aborted.
 
     OrchestrationEdge:
       type: object
@@ -518,6 +644,18 @@ components:
           items:
             type: string
           nullable: true
+
+    HumanInputRequest:
+      type: object
+      required:
+        - node_id
+      properties:
+        node_id:
+          type: string
+          description: ID of the human node to satisfy.
+        output:
+          type: object
+          description: Output/response provided by the human reviewer.
 
     StartRunRequest:
       type: object

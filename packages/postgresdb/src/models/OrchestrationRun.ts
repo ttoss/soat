@@ -3,12 +3,14 @@ import {
   Column,
   DataType,
   ForeignKey,
+  HasMany,
   Model,
   Table,
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Orchestration } from './Orchestration';
+import { OrchestrationCheckpoint } from './OrchestrationCheckpoint';
 import { Project } from './Project';
 
 @Table({
@@ -78,6 +80,9 @@ export class OrchestrationRun extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare error: object | null;
 
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare requiredAction: object | null;
+
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare traceId: string | null;
 
@@ -98,4 +103,9 @@ export class OrchestrationRun extends Model {
 
   @Column({ type: DataType.DATE })
   declare updatedAt: Date;
+
+  @HasMany(() => {
+    return OrchestrationCheckpoint;
+  })
+  declare checkpoints: OrchestrationCheckpoint[];
 }

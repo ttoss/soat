@@ -92,6 +92,25 @@ export const ERROR_CODES = {
     description:
       'The orchestration graph contains a cycle. Cycles are not supported.',
   },
+  ORCHESTRATION_RUN_NOT_CANCELLABLE: {
+    httpStatus: 409,
+    description:
+      'The orchestration run is already in a terminal state and cannot be cancelled.',
+  },
+  ORCHESTRATION_RUN_NOT_PAUSED: {
+    httpStatus: 409,
+    description: 'The orchestration run is not paused.',
+  },
+  ORCHESTRATION_HUMAN_NODE_MISMATCH: {
+    httpStatus: 400,
+    description:
+      'The specified node is not the active human node waiting for input.',
+  },
+  ORCHESTRATION_MAX_ITERATIONS_EXCEEDED: {
+    httpStatus: 422,
+    description:
+      'The orchestration run exceeded the maximum number of iterations.',
+  },
 } as const satisfies Record<
   string,
   { httpStatus: number; description: string }

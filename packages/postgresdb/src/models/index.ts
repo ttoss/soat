@@ -14,6 +14,7 @@ export { Generation } from './Generation';
 export { Memory } from './Memory';
 export { MemoryEntry } from './MemoryEntry';
 export { Orchestration } from './Orchestration';
+export { OrchestrationCheckpoint } from './OrchestrationCheckpoint';
 export { OrchestrationRun } from './OrchestrationRun';
 export { Policy } from './Policy';
 export { Project } from './Project';
