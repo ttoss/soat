@@ -1059,5 +1059,451 @@ describe('Orchestrations', () => {
       );
       expect([403, 400]).toContain(response.status);
     });
+
+    test('resuming a non-paused (completed) run returns 409', async () => {
+      // Create a simple orchestration that completes immediately
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Resume Non-Paused',
+          nodes: [
+            {
+              id: 'A',
+              type: 'transform',
+              expression: 'done',
+              output_mapping: { result: 'state.done' },
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('completed');
+
+      const resumeRes = await authenticatedTestClient(userToken).post(
+        `/api/v1/orchestrations/${createRes.body.id}/runs/${runRes.body.id}/resume`
+      );
+      expect(resumeRes.status).toBe(409);
+    });
+  });
+
+  // ── Additional node-type coverage ─────────────────────────────────────────
+
+  describe('Node type coverage – additional executor paths', () => {
+    let subOrchId: string;
+
+    beforeAll(async () => {
+      // Create a simple sub-orchestration used by loop and sub_orchestration tests
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Sub-Orch for Coverage',
+          nodes: [
+            {
+              id: 'pass',
+              type: 'transform',
+              expression: { var: 'item' },
+              output_mapping: { result: 'state.result' },
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(res.status).toBe(201);
+      subOrchId = res.body.id;
+    });
+
+    test('tool node without tool_id causes run to fail', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Tool No ID',
+          nodes: [{ id: 'tool', type: 'tool' }],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('failed');
+    });
+
+    test('delay node without duration causes run to fail', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Delay No Duration',
+          nodes: [{ id: 'delay', type: 'delay' }],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('failed');
+    });
+
+    test('delay node with PT0S completes successfully', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Delay Zero',
+          nodes: [
+            {
+              id: 'delay',
+              type: 'delay',
+              duration: 'PT0S',
+              output_mapping: { waited: 'state.waited' },
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('completed');
+      expect(runRes.body.state.waited).toBe('PT0S');
+    });
+
+    test('webhook emit mode completes', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Webhook Emit',
+          nodes: [
+            {
+              id: 'wh',
+              type: 'webhook',
+              mode: 'emit',
+              output_mapping: { emitted: 'state.emitted' },
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('completed');
+      expect(runRes.body.state.emitted).toBe(true);
+    });
+
+    test('webhook receive mode pauses the run', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Webhook Receive',
+          nodes: [{ id: 'wh', type: 'webhook', mode: 'receive' }],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('paused');
+    });
+
+    test('loop node without sub_graph causes run to fail', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Loop No SubGraph',
+          nodes: [{ id: 'loop', type: 'loop' }],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('failed');
+    });
+
+    test('loop node with empty collection completes', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Loop Empty Collection',
+          nodes: [
+            {
+              id: 'loop',
+              type: 'loop',
+              sub_graph: subOrchId,
+              collection: 'state.items',
+              item_variable: 'item',
+              output_mapping: { results: 'state.results' },
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
+        .send({ input: { items: [] } });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('completed');
+      expect(runRes.body.state.results).toEqual([]);
+    });
+
+    test('loop node iterates over collection items (runLoopBatches coverage)', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Loop With Items',
+          nodes: [
+            {
+              id: 'loop',
+              type: 'loop',
+              sub_graph: subOrchId,
+              collection: 'state.items',
+              item_variable: 'item',
+              output_mapping: { results: 'state.results' },
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
+        .send({ input: { items: ['hello'] } });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('completed');
+      expect(Array.isArray(runRes.body.state.results)).toBe(true);
+    });
+
+    test('loop node with non-state collection path', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Loop Non-State Collection',
+          nodes: [
+            {
+              id: 'loop',
+              type: 'loop',
+              sub_graph: subOrchId,
+              collection: 'items', // no 'state.' prefix — resolveLoopCollection normalises it
+              item_variable: 'item',
+              output_mapping: { results: 'state.results' },
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
+        .send({ input: { items: [] } });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('completed');
+    });
+
+    test('sub_orchestration node without orchestration_id causes run to fail', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'SubOrch No ID',
+          nodes: [{ id: 'sub', type: 'sub_orchestration' }],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('failed');
+    });
+
+    test('sub_orchestration node with valid orchestration completes', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'SubOrch Main',
+          nodes: [
+            {
+              id: 'sub',
+              type: 'sub_orchestration',
+              orchestration_id: subOrchId,
+              input_mapping: { item: 'state.value' },
+              output_mapping: { result: 'state.subResult' },
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
+        .send({ input: { value: 'test' } });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('completed');
+    });
+  });
+
+  // ── Cancel run status edge cases ──────────────────────────────────────────
+
+  describe('Cancel run terminal-status edge cases', () => {
+    test('cancelling a failed run returns 409', async () => {
+      // Create an orchestration that immediately fails
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Fail For Cancel Test',
+          nodes: [{ id: 'bad', type: 'transform' }], // no expression → fails
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+      const failOrchId = createRes.body.id;
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${failOrchId}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('failed');
+      const failedRunId = runRes.body.id;
+
+      const cancelRes = await authenticatedTestClient(userToken).post(
+        `/api/v1/orchestrations/${failOrchId}/runs/${failedRunId}/cancel`
+      );
+      expect(cancelRes.status).toBe(409);
+    });
+
+    test('cancelling an already-cancelled run returns 409', async () => {
+      // Create a human-node orchestration so the run pauses
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Paused For Double-Cancel',
+          nodes: [
+            {
+              id: 'wait',
+              type: 'human',
+              prompt: 'Waiting.',
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+      const pauseOrchId = createRes.body.id;
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${pauseOrchId}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('paused');
+      const pausedRunId = runRes.body.id;
+
+      // First cancel succeeds
+      const firstCancel = await authenticatedTestClient(userToken).post(
+        `/api/v1/orchestrations/${pauseOrchId}/runs/${pausedRunId}/cancel`
+      );
+      expect(firstCancel.status).toBe(200);
+
+      // Second cancel hits the 'cancelled' terminal-state branch
+      const secondCancel = await authenticatedTestClient(userToken).post(
+        `/api/v1/orchestrations/${pauseOrchId}/runs/${pausedRunId}/cancel`
+      );
+      expect(secondCancel.status).toBe(409);
+    });
+  });
+
+  // ── Submit human input edge cases ─────────────────────────────────────────
+
+  describe('Submit human input edge cases', () => {
+    let edgeOrchId: string;
+    let edgeRunId: string;
+
+    beforeAll(async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Human Edge Cases Orch',
+          nodes: [
+            {
+              id: 'step',
+              type: 'human',
+              prompt: 'Choose.',
+              options: ['a', 'b'],
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+      edgeOrchId = createRes.body.id;
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${edgeOrchId}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      edgeRunId = runRes.body.id;
+    });
+
+    test('submitting human input with wrong nodeId returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/orchestrations/${edgeOrchId}/runs/${edgeRunId}/human-input`
+        )
+        .send({ node_id: 'wrong_node_id', output: { choice: 'a' } });
+      expect(response.status).toBe(400);
+    });
+
+    test('submitting human input to a completed run returns 409', async () => {
+      // Create and complete a fresh orchestration (no human node)
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Completed For Human Submit',
+          nodes: [{ id: 'A', type: 'transform', expression: 'done' }],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('completed');
+
+      const submitRes = await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/orchestrations/${createRes.body.id}/runs/${runRes.body.id}/human-input`
+        )
+        .send({ node_id: 'A', output: { val: 1 } });
+      expect(submitRes.status).toBe(409);
+    });
   });
 });
