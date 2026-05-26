@@ -345,7 +345,7 @@ describe('Memories', () => {
 
         expect(response.status).toBe(201);
         expect(response.body.id).toBeDefined();
-        expect(response.body.id).toMatch(/^me_/);
+        expect(response.body.id).toMatch(/^mem_entry_/);
         expect(response.body.content).toBe('Customer prefers email over phone');
         expect(response.body.source).toBe('manual');
         expect(response.body.memory_id).toBe(freshMemoryId);
@@ -408,7 +408,7 @@ describe('Memories', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.action).toBe('skipped');
-        expect(response.body.id).toMatch(/^me_/);
+        expect(response.body.id).toMatch(/^mem_entry_/);
       });
 
       test('write with duplicate_threshold > 1 forces merge path', async () => {
@@ -427,7 +427,7 @@ describe('Memories', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.action).toBe('updated');
-        expect(response.body.id).toMatch(/^me_/);
+        expect(response.body.id).toMatch(/^mem_entry_/);
       });
     });
 

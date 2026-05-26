@@ -19,7 +19,7 @@ const buildResource = (args: {
   deletionPolicy?: string;
 }) => {
   return db.FormationResource.build({
-    publicId: `afr_${args.logicalId}`,
+    publicId: `fmr_${args.logicalId}`,
     formationId: 1,
     logicalId: args.logicalId,
     resourceType: args.resourceType,
@@ -246,7 +246,7 @@ describe('formationsApply', () => {
 
   test('processResourceChange marks resource as failed when create handler throws', async () => {
     const resourceRow = db.FormationResource.build({
-      publicId: 'afr_failure',
+      publicId: 'fmr_failure',
       formationId: 1,
       logicalId: 'xaiProvider',
       resourceType: 'ai_provider',

@@ -212,3 +212,34 @@ Both `branch_a` and `branch_b` run concurrently after `start` completes.
   ]
 }
 ```
+
+## Design Decisions
+
+### Why not embed orchestration logic in agents?
+
+Agents are LLM-powered reasoning engines. Using an LLM to decide "call tool A, then tool B, then tool C" when you know the exact sequence is wasteful (cost), slow (latency), and unreliable (the LLM might skip steps or change order).
+
+Orchestrations separate **what to do** (deterministic graph) from **how to think** (LLM in agent nodes).
+
+### Why typed state instead of message passing?
+
+Message passing (conversation history) works for chat but fails for structured workflows:
+
+- Messages are untyped text — downstream nodes have to "understand" what upstream sent.
+- Message history grows linearly — later nodes see irrelevant early context.
+- There is no way to express "take field X from step 2 and field Y from step 5".
+
+Typed state gives each node exactly the inputs it needs, in the exact structure it expects.
+
+### Why separate from sessions?
+
+Sessions are conversational (append-only message history, turn-based). Orchestrations are workflow-oriented (directed graph, state accumulation, parallel execution). They serve different use cases:
+
+- **Session:** "Chat with a customer support agent."
+- **Orchestration:** "Process this insurance claim through 7 steps with 3 approval gates."
+
+An agent node inside an orchestration may internally use a session for multi-turn reasoning, but the orchestration itself is not a conversation.
+
+### Expression language
+
+`transform` and `condition` nodes evaluate expressions using [JSON Logic](https://jsonlogic.com) — a JSON-serializable, side-effect-free expression format with no `eval`, no imports, and no access to the runtime environment. The full state object is passed as the data context, so any state field is reachable via `{ "var": "fieldName" }`.

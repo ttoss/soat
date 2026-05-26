@@ -401,7 +401,7 @@ describe('Agents', () => {
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
-      expect(response.body.id).toMatch(/^agt_/);
+      expect(response.body.id).toMatch(/^agent_/);
       expect(response.body.ai_provider_id).toBe(aiProviderId);
       expect(response.body.project_id).toBe(projectId);
       expect(response.body.max_steps).toBe(20);
@@ -451,7 +451,7 @@ describe('Agents', () => {
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThanOrEqual(1);
-      expect(response.body[0].id).toMatch(/^agt_/);
+      expect(response.body[0].id).toMatch(/^agent_/);
     });
   });
 

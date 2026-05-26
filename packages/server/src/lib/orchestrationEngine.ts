@@ -4,12 +4,19 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import type { RequiredAction } from './orchestrationExecutors';
 import {
-  applyOutputMapping,
+  detectCycle,
   executeNodeById,
   findStartNodes,
   processNodeResultBatch,
-  resolveNextNodes,
 } from './orchestrationExecutors';
+import {
+  applyHumanInputToState,
+  getTerminalOutput,
+  mapRunWithIncludes,
+  resolveResumeStartNodes,
+  restoreRunFromCheckpoint,
+  updateRunRecord,
+} from './orchestrationRunHelpers';
 import type {
   MappedOrchestrationRun,
   OrchestrationEdge,
@@ -18,43 +25,158 @@ import type {
 
 const log = createDebug('soat:orchestrations');
 
-const mapRunWithIncludes = async (
-  runId: number
-): Promise<MappedOrchestrationRun> => {
-  const finalRun = await db.OrchestrationRun.findOne({
-    where: { id: runId },
-    include: [
-      { model: db.Project, as: 'project' },
-      { model: db.Orchestration, as: 'orchestration' },
-    ],
+const MAX_ITERATIONS = 100;
+
+const enforceMaxIterations = (args: {
+  activeNodeIds: string[];
+  iterationCount: Map<string, number>;
+}): void => {
+  for (const nodeId of args.activeNodeIds) {
+    const count = (args.iterationCount.get(nodeId) ?? 0) + 1;
+    args.iterationCount.set(nodeId, count);
+    if (count > MAX_ITERATIONS) {
+      throw new DomainError(
+        'ORCHESTRATION_MAX_ITERATIONS_EXCEEDED',
+        `Node '${nodeId}' exceeded maximum iteration count (${MAX_ITERATIONS}).`
+      );
+    }
+  }
+};
+
+const writeRunCheckpoint = async (args: {
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  nodeId: string;
+  state: Record<string, unknown>;
+  artifacts: Record<string, unknown>;
+}): Promise<void> => {
+  await db.OrchestrationCheckpoint.create({
+    runId: args.runRecord.id as number,
+    nodeId: args.nodeId,
+    state: { ...args.state },
+    artifacts: { ...args.artifacts },
+  });
+};
+
+type RunBatchResult = {
+  nextActiveNodeIds: string[];
+  runStatus: 'running' | 'paused';
+  requiredAction: RequiredAction | null;
+};
+
+const executeRunBatch = async (args: {
+  activeNodeIds: string[];
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  nodes: OrchestrationNode[];
+  edges: OrchestrationEdge[];
+  state: Record<string, unknown>;
+  artifacts: Record<string, unknown>;
+  projectIds: number[];
+  traceId: string | null;
+  authHeader?: string;
+  completedNodes: Set<string>;
+  conditionLabels: Map<string, string>;
+  activatedNodes: Set<string>;
+  iterationCount: Map<string, number>;
+}): Promise<RunBatchResult> => {
+  const {
+    activeNodeIds,
+    runRecord,
+    nodes,
+    edges,
+    state,
+    artifacts,
+    projectIds,
+    traceId,
+    authHeader,
+    completedNodes,
+    conditionLabels,
+    activatedNodes,
+    iterationCount,
+  } = args;
+
+  log('executeRun: activeNodes=%o', activeNodeIds);
+  enforceMaxIterations({ activeNodeIds, iterationCount });
+
+  const nodeResults = await Promise.all(
+    activeNodeIds.map((nodeId) => {
+      return executeNodeById({
+        nodeId,
+        nodes,
+        state,
+        projectIds,
+        traceId,
+        authHeader,
+      });
+    })
+  );
+
+  const batch = processNodeResultBatch({
+    nodeResults,
+    artifacts,
+    conditionLabels,
+    completedNodes,
+    activatedNodes,
+    state,
+    edges,
+    isRunning: true,
   });
 
-  const run = finalRun as InstanceType<typeof db.OrchestrationRun> & {
-    orchestration: InstanceType<typeof db.Orchestration>;
-    project: InstanceType<typeof db.Project>;
-  };
+  let runStatus: 'running' | 'paused' = 'running';
+  let requiredAction: RequiredAction | null = null;
+  if (batch.requiredAction) {
+    runStatus = 'paused';
+    requiredAction = batch.requiredAction;
+  }
 
+  const lastNodeId = activeNodeIds[activeNodeIds.length - 1];
+  await writeRunCheckpoint({ runRecord, nodeId: lastNodeId, state, artifacts });
+
+  const nextActiveNodeIds = runStatus === 'running' ? batch.nextRound : [];
+  return { nextActiveNodeIds, runStatus, requiredAction };
+};
+
+type RunLoopState = {
+  completedNodes: Set<string>;
+  conditionLabels: Map<string, string>;
+  activatedNodes: Set<string>;
+  iterationCount: Map<string, number>;
+  activeNodeIds: string[];
+};
+
+const initRunLoopState = (args: {
+  nodes: OrchestrationNode[];
+  edges: OrchestrationEdge[];
+  completedNodes?: Set<string>;
+  conditionLabels?: Map<string, string>;
+  activatedNodes?: Set<string>;
+  iterationCount?: Map<string, number>;
+}): RunLoopState => {
+  const completedNodes = args.completedNodes ?? new Set<string>();
+  const conditionLabels = args.conditionLabels ?? new Map<string, string>();
+  const activatedNodes =
+    args.activatedNodes ??
+    new Set<string>(findStartNodes(args.nodes, args.edges));
+  const iterationCount = args.iterationCount ?? new Map<string, number>();
+  const activeNodeIds = args.activatedNodes
+    ? [...activatedNodes].filter((n) => {
+        return !completedNodes.has(n);
+      })
+    : [...activatedNodes];
   return {
-    id: run.publicId,
-    orchestrationId: run.orchestration.publicId,
-    projectId: run.project.publicId,
-    status: run.status,
-    state: run.state as Record<string, unknown>,
-    activeNodes: run.activeNodes as string[],
-    artifacts: run.artifacts as Record<string, unknown>,
-    error: run.error,
-    requiredAction: run.requiredAction as object | null,
-    traceId: run.traceId,
-    input: run.input as Record<string, unknown> | null,
-    output: run.output as Record<string, unknown> | null,
-    startedAt: run.startedAt,
-    completedAt: run.completedAt,
-    createdAt: run.createdAt,
-    updatedAt: run.updatedAt,
+    completedNodes,
+    conditionLabels,
+    activatedNodes,
+    iterationCount,
+    activeNodeIds,
   };
 };
 
-const MAX_ITERATIONS = 100;
+const buildRunError = (error: unknown): object => {
+  return {
+    message: error instanceof Error ? error.message : String(error),
+    code: error instanceof DomainError ? error.code : 'UNKNOWN',
+  };
+};
 
 const executeRunLoop = async (args: {
   runRecord: InstanceType<typeof db.OrchestrationRun>;
@@ -84,180 +206,56 @@ const executeRunLoop = async (args: {
     traceId,
     authHeader,
   } = args;
-
-  const completedNodes = args.completedNodes ?? new Set<string>();
-  const conditionLabels = args.conditionLabels ?? new Map<string, string>();
-  const activatedNodes =
-    args.activatedNodes ?? new Set<string>(findStartNodes(nodes, edges));
-  const iterationCount = args.iterationCount ?? new Map<string, number>();
-  let activeNodeIds = args.activatedNodes
-    ? [...activatedNodes].filter((n) => {
-        return !completedNodes.has(n);
-      })
-    : [...activatedNodes];
+  const loopState = initRunLoopState(args);
+  let { activeNodeIds } = loopState;
+  const { completedNodes, conditionLabels, activatedNodes, iterationCount } =
+    loopState;
   let runStatus: MappedOrchestrationRun['status'] = 'running';
   let runError: object | null = null;
   let requiredAction: RequiredAction | null = null;
 
   try {
-    // Detect cycles via DFS before executing — only for non-loop node graphs
-    const hasLoopNodes = nodes.some((n) => {
-      return n.type === 'loop';
-    });
-    if (!hasLoopNodes) {
-      const adj = new Map<string, string[]>();
-      for (const node of nodes) adj.set(node.id, []);
-      for (const edge of edges) {
-        const targets = adj.get(edge.from);
-        if (targets) targets.push(edge.to);
-      }
-      const WHITE = 0,
-        GRAY = 1,
-        BLACK = 2;
-      const color = new Map<string, number>(
-        nodes.map((n) => {
-          return [n.id, WHITE];
-        })
+    if (
+      !nodes.some((n) => {
+        return n.type === 'loop';
+      }) &&
+      detectCycle(nodes, edges)
+    ) {
+      throw new DomainError(
+        'ORCHESTRATION_CYCLE_DETECTED',
+        'Cycle detected in orchestration graph.'
       );
-      const dfs = (u: string): boolean => {
-        color.set(u, GRAY);
-        for (const v of adj.get(u) ?? []) {
-          if (color.get(v) === GRAY) return true;
-          if (color.get(v) === WHITE && dfs(v)) return true;
-        }
-        color.set(u, BLACK);
-        return false;
-      };
-      for (const node of nodes) {
-        if (color.get(node.id) === WHITE && dfs(node.id)) {
-          throw new DomainError(
-            'ORCHESTRATION_CYCLE_DETECTED',
-            'Cycle detected in orchestration graph.'
-          );
-        }
-      }
     }
 
     while (activeNodeIds.length > 0 && runStatus === 'running') {
-      log('executeRun: activeNodes=%o', activeNodeIds);
-
-      // Enforce max iterations for cycles
-      for (const nodeId of activeNodeIds) {
-        const count = (iterationCount.get(nodeId) ?? 0) + 1;
-        iterationCount.set(nodeId, count);
-        if (count > MAX_ITERATIONS) {
-          throw new DomainError(
-            'ORCHESTRATION_MAX_ITERATIONS_EXCEEDED',
-            `Node '${nodeId}' exceeded maximum iteration count (${MAX_ITERATIONS}).`
-          );
-        }
-      }
-
-      const nodeResults = await Promise.all(
-        activeNodeIds.map((nodeId) => {
-          return executeNodeById({
-            nodeId,
-            nodes,
-            state,
-            projectIds,
-            traceId,
-            authHeader,
-          });
-        })
-      );
-
-      const batch = processNodeResultBatch({
-        nodeResults,
-        artifacts,
-        conditionLabels,
-        completedNodes,
-        activatedNodes,
-        state,
+      const batchResult = await executeRunBatch({
+        activeNodeIds,
+        runRecord,
+        nodes,
         edges,
-        isRunning: runStatus === 'running',
+        state,
+        artifacts,
+        projectIds,
+        traceId,
+        authHeader,
+        completedNodes,
+        conditionLabels,
+        activatedNodes,
+        iterationCount,
       });
-
-      if (batch.requiredAction) {
-        runStatus = 'paused';
-        requiredAction = batch.requiredAction;
-      }
-
-      // Write checkpoint after each batch
-      const lastNodeId = activeNodeIds[activeNodeIds.length - 1];
-      await db.OrchestrationCheckpoint.create({
-        runId: runRecord.id as number,
-        nodeId: lastNodeId,
-        state: { ...state },
-        artifacts: { ...artifacts },
-      });
-
-      activeNodeIds = runStatus === 'running' ? batch.nextRound : [];
+      activeNodeIds = batchResult.nextActiveNodeIds;
+      runStatus = batchResult.runStatus;
+      requiredAction = batchResult.requiredAction;
     }
 
     if (runStatus === 'running') runStatus = 'completed';
   } catch (error: unknown) {
     runStatus = 'failed';
-    runError = {
-      message: error instanceof Error ? error.message : String(error),
-      code: error instanceof DomainError ? error.code : 'UNKNOWN',
-    };
+    runError = buildRunError(error);
     log('executeRun error %o', runError);
   }
 
   return { runStatus, requiredAction, runError };
-};
-
-const getTerminalOutput = (args: {
-  nodes: OrchestrationNode[];
-  edges: OrchestrationEdge[];
-  artifacts: Record<string, unknown>;
-}): Record<string, unknown> => {
-  const { nodes, edges, artifacts } = args;
-  const output: Record<string, unknown> = {};
-  const terminalIds = nodes
-    .map((n) => {
-      return n.id;
-    })
-    .filter((id) => {
-      return !edges.some((e) => {
-        return e.from === id;
-      });
-    });
-  for (const id of terminalIds) {
-    if (artifacts[id] !== undefined) output[id] = artifacts[id];
-  }
-  return output;
-};
-
-const updateRunRecord = async (args: {
-  runRecord: InstanceType<typeof db.OrchestrationRun>;
-  runStatus: MappedOrchestrationRun['status'];
-  requiredAction: RequiredAction | null;
-  runError: object | null;
-  state: Record<string, unknown>;
-  artifacts: Record<string, unknown>;
-  output: Record<string, unknown>;
-}): Promise<void> => {
-  const {
-    runRecord,
-    runStatus,
-    requiredAction,
-    runError,
-    state,
-    artifacts,
-    output,
-  } = args;
-  const isTerminal = runStatus === 'completed' || runStatus === 'failed';
-  await runRecord.update({
-    status: runStatus,
-    state,
-    activeNodes: runStatus === 'paused' ? [requiredAction?.nodeId ?? ''] : [],
-    artifacts,
-    error: runError,
-    requiredAction: runStatus === 'paused' ? requiredAction : null,
-    output: runStatus === 'completed' ? output : null,
-    completedAt: isTerminal ? new Date() : null,
-  });
 };
 
 export const startOrchestrationRun = async (args: {
@@ -355,57 +353,30 @@ export const resumeOrchestrationRunExecution = async (args: {
   const state = (run.state ?? {}) as Record<string, unknown>;
   const artifacts = (run.artifacts ?? {}) as Record<string, unknown>;
 
-  // Restore execution context from the last checkpoint
-  const checkpoint = await db.OrchestrationCheckpoint.findOne({
-    where: { runId: run.id as number },
-    order: [['createdAt', 'DESC']],
-  });
+  await restoreRunFromCheckpoint({ runId: run.id as number, state, artifacts });
 
-  const restoredState = checkpoint
-    ? (checkpoint.state as Record<string, unknown>)
-    : state;
-  const restoredArtifacts = checkpoint
-    ? (checkpoint.artifacts as Record<string, unknown>)
-    : artifacts;
-
-  // Merge restored state back
-  Object.assign(state, restoredState);
-  Object.assign(artifacts, restoredArtifacts);
-
-  // Apply human input output mapping
   if (humanNodeId && humanOutput) {
-    const humanNode = nodes.find((n) => {
-      return n.id === humanNodeId;
+    applyHumanInputToState({
+      humanNodeId,
+      humanOutput,
+      nodes,
+      state,
+      artifacts,
     });
-    if (humanNode) {
-      applyOutputMapping(humanNode.outputMapping, humanOutput, state);
-    }
-    artifacts[humanNodeId] = humanOutput;
   }
 
-  // Figure out active nodes to resume from
-  // If human input was submitted, continue from nodes after the human node
-  // Otherwise, use the run's activeNodes
   const activeNodes = run.activeNodes as string[];
   const completedNodes = new Set<string>(
     Object.keys(artifacts).concat(humanNodeId ? [humanNodeId] : [])
   );
-
-  // Build the starting set for the next round from edges leaving the human node or the activeNodes
   const conditionLabels = new Map<string, string>();
-
-  let startNodeIds: string[];
-  if (humanNodeId) {
-    const resolved = resolveNextNodes({
-      completedNodeId: humanNodeId,
-      completedNodes,
-      conditionLabels,
-      edges,
-    });
-    startNodeIds = resolved;
-  } else {
-    startNodeIds = activeNodes;
-  }
+  const startNodeIds = resolveResumeStartNodes({
+    humanNodeId,
+    activeNodes,
+    completedNodes,
+    conditionLabels,
+    edges,
+  });
 
   await run.update({ status: 'running', activeNodes: startNodeIds });
 
