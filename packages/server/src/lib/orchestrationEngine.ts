@@ -22,6 +22,11 @@ import type {
   OrchestrationEdge,
   OrchestrationNode,
 } from './orchestrations';
+import {
+  attachRequiredActionToRun,
+  findOrchestrationForStartRun,
+  resolveStartRunProjectScope,
+} from './orchestrationStartRun';
 
 const log = createDebug('soat:orchestrations');
 
@@ -269,25 +274,16 @@ export const startOrchestrationRun = async (args: {
     orchestrationPublicId: args.orchestrationPublicId,
   });
 
-  const where: Record<string, unknown> = {
-    publicId: args.orchestrationPublicId,
-  };
-  if (args.projectIds && args.projectIds.length > 0) {
-    where['projectId'] = args.projectIds;
-  }
-
-  const orch = await db.Orchestration.findOne({ where });
-  if (!orch)
-    throw new DomainError(
-      'ORCHESTRATION_NOT_FOUND',
-      `Orchestration '${args.orchestrationPublicId}' not found.`
-    );
-
-  const effectiveProjectId = args.projectId ?? (orch.projectId as number);
-  const effectiveProjectIds =
-    args.projectIds && args.projectIds.length > 0
-      ? args.projectIds
-      : [orch.projectId as number];
+  const orch = await findOrchestrationForStartRun({
+    orchestrationPublicId: args.orchestrationPublicId,
+    projectIds: args.projectIds,
+  });
+  const { effectiveProjectId, effectiveProjectIds } =
+    resolveStartRunProjectScope({
+      projectId: args.projectId,
+      projectIds: args.projectIds,
+      orchestrationProjectId: orch.projectId as number,
+    });
 
   const nodes = orch.nodes as OrchestrationNode[];
   const edges = orch.edges as OrchestrationEdge[];
@@ -330,13 +326,11 @@ export const startOrchestrationRun = async (args: {
 
   const mapped = await mapRunWithIncludes(runRecord.id as number);
 
-  if (runStatus === 'paused' && requiredAction) {
-    (
-      mapped as MappedOrchestrationRun & { requiredAction?: RequiredAction }
-    ).requiredAction = requiredAction;
-  }
-
-  return mapped;
+  return attachRequiredActionToRun({
+    mapped,
+    runStatus,
+    requiredAction,
+  });
 };
 
 export const resumeOrchestrationRunExecution = async (args: {
