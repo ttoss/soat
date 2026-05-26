@@ -318,8 +318,8 @@ formationsRouter.delete('/formations/:formation_id', async (ctx: Context) => {
     return;
   }
 
-  await deleteFormation({ id: ctx.params.formation_id });
-  ctx.status = 204;
+  const result = await deleteFormation({ id: ctx.params.formation_id });
+  ctx.body = result;
 });
 
 formationsRouter.get(
