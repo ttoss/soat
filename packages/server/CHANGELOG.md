@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.6.0](https://github.com/ttoss/soat/compare/v0.5.8...v0.6.0) (2026-05-26)
+
+### Bug Fixes
+
+* delete-formation returns 200 with `{ success: boolean }` instead of 204 No Content ([#117](https://github.com/ttoss/soat/issues/117)) ([263f959](https://github.com/ttoss/soat/commit/263f9595196f5687501f03c424e27c168ae1d3a6))
+
+### Features
+
+* orchestration ([#111](https://github.com/ttoss/soat/issues/111)) ([c80bc1c](https://github.com/ttoss/soat/commit/c80bc1c158fac40f27a9b3aea190a31eb12aaa8e))
+
 ## [0.5.8](https://github.com/ttoss/soat/compare/v0.5.7...v0.5.8) (2026-05-26)
 
 ### Bug Fixes
