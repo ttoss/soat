@@ -87,6 +87,11 @@ export const ERROR_CODES = {
     httpStatus: 422,
     description: 'A node in the orchestration run failed to execute.',
   },
+  ORCHESTRATION_CYCLE_DETECTED: {
+    httpStatus: 422,
+    description:
+      'The orchestration graph contains a cycle. Cycles are not supported.',
+  },
 } as const satisfies Record<
   string,
   { httpStatus: number; description: string }

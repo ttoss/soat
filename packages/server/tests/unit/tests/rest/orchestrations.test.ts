@@ -16,7 +16,7 @@ describe('Orchestrations', () => {
       {
         id: 'start',
         type: 'transform',
-        expression: 'state',
+        expression: { var: '' },
         output_mapping: { output: 'state.result' },
       },
     ],
@@ -31,13 +31,13 @@ describe('Orchestrations', () => {
       {
         id: 'nodeA',
         type: 'transform',
-        expression: '42',
+        expression: 42,
         output_mapping: { result: 'state.step1' },
       },
       {
         id: 'nodeB',
         type: 'transform',
-        expression: 'state.step1 + 1',
+        expression: { '+': [{ var: 'step1' }, 1] },
         input_mapping: { val: 'state.step1' },
         output_mapping: { result: 'state.step2' },
       },
@@ -51,18 +51,18 @@ describe('Orchestrations', () => {
       {
         id: 'cond',
         type: 'condition',
-        expression: "'yes'",
+        expression: 'yes',
       },
       {
         id: 'yes_node',
         type: 'transform',
-        expression: '"yes_result"',
+        expression: 'yes_result',
         output_mapping: { result: 'state.branch' },
       },
       {
         id: 'no_node',
         type: 'transform',
-        expression: '"no_result"',
+        expression: 'no_result',
         output_mapping: { result: 'state.branch' },
       },
     ],
@@ -275,7 +275,7 @@ describe('Orchestrations', () => {
         {
           id: 'updated_node',
           type: 'transform',
-          expression: '"updated"',
+          expression: 'updated',
           output_mapping: { result: 'state.updated' },
         },
       ];
@@ -438,7 +438,7 @@ describe('Orchestrations', () => {
             {
               id: 'A',
               type: 'transform',
-              expression: '"ok"',
+              expression: 'ok',
               input_mapping: { val: 'notstate.x' },
               output_mapping: { result: 'state.result' },
             },
@@ -464,7 +464,7 @@ describe('Orchestrations', () => {
             {
               id: 'A',
               type: 'transform',
-              expression: '"ok"',
+              expression: 'ok',
               input_mapping: { val: 'state.x.y' },
               output_mapping: { result: 'state.result' },
             },
@@ -487,12 +487,12 @@ describe('Orchestrations', () => {
         .send({
           name: 'Activation Group',
           nodes: [
-            { id: 'A', type: 'transform', expression: '"a"' },
-            { id: 'B', type: 'transform', expression: '"b"' },
+            { id: 'A', type: 'transform', expression: 'a' },
+            { id: 'B', type: 'transform', expression: 'b' },
             {
               id: 'C',
               type: 'transform',
-              expression: '"c"',
+              expression: 'c',
               output_mapping: { result: 'state.final' },
             },
           ],
@@ -641,6 +641,186 @@ describe('Orchestrations', () => {
         .send({ input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('failed');
+    });
+
+    // ── Phase 2: Parallel & Conditional ─────────────────────────────────
+
+    test('fan-out executes multiple branches and all state updates land', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Fan-Out Pipeline',
+          nodes: [
+            { id: 'start', type: 'transform', expression: 'start' },
+            {
+              id: 'branch_a',
+              type: 'transform',
+              expression: 'a',
+              output_mapping: { result: 'state.a' },
+            },
+            {
+              id: 'branch_b',
+              type: 'transform',
+              expression: 'b',
+              output_mapping: { result: 'state.b' },
+            },
+          ],
+          edges: [
+            { from: 'start', to: 'branch_a' },
+            { from: 'start', to: 'branch_b' },
+          ],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('completed');
+      expect(runRes.body.state.a).toBe('a');
+      expect(runRes.body.state.b).toBe('b');
+    });
+
+    test('fan-out then fan-in with activation_condition all completes correctly', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Fan-Out Fan-In All',
+          nodes: [
+            { id: 'start', type: 'transform', expression: 's' },
+            {
+              id: 'A',
+              type: 'transform',
+              expression: 'a',
+              output_mapping: { result: 'state.a' },
+            },
+            {
+              id: 'B',
+              type: 'transform',
+              expression: 'b',
+              output_mapping: { result: 'state.b' },
+            },
+            {
+              id: 'join',
+              type: 'transform',
+              expression: { cat: [{ var: 'a' }, { var: 'b' }] },
+              output_mapping: { result: 'state.joined' },
+            },
+          ],
+          edges: [
+            { from: 'start', to: 'A' },
+            { from: 'start', to: 'B' },
+            {
+              from: 'A',
+              to: 'join',
+              activation_group: 'merge',
+              activation_condition: 'all',
+            },
+            {
+              from: 'B',
+              to: 'join',
+              activation_group: 'merge',
+              activation_condition: 'all',
+            },
+          ],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('completed');
+      expect(runRes.body.state.joined).toBe('ab');
+    });
+
+    test('activation_condition any activates target on first completion only', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Fan-in Any',
+          nodes: [
+            { id: 'A', type: 'transform', expression: 'a' },
+            { id: 'B', type: 'transform', expression: 'b' },
+            {
+              id: 'C',
+              type: 'transform',
+              expression: 'c',
+              output_mapping: { result: 'state.final' },
+            },
+          ],
+          edges: [
+            {
+              from: 'A',
+              to: 'C',
+              activation_group: 'join',
+              activation_condition: 'any',
+            },
+            {
+              from: 'B',
+              to: 'C',
+              activation_group: 'join',
+              activation_condition: 'any',
+            },
+          ],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('completed');
+      // C runs exactly once
+      expect(runRes.body.state.final).toBe('c');
+    });
+
+    test('cycle in graph causes run to fail with cycle error', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Cyclic Pipeline',
+          nodes: [
+            { id: 'A', type: 'transform', expression: 'a' },
+            { id: 'B', type: 'transform', expression: 'b' },
+          ],
+          edges: [
+            { from: 'A', to: 'B' },
+            { from: 'B', to: 'A' },
+          ],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('failed');
+      expect(runRes.body.error).toBeDefined();
+      expect(runRes.body.error.code).toBe('ORCHESTRATION_CYCLE_DETECTED');
+    });
+
+    test('self-loop in graph causes run to fail', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Self-Loop Pipeline',
+          nodes: [{ id: 'A', type: 'transform', expression: 'a' }],
+          edges: [{ from: 'A', to: 'A' }],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
+        .send({ input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('failed');
+      expect(runRes.body.error.code).toBe('ORCHESTRATION_CYCLE_DETECTED');
     });
 
     describe('GET /api/v1/orchestrations/:orchestration_id/runs/:run_id', () => {

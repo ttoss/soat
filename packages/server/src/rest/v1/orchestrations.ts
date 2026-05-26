@@ -47,6 +47,71 @@ const resolveAuth = async (
   return { projectIds: projectIds ?? [primaryId], primaryId };
 };
 
+// ── Body parsers ───────────────────────────────────────────────────────────
+
+type RawCreateBody = {
+  projectId?: string;
+  name?: unknown;
+  description?: unknown;
+  nodes?: unknown;
+  edges?: unknown;
+  stateSchema?: unknown;
+  inputSchema?: unknown;
+};
+
+const validateCreateBody = (
+  body: RawCreateBody
+): { error: string } | { name: string; nodes: unknown[]; edges: unknown[] } => {
+  if (!body.name || typeof body.name !== 'string') {
+    return { error: 'name is required' };
+  }
+  if (!Array.isArray(body.nodes)) {
+    return { error: 'nodes must be an array' };
+  }
+  if (!Array.isArray(body.edges)) {
+    return { error: 'edges must be an array' };
+  }
+  return { name: body.name, nodes: body.nodes, edges: body.edges };
+};
+
+type RawUpdateBody = {
+  name?: unknown;
+  description?: unknown;
+  nodes?: unknown;
+  edges?: unknown;
+  stateSchema?: unknown;
+  inputSchema?: unknown;
+};
+
+const parseUpdateBody = (body: RawUpdateBody) => {
+  return {
+    name: typeof body.name === 'string' ? body.name : undefined,
+    description:
+      body.description !== undefined
+        ? body.description === null
+          ? null
+          : String(body.description)
+        : undefined,
+    nodes: Array.isArray(body.nodes) ? (body.nodes as never[]) : undefined,
+    edges: Array.isArray(body.edges) ? (body.edges as never[]) : undefined,
+    stateSchema:
+      body.stateSchema !== undefined
+        ? (body.stateSchema as object | null)
+        : undefined,
+    inputSchema:
+      body.inputSchema !== undefined
+        ? (body.inputSchema as object | null)
+        : undefined,
+  };
+};
+
+const parseRunInput = (raw: unknown): Record<string, unknown> | undefined => {
+  if (raw != null && typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>;
+  }
+  return undefined;
+};
+
 // ── Routes ────────────────────────────────────────────────────────────────
 
 /**
@@ -56,31 +121,12 @@ const resolveAuth = async (
  *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestrations/post'
  */
 orchestrationsRouter.post('/orchestrations', async (ctx: Context) => {
-  const body = (ctx.request.body ?? {}) as {
-    projectId?: string;
-    name?: unknown;
-    description?: unknown;
-    nodes?: unknown;
-    edges?: unknown;
-    stateSchema?: unknown;
-    inputSchema?: unknown;
-  };
+  const body = (ctx.request.body ?? {}) as RawCreateBody;
 
-  if (!body.name || typeof body.name !== 'string') {
+  const validated = validateCreateBody(body);
+  if ('error' in validated) {
     ctx.status = 400;
-    ctx.body = { error: 'name is required' };
-    return;
-  }
-
-  if (!Array.isArray(body.nodes)) {
-    ctx.status = 400;
-    ctx.body = { error: 'nodes must be an array' };
-    return;
-  }
-
-  if (!Array.isArray(body.edges)) {
-    ctx.status = 400;
-    ctx.body = { error: 'edges must be an array' };
+    ctx.body = { error: validated.error };
     return;
   }
 
@@ -93,11 +139,11 @@ orchestrationsRouter.post('/orchestrations', async (ctx: Context) => {
 
   const result = await createOrchestration({
     projectId: auth.primaryId,
-    name: body.name,
+    name: validated.name,
     description:
       typeof body.description === 'string' ? body.description : undefined,
-    nodes: body.nodes as never[],
-    edges: body.edges as never[],
+    nodes: validated.nodes as never[],
+    edges: validated.edges as never[],
     stateSchema:
       body.stateSchema != null && typeof body.stateSchema === 'object'
         ? body.stateSchema
@@ -214,35 +260,12 @@ orchestrationsRouter.patch(
       return;
     }
 
-    const body = (ctx.request.body ?? {}) as {
-      name?: unknown;
-      description?: unknown;
-      nodes?: unknown;
-      edges?: unknown;
-      stateSchema?: unknown;
-      inputSchema?: unknown;
-    };
+    const body = (ctx.request.body ?? {}) as RawUpdateBody;
 
     const result = await updateOrchestration({
       id: orchestrationId,
       projectIds: projectIds ?? undefined,
-      name: typeof body.name === 'string' ? body.name : undefined,
-      description:
-        body.description !== undefined
-          ? body.description === null
-            ? null
-            : String(body.description)
-          : undefined,
-      nodes: Array.isArray(body.nodes) ? (body.nodes as never[]) : undefined,
-      edges: Array.isArray(body.edges) ? (body.edges as never[]) : undefined,
-      stateSchema:
-        body.stateSchema !== undefined
-          ? (body.stateSchema as object | null)
-          : undefined,
-      inputSchema:
-        body.inputSchema !== undefined
-          ? (body.inputSchema as object | null)
-          : undefined,
+      ...parseUpdateBody(body),
     });
 
     ctx.body = result;
@@ -320,13 +343,7 @@ orchestrationsRouter.post(
     }
 
     const body = (ctx.request.body ?? {}) as { input?: unknown };
-    const input =
-      body.input != null &&
-      typeof body.input === 'object' &&
-      !Array.isArray(body.input)
-        ? (body.input as Record<string, unknown>)
-        : undefined;
-
+    const input = parseRunInput(body.input);
     const authHeader = ctx.headers['authorization'] as string | undefined;
 
     const result = await startOrchestrationRun({

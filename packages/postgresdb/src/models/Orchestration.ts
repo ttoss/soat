@@ -9,6 +9,7 @@ import {
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
+import { OrchestrationRun } from './OrchestrationRun';
 import { Project } from './Project';
 
 @Table({
@@ -69,6 +70,3 @@ export class Orchestration extends Model {
   @Column({ type: DataType.DATE })
   declare updatedAt: Date;
 }
-
-// Import after class definition to avoid circular reference issues
-import { OrchestrationRun } from './OrchestrationRun';

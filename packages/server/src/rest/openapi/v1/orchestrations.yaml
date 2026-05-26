@@ -276,8 +276,8 @@ components:
           type: string
           description: For tool nodes — specific operation/action on MCP/SOAT tools.
         expression:
-          type: string
-          description: For transform/condition nodes — JavaScript expression evaluated against state.
+          type: object
+          description: For transform/condition nodes — JSON Logic rule (https://jsonlogic.com) evaluated against the run state.
         prompt:
           type: string
           description: For human nodes — prompt shown to the human reviewer.
@@ -481,7 +481,8 @@ components:
           nullable: true
           description: Terminal node artifact(s) when completed.
         required_action:
-          $ref: '#/components/schemas/RequiredAction'
+          allOf:
+            - $ref: '#/components/schemas/RequiredAction'
           nullable: true
         started_at:
           type: string
