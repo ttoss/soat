@@ -291,8 +291,17 @@ paths:
             type: string
           example: af_V1StGXR8Z5jdHi6B
       responses:
-        '204':
+        '200':
           description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                required:
+                  - success
         '401':
           description: Unauthorized
         '403':

@@ -465,12 +465,13 @@ resources:
   // ── Delete ────────────────────────────────────────────────────────────────
 
   describe('DELETE /api/v1/formations/:formation_id', () => {
-    test('deletes the formation and returns 204', async () => {
+    test('deletes the formation and returns 200 with success', async () => {
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${formationId}`
       );
 
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
     });
 
     test('deleted formation is no longer found', async () => {
@@ -628,7 +629,7 @@ resources:
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${optionalPropsFormationId}`
       );
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
     });
   });
 
@@ -894,7 +895,7 @@ resources:
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${paramFormationId}`
       );
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
     });
   });
 
@@ -1041,7 +1042,7 @@ resources:
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${agentToolFormationId}`
       );
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
     });
 
     test('deleted tool formation no longer found', async () => {
@@ -1146,7 +1147,7 @@ resources:
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${aiProviderFormationId}`
       );
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
     });
 
     test('deleted ai_provider formation no longer found', async () => {
@@ -1246,7 +1247,7 @@ resources:
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${documentFormationId}`
       );
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
     });
 
     test('deleted document formation no longer found', async () => {
@@ -1360,7 +1361,7 @@ resources:
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${memoryEntryFormationId}`
       );
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
     });
 
     test('deleted memory_entry formation no longer found', async () => {
@@ -1458,7 +1459,7 @@ resources:
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${apiKeyFormationId}`
       );
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
     });
 
     test('deleted api_key formation no longer found', async () => {
@@ -1533,7 +1534,7 @@ resources:
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${secretFormationId}`
       );
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
     });
   });
 });
