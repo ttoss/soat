@@ -17,7 +17,6 @@ export const PUBLIC_ID_PREFIXES = {
   aiProvider: 'aip_',
   chat: 'cht_',
   agent: 'agt_',
-  agentTool: 'agt_tool_',
   tool: 'tool_',
   generation: 'agt_gen_',
   trace: 'agt_trace_',
@@ -26,9 +25,9 @@ export const PUBLIC_ID_PREFIXES = {
   session: 'sess_',
   memory: 'mem_',
   memoryEntry: 'me_',
-  formation: 'af_',
-  formationResource: 'afr_',
-  formationOperation: 'afo_',
+  formation: 'form_',
+  formationResource: 'fmr_',
+  formationOperation: 'fmo_',
 } as const;
 
 /**

@@ -14,7 +14,7 @@ describe('formationsApplyHelpers', () => {
 
   test('applyCreateChange creates resource, updates row, and tracks event', async () => {
     const resourceRow = db.FormationResource.build({
-      publicId: 'afr_create',
+      publicId: 'fmr_create',
       formationId: 1,
       logicalId: 'provider',
       resourceType: 'ai_provider',
@@ -61,7 +61,7 @@ describe('formationsApplyHelpers', () => {
 
   test('applyUpdateChange updates resource when properties changed', async () => {
     const existing = db.FormationResource.build({
-      publicId: 'afr_existing',
+      publicId: 'fmr_existing',
       formationId: 1,
       logicalId: 'memory',
       resourceType: 'memory',
@@ -113,7 +113,7 @@ describe('formationsApplyHelpers', () => {
 
   test('applyUpdateChange records no-op when properties did not change', async () => {
     const existing = db.FormationResource.build({
-      publicId: 'afr_noop',
+      publicId: 'fmr_noop',
       formationId: 1,
       logicalId: 'agent',
       resourceType: 'agent',

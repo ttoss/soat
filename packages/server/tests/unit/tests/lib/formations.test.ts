@@ -47,7 +47,7 @@ describe('formations lib', () => {
       const result = await planFormation({
         projectId: 1,
         template: simpleTemplate,
-        formationId: 'af_exists',
+        formationId: 'form_exists',
       });
       expect(result.changes[0].action).toBe('update');
     });
@@ -58,7 +58,7 @@ describe('formations lib', () => {
       const result = await planFormation({
         projectId: 1,
         template: simpleTemplate,
-        formationId: 'af_missing',
+        formationId: 'form_missing',
       });
       expect(result.changes[0].action).toBe('create');
     });
@@ -74,7 +74,7 @@ describe('formations lib', () => {
       const result = await planFormation({
         projectId: 1,
         template: simpleTemplate,
-        formationId: 'af_nophysical',
+        formationId: 'form_nophysical',
       });
       expect(result.changes[0].action).toBe('create');
     });
@@ -97,7 +97,7 @@ describe('formations lib', () => {
       const result = await planFormation({
         projectId: 1,
         template: simpleTemplate,
-        formationId: 'af_noop',
+        formationId: 'form_noop',
       });
       expect(result.changes[0].action).toBe('no-op');
       expect(result.changes[0].physicalResourceId).toBe('mem_1');
@@ -121,7 +121,7 @@ describe('formations lib', () => {
       const result = await planFormation({
         projectId: 1,
         template: simpleTemplate,
-        formationId: 'af_diff',
+        formationId: 'form_diff',
       });
       expect(result.changes[0].action).toBe('update');
       expect(result.changes[0].physicalResourceId).toBe('mem_1');
@@ -145,7 +145,7 @@ describe('formations lib', () => {
       const result = await planFormation({
         projectId: 1,
         template: simpleTemplate,
-        formationId: 'af_drift',
+        formationId: 'form_drift',
       });
       expect(result.changes[0].action).toBe('update');
     });
@@ -161,7 +161,7 @@ describe('formations lib', () => {
       const result = await planFormation({
         projectId: 1,
         template: simpleTemplate,
-        formationId: 'af_exists',
+        formationId: 'form_exists',
       });
       expect(result.changes[0].physicalResourceId).toBe('mem_1');
     });
@@ -197,7 +197,7 @@ describe('formations lib', () => {
     test('maps formation without resources when includeResources is false', async () => {
       jest.spyOn(db.Formation, 'findAll').mockResolvedValue([
         {
-          publicId: 'af_1',
+          publicId: 'form_1',
           project: { publicId: 'proj_1' },
           name: 'test',
           template: null,
@@ -211,7 +211,7 @@ describe('formations lib', () => {
 
       const result = await listFormations({ projectIds: [1] });
       expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('af_1');
+      expect(result[0].id).toBe('form_1');
       expect(result[0].resources).toBeUndefined();
     });
   });
@@ -221,18 +221,18 @@ describe('formations lib', () => {
   describe('getFormation', () => {
     test('throws DomainError when formation not found', async () => {
       jest.spyOn(db.Formation, 'findOne').mockResolvedValue(null);
-      await expect(getFormation({ id: 'af_missing' })).rejects.toThrow(
+      await expect(getFormation({ id: 'form_missing' })).rejects.toThrow(
         'not found'
       );
     });
 
     test('returns formation with resources when found', async () => {
       jest.spyOn(db.Formation, 'findOne').mockResolvedValue({
-        publicId: 'af_1',
+        publicId: 'form_1',
         project: { publicId: 'proj_1' },
         formationResources: [
           {
-            publicId: 'afr_1',
+            publicId: 'fmr_1',
             logicalId: 'MyMemory',
             resourceType: 'memory',
             physicalResourceId: 'mem_1',
@@ -248,9 +248,9 @@ describe('formations lib', () => {
         updatedAt: new Date(),
       } as any);
 
-      const result = await getFormation({ id: 'af_1' });
+      const result = await getFormation({ id: 'form_1' });
       expect(result).not.toBeNull();
-      expect(result!.id).toBe('af_1');
+      expect(result!.id).toBe('form_1');
       expect(result!.resources).toHaveLength(1);
       expect(result!.resources![0].logicalId).toBe('MyMemory');
     });
@@ -263,7 +263,7 @@ describe('formations lib', () => {
       jest.spyOn(db.Formation, 'findOne').mockResolvedValue(null);
       await expect(
         updateFormation({
-          id: 'af_missing',
+          id: 'form_missing',
           template: simpleTemplate,
         })
       ).rejects.toThrow('not found');
@@ -272,13 +272,13 @@ describe('formations lib', () => {
     test('updates metadata when provided alongside template', async () => {
       const mockFormation = {
         id: 1,
-        publicId: 'af_test',
+        publicId: 'form_test',
         projectId: 1,
         template: simpleTemplate,
         update: jest.fn().mockResolvedValue(undefined),
       };
       const refreshed = {
-        publicId: 'af_test',
+        publicId: 'form_test',
         project: { publicId: 'proj_1' },
         formationResources: [],
         name: 'test',
@@ -304,7 +304,7 @@ describe('formations lib', () => {
         .mockResolvedValue(undefined);
 
       const result = await updateFormation({
-        id: 'af_test',
+        id: 'form_test',
         template: simpleTemplate,
         metadata: { env: 'test' },
       });
@@ -319,13 +319,13 @@ describe('formations lib', () => {
     test('does not update metadata when not provided', async () => {
       const mockFormation = {
         id: 1,
-        publicId: 'af_test',
+        publicId: 'form_test',
         projectId: 1,
         template: simpleTemplate,
         update: jest.fn().mockResolvedValue(undefined),
       };
       const refreshed = {
-        publicId: 'af_test',
+        publicId: 'form_test',
         project: { publicId: 'proj_1' },
         formationResources: [],
         name: 'test',
@@ -350,7 +350,7 @@ describe('formations lib', () => {
         .spyOn(formationsApply, 'applyFormationTemplate')
         .mockResolvedValue(undefined);
 
-      await updateFormation({ id: 'af_test', template: simpleTemplate });
+      await updateFormation({ id: 'form_test', template: simpleTemplate });
 
       const metadataUpdateCalls = mockFormation.update.mock.calls.filter(
         (call: any[]) => {
@@ -366,7 +366,7 @@ describe('formations lib', () => {
   describe('deleteFormation', () => {
     test('throws DomainError when formation not found', async () => {
       jest.spyOn(db.Formation, 'findOne').mockResolvedValue(null);
-      await expect(deleteFormation({ id: 'af_missing' })).rejects.toThrow(
+      await expect(deleteFormation({ id: 'form_missing' })).rejects.toThrow(
         'not found'
       );
     });
@@ -375,7 +375,7 @@ describe('formations lib', () => {
       const mockOperation = { update: jest.fn().mockResolvedValue(undefined) };
       const mockFormation = {
         id: 1,
-        publicId: 'af_test',
+        publicId: 'form_test',
         template: null,
         update: jest.fn().mockResolvedValue(undefined),
       };
@@ -391,7 +391,7 @@ describe('formations lib', () => {
         .spyOn(formationsApply, 'performResourceDeletions')
         .mockResolvedValue({ events: [], hasError: true });
 
-      const result = await deleteFormation({ id: 'af_test' });
+      const result = await deleteFormation({ id: 'form_test' });
       expect(result).toEqual({ success: false });
       expect(mockOperation.update).toHaveBeenCalledWith({
         status: 'failed',
@@ -406,8 +406,8 @@ describe('formations lib', () => {
       const mockOperation = { update: jest.fn().mockResolvedValue(undefined) };
       const mockFormation = {
         id: 1,
-        publicId: 'af_test',
-        name: 'af_test',
+        publicId: 'form_test',
+        name: 'form_test',
         template: null,
         update: jest.fn().mockResolvedValue(undefined),
       };
@@ -423,7 +423,7 @@ describe('formations lib', () => {
         .spyOn(formationsApply, 'performResourceDeletions')
         .mockResolvedValue({ events: [], hasError: false });
 
-      const result = await deleteFormation({ id: 'af_test' });
+      const result = await deleteFormation({ id: 'form_test' });
       expect(result).toEqual({ success: true });
       expect(mockOperation.update).toHaveBeenCalledWith({
         status: 'succeeded',
@@ -431,7 +431,7 @@ describe('formations lib', () => {
       });
       expect(mockFormation.update).toHaveBeenCalledWith({
         status: 'deleted',
-        name: 'af_test__deleted__af_test',
+        name: 'form_test__deleted__form_test',
       });
     });
   });
@@ -442,7 +442,7 @@ describe('formations lib', () => {
     test('returns empty array when formation not found', async () => {
       jest.spyOn(db.Formation, 'findOne').mockResolvedValue(null);
       const result = await listFormationEvents({
-        formationId: 'af_missing',
+        formationId: 'form_missing',
       });
       expect(result).toEqual([]);
     });
@@ -462,7 +462,7 @@ describe('formations lib', () => {
         } as any,
       ]);
 
-      const result = await listFormationEvents({ formationId: 'af_1' });
+      const result = await listFormationEvents({ formationId: 'form_1' });
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('op_1');
       expect(result[0].operationType).toBe('create');
