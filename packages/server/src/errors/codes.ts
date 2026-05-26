@@ -75,6 +75,18 @@ export const ERROR_CODES = {
     description:
       'This tool type cannot be invoked server-side. Client tools must be executed by the calling client.',
   },
+  ORCHESTRATION_NOT_FOUND: {
+    httpStatus: 404,
+    description: 'The orchestration does not exist or is not accessible.',
+  },
+  ORCHESTRATION_RUN_NOT_FOUND: {
+    httpStatus: 404,
+    description: 'The orchestration run does not exist or is not accessible.',
+  },
+  ORCHESTRATION_NODE_FAILED: {
+    httpStatus: 422,
+    description: 'A node in the orchestration run failed to execute.',
+  },
 } as const satisfies Record<
   string,
   { httpStatus: number; description: string }

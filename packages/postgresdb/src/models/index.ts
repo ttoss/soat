@@ -13,6 +13,8 @@ export { FormationResource } from './FormationResource';
 export { Generation } from './Generation';
 export { Memory } from './Memory';
 export { MemoryEntry } from './MemoryEntry';
+export { Orchestration } from './Orchestration';
+export { OrchestrationRun } from './OrchestrationRun';
 export { Policy } from './Policy';
 export { Project } from './Project';
 export { Secret } from './Secret';

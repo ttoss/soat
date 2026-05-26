@@ -29,6 +29,8 @@ export const PUBLIC_ID_PREFIXES = {
   formation: 'af_',
   formationResource: 'afr_',
   formationOperation: 'afo_',
+  orchestration: 'orch_',
+  orchestrationRun: 'run_',
 } as const;
 
 /**

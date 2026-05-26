@@ -1,0 +1,45 @@
+{
+  "module": "orchestrations",
+  "operations": [
+    {
+      "operationId": "createOrchestration",
+      "action": "orchestrations:CreateOrchestration",
+      "description": "Create an orchestration"
+    },
+    {
+      "operationId": "listOrchestrations",
+      "action": "orchestrations:ListOrchestrations",
+      "description": "List orchestrations in a project"
+    },
+    {
+      "operationId": "getOrchestration",
+      "action": "orchestrations:GetOrchestration",
+      "description": "Get an orchestration by ID"
+    },
+    {
+      "operationId": "updateOrchestration",
+      "action": "orchestrations:UpdateOrchestration",
+      "description": "Update an orchestration"
+    },
+    {
+      "operationId": "deleteOrchestration",
+      "action": "orchestrations:DeleteOrchestration",
+      "description": "Delete an orchestration"
+    },
+    {
+      "operationId": "startRun",
+      "action": "orchestrations:StartRun",
+      "description": "Start a new orchestration run"
+    },
+    {
+      "operationId": "listRuns",
+      "action": "orchestrations:ListRuns",
+      "description": "List runs for an orchestration"
+    },
+    {
+      "operationId": "getRun",
+      "action": "orchestrations:GetRun",
+      "description": "Get an orchestration run by ID"
+    }
+  ]
+}
