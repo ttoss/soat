@@ -69,10 +69,15 @@ const executeRunLoop = async (args: {
     args;
 
   if (detectCycle(nodes, edges)) {
-    throw new DomainError(
-      'ORCHESTRATION_CYCLE_DETECTED',
-      'Orchestration graph contains a cycle. Cycles are not supported.'
-    );
+    return {
+      runStatus: 'failed',
+      requiredAction: null,
+      runError: {
+        code: 'ORCHESTRATION_CYCLE_DETECTED',
+        message:
+          'Orchestration graph contains a cycle. Cycles are not supported.',
+      },
+    };
   }
 
   const completedNodes = new Set<string>();
