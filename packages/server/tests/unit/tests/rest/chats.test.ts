@@ -122,7 +122,7 @@ describe('Chats', () => {
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
-      expect(response.body.id).toMatch(/^cht_/);
+      expect(response.body.id).toMatch(/^chat_/);
       expect(response.body.ai_provider_id).toBe(aiProviderId);
       expect(response.body.project_id).toBe(projectId);
     });

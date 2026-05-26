@@ -165,7 +165,7 @@ describe('Sessions', () => {
           type: 'user',
         });
       const actorId = actorRes.body.id;
-      expect(actorId).toMatch(/^act_/);
+      expect(actorId).toMatch(/^actor_/);
 
       // Create two sessions using that actor
       await authenticatedTestClient(userToken)

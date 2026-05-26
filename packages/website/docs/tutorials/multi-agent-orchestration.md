@@ -1,13 +1,13 @@
 ---
-sidebar_position: 4
+sidebar_position: 5
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-# Multi-Agent Orchestration
+# Multi-Agent Sonnet with Nested Agent Calls
 
-This tutorial demonstrates how to build a **multi-agent orchestration** pipeline where one agent coordinates multiple sub-agents using [SOAT tools](/docs/modules/agents#soat). This pattern applies to any workflow that can be decomposed into sequential or parallel sub-tasks — content pipelines, data processing, multi-step analysis, code generation, report assembly, and more.
+This tutorial demonstrates how to build a **nested-agent** pipeline where one agent coordinates multiple sub-agents using [SOAT tools](/docs/modules/agents#soat). If you want the same sonnet workflow with the [Orchestrations](/docs/modules/orchestrations) module calling each agent directly, see [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet). This nested-agent pattern applies to any workflow that can be decomposed into sequential or parallel sub-tasks — content pipelines, data processing, multi-step analysis, code generation, report assembly, and more.
 
 As a concrete example, you will build a system that composes a sonnet: an orchestrator agent creates the poem title itself and then delegates each stanza to a specialized sub-agent, all collaborating through a shared document. The same architecture works for any scenario where:
 
@@ -1095,7 +1095,7 @@ curl -s "$SOAT_URL/api/v1/traces?project_id=$PROJECT_ID" \
 
 ---
 
-## How It Works — The Orchestration Pattern
+## How It Works — The Nested-Agent Pattern
 
 The architecture you built follows a general **coordinator → workers → shared state** pattern:
 

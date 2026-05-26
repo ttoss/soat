@@ -1,0 +1,665 @@
+openapi: 3.0.3
+info:
+  title: Orchestrations API
+  version: 1.0.0
+  description: >
+    Declarative workflow execution layer for SOAT. Define multi-step pipelines as
+    directed graphs, execute them as runs, and inspect state and artifacts.
+  contact:
+    name: SOAT API Support
+
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+
+tags:
+  - name: Orchestrations
+    description: Manage orchestrations and their runs
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/orchestrations:
+    post:
+      tags:
+        - Orchestrations
+      summary: Create an orchestration
+      description: Creates a new orchestration workflow definition in the project.
+      operationId: createOrchestration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrchestrationRequest'
+      responses:
+        '201':
+          description: Orchestration created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Orchestration'
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+    get:
+      tags:
+        - Orchestrations
+      summary: List orchestrations
+      description: Returns orchestrations accessible to the caller.
+      operationId: listOrchestrations
+      parameters:
+        - in: query
+          name: project_id
+          schema:
+            type: string
+          description: Filter by project public ID
+      responses:
+        '200':
+          description: List of orchestrations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Orchestration'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/orchestrations/{orchestration_id}:
+    get:
+      tags:
+        - Orchestrations
+      summary: Get an orchestration
+      description: Returns the orchestration with nodes and edges.
+      operationId: getOrchestration
+      parameters:
+        - $ref: '#/components/parameters/orchestration_id'
+      responses:
+        '200':
+          description: Orchestration details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Orchestration'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+    patch:
+      tags:
+        - Orchestrations
+      summary: Update an orchestration
+      description: Partially updates an orchestration definition.
+      operationId: updateOrchestration
+      parameters:
+        - $ref: '#/components/parameters/orchestration_id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrchestrationRequest'
+      responses:
+        '200':
+          description: Updated orchestration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Orchestration'
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+    delete:
+      tags:
+        - Orchestrations
+      summary: Delete an orchestration
+      description: Deletes an orchestration definition and all its runs.
+      operationId: deleteOrchestration
+      parameters:
+        - $ref: '#/components/parameters/orchestration_id'
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+  /api/v1/orchestrations/{orchestration_id}/runs:
+    post:
+      tags:
+        - Orchestrations
+      summary: Start a run
+      description: Creates and immediately executes a new run for the orchestration.
+      operationId: startRun
+      parameters:
+        - $ref: '#/components/parameters/orchestration_id'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartRunRequest'
+      responses:
+        '201':
+          description: Run created and executed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestrationRun'
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Orchestration not found
+
+    get:
+      tags:
+        - Orchestrations
+      summary: List runs
+      description: Returns all runs for an orchestration.
+      operationId: listRuns
+      parameters:
+        - $ref: '#/components/parameters/orchestration_id'
+      responses:
+        '200':
+          description: List of runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrchestrationRun'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Orchestration not found
+
+  /api/v1/orchestrations/{orchestration_id}/runs/{run_id}/cancel:
+    post:
+      tags:
+        - Orchestrations
+      summary: Cancel a run
+      description: Cancels a running or paused orchestration run.
+      operationId: cancelRun
+      parameters:
+        - $ref: '#/components/parameters/orchestration_id'
+        - $ref: '#/components/parameters/run_id'
+      responses:
+        '200':
+          description: Cancelled run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestrationRun'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '409':
+          description: Run is already in a terminal state
+
+  /api/v1/orchestrations/{orchestration_id}/runs/{run_id}/human-input:
+    post:
+      tags:
+        - Orchestrations
+      summary: Submit human input
+      description: Provides human input to a paused orchestration run waiting at a human node.
+      operationId: submitHumanInput
+      parameters:
+        - $ref: '#/components/parameters/orchestration_id'
+        - $ref: '#/components/parameters/run_id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HumanInputRequest'
+      responses:
+        '200':
+          description: Run after processing human input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestrationRun'
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '409':
+          description: Run is not paused
+
+  /api/v1/orchestrations/{orchestration_id}/runs/{run_id}/resume:
+    post:
+      tags:
+        - Orchestrations
+      summary: Resume a run
+      description: Resumes a paused orchestration run from its last checkpoint.
+      operationId: resumeRun
+      parameters:
+        - $ref: '#/components/parameters/orchestration_id'
+        - $ref: '#/components/parameters/run_id'
+      responses:
+        '200':
+          description: Resumed run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestrationRun'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '409':
+          description: Run is not paused
+
+  /api/v1/orchestrations/{orchestration_id}/runs/{run_id}:
+    get:
+      tags:
+        - Orchestrations
+      summary: Get a run
+      description: Returns the status, state, and artifacts of a specific run.
+      operationId: getRun
+      parameters:
+        - $ref: '#/components/parameters/orchestration_id'
+        - $ref: '#/components/parameters/run_id'
+      responses:
+        '200':
+          description: Run details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestrationRun'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    orchestration_id:
+      in: path
+      name: orchestration_id
+      required: true
+      schema:
+        type: string
+      description: Public ID of the orchestration (orch_...)
+    run_id:
+      in: path
+      name: run_id
+      required: true
+      schema:
+        type: string
+      description: Public ID of the run (run_...)
+
+  schemas:
+    OrchestrationNode:
+      type: object
+      description: A single execution unit in the orchestration graph.
+      required:
+        - id
+        - type
+      properties:
+        id:
+          type: string
+          description: Unique node identifier within this orchestration.
+        type:
+          type: string
+          enum:
+            [
+              agent,
+              tool,
+              transform,
+              knowledge,
+              memory_write,
+              condition,
+              human,
+              loop,
+              delay,
+              webhook,
+              sub_orchestration,
+            ]
+          description: Node execution type.
+        agent_id:
+          type: string
+          description: For agent nodes — public ID of the agent to invoke.
+        tool_id:
+          type: string
+          description: For tool nodes — public ID of the tool to call.
+        operation_id:
+          type: string
+          description: For tool nodes — specific operation/action on MCP/SOAT tools.
+        expression:
+          type: object
+          description: For transform/condition nodes — JSON Logic rule (https://jsonlogic.com) evaluated against the run state.
+        prompt:
+          type: string
+          description: For human nodes — prompt shown to the human reviewer.
+        options:
+          type: array
+          items:
+            type: string
+          description: For human nodes — constrained choices.
+        memory_id:
+          type: string
+          description: For memory_write nodes — public ID of the target memory.
+        input_mapping:
+          type: object
+          additionalProperties:
+            type: string
+          description: Maps state paths to node input keys.
+        output_mapping:
+          type: object
+          additionalProperties:
+            type: string
+          description: Maps node artifact keys to state paths.
+        output_schema:
+          type: object
+          description: For agent nodes — JSON Schema for structured output parsing.
+        collection:
+          type: string
+          description: For loop nodes — state path to the collection to iterate over.
+        item_variable:
+          type: string
+          description: For loop nodes — variable name injected into state for each item.
+        sub_graph:
+          type: string
+          description: For loop nodes — sub-graph definition to run per item.
+        parallelism:
+          type: integer
+          description: For loop nodes — number of items to process in parallel.
+        duration:
+          type: string
+          description: For delay nodes — ISO 8601 duration (e.g. PT5S).
+        mode:
+          type: string
+          enum: [emit, receive]
+          description: For webhook nodes — whether to emit or receive.
+        webhook_url:
+          type: string
+          description: For webhook emit nodes — URL to POST to.
+        orchestration_id:
+          type: string
+          description: For sub_orchestration nodes — public ID of the child orchestration.
+        max_iterations:
+          type: integer
+          description: Maximum iterations before the node is aborted.
+
+    OrchestrationEdge:
+      type: object
+      description: A directed connection between two nodes.
+      required:
+        - from
+        - to
+      properties:
+        from:
+          type: string
+          description: Source node ID.
+        to:
+          type: string
+          description: Target node ID.
+        condition:
+          type: string
+          description: For condition node routing — label to match against condition output.
+        activation_group:
+          type: string
+          description: Groups edges for join semantics.
+        activation_condition:
+          type: string
+          enum: [all, any]
+          description: Whether all or any edges in the activation group must fire.
+
+    Orchestration:
+      type: object
+      required:
+        - id
+        - project_id
+        - name
+        - nodes
+        - edges
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          description: Public ID (orch_...).
+        project_id:
+          type: string
+          description: Public ID of the owning project.
+        name:
+          type: string
+          description: Human-readable name.
+        description:
+          type: string
+          nullable: true
+          description: Optional description.
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrchestrationNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrchestrationEdge'
+        state_schema:
+          type: object
+          nullable: true
+          description: Optional JSON Schema for state validation.
+        input_schema:
+          type: object
+          nullable: true
+          description: Schema for run inputs (initial state).
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateOrchestrationRequest:
+      type: object
+      required:
+        - project_id
+        - name
+        - nodes
+        - edges
+      properties:
+        project_id:
+          type: string
+          description: Public ID of the project.
+        name:
+          type: string
+          description: Human-readable name.
+        description:
+          type: string
+          nullable: true
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrchestrationNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrchestrationEdge'
+        state_schema:
+          type: object
+          nullable: true
+        input_schema:
+          type: object
+          nullable: true
+
+    UpdateOrchestrationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrchestrationNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrchestrationEdge'
+        state_schema:
+          type: object
+          nullable: true
+        input_schema:
+          type: object
+          nullable: true
+
+    OrchestrationRun:
+      type: object
+      required:
+        - id
+        - orchestration_id
+        - project_id
+        - status
+        - state
+        - active_nodes
+        - artifacts
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          description: Public ID (run_...).
+        orchestration_id:
+          type: string
+          description: Public ID of the parent orchestration.
+        project_id:
+          type: string
+          description: Public ID of the owning project.
+        status:
+          type: string
+          enum: [running, paused, completed, failed, cancelled]
+        state:
+          type: object
+          description: Current accumulated state.
+        active_nodes:
+          type: array
+          items:
+            type: string
+          description: Node IDs currently active.
+        artifacts:
+          type: object
+          description: Map of node ID to output artifact.
+        error:
+          type: object
+          nullable: true
+          description: Error details when status is failed.
+        trace_id:
+          type: string
+          nullable: true
+        input:
+          type: object
+          nullable: true
+          description: Initial input provided at run creation.
+        output:
+          type: object
+          nullable: true
+          description: Terminal node artifact(s) when completed.
+        required_action:
+          allOf:
+            - $ref: '#/components/schemas/RequiredAction'
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    RequiredAction:
+      type: object
+      description: Details for a paused run waiting for human input.
+      required:
+        - node_id
+        - prompt
+        - context
+      properties:
+        node_id:
+          type: string
+        prompt:
+          type: string
+        context:
+          type: object
+        options:
+          type: array
+          items:
+            type: string
+          nullable: true
+
+    HumanInputRequest:
+      type: object
+      required:
+        - node_id
+      properties:
+        node_id:
+          type: string
+          description: ID of the human node to satisfy.
+        output:
+          type: object
+          description: Output/response provided by the human reviewer.
+
+    StartRunRequest:
+      type: object
+      properties:
+        input:
+          type: object
+          description: Initial state for the run (merged with orchestration defaults).

@@ -75,6 +75,42 @@ export const ERROR_CODES = {
     description:
       'This tool type cannot be invoked server-side. Client tools must be executed by the calling client.',
   },
+  ORCHESTRATION_NOT_FOUND: {
+    httpStatus: 404,
+    description: 'The orchestration does not exist or is not accessible.',
+  },
+  ORCHESTRATION_RUN_NOT_FOUND: {
+    httpStatus: 404,
+    description: 'The orchestration run does not exist or is not accessible.',
+  },
+  ORCHESTRATION_NODE_FAILED: {
+    httpStatus: 422,
+    description: 'A node in the orchestration run failed to execute.',
+  },
+  ORCHESTRATION_CYCLE_DETECTED: {
+    httpStatus: 422,
+    description:
+      'The orchestration graph contains a cycle. Cycles are not supported.',
+  },
+  ORCHESTRATION_RUN_NOT_CANCELLABLE: {
+    httpStatus: 409,
+    description:
+      'The orchestration run is already in a terminal state and cannot be cancelled.',
+  },
+  ORCHESTRATION_RUN_NOT_PAUSED: {
+    httpStatus: 409,
+    description: 'The orchestration run is not paused.',
+  },
+  ORCHESTRATION_HUMAN_NODE_MISMATCH: {
+    httpStatus: 400,
+    description:
+      'The specified node is not the active human node waiting for input.',
+  },
+  ORCHESTRATION_MAX_ITERATIONS_EXCEEDED: {
+    httpStatus: 422,
+    description:
+      'The orchestration run exceeded the maximum number of iterations.',
+  },
 } as const satisfies Record<
   string,
   { httpStatus: number; description: string }

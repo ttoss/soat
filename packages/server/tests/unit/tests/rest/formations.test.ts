@@ -1303,7 +1303,7 @@ resources:
       expect(res.body.resources[0].logical_id).toBe('MyEntry');
       expect(res.body.resources[0].status).toBe('created');
       expect(res.body.resources[0].physical_resource_id).toBeDefined();
-      expect(res.body.resources[0].physical_resource_id).toMatch(/^me_/);
+      expect(res.body.resources[0].physical_resource_id).toMatch(/^mem_entry_/);
 
       memoryEntryFormationId = res.body.id;
     });

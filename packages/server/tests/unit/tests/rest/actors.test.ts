@@ -60,7 +60,7 @@ describe('Actors', () => {
         .send({ project_id: projectId, name: 'Alice' });
 
       expect(response.status).toBe(201);
-      expect(response.body.id).toMatch(/^act_/);
+      expect(response.body.id).toMatch(/^actor_/);
       expect(response.body.name).toBe('Alice');
       expect(response.body.project_id).toBe(projectId);
       expect(response.body.external_id).toBeUndefined();

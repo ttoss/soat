@@ -7,7 +7,7 @@ import TabItem from '@theme/TabItem';
 
 # Deploy a Multi-Agent App with Agent Formation
 
-This tutorial builds the same **multi-agent orchestration** pipeline from [Multi-Agent Orchestration](/docs/tutorials/multi-agent-orchestration) — an orchestrator agent that delegates sonnet stanzas to four specialized sub-agents — but deploys the entire system with a **single [Agent Formation](/docs/modules/formations) template** instead of many ordered API calls.
+This tutorial builds the same **multi-agent orchestration** pipeline from [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration) — an orchestrator agent that delegates sonnet stanzas to four specialized sub-agents — but deploys the entire system with a **single [Agent Formation](/docs/modules/formations) template** instead of many ordered API calls.
 
 You will:
 
@@ -24,7 +24,7 @@ By the end you will understand how [Agent Formation](/docs/modules/formations) t
 
 - SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
 - New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, agents, and sessions before diving in.
-- Want to see the same pipeline built step by step? Read [Multi-Agent Orchestration](/docs/tutorials/multi-agent-orchestration) first.
+- Want to see the same pipeline built step by step? Read [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration) first.
 - CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
 - For production hardening (secrets, env vars), see [Advanced Configuration](/docs/getting-started/advanced-config).
 - [Ollama](https://ollama.com) running locally with `qwen2.5:0.5b` pulled (`ollama pull qwen2.5:0.5b`).
@@ -1384,7 +1384,7 @@ Without formations, reproducing this pipeline requires **14 ordered API calls**,
 
 ## Summary
 
-In this tutorial you deployed the same multi-agent sonnet pipeline as [Multi-Agent Orchestration](/docs/tutorials/multi-agent-orchestration), but collapsed all resource creation into a single declarative template.
+In this tutorial you deployed the same multi-agent sonnet pipeline as [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration), but collapsed all resource creation into a single declarative template.
 
 | Concept                           | What you did                                                                         |
 | --------------------------------- | ------------------------------------------------------------------------------------ |
