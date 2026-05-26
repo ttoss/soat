@@ -333,6 +333,16 @@ describe('Orchestrations', () => {
       runId = response.body.id;
     });
 
+    test('admin can start a run without explicit project context', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/orchestrations/${orchestrationId}/runs`)
+        .send({ input: { greeting: 'hello from admin' } });
+
+      expect(response.status).toBe(201);
+      expect(response.body.id).toBeDefined();
+      expect(response.body.status).toBe('completed');
+    });
+
     test('run on non-existent orchestration returns 500 or 404', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations/nonexistent-id/runs')

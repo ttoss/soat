@@ -260,8 +260,8 @@ const executeRunLoop = async (args: {
 
 export const startOrchestrationRun = async (args: {
   orchestrationPublicId: string;
-  projectId: number;
-  projectIds: number[];
+  projectId?: number;
+  projectIds?: number[];
   input?: Record<string, unknown>;
   authHeader?: string;
 }): Promise<MappedOrchestrationRun> => {
@@ -269,17 +269,25 @@ export const startOrchestrationRun = async (args: {
     orchestrationPublicId: args.orchestrationPublicId,
   });
 
-  const orch = await db.Orchestration.findOne({
-    where: {
-      publicId: args.orchestrationPublicId,
-      projectId: args.projectIds,
-    },
-  });
+  const where: Record<string, unknown> = {
+    publicId: args.orchestrationPublicId,
+  };
+  if (args.projectIds && args.projectIds.length > 0) {
+    where['projectId'] = args.projectIds;
+  }
+
+  const orch = await db.Orchestration.findOne({ where });
   if (!orch)
     throw new DomainError(
       'ORCHESTRATION_NOT_FOUND',
       `Orchestration '${args.orchestrationPublicId}' not found.`
     );
+
+  const effectiveProjectId = args.projectId ?? (orch.projectId as number);
+  const effectiveProjectIds =
+    args.projectIds && args.projectIds.length > 0
+      ? args.projectIds
+      : [orch.projectId as number];
 
   const nodes = orch.nodes as OrchestrationNode[];
   const edges = orch.edges as OrchestrationEdge[];
@@ -288,7 +296,7 @@ export const startOrchestrationRun = async (args: {
 
   const runRecord = await db.OrchestrationRun.create({
     orchestrationId: orch.id as number,
-    projectId: args.projectId,
+    projectId: effectiveProjectId,
     status: 'running',
     state,
     activeNodes: [],
@@ -303,7 +311,7 @@ export const startOrchestrationRun = async (args: {
     edges,
     state,
     artifacts,
-    projectIds: args.projectIds,
+    projectIds: effectiveProjectIds,
     traceId: runRecord.traceId ?? null,
     authHeader: args.authHeader,
   });

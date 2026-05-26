@@ -14,10 +14,9 @@ import {
   updateOrchestration,
 } from 'src/lib/orchestrations';
 
+import { resolveStartRunScope } from './orchestrationAuth';
+
 export const orchestrationsRouter = new Router<Context>();
-
-// ── Auth helpers ──────────────────────────────────────────────────────────
-
 const resolveAuth = async (
   ctx: Context,
   action: string,
@@ -28,7 +27,6 @@ const resolveAuth = async (
     ctx.body = { error: 'Unauthorized' };
     return null;
   }
-
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action,
@@ -39,19 +37,14 @@ const resolveAuth = async (
     ctx.body = { error: 'Forbidden' };
     return null;
   }
-
   const primaryId = projectIds?.[0] ?? ctx.authUser.apiKeyProjectId;
   if (!primaryId) {
     ctx.status = 400;
     ctx.body = { error: 'project_id is required' };
     return null;
   }
-
   return { projectIds: projectIds ?? [primaryId], primaryId };
 };
-
-// ── Body parsers ───────────────────────────────────────────────────────────
-
 type RawCreateBody = {
   projectId?: string;
   name?: unknown;
@@ -61,7 +54,6 @@ type RawCreateBody = {
   stateSchema?: unknown;
   inputSchema?: unknown;
 };
-
 const validateCreateBody = (
   body: RawCreateBody
 ): { error: string } | { name: string; nodes: unknown[]; edges: unknown[] } => {
@@ -76,7 +68,6 @@ const validateCreateBody = (
   }
   return { name: body.name, nodes: body.nodes, edges: body.edges };
 };
-
 type RawUpdateBody = {
   name?: unknown;
   description?: unknown;
@@ -114,9 +105,6 @@ const parseRunInput = (raw: unknown): Record<string, unknown> | undefined => {
   }
   return undefined;
 };
-
-// ── Routes ────────────────────────────────────────────────────────────────
-
 /**
  * @openapi
  * /api/v1/orchestrations:
@@ -160,7 +148,6 @@ orchestrationsRouter.post('/orchestrations', async (ctx: Context) => {
   ctx.status = 201;
   ctx.body = result;
 });
-
 /**
  * @openapi
  * /api/v1/orchestrations:
@@ -195,7 +182,6 @@ orchestrationsRouter.get('/orchestrations', async (ctx: Context) => {
 
   ctx.body = await listOrchestrations({ projectIds });
 });
-
 /**
  * @openapi
  * /api/v1/orchestrations/{orchestration_id}:
@@ -236,7 +222,6 @@ orchestrationsRouter.get(
     ctx.body = result;
   }
 );
-
 /**
  * @openapi
  * /api/v1/orchestrations/{orchestration_id}:
@@ -274,7 +259,6 @@ orchestrationsRouter.patch(
     ctx.body = result;
   }
 );
-
 /**
  * @openapi
  * /api/v1/orchestrations/{orchestration_id}:
@@ -309,7 +293,6 @@ orchestrationsRouter.delete(
     ctx.status = 204;
   }
 );
-
 /**
  * @openapi
  * /api/v1/orchestrations/{orchestration_id}/runs:
@@ -326,24 +309,8 @@ orchestrationsRouter.post(
     }
 
     const orchestrationId = ctx.params['orchestration_id'] as string;
-
-    const projectIds = await ctx.authUser.resolveProjectIds({
-      action: 'orchestrations:StartRun',
-    });
-
-    if (projectIds === null) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
-
-    const allProjectIds = projectIds ?? [];
-    const primaryId = allProjectIds[0] ?? ctx.authUser.apiKeyProjectId;
-    if (!primaryId) {
-      ctx.status = 400;
-      ctx.body = { error: 'project_id is required' };
-      return;
-    }
+    const scope = await resolveStartRunScope(ctx);
+    if (!scope) return;
 
     const body = (ctx.request.body ?? {}) as { input?: unknown };
     const input = parseRunInput(body.input);
@@ -351,8 +318,8 @@ orchestrationsRouter.post(
 
     const result = await startOrchestrationRun({
       orchestrationPublicId: orchestrationId,
-      projectId: primaryId,
-      projectIds: allProjectIds.length > 0 ? allProjectIds : [primaryId],
+      projectId: scope.primaryId,
+      projectIds: scope.projectIds,
       input,
       authHeader,
     });
@@ -361,7 +328,6 @@ orchestrationsRouter.post(
     ctx.body = result;
   }
 );
-
 /**
  * @openapi
  * /api/v1/orchestrations/{orchestration_id}/runs:
@@ -397,7 +363,6 @@ orchestrationsRouter.get(
     ctx.body = result;
   }
 );
-
 /**
  * @openapi
  * /api/v1/orchestrations/{orchestration_id}/runs/{run_id}:
@@ -441,7 +406,6 @@ orchestrationsRouter.get(
     ctx.body = result;
   }
 );
-
 /**
  * @openapi
  * /api/v1/orchestrations/{orchestration_id}/runs/{run_id}/cancel:
@@ -465,7 +429,6 @@ orchestrationsRouter.post(
     ctx.body = result;
   }
 );
-
 /**
  * @openapi
  * /api/v1/orchestrations/{orchestration_id}/runs/{run_id}/human-input:
@@ -508,7 +471,6 @@ orchestrationsRouter.post(
     ctx.body = result;
   }
 );
-
 /**
  * @openapi
  * /api/v1/orchestrations/{orchestration_id}/runs/{run_id}/resume:
