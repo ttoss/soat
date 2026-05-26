@@ -163,9 +163,9 @@ const WRAPPER_FLAG_OVERRIDES: Record<string, CommandFlag[]> = {
       flag: '--parameter',
       source: 'wrapper',
       required: false,
-      type: 'string (repeatable key=value)',
+      type: 'string (repeatable key=value or key)',
       description:
-        'Repeatable parameter assignment merged into body.parameters.',
+        'Repeatable parameter assignment merged into body.parameters. Values support $VAR, ${VAR}, or @VAR_NAME (shell-safe env-file reference). Omit the value (--parameter KEY) to auto-read KEY from the merged env.',
       notes: 'Mutually exclusive with --parameters.',
     },
     {
@@ -174,7 +174,7 @@ const WRAPPER_FLAG_OVERRIDES: Record<string, CommandFlag[]> = {
       required: false,
       type: 'string',
       description:
-        'Load environment variables from file for resolving $VAR and ${VAR} in --parameter values.',
+        'Load environment variables from file for resolving $VAR, ${VAR}, and @VAR_NAME in --parameter values.',
     },
   ],
   'create-formation': [
@@ -199,9 +199,9 @@ const WRAPPER_FLAG_OVERRIDES: Record<string, CommandFlag[]> = {
       flag: '--parameter',
       source: 'wrapper',
       required: false,
-      type: 'string (repeatable key=value)',
+      type: 'string (repeatable key=value or key)',
       description:
-        'Repeatable parameter assignment merged into body.parameters.',
+        'Repeatable parameter assignment merged into body.parameters. Values support $VAR, ${VAR}, or @VAR_NAME (shell-safe env-file reference). Omit the value (--parameter KEY) to auto-read KEY from the merged env.',
       notes: 'Mutually exclusive with --parameters.',
     },
     {
@@ -210,7 +210,7 @@ const WRAPPER_FLAG_OVERRIDES: Record<string, CommandFlag[]> = {
       required: false,
       type: 'string',
       description:
-        'Load environment variables from file for resolving $VAR and ${VAR} in --parameter values.',
+        'Load environment variables from file for resolving $VAR, ${VAR}, and @VAR_NAME in --parameter values.',
     },
   ],
   'update-formation': [
@@ -235,9 +235,9 @@ const WRAPPER_FLAG_OVERRIDES: Record<string, CommandFlag[]> = {
       flag: '--parameter',
       source: 'wrapper',
       required: false,
-      type: 'string (repeatable key=value)',
+      type: 'string (repeatable key=value or key)',
       description:
-        'Repeatable parameter assignment merged into body.parameters.',
+        'Repeatable parameter assignment merged into body.parameters. Values support $VAR, ${VAR}, or @VAR_NAME (shell-safe env-file reference). Omit the value (--parameter KEY) to auto-read KEY from the merged env.',
       notes: 'Mutually exclusive with --parameters.',
     },
     {
@@ -246,7 +246,7 @@ const WRAPPER_FLAG_OVERRIDES: Record<string, CommandFlag[]> = {
       required: false,
       type: 'string',
       description:
-        'Load environment variables from file for resolving $VAR and ${VAR} in --parameter values.',
+        'Load environment variables from file for resolving $VAR, ${VAR}, and @VAR_NAME in --parameter values.',
     },
   ],
 };
