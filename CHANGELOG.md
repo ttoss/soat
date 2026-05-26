@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.5.8](https://github.com/ttoss/soat/compare/v0.5.7...v0.5.8) (2026-05-26)
+
+### Bug Fixes
+
+* normalize API error envelope (avoid nested error.error payload) ([#97](https://github.com/ttoss/soat/issues/97)) ([86f519b](https://github.com/ttoss/soat/commit/86f519bc6198a3db7567d91e4231014b4e2b33a7))
+* return 409 when deleting an AI provider with dependent chats ([#103](https://github.com/ttoss/soat/issues/103)) ([d9f0116](https://github.com/ttoss/soat/commit/d9f01162198a6c8edb0b92dd2cd69275bd02a8ff))
+
+### Features
+
+* expose webhook secret via GET endpoint and ref_attr formation output ([#107](https://github.com/ttoss/soat/issues/107)) ([a0691d7](https://github.com/ttoss/soat/commit/a0691d7dd778109092d2aba6d5cd60b9c9392436))
+
 ## [0.5.7](https://github.com/ttoss/soat/compare/v0.5.6...v0.5.7) (2026-05-25)
 
 ### Bug Fixes
