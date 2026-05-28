@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { DomainError } from '../errors';
 
 export type PersistedGeneration = {
   id: string;
@@ -19,14 +20,22 @@ export type PersistedGeneration = {
 };
 
 const mapGeneration = (
-  gen: InstanceType<(typeof db)['Generation']>
+  gen: InstanceType<(typeof db)['Generation']> & {
+    agent?: InstanceType<(typeof db)['Agent']>;
+    trace?: InstanceType<(typeof db)['Trace']>;
+    initiatorGeneration?: InstanceType<(typeof db)['Generation']> | null;
+  }
 ): PersistedGeneration => {
+  if (!gen.agent || !gen.trace) {
+    throw new Error('Generation associations are required for serialization.');
+  }
+
   return {
     id: gen.publicId,
     projectId: gen.projectId,
-    agentId: gen.agentId,
-    traceId: gen.traceId,
-    initiatorGenerationId: gen.initiatorGenerationId,
+    agentId: gen.agent.publicId,
+    traceId: gen.trace.publicId,
+    initiatorGenerationId: gen.initiatorGeneration?.publicId ?? null,
     startedByPrincipalType: gen.startedByPrincipalType,
     startedByPrincipalId: gen.startedByPrincipalId,
     status: gen.status,
@@ -44,23 +53,61 @@ export const createGenerationRecord = async (args: {
   publicId: string;
   projectId: number;
   agentId: string;
-  agentDbId?: number | null;
   traceId: string;
-  traceDbId?: number | null;
   initiatorGenerationId?: string | null;
-  initiatorGenerationDbId?: number | null;
   startedByPrincipalType?: string | null;
   startedByPrincipalId?: string | null;
 }) => {
+  const [agent, traceRow, initiatorGeneration] = await Promise.all([
+    db.Agent.findOne({
+      where: { publicId: args.agentId, projectId: args.projectId },
+    }),
+    db.Trace.findOne({
+      where: { publicId: args.traceId, projectId: args.projectId },
+    }),
+    args.initiatorGenerationId
+      ? db.Generation.findOne({
+          where: {
+            publicId: args.initiatorGenerationId,
+            projectId: args.projectId,
+          },
+        })
+      : Promise.resolve(null),
+  ]);
+
+  if (!agent) {
+    throw new DomainError(
+      'AGENT_NOT_FOUND',
+      `Agent '${args.agentId}' not found.`
+    );
+  }
+
+  let trace = traceRow;
+  if (!trace) {
+    trace = await db.Trace.create({
+      publicId: args.traceId,
+      projectId: args.projectId,
+      agentId: agent.id as number,
+      fileId: null,
+      stepCount: 0,
+      parentTraceId: null,
+      rootTraceId: null,
+    });
+  }
+
+  if (args.initiatorGenerationId && !initiatorGeneration) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Generation '${args.initiatorGenerationId}' not found.`
+    );
+  }
+
   const gen = await db.Generation.create({
     publicId: args.publicId,
     projectId: args.projectId,
-    agentId: args.agentId,
-    agentDbId: args.agentDbId ?? null,
-    traceId: args.traceId,
-    traceDbId: args.traceDbId ?? null,
-    initiatorGenerationId: args.initiatorGenerationId ?? null,
-    initiatorGenerationDbId: args.initiatorGenerationDbId ?? null,
+    agentId: agent.id,
+    traceId: trace.id,
+    initiatorGenerationId: initiatorGeneration?.id ?? null,
     startedByPrincipalType: args.startedByPrincipalType ?? null,
     startedByPrincipalId: args.startedByPrincipalId ?? null,
     status: 'in_progress',
@@ -70,7 +117,23 @@ export const createGenerationRecord = async (args: {
     stopReason: null,
     metadata: null,
   });
-  return mapGeneration(gen);
+
+  const fullGeneration = await db.Generation.findByPk(gen.id, {
+    include: [
+      { model: db.Agent, as: 'agent' },
+      { model: db.Trace, as: 'trace' },
+      { model: db.Generation, as: 'initiatorGeneration' },
+    ],
+  });
+
+  if (!fullGeneration) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Generation '${args.publicId}' not found.`
+    );
+  }
+
+  return mapGeneration(fullGeneration);
 };
 
 export const updateGenerationRecord = async (args: {
@@ -95,7 +158,17 @@ export const updateGenerationRecord = async (args: {
   if (args.metadata !== undefined) updates.metadata = args.metadata;
 
   await gen.update(updates);
-  return mapGeneration(gen);
+
+  const fullGeneration = await db.Generation.findByPk(gen.id, {
+    include: [
+      { model: db.Agent, as: 'agent' },
+      { model: db.Trace, as: 'trace' },
+      { model: db.Generation, as: 'initiatorGeneration' },
+    ],
+  });
+  if (!fullGeneration) return null;
+
+  return mapGeneration(fullGeneration);
 };
 
 export const listGenerations = async (args: {
@@ -115,11 +188,27 @@ export const listGenerations = async (args: {
       return { data: [], total: 0, limit, offset };
     where.projectId = args.projectIds;
   }
-  if (args.agentId !== undefined) where.agentId = args.agentId;
+  if (args.agentId !== undefined) {
+    const agentWhere: { publicId: string; projectId?: number[] } = {
+      publicId: args.agentId,
+    };
+    if (args.projectIds !== undefined) {
+      agentWhere.projectId = args.projectIds;
+    }
+
+    const agent = await db.Agent.findOne({ where: agentWhere });
+    if (!agent) return { data: [], total: 0, limit, offset };
+    where.agentId = agent.id;
+  }
   if (args.status !== undefined) where.status = args.status;
 
   const { count, rows } = await db.Generation.findAndCountAll({
     where: Object.keys(where).length > 0 ? where : undefined,
+    include: [
+      { model: db.Agent, as: 'agent' },
+      { model: db.Trace, as: 'trace' },
+      { model: db.Generation, as: 'initiatorGeneration' },
+    ],
     order: [['startedAt', 'DESC']],
     limit,
     offset,
@@ -135,7 +224,14 @@ export const getGeneration = async (args: {
   const where: Record<string, any> = { publicId: args.publicId };
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
 
-  const gen = await db.Generation.findOne({ where });
+  const gen = await db.Generation.findOne({
+    where,
+    include: [
+      { model: db.Agent, as: 'agent' },
+      { model: db.Trace, as: 'trace' },
+      { model: db.Generation, as: 'initiatorGeneration' },
+    ],
+  });
   if (!gen) return null;
 
   return mapGeneration(gen);

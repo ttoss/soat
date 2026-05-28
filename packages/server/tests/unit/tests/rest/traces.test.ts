@@ -71,6 +71,30 @@ describe('Traces REST API', () => {
     });
     const internalProjectId = project?.id as number;
 
+    const aiProvider = await db.AiProvider.create({
+      projectId: internalProjectId,
+      name: 'Traces REST Provider',
+      provider: 'openai',
+      defaultModel: 'gpt-4o-mini',
+      baseUrl: null,
+      config: null,
+      secretId: null,
+    });
+
+    await db.Agent.create({
+      publicId: 'agt_traces_rest_001',
+      projectId: internalProjectId,
+      aiProviderId: aiProvider.id,
+      name: 'Traces Agent 1',
+    });
+
+    await db.Agent.create({
+      publicId: 'agt_traces_rest_002',
+      projectId: internalProjectId,
+      aiProviderId: aiProvider.id,
+      name: 'Traces Agent 2',
+    });
+
     await saveTrace({
       traceId,
       projectId: internalProjectId,

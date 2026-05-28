@@ -278,7 +278,11 @@ describe('FK onDelete rules', () => {
 
       const actorRes = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
-        .send({ project_id: projectId, name: 'fkod-actor-mem', memory_id: memId });
+        .send({
+          project_id: projectId,
+          name: 'fkod-actor-mem',
+          memory_id: memId,
+        });
       expect(actorRes.status).toBe(201);
       const actorId = actorRes.body.id as string;
       expect(actorRes.body.memory_id).toBe(memId);
@@ -336,6 +340,33 @@ describe('FK onDelete rules', () => {
       });
       expect(after).not.toBeNull();
       expect(after!.actorId).toBeNull();
+    });
+  });
+
+  // ── RESTRICT: File deleted → references block deletion ──────────────────
+
+  describe('File deleted → referenced rows block deletion', () => {
+    test('file destroy is rejected when a document references it', async () => {
+      const file = await db.File.create({
+        projectId: internalProjectId,
+        path: `/fkod-file-${Date.now()}.txt`,
+        filename: `fkod-file-${Date.now()}.txt`,
+        contentType: 'text/plain',
+        size: 4,
+        storageType: 'local',
+        storagePath: '/tmp/fkod-file.txt',
+        metadata: null,
+      });
+
+      await db.Document.create({
+        fileId: file.id,
+        title: 'FKOD file reference',
+        metadata: null,
+        tags: null,
+        embedding: null,
+      });
+
+      await expect(file.destroy()).rejects.toThrow();
     });
   });
 });

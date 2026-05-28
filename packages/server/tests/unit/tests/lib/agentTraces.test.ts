@@ -34,15 +34,41 @@ describe('getTrace', () => {
 describe('saveTrace and upsertTraceRecord', () => {
   let projectId: number;
   let projectPublicId: string;
+  let aiProviderId: number;
+
+  const ensureAgent = async (publicId: string) => {
+    const existing = await db.Agent.findOne({ where: { publicId, projectId } });
+    if (existing) return existing;
+
+    return db.Agent.create({
+      publicId,
+      projectId,
+      aiProviderId,
+      name: `Agent ${publicId}`,
+    });
+  };
 
   beforeAll(async () => {
     const project = await db.Project.create({ name: 'Traces Lib Test' });
     projectId = project.id;
     projectPublicId = project.publicId;
+
+    const aiProvider = await db.AiProvider.create({
+      projectId,
+      name: 'Traces Provider',
+      provider: 'openai',
+      defaultModel: 'gpt-4o-mini',
+      baseUrl: null,
+      config: null,
+      secretId: null,
+    });
+    aiProviderId = aiProvider.id;
   });
 
   test('creates a new Trace row on first save', async () => {
     const traceId = `trc_lib_create_${Date.now()}`;
+    await ensureAgent('agt_trace_lib_001');
+
     await saveTrace({
       traceId,
       projectId,
@@ -60,6 +86,7 @@ describe('saveTrace and upsertTraceRecord', () => {
 
   test('updates an existing Trace row on second save', async () => {
     const traceId = `trc_lib_update_${Date.now()}`;
+    await ensureAgent('agt_trace_lib_002');
 
     await saveTrace({
       traceId,
@@ -83,6 +110,8 @@ describe('saveTrace and upsertTraceRecord', () => {
 
   test('saves a trace with empty steps', async () => {
     const traceId = `trc_lib_empty_${Date.now()}`;
+    await ensureAgent('agt_trace_lib_003');
+
     await saveTrace({
       traceId,
       projectId,
@@ -97,6 +126,8 @@ describe('saveTrace and upsertTraceRecord', () => {
 
   test('listTraces returns created traces for a given projectId', async () => {
     const traceId = `trc_lib_list_${Date.now()}`;
+    await ensureAgent('agt_trace_lib_004');
+
     await saveTrace({
       traceId,
       projectId,
@@ -116,6 +147,8 @@ describe('saveTrace and upsertTraceRecord', () => {
 
   test('getTrace returns trace when projectIds includes the project', async () => {
     const traceId = `trc_lib_get_${Date.now()}`;
+    await ensureAgent('agt_trace_lib_005');
+
     await saveTrace({
       traceId,
       projectId,
@@ -131,6 +164,8 @@ describe('saveTrace and upsertTraceRecord', () => {
 
   test('getTrace returns not_found when projectIds excludes the project', async () => {
     const traceId = `trc_lib_excl_${Date.now()}`;
+    await ensureAgent('agt_trace_lib_006');
+
     await saveTrace({
       traceId,
       projectId,

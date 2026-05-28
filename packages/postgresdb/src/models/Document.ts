@@ -34,9 +34,12 @@ export class Document extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false, unique: true })
   declare fileId: number;
 
-  @BelongsTo(() => {
-    return File;
-  })
+  @BelongsTo(
+    () => {
+      return File;
+    },
+    { onDelete: 'RESTRICT' }
+  )
   declare file: File;
 
   @Column({

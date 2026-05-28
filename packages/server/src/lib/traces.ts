@@ -45,21 +45,29 @@ export const serializeSteps = (steps: unknown[]): unknown[] => {
 const mapTrace = (
   row: InstanceType<(typeof db)['Trace']> & {
     project?: InstanceType<(typeof db)['Project']>;
+    agent?: InstanceType<(typeof db)['Agent']>;
+    file?: InstanceType<(typeof db)['File']> | null;
+    parentTrace?: InstanceType<(typeof db)['Trace']> | null;
+    rootTrace?: InstanceType<(typeof db)['Trace']> | null;
   }
 ): Trace => {
+  if (!row.agent) {
+    throw new Error('Trace agent association is required for serialization.');
+  }
+
   return {
     id: row.publicId,
     projectId: (row.project?.publicId ?? String(row.projectId)) as string,
-    agentId: row.agentId,
-    fileId: row.fileId ?? null,
+    agentId: row.agent.publicId,
+    fileId: row.file?.publicId ?? null,
     stepCount: row.stepCount,
-    parentTraceId: row.parentTraceId ?? null,
-    rootTraceId: row.rootTraceId ?? null,
+    parentTraceId: row.parentTrace?.publicId ?? null,
+    rootTraceId: row.rootTrace?.publicId ?? null,
     createdAt: row.createdAt,
   };
 };
 
-const findTraceDbId = async (
+const findTraceId = async (
   publicId: string | null | undefined
 ): Promise<number | null> => {
   if (!publicId) return null;
@@ -68,7 +76,7 @@ const findTraceDbId = async (
     | null;
 };
 
-const findFileDbId = async (
+const findFileId = async (
   publicId: string | null | undefined
 ): Promise<number | null> => {
   if (!publicId) return null;
@@ -80,15 +88,11 @@ const findFileDbId = async (
 type CreateTraceArgs = {
   traceId: string;
   projectId: number;
-  agentId: string;
-  agentDbId: number | null;
-  fileDbId: number | null;
-  filePublicId: string | undefined | null;
+  agentId: number;
+  fileId: number | null;
   stepCount: number;
-  parentTraceId: string | null;
-  parentTraceDbId: number | null;
-  rootTraceId: string | null;
-  rootTraceDbId: number | null;
+  parentTraceId: number | null;
+  rootTraceId: number | null;
 };
 
 const createTraceOrFallback = async (args: CreateTraceArgs): Promise<void> => {
@@ -97,14 +101,10 @@ const createTraceOrFallback = async (args: CreateTraceArgs): Promise<void> => {
       publicId: args.traceId,
       projectId: args.projectId,
       agentId: args.agentId,
-      agentDbId: args.agentDbId,
-      fileDbId: args.fileDbId,
-      fileId: args.filePublicId ?? null,
+      fileId: args.fileId,
       stepCount: args.stepCount,
       parentTraceId: args.parentTraceId,
-      parentTraceDbId: args.parentTraceDbId,
       rootTraceId: args.rootTraceId,
-      rootTraceDbId: args.rootTraceDbId,
     });
   } catch (createError) {
     // Handle race condition: another process may have created the record concurrently.
@@ -117,8 +117,7 @@ const createTraceOrFallback = async (args: CreateTraceArgs): Promise<void> => {
         args.traceId
       );
       await concurrent.update({
-        fileDbId: args.fileDbId,
-        fileId: args.filePublicId ?? null,
+        fileId: args.fileId,
         stepCount: args.stepCount,
       });
     } else {
@@ -131,7 +130,6 @@ const upsertTraceRecord = async (args: {
   traceId: string;
   projectId: number;
   agentId: string;
-  agentDbId?: number | null;
   filePublicId: string | undefined | null;
   stepCount: number;
   parentTraceId?: string | null;
@@ -150,15 +148,26 @@ const upsertTraceRecord = async (args: {
     where: { publicId: args.traceId },
   });
 
-  const fileDbId = await findFileDbId(args.filePublicId);
-  const parentTraceDbId = await findTraceDbId(args.parentTraceId);
-  const rootTraceDbId = await findTraceDbId(args.rootTraceId);
+  const [agent, fileId, parentTraceDbId, rootTraceDbId] = await Promise.all([
+    db.Agent.findOne({
+      where: { publicId: args.agentId, projectId: args.projectId },
+    }),
+    findFileId(args.filePublicId),
+    findTraceId(args.parentTraceId),
+    findTraceId(args.rootTraceId),
+  ]);
+
+  if (!agent) {
+    throw new DomainError(
+      'AGENT_NOT_FOUND',
+      `Agent '${args.agentId}' not found.`
+    );
+  }
 
   if (existing) {
     log('upsertTraceRecord: updating existing trace traceId=%s', args.traceId);
     await existing.update({
-      fileDbId,
-      fileId: args.filePublicId ?? null,
+      fileId,
       stepCount: args.stepCount,
     });
   } else {
@@ -166,15 +175,11 @@ const upsertTraceRecord = async (args: {
     await createTraceOrFallback({
       traceId: args.traceId,
       projectId: args.projectId,
-      agentId: args.agentId,
-      agentDbId: args.agentDbId ?? null,
-      fileDbId,
-      filePublicId: args.filePublicId,
+      agentId: agent.id as number,
+      fileId,
       stepCount: args.stepCount,
-      parentTraceId: args.parentTraceId ?? null,
-      parentTraceDbId,
-      rootTraceId: args.rootTraceId ?? null,
-      rootTraceDbId,
+      parentTraceId: parentTraceDbId,
+      rootTraceId: rootTraceDbId,
     });
   }
 };
@@ -191,7 +196,6 @@ export const saveTrace = async (args: {
   projectId: number;
   projectPublicId: string;
   agentId: string;
-  agentDbId?: number | null;
   steps: unknown[];
   parentTraceId?: string | null;
   rootTraceId?: string | null;
@@ -221,7 +225,6 @@ export const saveTrace = async (args: {
     traceId: args.traceId,
     projectId: args.projectId,
     agentId: args.agentId,
-    agentDbId: args.agentDbId,
     filePublicId: fileRecord.id,
     stepCount: serializedSteps.length,
     parentTraceId: args.parentTraceId ?? null,
@@ -252,7 +255,13 @@ export const listTraces = async (args: {
 
   const { count, rows } = await db.Trace.findAndCountAll({
     where: Object.keys(where).length > 0 ? where : undefined,
-    include: [{ model: db.Project, as: 'project' }],
+    include: [
+      { model: db.Project, as: 'project' },
+      { model: db.Agent, as: 'agent' },
+      { model: db.File, as: 'file' },
+      { model: db.Trace, as: 'parentTrace' },
+      { model: db.Trace, as: 'rootTrace' },
+    ],
     order: [['createdAt', 'DESC']],
     limit,
     offset,
@@ -277,7 +286,13 @@ export const getTrace = async (args: {
 
   const row = await db.Trace.findOne({
     where,
-    include: [{ model: db.Project, as: 'project' }],
+    include: [
+      { model: db.Project, as: 'project' },
+      { model: db.Agent, as: 'agent' },
+      { model: db.File, as: 'file' },
+      { model: db.Trace, as: 'parentTrace' },
+      { model: db.Trace, as: 'rootTrace' },
+    ],
   });
   if (!row)
     throw new DomainError(
@@ -336,7 +351,13 @@ export const getTraceTree = async (args: {
 
   const targetRow = await db.Trace.findOne({
     where,
-    include: [{ model: db.Project, as: 'project' }],
+    include: [
+      { model: db.Project, as: 'project' },
+      { model: db.Agent, as: 'agent' },
+      { model: db.File, as: 'file' },
+      { model: db.Trace, as: 'parentTrace' },
+      { model: db.Trace, as: 'rootTrace' },
+    ],
   });
   if (!targetRow)
     throw new DomainError(
@@ -345,12 +366,13 @@ export const getTraceTree = async (args: {
     );
 
   // Determine root publicId
-  const rootPublicId = targetRow.rootTraceId ?? targetRow.publicId;
+  const rootTraceDbId = (targetRow.rootTraceId ??
+    (targetRow.id as number)) as number;
 
   // Query all traces in the tree (root + all descendants sharing rootTraceId)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const treeWhere: Record<string, any> = {
-    [Op.or]: [{ publicId: rootPublicId }, { rootTraceId: rootPublicId }],
+    [Op.or]: [{ id: rootTraceDbId }, { rootTraceId: rootTraceDbId }],
   };
   if (args.projectIds !== undefined) {
     treeWhere.projectId = args.projectIds;
@@ -358,7 +380,13 @@ export const getTraceTree = async (args: {
 
   const allRows = await db.Trace.findAll({
     where: treeWhere,
-    include: [{ model: db.Project, as: 'project' }],
+    include: [
+      { model: db.Project, as: 'project' },
+      { model: db.Agent, as: 'agent' },
+      { model: db.File, as: 'file' },
+      { model: db.Trace, as: 'parentTrace' },
+      { model: db.Trace, as: 'rootTrace' },
+    ],
     order: [['createdAt', 'ASC']],
   });
 
