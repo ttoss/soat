@@ -49,6 +49,55 @@ const mapGeneration = (
   };
 };
 
+const findInitiatorGeneration = async (args: {
+  initiatorGenerationId?: string | null;
+  projectId: number;
+}) => {
+  if (!args.initiatorGenerationId) {
+    return null;
+  }
+
+  const initiatorGeneration = await db.Generation.findOne({
+    where: {
+      publicId: args.initiatorGenerationId,
+      projectId: args.projectId,
+    },
+  });
+
+  if (!initiatorGeneration) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Generation '${args.initiatorGenerationId}' not found.`
+    );
+  }
+
+  return initiatorGeneration;
+};
+
+const findOrCreateTrace = async (args: {
+  traceId: string;
+  projectId: number;
+  agentDbId: number;
+}) => {
+  const existingTrace = await db.Trace.findOne({
+    where: { publicId: args.traceId, projectId: args.projectId },
+  });
+
+  if (existingTrace) {
+    return existingTrace;
+  }
+
+  return db.Trace.create({
+    publicId: args.traceId,
+    projectId: args.projectId,
+    agentId: args.agentDbId,
+    fileId: null,
+    stepCount: 0,
+    parentTraceId: null,
+    rootTraceId: null,
+  });
+};
+
 export const createGenerationRecord = async (args: {
   publicId: string;
   projectId: number;
@@ -58,21 +107,14 @@ export const createGenerationRecord = async (args: {
   startedByPrincipalType?: string | null;
   startedByPrincipalId?: string | null;
 }) => {
-  const [agent, traceRow, initiatorGeneration] = await Promise.all([
+  const [agent, initiatorGeneration] = await Promise.all([
     db.Agent.findOne({
       where: { publicId: args.agentId, projectId: args.projectId },
     }),
-    db.Trace.findOne({
-      where: { publicId: args.traceId, projectId: args.projectId },
+    findInitiatorGeneration({
+      initiatorGenerationId: args.initiatorGenerationId,
+      projectId: args.projectId,
     }),
-    args.initiatorGenerationId
-      ? db.Generation.findOne({
-          where: {
-            publicId: args.initiatorGenerationId,
-            projectId: args.projectId,
-          },
-        })
-      : Promise.resolve(null),
   ]);
 
   if (!agent) {
@@ -82,25 +124,11 @@ export const createGenerationRecord = async (args: {
     );
   }
 
-  let trace = traceRow;
-  if (!trace) {
-    trace = await db.Trace.create({
-      publicId: args.traceId,
-      projectId: args.projectId,
-      agentId: agent.id as number,
-      fileId: null,
-      stepCount: 0,
-      parentTraceId: null,
-      rootTraceId: null,
-    });
-  }
-
-  if (args.initiatorGenerationId && !initiatorGeneration) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Generation '${args.initiatorGenerationId}' not found.`
-    );
-  }
+  const trace = await findOrCreateTrace({
+    traceId: args.traceId,
+    projectId: args.projectId,
+    agentDbId: agent.id as number,
+  });
 
   const gen = await db.Generation.create({
     publicId: args.publicId,

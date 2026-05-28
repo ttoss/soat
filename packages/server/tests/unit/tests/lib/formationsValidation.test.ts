@@ -538,8 +538,7 @@ describe('validateFormationTemplate', () => {
     expect(
       result.errors.some((e) => {
         return (
-          e.path.startsWith('outputs') &&
-          e.message.includes("'NonExistent'")
+          e.path.startsWith('outputs') && e.message.includes("'NonExistent'")
         );
       })
     ).toBe(true);
