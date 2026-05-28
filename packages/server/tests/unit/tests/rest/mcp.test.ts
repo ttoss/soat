@@ -79,10 +79,24 @@ describe('MCP tools - happy path', () => {
   };
 
   const parseResult = (res: {
-    body: { result?: { content?: [{ text: string }] } };
+    body: {
+      result?: {
+        content?: Array<{
+          text?: unknown;
+        }>;
+      };
+    };
   }) => {
     const text = res.body.result?.content?.[0]?.text;
-    return text ? JSON.parse(text) : null;
+    if (text == null) {
+      return null;
+    }
+
+    if (typeof text === 'string') {
+      return JSON.parse(text);
+    }
+
+    return text;
   };
 
   // ── Files ────────────────────────────────────────────────────────────────
@@ -838,7 +852,7 @@ describe('MCP tools - happy path', () => {
       traceId: mcpTraceId,
       projectId: internalProjectId,
       projectPublicId: projectId,
-      agentId: 'agt_mcp_test_001',
+      agentId: sessionAgentId,
       steps: [{ type: 'text-delta', text: 'hello' }],
     });
 
@@ -846,7 +860,7 @@ describe('MCP tools - happy path', () => {
       traceId: mcpChildTraceId,
       projectId: internalProjectId,
       projectPublicId: projectId,
-      agentId: 'agt_mcp_test_002',
+      agentId: sessionAgentId,
       steps: [{ type: 'text-delta', text: 'world' }],
       parentTraceId: mcpTraceId,
       rootTraceId: mcpTraceId,
