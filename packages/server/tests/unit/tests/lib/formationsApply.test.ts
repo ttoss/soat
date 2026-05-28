@@ -45,7 +45,9 @@ describe('formationsApply', () => {
     };
     const resolvedIds = new Map<string, string>([['provider', 'aip_1']]);
 
-    await expect(resolveFormationOutputs(template, resolvedIds)).resolves.toEqual({
+    await expect(
+      resolveFormationOutputs(template, resolvedIds)
+    ).resolves.toEqual({
       providerId: 'aip_1',
       greeting: 'hello',
     });
@@ -54,7 +56,14 @@ describe('formationsApply', () => {
   test('resolveFormationOutputs resolves ref_attr expressions using getAttributes', async () => {
     const template: FormationTemplate = {
       resources: {
-        MyWebhook: { type: 'webhook', properties: { name: 'hook', url: 'https://example.com', events: ['*'] } },
+        MyWebhook: {
+          type: 'webhook',
+          properties: {
+            name: 'hook',
+            url: 'https://example.com',
+            events: ['*'],
+          },
+        },
       },
       outputs: {
         webhookSecret: { ref_attr: 'MyWebhook.secret' },

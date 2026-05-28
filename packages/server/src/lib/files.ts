@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { db } from '../db';
+import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import {
   type CompiledPolicy,
@@ -348,6 +349,18 @@ export const deleteFile = async (args: { id: string }) => {
 
   if (!file) {
     return null;
+  }
+
+  const [traceCount, documentCount] = await Promise.all([
+    db.Trace.count({ where: { fileId: file.id } }),
+    db.Document.count({ where: { fileId: file.id } }),
+  ]);
+
+  if (traceCount > 0 || documentCount > 0) {
+    throw new DomainError(
+      'FILE_HAS_DEPENDENTS',
+      `File '${file.publicId}' is referenced and cannot be deleted.`
+    );
   }
 
   if (file.storageType === 'local' && file.storagePath) {

@@ -53,6 +53,16 @@ export const ERROR_CODES = {
     description:
       'The AI provider is referenced by one or more chats and cannot be deleted. Delete the dependent chats first.',
   },
+  AGENT_HAS_DEPENDENTS: {
+    httpStatus: 409,
+    description:
+      'The agent is referenced by one or more generations or traces and cannot be deleted. Delete the dependent records first.',
+  },
+  FILE_HAS_DEPENDENTS: {
+    httpStatus: 409,
+    description:
+      'The file is referenced by one or more records and cannot be deleted. Delete the dependent records first.',
+  },
   ACTOR_HAS_MESSAGES: {
     httpStatus: 409,
     description: 'The actor has linked session messages and cannot be deleted.',

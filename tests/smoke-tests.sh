@@ -853,10 +853,10 @@ if ! printf '%s\n' "$AGENT_STREAM_RESP" | grep -q "data: \[DONE\]"; then
 fi
 echo "Agent SSE stream OK."
 
-# 23. Cleanup — delete agent
-echo "--- Deleting agent ---"
-$SOAT_CLI delete-agent --agent-id "$AGENT_ID"
-echo "Agent deleted."
+# 23. Generated agents are now delete-blocked by dependent generations/traces
+echo "--- Verifying agent delete-block after generation ---"
+expect_cli_error_status 409 delete-agent --agent-id "$AGENT_ID"
+echo "Agent delete-block: OK (409 as expected)"
 
 # 24. Cleanup — delete agent tool
 echo "--- Deleting agent tool ---"
@@ -955,10 +955,10 @@ if [ -n "$MCP_GEN_RESP" ]; then
   fi
 fi
 
-# 30. Cleanup — delete MCP agent
-echo "--- Deleting MCP agent ---"
-$SOAT_CLI delete-agent --agent-id "$MCP_AGENT_ID"
-echo "MCP Agent deleted."
+# 30. MCP-generated agent is also delete-blocked by dependent generations/traces
+echo "--- Verifying MCP agent delete-block after generation ---"
+expect_cli_error_status 409 delete-agent --agent-id "$MCP_AGENT_ID"
+echo "MCP agent delete-block: OK (409 as expected)"
 
 # 31. Cleanup — delete MCP agent tool
 echo "--- Deleting MCP agent tool ---"
@@ -1092,10 +1092,10 @@ else
   exit 1
 fi
 
-# 35. Cleanup — delete client-tool agent
-echo "--- Deleting client-tool agent ---"
-$SOAT_CLI delete-agent --agent-id "$CLIENT_AGENT_ID"
-echo "Client-tool agent deleted."
+# 35. Client-tool agent is delete-blocked after generation persists trace data
+echo "--- Verifying client-tool agent delete-block after generation ---"
+expect_cli_error_status 409 delete-agent --agent-id "$CLIENT_AGENT_ID"
+echo "Client-tool agent delete-block: OK (409 as expected)"
 
 # 36. Cleanup — delete client agent tool
 echo "--- Deleting client agent tool ---"
@@ -1160,10 +1160,10 @@ else
   echo "WARNING: SOAT Agent output may not contain exact project names (LLM response varies), but generation completed successfully."
 fi
 
-# 41. Cleanup — delete SOAT agent
-echo "--- Deleting SOAT agent ---"
-$SOAT_CLI delete-agent --agent-id "$SOAT_AGENT_ID"
-echo "SOAT agent deleted."
+# 41. SOAT agent is delete-blocked after generation persists trace data
+echo "--- Verifying SOAT agent delete-block after generation ---"
+expect_cli_error_status 409 delete-agent --agent-id "$SOAT_AGENT_ID"
+echo "SOAT agent delete-block: OK (409 as expected)"
 
 # 42. Cleanup — delete SOAT agent tool
 echo "--- Deleting SOAT agent tool ---"
@@ -1351,10 +1351,10 @@ echo "--- Deleting user actor ---"
 $SOAT_CLI delete-actor --actor-id "$USER_ACTOR_ID"
 echo "User actor deleted."
 
-# 54. Cleanup — delete conversation-generate agent
-echo "--- Deleting conversation-generate agent ---"
-$SOAT_CLI delete-agent --agent-id "$CONVO_GEN_AGENT_ID"
-echo "Conversation-generate agent deleted."
+# 54. Conversation-generate agent is delete-blocked after generation persists
+echo "--- Verifying conversation-generate agent delete-block ---"
+expect_cli_error_status 409 delete-agent --agent-id "$CONVO_GEN_AGENT_ID"
+echo "Conversation-generate agent delete-block: OK (409 as expected)"
 echo "Conversations generate coverage: OK"
 
 # ── Webhooks ──────────────────────────────────────────────────────────────

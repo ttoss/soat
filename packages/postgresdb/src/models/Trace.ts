@@ -47,79 +47,62 @@ export class Trace extends Model {
   })
   declare project: Project;
 
-  // Intentionally denormalized for observability: retains the agent's public ID
-  // even after the agent is deleted (agentDbId will be set to NULL by the DB).
-  @Column({ type: DataType.STRING(32), allowNull: false })
-  declare agentId: string;
-
   @Index
   @ForeignKey(() => {
     return Agent;
   })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare agentDbId: number | null;
+  @Column({ type: DataType.INTEGER, allowNull: false })
+  declare agentId: number;
 
   @BelongsTo(
     () => {
       return Agent;
     },
-    { onDelete: 'SET NULL' }
+    { onDelete: 'RESTRICT' }
   )
-  declare agent: Agent | null;
+  declare agent: Agent;
 
   @ForeignKey(() => {
     return File;
   })
   @Column({ type: DataType.INTEGER, allowNull: true })
-  declare fileDbId: number | null;
+  declare fileId: number | null;
 
   @BelongsTo(
     () => {
       return File;
     },
-    { onDelete: 'SET NULL' }
+    { onDelete: 'RESTRICT' }
   )
   declare file: File | null;
 
-  // Denormalized for easy access without joining File
-  @Column({ type: DataType.STRING(32), allowNull: true })
-  declare fileId: string | null;
-
-  // Tree structure — null parentTraceId means this trace IS the root
-  @Column({ type: DataType.STRING(32), allowNull: true })
-  declare parentTraceId: string | null;
-
   @Index
   @ForeignKey(() => {
     return Trace;
   })
   @Column({ type: DataType.INTEGER, allowNull: true })
-  declare parentTraceDbId: number | null;
+  declare parentTraceId: number | null;
 
   @BelongsTo(
     () => {
       return Trace;
     },
-    { foreignKey: 'parentTraceDbId', as: 'parentTrace' }
+    { foreignKey: 'parentTraceId', as: 'parentTrace', onDelete: 'RESTRICT' }
   )
   declare parentTrace: Trace | null;
 
-  // Denormalized root trace publicId for fast tree queries
-  @Column({ type: DataType.STRING(32), allowNull: true })
-  declare rootTraceId: string | null;
-
   @Index
   @ForeignKey(() => {
     return Trace;
   })
   @Column({ type: DataType.INTEGER, allowNull: true })
-  declare rootTraceDbId: number | null;
+  declare rootTraceId: number | null;
 
   @BelongsTo(
     () => {
       return Trace;
     },
-    { foreignKey: 'rootTraceDbId', as: 'rootTrace' }
+    { foreignKey: 'rootTraceId', as: 'rootTrace', onDelete: 'RESTRICT' }
   )
   declare rootTrace: Trace | null;
 

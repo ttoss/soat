@@ -1,3 +1,6 @@
+import { db } from 'src/db';
+import { saveTrace } from 'src/lib/traces';
+
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Agents', () => {
@@ -580,6 +583,37 @@ describe('Agents', () => {
         `/api/v1/agents/${agentId}`
       );
       expect(response.status).toBe(204);
+    });
+
+    test('returns 409 when the agent has dependent traces', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Agent With Trace',
+        });
+      const blockedAgentId = createRes.body.id as string;
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      expect(project).not.toBeNull();
+
+      await saveTrace({
+        traceId: `trc_agent_delete_${Date.now()}`,
+        projectId: project!.id as number,
+        projectPublicId: projectId,
+        agentId: blockedAgentId,
+        steps: [{ type: 'text-delta', text: 'hello' }],
+      });
+
+      const response = await authenticatedTestClient(userToken).delete(
+        `/api/v1/agents/${blockedAgentId}`
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('AGENT_HAS_DEPENDENTS');
     });
 
     test('deleted agent returns 404 on get', async () => {

@@ -21,10 +21,10 @@ import { Trace } from './Trace';
       fields: ['project_id', 'status', 'started_at'],
     },
     {
-      fields: ['agent_db_id', 'status', 'started_at'],
+      fields: ['agent_id', 'status', 'started_at'],
     },
     {
-      fields: ['trace_db_id'],
+      fields: ['trace_id'],
     },
   ],
   hooks: {
@@ -54,60 +54,55 @@ export class Generation extends Model {
   })
   declare project: Project;
 
-  // Intentionally denormalized for observability: retains the agent's public ID
-  // even after the agent is deleted (agentDbId will be set to NULL by the DB).
-  @Column({ type: DataType.STRING(32), allowNull: false })
-  declare agentId: string;
-
   @Index
   @ForeignKey(() => {
     return Agent;
   })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare agentDbId: number | null;
+  @Column({ type: DataType.INTEGER, allowNull: false })
+  declare agentId: number;
 
   @BelongsTo(
     () => {
       return Agent;
     },
-    { onDelete: 'SET NULL' }
+    { onDelete: 'RESTRICT' }
   )
-  declare agent: Agent | null;
-
-  @Column({ type: DataType.STRING(32), allowNull: false })
-  declare traceId: string;
+  declare agent: Agent;
 
   @ForeignKey(() => {
     return Trace;
   })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare traceDbId: number | null;
+  @Column({ type: DataType.INTEGER, allowNull: false })
+  declare traceId: number;
 
-  @BelongsTo(() => {
-    return Trace;
-  })
-  declare trace: Trace | null;
+  @BelongsTo(
+    () => {
+      return Trace;
+    },
+    { onDelete: 'RESTRICT' }
+  )
+  declare trace: Trace;
 
   // Self-referencing FK for generation chain (nested agent calls)
   @ForeignKey(() => {
     return Generation;
   })
   @Column({ type: DataType.INTEGER, allowNull: true })
-  declare initiatorGenerationDbId: number | null;
+  declare initiatorGenerationId: number | null;
 
-  @BelongsTo(() => {
-    return Generation;
-  })
+  @BelongsTo(
+    () => {
+      return Generation;
+    },
+    { onDelete: 'RESTRICT' }
+  )
   declare initiatorGeneration: Generation | null;
-
-  @Column({ type: DataType.STRING(32), allowNull: true })
-  declare initiatorGenerationId: string | null;
 
   @ForeignKey(() => {
     return Actor;
   })
   @Column({ type: DataType.INTEGER, allowNull: true })
-  declare startedByActorDbId: number | null;
+  declare startedByActorId: number | null;
 
   @BelongsTo(
     () => {

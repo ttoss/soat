@@ -199,7 +199,9 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
       expect(
-        response.body.some((o: { id: string }) => o.id === orchestrationId)
+        response.body.some((o: { id: string }) => {
+          return o.id === orchestrationId;
+        })
       ).toBe(true);
     });
 

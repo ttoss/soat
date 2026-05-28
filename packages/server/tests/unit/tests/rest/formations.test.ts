@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Formations', () => {
@@ -1501,7 +1502,9 @@ resources:
       secretFormationId = res.body.id;
 
       const secretResource = res.body.resources.find(
-        (r: { logical_id: string }) => r.logical_id === 'MySecret'
+        (r: { logical_id: string }) => {
+          return r.logical_id === 'MySecret';
+        }
       );
       expect(secretResource).toBeDefined();
       expect(secretResource.status).toBe('created');

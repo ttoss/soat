@@ -12,11 +12,13 @@ import type { OrchestrationNode } from 'src/lib/orchestrations';
 
 const makeNode = (
   overrides: Partial<OrchestrationNode> = {}
-): OrchestrationNode => ({
-  id: 'n1',
-  type: 'transform',
-  ...overrides,
-});
+): OrchestrationNode => {
+  return {
+    id: 'n1',
+    type: 'transform',
+    ...overrides,
+  };
+};
 
 // ── applyInputMapping ──────────────────────────────────────────────────────
 
@@ -106,15 +108,18 @@ describe('executeTransformNode', () => {
   });
 
   test('throws DomainError when expression is null', () => {
-    expect(() =>
-      executeTransformNode({ node: makeNode({ expression: null }), state: {} })
-    ).toThrow(DomainError);
+    expect(() => {
+      return executeTransformNode({
+        node: makeNode({ expression: null }),
+        state: {},
+      });
+    }).toThrow(DomainError);
   });
 
   test('throws DomainError when expression is undefined', () => {
-    expect(() =>
-      executeTransformNode({ node: makeNode({}), state: {} })
-    ).toThrow(DomainError);
+    expect(() => {
+      return executeTransformNode({ node: makeNode({}), state: {} });
+    }).toThrow(DomainError);
   });
 });
 
@@ -138,21 +143,21 @@ describe('executeConditionNode', () => {
   });
 
   test('throws DomainError when expression is null', () => {
-    expect(() =>
-      executeConditionNode({
+    expect(() => {
+      return executeConditionNode({
         node: makeNode({ type: 'condition', expression: null }),
         state: {},
-      })
-    ).toThrow(DomainError);
+      });
+    }).toThrow(DomainError);
   });
 
   test('throws DomainError when expression is undefined', () => {
-    expect(() =>
-      executeConditionNode({
+    expect(() => {
+      return executeConditionNode({
         node: makeNode({ type: 'condition' }),
         state: {},
-      })
-    ).toThrow(DomainError);
+      });
+    }).toThrow(DomainError);
   });
 });
 
@@ -220,16 +225,16 @@ describe('executeWebhookNode', () => {
 
   test('emit mode fires fetch with webhookUrl (best-effort, no throw)', () => {
     // fetch is fire-and-forget; any network error is swallowed by .catch()
-    expect(() =>
-      executeWebhookNode({
+    expect(() => {
+      return executeWebhookNode({
         node: makeNode({
           type: 'webhook',
           mode: 'emit',
           webhookUrl: 'http://localhost:0/noop',
         }),
         state: { val: 1 },
-      })
-    ).not.toThrow();
+      });
+    }).not.toThrow();
   });
 
   test('receive mode returns requires_action with prompt and context', () => {

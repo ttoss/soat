@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 
+import { db } from 'src/db';
+
 import { storageDir } from '../../setupTests';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -272,6 +274,45 @@ describe('Files', () => {
           return f.includes(fileId);
         })
       ).toBe(false);
+    });
+
+    test('returns 409 when deleting a file referenced by another record', async () => {
+      const fileContent = Buffer.from('Keep me!');
+      const uploadRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', fileContent, {
+          filename: 'referenced.txt',
+          contentType: 'text/plain',
+        })
+        .field('project_id', projectId);
+
+      const fileId = uploadRes.body.id as string;
+      const fileRow = await db.File.findOne({ where: { publicId: fileId } });
+      expect(fileRow).not.toBeNull();
+
+      await db.Document.create({
+        fileId: fileRow!.id,
+        title: 'Referenced file',
+        metadata: null,
+        tags: null,
+        embedding: null,
+      });
+
+      const deleteRes = await authenticatedTestClient(userToken).delete(
+        `/api/v1/files/${fileId}`
+      );
+
+      expect(deleteRes.status).toBe(409);
+      expect(deleteRes.body.error.code).toBe('FILE_HAS_DEPENDENTS');
+
+      const filesAfter = fs.readdirSync(storageDir, {
+        recursive: true,
+      }) as string[];
+      expect(
+        filesAfter.some((f) => {
+          return f.includes(fileId);
+        })
+      ).toBe(true);
     });
 
     test('unauthenticated request cannot delete a file', async () => {
