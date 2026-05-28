@@ -1309,37 +1309,44 @@ curl -s "$SOAT_URL/api/v1/formations/$FORMATION_ID/events" \
 
 ## Step 12 — Delete the formation
 
-Deleting a formation removes all managed resources in reverse dependency order. See [Formations](/docs/modules/formations).
+Deleting a formation tries to remove managed resources in reverse dependency order. Depending on runtime artifacts created by the formation flow (for example, traces or generations that keep references alive), the delete operation may return `success: false` and keep the formation in `delete_failed` status for inspection. See [Formations](/docs/modules/formations).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat delete-formation --formation_id "$FORMATION_ID"
-```
+DELETE_RESULT=$(soat delete-formation --formation_id "$FORMATION_ID")
+printf '%s\n' "$DELETE_RESULT" | jq '.'
 
-Confirm the formation is gone:
-
-```bash
-# → expect-fail
-soat get-formation --formation_id "$FORMATION_ID"
+# Always inspect the current formation state after delete. When deletion
+# succeeds this prints an error payload; when it fails it prints id/status.
+soat get-formation --formation_id "$FORMATION_ID" | jq '{id, status, error}'
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-await authClient.formations.deleteFormation({
+const { data: deletion } = await authClient.formations.deleteFormation({
   path: { formation_id: FORMATION_ID },
 });
+console.log('delete success:', deletion?.success);
 
-// Confirm it's gone
-try {
-  await authClient.formations.getFormation({
+if (deletion?.success) {
+  // Confirm it's gone (should throw 404)
+  try {
+    await authClient.formations.getFormation({
+      path: { formation_id: FORMATION_ID },
+    });
+  } catch {
+    console.log('Formation deleted — 404 as expected');
+  }
+} else {
+  // Keep it for inspection when delete_failed happens.
+  const { data: remaining } = await authClient.formations.getFormation({
     path: { formation_id: FORMATION_ID },
   });
-} catch (e) {
-  console.log('Formation deleted — 404 as expected');
+  console.log('Formation delete failed, current status:', remaining?.status);
 }
 ```
 
@@ -1347,12 +1354,14 @@ try {
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X DELETE "$SOAT_URL/api/v1/formations/$FORMATION_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
+DELETE_RESPONSE=$(curl -s -X DELETE "$SOAT_URL/api/v1/formations/$FORMATION_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN")
+printf '%s\n' "$DELETE_RESPONSE" | jq '.'
 
-# Confirm it's gone — expect 404
+# Always inspect the current formation state after delete. When deletion
+# succeeds this prints an error payload; when it fails it prints id/status.
 curl -s "$SOAT_URL/api/v1/formations/$FORMATION_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{error}'
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{id, status, error}'
 ```
 
 </TabItem>

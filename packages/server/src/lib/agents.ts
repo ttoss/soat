@@ -283,6 +283,20 @@ export const deleteAgent = async (args: {
       `Agent '${args.id}' not found.`
     );
 
+  const agentId = (agent as unknown as { id: number }).id;
+
+  const [generationCount, traceCount] = await Promise.all([
+    db.Generation.count({ where: { agentId } }),
+    db.Trace.count({ where: { agentId } }),
+  ]);
+
+  if (generationCount > 0 || traceCount > 0) {
+    throw new DomainError(
+      'AGENT_HAS_DEPENDENTS',
+      `Agent '${args.id}' has dependent generations or traces and cannot be deleted.`
+    );
+  }
+
   // Actor.agentId is cleared automatically by the DB via onDelete: 'SET NULL' on the FK.
   await agent.destroy();
 
