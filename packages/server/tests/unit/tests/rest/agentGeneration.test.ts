@@ -267,6 +267,82 @@ describe('Agent Generation Routes', () => {
       expect(response.body.id).toBe('gen_success');
     });
 
+    test('accepts tool_output message content in snake_case request body', async () => {
+      const mockResult = {
+        id: 'gen_tool_output',
+        traceId: 'trc_tool_output',
+        status: 'completed' as const,
+        output: { model: 'test', content: 'resolved', finishReason: 'stop' },
+      };
+      mockCreateGeneration.mockResolvedValueOnce(mockResult);
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({
+          messages: [
+            {
+              role: 'user',
+              content: {
+                type: 'tool_output',
+                tool_id: 'tool_audio_to_text',
+                input: { url: 'https://example.com/audio.mp3' },
+                output_path: 'text',
+              },
+            },
+          ],
+        });
+
+      expect(response.status).toBe(200);
+      expect(mockCreateGeneration).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: [
+            {
+              role: 'user',
+              content: {
+                type: 'tool_output',
+                toolId: 'tool_audio_to_text',
+                input: { url: 'https://example.com/audio.mp3' },
+                outputPath: 'text',
+              },
+            },
+          ],
+        })
+      );
+    });
+
+    test('accepts document content message in snake_case request body', async () => {
+      const mockResult = {
+        id: 'gen_document_input',
+        traceId: 'trc_document_input',
+        status: 'completed' as const,
+        output: { model: 'test', content: 'resolved', finishReason: 'stop' },
+      };
+      mockCreateGeneration.mockResolvedValueOnce(mockResult);
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({
+          messages: [
+            {
+              role: 'user',
+              content: { type: 'document', document_id: 'doc_abc123' },
+            },
+          ],
+        });
+
+      expect(response.status).toBe(200);
+      expect(mockCreateGeneration).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: [
+            {
+              role: 'user',
+              content: { type: 'document', documentId: 'doc_abc123' },
+            },
+          ],
+        })
+      );
+    });
+
     test('returns 400 when generate throws AGENT_NOT_FOUND', async () => {
       mockCreateGeneration.mockRejectedValueOnce(
         new DomainError('AGENT_NOT_FOUND', 'Agent not found')

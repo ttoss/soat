@@ -325,17 +325,93 @@ Running an agent creates a **generation** — a single execution of the tool loo
 
 Use `POST /agents/{agent_id}/generate` to run a generation. It accepts `prompt` (string) and/or `messages` (array) as input. You can also pass `tool_choice`, `active_tool_ids`, `step_rules`, `stop_conditions`, and `max_call_depth` to override the agent defaults for that request.
 
-| Parameter         | Type          | Required | Description                                                                                                    |
-| ----------------- | ------------- | -------- | -------------------------------------------------------------------------------------------------------------- |
-| `prompt`          | string        | cond.    | Text prompt (must provide `prompt` and/or `messages`)                                                          |
-| `messages`        | array         | cond.    | Message history (must provide `prompt` and/or `messages`)                                                      |
-| `tool_choice`     | string/object | no       | Override the agent's `tool_choice` for this generation                                                         |
-| `active_tool_ids` | array         | no       | Override the agent's `active_tool_ids` for this generation                                                     |
-| `step_rules`      | array         | no       | Override the agent's `step_rules` for this generation                                                          |
-| `stop_conditions` | array         | no       | Override the agent's `stop_conditions` for this generation                                                     |
-| `max_call_depth`  | number        | no       | Maximum nesting depth for agent-to-agent calls (default: `10`) — see [Nested Agent Calls](#nested-agent-calls) |
-| `stream`          | boolean       | no       | Stream results as Server-Sent Events                                                                           |
-| `tool_context`    | object        | no       | Key-value pairs forwarded as `X-Soat-Context-*` headers on tool calls — see [Tool Context](#tool-context)      |
+| Parameter         | Type          | Required | Description                                                                                                                                 |
+| ----------------- | ------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prompt`          | string        | cond.    | Text prompt (must provide `prompt` and/or `messages`)                                                                                       |
+| `messages`        | array         | cond.    | Message history (must provide `prompt` and/or `messages`). Each item uses `content`, which can be plain text, `tool_output`, or `document`. |
+| `tool_choice`     | string/object | no       | Override the agent's `tool_choice` for this generation                                                                                      |
+| `active_tool_ids` | array         | no       | Override the agent's `active_tool_ids` for this generation                                                                                  |
+| `step_rules`      | array         | no       | Override the agent's `step_rules` for this generation                                                                                       |
+| `stop_conditions` | array         | no       | Override the agent's `stop_conditions` for this generation                                                                                  |
+| `max_call_depth`  | number        | no       | Maximum nesting depth for agent-to-agent calls (default: `10`) — see [Nested Agent Calls](#nested-agent-calls)                              |
+| `stream`          | boolean       | no       | Stream results as Server-Sent Events                                                                                                        |
+| `tool_context`    | object        | no       | Key-value pairs forwarded as `X-Soat-Context-*` headers on tool calls — see [Tool Context](#tool-context)                                   |
+
+#### Tool Output Message Content
+
+`messages[].content` can be a plain string (default), a `tool_output` object, or a `document` object. This keeps all non-text message input under the same `content` field.
+
+When `tool_output` is used, the server executes the referenced tool before model inference and replaces the message content with the extracted result.
+
+When `content.type` is `document`, the server loads the referenced document and uses its content as the message content.
+
+Use this when user input must be transformed first (for example, audio URL -> transcription text).
+
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": {
+        "type": "tool_output",
+        "tool_id": "tool_audio_to_text",
+        "input": { "url": "https://example.com/audio.mp3" },
+        "output_path": ".data.transcription.text"
+      }
+    }
+  ]
+}
+```
+
+`tool_id` is required. `output_path` is optional and accepts a jq expression used to select the value from the tool result. If `output_path` is omitted, the entire tool output is passed as the message content. For tools that expose multiple actions (`soat`, `mcp`), provide `action` as well.
+
+Example tool result object:
+
+```json
+{
+  "data": {
+    "transcription": {
+      "text": "Olá Pedro, seu pedido foi aprovado.",
+      "language": "pt-BR",
+      "confidence": 0.97
+    },
+    "duration_ms": 18420
+  },
+  "meta": {
+    "provider": "whisper",
+    "request_id": "req_abc123"
+  }
+}
+```
+
+If `output_path` is `.data.transcription.text`, the extracted value passed to the generation input is:
+
+```json
+"Olá Pedro, seu pedido foi aprovado."
+```
+
+Useful jq patterns:
+
+- Select nested property: `.data.transcription.text`
+- Filter array items: `.items[] | select(.lang == "pt-BR") | .text`
+- Fallback values: `.text // .data.text // ""`
+- Transform and join: `.segments | map(.text) | join(" ")`
+
+Document-based message example:
+
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": {
+        "type": "document",
+        "document_id": "doc_abc123"
+      }
+    }
+  ]
+}
+```
 
 ### Streaming
 
@@ -362,10 +438,10 @@ Pass `stream: true` to receive results as Server-Sent Events (SSE). Each step's 
 
 Each key is title-cased (first character uppercased) and prefixed with `X-Soat-Context-`:
 
-| `tool_context` key | Forwarded header              |
-| ------------------ | ----------------------------- |
-| `userId`           | `X-Soat-Context-UserId`       |
-| `tenantId`         | `X-Soat-Context-TenantId`     |
+| `tool_context` key | Forwarded header          |
+| ------------------ | ------------------------- |
+| `userId`           | `X-Soat-Context-UserId`   |
+| `tenantId`         | `X-Soat-Context-TenantId` |
 
 #### Supported Tool Types
 

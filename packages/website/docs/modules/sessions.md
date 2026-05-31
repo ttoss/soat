@@ -10,7 +10,7 @@ Sessions provide a simplified **1 user ↔ 1 agent** conversational interface. T
 By default, interacting with an agent requires three API calls:
 
 1. **Create a session** — `POST /agents/:agent_id/sessions`
-2. **Save a user message** — `POST /agents/:agent_id/sessions/:session_id/messages` (returns 201, does not trigger generation)
+2. **Save a user message** — `POST /agents/:agent_id/sessions/:session_id/messages` with either `message` or `document_id` (returns 201, does not trigger generation)
 3. **Generate a response** — `POST /agents/:agent_id/sessions/:session_id/generate` (triggers the LLM, returns the assistant reply)
 
 When `auto_generate` is enabled on the session, step 3 is handled automatically — `POST .../messages` saves the message and returns the assistant reply in one call, reducing the flow to two API calls.
@@ -66,15 +66,17 @@ The explicit `POST .../generate` endpoint continues to work regardless of this s
 
 Sessions support the same `tool_context` mechanism as direct agent generations — see [Tool Context](./agents.md#tool-context) in the Agents module for the full specification.
 
+Session message creation does not support `tool_output` message content. If you need pre-generation tool execution with `output_path` extraction, call [Agents generation](./agents.md#tool-output-message-content) directly.
+
 #### Auto-Populated Headers
 
 When a generation is triggered through a session (either via `POST .../generate` or auto-generate), the server automatically injects the following keys into `tool_context` before forwarding to tool calls:
 
-| Injected `tool_context` key | Forwarded header                      | Value                                                              |
-| --------------------------- | ------------------------------------- | ------------------------------------------------------------------ |
-| `actorId`                   | `X-Soat-Context-ActorId`              | Public ID of the session's actor (`actr_...`); omitted if not set  |
-| `actorExternalId`           | `X-Soat-Context-ActorExternalId`      | External ID of the session's actor; omitted if not set             |
-| `sessionId`                 | `X-Soat-Context-SessionId`            | Public ID of the session (`sess_...`); always present              |
+| Injected `tool_context` key | Forwarded header                 | Value                                                             |
+| --------------------------- | -------------------------------- | ----------------------------------------------------------------- |
+| `actorId`                   | `X-Soat-Context-ActorId`         | Public ID of the session's actor (`actr_...`); omitted if not set |
+| `actorExternalId`           | `X-Soat-Context-ActorExternalId` | External ID of the session's actor; omitted if not set            |
+| `sessionId`                 | `X-Soat-Context-SessionId`       | Public ID of the session (`sess_...`); always present             |
 
 Any values provided by the caller in `tool_context` are merged on top and take precedence over the auto-populated values.
 
@@ -141,6 +143,11 @@ Messages are returned with simplified roles:
 | `content`    | string | Message text                                                |
 | `model`      | string | Model used for assistant messages                           |
 | `created_at` | string | ISO 8601 timestamp                                          |
+
+When creating a session message (`POST .../messages`), send exactly one of:
+
+- `message`: raw text body
+- `document_id`: public ID of an existing document (its content is used as the message text)
 
 ## Examples
 

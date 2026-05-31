@@ -3,6 +3,7 @@ import type { ServerResponse } from 'node:http';
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import type { GenerationResult } from 'src/lib/agentGeneration';
+import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
 import { createGeneration, submitToolOutputs } from 'src/lib/agents';
 
 const pipeStreamToResponse = async (
@@ -106,7 +107,7 @@ agentGenerationRouter.post(
     const result = await createGeneration({
       projectIds,
       agentId: ctx.params.agent_id,
-      messages: messages as Array<{ role: string; content: string }>,
+      messages: messages as GenerationInputMessage[],
       stream: stream === true,
       traceId,
       parentTraceId,
@@ -114,6 +115,7 @@ agentGenerationRouter.post(
       remainingDepth:
         typeof maxCallDepth === 'number' ? maxCallDepth : undefined,
       authHeader: (ctx.headers.authorization as string) ?? '',
+      authUser: ctx.authUser,
       toolContext,
     });
 

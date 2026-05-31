@@ -8,11 +8,12 @@ import { createXai } from '@ai-sdk/xai';
 import type { AiProviderSlug } from '@soat/postgresdb';
 import type { LanguageModel, ModelMessage } from 'ai';
 import { generateText, streamText } from 'ai';
+import type { AuthUser } from 'src/Context';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
-import { getDocument } from 'src/lib/documents';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { resolveMessageContent } from './messageContent';
 
 const buildBedrockModel = (
   apiKey: string,
@@ -256,22 +257,26 @@ export const deleteChat = async (args: { id: string }): Promise<void> => {
   await chat.destroy();
 };
 
-const resolveMessages = async (
-  messages: ChatMessageInput[]
-): Promise<ChatMessage[]> => {
-  const resolved: ChatMessage[] = [];
-
-  for (const message of messages) {
-    if ('documentId' in message) {
-      const doc = await getDocument({ id: message.documentId });
-      resolved.push({
-        role: message.role,
-        content: doc?.content ?? '',
+const resolveMessages = async (args: {
+  messages: ChatMessageInput[];
+  authUser: AuthUser;
+}): Promise<ChatMessage[]> => {
+  const resolved = await Promise.all(
+    args.messages.map(async (message) => {
+      const resolvedContent = await resolveMessageContent({
+        content:
+          'documentId' in message
+            ? { type: 'document' as const, documentId: message.documentId }
+            : message.content,
+        authUser: args.authUser,
       });
-    } else {
-      resolved.push(message);
-    }
-  }
+
+      return {
+        role: message.role,
+        content: resolvedContent.content,
+      };
+    })
+  );
 
   return resolved;
 };
@@ -359,6 +364,7 @@ export const createChatCompletionForChat = async (args: {
   chatId: string;
   messages: ChatMessageInput[];
   model?: string;
+  authUser: AuthUser;
 }): Promise<{ model: string; content: string; finishReason: string }> => {
   const chat = await db.Chat.findOne({
     where: { publicId: args.chatId },
@@ -382,7 +388,10 @@ export const createChatCompletionForChat = async (args: {
     );
   }
 
-  const resolvedMessages = await resolveMessages(args.messages);
+  const resolvedMessages = await resolveMessages({
+    messages: args.messages,
+    authUser: args.authUser,
+  });
   const systemMessage = getChatSystemMessage(
     resolvedMessages,
     typedChat.systemMessage
@@ -416,6 +425,7 @@ export const streamChatCompletionForChat = async (args: {
   chatId: string;
   messages: ChatMessageInput[];
   model?: string;
+  authUser: AuthUser;
 }) => {
   const chat = await db.Chat.findOne({
     where: { publicId: args.chatId },
@@ -439,7 +449,10 @@ export const streamChatCompletionForChat = async (args: {
     );
   }
 
-  const resolvedMessages = await resolveMessages(args.messages);
+  const resolvedMessages = await resolveMessages({
+    messages: args.messages,
+    authUser: args.authUser,
+  });
 
   const systemFromRequest = resolvedMessages.find((m) => {
     return m.role === 'system';

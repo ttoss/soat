@@ -157,6 +157,7 @@ const handleStreamingCompletion = async (args: {
       chatId: args.chatId,
       messages: args.messages,
       model: args.model,
+      authUser: args.ctx.authUser!,
     });
 
     for await (const chunk of textStream) {
@@ -208,6 +209,7 @@ chatsRouter.post('/chats/:chat_id/completions', async (ctx: Context) => {
     chatId,
     messages: chatMessages,
     model,
+    authUser: ctx.authUser!,
   });
 
   ctx.body = {

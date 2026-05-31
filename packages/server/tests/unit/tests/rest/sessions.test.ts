@@ -46,6 +46,7 @@ describe('Sessions', () => {
                 'agents:SendSessionMessage',
                 'agents:SubmitSessionToolOutputs',
                 'agents:ListSessionMessages',
+                'documents:GetDocument',
               ],
             },
           ],
@@ -433,6 +434,27 @@ describe('Sessions', () => {
         .send({ message: 'Hi', tool_context: { req_key: 'val' } });
 
       expect(response.status).toBe(201);
+    });
+
+    test('accepts document_id and stores document-backed user message', async () => {
+      const createDocumentRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'Document content for session input',
+          filename: 'session-input.txt',
+        });
+
+      expect(createDocumentRes.status).toBe(201);
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .send({ document_id: createDocumentRes.body.id });
+
+      expect(response.status).toBe(201);
+      expect(response.body.role).toBe('user');
+      expect(response.body.content).toBe('Document content for session input');
+      expect(response.body.document_id).toBe(createDocumentRes.body.id);
     });
 
     test('missing message body returns 400', async () => {

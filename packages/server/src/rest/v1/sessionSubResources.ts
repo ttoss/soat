@@ -77,18 +77,39 @@ sessionSubResourcesRouter.post(
 
     const body = ctx.request.body as {
       message?: string;
+      documentId?: string;
       toolContext?: Record<string, string>;
     };
 
-    if (!body.message || typeof body.message !== 'string') {
-      throw new DomainError('VALIDATION_FAILED', 'message is required');
+    if (body.message !== undefined && typeof body.message !== 'string') {
+      throw new DomainError('VALIDATION_FAILED', 'message must be a string');
+    }
+
+    if (body.documentId !== undefined && typeof body.documentId !== 'string') {
+      throw new DomainError('VALIDATION_FAILED', 'documentId must be a string');
+    }
+
+    if (!body.message && !body.documentId) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        'either message or documentId is required'
+      );
+    }
+
+    if (body.message && body.documentId) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        'message and documentId are mutually exclusive'
+      );
     }
 
     const result = await addSessionMessage({
       agentId: agent.id as number,
       sessionId: ctx.params.session_id,
       message: body.message,
+      documentId: body.documentId,
       toolContext: body.toolContext,
+      authUser: ctx.authUser,
     });
 
     ctx.status = 201;

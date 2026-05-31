@@ -614,20 +614,36 @@ components:
           description: Key-value pairs injected as context headers into all tool call requests made during this session.
 
     AddSessionMessageRequest:
-      type: object
-      required:
-        - message
-      properties:
-        message:
-          type: string
-          description: User message text
-          example: Hello, how can I deploy my app?
-        tool_context:
-          type: object
-          additionalProperties:
-            type: string
-          nullable: true
-          description: Key-value pairs injected as context headers into all tool call requests made during this generation.
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - message
+          properties:
+            message:
+              type: string
+              description: User message text
+              example: Hello, how can I deploy my app?
+            tool_context:
+              type: object
+              additionalProperties:
+                type: string
+              nullable: true
+              description: Key-value pairs injected as context headers into all tool call requests made during this generation.
+        - type: object
+          additionalProperties: false
+          required:
+            - document_id
+          properties:
+            document_id:
+              type: string
+              description: Public ID of a document used as the user message content.
+            tool_context:
+              type: object
+              additionalProperties:
+                type: string
+              nullable: true
+              description: Key-value pairs injected as context headers into all tool call requests made during this generation.
 
     AddSessionMessageSaved:
       type: object
@@ -638,6 +654,9 @@ components:
           enum: [user]
         content:
           type: string
+        document_id:
+          type: string
+          nullable: true
     AddSessionMessageResponse:
       oneOf:
         - $ref: '#/components/schemas/AddSessionMessageSaved'
