@@ -853,6 +853,56 @@ if ! printf '%s\n' "$AGENT_STREAM_RESP" | grep -q "data: \[DONE\]"; then
 fi
 echo "Agent SSE stream OK."
 
+# 22c. Create a deterministic HTTP tool for tool_output message content
+echo "--- Creating project-detail tool ---"
+PROJECT_DETAIL_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name project-detail \
+  --type http \
+  --description "Gets the current smoke test project." \
+  --parameters '{"type":"object","properties":{},"required":[]}' \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects/$PROJECT_PUBLIC_ID\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+PROJECT_DETAIL_TOOL_ID=$(echo "$PROJECT_DETAIL_TOOL_RESP" | jq -r '.id')
+echo "Project-detail tool id: $PROJECT_DETAIL_TOOL_ID"
+
+# 22d. Create an agent that echoes the resolved tool_output content
+echo "--- Creating tool-output agent ---"
+TOOL_OUTPUT_AGENT_RESP=$($SOAT_CLI create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --name tool-output-agent \
+  --instructions "Repeat the user's last message exactly. Do not add any extra words or punctuation." \
+  --tool_ids "[\"$PROJECT_DETAIL_TOOL_ID\"]" \
+  --max_steps 2)
+TOOL_OUTPUT_AGENT_ID=$(echo "$TOOL_OUTPUT_AGENT_RESP" | jq -r '.id')
+echo "Tool-output agent id: $TOOL_OUTPUT_AGENT_ID"
+
+# 22e. Run generation using tool_output content extracted via output_path
+echo "--- Running tool_output message content generation ---"
+TOOL_OUTPUT_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$TOOL_OUTPUT_AGENT_ID" \
+  --messages '[{"role":"user","content":{"type":"tool_output","tool_id":"'"$PROJECT_DETAIL_TOOL_ID"'","output_path":".name"}}]' | sanitize_json)
+echo "Tool-output generation response:"
+printf '%s\n' "$TOOL_OUTPUT_GEN_RESP" | jq .
+
+TOOL_OUTPUT_GEN_STATUS=$(printf '%s\n' "$TOOL_OUTPUT_GEN_RESP" | jq -r '.status')
+if [ "$TOOL_OUTPUT_GEN_STATUS" != "completed" ]; then
+  echo "ERROR: Expected tool_output generation status 'completed', got '$TOOL_OUTPUT_GEN_STATUS'" >&2
+  exit 1
+fi
+
+TOOL_OUTPUT_GEN_CONTENT=$(printf '%s\n' "$TOOL_OUTPUT_GEN_RESP" | jq -r '.output.content // empty')
+if ! printf '%s\n' "$TOOL_OUTPUT_GEN_CONTENT" | grep -Fq 'smoke-test-project'; then
+  echo "ERROR: tool_output generation did not surface the selected project name" >&2
+  echo "$TOOL_OUTPUT_GEN_CONTENT" >&2
+  exit 1
+fi
+echo "tool_output message content: OK"
+
+# 22f. Cleanup — delete project-detail tool
+echo "--- Deleting project-detail tool ---"
+$SOAT_CLI delete-tool --tool-id "$PROJECT_DETAIL_TOOL_ID"
+echo "Project-detail tool deleted."
+
 # 23. Generated agents are now delete-blocked by dependent generations/traces
 echo "--- Verifying agent delete-block after generation ---"
 expect_cli_error_status 409 delete-agent --agent-id "$AGENT_ID"

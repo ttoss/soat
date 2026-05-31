@@ -7,6 +7,11 @@ import type { JsonObjectSchema } from '@ttoss/http-server-mcp';
 import type { JSONSchema7 } from 'ai';
 import createDebug from 'debug';
 
+import {
+  resolveParameter as resolveOpenApiParameter,
+  resolveSchema as resolveOpenApiSchema,
+} from './soatToolsSchemaHelpers';
+
 const log = createDebug('soat:tools');
 
 export interface ToolDefinition {
@@ -49,6 +54,8 @@ export interface OperationSpec {
           type?: string;
           required?: string[];
           properties?: Record<string, unknown>;
+          oneOf?: Array<Record<string, unknown>>;
+          anyOf?: Array<Record<string, unknown>>;
           $ref?: string;
         };
       };
@@ -70,14 +77,10 @@ export const resolveSchema = (
   type?: string;
   required?: string[];
   properties?: Record<string, unknown>;
+  oneOf?: Array<Record<string, unknown>>;
+  anyOf?: Array<Record<string, unknown>>;
 } => {
-  if (!schema) return {};
-  if (typeof schema.$ref === 'string') {
-    const refName = schema.$ref.replace('#/components/schemas/', '');
-    const resolved = spec.components?.schemas?.[refName];
-    return resolved || {};
-  }
-  return schema;
+  return resolveOpenApiSchema(schema, spec);
 };
 
 export const resolveParameter = (
@@ -93,13 +96,7 @@ export const resolveParameter = (
     items?: { type?: string };
   };
 } => {
-  if (!param) return {};
-  if (typeof param.$ref === 'string') {
-    const refName = param.$ref.replace('#/components/parameters/', '');
-    const resolved = spec.components?.parameters?.[refName];
-    return resolved || {};
-  }
-  return param;
+  return resolveOpenApiParameter(param, spec);
 };
 
 export const operationIdToToolName = (operationId: string): string => {
@@ -303,6 +300,8 @@ export const extractBodyProps = (args: {
           type?: string;
           required?: string[];
           properties?: Record<string, unknown>;
+          oneOf?: Array<Record<string, unknown>>;
+          anyOf?: Array<Record<string, unknown>>;
           $ref?: string;
         };
       };

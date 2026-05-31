@@ -84,4 +84,64 @@ describe('extractBodyProps', () => {
       })
     ).not.toContain('root_trace_id');
   });
+
+  test('flattens oneOf object request bodies into a combined body prop list', () => {
+    const result = extractBodyProps({
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              oneOf: [
+                {
+                  type: 'object',
+                  required: ['message'],
+                  properties: {
+                    message: {
+                      type: 'string',
+                      description: 'User message text',
+                    },
+                    tool_context: {
+                      type: 'object',
+                      description: 'Tool context',
+                    },
+                  },
+                },
+                {
+                  type: 'object',
+                  required: ['document_id'],
+                  properties: {
+                    document_id: {
+                      type: 'string',
+                      description: 'Document ID',
+                    },
+                    tool_context: {
+                      type: 'object',
+                      description: 'Tool context',
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+      spec: emptySpec,
+    });
+
+    expect(
+      result.map((p) => {
+        return p.snakeName;
+      })
+    ).toEqual(['message', 'tool_context', 'document_id']);
+    expect(
+      result.find((p) => {
+        return p.snakeName === 'message';
+      })?.required
+    ).toBe(false);
+    expect(
+      result.find((p) => {
+        return p.snakeName === 'document_id';
+      })?.required
+    ).toBe(false);
+  });
 });

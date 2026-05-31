@@ -641,6 +641,88 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate" \
 </TabItem>
 </Tabs>
 
+### Reuse a tool result as the generation input
+
+You can also start a generation with [Agents](/docs/modules/agents#tool-output-message-content) message content of type `tool_output`. The server executes the referenced tool first, applies `output_path`, and feeds the extracted value into the model as the user message.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+TOOL_OUTPUT_RESULT=$(soat create-agent-generation \
+  --agent-id "$AGENT_ID" \
+  --messages '[
+    {"role":"system","content":"Repeat the user message exactly."},
+    {
+      "role":"user",
+      "content": {
+        "type": "tool_output",
+        "tool_id": "'"$READ_TOOL_ID"'",
+        "action": "get-document",
+        "input": {"document_id": "'"$PUBLIC_DOC_ID"'"},
+        "output_path": ".content"
+      }
+    }
+  ]')
+
+echo "$TOOL_OUTPUT_RESULT" | jq '.'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: toolOutputGeneration } =
+  await aliceClient.agents.createAgentGeneration({
+    path: { agent_id: agentId },
+    body: {
+      messages: [
+        { role: 'system', content: 'Repeat the user message exactly.' },
+        {
+          role: 'user',
+          content: {
+            type: 'tool_output',
+            tool_id: readToolId,
+            action: 'get-document',
+            input: { document_id: publicDocId },
+            output_path: '.content',
+          },
+        },
+      ],
+    },
+  });
+
+console.log('Status:', toolOutputGeneration!.status);
+console.log('Result:', toolOutputGeneration!.result);
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate" \
+  -H "Authorization: Bearer $ALICE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"role": "system", "content": "Repeat the user message exactly."},
+      {
+        "role": "user",
+        "content": {
+          "type": "tool_output",
+          "tool_id": "'"$READ_TOOL_ID"'",
+          "action": "get-document",
+          "input": {"document_id": "'"$PUBLIC_DOC_ID"'"},
+          "output_path": ".content"
+        }
+      }
+    ]
+  }' | jq '.'
+```
+
+</TabItem>
+</Tabs>
+
 ---
 
 ## Step 9 — Verify the update and permissions

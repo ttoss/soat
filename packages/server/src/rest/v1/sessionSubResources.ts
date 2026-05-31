@@ -113,6 +113,7 @@ sessionSubResourcesRouter.post(
     });
 
     ctx.status = 201;
+    ctx.type = 'application/json';
     ctx.body = result;
   }
 );
