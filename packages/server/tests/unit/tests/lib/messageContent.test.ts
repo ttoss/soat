@@ -1,3 +1,6 @@
+import * as documentsModule from 'src/lib/documents';
+import * as toolsModule from 'src/lib/tools';
+
 const loadMessageContentModule = async () => {
   return import('src/lib/messageContent');
 };
@@ -64,7 +67,6 @@ describe('resolveMessageContent', () => {
   });
 
   test('resolves document content', async () => {
-    const documentsModule = await import('src/lib/documents');
     jest.spyOn(documentsModule, 'getDocument').mockResolvedValue(
       createDocumentResult({
         path: '/docs/spec.md',
@@ -98,7 +100,6 @@ describe('resolveMessageContent', () => {
   });
 
   test('resolves tool_output content with outputPath', async () => {
-    const toolsModule = await import('src/lib/tools');
     jest.spyOn(toolsModule, 'getTool').mockResolvedValue({
       id: 'tool_audio_to_text',
       projectId: 'proj_123',
@@ -140,7 +141,6 @@ describe('resolveMessageContent', () => {
   });
 
   test('rejects document content when caller lacks document permission', async () => {
-    const documentsModule = await import('src/lib/documents');
     jest
       .spyOn(documentsModule, 'getDocument')
       .mockResolvedValue(createDocumentResult({ path: '/docs/spec.md' }));
@@ -158,7 +158,6 @@ describe('resolveMessageContent', () => {
   });
 
   test('rejects document content when agent boundary denies document access', async () => {
-    const documentsModule = await import('src/lib/documents');
     jest
       .spyOn(documentsModule, 'getDocument')
       .mockResolvedValue(createDocumentResult({ path: '/docs/spec.md' }));
@@ -183,7 +182,6 @@ describe('resolveMessageContent', () => {
   });
 
   test('rejects tool_output content when tool is not allowed for the agent', async () => {
-    const toolsModule = await import('src/lib/tools');
     jest.spyOn(toolsModule, 'getTool').mockResolvedValue({
       id: 'tool_audio_to_text',
       projectId: 'proj_123',
@@ -217,7 +215,6 @@ describe('resolveMessageContent', () => {
   });
 
   test('rejects tool_output content when caller lacks tool call permission', async () => {
-    const toolsModule = await import('src/lib/tools');
     jest.spyOn(toolsModule, 'getTool').mockResolvedValue({
       id: 'tool_audio_to_text',
       projectId: 'proj_123',
@@ -253,7 +250,6 @@ describe('resolveMessageContent', () => {
   });
 
   test('rejects soat tool_output content when agent boundary denies the action', async () => {
-    const toolsModule = await import('src/lib/tools');
     jest.spyOn(toolsModule, 'getTool').mockResolvedValue({
       id: 'tool_soat',
       projectId: 'proj_123',

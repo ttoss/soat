@@ -116,10 +116,12 @@ describe('submitToolOutputs', () => {
 
     const { submitToolOutputs } = await loadAgentGenerationModule();
     const { pendingGenerations } = await loadGenerationHelpersModule();
-    const eventBusModule = await import('src/lib/eventBus');
-    const resolveProjectSpy =
-      eventBusModule.resolveProjectPublicId as jest.Mock;
-    const emitEventSpy = eventBusModule.emitEvent as jest.Mock;
+    const eventBusModule = jest.requireMock('src/lib/eventBus') as {
+      resolveProjectPublicId: jest.Mock;
+      emitEvent: jest.Mock;
+    };
+    const resolveProjectSpy = eventBusModule.resolveProjectPublicId;
+    const emitEventSpy = eventBusModule.emitEvent;
 
     const pending: PendingGeneration = {
       agentId: 'agt_test',
@@ -193,12 +195,14 @@ describe('resolveGenerationInputMessages', () => {
   };
 
   test('resolves document content from document message content', async () => {
-    const documentsModule = await import('src/lib/documents');
+    const documentsModule = jest.requireActual('src/lib/documents') as {
+      getDocument: (...args: unknown[]) => Promise<unknown>;
+    };
     jest.spyOn(documentsModule, 'getDocument').mockResolvedValue({
       id: 'doc_123',
       projectId: 'proj_123',
       content: 'document-based prompt',
-    } as Awaited<ReturnType<typeof documentsModule.getDocument>>);
+    });
     const { resolveGenerationInputMessages } =
       await loadGenerationInputMessagesModule();
 
@@ -218,7 +222,9 @@ describe('resolveGenerationInputMessages', () => {
   });
 
   test('throws when content.type=document document does not exist', async () => {
-    const documentsModule = await import('src/lib/documents');
+    const documentsModule = jest.requireActual('src/lib/documents') as {
+      getDocument: (...args: unknown[]) => Promise<unknown>;
+    };
     jest.spyOn(documentsModule, 'getDocument').mockResolvedValue(null);
     const { resolveGenerationInputMessages } =
       await loadGenerationInputMessagesModule();
@@ -248,7 +254,10 @@ describe('resolveGenerationInputMessages', () => {
   });
 
   test('executes tool_output content and resolves output_path', async () => {
-    const toolsModule = await import('src/lib/tools');
+    const toolsModule = jest.requireActual('src/lib/tools') as {
+      getTool: (...args: unknown[]) => Promise<unknown>;
+      callTool: (...args: unknown[]) => Promise<unknown>;
+    };
     jest.spyOn(toolsModule, 'getTool').mockResolvedValue({
       id: 'tool_audio_to_text',
       projectId: 'proj_123',
@@ -298,7 +307,10 @@ describe('resolveGenerationInputMessages', () => {
   });
 
   test('throws when output_path cannot be resolved', async () => {
-    const toolsModule = await import('src/lib/tools');
+    const toolsModule = jest.requireActual('src/lib/tools') as {
+      getTool: (...args: unknown[]) => Promise<unknown>;
+      callTool: (...args: unknown[]) => Promise<unknown>;
+    };
     jest.spyOn(toolsModule, 'getTool').mockResolvedValue({
       id: 'tool_audio_to_text',
       projectId: 'proj_123',

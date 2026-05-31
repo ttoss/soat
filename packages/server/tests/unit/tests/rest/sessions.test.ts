@@ -1,3 +1,4 @@
+import * as agentsModule from '../../../../src/lib/agents';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -1209,6 +1210,9 @@ describe('Sessions', () => {
 
   describe('POST /api/v1/agents/:agentId/sessions/:sessionId/tool-outputs - execution', () => {
     let sessionId: string;
+    let submitToolOutputsSpy: jest.SpiedFunction<
+      typeof agentsModule.submitToolOutputs
+    >;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
@@ -1217,7 +1221,12 @@ describe('Sessions', () => {
       sessionId = res.body.id;
     });
 
+    beforeEach(() => {
+      submitToolOutputsSpy = jest.spyOn(agentsModule, 'submitToolOutputs');
+    });
+
     afterEach(() => {
+      submitToolOutputsSpy.mockRestore();
       jest.clearAllMocks();
     });
 
@@ -1248,6 +1257,81 @@ describe('Sessions', () => {
 
       expect(response.status).toBe(404);
       expect(response.body.error).toBeDefined();
+    });
+
+    test('returns completed result and persists the assistant reply', async () => {
+      submitToolOutputsSpy.mockResolvedValueOnce({
+        id: 'gen_submit_done_01',
+        traceId: 'trc_submit_done_01',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: 'Weather in Paris: 18C',
+          finishReason: 'stop',
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/tool-outputs`)
+        .send({
+          generationId: 'gen_submit_done_01',
+          toolOutputs: [
+            { toolCallId: 'tc_done_01', output: { city: 'Paris' } },
+          ],
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('completed');
+      expect(response.body.generation_id).toBe('gen_submit_done_01');
+      expect(response.body.message.content).toBe('Weather in Paris: 18C');
+
+      const messagesResponse = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/${sessionId}/messages`
+      );
+
+      expect(messagesResponse.status).toBe(200);
+      expect(messagesResponse.body.data).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            role: 'assistant',
+            content: 'Weather in Paris: 18C',
+          }),
+        ])
+      );
+    });
+
+    test('returns requires_action result when more tool outputs are needed', async () => {
+      submitToolOutputsSpy.mockResolvedValueOnce({
+        id: 'gen_submit_req_01',
+        traceId: 'trc_submit_req_01',
+        status: 'requires_action',
+        requiredAction: {
+          type: 'submit_tool_outputs',
+          toolCalls: [
+            {
+              id: 'tc_req_followup_01',
+              toolName: 'get_forecast',
+              args: { location: 'Paris' },
+            },
+          ],
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/tool-outputs`)
+        .send({
+          generationId: 'gen_submit_req_01',
+          toolOutputs: [{ toolCallId: 'tc_req_01', output: 'partial result' }],
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('requires_action');
+      expect(response.body.generation_id).toBe('gen_submit_req_01');
+      expect(response.body.required_action).toEqual(
+        expect.objectContaining({
+          type: 'submit_tool_outputs',
+        })
+      );
     });
   });
 

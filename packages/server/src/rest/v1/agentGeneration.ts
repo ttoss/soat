@@ -3,8 +3,8 @@ import type { ServerResponse } from 'node:http';
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import type { GenerationResult } from 'src/lib/agentGeneration';
-import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
 import { createGeneration, submitToolOutputs } from 'src/lib/agents';
+import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
 
 const pipeStreamToResponse = async (
   stream: ReadableStream,

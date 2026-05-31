@@ -228,69 +228,55 @@ const resolveSoatIamAction = (action: string): string => {
   return definition?.iamAction ?? action;
 };
 
-export const resolveMessageContent = async (args: {
-  content: ResolvableMessageContent;
+const resolveDocumentContent = async (args: {
+  content: DocumentMessageContent;
+  authUser?: AuthUser;
+  agentBoundaryPolicy?: unknown;
+}): Promise<{ content: string; documentId: string }> => {
+  const document = await getDocument({ id: args.content.documentId });
+
+  if (!document || !document.projectId) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Document '${args.content.documentId}' not found.`
+    );
+  }
+
+  const resources = buildDocumentPermissionResources({
+    documentId: args.content.documentId,
+    projectPublicId: document.projectId,
+    path: document.path,
+  });
+  const context = buildDocumentPermissionContext({ tags: document.tags });
+
+  await assertCallerAllowed({
+    authUser: args.authUser,
+    projectPublicId: document.projectId,
+    action: 'documents:GetDocument',
+    resources,
+    context,
+  });
+  assertBoundaryAllowed({
+    boundaryPolicy: args.agentBoundaryPolicy,
+    action: 'documents:GetDocument',
+    resources,
+    context,
+  });
+
+  return {
+    content: document.content ?? '',
+    documentId: args.content.documentId,
+  };
+};
+
+const resolveToolOutputContent = async (args: {
+  content: ToolOutputMessageContent;
   projectIds?: number[];
   authHeader?: string;
   authUser?: AuthUser;
   allowedToolIds?: string[];
   agentBoundaryPolicy?: unknown;
-}): Promise<{ content: string; documentId?: string }> => {
-  if (typeof args.content === 'string') {
-    return { content: args.content };
-  }
-
-  if (isDocumentMessageContent(args.content)) {
-    const document = await getDocument({ id: args.content.documentId });
-
-    if (!document) {
-      throw new DomainError(
-        'RESOURCE_NOT_FOUND',
-        `Document '${args.content.documentId}' not found.`
-      );
-    }
-
-    if (!document.projectId) {
-      throw new DomainError(
-        'RESOURCE_NOT_FOUND',
-        `Document '${args.content.documentId}' not found.`
-      );
-    }
-
-    const resources = buildDocumentPermissionResources({
-      documentId: args.content.documentId,
-      projectPublicId: document.projectId,
-      path: document.path,
-    });
-    const context = buildDocumentPermissionContext({ tags: document.tags });
-
-    await assertCallerAllowed({
-      authUser: args.authUser,
-      projectPublicId: document.projectId,
-      action: 'documents:GetDocument',
-      resources,
-      context,
-    });
-    assertBoundaryAllowed({
-      boundaryPolicy: args.agentBoundaryPolicy,
-      action: 'documents:GetDocument',
-      resources,
-      context,
-    });
-
-    return {
-      content: document.content ?? '',
-      documentId: args.content.documentId,
-    };
-  }
-
-  if (!isToolOutputMessageContent(args.content)) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'message content must be a string or a valid tool_output/document object.'
-    );
-  }
-
+}): Promise<{ content: string }> => {
   assertToolAllowedForAgent({
     allowedToolIds: args.allowedToolIds,
     toolId: args.content.toolId,
@@ -323,14 +309,12 @@ export const resolveMessageContent = async (args: {
     authHeader: args.authHeader,
   });
 
-  const resolvedContent =
-    typeof args.content.outputPath === 'string' &&
-    args.content.outputPath.length > 0
-      ? resolvePathValue({
-          value: toolResult,
-          outputPath: args.content.outputPath,
-        })
-      : toolResult;
+  const resolvedContent = args.content.outputPath
+    ? resolvePathValue({
+        value: toolResult,
+        outputPath: args.content.outputPath,
+      })
+    : toolResult;
 
   if (resolvedContent === undefined) {
     throw new DomainError(
@@ -340,4 +324,41 @@ export const resolveMessageContent = async (args: {
   }
 
   return { content: stringifyToolOutput(resolvedContent) };
+};
+
+export const resolveMessageContent = async (args: {
+  content: ResolvableMessageContent;
+  projectIds?: number[];
+  authHeader?: string;
+  authUser?: AuthUser;
+  allowedToolIds?: string[];
+  agentBoundaryPolicy?: unknown;
+}): Promise<{ content: string; documentId?: string }> => {
+  if (typeof args.content === 'string') {
+    return { content: args.content };
+  }
+
+  if (isDocumentMessageContent(args.content)) {
+    return resolveDocumentContent({
+      content: args.content,
+      authUser: args.authUser,
+      agentBoundaryPolicy: args.agentBoundaryPolicy,
+    });
+  }
+
+  if (!isToolOutputMessageContent(args.content)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'message content must be a string or a valid tool_output/document object.'
+    );
+  }
+
+  return resolveToolOutputContent({
+    content: args.content,
+    projectIds: args.projectIds,
+    authHeader: args.authHeader,
+    authUser: args.authUser,
+    allowedToolIds: args.allowedToolIds,
+    agentBoundaryPolicy: args.agentBoundaryPolicy,
+  });
 };

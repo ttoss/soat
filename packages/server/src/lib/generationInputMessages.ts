@@ -1,7 +1,7 @@
 import type { AuthUser } from '../Context';
 import {
-  resolveMessageContent,
   type ResolvableMessageContent,
+  resolveMessageContent,
 } from './messageContent';
 
 export type GenerationInputMessage = {

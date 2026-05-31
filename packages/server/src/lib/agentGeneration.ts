@@ -65,6 +65,30 @@ const buildKnowledgeTools = (args: {
   }
 };
 
+const resolveGenerationModel = async (args: {
+  agentId: string;
+  typedAgent: TypedAgent;
+}) => {
+  const resolved = await resolveAiProviderSecret({
+    aiProviderId: args.typedAgent.aiProvider.publicId,
+  });
+
+  if (!resolved) {
+    throw new DomainError(
+      'AI_PROVIDER_NOT_FOUND',
+      `AI provider for agent '${args.agentId}' could not be resolved.`
+    );
+  }
+
+  return buildModel({
+    provider: resolved.provider,
+    secretValue: resolved.secretValue,
+    model: args.typedAgent.model ?? resolved.defaultModel,
+    baseUrl: resolved.baseUrl,
+    config: resolved.config as Record<string, unknown> | undefined,
+  });
+};
+
 const buildGenerationContext = async (args: {
   agentId: string;
   projectIds?: number[];
@@ -98,23 +122,9 @@ const buildGenerationContext = async (args: {
       : undefined,
     agentBoundaryPolicy: typedAgent.boundaryPolicy,
   });
-
-  const resolved = await resolveAiProviderSecret({
-    aiProviderId: typedAgent.aiProvider.publicId,
-  });
-
-  if (!resolved)
-    throw new DomainError(
-      'AI_PROVIDER_NOT_FOUND',
-      `AI provider for agent '${args.agentId}' could not be resolved.`
-    );
-
-  const model = buildModel({
-    provider: resolved.provider,
-    secretValue: resolved.secretValue,
-    model: typedAgent.model ?? resolved.defaultModel,
-    baseUrl: resolved.baseUrl,
-    config: resolved.config as Record<string, unknown> | undefined,
+  const model = await resolveGenerationModel({
+    agentId: args.agentId,
+    typedAgent,
   });
 
   const resolvedTools = typedAgent.toolIds

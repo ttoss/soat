@@ -1,11 +1,3 @@
-import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
-import { createAnthropic } from '@ai-sdk/anthropic';
-import { createAzure } from '@ai-sdk/azure';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createGroq } from '@ai-sdk/groq';
-import { createOpenAI } from '@ai-sdk/openai';
-import { createXai } from '@ai-sdk/xai';
-import type { AiProviderSlug } from '@soat/postgresdb';
 import type { LanguageModel, ModelMessage } from 'ai';
 import { generateText, streamText } from 'ai';
 import type { AuthUser } from 'src/Context';
@@ -13,100 +5,8 @@ import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { buildModel } from './agentModel';
 import { resolveMessageContent } from './messageContent';
-
-const buildBedrockModel = (
-  apiKey: string,
-  config: Record<string, unknown> | undefined,
-  model: string
-): LanguageModel => {
-  let parsedCredentials:
-    | {
-        accessKeyId?: string;
-        secretAccessKey?: string;
-        sessionToken?: string;
-      }
-    | undefined;
-
-  if (apiKey) {
-    try {
-      parsedCredentials = JSON.parse(apiKey);
-    } catch {
-      // fall back to default AWS credential chain
-    }
-  }
-
-  const region = (config?.region as string | undefined) ?? 'us-east-1';
-
-  return createAmazonBedrock({
-    region,
-    accessKeyId: parsedCredentials?.accessKeyId,
-    secretAccessKey: parsedCredentials?.secretAccessKey,
-    sessionToken: parsedCredentials?.sessionToken,
-  })(model);
-};
-
-const isOpenAILikeProvider = (provider: AiProviderSlug): boolean => {
-  return (
-    provider === 'openai' || provider === 'gateway' || provider === 'custom'
-  );
-};
-
-const getProviderFactory = (args: {
-  provider: AiProviderSlug;
-  apiKey: string;
-  baseUrl: string | undefined;
-  config: Record<string, unknown> | undefined;
-}): ((model: string) => LanguageModel) | null => {
-  const { provider, apiKey, baseUrl, config } = args;
-
-  if (isOpenAILikeProvider(provider)) {
-    return createOpenAI({ apiKey, baseURL: baseUrl });
-  }
-  if (provider === 'anthropic') {
-    return createAnthropic({ apiKey, baseURL: baseUrl });
-  }
-  if (provider === 'google') {
-    return createGoogleGenerativeAI({ apiKey });
-  }
-  if (provider === 'xai') {
-    return createXai({ apiKey });
-  }
-  if (provider === 'groq') {
-    return createGroq({ apiKey });
-  }
-  if (provider === 'azure') {
-    const resourceName = (config?.resourceName as string | undefined) ?? '';
-    return createAzure({ apiKey, resourceName });
-  }
-  if (provider === 'bedrock') {
-    return (model: string) => {
-      return buildBedrockModel(apiKey, config, model);
-    };
-  }
-  return null;
-};
-
-const buildModel = (args: {
-  provider: AiProviderSlug;
-  secretValue: string | null;
-  model: string;
-  baseUrl?: string;
-  config?: Record<string, unknown>;
-}): LanguageModel => {
-  const { provider, secretValue, model, baseUrl, config } = args;
-  const apiKey = secretValue ?? '';
-
-  const factory = getProviderFactory({ provider, apiKey, baseUrl, config });
-  if (factory) {
-    return factory(model);
-  }
-
-  return createOpenAI({
-    apiKey: 'ollama',
-    baseURL: baseUrl ? `${baseUrl}/v1` : undefined,
-  })(model);
-};
 
 const resolveModel = async (args: {
   aiProviderId: string;
