@@ -2,6 +2,7 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import type { LanguageModel, ModelMessage, Tool } from 'ai';
 import { generateText, stepCountIs } from 'ai';
 import createDebug from 'debug';
+import type { AuthUser } from 'src/Context';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 
 import { DomainError } from '../errors';
@@ -26,6 +27,10 @@ import {
 } from './agentNonStreamGeneration';
 import { resolveAgentTools } from './agentToolResolver';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
+import {
+  type GenerationInputMessage,
+  resolveGenerationInputMessages,
+} from './generationInputMessages';
 import { createGenerationRecord, updateGenerationRecord } from './generations';
 import { saveTrace, serializeSteps } from './traces';
 
@@ -60,11 +65,36 @@ const buildKnowledgeTools = (args: {
   }
 };
 
+const resolveGenerationModel = async (args: {
+  agentId: string;
+  typedAgent: TypedAgent;
+}) => {
+  const resolved = await resolveAiProviderSecret({
+    aiProviderId: args.typedAgent.aiProvider.publicId,
+  });
+
+  if (!resolved) {
+    throw new DomainError(
+      'AI_PROVIDER_NOT_FOUND',
+      `AI provider for agent '${args.agentId}' could not be resolved.`
+    );
+  }
+
+  return buildModel({
+    provider: resolved.provider,
+    secretValue: resolved.secretValue,
+    model: args.typedAgent.model ?? resolved.defaultModel,
+    baseUrl: resolved.baseUrl,
+    config: resolved.config as Record<string, unknown> | undefined,
+  });
+};
+
 const buildGenerationContext = async (args: {
   agentId: string;
   projectIds?: number[];
-  messages: Array<{ role: string; content: string }>;
+  messages: GenerationInputMessage[];
   authHeader?: string;
+  authUser?: AuthUser;
   toolContext?: Record<string, string>;
   traceId?: string;
   parentTraceId?: string | null;
@@ -82,22 +112,19 @@ const buildGenerationContext = async (args: {
       `Agent '${args.agentId}' not found.`
     );
 
-  const resolved = await resolveAiProviderSecret({
-    aiProviderId: typedAgent.aiProvider.publicId,
+  const resolvedMessages = await resolveGenerationInputMessages({
+    projectIds: args.projectIds,
+    messages: args.messages,
+    authHeader: args.authHeader,
+    authUser: args.authUser,
+    allowedToolIds: Array.isArray(typedAgent.toolIds)
+      ? (typedAgent.toolIds as string[])
+      : undefined,
+    agentBoundaryPolicy: typedAgent.boundaryPolicy,
   });
-
-  if (!resolved)
-    throw new DomainError(
-      'AI_PROVIDER_NOT_FOUND',
-      `AI provider for agent '${args.agentId}' could not be resolved.`
-    );
-
-  const model = buildModel({
-    provider: resolved.provider,
-    secretValue: resolved.secretValue,
-    model: typedAgent.model ?? resolved.defaultModel,
-    baseUrl: resolved.baseUrl,
-    config: resolved.config as Record<string, unknown> | undefined,
+  const model = await resolveGenerationModel({
+    agentId: args.agentId,
+    typedAgent,
   });
 
   const resolvedTools = typedAgent.toolIds
@@ -119,19 +146,19 @@ const buildGenerationContext = async (args: {
   const knowledgeMessages = await buildKnowledgeMessages({
     knowledgeConfig: typedAgent.knowledgeConfig,
     projectIds: args.projectIds,
-    messages: args.messages,
+    messages: resolvedMessages,
   });
 
   log(
     'buildGenerationContext: agentId=%s knowledgeMessages=%d userMessages=%d',
     args.agentId,
     knowledgeMessages.length,
-    args.messages.length
+    resolvedMessages.length
   );
 
   const allMessages = buildAllMessages(typedAgent.instructions, [
     ...knowledgeMessages,
-    ...args.messages,
+    ...resolvedMessages,
   ]);
 
   log('buildGenerationContext: allMessages=%o', allMessages);
@@ -191,8 +218,9 @@ const dispatchGeneration = (args: {
 const resolveContextAndRecord = async (args: {
   agentId: string;
   projectIds?: number[];
-  messages: Array<{ role: string; content: string }>;
+  messages: GenerationInputMessage[];
   authHeader?: string;
+  authUser?: AuthUser;
   toolContext?: Record<string, string>;
   traceId: string;
   parentTraceId?: string | null;
@@ -205,6 +233,7 @@ const resolveContextAndRecord = async (args: {
     projectIds: args.projectIds,
     messages: args.messages,
     authHeader: args.authHeader,
+    authUser: args.authUser,
     toolContext: args.toolContext,
     traceId: args.traceId,
     parentTraceId: args.parentTraceId,
@@ -228,7 +257,7 @@ const resolveContextAndRecord = async (args: {
 export const createGeneration = async (args: {
   projectIds?: number[];
   agentId: string;
-  messages: Array<{ role: string; content: string }>;
+  messages: GenerationInputMessage[];
   stream?: boolean;
   traceId?: string;
   parentTraceId?: string | null;
@@ -236,6 +265,7 @@ export const createGeneration = async (args: {
   initiatorGenerationId?: string | null;
   remainingDepth?: number;
   authHeader?: string;
+  authUser?: AuthUser;
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
 }): Promise<GenerationResult | ReadableStream> => {
@@ -270,6 +300,7 @@ export const createGeneration = async (args: {
     projectIds: args.projectIds,
     messages: args.messages,
     authHeader: args.authHeader,
+    authUser: args.authUser,
     toolContext: args.toolContext,
     traceId,
     parentTraceId: args.parentTraceId,

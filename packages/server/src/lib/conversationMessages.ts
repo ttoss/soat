@@ -193,6 +193,86 @@ export const addConversationMessage = async (args: {
   return mapped;
 };
 
+export const addConversationDocumentMessage = async (args: {
+  conversationId: string;
+  documentId: string;
+  role: string;
+  actorId?: string | null;
+  agentId?: string | null;
+  position?: number;
+  metadata?: Record<string, unknown>;
+}) => {
+  const conversation = await db.Conversation.findOne({
+    where: { publicId: args.conversationId },
+  });
+
+  if (!conversation) {
+    return null;
+  }
+
+  const participants = await resolveParticipantDbIds({
+    actorId: args.actorId,
+    agentId: args.agentId,
+  });
+
+  if (!participants) {
+    return null;
+  }
+
+  const document = await db.Document.findOne({
+    where: { publicId: args.documentId },
+    include: [{ model: db.File, as: 'file' }],
+  });
+
+  if (!document || document.file?.projectId !== conversation.projectId) {
+    return null;
+  }
+
+  const result = await insertMessage({
+    conversationId: conversation.id,
+    documentId: document.id,
+    role: args.role,
+    actorId: participants.actorDbId,
+    agentId: participants.agentDbId,
+    position: args.position,
+    metadata: args.metadata,
+  });
+
+  const messageWithAssociations = await db.ConversationMessage.findOne({
+    where: { id: result.id },
+    include: [
+      {
+        model: db.Document,
+        as: 'document',
+        include: [{ model: db.File, as: 'file' }],
+      },
+      { model: db.Actor, as: 'actor' },
+      { model: db.Agent, as: 'agent' },
+    ],
+  });
+
+  const mapped = mapMessage(messageWithAssociations!);
+
+  resolveProjectPublicId({ projectId: conversation.projectId }).then(
+    (projectPublicId) => {
+      emitEvent({
+        type: 'conversations.message.created',
+        projectId: conversation.projectId,
+        projectPublicId,
+        resourceType: 'conversation_message',
+        resourceId: mapped.documentId,
+        data: {
+          ...mapped,
+          conversationId: args.conversationId,
+        } as unknown as Record<string, unknown>,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  );
+
+  return mapped;
+};
+
 export const removeConversationMessage = async (args: {
   conversationId: string;
   documentId: string;

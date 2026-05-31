@@ -1,6 +1,8 @@
 import type http from 'node:http';
 
 import { app } from 'src/app';
+import { db } from 'src/db';
+import { saveTrace } from 'src/lib/traces';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -837,9 +839,6 @@ describe('MCP tools - happy path', () => {
   let mcpChildTraceId: string;
 
   test('list-traces returns results after seeding', async () => {
-    const { db } = await import('src/db');
-    const { saveTrace } = await import('src/lib/traces');
-
     const project = await db.Project.findOne({
       where: { publicId: projectId },
     });

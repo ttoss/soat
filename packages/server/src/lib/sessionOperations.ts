@@ -1,10 +1,20 @@
+import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { type GenerationResult, submitToolOutputs } from './agents';
+import { submitToolOutputs } from './agents';
 import { generateConversationMessage } from './conversationGeneration';
-import { addConversationMessage } from './conversationMessages';
+import {
+  addConversationDocumentMessage,
+  addConversationMessage,
+} from './conversationMessages';
 import { listConversationMessages } from './conversations';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { resolveMessageContent } from './messageContent';
+import {
+  emitGenerationCompleted,
+  emitGenerationRequiresAction,
+  emitGenerationStarted,
+  processToolOutputResult,
+} from './sessionGenerationHelpers';
 
 const GENERATING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -71,72 +81,6 @@ const buildToolContext = (
   return context;
 };
 
-const emitGenerationStarted = (
-  session: InstanceType<(typeof db)['Session']>
-) => {
-  resolveProjectPublicId({ projectId: session.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'sessions.generation.started',
-        projectId: session.projectId,
-        projectPublicId,
-        resourceType: 'session',
-        resourceId: session.publicId,
-        data: { sessionId: session.publicId },
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
-};
-
-const emitGenerationRequiresAction = (
-  session: InstanceType<(typeof db)['Session']>,
-  generationId: string,
-  traceId: string
-) => {
-  resolveProjectPublicId({ projectId: session.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'sessions.generation.requires_action',
-        projectId: session.projectId,
-        projectPublicId,
-        resourceType: 'session',
-        resourceId: session.publicId,
-        data: {
-          sessionId: session.publicId,
-          generationId,
-          traceId,
-        },
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
-};
-
-const emitGenerationCompleted = (
-  session: InstanceType<(typeof db)['Session']>,
-  generationId: string,
-  traceId: string
-) => {
-  resolveProjectPublicId({ projectId: session.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'sessions.generation.completed',
-        projectId: session.projectId,
-        projectPublicId,
-        resourceType: 'session',
-        resourceId: session.publicId,
-        data: {
-          sessionId: session.publicId,
-          generationId,
-          traceId,
-        },
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
-};
-
 /**
  * Abort any in-flight generation and check the DB-based concurrency guard.
  * Returns `'already_generating'` if the caller should bail out, `null` otherwise.
@@ -167,7 +111,11 @@ const buildGenerationResult = (
   result: Awaited<ReturnType<typeof generateConversationMessage>>
 ) => {
   if (result.status === 'requires_action') {
-    emitGenerationRequiresAction(session, result.generationId, result.traceId);
+    emitGenerationRequiresAction({
+      session,
+      generationId: result.generationId,
+      traceId: result.traceId,
+    });
     return {
       status: 'requires_action' as const,
       generationId: result.generationId,
@@ -175,7 +123,11 @@ const buildGenerationResult = (
       requiredAction: result.requiredAction,
     };
   }
-  emitGenerationCompleted(session, result.generationId, result.traceId);
+  emitGenerationCompleted({
+    session,
+    generationId: result.generationId,
+    traceId: result.traceId,
+  });
   return {
     status: 'completed' as const,
     message: {
@@ -299,11 +251,67 @@ export const listSessionMessages = async (args: {
   };
 };
 
+const assertSessionMessageInput = (args: {
+  message?: string;
+  documentId?: string;
+}) => {
+  if (!args.message && !args.documentId) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'either message or documentId is required'
+    );
+  }
+
+  if (args.message && args.documentId) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'message and documentId are mutually exclusive'
+    );
+  }
+};
+
+const addResolvedSessionUserMessage = async (args: {
+  conversationId: string;
+  actorId?: string | null;
+  message?: string;
+  documentId?: string;
+  authUser?: AuthUser;
+}) => {
+  const resolvedContent = await resolveMessageContent({
+    content: args.documentId
+      ? { type: 'document', documentId: args.documentId }
+      : (args.message ?? ''),
+    authUser: args.authUser,
+  });
+
+  const userMsg = args.documentId
+    ? await addConversationDocumentMessage({
+        conversationId: args.conversationId,
+        documentId: args.documentId,
+        role: 'user',
+        actorId: args.actorId ?? null,
+      })
+    : await addConversationMessage({
+        conversationId: args.conversationId,
+        message: resolvedContent.content,
+        role: 'user',
+        actorId: args.actorId ?? null,
+      });
+
+  if (!userMsg) {
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
+  }
+
+  return { resolvedContent, userMsg };
+};
+
 export const addSessionMessage = async (args: {
   agentId: number;
   sessionId: string;
-  message: string;
+  message?: string;
+  documentId?: string;
   toolContext?: Record<string, string>;
+  authUser?: AuthUser;
 }) => {
   const session = await findSessionRecord({
     agentId: args.agentId,
@@ -323,16 +331,18 @@ export const addSessionMessage = async (args: {
     }
   ).actor;
 
-  const userMsg = await addConversationMessage({
-    conversationId: conversation.publicId,
+  assertSessionMessageInput({
     message: args.message,
-    role: 'user',
-    actorId: actor?.publicId ?? null,
+    documentId: args.documentId,
   });
 
-  if (!userMsg) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
-  }
+  const { resolvedContent, userMsg } = await addResolvedSessionUserMessage({
+    conversationId: conversation.publicId,
+    actorId: actor?.publicId ?? null,
+    message: args.message,
+    documentId: args.documentId,
+    authUser: args.authUser,
+  });
 
   if (session.autoGenerate && !session.generatingAt) {
     return generateSessionResponse({
@@ -342,7 +352,11 @@ export const addSessionMessage = async (args: {
     });
   }
 
-  return { role: 'user' as const, content: args.message };
+  return {
+    role: 'user' as const,
+    content: userMsg.content ?? resolvedContent.content,
+    documentId: userMsg.documentId ?? resolvedContent.documentId,
+  };
 };
 
 export const sendSessionMessage = async (args: {
@@ -351,12 +365,14 @@ export const sendSessionMessage = async (args: {
   message: string;
   model?: string;
   toolContext?: Record<string, string>;
+  authUser?: AuthUser;
 }) => {
   await addSessionMessage({
     agentId: args.agentId,
     sessionId: args.sessionId,
     message: args.message,
     toolContext: args.toolContext,
+    authUser: args.authUser,
   });
 
   return generateSessionResponse({
@@ -394,42 +410,6 @@ const fetchSessionAndConversation = async (args: {
   }
 
   return { session, conversation, agent };
-};
-
-const processToolOutputResult = async (args: {
-  result: GenerationResult;
-  conversation: InstanceType<(typeof db)['Conversation']>;
-  agentPublicId: string;
-}) => {
-  // Persist the assistant reply as a conversation message
-  if (args.result.status === 'completed' && args.result.output?.content) {
-    await addConversationMessage({
-      conversationId: args.conversation.publicId,
-      message: args.result.output.content,
-      role: 'assistant',
-      agentId: args.agentPublicId,
-    });
-  }
-
-  if (args.result.status === 'requires_action') {
-    return {
-      status: 'requires_action' as const,
-      generationId: args.result.id,
-      traceId: args.result.traceId,
-      requiredAction: args.result.requiredAction!,
-    };
-  }
-
-  return {
-    status: 'completed' as const,
-    message: {
-      role: 'assistant' as const,
-      content: args.result.output?.content ?? '',
-      model: args.result.output?.model,
-    },
-    generationId: args.result.id,
-    traceId: args.result.traceId,
-  };
 };
 
 export const submitSessionToolOutputs = async (args: {

@@ -5,6 +5,7 @@ import { DomainError } from '../errors';
 import { createGeneration } from './agentGeneration';
 import { searchKnowledge } from './knowledge';
 import { writeMemoryEntry } from './memoryEntries';
+import { startOrchestrationRun } from './orchestrationEngine';
 import type { OrchestrationNode } from './orchestrations';
 import { callTool } from './tools';
 
@@ -350,7 +351,6 @@ const runLoopBatches = async (args: {
 }): Promise<unknown[]> => {
   const { items, parallelism, itemVariable, subGraph, projectIds, authHeader } =
     args;
-  const { startOrchestrationRun } = await import('./orchestrationEngine');
   const results: unknown[] = [];
   for (let i = 0; i < items.length; i += parallelism) {
     const batch = items.slice(i, i + parallelism);
@@ -420,7 +420,6 @@ export const executeSubOrchestrationNode = async (args: {
     );
 
   const input = applyInputMapping(node.inputMapping, state);
-  const { startOrchestrationRun } = await import('./orchestrationEngine');
   const run = await startOrchestrationRun({
     orchestrationPublicId: node.orchestrationId,
     projectId: projectIds[0],

@@ -84,6 +84,8 @@ Each message in the `messages` array can specify content in two ways:
 
 When `document_id` is supplied the server fetches the document and uses its `content` field as the message body.
 
+`output_path` extraction is not part of the Chats message schema. If you need tool-output selection (including jq expressions and the "no `output_path` => use full tool output" behavior), use [Agents](./agents.md#tool-output-message-content) directly.
+
 ### System Message Override
 
 When running `POST /chats/{chat_id}/completions`, if a message with `role: system` is included in the `messages` array it replaces the Chat's stored `system_message` for that call only — the Chat record is not modified.

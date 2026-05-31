@@ -1,3 +1,4 @@
+import { db } from 'src/db';
 import { saveTrace } from 'src/lib/traces';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -65,7 +66,6 @@ describe('Traces REST API', () => {
     childTraceId = `trc_rest_child_${Date.now()}`;
 
     // Get internal projectId from DB for saveTrace
-    const { db } = await import('src/db');
     const project = await db.Project.findOne({
       where: { publicId: projectId },
     });
