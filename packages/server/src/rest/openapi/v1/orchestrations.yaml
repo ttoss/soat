@@ -152,9 +152,9 @@ paths:
     post:
       tags:
         - Orchestrations
-      summary: Start a run
+      summary: Start an orchestration run
       description: Creates and immediately executes a new run for the orchestration.
-      operationId: startRun
+      operationId: startOrchestrationRun
       parameters:
         - $ref: '#/components/parameters/orchestration_id'
       requestBody:
@@ -182,9 +182,9 @@ paths:
     get:
       tags:
         - Orchestrations
-      summary: List runs
+      summary: List orchestration runs
       description: Returns all runs for an orchestration.
-      operationId: listRuns
+      operationId: listOrchestrationRuns
       parameters:
         - $ref: '#/components/parameters/orchestration_id'
       responses:
@@ -207,9 +207,9 @@ paths:
     post:
       tags:
         - Orchestrations
-      summary: Cancel a run
+      summary: Cancel an orchestration run
       description: Cancels a running or paused orchestration run.
-      operationId: cancelRun
+      operationId: cancelOrchestrationRun
       parameters:
         - $ref: '#/components/parameters/orchestration_id'
         - $ref: '#/components/parameters/run_id'
@@ -267,9 +267,9 @@ paths:
     post:
       tags:
         - Orchestrations
-      summary: Resume a run
+      summary: Resume an orchestration run
       description: Resumes a paused orchestration run from its last checkpoint.
-      operationId: resumeRun
+      operationId: resumeOrchestrationRun
       parameters:
         - $ref: '#/components/parameters/orchestration_id'
         - $ref: '#/components/parameters/run_id'
@@ -293,9 +293,9 @@ paths:
     get:
       tags:
         - Orchestrations
-      summary: Get a run
+      summary: Get an orchestration run
       description: Returns the status, state, and artifacts of a specific run.
-      operationId: getRun
+      operationId: getOrchestrationRun
       parameters:
         - $ref: '#/components/parameters/orchestration_id'
         - $ref: '#/components/parameters/run_id'
