@@ -280,20 +280,6 @@ program
     });
   });
 
-// ── deprecated command aliases ────────────────────────────────────────────────
-
-/**
- * Maps old (deprecated) command names to their new explicit equivalents.
- * These aliases will be removed in a future major release.
- */
-const DEPRECATED_COMMAND_ALIASES: Record<string, string> = {
-  'start-run': 'start-orchestration-run',
-  'list-runs': 'list-orchestration-runs',
-  'get-run': 'get-orchestration-run',
-  'resume-run': 'resume-orchestration-run',
-  'cancel-run': 'cancel-orchestration-run',
-};
-
 // ── dynamic dispatch ──────────────────────────────────────────────────────────
 
 program
@@ -307,14 +293,6 @@ program
     if (!commandName) {
       program.help();
       return;
-    }
-
-    const alias = DEPRECATED_COMMAND_ALIASES[commandName];
-    if (alias) {
-      console.error(
-        `Warning: "${commandName}" is deprecated and will be removed in a future major release. Use "${alias}" instead.`
-      );
-      commandName = alias;
     }
 
     const route = routes[commandName];
