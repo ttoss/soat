@@ -622,34 +622,34 @@ fi
 echo "Update orchestration: OK"
 
 echo "--- Starting completed run ---"
-ORCH_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-run \
+ORCH_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$ORCH_ID" \
   --input '{"theme":"orchestration"}')
 ORCH_RUN_ID=$(printf '%s\n' "$ORCH_RUN_RESP" | jq -r '.id')
 ORCH_RUN_STATUS=$(printf '%s\n' "$ORCH_RUN_RESP" | jq -r '.status')
 ORCH_RUN_TITLE=$(printf '%s\n' "$ORCH_RUN_RESP" | jq -r '.state.title')
 if [ "$ORCH_RUN_STATUS" != "completed" ] || [ "$ORCH_RUN_TITLE" != "orchestration sonnet" ]; then
-  echo "start-run did not complete as expected"
+  echo "start-orchestration-run did not complete as expected"
   printf '%s\n' "$ORCH_RUN_RESP"
   exit 1
 fi
 echo "Completed run: OK"
 
 echo "--- Getting run ---"
-ORCH_RUN_GET_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-run \
+ORCH_RUN_GET_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run \
   --orchestration-id "$ORCH_ID" \
   --run-id "$ORCH_RUN_ID")
 if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e --arg id "$ORCH_RUN_ID" '.id == $id and .status == "completed"' >/dev/null 2>&1; then
-  echo "get-run returned unexpected response"
+  echo "get-orchestration-run returned unexpected response"
   printf '%s\n' "$ORCH_RUN_GET_RESP"
   exit 1
 fi
 echo "Get run: OK"
 
 echo "--- Listing runs ---"
-ORCH_RUN_LIST_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-runs --orchestration-id "$ORCH_ID")
+ORCH_RUN_LIST_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --orchestration-id "$ORCH_ID")
 if ! printf '%s\n' "$ORCH_RUN_LIST_RESP" | jq -e --arg id "$ORCH_RUN_ID" 'map(.id) | index($id) != null' >/dev/null 2>&1; then
-  echo "list-runs did not include completed run"
+  echo "list-orchestration-runs did not include completed run"
   printf '%s\n' "$ORCH_RUN_LIST_RESP"
   exit 1
 fi
@@ -670,7 +670,7 @@ fi
 echo "Human orchestration id: $HUMAN_ORCH_ID"
 
 echo "--- Starting paused run ---"
-HUMAN_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-run \
+HUMAN_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$HUMAN_ORCH_ID" \
   --input '{}')
 HUMAN_RUN_ID=$(printf '%s\n' "$HUMAN_RUN_RESP" | jq -r '.id')
@@ -697,7 +697,7 @@ fi
 echo "Submit human input: OK"
 
 echo "--- Resuming a paused run without input ---"
-RESUME_CANDIDATE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-run \
+RESUME_CANDIDATE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$HUMAN_ORCH_ID" \
   --input '{}')
 RESUME_RUN_ID=$(printf '%s\n' "$RESUME_CANDIDATE_RESP" | jq -r '.id')
@@ -706,18 +706,18 @@ if ! printf '%s\n' "$RESUME_CANDIDATE_RESP" | jq -e '.status == "paused" and .re
   printf '%s\n' "$RESUME_CANDIDATE_RESP"
   exit 1
 fi
-HUMAN_RESUME_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI resume-run \
+HUMAN_RESUME_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI resume-orchestration-run \
   --orchestration-id "$HUMAN_ORCH_ID" \
   --run-id "$RESUME_RUN_ID")
 if ! printf '%s\n' "$HUMAN_RESUME_RESP" | jq -e '.status == "paused" and .required_action.node_id == "approval"' >/dev/null 2>&1; then
-  echo "resume-run did not complete human orchestration as expected"
+  echo "resume-orchestration-run did not complete human orchestration as expected"
   printf '%s\n' "$HUMAN_RESUME_RESP"
   exit 1
 fi
 echo "Resume run: OK"
 
 echo "--- Cancelling a paused run ---"
-CANCEL_CANDIDATE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-run \
+CANCEL_CANDIDATE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$HUMAN_ORCH_ID" \
   --input '{}')
 CANCEL_RUN_ID=$(printf '%s\n' "$CANCEL_CANDIDATE_RESP" | jq -r '.id')
@@ -726,11 +726,11 @@ if ! printf '%s\n' "$CANCEL_CANDIDATE_RESP" | jq -e '.status == "paused"' >/dev/
   printf '%s\n' "$CANCEL_CANDIDATE_RESP"
   exit 1
 fi
-CANCEL_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI cancel-run \
+CANCEL_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI cancel-orchestration-run \
   --orchestration-id "$HUMAN_ORCH_ID" \
   --run-id "$CANCEL_RUN_ID")
 if ! printf '%s\n' "$CANCEL_RUN_RESP" | jq -e '.status == "cancelled"' >/dev/null 2>&1; then
-  echo "cancel-run did not return cancelled status"
+  echo "cancel-orchestration-run did not return cancelled status"
   printf '%s\n' "$CANCEL_RUN_RESP"
   exit 1
 fi

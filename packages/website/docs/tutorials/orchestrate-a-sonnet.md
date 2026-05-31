@@ -654,7 +654,7 @@ Run the [orchestration](/docs/modules/orchestrations) with a theme. The run outp
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-RUN=$(soat start-run \
+RUN=$(soat start-orchestration-run \
   --orchestration-id "$ORCHESTRATION_ID" \
   --input '{"theme":"artificial intelligence"}')
 
@@ -687,7 +687,7 @@ Expected status output:
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: run } = await adminSoat.orchestrations.startRun({
+const { data: run } = await adminSoat.orchestrations.startOrchestrationRun({
   path: { orchestration_id: ORCHESTRATION_ID },
   body: {
     input: { theme: 'artificial intelligence' },
@@ -756,13 +756,13 @@ curl -s "$SOAT_URL/api/v1/documents/$POEM_DOC_ID" \
 
 ## Step 9 — Inspect the run state
 
-Use `get-run` to inspect the accumulated [orchestration](/docs/modules/orchestrations) state. This is the main difference from the nested-agent tutorial: you can see every intermediate field directly in the run record.
+Use `get-orchestration-run` to inspect the accumulated [orchestration](/docs/modules/orchestrations) state. This is the main difference from the nested-agent tutorial: you can see every intermediate field directly in the run record.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-run \
+soat get-orchestration-run \
   --orchestration-id "$ORCHESTRATION_ID" \
   --run-id "$RUN_ID" | jq '{status, state, output}'
 ```
@@ -778,7 +778,7 @@ Key fields to look for:
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: runState } = await adminSoat.orchestrations.getRun({
+const { data: runState } = await adminSoat.orchestrations.getOrchestrationRun({
   path: { orchestration_id: ORCHESTRATION_ID, run_id: RUN_ID },
 });
 console.log(JSON.stringify(runState.state, null, 2));
