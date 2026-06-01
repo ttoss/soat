@@ -906,9 +906,9 @@ The server enforces a **maximum call depth** controlled by the `max_call_depth` 
 
 This design is self-contained: each generation only needs its own `remaining_depth` — it does not need to know the original `max_call_depth` or any shared trace state.
 
-For observability, every top-level generation also creates a **trace** identified by a unique `trace_id` (`agt_trace_` prefix). The server attaches the same `trace_id` to all generations in the chain automatically. This is internal server plumbing — agents do not receive or propagate `trace_id`.
+For observability, every generation creates its own **trace** with a unique `trace_id` (`trc_` prefix). Each trace in a chain shares a common `root_trace_id` pointing back to the top-level trace, and each child trace carries a `parent_trace_id` pointing to its immediate parent. This is internal server plumbing — agents do not receive or propagate `trace_id`.
 
-When an agent spawns a child generation, the parent's `generation_id` is recorded as the child's `initiator_generation_id`. This creates a generation-to-generation chain that lets you reconstruct the full call graph without any parent/root trace foreign keys. The child's final `trace_id` also appears in the parent's step data (as the tool call result), making tree traversal implicit in trace content.
+When an agent spawns a child generation, the parent's `generation_id` is recorded as the child's `initiator_generation_id`. This creates a generation-to-generation chain that lets you reconstruct the full call graph. The child's `trace_id` also appears in the parent's step data (as the tool call result), making tree traversal possible from either the FK fields or the step content.
 
 Example: A caller starts Agent A with `max_call_depth: 3`. Agent A runs with `remaining_depth: 3` and calls Agent B (`remaining_depth: 2`). Agent B calls Agent C (`remaining_depth: 1`). Agent C can still run but cannot nest further — if it tries to call Agent D, `remaining_depth` would be `0` → the server rejects the call.
 
@@ -918,14 +918,18 @@ A trace is the execution log of a single generation — it records every step th
 
 ### Trace Data Model
 
-| Field        | Type   | Description                                                    |
-| ------------ | ------ | -------------------------------------------------------------- |
-| `id`         | string | Public identifier (`agt_trace_` prefix)                        |
-| `project_id` | string | Project the trace belongs to                                   |
-| `agent_id`   | string | Agent that produced the trace                                  |
-| `file_id`    | string | ID of the File record containing the full JSON steps (on disk) |
-| `step_count` | number | Total number of steps recorded                                 |
-| `created_at` | string | ISO 8601 creation timestamp                                    |
+| Field             | Type           | Description                                                                            |
+| ----------------- | -------------- | -------------------------------------------------------------------------------------- |
+| `id`              | string         | Public identifier (`trc_` prefix)                                                      |
+| `project_id`      | string         | Project the trace belongs to                                                           |
+| `agent_id`        | string         | Agent that produced the trace                                                          |
+| `file_id`         | string \| null | ID of the File record containing the full JSON steps (on disk)                         |
+| `step_count`      | number         | Total number of steps recorded                                                         |
+| `parent_trace_id` | string \| null | ID of the immediate parent trace; `null` for top-level (root) traces                  |
+| `root_trace_id`   | string \| null | ID of the root trace in a multi-agent chain; `null` when this trace is itself the root |
+| `created_at`      | string         | ISO 8601 creation timestamp                                                            |
+
+> For the full trace ancestry model — including invariants, a concrete multi-level example, and tree reconstruction guidance — see the [Traces module](./traces.md#trace-ancestry-model).
 
 ### Trace Content
 
@@ -951,11 +955,13 @@ Returns paginated metadata — no step content:
 {
   "data": [
     {
-      "id": "agt_trace_abc123",
+      "id": "trc_abc123",
       "project_id": "proj_ABC",
       "agent_id": "agt_01",
       "file_id": "file_xyz",
       "step_count": 5,
+      "parent_trace_id": null,
+      "root_trace_id": null,
       "created_at": "2025-01-15T10:30:00Z"
     }
   ],
@@ -975,25 +981,33 @@ Returns trace metadata including `file_id`. To get the full steps, download the 
 
 ```json
 {
-  "id": "agt_trace_abc123",
+  "id": "trc_abc123",
   "project_id": "proj_ABC",
   "agent_id": "agt_01",
   "file_id": "file_xyz",
   "step_count": 5,
+  "parent_trace_id": null,
+  "root_trace_id": null,
   "created_at": "2025-01-15T10:30:00Z"
 }
 ```
 
 ### Tree Traversal
 
-When Agent A calls Agent B, Agent B's trace ID appears in Agent A's step data as part of the tool call result. There are no explicit `parent_trace_id` or `root_trace_id` foreign keys. To reconstruct the call tree:
+Every trace carries explicit `parent_trace_id` and `root_trace_id` foreign keys so the full execution tree can be reconstructed without inspecting step content:
 
-1. Fetch the parent trace's content (via `file_id` → download).
-2. Find steps where a `soat` tool action `create-agent-generation` was called.
-3. The tool call result contains the child's `trace_id`.
-4. Fetch the child trace to continue traversal.
+- **`parent_trace_id`** — the ID of the immediate parent trace (`null` for the root trace).
+- **`root_trace_id`** — the ID of the root trace shared by every trace in the chain (`null` on the root trace itself).
 
-This design keeps the trace model simple and avoids circular FK complications.
+The recommended way to retrieve the full tree is the dedicated endpoint:
+
+```
+GET /api/v1/traces/{trace_id}/tree
+```
+
+This returns the root node with all descendants nested under `children`, regardless of which trace ID in the chain you supply. See the [Traces module](./traces.md) for full details, invariants, and a concrete example.
+
+You can also navigate the tree manually using the FK fields, or reconstruct it by inspecting step content: the tool call result for a `create-agent-generation` `soat` action contains the child's `trace_id`.
 
 ## Generations
 
