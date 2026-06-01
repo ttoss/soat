@@ -9,10 +9,10 @@ import TabItem from '@theme/TabItem';
 
 This tutorial shows how to give an agent a long-term memory that persists across sessions. You will:
 
-1. Create a [Memory](/docs/modules/memories) container and tag it for filtering.
+1. Create a [Memory](/docs/modules/memories#key-concepts) container and tag it for filtering.
 2. Write memory entries and observe the three deduplication outcomes: **created**, **skipped**, and **updated**.
-3. Upload a [Document](/docs/modules/documents) with structured reference information.
-4. Create an [agent](/docs/modules/agents) that retrieves from both memories and the document via `knowledge_config`, with `write_memory_id` enabled so the agent can persist new facts it learns.
+3. Upload a [Document](/docs/modules/documents#examples) with structured reference information.
+4. Create an [agent](/docs/modules/agents#examples) that retrieves from both memories and the document via `knowledge_config`, with `write_memory_id` enabled so the agent can persist new facts it learns.
 5. Run a generation and observe the model answering accurately from injected context — with no RAG logic in the prompt.
 6. Observe the agent writing a new fact to memory with `source: "agent"`.
 7. Query the knowledge layer directly to see memory entries and document chunks side by side.
@@ -64,7 +64,7 @@ export SOAT_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. It bypasses policy evaluation entirely. See [Users](/docs/modules/users) for full authentication details.
+Admin is the built-in superuser role. It bypasses policy evaluation entirely. See [Users](/docs/modules/users#examples) for full authentication details.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -117,7 +117,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project
 
-Every resource in SOAT lives inside a [project](/docs/modules/projects). Create one to hold the memory and agent.
+Every resource in SOAT lives inside a [project](/docs/modules/projects#examples). Create one to hold the memory and agent.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -155,7 +155,7 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Create an AI provider
 
-Set up a local [AI provider](/docs/modules/ai-providers) backed by Ollama. This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+Set up a local [AI provider](/docs/modules/ai-providers#examples) backed by Ollama. This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -203,7 +203,7 @@ echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 
 ## Step 4 — Create a memory
 
-A [Memory](/docs/modules/memories) is a named container that holds a collection of text entries. You can attach `tags` to a memory for later filtering — useful when an agent should search only a subset of all memories in a project.
+A [Memory](/docs/modules/memories#key-concepts) is a named container that holds a collection of text entries. You can attach `tags` to a memory for later filtering — useful when an agent should search only a subset of all memories in a project.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -471,7 +471,7 @@ curl -s "$SOAT_URL/api/v1/memories/$MEMORY_ID/entries" \
 
 ## Step 7 — Upload a support-policy document
 
-A [Document](/docs/modules/documents) is a text file indexed for semantic search. Here we store Alice's account support policy — structured reference material that the agent should consult alongside the memory entries written in Step 5.
+A [Document](/docs/modules/documents#examples) is a text file indexed for semantic search. Here we store Alice's account support policy — structured reference material that the agent should consult alongside the memory entries written in Step 5.
 
 The `path` field gives the document a logical location inside the project (similar to a file path). We will use `/alice/support-policy.txt` so we can later filter the entire `/alice/` subtree with a single `document_paths` prefix.
 
@@ -521,7 +521,7 @@ echo "DOC_ID: $DOC_ID"
 
 ## Step 8 — Create an agent with `knowledge_config`
 
-The `knowledge_config` field on an [agent](/docs/modules/agents) tells SOAT which memories and documents to search before every generation. The search query is automatically derived from the last user message — no explicit RAG logic needed in the prompt.
+The `knowledge_config` field on an [agent](/docs/modules/agents#examples) tells SOAT which memories and documents to search before every generation. The search query is automatically derived from the last user message — no explicit RAG logic needed in the prompt.
 
 The fields you can set in `knowledge_config`:
 
@@ -747,7 +747,7 @@ If the model called `write_memory`, you will see an entry with `"source": "agent
 
 ## Step 11 — Query the knowledge layer directly
 
-The [Knowledge](/docs/modules/knowledge) endpoint is the same search layer the agent uses internally. Pass both `memory_ids` and `document_paths` to see exactly which chunks — from both sources — would be injected for a given question.
+The [Knowledge](/docs/modules/knowledge#examples) endpoint is the same search layer the agent uses internally. Pass both `memory_ids` and `document_paths` to see exactly which chunks — from both sources — would be injected for a given question.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

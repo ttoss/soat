@@ -13,6 +13,12 @@ The IAM module covers:
 - **Policy Engine** — evaluation logic that resolves allow/deny decisions at request time
 - **Authorization Model** — how policies are resolved for each caller type (see [Authorization Model](#authorization-model) below)
 
+## Related Tutorials
+
+- [Permissions in Practice - Step 4 (Create policies)](/docs/tutorials/permissions#step-4--create-policies)
+- [Permissions in Practice - Step 6 (Create API keys)](/docs/tutorials/permissions#step-6--create-api-keys)
+- [Permissions in Practice - Step 7 (Verify permissions)](/docs/tutorials/permissions#step-7--verify-permissions)
+
 ## Authentication
 
 SOAT supports two authentication methods. Both use the `Authorization: Bearer <token>` header.

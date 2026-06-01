@@ -13,6 +13,12 @@ Traces support **parent-child relationships**: when an agent spawns a sub-agent 
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Debug Session, Generation, and Trace History - Step 5 (Inspect traces for each generation)](/docs/tutorials/debug-session-generation-trace-history#step-5---inspect-traces-for-each-generation)
+- [Multi-Agent Sonnet with Nested Agent Calls - Step 12 (Inspect the trace tree)](/docs/tutorials/multi-agent-orchestration#step-12--inspect-the-trace-tree)
+- [Deploy a Multi-Agent App with Agent Formation - Step 9 (Inspect the trace tree)](/docs/tutorials/formations#step-9--inspect-the-trace-tree)
+
 ## Data Model
 
 | Field             | Type           | Description                                                                            |
@@ -39,6 +45,35 @@ Each trace stores the raw step objects produced by the Vercel AI SDK `generateTe
 ### File Linkage
 
 Trace content (the step array) is stored as a file at the path `/traces/{traceId}.json` inside the project's file storage. The `file_id` field on the trace record points to this file so it can be downloaded directly via the Files API.
+
+## Debugging Joins (Trace, Generation, Session)
+
+When debugging a user flow, there are three related IDs:
+
+- `session_id` (conversation container)
+- `generation_id` (single agent execution)
+- `trace_id` (observability record for that execution)
+
+What you can resolve directly today:
+
+- From generation responses (`/sessions/.../generate` and auto-generate message responses): `generation_id` + `trace_id`
+- From trace APIs: trace metadata (`id`, `agent_id`, `file_id`, `parent_trace_id`, `root_trace_id`)
+- From `GET /traces/{trace_id}/generations`: all generation IDs linked to a trace
+
+Important limitation:
+
+- Trace records do not include `session_id` directly.
+
+Recommended correlation strategy:
+
+1. Capture (`session_id`, `generation_id`, `trace_id`) when generation responses are returned.
+2. Use `trace_id` to inspect trace metadata (`GET /traces/{trace_id}`), structure (`GET /traces/{trace_id}/tree`), and linked generation IDs (`GET /traces/{trace_id}/generations`).
+3. Use `session_id` to retrieve the full message timeline (`GET /agents/{agent_id}/sessions/{session_id}/messages`).
+
+This makes both directions deterministic in your own debug records:
+
+- `session_id` -> all `generation_id` values -> each `trace_id`
+- `trace_id` -> corresponding `generation_id` and `session_id`
 
 ## Trace Ancestry Model
 
@@ -103,6 +138,7 @@ The three trace records look like this:
 ```
 
 Key observations:
+
 - `trc_A` is the root: both `parent_trace_id` and `root_trace_id` are `null`.
 - `trc_B` is a depth-1 child: `parent_trace_id === root_trace_id === "trc_A"`.
 - `trc_C` is a depth-2 child: `parent_trace_id` points to its immediate parent (`trc_B`), while `root_trace_id` still points to the top-level root (`trc_A`).

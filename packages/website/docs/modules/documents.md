@@ -13,6 +13,12 @@ Documents are identified by an `id` prefixed with `doc_`. The internal database 
 
 See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Agent SOAT Tools and Preset Parameters - Step 4 (Create documents)](/docs/tutorials/agent-soat-tools#step-4--create-documents)
+- [Multi-Agent Sonnet with Nested Agent Calls - Step 4 (Create a shared document)](/docs/tutorials/multi-agent-orchestration#step-4--create-a-shared-document-for-the-poem)
+- [Orchestrate a Sonnet - Step 4 (Create the poem document)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool)
+
 ## Data Model
 
 | Field        | Type           | Description                                                                                                        |

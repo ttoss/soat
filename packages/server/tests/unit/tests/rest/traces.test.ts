@@ -11,6 +11,8 @@ describe('Traces REST API', () => {
   let projectId: string;
   let traceId: string;
   let childTraceId: string;
+  let traceGenerationIds: string[];
+  let tracesAgentDbId: number;
 
   beforeAll(async () => {
     await testClient
@@ -51,6 +53,7 @@ describe('Traces REST API', () => {
                 'traces:ListTraces',
                 'traces:GetTrace',
                 'traces:GetTraceTree',
+                'traces:GetTraceGenerations',
               ],
             },
           ],
@@ -81,12 +84,14 @@ describe('Traces REST API', () => {
       secretId: null,
     });
 
-    await db.Agent.create({
+    const tracesAgent = await db.Agent.create({
       publicId: 'agt_traces_rest_001',
       projectId: internalProjectId,
       aiProviderId: aiProvider.id,
       name: 'Traces Agent 1',
     });
+
+    tracesAgentDbId = tracesAgent.id;
 
     await db.Agent.create({
       publicId: 'agt_traces_rest_002',
@@ -112,6 +117,51 @@ describe('Traces REST API', () => {
       parentTraceId: traceId,
       rootTraceId: traceId,
     });
+
+    const rootTrace = await db.Trace.findOne({
+      where: { publicId: traceId, projectId: internalProjectId },
+    });
+
+    expect(rootTrace).toBeTruthy();
+
+    const firstGenerationId = `gen_rest_1_${Date.now()}`;
+    const secondGenerationId = `gen_rest_2_${Date.now()}`;
+
+    await db.Generation.create({
+      publicId: firstGenerationId,
+      projectId: internalProjectId,
+      agentId: tracesAgentDbId,
+      traceId: rootTrace!.id,
+      initiatorGenerationId: null,
+      startedByActorId: null,
+      startedByPrincipalType: null,
+      startedByPrincipalId: null,
+      status: 'completed',
+      startedAt: new Date(Date.now() - 2000),
+      completedAt: new Date(Date.now() - 1500),
+      lastActivityAt: new Date(Date.now() - 1500),
+      stopReason: 'stop',
+      metadata: null,
+    });
+
+    await db.Generation.create({
+      publicId: secondGenerationId,
+      projectId: internalProjectId,
+      agentId: tracesAgentDbId,
+      traceId: rootTrace!.id,
+      initiatorGenerationId: null,
+      startedByActorId: null,
+      startedByPrincipalType: null,
+      startedByPrincipalId: null,
+      status: 'completed',
+      startedAt: new Date(Date.now() - 1000),
+      completedAt: new Date(Date.now() - 500),
+      lastActivityAt: new Date(Date.now() - 500),
+      stopReason: 'stop',
+      metadata: null,
+    });
+
+    traceGenerationIds = [firstGenerationId, secondGenerationId];
   });
 
   describe('GET /api/v1/traces', () => {
@@ -217,6 +267,36 @@ describe('Traces REST API', () => {
       expect(res.status).toBe(200);
       expect(res.body.id).toBe(traceId);
       expect(res.body.children).toHaveLength(1);
+    });
+  });
+
+  describe('GET /api/v1/traces/:trace_id/generations', () => {
+    test('unauthenticated request returns 401', async () => {
+      const res = await testClient.get(`/api/v1/traces/${traceId}/generations`);
+      expect(res.status).toBe(401);
+    });
+
+    test('authenticated user can get generation IDs for a trace', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/traces/${traceId}/generations`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.trace_id).toBe(traceId);
+      expect(res.body.generation_ids).toEqual(traceGenerationIds);
+    });
+
+    test('returns 404 for non-existent trace', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/traces/trc_nonexistent_000000/generations'
+      );
+      expect(res.status).toBe(404);
+    });
+
+    test('user without permission cannot get generation IDs', async () => {
+      const res = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/traces/${traceId}/generations`
+      );
+      expect(res.status).toBe(403);
     });
   });
 });
