@@ -11,6 +11,12 @@ Each agent stores its AI provider, instructions, tool references, and execution 
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Chat with an LLM - Step 4 (Create an agent)](/docs/tutorials/chat-with-llm#step-4--create-an-agent)
+- [Agent SOAT Tools and Preset Parameters - Step 7 (Create the agent)](/docs/tutorials/agent-soat-tools#step-7--create-the-agent)
+- [Multi-Agent Sonnet with Nested Agent Calls - Step 6 (Create stanza agents)](/docs/tutorials/multi-agent-orchestration#step-6--create-the-four-stanza-agents)
+
 ## Key Concepts
 
 ### Agent Resource
@@ -925,7 +931,7 @@ A trace is the execution log of a single generation — it records every step th
 | `agent_id`        | string         | Agent that produced the trace                                                          |
 | `file_id`         | string \| null | ID of the File record containing the full JSON steps (on disk)                         |
 | `step_count`      | number         | Total number of steps recorded                                                         |
-| `parent_trace_id` | string \| null | ID of the immediate parent trace; `null` for top-level (root) traces                  |
+| `parent_trace_id` | string \| null | ID of the immediate parent trace; `null` for top-level (root) traces                   |
 | `root_trace_id`   | string \| null | ID of the root trace in a multi-agent chain; `null` when this trace is itself the root |
 | `created_at`      | string         | ISO 8601 creation timestamp                                                            |
 

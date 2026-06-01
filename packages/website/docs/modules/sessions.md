@@ -19,6 +19,12 @@ The session automatically creates and manages the underlying conversation. An op
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Chat with an LLM - Step 5 (Create a session)](/docs/tutorials/chat-with-llm#step-5--create-a-session)
+- [Chat with an LLM - Step 6 (Send messages and receive replies)](/docs/tutorials/chat-with-llm#step-6--send-messages-and-receive-replies)
+- [Debug Session, Generation, and Trace History - Step 4 (Retrieve the full session message timeline)](/docs/tutorials/debug-session-generation-trace-history#step-4---retrieve-the-full-session-message-timeline)
+
 ## Key Concepts
 
 ### How Sessions Relate to Other Concepts
@@ -93,6 +99,37 @@ Adding a caller-supplied `tenantId` alongside the automatically injected session
 ```
 
 The tool will receive headers: `X-Soat-Context-SessionId`, `X-Soat-Context-TenantId`, and — if the session has an actor — `X-Soat-Context-ActorId` and `X-Soat-Context-ActorExternalId`.
+
+## Debugging Links (Session, Generation, Trace)
+
+For debugging, treat the session as a timeline container and each generation as one execution snapshot.
+
+- One session can produce many generations over time.
+- Each successful call to `POST .../generate` returns `generation_id` and `trace_id`.
+- When `auto_generate` is enabled, `POST .../messages` may also return `generation_id` and `trace_id`.
+
+This gives you a reliable forward link:
+
+`session_id` -> `generation_id` -> `trace_id`
+
+Practical notes:
+
+- `GET .../sessions/{session_id}/messages` returns the conversation timeline (role/content/position/metadata).
+- Message rows are the canonical chat history, but they are not a first-class generation history list.
+- To preserve a complete debug history, store each returned pair (`generation_id`, `trace_id`) when a generation runs for that session.
+
+Recommended minimal debug ledger format:
+
+```json
+{
+  "session_id": "sess_...",
+  "generation_id": "gen_...",
+  "trace_id": "trc_...",
+  "created_at": "2026-06-01T12:34:56.000Z"
+}
+```
+
+For event-driven systems, webhook generation events are also useful correlation points because they include `session_id`, `generation_id`, and `trace_id`.
 
 #### Testing Without an Actor
 

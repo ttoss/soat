@@ -13,6 +13,11 @@ API keys use the standard `Authorization: Bearer <key>` header — the same as J
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Permissions in Practice - Step 6 (Create API keys)](/docs/tutorials/permissions#step-6--create-api-keys)
+- [Permissions in Practice - Step 7 (Verify permissions)](/docs/tutorials/permissions#step-7--verify-permissions)
+
 ## Data Model
 
 | Field        | Type     | Description                                                                   |

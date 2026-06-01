@@ -13,6 +13,12 @@ Users can have [Policies](./policies.md) attached to them, which control what re
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Permissions in Practice - Step 2 (Create regular users)](/docs/tutorials/permissions#step-2--create-regular-users)
+- [Chat with an LLM - Step 1 (Log in as admin)](/docs/tutorials/chat-with-llm#step-1--log-in-as-admin)
+- [Agent with Persistent Memory - Step 1 (Log in as admin)](/docs/tutorials/memories-agent#step-1--log-in-as-admin)
+
 ## Data Model
 
 | Field        | Type   | Description                      |

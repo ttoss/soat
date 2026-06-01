@@ -7,7 +7,7 @@ import TabItem from '@theme/TabItem';
 
 # Deploy a Multi-Agent App with Agent Formation
 
-This tutorial builds the same **multi-agent orchestration** pipeline from [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration) — an orchestrator agent that delegates sonnet stanzas to four specialized sub-agents — but deploys the entire system with a **single [Agent Formation](/docs/modules/formations) template** instead of many ordered API calls.
+This tutorial builds the same **multi-agent orchestration** pipeline from [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration) — an orchestrator agent that delegates sonnet stanzas to four specialized sub-agents — but deploys the entire system with a **single [Agent Formation](/docs/modules/formations#key-concepts) template** instead of many ordered API calls.
 
 You will:
 
@@ -18,7 +18,7 @@ You will:
 5. Update the formation to change a resource.
 6. Delete the formation and all its managed resources.
 
-By the end you will understand how [Agent Formation](/docs/modules/formations) turns a complex multi-step workflow into one reproducible, declarative operation.
+By the end you will understand how [Agent Formation](/docs/modules/formations#key-concepts) turns a complex multi-step workflow into one reproducible, declarative operation.
 
 ## Prerequisites
 
@@ -64,7 +64,7 @@ export SOAT_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser. See [Users](/docs/modules/users) for full authentication details.
+Admin is the built-in superuser. See [Users](/docs/modules/users#examples) for full authentication details.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -105,7 +105,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project
 
-All resources are scoped to a [project](/docs/modules/projects).
+All resources are scoped to a [project](/docs/modules/projects#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -143,7 +143,7 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Write the formation template
 
-A [formation template](/docs/modules/formations) is a JSON object with a `resources` map and an optional `outputs` map. This single template defines all 14 resources of the sonnet pipeline. SOAT resolves `{ "ref": "logicalId" }` expressions in dependency order so `tool_ids`, `ai_provider_id`, and nested `preset_parameters.agentId` are all wired automatically — no manual ID tracking required.
+A [formation template](/docs/modules/formations#key-concepts) is a JSON object with a `resources` map and an optional `outputs` map. This single template defines all 14 resources of the sonnet pipeline. SOAT resolves `{ "ref": "logicalId" }` expressions in dependency order so `tool_ids`, `ai_provider_id`, and nested `preset_parameters.agentId` are all wired automatically — no manual ID tracking required.
 
 The template defines:
 
@@ -835,7 +835,7 @@ TEMPLATE=$(cat formation.json)
 
 ## Step 4 — Validate the template
 
-Validate the template structure before doing anything else. See [Formations](/docs/modules/formations) for validation rules.
+Validate the template structure before doing anything else. See [Formations](/docs/modules/formations#key-concepts) for validation rules.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -877,7 +877,7 @@ curl -s -X POST "$SOAT_URL/api/v1/formations/validate" \
 
 ## Step 5 — Preview the deployment plan
 
-Preview the changes SOAT will make before deploying. The plan lists all resources that will be created. See [Formations](/docs/modules/formations).
+Preview the changes SOAT will make before deploying. The plan lists all resources that will be created. See [Formations](/docs/modules/formations#key-concepts).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -942,7 +942,7 @@ curl -s -X POST "$SOAT_URL/api/v1/formations/plan" \
 
 ## Step 6 — Deploy the formation
 
-Create the formation. SOAT provisions all 14 resources in dependency order and resolves every `ref` expression. The `outputs` section surfaces the orchestrator ID and poem document ID so you don't need to track them manually. See [Formations](/docs/modules/formations).
+Create the formation. SOAT provisions all 14 resources in dependency order and resolves every `ref` expression. The `outputs` section surfaces the orchestrator ID and poem document ID so you don't need to track them manually. See [Formations](/docs/modules/formations#key-concepts).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1106,7 +1106,7 @@ TRACE_ID=$(printf '%s\n' "$RESULT" | jq -r '.trace_id')
 
 ## Step 8 — Read the poem document
 
-The stanza agents accumulated the sonnet in the shared poem document. Read it directly from the [Documents](/docs/modules/documents) store.
+The stanza agents accumulated the sonnet in the shared poem document. Read it directly from the [Documents](/docs/modules/documents#examples) store.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1164,7 +1164,7 @@ curl -s "$SOAT_URL/api/v1/documents/$POEM_DOC_ID" \
 
 ## Step 9 — Inspect the trace tree
 
-The `/tree` endpoint returns the full execution tree rooted at the orchestrator trace. Each node is a [trace](/docs/modules/traces) record, and its `children` array contains the traces spawned by sub-agent tool calls.
+The `/tree` endpoint returns the full execution tree rooted at the orchestrator trace. Each node is a [trace](/docs/modules/traces#examples) record, and its `children` array contains the traces spawned by sub-agent tool calls.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1217,7 +1217,7 @@ curl -s "$SOAT_URL/api/v1/traces/$TRACE_ID/tree" \
 
 ## Step 10 — Update the formation
 
-Update the formation by supplying a modified template. SOAT diffs the new template against the current state and applies only the required changes. Here we update the orchestrator's instructions to change the sonnet theme prompt. See [Formations](/docs/modules/formations).
+Update the formation by supplying a modified template. SOAT diffs the new template against the current state and applies only the required changes. Here we update the orchestrator's instructions to change the sonnet theme prompt. See [Formations](/docs/modules/formations#key-concepts).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1266,7 +1266,7 @@ curl -s -X PUT "$SOAT_URL/api/v1/formations/$FORMATION_ID" \
 
 ## Step 11 — View operation events
 
-Each formation deployment and update appends events to the formation's event log. Use this to audit exactly which resources were created, updated, or deleted and in what order. See [Formations](/docs/modules/formations).
+Each formation deployment and update appends events to the formation's event log. Use this to audit exactly which resources were created, updated, or deleted and in what order. See [Formations](/docs/modules/formations#key-concepts).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1309,7 +1309,7 @@ curl -s "$SOAT_URL/api/v1/formations/$FORMATION_ID/events" \
 
 ## Step 12 — Delete the formation
 
-Deleting a formation tries to remove managed resources in reverse dependency order. Depending on runtime artifacts created by the formation flow (for example, traces or generations that keep references alive), the delete operation may return `success: false` and keep the formation in `delete_failed` status for inspection. See [Formations](/docs/modules/formations).
+Deleting a formation tries to remove managed resources in reverse dependency order. Depending on runtime artifacts created by the formation flow (for example, traces or generations that keep references alive), the delete operation may return `success: false` and keep the formation in `delete_failed` status for inspection. See [Formations](/docs/modules/formations#key-concepts).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

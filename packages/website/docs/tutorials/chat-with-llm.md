@@ -19,7 +19,7 @@ This tutorial walks through the full flow of having a back-and-forth conversatio
 8. Run async generation.
 9. Capture generation lifecycle events via webhook.
 
-By the end you will understand how [AI Providers](/docs/modules/ai-providers), [Agents](/docs/modules/agents), [Sessions](/docs/modules/sessions), and [Webhooks](/docs/modules/webhooks) compose together to drive both sync and async LLM conversations.
+By the end you will understand how [AI Providers](/docs/modules/ai-providers#examples), [Agents](/docs/modules/agents#examples), [Sessions](/docs/modules/sessions#examples), and [Webhooks](/docs/modules/webhooks#examples) compose together to drive both sync and async LLM conversations.
 
 ## Prerequisites
 
@@ -63,7 +63,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. It bypasses policy evaluation entirely. See [Users](/docs/modules/users) for full authentication and user management details.
+Admin is the built-in superuser role. It bypasses policy evaluation entirely. See [Users](/docs/modules/users#examples) for full authentication and user management details.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -108,7 +108,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project
 
-Every resource in SOAT lives inside a [project](/docs/modules/projects). Create one to hold the agent and its supporting configuration.
+Every resource in SOAT lives inside a [project](/docs/modules/projects#examples). Create one to hold the agent and its supporting configuration.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -150,11 +150,11 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Create a local AI provider
 
-For local development and tutorial tests, the simplest setup is an [AI provider](/docs/modules/ai-providers) backed by Ollama. It uses the server's `OLLAMA_BASE_URL`, so no secret is required.
+For local development and tutorial tests, the simplest setup is an [AI provider](/docs/modules/ai-providers#examples) backed by Ollama. It uses the server's `OLLAMA_BASE_URL`, so no secret is required.
 
 ## Step 3 — Create a local AI provider
 
-For local development and tutorial tests, the simplest setup is an [AI provider](/docs/modules/ai-providers) backed by Ollama. It uses the server's `OLLAMA_BASE_URL`, so no secret is required. This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+For local development and tutorial tests, the simplest setup is an [AI provider](/docs/modules/ai-providers#examples) backed by Ollama. It uses the server's `OLLAMA_BASE_URL`, so no secret is required. This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -207,7 +207,7 @@ echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 
 ## Step 4 — Create an agent
 
-An [agent](/docs/modules/agents) is bound to an AI provider and carries a system prompt (`instructions`). It is the entity that generates responses.
+An [agent](/docs/modules/agents#examples) is bound to an AI provider and carries a system prompt (`instructions`). It is the entity that generates responses.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -261,7 +261,7 @@ echo "AGENT_ID: $AGENT_ID"
 
 ## Step 5 — Create a session
 
-A [session](/docs/modules/sessions) is a single conversation thread tied to an agent. Setting `auto_generate` to `true` means the agent generates a reply automatically every time you send a user message.
+A [session](/docs/modules/sessions#examples) is a single conversation thread tied to an agent. Setting `auto_generate` to `true` means the agent generates a reply automatically every time you send a user message.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -307,7 +307,7 @@ echo "SESSION_ID: $SESSION_ID"
 
 ## Step 6 — Send messages and receive replies
 
-Because `auto_generate` is enabled, every call to `add-session-message` triggers generation immediately and returns the assistant reply inline. The conversation context is maintained across calls — the model sees all previous messages. See [Sessions](/docs/modules/sessions) for the full message and generation API.
+Because `auto_generate` is enabled, every call to `add-session-message` triggers generation immediately and returns the assistant reply inline. The conversation context is maintained across calls — the model sees all previous messages. See [Sessions](/docs/modules/sessions#examples) for the full message and generation API.
 
 ### 7a — First message
 
@@ -423,7 +423,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/mes
 
 ## Step 7 — View the conversation history
 
-Fetch all messages in the session to review the full exchange. Messages are persisted on the underlying [Conversation](/docs/modules/conversations) model; the session provides a scoped view into it.
+Fetch all messages in the session to review the full exchange. Messages are persisted on the underlying [Conversation](/docs/modules/conversations#key-concepts) model; the session provides a scoped view into it.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -474,7 +474,7 @@ curl -s "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
 
 ## Step 8 - Start a local webhook listener
 
-Start the CLI listener before creating the webhook. It opens a local HTTP endpoint and prints each matching delivery. In the automated tutorial tests, `SOAT_WEBHOOK_BASE_URL` is injected so the server container can reach this listener. See [CLI Commands](/docs/cli/commands) for all `soat listen` flags and [Webhooks](/docs/modules/webhooks) for the full delivery and signing model.
+Start the CLI listener before creating the webhook. It opens a local HTTP endpoint and prints each matching delivery. In the automated tutorial tests, `SOAT_WEBHOOK_BASE_URL` is injected so the server container can reach this listener. See [CLI Commands](/docs/cli/commands) for all `soat listen` flags and [Webhooks](/docs/modules/webhooks#examples) for the full delivery and signing model.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -510,7 +510,7 @@ sleep 2
 
 ## Step 9 - Create a session webhook subscription
 
-Subscribe to session generation events so you can observe the async lifecycle. See [Webhooks](/docs/modules/webhooks) for the full list of event types, retry rules, and HMAC signing.
+Subscribe to session generation events so you can observe the async lifecycle. See [Webhooks](/docs/modules/webhooks#examples) for the full list of event types, retry rules, and HMAC signing.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -565,7 +565,7 @@ echo "WEBHOOK_ID: $WEBHOOK_ID"
 
 ## Step 10 - Trigger async generation
 
-Disable `auto_generate`, add a user message, then trigger generation with `async=true`. See [Sessions — Async Generation](/docs/modules/sessions) for status codes and how to poll for completion.
+Disable `auto_generate`, add a user message, then trigger generation with `async=true`. See [Sessions — Async Generation](/docs/modules/sessions#examples) for status codes and how to poll for completion.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -656,7 +656,7 @@ When generation runs, your `soat listen` terminal should log events such as:
 
 ## Step 11 - Verify delivery and final assistant message
 
-Wait for the async delivery, inspect the webhook listener output, then fetch session messages again. Delivery records are queryable via the [Webhooks](/docs/modules/webhooks) module.
+Wait for the async delivery, inspect the webhook listener output, then fetch session messages again. Delivery records are queryable via the [Webhooks](/docs/modules/webhooks#examples) module.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -727,4 +727,4 @@ curl -s "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
 
 - **Manual generation**: Create a session without `auto_generate` and call `generate-session-response` (`soat generate-session-response --agent-id … --session-id …`) explicitly for full control over when the model responds.
 - **Session tags**: Use `replace-session-tags` / `merge-session-tags` to attach metadata (e.g. user ID, conversation topic) to a session for filtering.
-- **Agents with tools**: Attach SOAT tools or HTTP tools to the agent so the model can take actions. See the [Agents module](/docs/modules/agents).
+- **Agents with tools**: Attach SOAT tools or HTTP tools to the agent so the model can take actions. See the [Agents module](/docs/modules/agents#examples).

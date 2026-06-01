@@ -13,6 +13,12 @@ When a provider is linked to a secret the secret's encrypted value is retrieved 
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Chat with an LLM - Step 3 (Create a local AI provider)](/docs/tutorials/chat-with-llm#step-3--create-a-local-ai-provider)
+- [Connect Third-Party LLMs - Step 4 (Create provider records)](/docs/tutorials/connect-third-party-llms#step-4--create-provider-records)
+- [Multi-Agent Sonnet with Nested Agent Calls - Step 3 (Create an AI provider)](/docs/tutorials/multi-agent-orchestration#step-3--create-an-ai-provider)
+
 ## Data Model
 
 | Field           | Type             | Description                                               |

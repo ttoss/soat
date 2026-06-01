@@ -13,6 +13,12 @@ Policies are identified by an `id` prefixed with `pol_`.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Permissions in Practice - Step 4 (Create policies)](/docs/tutorials/permissions#step-4--create-policies)
+- [Permissions in Practice - Step 5 (Attach policies to users)](/docs/tutorials/permissions#step-5--attach-policies-to-users)
+- [Agent SOAT Tools and Preset Parameters - Step 5 (Create user alice with a restricted policy)](/docs/tutorials/agent-soat-tools#step-5--create-user-alice-with-a-restricted-policy)
+
 ## Data Model
 
 | Field         | Type   | Description                            |

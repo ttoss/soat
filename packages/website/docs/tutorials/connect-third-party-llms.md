@@ -16,7 +16,7 @@ This tutorial shows how to connect SOAT to hosted LLM providers such as xAI, Ope
 5. Create an agent backed by one of those providers.
 6. Start a conversation and inspect the result.
 
-By the end you will understand how [Secrets](/docs/modules/secrets), [AI Providers](/docs/modules/ai-providers), [Agents](/docs/modules/agents), and [Sessions](/docs/modules/sessions) work together for externally hosted models.
+By the end you will understand how [Secrets](/docs/modules/secrets#examples), [AI Providers](/docs/modules/ai-providers#examples), [Agents](/docs/modules/agents#examples), and [Sessions](/docs/modules/sessions#examples) work together for externally hosted models.
 
 ## Prerequisites
 
@@ -53,7 +53,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. It bypasses policy evaluation entirely. See [Users](/docs/modules/users) for full authentication and user management details.
+Admin is the built-in superuser role. It bypasses policy evaluation entirely. See [Users](/docs/modules/users#examples) for full authentication and user management details.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -97,7 +97,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project
 
-Every resource in SOAT lives inside a [project](/docs/modules/projects). Create one to hold the provider and agent.
+Every resource in SOAT lives inside a [project](/docs/modules/projects#examples). Create one to hold the provider and agent.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -137,7 +137,7 @@ PROJECT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/projects" \
 
 ## Step 3 — Store provider credentials as secrets
 
-[Secrets](/docs/modules/secrets) store sensitive values encrypted; providers reference them by ID. Create one secret per provider credential set.
+[Secrets](/docs/modules/secrets#examples) store sensitive values encrypted; providers reference them by ID. Create one secret per provider credential set.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -226,7 +226,7 @@ XAI_SECRET_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/secrets" \
 
 ## Step 4 — Create provider records
 
-Each provider points to a hosted model endpoint. See [AI Providers](/docs/modules/ai-providers) for the full list of supported providers and configuration options. Choose the provider that matches your hosted model:
+Each provider points to a hosted model endpoint. See [AI Providers](/docs/modules/ai-providers#examples) for the full list of supported providers and configuration options. Choose the provider that matches your hosted model:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -320,7 +320,7 @@ OPENAI_PROVIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/ai-providers" \
 
 ## Step 5 — Create an agent
 
-Once the provider exists, create an [agent](/docs/modules/agents) that points at it.
+Once the provider exists, create an [agent](/docs/modules/agents#examples) that points at it.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -366,7 +366,7 @@ AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
 
 ## Step 6 — Start a conversation
 
-Create a [session](/docs/modules/sessions) and send a message through the provider-backed agent.
+Create a [session](/docs/modules/sessions#examples) and send a message through the provider-backed agent.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
