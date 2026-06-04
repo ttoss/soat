@@ -1687,11 +1687,11 @@ if [ -z "$SSA_ACTOR_ID" ] || [ "$SSA_ACTOR_ID" = "null" ]; then
   exit 1
 fi
 
-SSA_AGENT_RESP=$(curl -s -X POST \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"smoke-ssa-agent\",\"single_session_per_actor\":true}" \
-  "$BASE_URL/api/v1/agents")
+SSA_AGENT_RESP=$($SOAT_CLI create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --name smoke-ssa-agent \
+  --single_session_per_actor true)
 SSA_AGENT_ID=$(printf '%s\n' "$SSA_AGENT_RESP" | jq -r '.id')
 if [ -z "$SSA_AGENT_ID" ] || [ "$SSA_AGENT_ID" = "null" ]; then
   echo "ERROR: Failed to create single_session_per_actor agent" >&2
@@ -1700,11 +1700,9 @@ if [ -z "$SSA_AGENT_ID" ] || [ "$SSA_AGENT_ID" = "null" ]; then
 fi
 echo "SSA agent created: $SSA_AGENT_ID"
 
-SSA_SESSION_RESP=$(curl -s -X POST \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"actor_id\":\"$SSA_ACTOR_ID\"}" \
-  "$BASE_URL/api/v1/agents/$SSA_AGENT_ID/sessions")
+SSA_SESSION_RESP=$($SOAT_CLI create-agent-session \
+  --agent_id "$SSA_AGENT_ID" \
+  --actor_id "$SSA_ACTOR_ID")
 SSA_SESSION_ID=$(printf '%s\n' "$SSA_SESSION_RESP" | jq -r '.id')
 if [ -z "$SSA_SESSION_ID" ] || [ "$SSA_SESSION_ID" = "null" ]; then
   echo "ERROR: First session creation should succeed" >&2
@@ -1713,15 +1711,9 @@ if [ -z "$SSA_SESSION_ID" ] || [ "$SSA_SESSION_ID" = "null" ]; then
 fi
 echo "First session created: $SSA_SESSION_ID"
 
-SSA_CONFLICT_RESP=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"actor_id\":\"$SSA_ACTOR_ID\"}" \
-  "$BASE_URL/api/v1/agents/$SSA_AGENT_ID/sessions")
-if [ "$SSA_CONFLICT_RESP" != "409" ]; then
-  echo "ERROR: Expected 409 on duplicate session, got $SSA_CONFLICT_RESP" >&2
-  exit 1
-fi
+expect_cli_error_status 409 create-agent-session \
+  --agent_id "$SSA_AGENT_ID" \
+  --actor_id "$SSA_ACTOR_ID"
 echo "Duplicate session correctly rejected with 409."
 
 $SOAT_CLI delete-agent --agent-id "$SSA_AGENT_ID"

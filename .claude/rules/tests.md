@@ -223,6 +223,10 @@ pnpm --filter @soat/server test --testPathPatterns=mcp.test.ts
 
 The smoke tests (`tests/smoke-tests.sh`) are end-to-end shell scripts that run against a live server. They require `curl` and `jq`.
 
+### CLI-first rule
+
+**All operations in `smoke-tests.sh` must be performed via the `$SOAT_CLI` wrapper** (e.g. `$SOAT_CLI create-agent`, `$SOAT_CLI create-agent-session`). The only permitted exception is the MCP JSON-RPC protocol check (`POST /mcp`), which uses `curl` because the `/mcp` endpoint is not a REST API operation and has no CLI equivalent. Do **not** use `curl` to call any `/api/v1/*` endpoint — if the CLI does not yet support an operation, add it to the CLI first.
+
 ### Running
 
 ```bash
