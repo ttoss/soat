@@ -593,6 +593,68 @@ describe('Sessions', () => {
     });
   });
 
+  // ── Context window limiting ───────────────────────────────────────────
+
+  describe('Context window limiting', () => {
+    let contextAgentId: string;
+    let contextSessionId: string;
+
+    beforeAll(async () => {
+      const agentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'Context Limit Agent',
+          max_context_messages: 2,
+        });
+      contextAgentId = agentRes.body.id;
+
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${contextAgentId}/sessions`)
+        .send({ name: 'Context Limit Test' });
+      contextSessionId = sessionRes.body.id;
+
+      for (let i = 1; i <= 4; i++) {
+        await authenticatedTestClient(userToken)
+          .post(
+            `/api/v1/agents/${contextAgentId}/sessions/${contextSessionId}/messages`
+          )
+          .send({ message: `Message ${i}` });
+      }
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    test('generation sends only the last max_context_messages messages to the model', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_ctx_01',
+        traceId: 'trc_ctx_01',
+        status: 'completed',
+        output: { model: 'test-model', content: 'Reply', finishReason: 'stop' },
+      });
+
+      const response = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${contextAgentId}/sessions/${contextSessionId}/generate`
+      );
+
+      expect(response.status).toBe(200);
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+
+      const callArgs = mockCreateGeneration.mock.calls[0][0] as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      const nonSystemMessages = callArgs.messages.filter(
+        (m) => m.role !== 'system'
+      );
+      expect(nonSystemMessages).toHaveLength(2);
+      expect(nonSystemMessages[0].content).toContain('Message 3');
+      expect(nonSystemMessages[1].content).toContain('Message 4');
+    });
+  });
+
   // ── Permission checks ─────────────────────────────────────────────────
 
   describe('Permission enforcement', () => {

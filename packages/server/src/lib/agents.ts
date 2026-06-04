@@ -28,6 +28,7 @@ export type MappedAgent = {
   boundaryPolicy: object | null;
   temperature: number | null;
   knowledgeConfig: object | null;
+  maxContextMessages: number | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -63,6 +64,7 @@ const mapAgent = (
     boundaryPolicy: agent.boundaryPolicy,
     temperature: agent.temperature,
     knowledgeConfig: agent.knowledgeConfig,
+    maxContextMessages: agent.maxContextMessages,
     createdAt: agent.createdAt,
     updatedAt: agent.updatedAt,
   };
@@ -84,6 +86,7 @@ type AgentUpdateFields = {
   boundaryPolicy?: object | null;
   temperature?: number | null;
   knowledgeConfig?: object | null;
+  maxContextMessages?: number | null;
 };
 
 const AGENT_SCALAR_FIELDS = [
@@ -99,6 +102,7 @@ const AGENT_SCALAR_FIELDS = [
   'boundaryPolicy',
   'temperature',
   'knowledgeConfig',
+  'maxContextMessages',
 ] as const;
 
 const buildAgentUpdates = (
@@ -135,6 +139,7 @@ export const createAgent = async (args: {
   boundaryPolicy?: object;
   temperature?: number;
   knowledgeConfig?: object;
+  maxContextMessages?: number;
 }): Promise<MappedAgent> => {
   const aiProviderId = await resolveAiProviderDbId(args.aiProviderId);
   if (!aiProviderId)
@@ -155,6 +160,7 @@ export const createAgent = async (args: {
     stepRules: null,
     boundaryPolicy: null,
     temperature: null,
+    maxContextMessages: null,
   };
   const agent = await db.Agent.create({
     ...defaults,
