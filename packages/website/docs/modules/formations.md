@@ -144,6 +144,56 @@ Pass parameter values in the `parameters` field of the create or update request:
 - Parameters without a `default` and not provided in the request cause a `400 Missing required parameters` error.
 - Parameter values are **never stored** in the database — provide them on every create/update call.
 
+#### Providing Parameter Values via the CLI
+
+The CLI accepts `--parameter` (repeatable) instead of a JSON `--parameters` object. It also accepts `--env-file` to load an `.env` file so that sensitive values never need to be hardcoded in the command.
+
+**Syntax options for `--parameter`:**
+
+| Syntax | Example | When to use |
+|---|---|---|
+| `Key=literal` | `--parameter AppUrl=https://example.com` | Non-sensitive, static values |
+| `Key=$VAR` or `Key=${VAR}` | `--parameter ApiKey=$API_KEY` | Variable already exported in the shell |
+| `Key=@VAR_NAME` | `--parameter ApiKey=@API_KEY` | Variable in `--env-file`; shell-safe (no expansion) |
+| `KEY` (no `=`) | `--parameter API_KEY` | Read env var by exact name from `--env-file` or shell env |
+
+**Why `$VAR` breaks with `--env-file`**
+
+The shell expands `$VAR` to an empty string before the CLI process starts, so `--env-file` loading always arrives too late when variables are not exported in the calling shell. Use `@VAR_NAME` or the bare-key syntax instead — neither is interpreted by the shell.
+
+**Example — deploying with secrets from an `.env` file:**
+
+Given `.env`:
+```env
+XAI_API_KEY=xai-...
+TOOLS_API_KEY=tk-...
+APP_URL=https://www.example.com
+```
+
+```bash
+soat update-formation \
+  --formation-id af_6sBFq1eBsCwB16dM \
+  --template-file formation.yaml \
+  --env-file .env \
+  --parameter AppUrl=@APP_URL \
+  --parameter ToolsApiKey=@TOOLS_API_KEY \
+  --parameter XaiApiKey=@XAI_API_KEY
+```
+
+Or using the bare-key syntax (parameter name must match the env var name exactly):
+
+```bash
+soat update-formation \
+  --formation-id af_6sBFq1eBsCwB16dM \
+  --template-file formation.yaml \
+  --env-file .env \
+  --parameter APP_URL \
+  --parameter TOOLS_API_KEY \
+  --parameter XAI_API_KEY
+```
+
+**Lookup order:** `--env-file` variables are checked first; if not found there, `process.env` (the calling shell's exported variables) is checked. Missing variables cause the CLI to exit with an error before the API call is made.
+
 ### Resource Declaration
 
 ```json
