@@ -12,13 +12,14 @@ A module is a named resource (e.g., `files`, `users`) that is exposed through th
 - [ ] Business logic updated in `packages/server/src/lib/<module>.ts`
 - [ ] REST routes updated in `packages/server/src/rest/v1/<module>.ts` with `@openapi` JSDoc blocks
 - [ ] Module router registered in `packages/server/src/rest/v1/index.ts`
-- [ ] OpenAPI spec updated so the generated MCP tool surface stays correct
+- [ ] OpenAPI spec (`packages/server/src/rest/openapi/v1/<module>.yaml`) updated
 - [ ] `pnpm --filter @soat/sdk generate` run after OpenAPI changes
 - [ ] `pnpm --filter @soat/cli generate` run after OpenAPI changes
 - [ ] Permission actions updated in `packages/server/src/permissions/<module>.json`
 - [ ] Permissions Reference page regenerated: `pnpm --filter @soat/website generate-permissions-page`
 - [ ] Module docs updated in `packages/website/docs/modules/<module>.md`
 - [ ] Tests updated in `packages/server/tests/unit/tests/<module>.test.ts`
+- [ ] Formation schema synced if the module has a formation resource type (see [Formations Sync](#formations-sync))
 
 ## REST
 
@@ -48,6 +49,49 @@ Do **not** document REST endpoints in the module docs — those are covered in t
 ## Tests
 
 Tests live in `packages/server/tests/unit/tests/<module>.test.ts`. Every public lib function and every REST route must have at least one test. Follow the patterns already established in `files.test.ts` and `users.test.ts`.
+
+## Formations Sync
+
+Any module that has a corresponding formation resource type (i.e. a `*FormationModule` in `packages/server/src/lib/formation-modules/`) **must keep the formation schema in sync with the REST OpenAPI spec**. This is a separate step from updating the main module's OpenAPI spec.
+
+### What triggers a formation sync
+
+| Change type | Action required |
+|---|---|
+| New field added to a resource via the REST API | Add the same field (snake_case) to the matching `*ResourceProperties` schema in `packages/server/src/rest/openapi/v1/formations.yaml` |
+| Field removed or renamed | Remove or rename the corresponding property in `formations.yaml` |
+| Field added to `*ResourceProperties` | Add handling in the formation module (`build*Args`, `update`, and `read`) |
+
+### Formation modules and their schema names
+
+| Module | Formation module file | Schema name in `formations.yaml` |
+|---|---|---|
+| agents | `agentsFormationModule.ts` | `AgentResourceProperties` |
+| actors | `actorsFormationModule.ts` | `ActorResourceProperties` |
+| chats | `chatsFormationModule.ts` | `ChatResourceProperties` |
+| conversations | `conversationsFormationModule.ts` | `ConversationResourceProperties` |
+| tools | `toolsFormationModule.ts` | `ToolResourceProperties` |
+| ai-providers | `aiProvidersFormationModule.ts` | `AiProviderResourceProperties` |
+| (others) | `*FormationModule.ts` | `*ResourceProperties` |
+
+### How the validator works
+
+`formationSpecLoader.ts` reads the `*ResourceProperties` schema from `formations.yaml` at runtime and derives:
+
+- **allowed fields** — the `properties` keys; any field not listed here triggers "Unknown `<resource>` field" with HTTP 400
+- **required fields** — the `required` array
+- **field types** — the `type` of each property
+
+This means the YAML schema is the **sole allowlist** for formation templates. A field that exists in the REST API but not in `formations.yaml` will always be rejected by `update-formation`.
+
+### Checklist
+
+When adding or changing a resource field:
+
+- [ ] Field added/updated in the module's REST OpenAPI spec (`packages/server/src/rest/openapi/v1/<module>.yaml`)
+- [ ] Same field added/updated in `AgentResourceProperties` (or equivalent) in `packages/server/src/rest/openapi/v1/formations.yaml`
+- [ ] Formation module updated: `build*Args` / `update` handler passes the new field to the lib function
+- [ ] Formation module `read` method returns the new field (snake_case)
 
 ## Shared Business Rules
 
