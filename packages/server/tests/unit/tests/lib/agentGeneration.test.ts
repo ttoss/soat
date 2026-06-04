@@ -177,6 +177,101 @@ describe('submitToolOutputs', () => {
     expect(resolveProjectSpy).toHaveBeenCalledWith({ projectId: 1 });
     expect(emitEventSpy).toHaveBeenCalled();
   });
+
+  test('saveTrace is awaited before returning (regression: file_id was null in sync mode)', async () => {
+    let resolveTrace!: () => void;
+    const traceFinished = new Promise<void>((res) => {
+      resolveTrace = res;
+    });
+
+    jest.doMock('src/lib/traces', () => {
+      return {
+        saveTrace: jest.fn().mockImplementation(() => traceFinished),
+        serializeSteps: jest.fn().mockReturnValue([]),
+      };
+    });
+    jest.doMock('ai', () => {
+      const actual = jest.requireActual('ai');
+      return {
+        ...actual,
+        generateText: jest.fn().mockResolvedValue({
+          text: 'done',
+          finishReason: 'stop',
+          steps: [],
+          response: { modelId: 'mock-model' },
+        }),
+      };
+    });
+    jest.doMock('src/lib/eventBus', () => {
+      const actual = jest.requireActual('src/lib/eventBus');
+      return {
+        ...actual,
+        resolveProjectPublicId: jest.fn().mockResolvedValue('prj_test'),
+        emitEvent: jest.fn(),
+      };
+    });
+    jest.doMock('src/lib/generations', () => {
+      return {
+        createGenerationRecord: jest.fn().mockResolvedValue(undefined),
+        getGeneration: jest.fn().mockResolvedValue(null),
+        updateGenerationRecord: jest.fn().mockResolvedValue(undefined),
+      };
+    });
+
+    const { submitToolOutputs } = await loadAgentGenerationModule();
+    const { pendingGenerations } = await loadGenerationHelpersModule();
+
+    const pending: PendingGeneration = {
+      agentId: 'agt_test',
+      projectId: 1,
+      projectPublicId: 'prj_test',
+      traceId: 'trc_regression',
+      parentTraceId: null,
+      rootTraceId: null,
+      generationId: 'gen_regression_1',
+      initiatorGenerationId: null,
+      pendingToolCalls: [
+        { toolCallId: 'tc_r1', toolName: 'clientTool', args: {} },
+      ],
+      messages: [{ role: 'user', content: 'hello' }],
+      resolvedModel: {} as never,
+      agentConfig: {
+        instructions: null,
+        maxSteps: 5,
+        toolChoice: 'auto',
+        stopConditions: null,
+        activeToolIds: null,
+        stepRules: null,
+        temperature: null,
+      },
+      resolvedTools: {},
+    };
+
+    pendingGenerations.set('gen_regression_1', pending);
+
+    let resolved = false;
+    const callPromise = submitToolOutputs({
+      agentId: 'agt_test',
+      generationId: 'gen_regression_1',
+      toolOutputs: [{ toolCallId: 'tc_r1', output: 'ok' }],
+    }).then((r) => {
+      resolved = true;
+      return r;
+    });
+
+    // Flush microtasks — submitToolOutputs should NOT resolve yet because
+    // saveTrace is still pending (the old fire-and-forget bug would have
+    // resolved here, leaving file_id null for the caller).
+    await new Promise((r) => setImmediate(r));
+    expect(resolved).toBe(false);
+
+    // Unblock the trace save — now submitToolOutputs should resolve.
+    resolveTrace();
+    const result = await callPromise;
+
+    expect(resolved).toBe(true);
+    expect(result.status).toBe('completed');
+  });
 });
 
 describe('resolveGenerationInputMessages', () => {
