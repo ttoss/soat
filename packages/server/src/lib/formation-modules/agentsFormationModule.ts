@@ -76,6 +76,12 @@ const buildCreateAgentArgs = (args: {
     boundaryPolicy:
       toNullableObject(args.properties.boundary_policy) ?? undefined,
     temperature: toNullableNumber(args.properties.temperature) ?? undefined,
+    maxContextMessages:
+      toNullableNumber(args.properties.max_context_messages) ?? undefined,
+    singleSessionPerActor:
+      args.properties.single_session_per_actor != null
+        ? Boolean(args.properties.single_session_per_actor)
+        : undefined,
     knowledgeConfig:
       toNullableObject(args.properties.knowledge_config) ?? undefined,
   };
@@ -131,6 +137,11 @@ export const agentsFormationModule: FormationModule = {
       stepRules: toNullableArray<object>(properties.step_rules),
       boundaryPolicy: toNullableObject(properties.boundary_policy),
       temperature: toNullableNumber(properties.temperature),
+      maxContextMessages: toNullableNumber(properties.max_context_messages),
+      singleSessionPerActor:
+        properties.single_session_per_actor != null
+          ? Boolean(properties.single_session_per_actor)
+          : undefined,
       knowledgeConfig: toNullableObject(properties.knowledge_config),
     });
   },
@@ -155,6 +166,8 @@ export const agentsFormationModule: FormationModule = {
         step_rules: agent.stepRules,
         boundary_policy: agent.boundaryPolicy,
         temperature: agent.temperature,
+        max_context_messages: agent.maxContextMessages,
+        single_session_per_actor: agent.singleSessionPerActor,
         knowledge_config: agent.knowledgeConfig,
       };
     } catch {

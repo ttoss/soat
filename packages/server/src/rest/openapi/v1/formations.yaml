@@ -521,6 +521,14 @@ components:
           type: number
           nullable: true
           description: Sampling temperature
+        max_context_messages:
+          type: integer
+          nullable: true
+          description: Maximum number of recent messages to include in the context window sent to the model. When null, all messages are included.
+        single_session_per_actor:
+          type: boolean
+          nullable: true
+          description: When true, only one open session per actor_id is allowed for this agent.
         knowledge_config:
           type: object
           nullable: true
