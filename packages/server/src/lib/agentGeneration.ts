@@ -324,13 +324,13 @@ export const createGeneration = async (args: {
 
 // ── Submit Tool Outputs ───────────────────────────────────────────────────
 
-const fireCompletionSideEffects = (args: {
+const fireCompletionSideEffects = async (args: {
   generationId: string;
   pending: NonNullable<ReturnType<typeof pendingGenerations.get>>;
   result: { steps: unknown[]; finishReason: string };
   completedResult: GenerationResult;
-}): void => {
-  saveTrace({
+}): Promise<void> => {
+  await saveTrace({
     traceId: args.pending.traceId,
     projectId: args.pending.projectId,
     projectPublicId: args.pending.projectPublicId,
@@ -430,7 +430,7 @@ export const submitToolOutputs = async (args: {
     },
   };
 
-  fireCompletionSideEffects({
+  await fireCompletionSideEffects({
     generationId: args.generationId,
     pending,
     result,
