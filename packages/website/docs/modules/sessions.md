@@ -37,7 +37,7 @@ The session automatically creates and manages the underlying conversation. An op
 
 ### Lifecycle
 
-A session starts in `open` status. It can be updated to `closed` when the interaction is complete. Deleting a session cascades to the underlying conversation.
+A session starts in `open` status. It can be updated to `closed` when the interaction is complete. If `inactivity_ttl_seconds` is configured, the status transitions to `expired` lazily when the session is next fetched or listed after the TTL elapses. Deleting a session cascades to the underlying conversation.
 
 ### Actor ID
 
@@ -93,7 +93,9 @@ Sessions can be configured to expire automatically after a period of inactivity 
 - **`0` (default)** — the session never expires.
 - **Any positive integer** — the session expires if no user message has been added for that many seconds since `last_activity_at` (or `created_at` if no messages exist yet).
 
-When a session has expired, calls to `POST .../generate` return `410 Gone` with error code `SESSION_EXPIRED`. The caller should open a fresh session to continue.
+When a session has exceeded its TTL, its `status` is lazily updated to `expired` the next time it is fetched or listed. Once expired, calls to `POST .../generate` return `410 Gone` with error code `SESSION_EXPIRED`. The caller should open a fresh session to continue.
+
+Expired sessions are excluded from `?status=open` queries and can be filtered explicitly with `?status=expired`.
 
 ```json
 POST /agents/{agent_id}/sessions
@@ -114,7 +116,7 @@ HTTP 410 Gone
 }
 ```
 
-The TTL is checked on every generation request — there is no background job. Sessions are never automatically deleted; only the generation call is rejected.
+The TTL is checked on every read — there is no background job. Sessions are never automatically deleted; only the generation call is rejected.
 
 ### Tool Context
 
@@ -210,7 +212,7 @@ This is useful for local testing where no actor record exists yet. The values yo
 | `id`                      | string         | Public identifier prefixed with `sess_`                                                                        |
 | `agent_id`                | string         | Public ID of the agent this session belongs to                                                                 |
 | `conversation_id`         | string         | Public ID of the underlying conversation                                                                       |
-| `status`                  | string         | `open` (default) or `closed`                                                                                   |
+| `status`                  | string         | `open` (default), `closed`, or `expired`                                                                       |
 | `name`                    | string         | Optional display name                                                                                          |
 | `actor_id`                | string \| null | Optional public ID of the Actor associated with this session (`actr_` prefix); `null` when no actor is set     |
 | `tags`                    | object         | Free-form key-value metadata                                                                                   |

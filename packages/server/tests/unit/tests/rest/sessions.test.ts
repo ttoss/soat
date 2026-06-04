@@ -1647,6 +1647,97 @@ describe('Sessions', () => {
       expect(genRes.status).toBe(200);
     });
 
+    test('expired session is excluded from ?status=open', async () => {
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ inactivity_ttl_seconds: 1 });
+      expect(sessionRes.status).toBe(201);
+      const expiredId = sessionRes.body.id;
+
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 1500);
+      });
+
+      // Trigger lazy expiry via GET
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/${expiredId}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.status).toBe('expired');
+
+      // Must not appear in ?status=open
+      const listOpen = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions?status=open`
+      );
+      expect(listOpen.status).toBe(200);
+      const openIds = listOpen.body.data.map((s: { id: string }) => {
+        return s.id;
+      });
+      expect(openIds).not.toContain(expiredId);
+
+      // Must appear in ?status=expired
+      const listExpired = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions?status=expired`
+      );
+      expect(listExpired.status).toBe(200);
+      const expiredIds = listExpired.body.data.map((s: { id: string }) => {
+        return s.id;
+      });
+      expect(expiredIds).toContain(expiredId);
+    });
+
+    test('listSessions lazily expires rows before returning', async () => {
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ inactivity_ttl_seconds: 1 });
+      expect(sessionRes.status).toBe(201);
+      const lazyId = sessionRes.body.id;
+
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 1500);
+      });
+
+      // Trigger expiry via list (no single GET)
+      const listRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions`
+      );
+      expect(listRes.status).toBe(200);
+      const found = listRes.body.data.find((s: { id: string }) => {
+        return s.id === lazyId;
+      });
+      expect(found).toBeDefined();
+      expect(found.status).toBe('expired');
+    });
+
+    test('generate on expired session updates status to expired before returning 410', async () => {
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ inactivity_ttl_seconds: 1 });
+      expect(sessionRes.status).toBe(201);
+      const sessionId = sessionRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .send({ message: 'hello' });
+
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 1500);
+      });
+
+      const genRes = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${sessionId}/generate`
+      );
+      expect(genRes.status).toBe(410);
+      expect(genRes.body.error.code).toBe('SESSION_EXPIRED');
+
+      // DB must now reflect expired status
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/${sessionId}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.status).toBe('expired');
+    });
+
     test('session with TTL 0 never expires', async () => {
       mockCreateGeneration.mockResolvedValueOnce({
         id: 'gen_ttl_zero',
@@ -1736,6 +1827,35 @@ describe('Sessions', () => {
       if (existingId) {
         expect(second.body.error.meta.session_id).toBe(existingId);
       }
+    });
+
+    test('expired session does not block new session creation', async () => {
+      const actorRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'Expired Session Actor' });
+      const expiredActorId = actorRes.body.id;
+
+      // Create a session with very short TTL
+      const sess1 = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({ actor_id: expiredActorId, inactivity_ttl_seconds: 1 });
+      expect(sess1.status).toBe(201);
+      const expiredSessId = sess1.body.id;
+
+      // Wait for TTL to elapse and trigger lazy expiry via GET
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 1500);
+      });
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${singleSessionAgentId}/sessions/${expiredSessId}`
+      );
+      expect(getRes.body.status).toBe('expired');
+
+      // New session for same actor should now succeed (expired != open)
+      const sess2 = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({ actor_id: expiredActorId });
+      expect(sess2.status).toBe(201);
     });
 
     test('no enforcement when actor_id is absent', async () => {

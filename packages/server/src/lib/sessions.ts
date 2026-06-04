@@ -3,6 +3,23 @@ import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { createSessionTransaction } from './sessionTransaction';
 
+const isSessionExpired = (session: InstanceType<(typeof db)['Session']>) => {
+  const ttl = session.inactivityTtlSeconds;
+  if (!ttl || session.status !== 'open') {
+    return false;
+  }
+  const lastActivity = session.lastActivityAt ?? session.createdAt;
+  return Date.now() - new Date(lastActivity).getTime() > ttl * 1000;
+};
+
+const checkAndExpireSession = async (
+  session: InstanceType<(typeof db)['Session']>
+) => {
+  if (isSessionExpired(session)) {
+    await session.update({ status: 'expired' });
+  }
+};
+
 const sessionIncludes = () => {
   return [
     { model: db.Project, as: 'project' },
@@ -183,6 +200,8 @@ export const listSessions = async (args: {
     order: [['createdAt', 'DESC']],
   });
 
+  await Promise.all(rows.map(checkAndExpireSession));
+
   return { data: rows.map(mapSession), total: count, limit, offset };
 };
 
@@ -201,6 +220,8 @@ export const getSession = async (args: {
       `Session '${args.sessionId}' not found.`
     );
   }
+
+  await checkAndExpireSession(session);
 
   return mapSession(session);
 };
