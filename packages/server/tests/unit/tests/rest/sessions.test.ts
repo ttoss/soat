@@ -1701,7 +1701,7 @@ describe('Sessions', () => {
     });
 
     test('agent has single_session_per_actor true', async () => {
-      const res = await authenticatedTestClient(userToken).get(
+      const res = await authenticatedTestClient(adminToken).get(
         `/api/v1/agents/${singleSessionAgentId}`
       );
       expect(res.status).toBe(200);
