@@ -68,6 +68,36 @@ Content-Type: application/json
 
 The explicit `POST .../generate` endpoint continues to work regardless of this setting. Async generation (`?async=true`) is also supported on `POST .../messages` when `auto_generate` is enabled — the request returns `202 Accepted` immediately and generation proceeds in the background.
 
+### Inactivity TTL
+
+Sessions can be configured to expire automatically after a period of inactivity using `inactivity_ttl_seconds`.
+
+- **`0` (default)** — the session never expires.
+- **Any positive integer** — the session expires if no user message has been added for that many seconds since `last_activity_at` (or `created_at` if no messages exist yet).
+
+When a session has expired, calls to `POST .../generate` return `410 Gone` with error code `SESSION_EXPIRED`. The caller should open a fresh session to continue.
+
+```json
+POST /agents/{agent_id}/sessions
+{
+  "inactivity_ttl_seconds": 600
+}
+```
+
+After 10 minutes of silence the session expires. The next `POST .../generate` returns:
+
+```json
+HTTP 410 Gone
+{
+  "error": {
+    "code": "SESSION_EXPIRED",
+    "message": "The session has expired due to inactivity."
+  }
+}
+```
+
+The TTL is checked on every generation request — there is no background job. Sessions are never automatically deleted; only the generation call is rejected.
+
 ### Tool Context
 
 Sessions support the same `tool_context` mechanism as direct agent generations — see [Tool Context](./agents.md#tool-context) in the Agents module for the full specification.
@@ -157,18 +187,20 @@ This is useful for local testing where no actor record exists yet. The values yo
 
 ### Session
 
-| Field             | Type           | Description                                                                                                    |
-| ----------------- | -------------- | -------------------------------------------------------------------------------------------------------------- |
-| `id`              | string         | Public identifier prefixed with `sess_`                                                                        |
-| `agent_id`        | string         | Public ID of the agent this session belongs to                                                                 |
-| `conversation_id` | string         | Public ID of the underlying conversation                                                                       |
-| `status`          | string         | `open` (default) or `closed`                                                                                   |
-| `name`            | string         | Optional display name                                                                                          |
-| `actor_id`        | string \| null | Optional public ID of the Actor associated with this session (`actr_` prefix); `null` when no actor is set     |
-| `tags`            | object         | Free-form key-value metadata                                                                                   |
-| `auto_generate`   | boolean        | When `true`, saving a message via `POST .../messages` automatically triggers LLM generation (default: `false`) |
-| `created_at`      | string         | ISO 8601 creation timestamp                                                                                    |
-| `updated_at`      | string         | ISO 8601 last-updated timestamp                                                                                |
+| Field                     | Type           | Description                                                                                                    |
+| ------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------- |
+| `id`                      | string         | Public identifier prefixed with `sess_`                                                                        |
+| `agent_id`                | string         | Public ID of the agent this session belongs to                                                                 |
+| `conversation_id`         | string         | Public ID of the underlying conversation                                                                       |
+| `status`                  | string         | `open` (default) or `closed`                                                                                   |
+| `name`                    | string         | Optional display name                                                                                          |
+| `actor_id`                | string \| null | Optional public ID of the Actor associated with this session (`actr_` prefix); `null` when no actor is set     |
+| `tags`                    | object         | Free-form key-value metadata                                                                                   |
+| `auto_generate`           | boolean        | When `true`, saving a message via `POST .../messages` automatically triggers LLM generation (default: `false`) |
+| `inactivity_ttl_seconds`  | integer        | Seconds of inactivity before the session expires. `0` means never expires (default: `0`)                       |
+| `last_activity_at`        | string \| null | ISO 8601 timestamp of the last user message; `null` until the first message is added                           |
+| `created_at`              | string         | ISO 8601 creation timestamp                                                                                    |
+| `updated_at`              | string         | ISO 8601 last-updated timestamp                                                                                |
 
 ### Message (within a session)
 

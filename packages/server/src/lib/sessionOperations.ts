@@ -140,6 +140,21 @@ const buildGenerationResult = (
   };
 };
 
+const checkSessionExpiry = (session: InstanceType<(typeof db)['Session']>) => {
+  const ttl = session.inactivityTtlSeconds;
+  if (!ttl) {
+    return;
+  }
+  const lastActivity = session.lastActivityAt ?? session.createdAt;
+  const elapsed = Date.now() - new Date(lastActivity).getTime();
+  if (elapsed > ttl * 1000) {
+    throw new DomainError(
+      'SESSION_EXPIRED',
+      'The session has expired due to inactivity.'
+    );
+  }
+};
+
 export const generateSessionResponse = async (args: {
   agentId: number;
   sessionId: string;
@@ -154,6 +169,8 @@ export const generateSessionResponse = async (args: {
   if (!session) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
   }
+
+  checkSessionExpiry(session);
 
   const sessionKey = `${args.agentId}#${args.sessionId}`;
   const concurrencyResult = checkConcurrency({ sessionKey, session });
@@ -343,6 +360,8 @@ export const addSessionMessage = async (args: {
     documentId: args.documentId,
     authUser: args.authUser,
   });
+
+  await session.update({ lastActivityAt: new Date() });
 
   if (session.autoGenerate && !session.generatingAt) {
     return generateSessionResponse({

@@ -317,6 +317,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '410':
+          description: Session has expired due to inactivity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/agents/{agent_id}/sessions/{session_id}/tool-outputs:
     post:
@@ -552,6 +558,16 @@ components:
             type: string
           nullable: true
           description: Key-value pairs injected as context headers into all tool call requests made during this session.
+        inactivity_ttl_seconds:
+          type: integer
+          default: 0
+          description: Number of seconds of inactivity after which the session expires. 0 means the session never expires.
+          example: 300
+        last_activity_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of the last activity on the session (message added or response generated).
 
     SessionMessage:
       type: object
@@ -591,6 +607,11 @@ components:
             type: string
           nullable: true
           description: Key-value pairs injected as context headers into all tool call requests made during this session.
+        inactivity_ttl_seconds:
+          type: integer
+          default: 0
+          description: Number of seconds of inactivity after which the session expires. 0 means the session never expires.
+          example: 300
 
     UpdateSessionRequest:
       type: object
