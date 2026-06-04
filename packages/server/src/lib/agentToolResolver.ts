@@ -270,7 +270,7 @@ export const buildHttpToolExecute = (
     ];
     const rawMethod = (args.execute.method ?? 'POST').toUpperCase();
     const method = ALLOWED_METHODS.includes(rawMethod) ? rawMethod : 'POST';
-    const hasBody = !['GET', 'HEAD', 'DELETE'].includes(method);
+    const hasBody = !['GET', 'HEAD'].includes(method);
     const rawArgs =
       toolArgs && typeof toolArgs === 'object'
         ? (toolArgs as Record<string, unknown>)

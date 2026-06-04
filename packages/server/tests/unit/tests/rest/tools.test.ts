@@ -88,6 +88,32 @@ describe('Tools', () => {
     clientToolId = clientToolRes.body.id;
   });
 
+  describe('POST /api/v1/tools — execute.headers case preservation', () => {
+    test('HTTP headers in execute config are preserved exactly as given (not case-transformed)', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'header-case-test-tool',
+          type: 'http',
+          description: 'Tool to test header case preservation',
+          execute: {
+            url: 'https://example.com/api/delete',
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+          },
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.execute).toBeDefined();
+      expect(response.body.execute.headers).toBeDefined();
+      expect(response.body.execute.headers['Content-Type']).toBe(
+        'application/json'
+      );
+      expect(response.body.execute.headers['_content-_type']).toBeUndefined();
+    });
+  });
+
   describe('POST /api/v1/tools', () => {
     test('authenticated user with permission can create a tool', async () => {
       const response = await authenticatedTestClient(userToken)
