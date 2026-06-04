@@ -38,6 +38,7 @@ Each agent stores its AI provider, instructions, tool references, and execution 
 | `boundary_policy`  | object        | no       | Boundary policy that limits which `soat` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions) |
 | `temperature`      | number        | no       | Sampling temperature                                                                                                             |
 | `knowledge_config` | object        | no       | Knowledge retrieval config injected before every generation — see [Knowledge Config](#knowledge-config)                          |
+| `max_context_messages` | number    | no       | Maximum number of recent messages sent to the model per generation — see [Context Window Limiting](#context-window-limiting)     |
 
 ### Agent Tool
 
@@ -313,6 +314,20 @@ Example — stop after the model calls a `done` tool **or** after 50 steps:
   "stop_conditions": [{ "type": "hasToolCall", "tool_name": "done" }]
 }
 ```
+
+### Context Window Limiting
+
+By default, every message in the session's conversation history is sent to the model on each generation. In long sessions this accumulates full tool-call history, which can cause context-length degradation: hallucinated tool success, stale parameters, and silent no-ops.
+
+Set `max_context_messages` on the agent to cap how many recent messages are included. Only the last `N` messages are sent; older messages are silently dropped from the context for that generation (the full history is still stored in the database).
+
+```json
+{
+  "max_context_messages": 20
+}
+```
+
+When `null` (the default), all messages are included.
 
 ### Active Tools
 
