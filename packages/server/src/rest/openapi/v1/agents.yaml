@@ -551,6 +551,10 @@ components:
               type: string
               nullable: true
               description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
+        max_context_messages:
+          type: integer
+          nullable: true
+          description: Maximum number of recent messages to include in the context window sent to the model. When null, all messages are included.
         created_at:
           type: string
           format: date-time
@@ -626,6 +630,9 @@ components:
               type: string
               nullable: true
               description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
+        max_context_messages:
+          type: integer
+          description: Maximum number of recent messages included in the context window. Null means no limit.
 
     UpdateAgentRequest:
       type: object
@@ -701,6 +708,10 @@ components:
               type: string
               nullable: true
               description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
+        max_context_messages:
+          type: integer
+          nullable: true
+          description: Maximum number of recent messages included in the context window. Null means no limit.
 
     CreateAgentGenerationRequest:
       type: object

@@ -31,6 +31,8 @@ const extractSessionOptional = (session: Parameters<typeof mapSession>[0]) => {
     tags: session.tags ?? undefined,
     toolContext: session.toolContext ?? null,
     generatingAt: session.generatingAt ?? null,
+    inactivityTtlSeconds: session.inactivityTtlSeconds ?? 0,
+    lastActivityAt: session.lastActivityAt ?? null,
   };
 };
 
@@ -61,6 +63,7 @@ export const createSession = async (args: {
   actorId?: string | null;
   autoGenerate?: boolean;
   toolContext?: Record<string, string> | null;
+  inactivityTtlSeconds?: number;
 }) => {
   const agent = await db.Agent.findByPk(args.agentId);
   if (!agent) {
@@ -93,6 +96,7 @@ export const createSession = async (args: {
       existingActorId,
       autoGenerate: args.autoGenerate,
       toolContext: args.toolContext,
+      inactivityTtlSeconds: args.inactivityTtlSeconds,
       transaction: t,
     });
   });

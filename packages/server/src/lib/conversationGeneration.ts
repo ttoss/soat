@@ -155,7 +155,11 @@ const loadGenerationContext = async (args: {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Agent not found');
   }
 
-  const messages = await db.ConversationMessage.findAll({
+  const maxContextMessages = (
+    generatingAgent as unknown as { maxContextMessages: number | null }
+  ).maxContextMessages;
+
+  const allMessages = await db.ConversationMessage.findAll({
     where: { conversationId: conversation.id },
     include: [
       {
@@ -167,6 +171,11 @@ const loadGenerationContext = async (args: {
     ],
     order: [['position', 'ASC']],
   });
+
+  const messages =
+    maxContextMessages != null && allMessages.length > maxContextMessages
+      ? allMessages.slice(-maxContextMessages)
+      : allMessages;
 
   const snapshotPosition =
     messages.length > 0 ? messages[messages.length - 1].position : -1;

@@ -430,6 +430,28 @@ describe('Agents', () => {
       expect(response.body.max_steps).toBe(5);
       expect(response.body.temperature).toBe(0.7);
     });
+
+    test('max_context_messages defaults to null when not specified', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
+
+      expect(response.status).toBe(201);
+      expect(response.body.max_context_messages).toBeNull();
+    });
+
+    test('creates an agent with max_context_messages', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          max_context_messages: 10,
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.max_context_messages).toBe(10);
+    });
   });
 
   describe('GET /api/v1/agents', () => {
@@ -539,6 +561,15 @@ describe('Agents', () => {
       expect(response.body.name).toBe('Renamed Agent');
       expect(response.body.instructions).toBe('New instructions');
       expect(response.body.max_steps).toBe(10);
+    });
+
+    test('can update max_context_messages', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agentId}`)
+        .send({ max_context_messages: 5 });
+
+      expect(response.status).toBe(200);
+      expect(response.body.max_context_messages).toBe(5);
     });
 
     test('can update agent with toolIds', async () => {

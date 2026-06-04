@@ -39,6 +39,7 @@ type CreateAgentBody = {
   boundaryPolicy?: unknown;
   temperature?: unknown;
   knowledgeConfig?: unknown;
+  maxContextMessages?: unknown;
   projectId?: string;
 };
 
@@ -50,6 +51,10 @@ const parseNullableString = (v: unknown): string | null | undefined => {
 
 const parseOptional = <T>(v: unknown): T | undefined => {
   return v !== undefined ? (v as T) : undefined;
+};
+
+const parseNumber = (v: unknown): number | undefined => {
+  return typeof v === 'number' ? v : undefined;
 };
 
 const parseUpdateAgentBody = (body: Record<string, unknown>) => {
@@ -68,6 +73,7 @@ const parseUpdateAgentBody = (body: Record<string, unknown>) => {
     boundaryPolicy: parseOptional<object | null>(body.boundaryPolicy),
     temperature: parseOptional<number | null>(body.temperature),
     knowledgeConfig: parseOptional<object | null>(body.knowledgeConfig),
+    maxContextMessages: parseOptional<number | null>(body.maxContextMessages),
   };
 };
 
@@ -105,7 +111,7 @@ const buildCreateAgentArgs = (
       typeof body.instructions === 'string' ? body.instructions : undefined,
     model: typeof body.model === 'string' ? body.model : undefined,
     toolIds: Array.isArray(body.toolIds) ? body.toolIds : undefined,
-    maxSteps: typeof body.maxSteps === 'number' ? body.maxSteps : undefined,
+    maxSteps: parseNumber(body.maxSteps),
     toolChoice: body.toolChoice as object | undefined,
     stopConditions: Array.isArray(body.stopConditions)
       ? body.stopConditions
@@ -115,9 +121,9 @@ const buildCreateAgentArgs = (
       : undefined,
     stepRules: Array.isArray(body.stepRules) ? body.stepRules : undefined,
     boundaryPolicy: body.boundaryPolicy as object | undefined,
-    temperature:
-      typeof body.temperature === 'number' ? body.temperature : undefined,
+    temperature: parseNumber(body.temperature),
     knowledgeConfig: body.knowledgeConfig as object | undefined,
+    maxContextMessages: parseNumber(body.maxContextMessages),
   };
 };
 
