@@ -53,7 +53,43 @@ const validateAgentProperties = (args: {
   return errors;
 };
 
+const toOptionalBoolean = (value: unknown): boolean | undefined => {
+  return value != null ? Boolean(value) : undefined;
+};
+
+const toOptional = <T>(value: T | null | undefined): T | undefined => {
+  return value ?? undefined;
+};
+
 // ── Module export ────────────────────────────────────────────────────────
+
+const mapAgentProperties = (properties: Record<string, unknown>) => {
+  return {
+    aiProviderId: properties.ai_provider_id as string,
+    name: toOptionalString(properties.name),
+    instructions: toOptionalString(properties.instructions),
+    model: toOptionalString(properties.model),
+    toolIds: toOptional(toNullableArray<string>(properties.tool_ids)),
+    maxSteps: toOptional(toNullableNumber(properties.max_steps)),
+    toolChoice: toOptional(toNullableObject(properties.tool_choice)),
+    stopConditions: toOptional(
+      toNullableArray<object>(properties.stop_conditions)
+    ),
+    activeToolIds: toOptional(
+      toNullableArray<string>(properties.active_tool_ids)
+    ),
+    stepRules: toOptional(toNullableArray<object>(properties.step_rules)),
+    boundaryPolicy: toOptional(toNullableObject(properties.boundary_policy)),
+    temperature: toOptional(toNullableNumber(properties.temperature)),
+    maxContextMessages: toOptional(
+      toNullableNumber(properties.max_context_messages)
+    ),
+    singleSessionPerActor: toOptionalBoolean(
+      properties.single_session_per_actor
+    ),
+    knowledgeConfig: toOptional(toNullableObject(properties.knowledge_config)),
+  };
+};
 
 const buildCreateAgentArgs = (args: {
   properties: Record<string, unknown>;
@@ -61,29 +97,7 @@ const buildCreateAgentArgs = (args: {
 }) => {
   return {
     projectId: args.projectId,
-    aiProviderId: args.properties.ai_provider_id as string,
-    name: toOptionalString(args.properties.name),
-    instructions: toOptionalString(args.properties.instructions),
-    model: toOptionalString(args.properties.model),
-    toolIds: toNullableArray<string>(args.properties.tool_ids) ?? undefined,
-    maxSteps: toNullableNumber(args.properties.max_steps) ?? undefined,
-    toolChoice: toNullableObject(args.properties.tool_choice) ?? undefined,
-    stopConditions:
-      toNullableArray<object>(args.properties.stop_conditions) ?? undefined,
-    activeToolIds:
-      toNullableArray<string>(args.properties.active_tool_ids) ?? undefined,
-    stepRules: toNullableArray<object>(args.properties.step_rules) ?? undefined,
-    boundaryPolicy:
-      toNullableObject(args.properties.boundary_policy) ?? undefined,
-    temperature: toNullableNumber(args.properties.temperature) ?? undefined,
-    maxContextMessages:
-      toNullableNumber(args.properties.max_context_messages) ?? undefined,
-    singleSessionPerActor:
-      args.properties.single_session_per_actor != null
-        ? Boolean(args.properties.single_session_per_actor)
-        : undefined,
-    knowledgeConfig:
-      toNullableObject(args.properties.knowledge_config) ?? undefined,
+    ...mapAgentProperties(args.properties),
   };
 };
 
@@ -138,10 +152,9 @@ export const agentsFormationModule: FormationModule = {
       boundaryPolicy: toNullableObject(properties.boundary_policy),
       temperature: toNullableNumber(properties.temperature),
       maxContextMessages: toNullableNumber(properties.max_context_messages),
-      singleSessionPerActor:
-        properties.single_session_per_actor != null
-          ? Boolean(properties.single_session_per_actor)
-          : undefined,
+      singleSessionPerActor: toOptionalBoolean(
+        properties.single_session_per_actor
+      ),
       knowledgeConfig: toNullableObject(properties.knowledge_config),
     });
   },
