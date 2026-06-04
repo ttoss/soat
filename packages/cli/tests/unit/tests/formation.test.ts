@@ -135,4 +135,112 @@ describe('formation wrapper endpoint integration', () => {
     expect(body.parameters?.toolsApiKey).toBe('updated-key');
     expect(body.template).toBeDefined();
   });
+
+  test('--parameter Key=@ENV_VAR_NAME reads value from env file (shell-safe)', async () => {
+    const requests = await cliTestClient.call([
+      'create-formation',
+      '--project-id',
+      'proj_test',
+      '--name',
+      'at-ref-stack',
+      '--template-path',
+      templatePath,
+      '--env-file',
+      envFilePath,
+      '--parameter',
+      'appUrl=@APP_URL',
+    ]);
+
+    expect(requests).toHaveLength(1);
+    const body = requests[0]?.body as {
+      parameters?: Record<string, string>;
+    };
+    expect(body.parameters?.appUrl).toBe('https://from-env-file.test');
+  });
+
+  test('--parameter KEY (no =) reads value from env file using key as var name', async () => {
+    const requests = await cliTestClient.call([
+      'create-formation',
+      '--project-id',
+      'proj_test',
+      '--name',
+      'no-eq-stack',
+      '--template-path',
+      templatePath,
+      '--env-file',
+      envFilePath,
+      '--parameter',
+      'APP_URL',
+    ]);
+
+    expect(requests).toHaveLength(1);
+    const body = requests[0]?.body as {
+      parameters?: Record<string, string>;
+    };
+    expect(body.parameters?.APP_URL).toBe('https://from-env-file.test');
+  });
+
+  test('--parameter KEY (no =) reads value from process.env when not in env file', async () => {
+    const originalValue = process.env['SOAT_TEST_PROCESS_ENV_VAR'];
+    process.env['SOAT_TEST_PROCESS_ENV_VAR'] = 'from-process-env';
+    try {
+      const requests = await cliTestClient.call([
+        'create-formation',
+        '--project-id',
+        'proj_test',
+        '--name',
+        'process-env-stack',
+        '--template-path',
+        templatePath,
+        '--parameter',
+        'SOAT_TEST_PROCESS_ENV_VAR',
+      ]);
+
+      expect(requests).toHaveLength(1);
+      const body = requests[0]?.body as {
+        parameters?: Record<string, string>;
+      };
+      expect(body.parameters?.SOAT_TEST_PROCESS_ENV_VAR).toBe(
+        'from-process-env'
+      );
+    } finally {
+      if (originalValue === undefined) {
+        delete process.env['SOAT_TEST_PROCESS_ENV_VAR'];
+      } else {
+        process.env['SOAT_TEST_PROCESS_ENV_VAR'] = originalValue;
+      }
+    }
+  });
+
+  test('--parameter KEY (no =) throws when env var is missing', async () => {
+    await expect(
+      cliTestClient.call([
+        'create-formation',
+        '--project-id',
+        'proj_test',
+        '--name',
+        'missing-env-stack',
+        '--template-path',
+        templatePath,
+        '--parameter',
+        'MISSING_VAR',
+      ])
+    ).rejects.toThrow('Missing environment variable: MISSING_VAR');
+  });
+
+  test('--parameter Key=@ENV_VAR_NAME throws when env var is missing', async () => {
+    await expect(
+      cliTestClient.call([
+        'create-formation',
+        '--project-id',
+        'proj_test',
+        '--name',
+        'missing-at-ref-stack',
+        '--template-path',
+        templatePath,
+        '--parameter',
+        'apiKey=@MISSING_SECRET',
+      ])
+    ).rejects.toThrow('Missing environment variable: MISSING_SECRET');
+  });
 });

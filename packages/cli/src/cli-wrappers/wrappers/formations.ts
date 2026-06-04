@@ -92,6 +92,16 @@ const resolveEnvRef = (args: {
 }): string => {
   const { value, env } = args;
 
+  // @ENV_VAR_NAME — shell-safe reference; the shell does not expand @ prefixes
+  const atRef = /^@([A-Za-z_][A-Za-z0-9_]*)$/.exec(value);
+  if (atRef) {
+    const resolved = env[atRef[1]];
+    if (resolved === undefined) {
+      throw new Error(`Missing environment variable: ${atRef[1]}`);
+    }
+    return resolved;
+  }
+
   const simple = /^\$([A-Za-z_][A-Za-z0-9_]*)$/.exec(value);
   if (simple) {
     const resolved = env[simple[1]];
@@ -113,6 +123,46 @@ const resolveEnvRef = (args: {
   return value;
 };
 
+const resolveParameterPair = (args: {
+  pair: string;
+  env: Record<string, string | undefined>;
+}): { key: string; value: string } => {
+  const { pair, env } = args;
+  const eqIdx = pair.indexOf('=');
+
+  if (eqIdx === 0) {
+    throw new Error(
+      `Invalid --${PARAMETER_FLAG} value "${pair}". Parameter key cannot be empty.`
+    );
+  }
+
+  if (eqIdx === -1) {
+    // No '=' — use the token itself as the env var name to look up
+    const key = pair.trim();
+    if (!key) {
+      throw new Error(
+        `Invalid --${PARAMETER_FLAG} value "${pair}". Parameter key cannot be empty.`
+      );
+    }
+    const resolved = env[key];
+    if (resolved === undefined) {
+      throw new Error(`Missing environment variable: ${key}`);
+    }
+    return { key, value: resolved };
+  }
+
+  const key = pair.slice(0, eqIdx).trim();
+  const rawValue = pair.slice(eqIdx + 1);
+
+  if (!key) {
+    throw new Error(
+      `Invalid --${PARAMETER_FLAG} value "${pair}". Parameter key cannot be empty.`
+    );
+  }
+
+  return { key, value: resolveEnvRef({ value: rawValue, env }) };
+};
+
 export const formationsWrapper: Wrapper = {
   id: 'formations-wrapper',
   commands: FORMATION_COMMANDS,
@@ -127,7 +177,7 @@ export const formationsWrapper: Wrapper = {
     {
       name: 'parameter',
       description:
-        'Template parameter in key=value format (repeatable). Values may reference env vars ($VAR)',
+        'Template parameter in key=value format (repeatable). Values support env var references: $VAR, ${VAR}, or @VAR_NAME (shell-safe). Omit the value entirely (--parameter KEY) to auto-read KEY from the merged env.',
       required: false,
       type: 'string',
     },
@@ -193,26 +243,8 @@ export const formationsWrapper: Wrapper = {
       const resolvedParameters: Record<string, string> = {};
 
       for (const pair of parameterValues) {
-        const eqIdx = pair.indexOf('=');
-        if (eqIdx <= 0) {
-          throw new Error(
-            `Invalid --${PARAMETER_FLAG} value "${pair}". Expected key=value.`
-          );
-        }
-
-        const key = pair.slice(0, eqIdx).trim();
-        const rawValue = pair.slice(eqIdx + 1);
-
-        if (!key) {
-          throw new Error(
-            `Invalid --${PARAMETER_FLAG} value "${pair}". Parameter key cannot be empty.`
-          );
-        }
-
-        resolvedParameters[key] = resolveEnvRef({
-          value: rawValue,
-          env: mergedEnv,
-        });
+        const { key, value } = resolveParameterPair({ pair, env: mergedEnv });
+        resolvedParameters[key] = value;
       }
 
       forcedBody[PARAMETERS_FIELD] = resolvedParameters;
