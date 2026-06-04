@@ -155,7 +155,7 @@ describe('agentNonStreamGeneration', () => {
     jest.spyOn(helpersModule, 'findPendingClientTools').mockReturnValue([]);
     const completedSpy = jest
       .spyOn(helpersModule, 'buildCompletedGenerationResult')
-      .mockReturnValue({
+      .mockResolvedValue({
         id: 'gen_2',
         traceId: 'trc_2',
         status: 'completed',

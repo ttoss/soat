@@ -346,7 +346,7 @@ export const savePendingGeneration = (args: {
   return requiresActionResult;
 };
 
-export const buildCompletedGenerationResult = (args: {
+export const buildCompletedGenerationResult = async (args: {
   generationId: string;
   traceId: string;
   parentTraceId?: string | null;
@@ -359,11 +359,11 @@ export const buildCompletedGenerationResult = (args: {
   };
   typedAgent: TypedAgent;
   agentId: string;
-}): GenerationResult => {
+}): Promise<GenerationResult> => {
   const serializedStepsCompleted = serializeSteps(
     args.result.steps as unknown[]
   );
-  saveTrace({
+  await saveTrace({
     traceId: args.traceId,
     projectId: args.typedAgent.project.id as number,
     projectPublicId: args.typedAgent.project.publicId,
@@ -371,7 +371,7 @@ export const buildCompletedGenerationResult = (args: {
     steps: serializedStepsCompleted,
     parentTraceId: args.parentTraceId ?? null,
     rootTraceId: args.rootTraceId ?? null,
-  }).catch(() => {});
+  });
   updateGenerationRecord({
     publicId: args.generationId,
     status: 'completed',
