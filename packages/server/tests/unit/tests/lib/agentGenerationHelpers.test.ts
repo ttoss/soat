@@ -378,4 +378,136 @@ describe('runStreamGeneration', () => {
       });
     }).toThrow();
   });
+
+  describe('onFinish callback and prepareStep via isolateModules', () => {
+    // streamText is non-configurable so jest.spyOn can't override it, and
+    // jest.mock at file scope won't intercept the already-loaded module.
+    // jest.isolateModules reloads the module fresh inside the mock registry,
+    // so we also mock traces and generations inside the same isolated scope.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let isolatedRunStreamGeneration: (...args: any[]) => any;
+    const mockStreamTextFn = jest.fn();
+    const mockSaveTraceFn = jest.fn().mockResolvedValue(undefined as void);
+    const mockUpdateGenerationFn = jest.fn().mockResolvedValue(null);
+
+    beforeEach(() => {
+      mockStreamTextFn.mockReset();
+      mockSaveTraceFn.mockReset().mockResolvedValue(undefined);
+      mockUpdateGenerationFn.mockReset().mockResolvedValue(null);
+
+      jest.isolateModules(() => {
+        jest.mock('ai', () => {
+          return {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            streamText: (opts: any) => {
+              return mockStreamTextFn(opts);
+            },
+            stepCountIs: () => {
+              return () => {
+                return false;
+              };
+            },
+          };
+        });
+        jest.mock('src/lib/traces', () => {
+          return {
+            saveTrace: mockSaveTraceFn,
+            serializeSteps: (s: unknown) => {
+              return s;
+            },
+          };
+        });
+        jest.mock('src/lib/generations', () => {
+          return { updateGenerationRecord: mockUpdateGenerationFn };
+        });
+        // jest.isolateModules requires require() for synchronous module loading
+        // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+        const mod = require('src/lib/agentGenerationHelpers') as any;
+        isolatedRunStreamGeneration = mod.runStreamGeneration;
+      });
+    });
+
+    test('onFinish callback invokes saveTrace and updateGenerationRecord', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let capturedOpts: Record<string, any> | undefined;
+      mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+        return { textStream: new ReadableStream() };
+      });
+
+      isolatedRunStreamGeneration({
+        model: {},
+        allMessages: [{ role: 'user', content: 'Hi' }],
+        resolvedTools: {},
+        typedAgent: mockAgent,
+        generationId: 'gen_onfinish',
+        traceId: 'trc_onfinish',
+        agentId: 'agt_onfinish',
+      });
+
+      expect(capturedOpts?.onFinish).toBeDefined();
+      await capturedOpts?.onFinish({ steps: [], finishReason: 'stop' });
+
+      expect(mockSaveTraceFn).toHaveBeenCalledTimes(1);
+      expect(mockUpdateGenerationFn).toHaveBeenCalledTimes(1);
+    });
+
+    test('prepareStep returns toolChoice override when a matching step rule matches', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let capturedOpts: Record<string, any> | undefined;
+      mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+        return { textStream: new ReadableStream() };
+      });
+
+      isolatedRunStreamGeneration({
+        model: {},
+        allMessages: [{ role: 'user', content: 'Hi' }],
+        resolvedTools: {},
+        typedAgent: {
+          ...mockAgent,
+          stepRules: [
+            { step: 1, toolChoice: { type: 'tool', toolName: 'myTool' } },
+          ],
+        },
+        generationId: 'gen_steprules',
+        traceId: 'trc_steprules',
+        agentId: 'agt_steprules',
+      });
+
+      expect(capturedOpts?.prepareStep).toBeDefined();
+      const result = capturedOpts?.prepareStep({ stepNumber: 0 });
+      expect(result).toEqual({
+        toolChoice: { type: 'tool', toolName: 'myTool' },
+        activeTools: ['myTool'],
+      });
+    });
+
+    test('prepareStep returns empty object when no step rule matches', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let capturedOpts: Record<string, any> | undefined;
+      mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+        return { textStream: new ReadableStream() };
+      });
+
+      isolatedRunStreamGeneration({
+        model: {},
+        allMessages: [{ role: 'user', content: 'Hi' }],
+        resolvedTools: {},
+        typedAgent: {
+          ...mockAgent,
+          stepRules: [
+            { step: 2, toolChoice: { type: 'tool', toolName: 'myTool' } },
+          ],
+        },
+        generationId: 'gen_steprules_nomatch',
+        traceId: 'trc_steprules_nomatch',
+        agentId: 'agt_steprules_nomatch',
+      });
+
+      const result = capturedOpts?.prepareStep({ stepNumber: 0 });
+      expect(result).toEqual({});
+    });
+  });
 });
