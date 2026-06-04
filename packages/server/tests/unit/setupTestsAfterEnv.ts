@@ -41,26 +41,48 @@ let postgresContainer: StartedPostgreSqlContainer;
 jest.setTimeout(120000);
 
 beforeAll(async () => {
-  postgresContainer = await new PostgreSqlContainer(
-    'pgvector/pgvector:0.8.2-pg18-trixie'
-  ).start();
+  let dbConfig: {
+    username: string;
+    password: string;
+    database: string;
+    host: string;
+    port: number;
+  };
 
-  try {
-    const db = await initialize({
-      models,
-      logging: false,
+  if (process.env.TEST_DB_HOST) {
+    dbConfig = {
+      username: process.env.TEST_DB_USERNAME ?? 'postgres',
+      password: process.env.TEST_DB_PASSWORD ?? '',
+      database: process.env.TEST_DB_NAME ?? 'soat_test',
+      host: process.env.TEST_DB_HOST,
+      port: Number(process.env.TEST_DB_PORT ?? 5432),
+    };
+  } else {
+    postgresContainer = await new PostgreSqlContainer(
+      'pgvector/pgvector:0.8.2-pg18-trixie'
+    ).start();
+
+    dbConfig = {
       username: postgresContainer.getUsername(),
       password: postgresContainer.getPassword(),
       database: postgresContainer.getDatabase(),
       host: postgresContainer.getHost(),
       port: postgresContainer.getPort(),
+    };
+  }
+
+  try {
+    const db = await initialize({
+      models,
+      logging: false,
+      ...dbConfig,
     });
 
     await initializeDatabase(app);
 
     sequelize = db.sequelize;
 
-    await sequelize.sync();
+    await sequelize.sync({ force: !!process.env.TEST_DB_HOST });
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Error during database initialization:', error);

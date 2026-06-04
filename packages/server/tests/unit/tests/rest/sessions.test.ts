@@ -1569,4 +1569,111 @@ describe('Sessions', () => {
       );
     });
   });
+
+  // ── Inactivity TTL ─────────────────────────────────────────────────────
+
+  describe('inactivity TTL', () => {
+    test('can create a session with inactivity_ttl_seconds', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ inactivity_ttl_seconds: 300 });
+
+      expect(response.status).toBe(201);
+      expect(response.body.inactivity_ttl_seconds).toBe(300);
+    });
+
+    test('inactivity_ttl_seconds defaults to 0 (never expires)', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({});
+
+      expect(response.status).toBe(201);
+      expect(response.body.inactivity_ttl_seconds).toBe(0);
+    });
+
+    test('generate returns SESSION_EXPIRED when TTL has elapsed', async () => {
+      // Create a session with a very short TTL (1 second)
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ inactivity_ttl_seconds: 1 });
+      expect(sessionRes.status).toBe(201);
+      const sessionId = sessionRes.body.id;
+
+      // Add a message to start the inactivity clock
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .send({ message: 'hello' });
+
+      // Wait for TTL to elapse
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 1500);
+      });
+
+      // Generate should fail with SESSION_EXPIRED
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/generate`)
+        .send({});
+
+      expect(genRes.status).toBe(410);
+      expect(genRes.body.error.code).toBe('SESSION_EXPIRED');
+    });
+
+    test('generate succeeds when within TTL window', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_ttl_ok',
+        traceId: 'trc_ttl_ok',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: 'hello',
+          finishReason: 'stop',
+        },
+      });
+
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ inactivity_ttl_seconds: 60 });
+      expect(sessionRes.status).toBe(201);
+      const sessionId = sessionRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .send({ message: 'hello' });
+
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/generate`)
+        .send({});
+
+      expect(genRes.status).toBe(200);
+    });
+
+    test('session with TTL 0 never expires', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_ttl_zero',
+        traceId: 'trc_ttl_zero',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: 'hello',
+          finishReason: 'stop',
+        },
+      });
+
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ inactivity_ttl_seconds: 0 });
+      expect(sessionRes.status).toBe(201);
+      const sessionId = sessionRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .send({ message: 'hello' });
+
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/generate`)
+        .send({});
+
+      expect(genRes.status).toBe(200);
+    });
+  });
 });

@@ -33,6 +33,11 @@ export const ERROR_CODES = {
     description:
       'A generation is already in progress for this session. Wait for it to complete before starting a new one.',
   },
+  SESSION_EXPIRED: {
+    httpStatus: 410,
+    description:
+      'The session has expired due to inactivity. Open a new session to continue.',
+  },
   AGENT_AND_CHAT_EXCLUSIVE: {
     httpStatus: 400,
     description:

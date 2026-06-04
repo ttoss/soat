@@ -95,6 +95,7 @@ sessionsRouter.post('/', async (ctx: Context) => {
     actorId?: string;
     autoGenerate?: boolean;
     toolContext?: Record<string, string> | null;
+    inactivityTtlSeconds?: number;
   };
 
   const result = await createSession({
@@ -104,6 +105,7 @@ sessionsRouter.post('/', async (ctx: Context) => {
     actorId: body.actorId,
     autoGenerate: body.autoGenerate,
     toolContext: body.toolContext,
+    inactivityTtlSeconds: body.inactivityTtlSeconds,
   });
 
   ctx.status = 201;

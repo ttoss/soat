@@ -116,6 +116,17 @@ export class Session extends Model {
   })
   declare toolContext: Record<string, string> | null;
 
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    field: 'inactivity_ttl_seconds',
+  })
+  declare inactivityTtlSeconds: number;
+
+  @Column({ type: DataType.DATE, allowNull: true, field: 'last_activity_at' })
+  declare lastActivityAt: Date | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 
