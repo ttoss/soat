@@ -81,10 +81,10 @@ paths:
         - name: status
           in: query
           required: false
-          description: Filter by session status (open or closed)
+          description: Filter by session status (open, closed, or expired)
           schema:
             type: string
-            enum: [open, closed]
+            enum: [open, closed, expired]
         - name: limit
           in: query
           required: false
@@ -534,7 +534,7 @@ components:
           example: conv_V1StGXR8Z5jdHi6B
         status:
           type: string
-          enum: [open, closed]
+          enum: [open, closed, expired]
           example: open
         name:
           type: string
@@ -634,7 +634,7 @@ components:
           description: Session name (set to null to clear)
         status:
           type: string
-          enum: [open, closed]
+          enum: [open, closed, expired]
           description: Session status
         auto_generate:
           type: boolean
