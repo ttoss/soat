@@ -8,6 +8,7 @@ import {
   type TypedAgent,
 } from 'src/lib/agentGenerationHelpers';
 import { buildDepthGuardResult } from 'src/lib/agentGenerationRecovery';
+import * as tracesModule from 'src/lib/traces';
 
 describe('buildAllMessages', () => {
   test('returns messages unchanged when instructions is null', () => {
@@ -241,8 +242,8 @@ describe('savePendingGeneration', () => {
 });
 
 describe('buildCompletedGenerationResult', () => {
-  test('returns completed result and updates traces', () => {
-    const result = buildCompletedGenerationResult({
+  test('returns completed result and updates traces', async () => {
+    const result = await buildCompletedGenerationResult({
       generationId: 'gen_done001',
       traceId: 'trc_done001',
       result: {
@@ -263,8 +264,8 @@ describe('buildCompletedGenerationResult', () => {
     expect(result.output?.model).toBe('gpt-4');
   });
 
-  test('uses typedAgent model when response has no modelId', () => {
-    const result = buildCompletedGenerationResult({
+  test('uses typedAgent model when response has no modelId', async () => {
+    const result = await buildCompletedGenerationResult({
       generationId: 'gen_done002',
       traceId: 'trc_done002',
       result: { steps: [], response: {}, text: 'Hi', finishReason: 'stop' },
@@ -275,9 +276,9 @@ describe('buildCompletedGenerationResult', () => {
     expect(result.output?.model).toBe('test-model');
   });
 
-  test('uses empty string when both response modelId and typedAgent.model are absent', () => {
+  test('uses empty string when both response modelId and typedAgent.model are absent', async () => {
     const agentWithoutModel: TypedAgent = { ...mockAgent, model: null };
-    const result = buildCompletedGenerationResult({
+    const result = await buildCompletedGenerationResult({
       generationId: 'gen_done003',
       traceId: 'trc_done003',
       result: {
@@ -291,6 +292,34 @@ describe('buildCompletedGenerationResult', () => {
     });
 
     expect(result.output?.model).toBe('');
+  });
+
+  test('awaits saveTrace before returning so trace file_id is available in sync mode', async () => {
+    let saveTraceResolved = false;
+
+    jest.spyOn(tracesModule, 'saveTrace').mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 10);
+      });
+      saveTraceResolved = true;
+    });
+
+    await buildCompletedGenerationResult({
+      generationId: 'gen_await_trace',
+      traceId: 'trc_await_trace',
+      result: {
+        steps: [],
+        response: { modelId: 'gpt-4' },
+        text: 'Done',
+        finishReason: 'stop',
+      },
+      typedAgent: mockAgent,
+      agentId: 'agt_test001',
+    });
+
+    expect(saveTraceResolved).toBe(true);
+
+    jest.restoreAllMocks();
   });
 });
 

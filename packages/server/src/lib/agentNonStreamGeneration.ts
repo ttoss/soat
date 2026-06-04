@@ -113,7 +113,7 @@ type GenerateTextResult = {
   finishReason: string;
 };
 
-const resolveGenerationResult = (args: {
+const resolveGenerationResult = async (args: {
   generationId: string;
   traceId: string;
   parentTraceId?: string | null;
@@ -126,7 +126,7 @@ const resolveGenerationResult = (args: {
   result: GenerateTextResult;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
-}): GenerationResult => {
+}): Promise<GenerationResult> => {
   const pendingToolCalls = findPendingClientTools(
     args.result.steps as Array<{
       toolCalls?: Array<{
