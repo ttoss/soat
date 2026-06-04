@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.6.4](https://github.com/ttoss/soat/compare/v0.6.3...v0.6.4) (2026-06-04)
+
+### Bug Fixes
+
+* add single_session_per_actor and max_context_messages to formation agent validator ([#141](https://github.com/ttoss/soat/issues/141)) ([a644d95](https://github.com/ttoss/soat/commit/a644d95e31dda50ea0f4660bdebd0de8af05848e)), closes [#140](https://github.com/ttoss/soat/issues/140) [#135](https://github.com/ttoss/soat/issues/135) [#129](https://github.com/ttoss/soat/issues/129)
+
 ## [0.6.3](https://github.com/ttoss/soat/compare/v0.6.2...v0.6.3) (2026-06-04)
 
 ### Bug Fixes
