@@ -1,6 +1,6 @@
 ---
-applyTo: '**/packages/server/**'
-description: Instructions for the server package architecture, development, and building.
+paths:
+  - "packages/server/**"
 ---
 
 # Server Instructions

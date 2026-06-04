@@ -1,6 +1,6 @@
 ---
-applyTo: '**/packages/postgresdb/**'
-description: Instructions for the PostgresDB package usage and integration.
+paths:
+  - "packages/postgresdb/**"
 ---
 
 # PostgresDB Package Instructions

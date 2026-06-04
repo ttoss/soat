@@ -1,8 +1,6 @@
 ---
-applyTo: '**/packages/server/**'
-description: >
-  How to signal and handle errors in the server package: DomainError usage,
-  error codes registry, error middleware response shapes, and the find* vs get* naming rule.
+paths:
+  - "packages/server/**"
 ---
 
 # Error Handling

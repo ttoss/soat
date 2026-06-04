@@ -1,8 +1,3 @@
----
-applyTo: '**'
-description: Case convention rules for the REST API, MCP, SDK, and internal code.
----
-
 # Case Convention
 
 This project uses an automatic case-transform middleware that decouples the external REST API contract (snake_case) from the internal JavaScript/TypeScript code (camelCase).

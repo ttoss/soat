@@ -1,8 +1,3 @@
----
-applyTo: '**'
-description: Instructions for writing, running, and maintaining unit tests across the codebase.
----
-
 # Test Instructions
 
 ## Running Tests

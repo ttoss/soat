@@ -1,8 +1,3 @@
----
-applyTo: '**'
-description: Common instructions that apply to all parts of the codebase.
----
-
 # Common Instructions
 
 These instructions are essential for ensuring that agents add the correct instructions when modifying or creating code in the codebase.

@@ -1,6 +1,6 @@
 ---
-applyTo: '**/packages/website/**'
-description: Instructions for the website package, including API documentation generation.
+paths:
+  - "packages/website/**"
 ---
 
 # Website Instructions
