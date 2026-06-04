@@ -215,6 +215,52 @@ describe('savePendingGeneration', () => {
     expect(result.requiredAction?.toolCalls).toHaveLength(2);
   });
 
+  test('does not call saveTrace — trace must not be written mid-generation', () => {
+    const saveTraceSpy = jest
+      .spyOn(tracesModule, 'saveTrace')
+      .mockResolvedValue(undefined);
+
+    savePendingGeneration({
+      generationId: 'gen_notrace01',
+      traceId: 'trc_notrace01',
+      pendingToolCalls: [
+        { toolCallId: 'tc_1', toolName: 'myTool', input: {} },
+      ],
+      allMessages: [{ role: 'user', content: 'Hello' }],
+      result: { steps: [], response: { messages: [] } },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      model: {} as any,
+      typedAgent: mockAgent,
+      agentId: 'agt_test001',
+      resolvedTools: {},
+    });
+
+    expect(saveTraceSpy).not.toHaveBeenCalled();
+    jest.restoreAllMocks();
+  });
+
+  test('stores first-call steps in pendingGenerations for later trace assembly', () => {
+    const firstCallSteps = [{ type: 'tool-call', toolCallId: 'tc_1' }];
+
+    savePendingGeneration({
+      generationId: 'gen_steps01',
+      traceId: 'trc_steps01',
+      pendingToolCalls: [
+        { toolCallId: 'tc_1', toolName: 'myTool', input: {} },
+      ],
+      allMessages: [{ role: 'user', content: 'Hello' }],
+      result: { steps: firstCallSteps, response: { messages: [] } },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      model: {} as any,
+      typedAgent: mockAgent,
+      agentId: 'agt_test001',
+      resolvedTools: {},
+    });
+
+    const pending = pendingGenerations.get('gen_steps01');
+    expect(pending?.steps).toEqual(firstCallSteps);
+  });
+
   test('uses default maxSteps when typedAgent.maxSteps is null', () => {
     const agentWithoutMaxSteps: TypedAgent = {
       ...mockAgent,

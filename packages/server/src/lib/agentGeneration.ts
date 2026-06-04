@@ -330,12 +330,14 @@ const fireCompletionSideEffects = (args: {
   result: { steps: unknown[]; finishReason: string };
   completedResult: GenerationResult;
 }): void => {
+  const prevSteps = args.pending.steps ?? [];
+  const allSteps = [...prevSteps, ...serializeSteps(args.result.steps)];
   saveTrace({
     traceId: args.pending.traceId,
     projectId: args.pending.projectId,
     projectPublicId: args.pending.projectPublicId,
     agentId: args.pending.agentId,
-    steps: serializeSteps(args.result.steps as unknown[]),
+    steps: allSteps,
     parentTraceId: args.pending.parentTraceId ?? undefined,
     rootTraceId: args.pending.rootTraceId ?? undefined,
   }).catch(() => {});
