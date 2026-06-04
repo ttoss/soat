@@ -8,6 +8,7 @@ import {
   type TypedAgent,
 } from 'src/lib/agentGenerationHelpers';
 import { buildDepthGuardResult } from 'src/lib/agentGenerationRecovery';
+import * as generationsModule from 'src/lib/generations';
 import * as tracesModule from 'src/lib/traces';
 
 describe('buildAllMessages', () => {
@@ -242,6 +243,17 @@ describe('savePendingGeneration', () => {
 });
 
 describe('buildCompletedGenerationResult', () => {
+  beforeEach(() => {
+    jest.spyOn(tracesModule, 'saveTrace').mockResolvedValue(undefined);
+    jest
+      .spyOn(generationsModule, 'updateGenerationRecord')
+      .mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   test('returns completed result and updates traces', async () => {
     const result = await buildCompletedGenerationResult({
       generationId: 'gen_done001',
@@ -318,8 +330,6 @@ describe('buildCompletedGenerationResult', () => {
     });
 
     expect(saveTraceResolved).toBe(true);
-
-    jest.restoreAllMocks();
   });
 });
 
