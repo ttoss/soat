@@ -317,7 +317,7 @@ Example — stop after the model calls a `done` tool **or** after 50 steps:
 
 ### Context Window Limiting
 
-By default, every message in the session's conversation history is sent to the model on each generation. In long sessions this accumulates full tool-call history, which can cause context-length degradation: hallucinated tool success, stale parameters, and silent no-ops.
+By default, every user and assistant text message in the session's conversation history is sent to the model on each generation. In long sessions the growing number of turns increases the context size, which can cause degradation: hallucinated tool success, stale parameters, and silent no-ops.
 
 Set `max_context_messages` on the agent to cap how many recent messages are included. Only the last `N` messages are sent; older messages are silently dropped from the context for that generation (the full history is still stored in the database).
 
