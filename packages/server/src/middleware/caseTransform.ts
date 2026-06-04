@@ -74,8 +74,12 @@ export const caseTransformMiddleware = async (ctx: Context, next: Next) => {
 
   await next();
 
-  // Transform outgoing response body from camelCase to snake_case
+  // Transform outgoing response body from camelCase to snake_case.
+  // The 'execute' key is a pass-through user document (tool execute configs)
+  // whose inner keys (e.g. HTTP headers like Content-Type) must not be
+  // transformed — they are arbitrary user-defined strings, not camelCase fields.
+  const RESPONSE_SKIP_KEYS = new Set(['execute']);
   if (isPlainObject(ctx.body) || Array.isArray(ctx.body)) {
-    ctx.body = transformKeys(ctx.body, camelToSnake);
+    ctx.body = transformKeys(ctx.body, camelToSnake, RESPONSE_SKIP_KEYS);
   }
 };

@@ -116,7 +116,7 @@ echo "Admin token: $ADMIN_TOKEN"
 
 ## Step 2 — Create regular users
 
-Create `alice` (project lead) and `bob` (read-only analyst). Only admins can create users. See [Users](/docs/modules/users) for the full user management reference.
+Create `alice` (project lead) and `bob` (read-only analyst). Only admins can create users. See [Users](/docs/modules/users#examples) for the full user management reference.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -175,7 +175,7 @@ echo "bob  : $BOB_ID"
 
 ## Step 3 — Create the Analytics project
 
-See [Projects](/docs/modules/projects) for the full project management reference.
+See [Projects](/docs/modules/projects#examples) for the full project management reference.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -452,7 +452,7 @@ curl -s -X PUT "$SOAT_BASE_URL/api/v1/users/$BOB_ID/policies" \
 
 ## Step 6 — Create API keys
 
-API keys allow programmatic access without sending a username and password. See [API Keys](/docs/modules/api-keys) for key rotation and revocation. Here you create two keys:
+API keys allow programmatic access without sending a username and password. See [API Keys](/docs/modules/api-keys#examples) for key rotation and revocation. Here you create two keys:
 
 - **Alice's key** — scoped to the Analytics project, inherits her full-access policy.
 - **Bob's key** — scoped to the Analytics project, further restricted to the read-only policy.
@@ -580,7 +580,7 @@ Store the key value. The raw `sk_…` key is returned **only once**. Store it in
 
 ## Step 7 — Verify permissions
 
-Confirm that each key behaves as expected. The file upload and list operations used here are part of the [Files](/docs/modules/files) module.
+Confirm that each key behaves as expected. The file upload and list operations used here are part of the [Files](/docs/modules/files#examples) module.
 
 ### Alice can upload a file
 
@@ -786,6 +786,6 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 
 ## Next steps
 
-- Explore [IAM](/docs/modules/iam) for the full policy document format including wildcard actions and SRN patterns.
-- See [Policies](/docs/modules/policies) for the complete policy CRUD API.
-- See [API Keys](/docs/modules/api-keys) for key rotation and revocation patterns.
+- Explore [IAM](/docs/modules/iam#policy-documents) for the full policy document format including wildcard actions and SRN patterns.
+- See [Policies](/docs/modules/policies#examples) for the complete policy CRUD API.
+- See [API Keys](/docs/modules/api-keys#examples) for key rotation and revocation patterns.

@@ -11,6 +11,12 @@ Each agent stores its AI provider, instructions, tool references, and execution 
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Chat with an LLM - Step 4 (Create an agent)](/docs/tutorials/chat-with-llm#step-4--create-an-agent)
+- [Agent SOAT Tools and Preset Parameters - Step 7 (Create the agent)](/docs/tutorials/agent-soat-tools#step-7--create-the-agent)
+- [Multi-Agent Sonnet with Nested Agent Calls - Step 6 (Create stanza agents)](/docs/tutorials/multi-agent-orchestration#step-6--create-the-four-stanza-agents)
+
 ## Key Concepts
 
 ### Agent Resource
@@ -32,6 +38,8 @@ Each agent stores its AI provider, instructions, tool references, and execution 
 | `boundary_policy`  | object        | no       | Boundary policy that limits which `soat` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions) |
 | `temperature`      | number        | no       | Sampling temperature                                                                                                             |
 | `knowledge_config` | object        | no       | Knowledge retrieval config injected before every generation — see [Knowledge Config](#knowledge-config)                          |
+| `max_context_messages` | number    | no       | Maximum number of recent messages sent to the model per generation — see [Context Window Limiting](#context-window-limiting)     |
+| `single_session_per_actor` | boolean | no  | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)         |
 
 ### Agent Tool
 
@@ -308,6 +316,40 @@ Example — stop after the model calls a `done` tool **or** after 50 steps:
 }
 ```
 
+### Context Window Limiting
+
+By default, every user and assistant text message in the session's conversation history is sent to the model on each generation. In long sessions the growing number of turns increases the context size, which can cause degradation: hallucinated tool success, stale parameters, and silent no-ops.
+
+Set `max_context_messages` on the agent to cap how many recent messages are included. Only the last `N` messages are sent; older messages are silently dropped from the context for that generation (the full history is still stored in the database).
+
+```json
+{
+  "max_context_messages": 20
+}
+```
+
+When `null` (the default), all messages are included.
+
+### Single Session Per Actor
+
+When `single_session_per_actor` is `true`, the server enforces that only one open session per `actor_id` can exist at a time for that agent.
+
+- If a second `POST /agents/:id/sessions` is made with the same `actor_id` while an open session already exists, the server returns `409 Conflict` with error code `SINGLE_SESSION_CONFLICT` and `meta.session_id` pointing to the existing session.
+- Requests without an `actor_id` are not affected regardless of this flag.
+- Closing or deleting the existing session allows a new one to be created.
+
+```json
+{
+  "error": {
+    "code": "SINGLE_SESSION_CONFLICT",
+    "message": "An open session already exists for this actor.",
+    "meta": {
+      "session_id": "sess_..."
+    }
+  }
+}
+```
+
 ### Active Tools
 
 By default, all tools in `tool_ids` are available at every step. Use `active_tool_ids` to restrict which tools the model can see globally. For phased workflows where different steps need different tools, use [Step Rules](#step-rules) instead.
@@ -325,17 +367,93 @@ Running an agent creates a **generation** — a single execution of the tool loo
 
 Use `POST /agents/{agent_id}/generate` to run a generation. It accepts `prompt` (string) and/or `messages` (array) as input. You can also pass `tool_choice`, `active_tool_ids`, `step_rules`, `stop_conditions`, and `max_call_depth` to override the agent defaults for that request.
 
-| Parameter         | Type          | Required | Description                                                                                                    |
-| ----------------- | ------------- | -------- | -------------------------------------------------------------------------------------------------------------- |
-| `prompt`          | string        | cond.    | Text prompt (must provide `prompt` and/or `messages`)                                                          |
-| `messages`        | array         | cond.    | Message history (must provide `prompt` and/or `messages`)                                                      |
-| `tool_choice`     | string/object | no       | Override the agent's `tool_choice` for this generation                                                         |
-| `active_tool_ids` | array         | no       | Override the agent's `active_tool_ids` for this generation                                                     |
-| `step_rules`      | array         | no       | Override the agent's `step_rules` for this generation                                                          |
-| `stop_conditions` | array         | no       | Override the agent's `stop_conditions` for this generation                                                     |
-| `max_call_depth`  | number        | no       | Maximum nesting depth for agent-to-agent calls (default: `10`) — see [Nested Agent Calls](#nested-agent-calls) |
-| `stream`          | boolean       | no       | Stream results as Server-Sent Events                                                                           |
-| `tool_context`    | object        | no       | Key-value pairs forwarded as `X-Soat-Context-*` headers on tool calls — see [Tool Context](#tool-context)      |
+| Parameter         | Type          | Required | Description                                                                                                                                 |
+| ----------------- | ------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prompt`          | string        | cond.    | Text prompt (must provide `prompt` and/or `messages`)                                                                                       |
+| `messages`        | array         | cond.    | Message history (must provide `prompt` and/or `messages`). Each item uses `content`, which can be plain text, `tool_output`, or `document`. |
+| `tool_choice`     | string/object | no       | Override the agent's `tool_choice` for this generation                                                                                      |
+| `active_tool_ids` | array         | no       | Override the agent's `active_tool_ids` for this generation                                                                                  |
+| `step_rules`      | array         | no       | Override the agent's `step_rules` for this generation                                                                                       |
+| `stop_conditions` | array         | no       | Override the agent's `stop_conditions` for this generation                                                                                  |
+| `max_call_depth`  | number        | no       | Maximum nesting depth for agent-to-agent calls (default: `10`) — see [Nested Agent Calls](#nested-agent-calls)                              |
+| `stream`          | boolean       | no       | Stream results as Server-Sent Events                                                                                                        |
+| `tool_context`    | object        | no       | Key-value pairs forwarded as `X-Soat-Context-*` headers on tool calls — see [Tool Context](#tool-context)                                   |
+
+#### Tool Output Message Content
+
+`messages[].content` can be a plain string (default), a `tool_output` object, or a `document` object. This keeps all non-text message input under the same `content` field.
+
+When `tool_output` is used, the server executes the referenced tool before model inference and replaces the message content with the extracted result.
+
+When `content.type` is `document`, the server loads the referenced document and uses its content as the message content.
+
+Use this when user input must be transformed first (for example, audio URL -> transcription text).
+
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": {
+        "type": "tool_output",
+        "tool_id": "tool_audio_to_text",
+        "input": { "url": "https://example.com/audio.mp3" },
+        "output_path": ".data.transcription.text"
+      }
+    }
+  ]
+}
+```
+
+`tool_id` is required. `output_path` is optional and accepts a jq expression used to select the value from the tool result. If `output_path` is omitted, the entire tool output is passed as the message content. For tools that expose multiple actions (`soat`, `mcp`), provide `action` as well.
+
+Example tool result object:
+
+```json
+{
+  "data": {
+    "transcription": {
+      "text": "Olá Pedro, seu pedido foi aprovado.",
+      "language": "pt-BR",
+      "confidence": 0.97
+    },
+    "duration_ms": 18420
+  },
+  "meta": {
+    "provider": "whisper",
+    "request_id": "req_abc123"
+  }
+}
+```
+
+If `output_path` is `.data.transcription.text`, the extracted value passed to the generation input is:
+
+```json
+"Olá Pedro, seu pedido foi aprovado."
+```
+
+Useful jq patterns:
+
+- Select nested property: `.data.transcription.text`
+- Filter array items: `.items[] | select(.lang == "pt-BR") | .text`
+- Fallback values: `.text // .data.text // ""`
+- Transform and join: `.segments | map(.text) | join(" ")`
+
+Document-based message example:
+
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": {
+        "type": "document",
+        "document_id": "doc_abc123"
+      }
+    }
+  ]
+}
+```
 
 ### Streaming
 
@@ -362,10 +480,10 @@ Pass `stream: true` to receive results as Server-Sent Events (SSE). Each step's 
 
 Each key is title-cased (first character uppercased) and prefixed with `X-Soat-Context-`:
 
-| `tool_context` key | Forwarded header              |
-| ------------------ | ----------------------------- |
-| `userId`           | `X-Soat-Context-UserId`       |
-| `tenantId`         | `X-Soat-Context-TenantId`     |
+| `tool_context` key | Forwarded header          |
+| ------------------ | ------------------------- |
+| `userId`           | `X-Soat-Context-UserId`   |
+| `tenantId`         | `X-Soat-Context-TenantId` |
 
 #### Supported Tool Types
 
@@ -830,9 +948,9 @@ The server enforces a **maximum call depth** controlled by the `max_call_depth` 
 
 This design is self-contained: each generation only needs its own `remaining_depth` — it does not need to know the original `max_call_depth` or any shared trace state.
 
-For observability, every top-level generation also creates a **trace** identified by a unique `trace_id` (`agt_trace_` prefix). The server attaches the same `trace_id` to all generations in the chain automatically. This is internal server plumbing — agents do not receive or propagate `trace_id`.
+For observability, every generation creates its own **trace** with a unique `trace_id` (`trc_` prefix). Each trace in a chain shares a common `root_trace_id` pointing back to the top-level trace, and each child trace carries a `parent_trace_id` pointing to its immediate parent. This is internal server plumbing — agents do not receive or propagate `trace_id`.
 
-When an agent spawns a child generation, the parent's `generation_id` is recorded as the child's `initiator_generation_id`. This creates a generation-to-generation chain that lets you reconstruct the full call graph without any parent/root trace foreign keys. The child's final `trace_id` also appears in the parent's step data (as the tool call result), making tree traversal implicit in trace content.
+When an agent spawns a child generation, the parent's `generation_id` is recorded as the child's `initiator_generation_id`. This creates a generation-to-generation chain that lets you reconstruct the full call graph. The child's `trace_id` also appears in the parent's step data (as the tool call result), making tree traversal possible from either the FK fields or the step content.
 
 Example: A caller starts Agent A with `max_call_depth: 3`. Agent A runs with `remaining_depth: 3` and calls Agent B (`remaining_depth: 2`). Agent B calls Agent C (`remaining_depth: 1`). Agent C can still run but cannot nest further — if it tries to call Agent D, `remaining_depth` would be `0` → the server rejects the call.
 
@@ -842,14 +960,18 @@ A trace is the execution log of a single generation — it records every step th
 
 ### Trace Data Model
 
-| Field        | Type   | Description                                                    |
-| ------------ | ------ | -------------------------------------------------------------- |
-| `id`         | string | Public identifier (`agt_trace_` prefix)                        |
-| `project_id` | string | Project the trace belongs to                                   |
-| `agent_id`   | string | Agent that produced the trace                                  |
-| `file_id`    | string | ID of the File record containing the full JSON steps (on disk) |
-| `step_count` | number | Total number of steps recorded                                 |
-| `created_at` | string | ISO 8601 creation timestamp                                    |
+| Field             | Type           | Description                                                                            |
+| ----------------- | -------------- | -------------------------------------------------------------------------------------- |
+| `id`              | string         | Public identifier (`trc_` prefix)                                                      |
+| `project_id`      | string         | Project the trace belongs to                                                           |
+| `agent_id`        | string         | Agent that produced the trace                                                          |
+| `file_id`         | string \| null | ID of the File record containing the full JSON steps (on disk)                         |
+| `step_count`      | number         | Total number of steps recorded                                                         |
+| `parent_trace_id` | string \| null | ID of the immediate parent trace; `null` for top-level (root) traces                   |
+| `root_trace_id`   | string \| null | ID of the root trace in a multi-agent chain; `null` when this trace is itself the root |
+| `created_at`      | string         | ISO 8601 creation timestamp                                                            |
+
+> For the full trace ancestry model — including invariants, a concrete multi-level example, and tree reconstruction guidance — see the [Traces module](./traces.md#trace-ancestry-model).
 
 ### Trace Content
 
@@ -875,11 +997,13 @@ Returns paginated metadata — no step content:
 {
   "data": [
     {
-      "id": "agt_trace_abc123",
+      "id": "trc_abc123",
       "project_id": "proj_ABC",
       "agent_id": "agt_01",
       "file_id": "file_xyz",
       "step_count": 5,
+      "parent_trace_id": null,
+      "root_trace_id": null,
       "created_at": "2025-01-15T10:30:00Z"
     }
   ],
@@ -899,25 +1023,33 @@ Returns trace metadata including `file_id`. To get the full steps, download the 
 
 ```json
 {
-  "id": "agt_trace_abc123",
+  "id": "trc_abc123",
   "project_id": "proj_ABC",
   "agent_id": "agt_01",
   "file_id": "file_xyz",
   "step_count": 5,
+  "parent_trace_id": null,
+  "root_trace_id": null,
   "created_at": "2025-01-15T10:30:00Z"
 }
 ```
 
 ### Tree Traversal
 
-When Agent A calls Agent B, Agent B's trace ID appears in Agent A's step data as part of the tool call result. There are no explicit `parent_trace_id` or `root_trace_id` foreign keys. To reconstruct the call tree:
+Every trace carries explicit `parent_trace_id` and `root_trace_id` foreign keys so the full execution tree can be reconstructed without inspecting step content:
 
-1. Fetch the parent trace's content (via `file_id` → download).
-2. Find steps where a `soat` tool action `create-agent-generation` was called.
-3. The tool call result contains the child's `trace_id`.
-4. Fetch the child trace to continue traversal.
+- **`parent_trace_id`** — the ID of the immediate parent trace (`null` for the root trace).
+- **`root_trace_id`** — the ID of the root trace shared by every trace in the chain (`null` on the root trace itself).
 
-This design keeps the trace model simple and avoids circular FK complications.
+The recommended way to retrieve the full tree is the dedicated endpoint:
+
+```
+GET /api/v1/traces/{trace_id}/tree
+```
+
+This returns the root node with all descendants nested under `children`, regardless of which trace ID in the chain you supply. See the [Traces module](./traces.md) for full details, invariants, and a concrete example.
+
+You can also navigate the tree manually using the FK fields, or reconstruct it by inspecting step content: the tool call result for a `create-agent-generation` `soat` action contains the child's `trace_id`.
 
 ## Generations
 

@@ -19,7 +19,7 @@ const buildResource = (args: {
   deletionPolicy?: string;
 }) => {
   return db.FormationResource.build({
-    publicId: `afr_${args.logicalId}`,
+    publicId: `fmr_${args.logicalId}`,
     formationId: 1,
     logicalId: args.logicalId,
     resourceType: args.resourceType,
@@ -45,7 +45,9 @@ describe('formationsApply', () => {
     };
     const resolvedIds = new Map<string, string>([['provider', 'aip_1']]);
 
-    await expect(resolveFormationOutputs(template, resolvedIds)).resolves.toEqual({
+    await expect(
+      resolveFormationOutputs(template, resolvedIds)
+    ).resolves.toEqual({
       providerId: 'aip_1',
       greeting: 'hello',
     });
@@ -54,7 +56,14 @@ describe('formationsApply', () => {
   test('resolveFormationOutputs resolves ref_attr expressions using getAttributes', async () => {
     const template: FormationTemplate = {
       resources: {
-        MyWebhook: { type: 'webhook', properties: { name: 'hook', url: 'https://example.com', events: ['*'] } },
+        MyWebhook: {
+          type: 'webhook',
+          properties: {
+            name: 'hook',
+            url: 'https://example.com',
+            events: ['*'],
+          },
+        },
       },
       outputs: {
         webhookSecret: { ref_attr: 'MyWebhook.secret' },
@@ -246,7 +255,7 @@ describe('formationsApply', () => {
 
   test('processResourceChange marks resource as failed when create handler throws', async () => {
     const resourceRow = db.FormationResource.build({
-      publicId: 'afr_failure',
+      publicId: 'fmr_failure',
       formationId: 1,
       logicalId: 'xaiProvider',
       resourceType: 'ai_provider',

@@ -1,3 +1,4 @@
+import * as agentsModule from '../../../../src/lib/agents';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -46,6 +47,7 @@ describe('Sessions', () => {
                 'agents:SendSessionMessage',
                 'agents:SubmitSessionToolOutputs',
                 'agents:ListSessionMessages',
+                'documents:GetDocument',
               ],
             },
           ],
@@ -165,7 +167,7 @@ describe('Sessions', () => {
           type: 'user',
         });
       const actorId = actorRes.body.id;
-      expect(actorId).toMatch(/^act_/);
+      expect(actorId).toMatch(/^actor_/);
 
       // Create two sessions using that actor
       await authenticatedTestClient(userToken)
@@ -435,6 +437,27 @@ describe('Sessions', () => {
       expect(response.status).toBe(201);
     });
 
+    test('accepts document_id and stores document-backed user message', async () => {
+      const createDocumentRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'Document content for session input',
+          filename: 'session-input.txt',
+        });
+
+      expect(createDocumentRes.status).toBe(201);
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .send({ document_id: createDocumentRes.body.id });
+
+      expect(response.status).toBe(201);
+      expect(response.body.role).toBe('user');
+      expect(response.body.content).toBe('Document content for session input');
+      expect(response.body.document_id).toBe(createDocumentRes.body.id);
+    });
+
     test('missing message body returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
@@ -567,6 +590,68 @@ describe('Sessions', () => {
         .send({ env: 'test' });
 
       expect(response.status).toBe(404);
+    });
+  });
+
+  // ── Context window limiting ───────────────────────────────────────────
+
+  describe('Context window limiting', () => {
+    let contextAgentId: string;
+    let contextSessionId: string;
+
+    beforeAll(async () => {
+      const agentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'Context Limit Agent',
+          max_context_messages: 2,
+        });
+      contextAgentId = agentRes.body.id;
+
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${contextAgentId}/sessions`)
+        .send({ name: 'Context Limit Test' });
+      contextSessionId = sessionRes.body.id;
+
+      for (let i = 1; i <= 4; i++) {
+        await authenticatedTestClient(userToken)
+          .post(
+            `/api/v1/agents/${contextAgentId}/sessions/${contextSessionId}/messages`
+          )
+          .send({ message: `Message ${i}` });
+      }
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    test('generation sends only the last max_context_messages messages to the model', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_ctx_01',
+        traceId: 'trc_ctx_01',
+        status: 'completed',
+        output: { model: 'test-model', content: 'Reply', finishReason: 'stop' },
+      });
+
+      const response = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${contextAgentId}/sessions/${contextSessionId}/generate`
+      );
+
+      expect(response.status).toBe(200);
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+
+      const callArgs = mockCreateGeneration.mock.calls[0][0] as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      const nonSystemMessages = callArgs.messages.filter((m) => {
+        return m.role !== 'system';
+      });
+      expect(nonSystemMessages).toHaveLength(2);
+      expect(nonSystemMessages[0].content).toContain('Message 3');
+      expect(nonSystemMessages[1].content).toContain('Message 4');
     });
   });
 
@@ -1187,6 +1272,9 @@ describe('Sessions', () => {
 
   describe('POST /api/v1/agents/:agentId/sessions/:sessionId/tool-outputs - execution', () => {
     let sessionId: string;
+    let submitToolOutputsSpy: jest.SpiedFunction<
+      typeof agentsModule.submitToolOutputs
+    >;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
@@ -1195,7 +1283,12 @@ describe('Sessions', () => {
       sessionId = res.body.id;
     });
 
+    beforeEach(() => {
+      submitToolOutputsSpy = jest.spyOn(agentsModule, 'submitToolOutputs');
+    });
+
     afterEach(() => {
+      submitToolOutputsSpy.mockRestore();
       jest.clearAllMocks();
     });
 
@@ -1226,6 +1319,81 @@ describe('Sessions', () => {
 
       expect(response.status).toBe(404);
       expect(response.body.error).toBeDefined();
+    });
+
+    test('returns completed result and persists the assistant reply', async () => {
+      submitToolOutputsSpy.mockResolvedValueOnce({
+        id: 'gen_submit_done_01',
+        traceId: 'trc_submit_done_01',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: 'Weather in Paris: 18C',
+          finishReason: 'stop',
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/tool-outputs`)
+        .send({
+          generationId: 'gen_submit_done_01',
+          toolOutputs: [
+            { toolCallId: 'tc_done_01', output: { city: 'Paris' } },
+          ],
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('completed');
+      expect(response.body.generation_id).toBe('gen_submit_done_01');
+      expect(response.body.message.content).toBe('Weather in Paris: 18C');
+
+      const messagesResponse = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/${sessionId}/messages`
+      );
+
+      expect(messagesResponse.status).toBe(200);
+      expect(messagesResponse.body.data).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            role: 'assistant',
+            content: 'Weather in Paris: 18C',
+          }),
+        ])
+      );
+    });
+
+    test('returns requires_action result when more tool outputs are needed', async () => {
+      submitToolOutputsSpy.mockResolvedValueOnce({
+        id: 'gen_submit_req_01',
+        traceId: 'trc_submit_req_01',
+        status: 'requires_action',
+        requiredAction: {
+          type: 'submit_tool_outputs',
+          toolCalls: [
+            {
+              id: 'tc_req_followup_01',
+              toolName: 'get_forecast',
+              args: { location: 'Paris' },
+            },
+          ],
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/tool-outputs`)
+        .send({
+          generationId: 'gen_submit_req_01',
+          toolOutputs: [{ toolCallId: 'tc_req_01', output: 'partial result' }],
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('requires_action');
+      expect(response.body.generation_id).toBe('gen_submit_req_01');
+      expect(response.body.required_action).toEqual(
+        expect.objectContaining({
+          type: 'submit_tool_outputs',
+        })
+      );
     });
   });
 
@@ -1399,6 +1567,356 @@ describe('Sessions', () => {
         'actorExternalId',
         testActorExternalId
       );
+    });
+  });
+
+  // ── Inactivity TTL ─────────────────────────────────────────────────────
+
+  describe('inactivity TTL', () => {
+    test('can create a session with inactivity_ttl_seconds', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ inactivity_ttl_seconds: 300 });
+
+      expect(response.status).toBe(201);
+      expect(response.body.inactivity_ttl_seconds).toBe(300);
+    });
+
+    test('inactivity_ttl_seconds defaults to 0 (never expires)', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({});
+
+      expect(response.status).toBe(201);
+      expect(response.body.inactivity_ttl_seconds).toBe(0);
+    });
+
+    test('generate returns SESSION_EXPIRED when TTL has elapsed', async () => {
+      // Create a session with a very short TTL (1 second)
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ inactivity_ttl_seconds: 1 });
+      expect(sessionRes.status).toBe(201);
+      const sessionId = sessionRes.body.id;
+
+      // Add a message to start the inactivity clock
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .send({ message: 'hello' });
+
+      // Wait for TTL to elapse
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 1500);
+      });
+
+      // Generate should fail with SESSION_EXPIRED
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/generate`)
+        .send({});
+
+      expect(genRes.status).toBe(410);
+      expect(genRes.body.error.code).toBe('SESSION_EXPIRED');
+    });
+
+    test('generate succeeds when within TTL window', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_ttl_ok',
+        traceId: 'trc_ttl_ok',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: 'hello',
+          finishReason: 'stop',
+        },
+      });
+
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ inactivity_ttl_seconds: 60 });
+      expect(sessionRes.status).toBe(201);
+      const sessionId = sessionRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .send({ message: 'hello' });
+
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/generate`)
+        .send({});
+
+      expect(genRes.status).toBe(200);
+    });
+
+    test('expired session is excluded from ?status=open', async () => {
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ inactivity_ttl_seconds: 1 });
+      expect(sessionRes.status).toBe(201);
+      const expiredId = sessionRes.body.id;
+
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 1500);
+      });
+
+      // Trigger lazy expiry via GET
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/${expiredId}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.status).toBe('expired');
+
+      // Must not appear in ?status=open
+      const listOpen = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions?status=open`
+      );
+      expect(listOpen.status).toBe(200);
+      const openIds = listOpen.body.data.map((s: { id: string }) => {
+        return s.id;
+      });
+      expect(openIds).not.toContain(expiredId);
+
+      // Must appear in ?status=expired
+      const listExpired = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions?status=expired`
+      );
+      expect(listExpired.status).toBe(200);
+      const expiredIds = listExpired.body.data.map((s: { id: string }) => {
+        return s.id;
+      });
+      expect(expiredIds).toContain(expiredId);
+    });
+
+    test('listSessions lazily expires rows before returning', async () => {
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ inactivity_ttl_seconds: 1 });
+      expect(sessionRes.status).toBe(201);
+      const lazyId = sessionRes.body.id;
+
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 1500);
+      });
+
+      // Trigger expiry via list (no single GET)
+      const listRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions`
+      );
+      expect(listRes.status).toBe(200);
+      const found = listRes.body.data.find((s: { id: string }) => {
+        return s.id === lazyId;
+      });
+      expect(found).toBeDefined();
+      expect(found.status).toBe('expired');
+    });
+
+    test('generate on expired session updates status to expired before returning 410', async () => {
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ inactivity_ttl_seconds: 1 });
+      expect(sessionRes.status).toBe(201);
+      const sessionId = sessionRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .send({ message: 'hello' });
+
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 1500);
+      });
+
+      const genRes = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${sessionId}/generate`
+      );
+      expect(genRes.status).toBe(410);
+      expect(genRes.body.error.code).toBe('SESSION_EXPIRED');
+
+      // DB must now reflect expired status
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/${sessionId}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.status).toBe('expired');
+    });
+
+    test('session with TTL 0 never expires', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_ttl_zero',
+        traceId: 'trc_ttl_zero',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: 'hello',
+          finishReason: 'stop',
+        },
+      });
+
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ inactivity_ttl_seconds: 0 });
+      expect(sessionRes.status).toBe(201);
+      const sessionId = sessionRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .send({ message: 'hello' });
+
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/generate`)
+        .send({});
+
+      expect(genRes.status).toBe(200);
+    });
+  });
+
+  // ── single_session_per_actor ───────────────────────────────────────────
+
+  describe('single_session_per_actor', () => {
+    let singleSessionAgentId: string;
+    let singleSessionActorId: string;
+
+    beforeAll(async () => {
+      const agentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'Single Session Agent',
+          single_session_per_actor: true,
+        });
+      singleSessionAgentId = agentRes.body.id;
+
+      const actorRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'Single Session Actor' });
+      singleSessionActorId = actorRes.body.id;
+    });
+
+    test('agent has single_session_per_actor true', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/agents/${singleSessionAgentId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.single_session_per_actor).toBe(true);
+    });
+
+    test('first session with actor_id succeeds', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({ actor_id: singleSessionActorId });
+      expect(res.status).toBe(201);
+      expect(res.body.id).toMatch(/^sess_/);
+    });
+
+    test('second session with same actor_id returns 409 with session_id in meta', async () => {
+      // ensure first session exists
+      const first = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({ actor_id: singleSessionActorId });
+      // might be 409 if previous test created it, or 201
+      const existingId =
+        first.status === 201
+          ? first.body.id
+          : first.body.error?.meta?.session_id;
+
+      const second = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({ actor_id: singleSessionActorId });
+      expect(second.status).toBe(409);
+      expect(second.body.error.code).toBe('SINGLE_SESSION_CONFLICT');
+      expect(second.body.error.meta.session_id).toMatch(/^sess_/);
+      if (existingId) {
+        expect(second.body.error.meta.session_id).toBe(existingId);
+      }
+    });
+
+    test('expired session does not block new session creation', async () => {
+      const actorRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'Expired Session Actor' });
+      const expiredActorId = actorRes.body.id;
+
+      // Create a session with very short TTL
+      const sess1 = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({ actor_id: expiredActorId, inactivity_ttl_seconds: 1 });
+      expect(sess1.status).toBe(201);
+      const expiredSessId = sess1.body.id;
+
+      // Wait for TTL to elapse and trigger lazy expiry via GET
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 1500);
+      });
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${singleSessionAgentId}/sessions/${expiredSessId}`
+      );
+      expect(getRes.body.status).toBe('expired');
+
+      // New session for same actor should now succeed (expired != open)
+      const sess2 = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({ actor_id: expiredActorId });
+      expect(sess2.status).toBe(201);
+    });
+
+    test('no enforcement when actor_id is absent', async () => {
+      const res1 = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({});
+      expect(res1.status).toBe(201);
+
+      const res2 = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({});
+      expect(res2.status).toBe(201);
+    });
+
+    test('no enforcement when single_session_per_actor is false', async () => {
+      const agentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'No Single Session Agent',
+          single_session_per_actor: false,
+        });
+      const normalAgentId = agentRes.body.id;
+
+      const actorRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'Normal Actor' });
+      const normalActorId = actorRes.body.id;
+
+      const res1 = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${normalAgentId}/sessions`)
+        .send({ actor_id: normalActorId });
+      expect(res1.status).toBe(201);
+
+      const res2 = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${normalAgentId}/sessions`)
+        .send({ actor_id: normalActorId });
+      expect(res2.status).toBe(201);
+    });
+
+    test('after closing existing session, new session can be created', async () => {
+      const actorRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'Reopen Actor' });
+      const actorId = actorRes.body.id;
+
+      const sess1 = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({ actor_id: actorId });
+      expect(sess1.status).toBe(201);
+      const sessId = sess1.body.id;
+
+      await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${singleSessionAgentId}/sessions/${sessId}`)
+        .send({ status: 'closed' });
+
+      const sess2 = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({ actor_id: actorId });
+      expect(sess2.status).toBe(201);
     });
   });
 });

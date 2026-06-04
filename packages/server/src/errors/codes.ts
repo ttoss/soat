@@ -28,10 +28,20 @@ export const ERROR_CODES = {
     description:
       'The generation does not exist or is not in a pending state for tool output submission.',
   },
+  SINGLE_SESSION_CONFLICT: {
+    httpStatus: 409,
+    description:
+      'An open session already exists for this actor. Use the existing session or close it first.',
+  },
   GENERATION_ALREADY_IN_PROGRESS: {
     httpStatus: 409,
     description:
       'A generation is already in progress for this session. Wait for it to complete before starting a new one.',
+  },
+  SESSION_EXPIRED: {
+    httpStatus: 410,
+    description:
+      'The session has expired due to inactivity. Open a new session to continue.',
   },
   AGENT_AND_CHAT_EXCLUSIVE: {
     httpStatus: 400,
@@ -52,6 +62,16 @@ export const ERROR_CODES = {
     httpStatus: 409,
     description:
       'The AI provider is referenced by one or more chats and cannot be deleted. Delete the dependent chats first.',
+  },
+  AGENT_HAS_DEPENDENTS: {
+    httpStatus: 409,
+    description:
+      'The agent is referenced by one or more generations or traces and cannot be deleted. Delete the dependent records first.',
+  },
+  FILE_HAS_DEPENDENTS: {
+    httpStatus: 409,
+    description:
+      'The file is referenced by one or more records and cannot be deleted. Delete the dependent records first.',
   },
   ACTOR_HAS_MESSAGES: {
     httpStatus: 409,
@@ -74,6 +94,42 @@ export const ERROR_CODES = {
     httpStatus: 422,
     description:
       'This tool type cannot be invoked server-side. Client tools must be executed by the calling client.',
+  },
+  ORCHESTRATION_NOT_FOUND: {
+    httpStatus: 404,
+    description: 'The orchestration does not exist or is not accessible.',
+  },
+  ORCHESTRATION_RUN_NOT_FOUND: {
+    httpStatus: 404,
+    description: 'The orchestration run does not exist or is not accessible.',
+  },
+  ORCHESTRATION_NODE_FAILED: {
+    httpStatus: 422,
+    description: 'A node in the orchestration run failed to execute.',
+  },
+  ORCHESTRATION_CYCLE_DETECTED: {
+    httpStatus: 422,
+    description:
+      'The orchestration graph contains a cycle. Cycles are not supported.',
+  },
+  ORCHESTRATION_RUN_NOT_CANCELLABLE: {
+    httpStatus: 409,
+    description:
+      'The orchestration run is already in a terminal state and cannot be cancelled.',
+  },
+  ORCHESTRATION_RUN_NOT_PAUSED: {
+    httpStatus: 409,
+    description: 'The orchestration run is not paused.',
+  },
+  ORCHESTRATION_HUMAN_NODE_MISMATCH: {
+    httpStatus: 400,
+    description:
+      'The specified node is not the active human node waiting for input.',
+  },
+  ORCHESTRATION_MAX_ITERATIONS_EXCEEDED: {
+    httpStatus: 422,
+    description:
+      'The orchestration run exceeded the maximum number of iterations.',
   },
 } as const satisfies Record<
   string,

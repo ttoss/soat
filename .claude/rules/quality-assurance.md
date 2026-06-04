@@ -1,8 +1,3 @@
----
-applyTo: '**'
-description: Quality assurance standards including TypeScript type safety, testing, linting, and typechecking requirements.
----
-
 # Quality Assurance Standards
 
 Every implementation is complete only when **all** of the following checks pass without errors or warnings.

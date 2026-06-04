@@ -13,6 +13,11 @@ Secrets can be linked to [AI Providers](./ai-providers.md) to supply credentials
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Connect Third-Party LLMs - Step 3 (Store provider credentials as secrets)](/docs/tutorials/connect-third-party-llms#step-3--store-provider-credentials-as-secrets)
+- [Connect Third-Party LLMs - Step 4 (Create provider records)](/docs/tutorials/connect-third-party-llms#step-4--create-provider-records)
+
 ## Configuration
 
 | Environment Variable     | Required | Description                                                                                      |

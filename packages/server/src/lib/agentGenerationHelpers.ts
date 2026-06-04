@@ -25,6 +25,7 @@ export type PendingGeneration = {
     args: unknown;
   }>;
   messages: Array<unknown>;
+  steps: unknown[];
   resolvedModel: LanguageModel;
   agentConfig: {
     instructions: string | null;
@@ -244,6 +245,7 @@ const storePendingGenerationState = (args: {
       };
     }),
     messages: [...args.allMessages, ...args.result.response.messages],
+    steps: serializeSteps(args.result.steps),
     resolvedModel: args.model,
     agentConfig: {
       instructions: args.typedAgent.instructions,
@@ -269,6 +271,7 @@ const storePendingGenerationState = (args: {
       };
     }),
     messages: [...args.allMessages, ...args.result.response.messages],
+    steps: serializeSteps(args.result.steps),
     parentTraceId: args.parentTraceId ?? null,
     rootTraceId: args.rootTraceId ?? null,
     toolContext: args.toolContext ?? null,
@@ -299,16 +302,6 @@ export const savePendingGeneration = (args: {
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
 }): GenerationResult => {
-  const serializedStepsPending = serializeSteps(args.result.steps as unknown[]);
-  saveTrace({
-    traceId: args.traceId,
-    projectId: args.typedAgent.project.id as number,
-    projectPublicId: args.typedAgent.project.publicId,
-    agentId: args.agentId,
-    steps: serializedStepsPending,
-    parentTraceId: args.parentTraceId ?? null,
-    rootTraceId: args.rootTraceId ?? null,
-  }).catch(() => {});
   updateGenerationRecord({
     publicId: args.generationId,
     status: 'requires_action',
@@ -346,7 +339,7 @@ export const savePendingGeneration = (args: {
   return requiresActionResult;
 };
 
-export const buildCompletedGenerationResult = (args: {
+export const buildCompletedGenerationResult = async (args: {
   generationId: string;
   traceId: string;
   parentTraceId?: string | null;
@@ -359,11 +352,11 @@ export const buildCompletedGenerationResult = (args: {
   };
   typedAgent: TypedAgent;
   agentId: string;
-}): GenerationResult => {
+}): Promise<GenerationResult> => {
   const serializedStepsCompleted = serializeSteps(
     args.result.steps as unknown[]
   );
-  saveTrace({
+  await saveTrace({
     traceId: args.traceId,
     projectId: args.typedAgent.project.id as number,
     projectPublicId: args.typedAgent.project.publicId,
@@ -371,7 +364,7 @@ export const buildCompletedGenerationResult = (args: {
     steps: serializedStepsCompleted,
     parentTraceId: args.parentTraceId ?? null,
     rootTraceId: args.rootTraceId ?? null,
-  }).catch(() => {});
+  });
   updateGenerationRecord({
     publicId: args.generationId,
     status: 'completed',

@@ -8,6 +8,8 @@ import {
   type TypedAgent,
 } from 'src/lib/agentGenerationHelpers';
 import { buildDepthGuardResult } from 'src/lib/agentGenerationRecovery';
+import * as generationsModule from 'src/lib/generations';
+import * as tracesModule from 'src/lib/traces';
 
 describe('buildAllMessages', () => {
   test('returns messages unchanged when instructions is null', () => {
@@ -213,6 +215,52 @@ describe('savePendingGeneration', () => {
     expect(result.requiredAction?.toolCalls).toHaveLength(2);
   });
 
+  test('does not call saveTrace — trace must not be written mid-generation', () => {
+    const saveTraceSpy = jest
+      .spyOn(tracesModule, 'saveTrace')
+      .mockResolvedValue(undefined);
+
+    savePendingGeneration({
+      generationId: 'gen_notrace01',
+      traceId: 'trc_notrace01',
+      pendingToolCalls: [
+        { toolCallId: 'tc_1', toolName: 'myTool', input: {} },
+      ],
+      allMessages: [{ role: 'user', content: 'Hello' }],
+      result: { steps: [], response: { messages: [] } },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      model: {} as any,
+      typedAgent: mockAgent,
+      agentId: 'agt_test001',
+      resolvedTools: {},
+    });
+
+    expect(saveTraceSpy).not.toHaveBeenCalled();
+    jest.restoreAllMocks();
+  });
+
+  test('stores first-call steps in pendingGenerations for later trace assembly', () => {
+    const firstCallSteps = [{ type: 'tool-call', toolCallId: 'tc_1' }];
+
+    savePendingGeneration({
+      generationId: 'gen_steps01',
+      traceId: 'trc_steps01',
+      pendingToolCalls: [
+        { toolCallId: 'tc_1', toolName: 'myTool', input: {} },
+      ],
+      allMessages: [{ role: 'user', content: 'Hello' }],
+      result: { steps: firstCallSteps, response: { messages: [] } },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      model: {} as any,
+      typedAgent: mockAgent,
+      agentId: 'agt_test001',
+      resolvedTools: {},
+    });
+
+    const pending = pendingGenerations.get('gen_steps01');
+    expect(pending?.steps).toEqual(firstCallSteps);
+  });
+
   test('uses default maxSteps when typedAgent.maxSteps is null', () => {
     const agentWithoutMaxSteps: TypedAgent = {
       ...mockAgent,
@@ -241,8 +289,19 @@ describe('savePendingGeneration', () => {
 });
 
 describe('buildCompletedGenerationResult', () => {
-  test('returns completed result and updates traces', () => {
-    const result = buildCompletedGenerationResult({
+  beforeEach(() => {
+    jest.spyOn(tracesModule, 'saveTrace').mockResolvedValue(undefined);
+    jest
+      .spyOn(generationsModule, 'updateGenerationRecord')
+      .mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('returns completed result and updates traces', async () => {
+    const result = await buildCompletedGenerationResult({
       generationId: 'gen_done001',
       traceId: 'trc_done001',
       result: {
@@ -263,8 +322,8 @@ describe('buildCompletedGenerationResult', () => {
     expect(result.output?.model).toBe('gpt-4');
   });
 
-  test('uses typedAgent model when response has no modelId', () => {
-    const result = buildCompletedGenerationResult({
+  test('uses typedAgent model when response has no modelId', async () => {
+    const result = await buildCompletedGenerationResult({
       generationId: 'gen_done002',
       traceId: 'trc_done002',
       result: { steps: [], response: {}, text: 'Hi', finishReason: 'stop' },
@@ -275,9 +334,9 @@ describe('buildCompletedGenerationResult', () => {
     expect(result.output?.model).toBe('test-model');
   });
 
-  test('uses empty string when both response modelId and typedAgent.model are absent', () => {
+  test('uses empty string when both response modelId and typedAgent.model are absent', async () => {
     const agentWithoutModel: TypedAgent = { ...mockAgent, model: null };
-    const result = buildCompletedGenerationResult({
+    const result = await buildCompletedGenerationResult({
       generationId: 'gen_done003',
       traceId: 'trc_done003',
       result: {
@@ -291,6 +350,32 @@ describe('buildCompletedGenerationResult', () => {
     });
 
     expect(result.output?.model).toBe('');
+  });
+
+  test('awaits saveTrace before returning so trace file_id is available in sync mode', async () => {
+    let saveTraceResolved = false;
+
+    jest.spyOn(tracesModule, 'saveTrace').mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 10);
+      });
+      saveTraceResolved = true;
+    });
+
+    await buildCompletedGenerationResult({
+      generationId: 'gen_await_trace',
+      traceId: 'trc_await_trace',
+      result: {
+        steps: [],
+        response: { modelId: 'gpt-4' },
+        text: 'Done',
+        finishReason: 'stop',
+      },
+      typedAgent: mockAgent,
+      agentId: 'agt_test001',
+    });
+
+    expect(saveTraceResolved).toBe(true);
   });
 });
 
@@ -338,5 +423,137 @@ describe('runStreamGeneration', () => {
         agentId: 'agt_stream_explicit',
       });
     }).toThrow();
+  });
+
+  describe('onFinish callback and prepareStep via isolateModules', () => {
+    // streamText is non-configurable so jest.spyOn can't override it, and
+    // jest.mock at file scope won't intercept the already-loaded module.
+    // jest.isolateModules reloads the module fresh inside the mock registry,
+    // so we also mock traces and generations inside the same isolated scope.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let isolatedRunStreamGeneration: (...args: any[]) => any;
+    const mockStreamTextFn = jest.fn();
+    const mockSaveTraceFn = jest.fn().mockResolvedValue(undefined as void);
+    const mockUpdateGenerationFn = jest.fn().mockResolvedValue(null);
+
+    beforeEach(() => {
+      mockStreamTextFn.mockReset();
+      mockSaveTraceFn.mockReset().mockResolvedValue(undefined);
+      mockUpdateGenerationFn.mockReset().mockResolvedValue(null);
+
+      jest.isolateModules(() => {
+        jest.mock('ai', () => {
+          return {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            streamText: (opts: any) => {
+              return mockStreamTextFn(opts);
+            },
+            stepCountIs: () => {
+              return () => {
+                return false;
+              };
+            },
+          };
+        });
+        jest.mock('src/lib/traces', () => {
+          return {
+            saveTrace: mockSaveTraceFn,
+            serializeSteps: (s: unknown) => {
+              return s;
+            },
+          };
+        });
+        jest.mock('src/lib/generations', () => {
+          return { updateGenerationRecord: mockUpdateGenerationFn };
+        });
+        // jest.isolateModules requires require() for synchronous module loading
+        // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+        const mod = require('src/lib/agentGenerationHelpers') as any;
+        isolatedRunStreamGeneration = mod.runStreamGeneration;
+      });
+    });
+
+    test('onFinish callback invokes saveTrace and updateGenerationRecord', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let capturedOpts: Record<string, any> | undefined;
+      mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+        return { textStream: new ReadableStream() };
+      });
+
+      isolatedRunStreamGeneration({
+        model: {},
+        allMessages: [{ role: 'user', content: 'Hi' }],
+        resolvedTools: {},
+        typedAgent: mockAgent,
+        generationId: 'gen_onfinish',
+        traceId: 'trc_onfinish',
+        agentId: 'agt_onfinish',
+      });
+
+      expect(capturedOpts?.onFinish).toBeDefined();
+      await capturedOpts?.onFinish({ steps: [], finishReason: 'stop' });
+
+      expect(mockSaveTraceFn).toHaveBeenCalledTimes(1);
+      expect(mockUpdateGenerationFn).toHaveBeenCalledTimes(1);
+    });
+
+    test('prepareStep returns toolChoice override when a matching step rule matches', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let capturedOpts: Record<string, any> | undefined;
+      mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+        return { textStream: new ReadableStream() };
+      });
+
+      isolatedRunStreamGeneration({
+        model: {},
+        allMessages: [{ role: 'user', content: 'Hi' }],
+        resolvedTools: {},
+        typedAgent: {
+          ...mockAgent,
+          stepRules: [
+            { step: 1, toolChoice: { type: 'tool', toolName: 'myTool' } },
+          ],
+        },
+        generationId: 'gen_steprules',
+        traceId: 'trc_steprules',
+        agentId: 'agt_steprules',
+      });
+
+      expect(capturedOpts?.prepareStep).toBeDefined();
+      const result = capturedOpts?.prepareStep({ stepNumber: 0 });
+      expect(result).toEqual({
+        toolChoice: { type: 'tool', toolName: 'myTool' },
+        activeTools: ['myTool'],
+      });
+    });
+
+    test('prepareStep returns empty object when no step rule matches', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let capturedOpts: Record<string, any> | undefined;
+      mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+        return { textStream: new ReadableStream() };
+      });
+
+      isolatedRunStreamGeneration({
+        model: {},
+        allMessages: [{ role: 'user', content: 'Hi' }],
+        resolvedTools: {},
+        typedAgent: {
+          ...mockAgent,
+          stepRules: [
+            { step: 2, toolChoice: { type: 'tool', toolName: 'myTool' } },
+          ],
+        },
+        generationId: 'gen_steprules_nomatch',
+        traceId: 'trc_steprules_nomatch',
+        agentId: 'agt_steprules_nomatch',
+      });
+
+      const result = capturedOpts?.prepareStep({ stepNumber: 0 });
+      expect(result).toEqual({});
+    });
   });
 });

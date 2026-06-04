@@ -3,6 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError, type ErrorCode } from '../errors';
+import { createMemory } from './memories';
 import {
   type CompiledPolicy,
   registerResourceFieldMap,
@@ -234,7 +235,6 @@ export const createActor = async (args: {
   let resolvedMemoryId = args.memoryId ?? null;
   if (args.autoCreateMemory && resolvedMemoryId === null) {
     log('createActor: auto-creating memory for actor name=%s', args.name);
-    const { createMemory } = await import('./memories');
     const memory = await createMemory({
       projectId: args.projectId,
       name: args.name,
@@ -271,7 +271,6 @@ const attachMemoryToActor = async (args: {
   name: string;
 }) => {
   log('attachMemoryToActor: auto-creating memory name=%s', args.name);
-  const { createMemory } = await import('./memories');
   const memory = await createMemory({
     projectId: args.projectId,
     name: args.name,

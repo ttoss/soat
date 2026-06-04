@@ -1,6 +1,6 @@
 ---
-applyTo: '**/docs/tutorials/**'
-description: Instructions for writing, validating, and maintaining SOAT tutorials.
+paths:
+  - "packages/website/docs/tutorials/**"
 ---
 
 # Tutorial Instructions

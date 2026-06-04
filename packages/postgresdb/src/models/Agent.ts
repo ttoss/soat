@@ -84,8 +84,14 @@ export class Agent extends Model {
   @Column({ type: DataType.FLOAT, allowNull: true })
   declare temperature: number | null;
 
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare maxContextMessages: number | null;
+
   @Column({ type: DataType.JSONB, allowNull: true })
   declare knowledgeConfig: object | null;
+
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  declare singleSessionPerActor: boolean;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

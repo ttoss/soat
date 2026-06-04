@@ -13,6 +13,12 @@ Traces support **parent-child relationships**: when an agent spawns a sub-agent 
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Debug Session, Generation, and Trace History - Step 5 (Inspect traces for each generation)](/docs/tutorials/debug-session-generation-trace-history#step-5---inspect-traces-for-each-generation)
+- [Multi-Agent Sonnet with Nested Agent Calls - Step 12 (Inspect the trace tree)](/docs/tutorials/multi-agent-orchestration#step-12--inspect-the-trace-tree)
+- [Deploy a Multi-Agent App with Agent Formation - Step 9 (Inspect the trace tree)](/docs/tutorials/formations#step-9--inspect-the-trace-tree)
+
 ## Data Model
 
 | Field             | Type           | Description                                                                            |
@@ -22,7 +28,7 @@ Traces support **parent-child relationships**: when an agent spawns a sub-agent 
 | `agent_id`        | string         | Agent that produced the trace                                                          |
 | `file_id`         | string \| null | ID of the file containing the serialized steps (JSON array)                            |
 | `step_count`      | number         | Number of reasoning steps recorded                                                     |
-| `parent_trace_id` | string \| null | ID of the parent trace when this generation was triggered by another agent             |
+| `parent_trace_id` | string \| null | ID of the immediate parent trace; `null` when this trace is itself the root            |
 | `root_trace_id`   | string \| null | ID of the root trace in a multi-agent chain; `null` when this trace is itself the root |
 | `created_at`      | string         | ISO 8601 creation timestamp                                                            |
 
@@ -39,6 +45,163 @@ Each trace stores the raw step objects produced by the Vercel AI SDK `generateTe
 ### File Linkage
 
 Trace content (the step array) is stored as a file at the path `/traces/{traceId}.json` inside the project's file storage. The `file_id` field on the trace record points to this file so it can be downloaded directly via the Files API.
+
+## Debugging Joins (Trace, Generation, Session)
+
+When debugging a user flow, there are three related IDs:
+
+- `session_id` (conversation container)
+- `generation_id` (single agent execution)
+- `trace_id` (observability record for that execution)
+
+What you can resolve directly today:
+
+- From generation responses (`/sessions/.../generate` and auto-generate message responses): `generation_id` + `trace_id`
+- From trace APIs: trace metadata (`id`, `agent_id`, `file_id`, `parent_trace_id`, `root_trace_id`)
+- From `GET /traces/{trace_id}/generations`: all generation IDs linked to a trace
+
+Important limitation:
+
+- Trace records do not include `session_id` directly.
+
+Recommended correlation strategy:
+
+1. Capture (`session_id`, `generation_id`, `trace_id`) when generation responses are returned.
+2. Use `trace_id` to inspect trace metadata (`GET /traces/{trace_id}`), structure (`GET /traces/{trace_id}/tree`), and linked generation IDs (`GET /traces/{trace_id}/generations`).
+3. Use `session_id` to retrieve the full message timeline (`GET /agents/{agent_id}/sessions/{session_id}/messages`).
+
+This makes both directions deterministic in your own debug records:
+
+- `session_id` -> all `generation_id` values -> each `trace_id`
+- `trace_id` -> corresponding `generation_id` and `session_id`
+
+## Trace Ancestry Model
+
+This section is the canonical reference for how trace relationships work. All other SOAT documentation on traces points here.
+
+### Field Definitions
+
+| Field             | Meaning                                                                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `parent_trace_id` | The `id` of the trace that **directly triggered** this generation. Always the immediate parent — never a grandparent or higher node. |
+| `root_trace_id`   | The `id` of the **top-level trace** that started the entire chain. Every trace in a chain shares the same value.                     |
+
+### Invariants
+
+The following properties hold for every trace returned by the API:
+
+1. **Root traces** — `parent_trace_id` is `null` **and** `root_trace_id` is `null`. A trace is the root of its chain if and only if both fields are `null`.
+2. **Child traces** — `parent_trace_id` is always the immediate parent (never skipped levels). `root_trace_id` is always the top-level ancestor (never `null` for non-root traces).
+3. **Sibling traces** share the same `parent_trace_id` and `root_trace_id`.
+4. **Depth-1 children** of the root have `parent_trace_id === root_trace_id`.
+5. The `GET /traces/{id}/tree` endpoint accepts any `id` in the chain and always returns the same full tree rooted at the root trace.
+
+### Concrete Example
+
+Consider a three-level chain: Agent A (top level) calls Agent B via a tool, and Agent B calls Agent C:
+
+```
+trc_A   (root)
+└── trc_B   (child of A)
+    └── trc_C   (child of B)
+```
+
+The three trace records look like this:
+
+```json
+[
+  {
+    "id": "trc_A",
+    "agent_id": "agt_orchestrator",
+    "parent_trace_id": null,
+    "root_trace_id": null,
+    "step_count": 3,
+    "created_at": "2025-01-15T10:30:00Z"
+  },
+  {
+    "id": "trc_B",
+    "agent_id": "agt_researcher",
+    "parent_trace_id": "trc_A",
+    "root_trace_id": "trc_A",
+    "step_count": 5,
+    "created_at": "2025-01-15T10:30:02Z"
+  },
+  {
+    "id": "trc_C",
+    "agent_id": "agt_summarizer",
+    "parent_trace_id": "trc_B",
+    "root_trace_id": "trc_A",
+    "step_count": 2,
+    "created_at": "2025-01-15T10:30:08Z"
+  }
+]
+```
+
+Key observations:
+
+- `trc_A` is the root: both `parent_trace_id` and `root_trace_id` are `null`.
+- `trc_B` is a depth-1 child: `parent_trace_id === root_trace_id === "trc_A"`.
+- `trc_C` is a depth-2 child: `parent_trace_id` points to its immediate parent (`trc_B`), while `root_trace_id` still points to the top-level root (`trc_A`).
+
+### Reconstructing the Tree from API Results
+
+**Option 1 — Use the tree endpoint (recommended)**
+
+Supply any trace ID from the chain. The server resolves the root and returns the fully nested tree in one call:
+
+```
+GET /api/v1/traces/{any_trace_id}/tree
+```
+
+Response shape:
+
+```json
+{
+  "id": "trc_A",
+  "parent_trace_id": null,
+  "root_trace_id": null,
+  "children": [
+    {
+      "id": "trc_B",
+      "parent_trace_id": "trc_A",
+      "root_trace_id": "trc_A",
+      "children": [
+        {
+          "id": "trc_C",
+          "parent_trace_id": "trc_B",
+          "root_trace_id": "trc_A",
+          "children": []
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Option 2 — Build the tree client-side from a flat list**
+
+1. Identify the root: find the trace where `root_trace_id` is `null` (and therefore `parent_trace_id` is also `null`).
+2. Group the remaining traces by `parent_trace_id`.
+3. Recursively attach children to their parents starting from the root.
+
+```ts
+function buildTree(traces) {
+  const byId = new Map(traces.map((t) => [t.id, { ...t, children: [] }]));
+  let root;
+  for (const node of byId.values()) {
+    if (!node.parent_trace_id) {
+      root = node;
+    } else {
+      byId.get(node.parent_trace_id)?.children.push(node);
+    }
+  }
+  return root;
+}
+```
+
+**Option 3 — Follow step content**
+
+Each step in a parent trace that triggered a child generation contains the child's `trace_id` in the tool call result. You can walk the tree by downloading each trace's step file and following the `trace_id` references in `create-agent-generation` tool results.
 
 ## Examples
 

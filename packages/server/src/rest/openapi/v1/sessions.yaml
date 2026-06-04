@@ -52,6 +52,18 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: An open session already exists for this actor (single_session_per_actor is enabled)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: SINGLE_SESSION_CONFLICT
+                  message: An open session already exists for this actor.
+                  meta:
+                    session_id: sess_abc123
     get:
       tags:
         - Sessions
@@ -69,10 +81,10 @@ paths:
         - name: status
           in: query
           required: false
-          description: Filter by session status (open or closed)
+          description: Filter by session status (open, closed, or expired)
           schema:
             type: string
-            enum: [open, closed]
+            enum: [open, closed, expired]
         - name: limit
           in: query
           required: false
@@ -317,6 +329,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '410':
+          description: Session has expired due to inactivity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/agents/{agent_id}/sessions/{session_id}/tool-outputs:
     post:
@@ -516,7 +534,7 @@ components:
           example: conv_V1StGXR8Z5jdHi6B
         status:
           type: string
-          enum: [open, closed]
+          enum: [open, closed, expired]
           example: open
         name:
           type: string
@@ -552,6 +570,16 @@ components:
             type: string
           nullable: true
           description: Key-value pairs injected as context headers into all tool call requests made during this session.
+        inactivity_ttl_seconds:
+          type: integer
+          default: 0
+          description: Number of seconds of inactivity after which the session expires. 0 means the session never expires.
+          example: 300
+        last_activity_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of the last activity on the session (message added or response generated).
 
     SessionMessage:
       type: object
@@ -591,6 +619,11 @@ components:
             type: string
           nullable: true
           description: Key-value pairs injected as context headers into all tool call requests made during this session.
+        inactivity_ttl_seconds:
+          type: integer
+          default: 0
+          description: Number of seconds of inactivity after which the session expires. 0 means the session never expires.
+          example: 300
 
     UpdateSessionRequest:
       type: object
@@ -601,7 +634,7 @@ components:
           description: Session name (set to null to clear)
         status:
           type: string
-          enum: [open, closed]
+          enum: [open, closed, expired]
           description: Session status
         auto_generate:
           type: boolean
@@ -614,20 +647,36 @@ components:
           description: Key-value pairs injected as context headers into all tool call requests made during this session.
 
     AddSessionMessageRequest:
-      type: object
-      required:
-        - message
-      properties:
-        message:
-          type: string
-          description: User message text
-          example: Hello, how can I deploy my app?
-        tool_context:
-          type: object
-          additionalProperties:
-            type: string
-          nullable: true
-          description: Key-value pairs injected as context headers into all tool call requests made during this generation.
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - message
+          properties:
+            message:
+              type: string
+              description: User message text
+              example: Hello, how can I deploy my app?
+            tool_context:
+              type: object
+              additionalProperties:
+                type: string
+              nullable: true
+              description: Key-value pairs injected as context headers into all tool call requests made during this generation.
+        - type: object
+          additionalProperties: false
+          required:
+            - document_id
+          properties:
+            document_id:
+              type: string
+              description: Public ID of a document used as the user message content.
+            tool_context:
+              type: object
+              additionalProperties:
+                type: string
+              nullable: true
+              description: Key-value pairs injected as context headers into all tool call requests made during this generation.
 
     AddSessionMessageSaved:
       type: object
@@ -638,6 +687,9 @@ components:
           enum: [user]
         content:
           type: string
+        document_id:
+          type: string
+          nullable: true
     AddSessionMessageResponse:
       oneOf:
         - $ref: '#/components/schemas/AddSessionMessageSaved'

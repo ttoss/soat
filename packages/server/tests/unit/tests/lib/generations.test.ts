@@ -8,11 +8,37 @@ import {
 
 describe('generations', () => {
   let projectId: number;
+  let aiProviderId: number;
   const agentId = 'agt_gen_lib_test_001';
+
+  const ensureAgent = async (publicId: string) => {
+    const existing = await db.Agent.findOne({ where: { publicId, projectId } });
+    if (existing) return existing;
+
+    return db.Agent.create({
+      publicId,
+      projectId,
+      aiProviderId,
+      name: `Agent ${publicId}`,
+    });
+  };
 
   beforeAll(async () => {
     const project = await db.Project.create({ name: 'Generations Lib Test' });
     projectId = project.id;
+
+    const aiProvider = await db.AiProvider.create({
+      projectId,
+      name: 'Generations Provider',
+      provider: 'openai',
+      defaultModel: 'gpt-4o-mini',
+      baseUrl: null,
+      config: null,
+      secretId: null,
+    });
+    aiProviderId = aiProvider.id;
+
+    await ensureAgent(agentId);
   });
 
   // ── createGenerationRecord ────────────────────────────────────────────────
@@ -38,6 +64,13 @@ describe('generations', () => {
     });
 
     test('creates a generation with optional initiatorGenerationId', async () => {
+      await createGenerationRecord({
+        publicId: 'gen_parent_001',
+        projectId,
+        agentId,
+        traceId: 'trc_parent_001',
+      });
+
       const gen = await createGenerationRecord({
         publicId: 'gen_create_test002',
         projectId,
@@ -127,6 +160,9 @@ describe('generations', () => {
 
   describe('listGenerations', () => {
     beforeAll(async () => {
+      await ensureAgent('agt_list_001');
+      await ensureAgent('agt_list_002');
+
       await createGenerationRecord({
         publicId: 'gen_list_test001',
         projectId,

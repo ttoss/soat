@@ -11,6 +11,10 @@ type CliTestClient = {
   reset: () => void;
 };
 
+const loadCliModule = async () => {
+  return import('../../src/index');
+};
+
 const DEFAULT_RESPONSE_HEADERS = {
   'Content-Type': 'application/json',
 };
@@ -45,7 +49,7 @@ export const createCliTestClient = (): CliTestClient => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     jest.resetModules();
-    const { runCli } = await import('../../src/index');
+    const { runCli } = await loadCliModule();
     await runCli(['node', 'soat', ...args]);
 
     return requests;

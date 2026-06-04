@@ -7,6 +7,7 @@ export const createSessionTransaction = async (args: {
   existingActorId?: number | null;
   autoGenerate?: boolean;
   toolContext?: Record<string, string> | null;
+  inactivityTtlSeconds?: number;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   transaction: any;
 }): Promise<InstanceType<(typeof db)['Session']>> => {
@@ -29,6 +30,8 @@ export const createSessionTransaction = async (args: {
       name: args.name ?? null,
       autoGenerate: args.autoGenerate ?? false,
       toolContext: args.toolContext ?? null,
+      inactivityTtlSeconds: args.inactivityTtlSeconds ?? 0,
+      lastActivityAt: null,
     },
     { transaction: args.transaction }
   );

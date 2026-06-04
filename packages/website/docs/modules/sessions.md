@@ -10,7 +10,7 @@ Sessions provide a simplified **1 user ↔ 1 agent** conversational interface. T
 By default, interacting with an agent requires three API calls:
 
 1. **Create a session** — `POST /agents/:agent_id/sessions`
-2. **Save a user message** — `POST /agents/:agent_id/sessions/:session_id/messages` (returns 201, does not trigger generation)
+2. **Save a user message** — `POST /agents/:agent_id/sessions/:session_id/messages` with either `message` or `document_id` (returns 201, does not trigger generation)
 3. **Generate a response** — `POST /agents/:agent_id/sessions/:session_id/generate` (triggers the LLM, returns the assistant reply)
 
 When `auto_generate` is enabled on the session, step 3 is handled automatically — `POST .../messages` saves the message and returns the assistant reply in one call, reducing the flow to two API calls.
@@ -18,6 +18,12 @@ When `auto_generate` is enabled on the session, step 3 is handled automatically 
 The session automatically creates and manages the underlying conversation. An optional `actor_id` can be supplied to associate an existing Actor as the session owner; if omitted the session is created with no actor.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
+
+## Related Tutorials
+
+- [Chat with an LLM - Step 5 (Create a session)](/docs/tutorials/chat-with-llm#step-5--create-a-session)
+- [Chat with an LLM - Step 6 (Send messages and receive replies)](/docs/tutorials/chat-with-llm#step-6--send-messages-and-receive-replies)
+- [Debug Session, Generation, and Trace History - Step 4 (Retrieve the full session message timeline)](/docs/tutorials/debug-session-generation-trace-history#step-4---retrieve-the-full-session-message-timeline)
 
 ## Key Concepts
 
@@ -31,7 +37,7 @@ The session automatically creates and manages the underlying conversation. An op
 
 ### Lifecycle
 
-A session starts in `open` status. It can be updated to `closed` when the interaction is complete. Deleting a session cascades to the underlying conversation.
+A session starts in `open` status. It can be updated to `closed` when the interaction is complete. If `inactivity_ttl_seconds` is configured, the status transitions to `expired` lazily when the session is next fetched or listed after the TTL elapses. Deleting a session cascades to the underlying conversation.
 
 ### Actor ID
 
@@ -62,19 +68,71 @@ Content-Type: application/json
 
 The explicit `POST .../generate` endpoint continues to work regardless of this setting. Async generation (`?async=true`) is also supported on `POST .../messages` when `auto_generate` is enabled — the request returns `202 Accepted` immediately and generation proceeds in the background.
 
+### Single Session Per Actor
+
+When the parent agent has `single_session_per_actor: true`, `POST /agents/:id/sessions` with an `actor_id` will return `409 Conflict` if an open session for that actor already exists. The error body includes `meta.session_id` with the existing session's ID so the caller can reuse it without a separate lookup:
+
+```json
+{
+  "error": {
+    "code": "SINGLE_SESSION_CONFLICT",
+    "message": "An open session already exists for this actor.",
+    "meta": {
+      "session_id": "sess_..."
+    }
+  }
+}
+```
+
+Requests without `actor_id` are not subject to this check.
+
+### Inactivity TTL
+
+Sessions can be configured to expire automatically after a period of inactivity using `inactivity_ttl_seconds`.
+
+- **`0` (default)** — the session never expires.
+- **Any positive integer** — the session expires if no user message has been added for that many seconds since `last_activity_at` (or `created_at` if no messages exist yet).
+
+When a session has exceeded its TTL, its `status` is lazily updated to `expired` the next time it is fetched or listed. Once expired, calls to `POST .../generate` return `410 Gone` with error code `SESSION_EXPIRED`. The caller should open a fresh session to continue.
+
+Expired sessions are excluded from `?status=open` queries and can be filtered explicitly with `?status=expired`.
+
+```json
+POST /agents/{agent_id}/sessions
+{
+  "inactivity_ttl_seconds": 600
+}
+```
+
+After 10 minutes of silence the session expires. The next `POST .../generate` returns:
+
+```json
+HTTP 410 Gone
+{
+  "error": {
+    "code": "SESSION_EXPIRED",
+    "message": "The session has expired due to inactivity."
+  }
+}
+```
+
+The TTL is checked on every read — there is no background job. Sessions are never automatically deleted; only the generation call is rejected.
+
 ### Tool Context
 
 Sessions support the same `tool_context` mechanism as direct agent generations — see [Tool Context](./agents.md#tool-context) in the Agents module for the full specification.
+
+Session message creation does not support `tool_output` message content. If you need pre-generation tool execution with `output_path` extraction, call [Agents generation](./agents.md#tool-output-message-content) directly.
 
 #### Auto-Populated Headers
 
 When a generation is triggered through a session (either via `POST .../generate` or auto-generate), the server automatically injects the following keys into `tool_context` before forwarding to tool calls:
 
-| Injected `tool_context` key | Forwarded header                      | Value                                                              |
-| --------------------------- | ------------------------------------- | ------------------------------------------------------------------ |
-| `actorId`                   | `X-Soat-Context-ActorId`              | Public ID of the session's actor (`actr_...`); omitted if not set  |
-| `actorExternalId`           | `X-Soat-Context-ActorExternalId`      | External ID of the session's actor; omitted if not set             |
-| `sessionId`                 | `X-Soat-Context-SessionId`            | Public ID of the session (`sess_...`); always present              |
+| Injected `tool_context` key | Forwarded header                 | Value                                                             |
+| --------------------------- | -------------------------------- | ----------------------------------------------------------------- |
+| `actorId`                   | `X-Soat-Context-ActorId`         | Public ID of the session's actor (`actr_...`); omitted if not set |
+| `actorExternalId`           | `X-Soat-Context-ActorExternalId` | External ID of the session's actor; omitted if not set            |
+| `sessionId`                 | `X-Soat-Context-SessionId`       | Public ID of the session (`sess_...`); always present             |
 
 Any values provided by the caller in `tool_context` are merged on top and take precedence over the auto-populated values.
 
@@ -91,6 +149,37 @@ Adding a caller-supplied `tenantId` alongside the automatically injected session
 ```
 
 The tool will receive headers: `X-Soat-Context-SessionId`, `X-Soat-Context-TenantId`, and — if the session has an actor — `X-Soat-Context-ActorId` and `X-Soat-Context-ActorExternalId`.
+
+## Debugging Links (Session, Generation, Trace)
+
+For debugging, treat the session as a timeline container and each generation as one execution snapshot.
+
+- One session can produce many generations over time.
+- Each successful call to `POST .../generate` returns `generation_id` and `trace_id`.
+- When `auto_generate` is enabled, `POST .../messages` may also return `generation_id` and `trace_id`.
+
+This gives you a reliable forward link:
+
+`session_id` -> `generation_id` -> `trace_id`
+
+Practical notes:
+
+- `GET .../sessions/{session_id}/messages` returns the conversation timeline (role/content/position/metadata).
+- Message rows are the canonical chat history, but they are not a first-class generation history list.
+- To preserve a complete debug history, store each returned pair (`generation_id`, `trace_id`) when a generation runs for that session.
+
+Recommended minimal debug ledger format:
+
+```json
+{
+  "session_id": "sess_...",
+  "generation_id": "gen_...",
+  "trace_id": "trc_...",
+  "created_at": "2026-06-01T12:34:56.000Z"
+}
+```
+
+For event-driven systems, webhook generation events are also useful correlation points because they include `session_id`, `generation_id`, and `trace_id`.
 
 #### Testing Without an Actor
 
@@ -118,18 +207,20 @@ This is useful for local testing where no actor record exists yet. The values yo
 
 ### Session
 
-| Field             | Type           | Description                                                                                                    |
-| ----------------- | -------------- | -------------------------------------------------------------------------------------------------------------- |
-| `id`              | string         | Public identifier prefixed with `sess_`                                                                        |
-| `agent_id`        | string         | Public ID of the agent this session belongs to                                                                 |
-| `conversation_id` | string         | Public ID of the underlying conversation                                                                       |
-| `status`          | string         | `open` (default) or `closed`                                                                                   |
-| `name`            | string         | Optional display name                                                                                          |
-| `actor_id`        | string \| null | Optional public ID of the Actor associated with this session (`actr_` prefix); `null` when no actor is set     |
-| `tags`            | object         | Free-form key-value metadata                                                                                   |
-| `auto_generate`   | boolean        | When `true`, saving a message via `POST .../messages` automatically triggers LLM generation (default: `false`) |
-| `created_at`      | string         | ISO 8601 creation timestamp                                                                                    |
-| `updated_at`      | string         | ISO 8601 last-updated timestamp                                                                                |
+| Field                     | Type           | Description                                                                                                    |
+| ------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------- |
+| `id`                      | string         | Public identifier prefixed with `sess_`                                                                        |
+| `agent_id`                | string         | Public ID of the agent this session belongs to                                                                 |
+| `conversation_id`         | string         | Public ID of the underlying conversation                                                                       |
+| `status`                  | string         | `open` (default), `closed`, or `expired`                                                                       |
+| `name`                    | string         | Optional display name                                                                                          |
+| `actor_id`                | string \| null | Optional public ID of the Actor associated with this session (`actr_` prefix); `null` when no actor is set     |
+| `tags`                    | object         | Free-form key-value metadata                                                                                   |
+| `auto_generate`           | boolean        | When `true`, saving a message via `POST .../messages` automatically triggers LLM generation (default: `false`) |
+| `inactivity_ttl_seconds`  | integer        | Seconds of inactivity before the session expires. `0` means never expires (default: `0`)                       |
+| `last_activity_at`        | string \| null | ISO 8601 timestamp of the last user message; `null` until the first message is added                           |
+| `created_at`              | string         | ISO 8601 creation timestamp                                                                                    |
+| `updated_at`              | string         | ISO 8601 last-updated timestamp                                                                                |
 
 ### Message (within a session)
 
@@ -141,6 +232,11 @@ Messages are returned with simplified roles:
 | `content`    | string | Message text                                                |
 | `model`      | string | Model used for assistant messages                           |
 | `created_at` | string | ISO 8601 timestamp                                          |
+
+When creating a session message (`POST .../messages`), send exactly one of:
+
+- `message`: raw text body
+- `document_id`: public ID of an existing document (its content is used as the message text)
 
 ## Examples
 

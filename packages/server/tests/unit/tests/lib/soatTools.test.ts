@@ -22,7 +22,9 @@ describe('soatTools', () => {
       };
     });
 
-    const { soatTools } = await import('src/lib/soatTools');
+    const { soatTools } = jest.requireActual('src/lib/soatTools') as {
+      soatTools: unknown[];
+    };
 
     expect(soatTools).toEqual([]);
   });
@@ -66,7 +68,9 @@ describe('soatTools', () => {
       };
     });
 
-    const { soatTools } = await import('src/lib/soatTools');
+    const { soatTools } = jest.requireActual('src/lib/soatTools') as {
+      soatTools: unknown[];
+    };
 
     expect(soatTools).toEqual([{ id: 'tool:/a' }, { id: 'tool:/b' }]);
     expect(processPath).toHaveBeenNthCalledWith(
@@ -118,7 +122,9 @@ describe('soatTools', () => {
       };
     });
 
-    const { soatTools } = await import('src/lib/soatTools');
+    const { soatTools } = jest.requireActual('src/lib/soatTools') as {
+      soatTools: unknown[];
+    };
 
     expect(soatTools).toEqual([{ id: 'tool:/ok' }]);
     expect(processPath).toHaveBeenCalledTimes(1);

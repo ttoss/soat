@@ -296,6 +296,55 @@ describe('resolveAgentTools', () => {
     process.env.SOAT_ERROR_LOGS_ENABLED = originalValue;
   });
 
+  test('DELETE tool with JSON body sends Content-Type and body in request', async () => {
+    const deleteToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'myDeleteHttpTool',
+        type: 'http',
+        description: 'Test DELETE HTTP tool with body',
+        parameters: {
+          type: 'object',
+          properties: {
+            item_id: { type: 'string' },
+          },
+        },
+        execute: {
+          url: 'https://example.com/api/items',
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+        },
+      });
+    expect(deleteToolRes.status).toBe(201);
+
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ deleted: true }), { status: 200 })
+      );
+
+    const tools = await resolveAgentTools({ toolIds: [deleteToolRes.body.id] });
+    const deleteTool = tools.myDeleteHttpTool;
+
+    if ('execute' in deleteTool && typeof deleteTool.execute === 'function') {
+      await deleteTool.execute({ item_id: 'abc' }, {} as never);
+    }
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://example.com/api/items',
+      expect.objectContaining({
+        method: 'DELETE',
+        body: JSON.stringify({ item_id: 'abc' }),
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+        }),
+      })
+    );
+
+    fetchMock.mockRestore();
+  });
+
   test('does not log HTTP tool call errors when SOAT_ERROR_LOGS_ENABLED is disabled', async () => {
     const originalValue = process.env.SOAT_ERROR_LOGS_ENABLED;
     process.env.SOAT_ERROR_LOGS_ENABLED = 'false';

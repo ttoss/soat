@@ -105,7 +105,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project
 
-Every resource in SOAT lives inside a [project](/docs/modules/projects). Create one to hold the agent, documents, and tools.
+Every resource in SOAT lives inside a [project](/docs/modules/projects#examples). Create one to hold the agent, documents, and tools.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -143,7 +143,7 @@ echo "Project: $PROJECT_ID"
 
 ## Step 3 — Create an Ollama AI provider
 
-Set up a local [AI provider](/docs/modules/ai-providers) backed by Ollama. This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+Set up a local [AI provider](/docs/modules/ai-providers#examples) backed by Ollama. This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -190,7 +190,7 @@ echo "Provider: $PROVIDER_ID"
 
 ## Step 4 — Create documents
 
-Create two [documents](/docs/modules/documents): a **public** note the agent will update, and a **private** note it must not touch.
+Create two [documents](/docs/modules/documents#examples): a **public** note the agent will update, and a **private** note it must not touch.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -270,7 +270,7 @@ echo "Private doc: $PRIVATE_DOC_ID"
 
 ## Step 5 — Create user alice with a restricted policy
 
-Alice is allowed to run agent generations and access documents under `/notes/public/*`. She cannot read or modify documents at other paths. See [Users](/docs/modules/users), [Policies](/docs/modules/policies), and [IAM — SRNs](/docs/modules/iam#soat-resource-names-srns) for the full access-control model.
+Alice is allowed to run agent generations and access documents under `/notes/public/*`. She cannot read or modify documents at other paths. See [Users](/docs/modules/users#examples), [Policies](/docs/modules/policies#examples), and [IAM — SRNs](/docs/modules/iam#soat-resource-names-srns) for the full access-control model.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -377,7 +377,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/policies/attach-user" \
 
 ## Step 6 — Create soat tools
 
-Create three [tools](/docs/modules/tools). Notice the third tool — `docs-write` — has `preset_parameters` containing the public document's ID. The key uses **camelCase** (`documentId`) because soat tool schemas use camelCase property names internally. The model will never see the `documentId` field; it will be injected automatically at call time.
+Create three [tools](/docs/modules/tools#examples). Notice the third tool — `docs-write` — has `preset_parameters` containing the public document's ID. The key uses **camelCase** (`documentId`) because soat tool schemas use camelCase property names internally. The model will never see the `documentId` field; it will be injected automatically at call time.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -503,7 +503,7 @@ The three tool names the model will see at runtime are:
 
 ## Step 7 — Create the agent
 
-Create the [agent](/docs/modules/agents) and attach all three tools. The agent's instructions guide the model to use its tools when answering requests.
+Create the [agent](/docs/modules/agents#examples) and attach all three tools. The agent's instructions guide the model to use its tools when answering requests.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -559,7 +559,7 @@ echo "Agent: $AGENT_ID"
 
 ## Step 8 — Log in as alice and run a generation
 
-Alice asks the agent to update the public note via a [session](/docs/modules/sessions). The agent will call `docs_update-document` without knowing the document ID — the server injects it from `preset_parameters`.
+Alice asks the agent to update the public note via a [session](/docs/modules/sessions#examples). The agent will call `docs_update-document` without knowing the document ID — the server injects it from `preset_parameters`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -641,11 +641,93 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate" \
 </TabItem>
 </Tabs>
 
+### Reuse a tool result as the generation input
+
+You can also start a generation with [Agents](/docs/modules/agents#tool-output-message-content) message content of type `tool_output`. The server executes the referenced tool first, applies `output_path`, and feeds the extracted value into the model as the user message.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+TOOL_OUTPUT_RESULT=$(soat create-agent-generation \
+  --agent-id "$AGENT_ID" \
+  --messages '[
+    {"role":"system","content":"Repeat the user message exactly."},
+    {
+      "role":"user",
+      "content": {
+        "type": "tool_output",
+        "tool_id": "'"$READ_TOOL_ID"'",
+        "action": "get-document",
+        "input": {"document_id": "'"$PUBLIC_DOC_ID"'"},
+        "output_path": ".content"
+      }
+    }
+  ]')
+
+echo "$TOOL_OUTPUT_RESULT" | jq '.'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: toolOutputGeneration } =
+  await aliceClient.agents.createAgentGeneration({
+    path: { agent_id: agentId },
+    body: {
+      messages: [
+        { role: 'system', content: 'Repeat the user message exactly.' },
+        {
+          role: 'user',
+          content: {
+            type: 'tool_output',
+            tool_id: readToolId,
+            action: 'get-document',
+            input: { document_id: publicDocId },
+            output_path: '.content',
+          },
+        },
+      ],
+    },
+  });
+
+console.log('Status:', toolOutputGeneration!.status);
+console.log('Result:', toolOutputGeneration!.result);
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate" \
+  -H "Authorization: Bearer $ALICE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"role": "system", "content": "Repeat the user message exactly."},
+      {
+        "role": "user",
+        "content": {
+          "type": "tool_output",
+          "tool_id": "'"$READ_TOOL_ID"'",
+          "action": "get-document",
+          "input": {"document_id": "'"$PUBLIC_DOC_ID"'"},
+          "output_path": ".content"
+        }
+      }
+    ]
+  }' | jq '.'
+```
+
+</TabItem>
+</Tabs>
+
 ---
 
 ## Step 9 — Verify the update and permissions
 
-Confirm the agent updated the public [document](/docs/modules/documents) and was blocked from accessing the private one. This demonstrates how [IAM policies](/docs/modules/iam#authorization-model) enforce path-based access at runtime.
+Confirm the agent updated the public [document](/docs/modules/documents#examples) and was blocked from accessing the private one. This demonstrates how [IAM policies](/docs/modules/iam#authorization-model) enforce path-based access at runtime.
 
 ### Confirm the public document was updated
 
@@ -781,4 +863,4 @@ The server merges `preset_parameters` into the call before dispatching — alice
 - Add more actions to the tools (e.g., `search-documents`) for richer agent workflows.
 - Use [step rules](/docs/modules/agents#step-rules) to force the agent to call a specific tool first.
 - Explore [boundary policies](/docs/modules/agents#soat-action-permissions) to limit which actions agents can use at the agent level, independent of caller IAM policies.
-- Read the [agents module reference](/docs/modules/agents) for the full list of soat actions and configuration options.
+- Read the [agents module reference](/docs/modules/agents#examples) for the full list of soat actions and configuration options.

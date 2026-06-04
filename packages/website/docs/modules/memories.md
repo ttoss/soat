@@ -4,6 +4,12 @@
 
 Memories are named containers for storing and organizing knowledge items (entries) within a project. They provide a logical namespace for text content, enabling structured retrieval via the [Knowledge](./knowledge.md) module. Each memory can hold many **memory entries** — individual pieces of text that are automatically embedded for semantic search.
 
+## Related Tutorials
+
+- [Agent with Persistent Memory - Step 4 (Create a memory)](/docs/tutorials/memories-agent#step-4--create-a-memory)
+- [Agent with Persistent Memory - Step 5 (Write memory entries)](/docs/tutorials/memories-agent#step-5--write-memory-entries)
+- [Agent with Persistent Memory - Step 10 (Observe the agent writing to memory)](/docs/tutorials/memories-agent#step-10--observe-the-agent-writing-to-memory)
+
 ## Key Concepts
 
 ### Memory

@@ -3,6 +3,23 @@ import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { createSessionTransaction } from './sessionTransaction';
 
+const isSessionExpired = (session: InstanceType<(typeof db)['Session']>) => {
+  const ttl = session.inactivityTtlSeconds;
+  if (!ttl || session.status !== 'open') {
+    return false;
+  }
+  const lastActivity = session.lastActivityAt ?? session.createdAt;
+  return Date.now() - new Date(lastActivity).getTime() > ttl * 1000;
+};
+
+const checkAndExpireSession = async (
+  session: InstanceType<(typeof db)['Session']>
+) => {
+  if (isSessionExpired(session)) {
+    await session.update({ status: 'expired' });
+  }
+};
+
 const sessionIncludes = () => {
   return [
     { model: db.Project, as: 'project' },
@@ -31,6 +48,8 @@ const extractSessionOptional = (session: Parameters<typeof mapSession>[0]) => {
     tags: session.tags ?? undefined,
     toolContext: session.toolContext ?? null,
     generatingAt: session.generatingAt ?? null,
+    inactivityTtlSeconds: session.inactivityTtlSeconds ?? 0,
+    lastActivityAt: session.lastActivityAt ?? null,
   };
 };
 
@@ -61,6 +80,7 @@ export const createSession = async (args: {
   actorId?: string | null;
   autoGenerate?: boolean;
   toolContext?: Record<string, string> | null;
+  inactivityTtlSeconds?: number;
 }) => {
   const agent = await db.Agent.findByPk(args.agentId);
   if (!agent) {
@@ -83,6 +103,19 @@ export const createSession = async (args: {
       );
     }
     existingActorId = existingActor.id;
+
+    if (agent.singleSessionPerActor) {
+      const conflictingSession = await db.Session.findOne({
+        where: { agentId: agent.id, actorId: existingActorId, status: 'open' },
+      });
+      if (conflictingSession) {
+        throw new DomainError(
+          'SINGLE_SESSION_CONFLICT',
+          'An open session already exists for this actor.',
+          { session_id: conflictingSession.publicId }
+        );
+      }
+    }
   }
 
   const session = await db.sequelize.transaction((t) => {
@@ -93,6 +126,7 @@ export const createSession = async (args: {
       existingActorId,
       autoGenerate: args.autoGenerate,
       toolContext: args.toolContext,
+      inactivityTtlSeconds: args.inactivityTtlSeconds,
       transaction: t,
     });
   });
@@ -166,6 +200,8 @@ export const listSessions = async (args: {
     order: [['createdAt', 'DESC']],
   });
 
+  await Promise.all(rows.map(checkAndExpireSession));
+
   return { data: rows.map(mapSession), total: count, limit, offset };
 };
 
@@ -184,6 +220,8 @@ export const getSession = async (args: {
       `Session '${args.sessionId}' not found.`
     );
   }
+
+  await checkAndExpireSession(session);
 
   return mapSession(session);
 };

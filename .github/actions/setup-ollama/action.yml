@@ -1,15 +1,5 @@
 name: Setup Ollama
-description: Cache Ollama models and Docker image, optionally delete stale image caches.
-
-inputs:
-  delete-stale-caches:
-    description: Delete stale Ollama Docker image caches on a cache miss (set to 'true' on the main branch).
-    required: false
-    default: 'false'
-  github-token:
-    description: GitHub token used to delete stale caches (required when delete-stale-caches is true).
-    required: false
-    default: ''
+description: Cache Ollama models and ensure the Ollama Docker image is available.
 
 runs:
   using: composite
@@ -23,36 +13,9 @@ runs:
         path: ~/.ollama/models
         key: ollama-models
 
-    - name: Cache Ollama Docker image
-      id: cache-ollama-image
-      uses: actions/cache@v5
-      with:
-        path: /tmp/ollama-image.tar
-        key: ollama-docker-image-${{ hashFiles('.github/actions/setup-ollama/action.yml') }}
-        restore-keys: |
-          ollama-docker-image-
-
-    - name: Load Ollama Docker image from cache
-      shell: bash
-      run: |
-        if [ -f /tmp/ollama-image.tar ]; then
-          docker load -i /tmp/ollama-image.tar
-        fi
-
-    - name: Delete stale Ollama Docker image caches
-      if: steps.cache-ollama-image.outputs.cache-hit != 'true' && inputs.delete-stale-caches == 'true'
-      shell: bash
-      run: |
-        gh cache list --key ollama-docker-image- --json id --jq '.[].id' \
-          | xargs -r -I{} gh cache delete {}
-      env:
-        GH_TOKEN: ${{ inputs.github-token }}
-
-    - name: Pull and save Ollama Docker image
-      if: steps.cache-ollama-image.outputs.cache-hit != 'true'
+    - name: Ensure Ollama Docker image is available
       shell: bash
       run: |
         if ! docker image inspect ollama/ollama:0.20.6 &>/dev/null; then
           docker pull ollama/ollama:0.20.6
         fi
-        docker save ollama/ollama:0.20.6 -o /tmp/ollama-image.tar

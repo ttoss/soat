@@ -116,7 +116,7 @@ describe('formation wrapper endpoint integration', () => {
     const requests = await cliTestClient.call([
       'update-formation',
       '--formation-id',
-      'af_existing',
+      'form_existing',
       '--template-path',
       templatePath,
       '--parameter',
@@ -126,7 +126,7 @@ describe('formation wrapper endpoint integration', () => {
     expect(cliTestClient.fetchMock).toHaveBeenCalledTimes(1);
     expect(requests).toHaveLength(1);
     expect(requests[0]?.method).toBe('PUT');
-    expect(requests[0]?.path).toBe('/api/v1/formations/af_existing');
+    expect(requests[0]?.path).toBe('/api/v1/formations/form_existing');
 
     const body = requests[0]?.body as {
       parameters?: Record<string, string>;

@@ -1,13 +1,13 @@
 ---
-sidebar_position: 4
+sidebar_position: 5
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-# Multi-Agent Orchestration
+# Multi-Agent Sonnet with Nested Agent Calls
 
-This tutorial demonstrates how to build a **multi-agent orchestration** pipeline where one agent coordinates multiple sub-agents using [SOAT tools](/docs/modules/agents#soat). This pattern applies to any workflow that can be decomposed into sequential or parallel sub-tasks — content pipelines, data processing, multi-step analysis, code generation, report assembly, and more.
+This tutorial demonstrates how to build a **nested-agent** pipeline where one agent coordinates multiple sub-agents using [SOAT tools](/docs/modules/agents#soat). If you want the same sonnet workflow with the [Orchestrations](/docs/modules/orchestrations#examples) module calling each agent directly, see [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet). This nested-agent pattern applies to any workflow that can be decomposed into sequential or parallel sub-tasks — content pipelines, data processing, multi-step analysis, code generation, report assembly, and more.
 
 As a concrete example, you will build a system that composes a sonnet: an orchestrator agent creates the poem title itself and then delegates each stanza to a specialized sub-agent, all collaborating through a shared document. The same architecture works for any scenario where:
 
@@ -65,7 +65,7 @@ export SOAT_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. See [Users](/docs/modules/users) for full authentication details.
+Admin is the built-in superuser role. See [Users](/docs/modules/users#examples) for full authentication details.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -107,7 +107,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project
 
-Every resource lives inside a [project](/docs/modules/projects). Create one for this tutorial.
+Every resource lives inside a [project](/docs/modules/projects#examples). Create one for this tutorial.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -145,7 +145,7 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Create an AI provider
 
-Set up a local [AI provider](/docs/modules/ai-providers) backed by Ollama. This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+Set up a local [AI provider](/docs/modules/ai-providers#examples) backed by Ollama. This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -193,7 +193,7 @@ echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 
 ## Step 4 — Create a shared document for the poem
 
-Create a [document](/docs/modules/documents) that will hold the poem. Each stanza agent will read this document, then update it by appending their stanza.
+Create a [document](/docs/modules/documents#examples) that will hold the poem. Each stanza agent will read this document, then update it by appending their stanza.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -324,7 +324,7 @@ echo "WRITE_STANZA_TOOL_ID: $WRITE_STANZA_TOOL_ID"
 
 ## Step 6 — Create the four stanza agents
 
-Each stanza agent writes one stanza of the sonnet. They all share the same fixed document tools (`poem-read`, `poem-write`) but use different instructions and rhyme schemes. See [Agents](/docs/modules/agents).
+Each stanza agent writes one stanza of the sonnet. They all share the same fixed document tools (`poem-read`, `poem-write`) but use different instructions and rhyme schemes. See [Agents](/docs/modules/agents#examples).
 
 To maximize determinism, each stanza agent uses strict `step_rules`:
 
@@ -867,7 +867,7 @@ echo "TRACE_ID: $TRACE_ID"
 
 ## Step 10 — Read the completed poem from the shared document
 
-The shared [document](/docs/modules/documents) stores the final poem. Retrieve it to verify persisted output.
+The shared [document](/docs/modules/documents#examples) stores the final poem. Retrieve it to verify persisted output.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -914,7 +914,7 @@ curl -s "$SOAT_URL/api/v1/documents/$POEM_DOC_ID" \
 
 ## Step 11 — Inspect the trace
 
-The [trace](/docs/modules/traces) endpoint returns **metadata only**: the total step count and a `file_id` pointing to the full JSON steps stored on disk. This is intentional — the metadata record is small and fast to query; the full step content (model calls, tool calls, tool results) is stored as a File and retrieved separately.
+The [trace](/docs/modules/traces#examples) endpoint returns **metadata only**: the total step count and a `file_id` pointing to the full JSON steps stored on disk. This is intentional — the metadata record is small and fast to query; the full step content (model calls, tool calls, tool results) is stored as a File and retrieved separately.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -990,7 +990,7 @@ curl -s "$SOAT_URL/api/v1/files/$FILE_ID/download" \
 
 ## Step 12 — Inspect the trace tree
 
-The `/tree` endpoint returns the full execution tree rooted at the orchestrator trace. Each node is a [trace](/docs/modules/traces) record, and its `children` array contains the traces spawned by sub-agent tool calls. This gives you end-to-end observability across all nested agent calls in a single response.
+The `/tree` endpoint returns the full execution tree rooted at the orchestrator trace. Each node is a [trace](/docs/modules/traces#examples) record, and its `children` array contains the traces spawned by sub-agent tool calls. This gives you end-to-end observability across all nested agent calls in a single response.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1050,7 +1050,7 @@ curl -s "$SOAT_URL/api/v1/traces/$TRACE_ID/tree" \
 
 ## Step 13 — List all traces for the project
 
-List all traces in the project to inspect the orchestrator and nested stanza runs. See [Traces](/docs/modules/traces).
+List all traces in the project to inspect the orchestrator and nested stanza runs. See [Traces](/docs/modules/traces#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1095,7 +1095,7 @@ curl -s "$SOAT_URL/api/v1/traces?project_id=$PROJECT_ID" \
 
 ---
 
-## How It Works — The Orchestration Pattern
+## How It Works — The Nested-Agent Pattern
 
 The architecture you built follows a general **coordinator → workers → shared state** pattern:
 

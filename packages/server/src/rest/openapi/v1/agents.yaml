@@ -264,6 +264,17 @@ paths:
                   messages:
                     - role: user
                       content: What is the weather in Tokyo?
+              toolOutput:
+                summary: Use a tool output as user message content
+                value:
+                  messages:
+                    - role: user
+                      content:
+                        type: tool_output
+                        tool_id: tool_audio_to_text
+                        input:
+                          url: https://example.com/audio.mp3
+                        output_path: text
               streaming:
                 summary: Streaming generation
                 value:
@@ -540,6 +551,13 @@ components:
               type: string
               nullable: true
               description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
+        max_context_messages:
+          type: integer
+          nullable: true
+          description: Maximum number of recent messages to include in the context window sent to the model. When null, all messages are included.
+        single_session_per_actor:
+          type: boolean
+          description: When true, only one open session per actor_id is allowed for this agent. Creating a second open session for the same actor returns 409.
         created_at:
           type: string
           format: date-time
@@ -615,6 +633,12 @@ components:
               type: string
               nullable: true
               description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
+        max_context_messages:
+          type: integer
+          description: Maximum number of recent messages included in the context window. Null means no limit.
+        single_session_per_actor:
+          type: boolean
+          description: When true, only one open session per actor_id is allowed for this agent.
 
     UpdateAgentRequest:
       type: object
@@ -690,6 +714,14 @@ components:
               type: string
               nullable: true
               description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
+        max_context_messages:
+          type: integer
+          nullable: true
+          description: Maximum number of recent messages included in the context window. Null means no limit.
+        single_session_per_actor:
+          type: boolean
+          nullable: true
+          description: When true, only one open session per actor_id is allowed for this agent.
 
     CreateAgentGenerationRequest:
       type: object
@@ -701,6 +733,7 @@ components:
           minItems: 1
           items:
             type: object
+            additionalProperties: false
             required:
               - role
               - content
@@ -712,7 +745,10 @@ components:
                   - user
                   - assistant
               content:
-                type: string
+                oneOf:
+                  - type: string
+                  - $ref: '#/components/schemas/ToolOutputMessageContent'
+                  - $ref: '#/components/schemas/DocumentMessageContent'
         stream:
           type: boolean
           default: false
@@ -743,6 +779,47 @@ components:
             type: string
           nullable: true
           description: Key-value pairs injected as context headers into all tool call requests made during this generation.
+
+    ToolOutputMessageContent:
+      type: object
+      required:
+        - type
+        - tool_id
+      properties:
+        type:
+          type: string
+          enum:
+            - tool_output
+        tool_id:
+          type: string
+          description: Public ID of the tool to execute before generation.
+        action:
+          type: string
+          nullable: true
+          description: Optional action name for tools that require action selection (for example soat and mcp tools).
+        input:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Input payload passed to the tool call.
+        output_path:
+          type: string
+          nullable: true
+          description: Optional dot-notation path used to extract a value from the tool output.
+
+    DocumentMessageContent:
+      type: object
+      required:
+        - type
+        - document_id
+      properties:
+        type:
+          type: string
+          enum:
+            - document
+        document_id:
+          type: string
+          description: Public ID of a document to use as the message content.
 
     SubmitToolOutputsRequest:
       type: object

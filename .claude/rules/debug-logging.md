@@ -1,6 +1,6 @@
 ---
-applyTo: '**/packages/server/src/**'
-description: Instructions for adding debug logging to server lib and route handler code.
+paths:
+  - "packages/server/src/**"
 ---
 
 # Debug Logging

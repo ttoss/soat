@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Formations', () => {
@@ -223,7 +224,7 @@ resources:
 
       expect(res.status).toBe(201);
       expect(res.body.id).toBeDefined();
-      expect(res.body.id).toMatch(/^af_/);
+      expect(res.body.id).toMatch(/^form_/);
       expect(res.body.name).toBe('test-formation');
       expect(res.body.status).toBe('active');
       expect(res.body.project_id).toBe(projectId);
@@ -350,7 +351,7 @@ resources:
 
     test('unknown id returns 404', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        '/api/v1/formations/af_nonexistent'
+        '/api/v1/formations/form_nonexistent'
       );
 
       expect(res.status).toBe(404);
@@ -409,7 +410,7 @@ resources:
 
     test('unknown id returns 404', async () => {
       const res = await authenticatedTestClient(userToken)
-        .put('/api/v1/formations/af_nonexistent')
+        .put('/api/v1/formations/form_nonexistent')
         .send({ template: simpleTemplate });
 
       expect(res.status).toBe(404);
@@ -449,7 +450,7 @@ resources:
 
     test('unknown formation returns 404', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        '/api/v1/formations/af_nonexistent/events'
+        '/api/v1/formations/form_nonexistent/events'
       );
       expect(res.status).toBe(404);
     });
@@ -465,12 +466,13 @@ resources:
   // ── Delete ────────────────────────────────────────────────────────────────
 
   describe('DELETE /api/v1/formations/:formation_id', () => {
-    test('deletes the formation and returns 204', async () => {
+    test('deletes the formation and returns 200 with success', async () => {
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${formationId}`
       );
 
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
     });
 
     test('deleted formation is no longer found', async () => {
@@ -482,7 +484,7 @@ resources:
 
     test('unknown id returns 404', async () => {
       const res = await authenticatedTestClient(userToken).delete(
-        '/api/v1/formations/af_nonexistent'
+        '/api/v1/formations/form_nonexistent'
       );
       expect(res.status).toBe(404);
     });
@@ -628,7 +630,7 @@ resources:
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${optionalPropsFormationId}`
       );
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
     });
   });
 
@@ -894,7 +896,7 @@ resources:
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${paramFormationId}`
       );
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
     });
   });
 
@@ -1041,7 +1043,7 @@ resources:
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${agentToolFormationId}`
       );
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
     });
 
     test('deleted tool formation no longer found', async () => {
@@ -1146,7 +1148,7 @@ resources:
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${aiProviderFormationId}`
       );
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
     });
 
     test('deleted ai_provider formation no longer found', async () => {
@@ -1246,7 +1248,7 @@ resources:
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${documentFormationId}`
       );
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
     });
 
     test('deleted document formation no longer found', async () => {
@@ -1302,7 +1304,7 @@ resources:
       expect(res.body.resources[0].logical_id).toBe('MyEntry');
       expect(res.body.resources[0].status).toBe('created');
       expect(res.body.resources[0].physical_resource_id).toBeDefined();
-      expect(res.body.resources[0].physical_resource_id).toMatch(/^me_/);
+      expect(res.body.resources[0].physical_resource_id).toMatch(/^mem_entry_/);
 
       memoryEntryFormationId = res.body.id;
     });
@@ -1360,7 +1362,7 @@ resources:
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${memoryEntryFormationId}`
       );
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
     });
 
     test('deleted memory_entry formation no longer found', async () => {
@@ -1458,7 +1460,7 @@ resources:
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${apiKeyFormationId}`
       );
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
     });
 
     test('deleted api_key formation no longer found', async () => {
@@ -1500,7 +1502,9 @@ resources:
       secretFormationId = res.body.id;
 
       const secretResource = res.body.resources.find(
-        (r: { logical_id: string }) => r.logical_id === 'MySecret'
+        (r: { logical_id: string }) => {
+          return r.logical_id === 'MySecret';
+        }
       );
       expect(secretResource).toBeDefined();
       expect(secretResource.status).toBe('created');
@@ -1533,7 +1537,7 @@ resources:
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${secretFormationId}`
       );
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
     });
   });
 });

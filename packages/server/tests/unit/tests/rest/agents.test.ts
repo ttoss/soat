@@ -1,3 +1,6 @@
+import { db } from 'src/db';
+import { saveTrace } from 'src/lib/traces';
+
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Agents', () => {
@@ -401,7 +404,7 @@ describe('Agents', () => {
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
-      expect(response.body.id).toMatch(/^agt_/);
+      expect(response.body.id).toMatch(/^agent_/);
       expect(response.body.ai_provider_id).toBe(aiProviderId);
       expect(response.body.project_id).toBe(projectId);
       expect(response.body.max_steps).toBe(20);
@@ -427,6 +430,28 @@ describe('Agents', () => {
       expect(response.body.max_steps).toBe(5);
       expect(response.body.temperature).toBe(0.7);
     });
+
+    test('max_context_messages defaults to null when not specified', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
+
+      expect(response.status).toBe(201);
+      expect(response.body.max_context_messages).toBeNull();
+    });
+
+    test('creates an agent with max_context_messages', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          max_context_messages: 10,
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.max_context_messages).toBe(10);
+    });
   });
 
   describe('GET /api/v1/agents', () => {
@@ -451,7 +476,7 @@ describe('Agents', () => {
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThanOrEqual(1);
-      expect(response.body[0].id).toMatch(/^agt_/);
+      expect(response.body[0].id).toMatch(/^agent_/);
     });
   });
 
@@ -538,6 +563,15 @@ describe('Agents', () => {
       expect(response.body.max_steps).toBe(10);
     });
 
+    test('can update max_context_messages', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agentId}`)
+        .send({ max_context_messages: 5 });
+
+      expect(response.status).toBe(200);
+      expect(response.body.max_context_messages).toBe(5);
+    });
+
     test('can update agent with toolIds', async () => {
       const toolRes = await authenticatedTestClient(userToken)
         .post('/api/v1/tools')
@@ -580,6 +614,37 @@ describe('Agents', () => {
         `/api/v1/agents/${agentId}`
       );
       expect(response.status).toBe(204);
+    });
+
+    test('returns 409 when the agent has dependent traces', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Agent With Trace',
+        });
+      const blockedAgentId = createRes.body.id as string;
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      expect(project).not.toBeNull();
+
+      await saveTrace({
+        traceId: `trc_agent_delete_${Date.now()}`,
+        projectId: project!.id as number,
+        projectPublicId: projectId,
+        agentId: blockedAgentId,
+        steps: [{ type: 'text-delta', text: 'hello' }],
+      });
+
+      const response = await authenticatedTestClient(userToken).delete(
+        `/api/v1/agents/${blockedAgentId}`
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('AGENT_HAS_DEPENDENTS');
     });
 
     test('deleted agent returns 404 on get', async () => {
