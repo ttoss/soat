@@ -29,6 +29,7 @@ export type MappedAgent = {
   temperature: number | null;
   knowledgeConfig: object | null;
   maxContextMessages: number | null;
+  singleSessionPerActor: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -65,6 +66,7 @@ const mapAgent = (
     temperature: agent.temperature,
     knowledgeConfig: agent.knowledgeConfig,
     maxContextMessages: agent.maxContextMessages,
+    singleSessionPerActor: agent.singleSessionPerActor,
     createdAt: agent.createdAt,
     updatedAt: agent.updatedAt,
   };
@@ -87,6 +89,7 @@ type AgentUpdateFields = {
   temperature?: number | null;
   knowledgeConfig?: object | null;
   maxContextMessages?: number | null;
+  singleSessionPerActor?: boolean;
 };
 
 const AGENT_SCALAR_FIELDS = [
@@ -103,6 +106,7 @@ const AGENT_SCALAR_FIELDS = [
   'temperature',
   'knowledgeConfig',
   'maxContextMessages',
+  'singleSessionPerActor',
 ] as const;
 
 const buildAgentUpdates = (
@@ -140,6 +144,7 @@ export const createAgent = async (args: {
   temperature?: number;
   knowledgeConfig?: object;
   maxContextMessages?: number;
+  singleSessionPerActor?: boolean;
 }): Promise<MappedAgent> => {
   const aiProviderId = await resolveAiProviderDbId(args.aiProviderId);
   if (!aiProviderId)

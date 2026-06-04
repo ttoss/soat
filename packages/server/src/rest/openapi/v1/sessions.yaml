@@ -52,6 +52,18 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: An open session already exists for this actor (single_session_per_actor is enabled)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: SINGLE_SESSION_CONFLICT
+                  message: An open session already exists for this actor.
+                  meta:
+                    session_id: sess_abc123
     get:
       tags:
         - Sessions

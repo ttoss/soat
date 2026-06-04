@@ -555,6 +555,9 @@ components:
           type: integer
           nullable: true
           description: Maximum number of recent messages to include in the context window sent to the model. When null, all messages are included.
+        single_session_per_actor:
+          type: boolean
+          description: When true, only one open session per actor_id is allowed for this agent. Creating a second open session for the same actor returns 409.
         created_at:
           type: string
           format: date-time
@@ -633,6 +636,9 @@ components:
         max_context_messages:
           type: integer
           description: Maximum number of recent messages included in the context window. Null means no limit.
+        single_session_per_actor:
+          type: boolean
+          description: When true, only one open session per actor_id is allowed for this agent.
 
     UpdateAgentRequest:
       type: object
@@ -712,6 +718,10 @@ components:
           type: integer
           nullable: true
           description: Maximum number of recent messages included in the context window. Null means no limit.
+        single_session_per_actor:
+          type: boolean
+          nullable: true
+          description: When true, only one open session per actor_id is allowed for this agent.
 
     CreateAgentGenerationRequest:
       type: object

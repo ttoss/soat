@@ -28,6 +28,11 @@ export const ERROR_CODES = {
     description:
       'The generation does not exist or is not in a pending state for tool output submission.',
   },
+  SINGLE_SESSION_CONFLICT: {
+    httpStatus: 409,
+    description:
+      'An open session already exists for this actor. Use the existing session or close it first.',
+  },
   GENERATION_ALREADY_IN_PROGRESS: {
     httpStatus: 409,
     description:

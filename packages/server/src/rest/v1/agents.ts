@@ -40,6 +40,7 @@ type CreateAgentBody = {
   temperature?: unknown;
   knowledgeConfig?: unknown;
   maxContextMessages?: unknown;
+  singleSessionPerActor?: unknown;
   projectId?: string;
 };
 
@@ -74,6 +75,10 @@ const parseUpdateAgentBody = (body: Record<string, unknown>) => {
     temperature: parseOptional<number | null>(body.temperature),
     knowledgeConfig: parseOptional<object | null>(body.knowledgeConfig),
     maxContextMessages: parseOptional<number | null>(body.maxContextMessages),
+    singleSessionPerActor:
+      typeof body.singleSessionPerActor === 'boolean'
+        ? body.singleSessionPerActor
+        : undefined,
   };
 };
 
@@ -124,6 +129,10 @@ const buildCreateAgentArgs = (
     temperature: parseNumber(body.temperature),
     knowledgeConfig: body.knowledgeConfig as object | undefined,
     maxContextMessages: parseNumber(body.maxContextMessages),
+    singleSessionPerActor:
+      typeof body.singleSessionPerActor === 'boolean'
+        ? body.singleSessionPerActor
+        : undefined,
   };
 };
 

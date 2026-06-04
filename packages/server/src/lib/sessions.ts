@@ -86,6 +86,19 @@ export const createSession = async (args: {
       );
     }
     existingActorId = existingActor.id;
+
+    if (agent.singleSessionPerActor) {
+      const conflictingSession = await db.Session.findOne({
+        where: { agentId: agent.id, actorId: existingActorId, status: 'open' },
+      });
+      if (conflictingSession) {
+        throw new DomainError(
+          'SINGLE_SESSION_CONFLICT',
+          'An open session already exists for this actor.',
+          { session_id: conflictingSession.publicId }
+        );
+      }
+    }
   }
 
   const session = await db.sequelize.transaction((t) => {
