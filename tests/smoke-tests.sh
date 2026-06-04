@@ -1676,5 +1676,57 @@ echo "Session formation deleted."
 
 echo "Formations new resource types coverage: OK"
 
+# single_session_per_actor
+echo "--- single_session_per_actor enforcement ---"
+SSA_ACTOR_RESP=$($SOAT_CLI create-actor \
+  --project_id "$PROJECT_PUBLIC_ID" --name smoke-ssa-actor)
+SSA_ACTOR_ID=$(printf '%s\n' "$SSA_ACTOR_RESP" | jq -r '.id')
+if [ -z "$SSA_ACTOR_ID" ] || [ "$SSA_ACTOR_ID" = "null" ]; then
+  echo "ERROR: Failed to create actor for single_session_per_actor test" >&2
+  printf '%s\n' "$SSA_ACTOR_RESP" >&2
+  exit 1
+fi
+
+SSA_AGENT_RESP=$(curl -s -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"smoke-ssa-agent\",\"single_session_per_actor\":true}" \
+  "$BASE_URL/api/v1/agents")
+SSA_AGENT_ID=$(printf '%s\n' "$SSA_AGENT_RESP" | jq -r '.id')
+if [ -z "$SSA_AGENT_ID" ] || [ "$SSA_AGENT_ID" = "null" ]; then
+  echo "ERROR: Failed to create single_session_per_actor agent" >&2
+  printf '%s\n' "$SSA_AGENT_RESP" >&2
+  exit 1
+fi
+echo "SSA agent created: $SSA_AGENT_ID"
+
+SSA_SESSION_RESP=$(curl -s -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"actor_id\":\"$SSA_ACTOR_ID\"}" \
+  "$BASE_URL/api/v1/agents/$SSA_AGENT_ID/sessions")
+SSA_SESSION_ID=$(printf '%s\n' "$SSA_SESSION_RESP" | jq -r '.id')
+if [ -z "$SSA_SESSION_ID" ] || [ "$SSA_SESSION_ID" = "null" ]; then
+  echo "ERROR: First session creation should succeed" >&2
+  printf '%s\n' "$SSA_SESSION_RESP" >&2
+  exit 1
+fi
+echo "First session created: $SSA_SESSION_ID"
+
+SSA_CONFLICT_RESP=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"actor_id\":\"$SSA_ACTOR_ID\"}" \
+  "$BASE_URL/api/v1/agents/$SSA_AGENT_ID/sessions")
+if [ "$SSA_CONFLICT_RESP" != "409" ]; then
+  echo "ERROR: Expected 409 on duplicate session, got $SSA_CONFLICT_RESP" >&2
+  exit 1
+fi
+echo "Duplicate session correctly rejected with 409."
+
+$SOAT_CLI delete-agent --agent-id "$SSA_AGENT_ID"
+$SOAT_CLI delete-actor --actor-id "$SSA_ACTOR_ID"
+echo "single_session_per_actor: OK"
+
 echo ""
 echo "=== All smoke tests passed! ==="

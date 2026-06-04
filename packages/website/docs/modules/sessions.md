@@ -68,6 +68,24 @@ Content-Type: application/json
 
 The explicit `POST .../generate` endpoint continues to work regardless of this setting. Async generation (`?async=true`) is also supported on `POST .../messages` when `auto_generate` is enabled — the request returns `202 Accepted` immediately and generation proceeds in the background.
 
+### Single Session Per Actor
+
+When the parent agent has `single_session_per_actor: true`, `POST /agents/:id/sessions` with an `actor_id` will return `409 Conflict` if an open session for that actor already exists. The error body includes `meta.session_id` with the existing session's ID so the caller can reuse it without a separate lookup:
+
+```json
+{
+  "error": {
+    "code": "SINGLE_SESSION_CONFLICT",
+    "message": "An open session already exists for this actor.",
+    "meta": {
+      "session_id": "sess_..."
+    }
+  }
+}
+```
+
+Requests without `actor_id` are not subject to this check.
+
 ### Inactivity TTL
 
 Sessions can be configured to expire automatically after a period of inactivity using `inactivity_ttl_seconds`.

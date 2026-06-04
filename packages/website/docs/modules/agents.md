@@ -39,6 +39,7 @@ Each agent stores its AI provider, instructions, tool references, and execution 
 | `temperature`      | number        | no       | Sampling temperature                                                                                                             |
 | `knowledge_config` | object        | no       | Knowledge retrieval config injected before every generation — see [Knowledge Config](#knowledge-config)                          |
 | `max_context_messages` | number    | no       | Maximum number of recent messages sent to the model per generation — see [Context Window Limiting](#context-window-limiting)     |
+| `single_session_per_actor` | boolean | no  | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)         |
 
 ### Agent Tool
 
@@ -328,6 +329,26 @@ Set `max_context_messages` on the agent to cap how many recent messages are incl
 ```
 
 When `null` (the default), all messages are included.
+
+### Single Session Per Actor
+
+When `single_session_per_actor` is `true`, the server enforces that only one open session per `actor_id` can exist at a time for that agent.
+
+- If a second `POST /agents/:id/sessions` is made with the same `actor_id` while an open session already exists, the server returns `409 Conflict` with error code `SINGLE_SESSION_CONFLICT` and `meta.session_id` pointing to the existing session.
+- Requests without an `actor_id` are not affected regardless of this flag.
+- Closing or deleting the existing session allows a new one to be created.
+
+```json
+{
+  "error": {
+    "code": "SINGLE_SESSION_CONFLICT",
+    "message": "An open session already exists for this actor.",
+    "meta": {
+      "session_id": "sess_..."
+    }
+  }
+}
+```
 
 ### Active Tools
 

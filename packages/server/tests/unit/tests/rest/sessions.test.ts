@@ -646,9 +646,9 @@ describe('Sessions', () => {
       const callArgs = mockCreateGeneration.mock.calls[0][0] as {
         messages: Array<{ role: string; content: string }>;
       };
-      const nonSystemMessages = callArgs.messages.filter(
-        (m) => m.role !== 'system'
-      );
+      const nonSystemMessages = callArgs.messages.filter((m) => {
+        return m.role !== 'system';
+      });
       expect(nonSystemMessages).toHaveLength(2);
       expect(nonSystemMessages[0].content).toContain('Message 3');
       expect(nonSystemMessages[1].content).toContain('Message 4');
@@ -1674,6 +1674,129 @@ describe('Sessions', () => {
         .send({});
 
       expect(genRes.status).toBe(200);
+    });
+  });
+
+  // ── single_session_per_actor ───────────────────────────────────────────
+
+  describe('single_session_per_actor', () => {
+    let singleSessionAgentId: string;
+    let singleSessionActorId: string;
+
+    beforeAll(async () => {
+      const agentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'Single Session Agent',
+          single_session_per_actor: true,
+        });
+      singleSessionAgentId = agentRes.body.id;
+
+      const actorRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'Single Session Actor' });
+      singleSessionActorId = actorRes.body.id;
+    });
+
+    test('agent has single_session_per_actor true', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/agents/${singleSessionAgentId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.single_session_per_actor).toBe(true);
+    });
+
+    test('first session with actor_id succeeds', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({ actor_id: singleSessionActorId });
+      expect(res.status).toBe(201);
+      expect(res.body.id).toMatch(/^sess_/);
+    });
+
+    test('second session with same actor_id returns 409 with session_id in meta', async () => {
+      // ensure first session exists
+      const first = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({ actor_id: singleSessionActorId });
+      // might be 409 if previous test created it, or 201
+      const existingId =
+        first.status === 201
+          ? first.body.id
+          : first.body.error?.meta?.session_id;
+
+      const second = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({ actor_id: singleSessionActorId });
+      expect(second.status).toBe(409);
+      expect(second.body.error.code).toBe('SINGLE_SESSION_CONFLICT');
+      expect(second.body.error.meta.session_id).toMatch(/^sess_/);
+      if (existingId) {
+        expect(second.body.error.meta.session_id).toBe(existingId);
+      }
+    });
+
+    test('no enforcement when actor_id is absent', async () => {
+      const res1 = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({});
+      expect(res1.status).toBe(201);
+
+      const res2 = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({});
+      expect(res2.status).toBe(201);
+    });
+
+    test('no enforcement when single_session_per_actor is false', async () => {
+      const agentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'No Single Session Agent',
+          single_session_per_actor: false,
+        });
+      const normalAgentId = agentRes.body.id;
+
+      const actorRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'Normal Actor' });
+      const normalActorId = actorRes.body.id;
+
+      const res1 = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${normalAgentId}/sessions`)
+        .send({ actor_id: normalActorId });
+      expect(res1.status).toBe(201);
+
+      const res2 = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${normalAgentId}/sessions`)
+        .send({ actor_id: normalActorId });
+      expect(res2.status).toBe(201);
+    });
+
+    test('after closing existing session, new session can be created', async () => {
+      const actorRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'Reopen Actor' });
+      const actorId = actorRes.body.id;
+
+      const sess1 = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({ actor_id: actorId });
+      expect(sess1.status).toBe(201);
+      const sessId = sess1.body.id;
+
+      await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${singleSessionAgentId}/sessions/${sessId}`)
+        .send({ status: 'closed' });
+
+      const sess2 = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({ actor_id: actorId });
+      expect(sess2.status).toBe(201);
     });
   });
 });
