@@ -140,6 +140,7 @@ describe('submitToolOutputs', () => {
         },
       ],
       messages: [{ role: 'user', content: 'hello' }],
+      steps: [],
       resolvedModel: {} as never,
       agentConfig: {
         instructions: null,
