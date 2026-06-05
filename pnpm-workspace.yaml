@@ -33,7 +33,7 @@ allowBuilds:
   core-js: true
   cpu-features: true
   esbuild: true
-  postman-code-generators: true
+  postman-code-generators: false
   protobufjs: true
   ssh2: true
   unrs-resolver: true
