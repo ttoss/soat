@@ -8,7 +8,7 @@ BASE_URL="$SERVER_URL"
 # Set env vars consumed by the CLI (no profile / config file needed)
 # The SDK paths already include /api/v1, so the base URL should be host-only.
 export SOAT_BASE_URL="$SERVER_URL"
-SOAT_CLI="node /app/packages/cli/dist/esm/index.js"
+SOAT_CLI="node /app/packages/cli/dist/index.mjs"
 
 expect_cli_error_status() {
   EXPECTED_STATUS="$1"
