@@ -6,12 +6,18 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/esm/index.js"
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsdown",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "sync": "ttoss-postgresdb sync"
@@ -26,7 +32,7 @@
     "@ttoss/postgresdb-cli": "^0.2.13",
     "@ttoss/test-utils": "^4.2.13",
     "@types/node": "^24",
-    "tsup": "^8.5.1",
+    "tsdown": "^0.22.1",
     "typescript": "~6.0.3"
   }
 }

@@ -7,7 +7,7 @@
     "lint": "eslint src tests",
     "test": "jest --config tests/unit/jest.config.ts --coverage=false",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
-    "build": "pnpm generate && tsup"
+    "build": "pnpm generate && tsdown"
   },
   "dependencies": {
     "@inquirer/input": "^5.1.2",
@@ -24,7 +24,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^24",
     "jest": "^30.4.2",
-    "tsup": "^8.5.1",
+    "tsdown": "^0.22.1",
     "tsx": "^4.22.4"
   },
   "files": [

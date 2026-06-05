@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { tsupConfig } from '@ttoss/config';
+import { tsdownConfig } from '@ttoss/config';
 
 /**
  * Copies OpenAPI YAML spec files to dist/rest/openapi/v1/ so that
@@ -21,10 +21,9 @@ const copyOpenApiFiles = () => {
   }
 };
 
-export const tsup = {
-  ...tsupConfig({
-    entry: ['src/server.ts'],
-  }),
+export default {
+  ...tsdownConfig(),
+  entry: ['src/server.ts'],
   format: ['esm'],
   sourcemap: true,
   onSuccess: copyOpenApiFiles,

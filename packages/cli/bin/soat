@@ -1,4 +1,4 @@
 #!/usr/bin/env node
-import('../dist/esm/index.js').then(({ runCli }) => {
+import('../dist/index.mjs').then(({ runCli }) => {
   return runCli(process.argv);
 });
