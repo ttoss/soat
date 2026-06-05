@@ -13,6 +13,7 @@
   "bugs": {
     "url": "https://github.com/ttoss/soat/issues"
   },
+  "type": "module",
   "scripts": {
     "prepare": "husky",
     "smoke-tests": "docker compose -f tests/docker-compose.smoke.yml up --build --renew-anon-volumes --remove-orphans --abort-on-container-exit --exit-code-from smoke-test",
@@ -23,26 +24,26 @@
     "syncpack:lint": "syncpack lint"
   },
   "devDependencies": {
-    "@commitlint/cli": "^20.5.0",
-    "@lerna-lite/changed": "^5.1.0",
-    "@lerna-lite/cli": "^5.1.0",
-    "@lerna-lite/list": "^5.1.0",
-    "@lerna-lite/version": "^5.1.0",
-    "@ttoss/config": "^1.37.10",
-    "@ttoss/eslint-config": "^1.26.16",
-    "@ttoss/monorepo": "^1.29.10",
-    "carlin": "^1.49.5",
+    "@commitlint/cli": "^21.0.2",
+    "@lerna-lite/changed": "^5.3.0",
+    "@lerna-lite/cli": "^5.3.0",
+    "@lerna-lite/list": "^5.3.0",
+    "@lerna-lite/version": "^5.3.0",
+    "@ttoss/config": "^1.37.13",
+    "@ttoss/eslint-config": "^1.27.0",
+    "@ttoss/monorepo": "^1.29.13",
+    "carlin": "^1.49.16",
     "eslint": "^9",
     "husky": "^9.1.7",
-    "lint-staged": "^16.4.0",
+    "lint-staged": "^17.0.7",
     "prettier": "^3.8.3",
-    "syncpack": "^14.3.0",
-    "turbo": "^2.9.6",
+    "syncpack": "^15.3.1",
+    "turbo": "^2.9.16",
     "typescript": "~6.0.3"
   },
   "engines": {
     "node": "^24.0.0",
-    "pnpm": "^10.0.0"
+    "pnpm": "^11.0.0"
   },
-  "packageManager": "pnpm@10.33.2"
+  "packageManager": "pnpm@11.5.2"
 }

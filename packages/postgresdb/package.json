@@ -17,14 +17,14 @@
     "sync": "ttoss-postgresdb sync"
   },
   "dependencies": {
-    "@ttoss/postgresdb": "^0.9.0",
-    "nanoid": "^5.1.9"
+    "@ttoss/postgresdb": "^0.9.4",
+    "nanoid": "^5.1.11"
   },
   "devDependencies": {
-    "@testcontainers/postgresql": "^11.14.0",
-    "@ttoss/config": "^1.37.10",
-    "@ttoss/postgresdb-cli": "^0.2.9",
-    "@ttoss/test-utils": "^4.2.10",
+    "@testcontainers/postgresql": "^12.0.1",
+    "@ttoss/config": "^1.37.13",
+    "@ttoss/postgresdb-cli": "^0.2.13",
+    "@ttoss/test-utils": "^4.2.13",
     "@types/node": "^24",
     "tsup": "^8.5.1",
     "typescript": "~6.0.3"
