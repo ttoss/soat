@@ -10,9 +10,6 @@ import { version } from '../../package.json' with { type: 'json' };
 import { soatTools } from '../lib/soatTools';
 import { toMcpText } from './toMcpText';
 
-// Workaround until https://github.com/ttoss/ttoss/issues/1018 is fixed.
-// McpServer is incorrectly declared as type-only but is a runtime value.
-// @ts-expect-error TS1362
 const mcpServer = new McpServer({
   name: 'soat',
   title: 'SOAT',

@@ -13,13 +13,13 @@
     "@inquirer/input": "^5.1.2",
     "@inquirer/password": "^5.1.1",
     "@soat/sdk": "workspace:*",
-    "@ttoss/logger": "^0.8.14",
+    "@ttoss/logger": "^0.8.16",
     "commander": "^15.0.0",
     "js-yaml": "^4.2.0"
   },
   "devDependencies": {
-    "@ttoss/config": "^1.37.13",
-    "@ttoss/test-utils": "^4.2.13",
+    "@ttoss/config": "^1.37.15",
+    "@ttoss/test-utils": "^4.2.15",
     "@types/jest": "^30.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^24",

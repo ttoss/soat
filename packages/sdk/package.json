@@ -37,7 +37,7 @@
   "devDependencies": {
     "@hey-api/client-fetch": "^0.13.1",
     "@hey-api/openapi-ts": "^0.98.1",
-    "@ttoss/config": "^1.37.13",
+    "@ttoss/config": "^1.37.15",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^24",
     "js-yaml": "^4.2.0",
