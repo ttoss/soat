@@ -3,13 +3,11 @@ import {
   Column,
   DataType,
   ForeignKey,
-  HasMany,
   Model,
   Table,
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
-import { MemoryEntry } from './MemoryEntry';
 import { Project } from './Project';
 
 @Table({
@@ -49,11 +47,6 @@ export class Memory extends Model {
 
   @Column({ type: DataType.ARRAY(DataType.STRING), allowNull: true })
   declare tags: string[] | null;
-
-  @HasMany(() => {
-    return MemoryEntry;
-  })
-  declare entries: MemoryEntry[];
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
