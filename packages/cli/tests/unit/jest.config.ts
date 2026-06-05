@@ -16,6 +16,6 @@ export default jestUnitConfig({
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   transformIgnorePatterns: getTransformIgnorePatterns({
-    esmModules: ['@soat/sdk', '@inquirer/input', '@inquirer/password'],
+    esmModules: ['@soat/sdk', '@inquirer/input', '@inquirer/password', 'commander'],
   }),
 });
