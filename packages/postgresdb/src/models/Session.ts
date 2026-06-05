@@ -84,7 +84,7 @@ export class Session extends Model {
   )
   declare actor: Actor | null;
 
-  @Column({ defaultValue: 'open' })
+  @Column({ type: DataType.STRING, defaultValue: 'open' })
   declare status: string;
 
   @Column({ type: DataType.STRING, allowNull: true })

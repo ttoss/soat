@@ -103,7 +103,10 @@ const typeValidators: Record<
 
 const resolveFormationSpecPath = (): string => {
   const candidates = [
+    // Tests (ts-jest): __dirname = src/lib/formation-modules/
     path.resolve(__dirname, '../../rest/openapi/v1/formations.yaml'),
+    // Production bundle (tsdown): __dirname = dist/, yamls copied there by onSuccess
+    path.resolve(__dirname, 'rest/openapi/v1/formations.yaml'),
     path.resolve(__dirname, '../../../src/rest/openapi/v1/formations.yaml'),
     path.resolve(process.cwd(), 'src/rest/openapi/v1/formations.yaml'),
     path.resolve(

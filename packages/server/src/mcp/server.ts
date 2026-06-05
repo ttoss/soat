@@ -1,3 +1,4 @@
+import type { App } from '@ttoss/http-server';
 import {
   apiCall,
   createMcpRouter,
@@ -50,4 +51,7 @@ const mcpRouter = createMcpRouter(mcpServer, {
   },
 });
 
-export { mcpRouter };
+export const setupMcpMiddleware = (app: App) => {
+  app.use(mcpRouter.routes());
+  app.use(mcpRouter.allowedMethods());
+};

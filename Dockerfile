@@ -83,13 +83,6 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 COPY --from=builder /app/packages/server/dist ./packages/server/dist
 COPY --from=builder /app/packages/postgresdb/dist ./packages/postgresdb/dist
 
-# Copy OpenAPI specs needed at runtime by resolveFormationSpecPath() and other
-# spec loaders. The first candidate path is ../../rest/openapi/v1/ relative to dist/esm/.
-COPY --from=builder /app/packages/server/src/rest/openapi/v1/ ./packages/server/rest/openapi/v1/
-
-# Mark dist/esm as ESM so Node.js parses import statements correctly
-RUN echo '{"type":"module"}' > packages/server/dist/esm/package.json
-
 # Directory where uploaded files are persisted
 ENV FILES_STORAGE_DIR=/data/files
 
@@ -100,4 +93,4 @@ VOLUME ["/data/files"]
 
 EXPOSE 5047
 
-CMD ["node", "--enable-source-maps", "packages/server/dist/esm/server.js"]
+CMD ["node", "--enable-source-maps", "packages/server/dist/server.mjs"]

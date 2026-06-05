@@ -3,22 +3,22 @@
   "version": "0.6.5",
   "description": "TypeScript SDK for the SOAT API",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
   "exports": {
     ".": {
       "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/esm/index.js"
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
       },
       "require": {
         "types": "./dist/index.d.cts",
-        "default": "./dist/index.js"
+        "default": "./dist/index.cjs"
       }
     }
   },
   "scripts": {
-    "build": "pnpm generate && tsup",
+    "build": "pnpm generate && tsdown",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "generate": "tsx scripts/generate.ts"
@@ -36,12 +36,12 @@
   },
   "devDependencies": {
     "@hey-api/client-fetch": "^0.13.1",
-    "@hey-api/openapi-ts": "^0.96.1",
-    "@ttoss/config": "^1.37.10",
+    "@hey-api/openapi-ts": "^0.98.1",
+    "@ttoss/config": "^1.37.15",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^24",
-    "js-yaml": "^4.1.1",
-    "tsup": "^8.5.1",
-    "tsx": "^4.21.0"
+    "js-yaml": "^4.2.0",
+    "tsdown": "^0.22.1",
+    "tsx": "^4.22.4"
   }
 }

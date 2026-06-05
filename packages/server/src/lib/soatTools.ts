@@ -22,7 +22,11 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const log = createDebug('soat:tools');
 
 const loadToolDefinitions = (): ToolDefinition[] => {
-  const specDir = path.resolve(__dirname, '../rest/openapi/v1');
+  // In tests (ts-jest), __dirname is src/lib/ — specs are at ../rest/openapi/v1.
+  // In the production bundle, __dirname is dist/ — specs are copied to rest/openapi/v1.
+  const candidate1 = path.resolve(__dirname, '../rest/openapi/v1');
+  const candidate2 = path.resolve(__dirname, 'rest/openapi/v1');
+  const specDir = fs.existsSync(candidate1) ? candidate1 : candidate2;
   const tools: ToolDefinition[] = [];
 
   if (!fs.existsSync(specDir)) return tools;

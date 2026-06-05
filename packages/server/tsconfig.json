@@ -5,7 +5,8 @@
       "src/*": ["./src/*"]
     },
     "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedParameters": true,
+    "declaration": false
   },
   "include": ["src", "scripts"]
 }

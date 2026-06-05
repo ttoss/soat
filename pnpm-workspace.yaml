@@ -1,2 +1,39 @@
 packages:
   - 'packages/*'
+minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  - 'carlin'
+  - '@ttoss/*'
+  - 'pnpm'
+blockExoticSubdeps: true
+trustLockfile: true
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  # https://github.com/storybookjs/storybook/issues/34957
+  # https://github.com/TypeStrong/fork-ts-checker-webpack-plugin/issues/895
+  - chokidar
+  # Docusaurus dependencies
+  - detect-port
+  # Relay/fbjs
+  - ua-parser-js
+  # tsdown, lint-staged, @commitlint/cli, @lerna-lite/core, Docusaurus mermaid path
+  - tinyexec
+  # semver@6.3.1 comes from Babel stack, especially @babel/core
+  - semver
+  - '@octokit/webhooks'
+  - 'react-redux'
+  - 'reselect'
+  - 'undici-types'
+  - '@ttoss/*'
+  - carlin
+allowBuilds:
+  '@parcel/watcher': true
+  '@swc/core': true
+  aws-sdk: true
+  core-js: true
+  cpu-features: true
+  esbuild: true
+  postman-code-generators: false
+  protobufjs: true
+  ssh2: true
+  unrs-resolver: true

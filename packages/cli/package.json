@@ -7,25 +7,25 @@
     "lint": "eslint src tests",
     "test": "jest --config tests/unit/jest.config.ts --coverage=false",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
-    "build": "pnpm generate && tsup"
+    "build": "pnpm generate && tsdown"
   },
   "dependencies": {
-    "@inquirer/input": "^5.0.12",
-    "@inquirer/password": "^5.0.12",
+    "@inquirer/input": "^5.1.2",
+    "@inquirer/password": "^5.1.1",
     "@soat/sdk": "workspace:*",
-    "@ttoss/logger": "^0.8.10",
-    "commander": "^14.0.3",
-    "js-yaml": "^4.1.1"
+    "@ttoss/logger": "^0.8.16",
+    "commander": "^15.0.0",
+    "js-yaml": "^4.2.0"
   },
   "devDependencies": {
-    "@ttoss/config": "^1.37.10",
-    "@ttoss/test-utils": "^4.2.10",
+    "@ttoss/config": "^1.37.15",
+    "@ttoss/test-utils": "^4.2.15",
     "@types/jest": "^30.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^24",
-    "jest": "^30.3.0",
-    "tsup": "^8.5.1",
-    "tsx": "^4.21.0"
+    "jest": "^30.4.2",
+    "tsdown": "^0.22.1",
+    "tsx": "^4.22.4"
   },
   "files": [
     "dist",
