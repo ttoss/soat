@@ -467,6 +467,58 @@ describe('Sessions', () => {
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
       expect(response.body.error.message).toMatch(/message/);
     });
+
+    describe('idempotency_key', () => {
+      test('first call with idempotency_key returns 201', async () => {
+        const response = await authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+          .send({ message: 'Idempotent message', idempotency_key: 'idem-key-1' });
+
+        expect(response.status).toBe(201);
+        expect(response.body.role).toBe('user');
+        expect(response.body.content).toBe('Idempotent message');
+      });
+
+      test('duplicate call with same idempotency_key returns 200 with original message', async () => {
+        const key = 'idem-key-dup-' + Date.now();
+
+        const first = await authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+          .send({ message: 'Original message', idempotency_key: key });
+
+        expect(first.status).toBe(201);
+
+        const second = await authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+          .send({ message: 'Different message', idempotency_key: key });
+
+        expect(second.status).toBe(200);
+        expect(second.body.role).toBe('user');
+        expect(second.body.content).toBe('Original message');
+      });
+
+      test('same idempotency_key in different sessions is allowed', async () => {
+        const key = 'idem-key-cross-session-' + Date.now();
+
+        const sessionRes = await authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${agentId}/sessions`)
+          .send({ name: 'Second session for idempotency test' });
+        const secondSessionId = sessionRes.body.id;
+
+        const first = await authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+          .send({ message: 'Session 1 message', idempotency_key: key });
+
+        expect(first.status).toBe(201);
+
+        const second = await authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${agentId}/sessions/${secondSessionId}/messages`)
+          .send({ message: 'Session 2 message', idempotency_key: key });
+
+        expect(second.status).toBe(201);
+        expect(second.body.content).toBe('Session 2 message');
+      });
+    });
   });
 
   // ── Generate Session Response ──────────────────────────────────────────

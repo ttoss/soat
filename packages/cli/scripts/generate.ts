@@ -43,6 +43,7 @@ interface OpenApiRequestBodyProperty {
 interface OpenApiRequestBodySchema {
   required?: string[];
   properties?: Record<string, OpenApiRequestBodyProperty>;
+  oneOf?: OpenApiRequestBodySchema[];
 }
 
 interface OpenApiRequestBody {
@@ -74,6 +75,7 @@ interface OpenApiPathItem {
 
 interface OpenApiComponents {
   parameters?: Record<string, OpenApiParameterFull>;
+  schemas?: Record<string, OpenApiRequestBodySchema & { $ref?: string }>;
 }
 
 interface OpenApiSpec {
@@ -154,6 +156,17 @@ for (const file of files) {
     return p;
   };
 
+  /** Resolve a schema that may be a $ref to components/schemas. */
+  const resolveSchema = (
+    schema: OpenApiRequestBodySchema & { $ref?: string }
+  ): OpenApiRequestBodySchema => {
+    if (schema.$ref) {
+      const refKey = schema.$ref.replace('#/components/schemas/', '');
+      return spec.components?.schemas?.[refKey] ?? schema;
+    }
+    return schema;
+  };
+
   for (const [, pathItem] of Object.entries(spec.paths ?? {})) {
     // Collect path-level parameters (inherited by all operations)
     const pathLevelParams = (pathItem.parameters ?? []).map(resolveParam);
@@ -196,19 +209,65 @@ for (const file of files) {
         });
       }
 
-      const bodySchema = op.requestBody?.content?.['application/json']?.schema;
-      if (bodySchema?.properties) {
-        const requiredBodyFields = new Set(bodySchema.required ?? []);
-        for (const [propName, propSchema] of Object.entries(
-          bodySchema.properties
-        )) {
-          flags.push({
-            name: propName,
-            description: propSchema.description ?? '',
-            required: requiredBodyFields.has(propName),
-            type: propSchema.type ?? 'string',
-            in: 'body',
-          });
+      const rawBodySchema = op.requestBody?.content?.['application/json']?.schema;
+      const bodySchema = rawBodySchema
+        ? resolveSchema(rawBodySchema as OpenApiRequestBodySchema & { $ref?: string })
+        : undefined;
+      if (bodySchema) {
+        const mergedProperties: Record<string, OpenApiRequestBodyProperty> = {};
+        const requiredInAll = new Set<string>();
+
+        const collectFromSchema = (schema: OpenApiRequestBodySchema) => {
+          if (schema.properties) {
+            const required = new Set(schema.required ?? []);
+            for (const [propName, propSchema] of Object.entries(
+              schema.properties
+            )) {
+              if (!mergedProperties[propName]) {
+                mergedProperties[propName] = propSchema;
+                if (required.has(propName)) requiredInAll.add(propName);
+              }
+            }
+          }
+        };
+
+        if (bodySchema.oneOf) {
+          for (const variant of bodySchema.oneOf) {
+            collectFromSchema(variant);
+          }
+          // A field is only required if it appears as required in ALL variants
+          const requiredEvery = new Set<string>();
+          for (const propName of Object.keys(mergedProperties)) {
+            if (
+              bodySchema.oneOf.every((v) => v.required?.includes(propName))
+            ) {
+              requiredEvery.add(propName);
+            }
+          }
+          for (const [propName, propSchema] of Object.entries(
+            mergedProperties
+          )) {
+            flags.push({
+              name: propName,
+              description: propSchema.description ?? '',
+              required: requiredEvery.has(propName),
+              type: propSchema.type ?? 'string',
+              in: 'body',
+            });
+          }
+        } else {
+          collectFromSchema(bodySchema);
+          for (const [propName, propSchema] of Object.entries(
+            mergedProperties
+          )) {
+            flags.push({
+              name: propName,
+              description: propSchema.description ?? '',
+              required: requiredInAll.has(propName),
+              type: propSchema.type ?? 'string',
+              in: 'body',
+            });
+          }
         }
       }
 

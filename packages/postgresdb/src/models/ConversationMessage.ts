@@ -23,6 +23,10 @@ import { Document } from './Document';
       unique: true,
       fields: ['conversation_id', 'position'],
     },
+    {
+      unique: true,
+      fields: ['conversation_id', 'idempotency_key'],
+    },
   ],
 })
 export class ConversationMessage extends Model {
@@ -87,4 +91,7 @@ export class ConversationMessage extends Model {
 
   @Column({ type: DataType.JSONB, allowNull: true })
   declare metadata: Record<string, unknown> | null;
+
+  @Column({ type: DataType.STRING, allowNull: true, field: 'idempotency_key' })
+  declare idempotencyKey: string | null;
 }

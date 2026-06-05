@@ -1720,5 +1720,46 @@ $SOAT_CLI delete-agent --agent-id "$SSA_AGENT_ID"
 $SOAT_CLI delete-actor --actor-id "$SSA_ACTOR_ID"
 echo "single_session_per_actor: OK"
 
+# idempotency_key on add-session-message
+echo "--- add-session-message idempotency_key deduplication ---"
+IDEM_SESSION_RESP=$($SOAT_CLI create-agent-session \
+  --agent_id "$AGENT_ID")
+IDEM_SESSION_ID=$(printf '%s\n' "$IDEM_SESSION_RESP" | jq -r '.id')
+if [ -z "$IDEM_SESSION_ID" ] || [ "$IDEM_SESSION_ID" = "null" ]; then
+  echo "ERROR: Failed to create session for idempotency test" >&2
+  printf '%s\n' "$IDEM_SESSION_RESP" >&2
+  exit 1
+fi
+
+IDEM_KEY="smoke-idem-key-$$"
+
+IDEM_FIRST_RESP=$($SOAT_CLI add-session-message \
+  --agent_id "$AGENT_ID" \
+  --session_id "$IDEM_SESSION_ID" \
+  --message "first message" \
+  --idempotency_key "$IDEM_KEY")
+IDEM_FIRST_CONTENT=$(printf '%s\n' "$IDEM_FIRST_RESP" | jq -r '.content')
+if [ "$IDEM_FIRST_CONTENT" != "first message" ]; then
+  echo "ERROR: first idempotency_key call did not return expected content" >&2
+  printf '%s\n' "$IDEM_FIRST_RESP" >&2
+  exit 1
+fi
+echo "First call with idempotency_key: OK"
+
+IDEM_SECOND_RESP=$($SOAT_CLI add-session-message \
+  --agent_id "$AGENT_ID" \
+  --session_id "$IDEM_SESSION_ID" \
+  --message "different message" \
+  --idempotency_key "$IDEM_KEY")
+IDEM_SECOND_CONTENT=$(printf '%s\n' "$IDEM_SECOND_RESP" | jq -r '.content')
+if [ "$IDEM_SECOND_CONTENT" != "first message" ]; then
+  echo "ERROR: duplicate idempotency_key call did not return original content" >&2
+  printf '%s\n' "$IDEM_SECOND_RESP" >&2
+  exit 1
+fi
+echo "Duplicate call with idempotency_key returns original message: OK"
+
+echo "add-session-message idempotency_key: OK"
+
 echo ""
 echo "=== All smoke tests passed! ==="

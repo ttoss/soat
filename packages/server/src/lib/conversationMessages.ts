@@ -64,6 +64,7 @@ const insertMessage = async (args: {
   agentId?: number | null;
   position?: number;
   metadata?: Record<string, unknown>;
+  idempotencyKey: string | null;
 }) => {
   return db.sequelize.transaction(async (t) => {
     let position = args.position;
@@ -103,10 +104,35 @@ const insertMessage = async (args: {
         agentId: args.agentId ?? null,
         position,
         metadata: args.metadata ?? null,
+        idempotencyKey: args.idempotencyKey,
       },
       { transaction: t }
     );
   });
+};
+
+const findIdempotentMessage = async (args: {
+  conversationId: number;
+  idempotencyKey: string;
+}) => {
+  const existing = await db.ConversationMessage.findOne({
+    where: {
+      conversationId: args.conversationId,
+      idempotencyKey: args.idempotencyKey,
+    },
+    include: [
+      {
+        model: db.Document,
+        as: 'document',
+        include: [{ model: db.File, as: 'file' }],
+      },
+      { model: db.Actor, as: 'actor' },
+      { model: db.Agent, as: 'agent' },
+    ],
+  });
+  return existing
+    ? { ...mapMessage(existing), idempotent: true as const }
+    : null;
 };
 
 export const addConversationMessage = async (args: {
@@ -117,6 +143,7 @@ export const addConversationMessage = async (args: {
   agentId?: string | null;
   position?: number;
   metadata?: Record<string, unknown>;
+  idempotencyKey?: string | null;
 }) => {
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.conversationId },
@@ -126,14 +153,20 @@ export const addConversationMessage = async (args: {
     return null;
   }
 
-  let actorDbId: number | null = null;
-  let agentDbId: number | null = null;
+  if (args.idempotencyKey) {
+    const hit = await findIdempotentMessage({
+      conversationId: conversation.id,
+      idempotencyKey: args.idempotencyKey,
+    });
+    if (hit) return hit;
+  }
+
   const participants = await resolveParticipantDbIds({
     actorId: args.actorId,
     agentId: args.agentId,
   });
   if (!participants) return null;
-  ({ actorDbId, agentDbId } = participants);
+  const { actorDbId, agentDbId } = participants;
 
   const createdDoc = await createDocument({
     projectId: conversation.projectId,
@@ -156,6 +189,7 @@ export const addConversationMessage = async (args: {
     agentId: agentDbId,
     position: args.position,
     metadata: args.metadata,
+    idempotencyKey: args.idempotencyKey ?? null,
   });
 
   const messageWithAssociations = await db.ConversationMessage.findOne({
@@ -236,6 +270,7 @@ export const addConversationDocumentMessage = async (args: {
     agentId: participants.agentDbId,
     position: args.position,
     metadata: args.metadata,
+    idempotencyKey: null,
   });
 
   const messageWithAssociations = await db.ConversationMessage.findOne({
