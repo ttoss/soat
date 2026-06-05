@@ -1,7 +1,7 @@
 import { addHealthCheck, App, bodyParser, cors } from '@ttoss/http-server';
 
 import { initializeDispatcher } from './lib/webhookDispatcher';
-import { mcpRouter } from './mcp/server';
+import { setupMcpMiddleware } from './mcp/server';
 import { authMiddleware } from './middleware/auth';
 import { errorLoggerMiddleware } from './middleware/errorLogger';
 import { restRouter } from './rest/router';
@@ -20,7 +20,6 @@ app.use(authMiddleware);
 app.use(restRouter.routes());
 app.use(restRouter.allowedMethods());
 
-app.use(mcpRouter.routes());
-app.use(mcpRouter.allowedMethods());
+setupMcpMiddleware(app);
 
 export { app };
