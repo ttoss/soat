@@ -3,18 +3,18 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { submitToolOutputs } from './agents';
 import { generateConversationMessage } from './conversationGeneration';
-import {
-  addConversationDocumentMessage,
-  addConversationMessage,
-} from './conversationMessages';
 import { listConversationMessages } from './conversations';
-import { resolveMessageContent } from './messageContent';
 import {
   emitGenerationCompleted,
   emitGenerationRequiresAction,
   emitGenerationStarted,
   processToolOutputResult,
 } from './sessionGenerationHelpers';
+import {
+  addResolvedSessionUserMessage,
+  assertSessionMessageInput,
+  triggerOrReturnMessage,
+} from './sessionMessageHelpers';
 
 const GENERATING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -273,60 +273,6 @@ export const listSessionMessages = async (args: {
   };
 };
 
-const assertSessionMessageInput = (args: {
-  message?: string;
-  documentId?: string;
-}) => {
-  if (!args.message && !args.documentId) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'either message or documentId is required'
-    );
-  }
-
-  if (args.message && args.documentId) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'message and documentId are mutually exclusive'
-    );
-  }
-};
-
-const addResolvedSessionUserMessage = async (args: {
-  conversationId: string;
-  actorId?: string | null;
-  message?: string;
-  documentId?: string;
-  authUser?: AuthUser;
-}) => {
-  const resolvedContent = await resolveMessageContent({
-    content: args.documentId
-      ? { type: 'document', documentId: args.documentId }
-      : (args.message ?? ''),
-    authUser: args.authUser,
-  });
-
-  const userMsg = args.documentId
-    ? await addConversationDocumentMessage({
-        conversationId: args.conversationId,
-        documentId: args.documentId,
-        role: 'user',
-        actorId: args.actorId ?? null,
-      })
-    : await addConversationMessage({
-        conversationId: args.conversationId,
-        message: resolvedContent.content,
-        role: 'user',
-        actorId: args.actorId ?? null,
-      });
-
-  if (!userMsg) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
-  }
-
-  return { resolvedContent, userMsg };
-};
-
 export const addSessionMessage = async (args: {
   agentId: number;
   sessionId: string;
@@ -334,6 +280,7 @@ export const addSessionMessage = async (args: {
   documentId?: string;
   toolContext?: Record<string, string>;
   authUser?: AuthUser;
+  idempotencyKey?: string;
 }) => {
   const session = await findSessionRecord({
     agentId: args.agentId,
@@ -364,23 +311,32 @@ export const addSessionMessage = async (args: {
     message: args.message,
     documentId: args.documentId,
     authUser: args.authUser,
+    idempotencyKey: args.idempotencyKey,
   });
+
+  const savedContent = userMsg.content ?? resolvedContent.content;
+  const savedDocumentId = userMsg.documentId ?? resolvedContent.documentId;
+
+  if ((userMsg as { idempotent?: boolean }).idempotent) {
+    return {
+      role: 'user' as const,
+      content: savedContent,
+      documentId: savedDocumentId,
+      idempotent: true as const,
+    };
+  }
 
   await session.update({ lastActivityAt: new Date() });
 
-  if (session.autoGenerate && !session.generatingAt) {
-    return generateSessionResponse({
-      agentId: args.agentId,
-      sessionId: args.sessionId,
-      toolContext: args.toolContext,
-    });
-  }
-
-  return {
-    role: 'user' as const,
-    content: userMsg.content ?? resolvedContent.content,
-    documentId: userMsg.documentId ?? resolvedContent.documentId,
-  };
+  return triggerOrReturnMessage({
+    session,
+    agentId: args.agentId,
+    sessionId: args.sessionId,
+    toolContext: args.toolContext,
+    savedContent,
+    savedDocumentId,
+    generateFn: generateSessionResponse,
+  });
 };
 
 export const sendSessionMessage = async (args: {

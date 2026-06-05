@@ -86,6 +86,24 @@ When the parent agent has `single_session_per_actor: true`, `POST /agents/:id/se
 
 Requests without `actor_id` are not subject to this check.
 
+### Idempotency
+
+Channels like WhatsApp use at-least-once webhook delivery — the same inbound message may arrive multiple times. Pass `idempotency_key` in the `POST .../messages` body to deduplicate:
+
+```json
+{
+  "message": "Hello",
+  "idempotency_key": "wamid.HBgLNTUxMTk4..."
+}
+```
+
+**Behavior:**
+
+- **First call** — message is saved and, if `auto_generate` is on, generation is triggered. Returns `201 Created`.
+- **Subsequent calls with the same key** — no new message or generation is created; the original message is returned immediately. Returns `200 OK`.
+
+The key is scoped to the session: the same key may be reused across different sessions without conflict.
+
 ### Inactivity TTL
 
 Sessions can be configured to expire automatically after a period of inactivity using `inactivity_ttl_seconds`.
@@ -237,6 +255,8 @@ When creating a session message (`POST .../messages`), send exactly one of:
 
 - `message`: raw text body
 - `document_id`: public ID of an existing document (its content is used as the message text)
+
+An optional `idempotency_key` string can be included with either variant to prevent duplicate processing — see [Idempotency](#idempotency) below.
 
 ## Examples
 

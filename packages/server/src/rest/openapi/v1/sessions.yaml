@@ -259,6 +259,12 @@ paths:
             schema:
               $ref: '#/components/schemas/AddSessionMessageRequest'
       responses:
+        '200':
+          description: Duplicate request — original message returned (idempotency_key matched)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddSessionMessageSaved'
         '201':
           description: User message saved
           content:
@@ -663,6 +669,14 @@ components:
                 type: string
               nullable: true
               description: Key-value pairs injected as context headers into all tool call requests made during this generation.
+            idempotency_key:
+              type: string
+              description: >
+                Optional deduplication key scoped to this session. If a message
+                with the same key already exists in the session, the original
+                message is returned with HTTP 200 and no new message or
+                generation is triggered.
+              example: wamid.HBgLNTUxMTk4...
         - type: object
           additionalProperties: false
           required:
@@ -677,6 +691,14 @@ components:
                 type: string
               nullable: true
               description: Key-value pairs injected as context headers into all tool call requests made during this generation.
+            idempotency_key:
+              type: string
+              description: >
+                Optional deduplication key scoped to this session. If a message
+                with the same key already exists in the session, the original
+                message is returned with HTTP 200 and no new message or
+                generation is triggered.
+              example: wamid.HBgLNTUxMTk4...
 
     AddSessionMessageSaved:
       type: object

@@ -70,6 +70,30 @@ sessionSubResourcesRouter.get('/:session_id/messages', async (ctx: Context) => {
 
 // ── Add Message ──────────────────────────────────────────────────────────
 
+const validateAddMessageBody = (body: {
+  message?: string;
+  documentId?: string;
+}) => {
+  if (body.message !== undefined && typeof body.message !== 'string') {
+    throw new DomainError('VALIDATION_FAILED', 'message must be a string');
+  }
+  if (body.documentId !== undefined && typeof body.documentId !== 'string') {
+    throw new DomainError('VALIDATION_FAILED', 'documentId must be a string');
+  }
+  if (!body.message && !body.documentId) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'either message or documentId is required'
+    );
+  }
+  if (body.message && body.documentId) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'message and documentId are mutually exclusive'
+    );
+  }
+};
+
 sessionSubResourcesRouter.post(
   '/:session_id/messages',
   async (ctx: Context) => {
@@ -79,29 +103,10 @@ sessionSubResourcesRouter.post(
       message?: string;
       documentId?: string;
       toolContext?: Record<string, string>;
+      idempotencyKey?: string;
     };
 
-    if (body.message !== undefined && typeof body.message !== 'string') {
-      throw new DomainError('VALIDATION_FAILED', 'message must be a string');
-    }
-
-    if (body.documentId !== undefined && typeof body.documentId !== 'string') {
-      throw new DomainError('VALIDATION_FAILED', 'documentId must be a string');
-    }
-
-    if (!body.message && !body.documentId) {
-      throw new DomainError(
-        'VALIDATION_FAILED',
-        'either message or documentId is required'
-      );
-    }
-
-    if (body.message && body.documentId) {
-      throw new DomainError(
-        'VALIDATION_FAILED',
-        'message and documentId are mutually exclusive'
-      );
-    }
+    validateAddMessageBody(body);
 
     const result = await addSessionMessage({
       agentId: agent.id as number,
@@ -110,11 +115,16 @@ sessionSubResourcesRouter.post(
       documentId: body.documentId,
       toolContext: body.toolContext,
       authUser: ctx.authUser,
+      idempotencyKey: body.idempotencyKey,
     });
 
-    ctx.status = 201;
+    const resultObj = result as Record<string, unknown>;
+    const isIdempotentHit = resultObj.idempotent === true;
+    ctx.status = isIdempotentHit ? 200 : 201;
     ctx.type = 'application/json';
-    ctx.body = result;
+
+    const { idempotent: _flag, ...responseBody } = resultObj;
+    ctx.body = responseBody;
   }
 );
 
