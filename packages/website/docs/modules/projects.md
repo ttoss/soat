@@ -132,31 +132,3 @@ curl https://api.example.com/api/v1/projects/proj_ABC \
 </TabItem>
 </Tabs>
 
-### Security Model
-
-- The raw key is a 32-byte random value prefixed with `pk_`.
-- Only the `key_prefix` (first 8 characters) and a bcrypt hash of the full key are stored.
-- Authentication works by matching the prefix to candidate rows, then verifying the full key against each hash.
-
-### Intersection Authorization
-
-When an project key is used to make a request, authorization applies **intersection semantics**:
-
-1. The owning user's project membership policies must allow the action.
-2. The key's own attached policy must also allow the action.
-
-Both must independently evaluate to `Allow`. This ensures a key can never exceed the permissions of the user who created it.
-
-### Scoping
-
-A project key is scoped to exactly one project. Requests made with the key can only access resources within that project. The project is resolved automatically from the key — callers do not need to specify the project explicitly.
-
-### API Key Permissions
-
-Project key operations require authentication. The creator of a key is the only user who can read or update it (ownership enforcement).
-
-| Action            | Permission     | REST Endpoint              | MCP Tool |
-| ----------------- | -------------- | -------------------------- | -------- |
-| Create key        | Project member | `POST /api/v1/api-keys`    | —        |
-| Get key by ID     | Key owner only | `GET /api/v1/api-keys/:id` | —        |
-| Update key policy | Key owner only | `PUT /api/v1/api-keys/:id` | —        |

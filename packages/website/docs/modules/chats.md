@@ -3,88 +3,50 @@ import TabItem from '@theme/TabItem';
 
 # Chats
 
-The Chats module provides both a stateless completions endpoint and a stateful Chat resource. A Chat stores the AI provider, an optional default system message, and an optional model override so callers only need to pass the conversation history per request.
+LLM completions with optional persistent configuration, supporting both stateless and per-chat modes.
 
 ## Overview
 
-There are two ways to call the completions API:
+Chats provide two ways to call the completions API:
 
-> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
-
-### Stateless — `POST /chats/completions`
-
-No setup required. Every request must include the full provider configuration — `ai_provider_id`, optional `system_message`, and optional `model`. Use this for one-off calls or when the provider configuration changes per request.
-
-```json
-POST /api/v1/chats/completions
-{
-  "ai_provider_id": "aip_abc123",
-  "system_message": "You are a helpful assistant.",
-  "messages": [
-    { "role": "user", "content": "Hello!" }
-  ]
-}
-```
-
-### Per-chat — `POST /chats/{chat_id}/completions`
-
-Requires creating a Chat resource first (`POST /chats`). The Chat stores the AI provider, default system message, and model — callers only need to pass the `messages` array per request. Use this when the same configuration is reused across many calls.
-
-**Step 1 — create the chat once:**
-
-```json
-POST /api/v1/chats
-{
-  "project_id": "prj_xyz",
-  "ai_provider_id": "aip_abc123",
-  "system_message": "You are a helpful assistant.",
-  "name": "My Assistant"
-}
-```
-
-**Step 2 — run completions using the returned `id`:**
-
-```json
-POST /api/v1/chats/cht_def456/completions
-{
-  "messages": [
-    { "role": "user", "content": "Hello!" }
-  ]
-}
-```
+- **Stateless** (`POST /chats/completions`) — pass the full provider configuration on every request. No setup required.
+- **Per-chat** (`POST /chats/{chat_id}/completions`) — create a Chat resource once to store the AI provider, default system message, and model; then pass only the `messages` array per request.
 
 Both endpoints support SSE streaming via `stream: true`.
 
-## Key Concepts
+> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
-### Chat Resource
+## Related Tutorials
 
-A Chat is a persistent resource belonging to a project. It stores:
+- [Chat with an LLM - Step 3 (Create a local AI provider)](/docs/tutorials/chat-with-llm#step-3--create-a-local-ai-provider)
+- [Connect Third-Party LLMs - Step 6 (Start a conversation)](/docs/tutorials/connect-third-party-llms#step-6--start-a-conversation)
+
+## Data Model
+
+### Chat
 
 | Field            | Type     | Description                                                      |
 | ---------------- | -------- | ---------------------------------------------------------------- |
-| `id`             | `string` | Public ID prefixed with `cht_`                                   |
-| `project_id`     | `string` | Public ID of the owning project                                  |
-| `ai_provider_id` | `string` | Public ID of the AI provider used for completions                |
-| `name`           | `string` | Optional human-readable name                                     |
-| `system_message` | `string` | Optional default system prompt applied to all completions        |
-| `model`          | `string` | Optional model override (falls back to provider's default_model) |
-| `created_at`     | `string` | ISO 8601 creation timestamp                                      |
-| `updated_at`     | `string` | ISO 8601 last-updated timestamp                                  |
+| `id`             | string   | Public ID prefixed with `cht_`                                   |
+| `project_id`     | string   | Public ID of the owning project                                  |
+| `ai_provider_id` | string   | Public ID of the AI provider used for completions                |
+| `name`           | string   | Optional human-readable name                                     |
+| `system_message` | string   | Optional default system prompt applied to all completions        |
+| `model`          | string   | Optional model override (falls back to provider's `default_model`) |
+| `created_at`     | string   | ISO 8601 creation timestamp                                      |
+| `updated_at`     | string   | ISO 8601 last-updated timestamp                                  |
 
-### Messages
+### Message
 
-Each message in the `messages` array can specify content in two ways:
+Each message in the `messages` array sent to the completions endpoint:
 
 | Field         | Type                              | Description                                                               |
 | ------------- | --------------------------------- | ------------------------------------------------------------------------- |
 | `role`        | `system` \| `user` \| `assistant` | Identifies the author of the message                                      |
-| `content`     | `string`                          | Text body _(use this or `document_id`, not both)_                         |
-| `document_id` | `string`                          | Public ID of a document — the server resolves its content before the call |
+| `content`     | string                            | Text body _(use this or `document_id`, not both)_                         |
+| `document_id` | string                            | Public ID of a document — the server resolves its content before the call |
 
-When `document_id` is supplied the server fetches the document and uses its `content` field as the message body.
-
-`output_path` extraction is not part of the Chats message schema. If you need tool-output selection (including jq expressions and the "no `output_path` => use full tool output" behavior), use [Agents](./agents.md#tool-output-message-content) directly.
+## Key Concepts
 
 ### System Message Override
 
@@ -92,11 +54,15 @@ When running `POST /chats/{chat_id}/completions`, if a message with `role: syste
 
 ### AI Provider Resolution
 
-See the [AI Providers](./ai-providers.md) module for the full list of supported providers and how secrets are resolved. For per-chat completions the AI provider is taken from the Chat record. For stateless completions it is passed directly in the request body.
+For per-chat completions the AI provider is taken from the Chat record. For stateless completions it is passed directly in the request body. See [AI Providers](./ai-providers.md) for the full list of supported providers and how secrets are resolved.
 
 ### Streaming
 
 Set `stream: true` in the request body to receive an SSE stream. Each event contains a JSON object with a `choices[0].delta.content` chunk. The stream ends with `data: [DONE]`.
+
+### Tool Output Selection
+
+For `document_id`-based messages, the server fetches the document and uses its `content` field as the message body. For tool-output selection with jq expressions (the `output_path` behavior), use [Agents](./agents.md#tool-output-message-content) directly — that feature is not part of the Chats message schema.
 
 ## Examples
 
@@ -117,12 +83,8 @@ soat create-chat \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-// SDK
 import { SoatClient } from '@soat/sdk';
-const soat = new SoatClient({
-  baseUrl: 'https://api.example.com',
-  token: 'sk_...',
-});
+const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
 
 const { data, error } = await soat.chats.createChat({
   body: {
@@ -169,7 +131,6 @@ soat create-chat-completion \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-// SDK
 const { data, error } = await soat.chats.createChatCompletion({
   body: {
     ai_provider_id: 'aip_abc123',

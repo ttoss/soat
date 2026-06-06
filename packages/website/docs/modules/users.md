@@ -3,13 +3,13 @@ import TabItem from '@theme/TabItem';
 
 # Users
 
-The Users module manages human identities within SOAT. A user can authenticate via username/password and receive a JWT token used for subsequent requests.
+Human identities within the SOAT instance, authenticated via username and password.
 
 ## Overview
 
-Users are global to the SOAT instance (not scoped to a project). The first user is created via the bootstrap endpoint. After that, only authenticated admin users may create additional users.
+Users are global to the SOAT instance — not scoped to any project. The first user is created via the bootstrap endpoint. After that, only authenticated admin users may create additional users.
 
-Users can have [Policies](./policies.md) attached to them, which control what resources and operations they are permitted to access.
+Users can have [Policies](./policies.md) attached to them, which control what resources and operations they are permitted to access. See [IAM](./iam.md) for the full authorization model.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -21,12 +21,45 @@ Users can have [Policies](./policies.md) attached to them, which control what re
 
 ## Data Model
 
-| Field        | Type   | Description                      |
-| ------------ | ------ | -------------------------------- |
-| `id`         | string | Public identifier (e.g. `usr_…`) |
-| `username`   | string | Unique login name                |
-| `created_at` | string | ISO 8601 creation timestamp      |
-| `updated_at` | string | ISO 8601 last-updated timestamp  |
+| Field        | Type   | Description                                         |
+| ------------ | ------ | --------------------------------------------------- |
+| `id`         | string | Public identifier prefixed with `usr_`              |
+| `username`   | string | Unique login name                                   |
+| `role`       | string | `"admin"` or `"user"` — see [Roles](#roles)         |
+| `created_at` | string | ISO 8601 creation timestamp                         |
+| `updated_at` | string | ISO 8601 last-updated timestamp                     |
+
+Sensitive fields (`passwordHash`, internal numeric ID) are never exposed in responses.
+
+## Key Concepts
+
+### Roles
+
+| Role    | Description                                                              |
+| ------- | ------------------------------------------------------------------------ |
+| `admin` | Full access to all resources and operations. Bypasses policy evaluation. |
+| `user`  | Access determined by the [policies](./policies.md) attached to the account. |
+
+### Bootstrap
+
+The `POST /api/v1/users/bootstrap` endpoint creates the first admin user. It is only available when the user table is empty and returns `409 Conflict` if any user already exists. This endpoint does not require authentication.
+
+You can also bootstrap an admin automatically on server startup by setting two environment variables:
+
+```env
+SOAT_ADMIN_USERNAME=admin
+SOAT_ADMIN_PASSWORD=supersecret
+```
+
+When both variables are present and no users exist, the server creates the admin user before accepting requests. If users already exist, the variables are ignored.
+
+### Authentication
+
+Users authenticate via `POST /api/v1/users/login` with username and password. On success, the server returns a signed JWT containing the user's public ID and role. The token is passed as `Authorization: Bearer <token>` on subsequent requests. See [IAM — Authentication](./iam.md#authentication).
+
+### Policy Attachment
+
+Policies are attached to a user via `PUT /api/v1/users/:userId/policies`. This replaces the user's full policy list. User management operations (create, update, delete) require the `admin` role and are not governed by the policy engine.
 
 ## Examples
 
@@ -43,7 +76,6 @@ soat bootstrap-user --username admin --password supersecret
 <TabItem value="sdk" label="SDK">
 
 ```ts
-// SDK
 import { SoatClient } from '@soat/sdk';
 const soat = new SoatClient({ baseUrl: 'https://api.example.com' });
 
@@ -78,7 +110,6 @@ soat login-user --username admin --password supersecret
 <TabItem value="sdk" label="SDK">
 
 ```ts
-// SDK
 const { data, error } = await soat.users.loginUser({
   body: { username: 'admin', password: 'supersecret' },
 });
@@ -111,11 +142,7 @@ soat create-user --username alice --password alicepass
 <TabItem value="sdk" label="SDK">
 
 ```ts
-// SDK
-const authedSoat = new SoatClient({
-  baseUrl: 'https://api.example.com',
-  token: 'sk_...',
-});
+const authedSoat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
 
 const { data, error } = await authedSoat.users.createUser({
   body: { username: 'alice', password: 'alicepass' },

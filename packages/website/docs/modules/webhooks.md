@@ -3,11 +3,11 @@ import TabItem from '@theme/TabItem';
 
 # Webhooks
 
-The Webhooks module lets you subscribe to events that occur within a project and receive HTTP POST callbacks when those events fire. Every delivery is signed with HMAC-SHA256 so you can verify authenticity on the receiving end.
+HTTP callbacks that deliver signed event notifications when project resources change.
 
 ## Overview
 
-A webhook is scoped to a project. When you create a webhook you specify a URL, a list of event patterns to subscribe to, and optionally a project policy that gates delivery. The server automatically dispatches matching events, retrying up to three times for failed deliveries.
+A webhook is scoped to a project. When you create a webhook you specify a URL and a list of event patterns to subscribe to. The server dispatches matching events automatically, retrying up to three times for failed deliveries. Every delivery is signed with HMAC-SHA256 so receivers can verify authenticity.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -16,52 +16,6 @@ A webhook is scoped to a project. When you create a webhook you specify a URL, a
 - [Chat with an LLM - Step 8 (Start a local webhook listener)](/docs/tutorials/chat-with-llm#step-8---start-a-local-webhook-listener)
 - [Chat with an LLM - Step 9 (Create a session webhook subscription)](/docs/tutorials/chat-with-llm#step-9---create-a-session-webhook-subscription)
 - [Chat with an LLM - Step 11 (Verify delivery)](/docs/tutorials/chat-with-llm#step-11---verify-delivery-and-final-assistant-message)
-
-## Key Concepts
-
-### Event Patterns
-
-Each webhook subscribes to one or more event patterns. Patterns use a dot-separated hierarchy:
-
-| Pattern        | Matches                          |
-| -------------- | -------------------------------- |
-| `file.created` | Exactly the `file.created` event |
-| `file.*`       | Any event starting with `file.`  |
-| `*`            | Every event in the project       |
-
-### Delivery
-
-When an event matches a webhook, the server sends an HTTP POST to the webhook URL with a JSON payload containing the event data. The request includes three headers:
-
-| Header             | Description                                                                |
-| ------------------ | -------------------------------------------------------------------------- |
-| `X-Soat-Event`     | The event type (e.g., `file.created`)                                      |
-| `X-Soat-Delivery`  | Unique delivery ID                                                         |
-| `X-Soat-Signature` | HMAC-SHA256 hex digest of the request body, signed with the webhook secret |
-
-Deliveries are retried up to three times. Each attempt and its outcome are recorded in a delivery log that you can query through the API.
-
-### Secret and Signature Verification
-
-Every webhook has a secret generated at creation time. The secret is returned in the response body when a webhook is created or when the secret is rotated. You can also retrieve it explicitly at any time using the `GET /api/v1/projects/{project_id}/webhooks/{webhook_id}/secret` endpoint (requires the `webhooks:GetWebhookSecret` permission).
-
-To verify a delivery, compute the HMAC-SHA256 of the raw request body using the secret and compare it to the `X-Soat-Signature` header:
-
-```js
-const crypto = require('crypto');
-
-const isValid = (secret, body, signature) => {
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(body)
-    .digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
-};
-```
-
-### Policy Gating
-
-You can optionally attach a project policy to a webhook. When a policy is set, the event is only delivered if the policy evaluates to _allow_ for the event context. This lets you filter deliveries without changing your event subscriptions.
 
 ## Data Model
 
@@ -96,6 +50,75 @@ You can optionally attach a project policy to a webhook. When a policy is set, t
 | `created_at`      | string                             | ISO 8601 creation timestamp                |
 | `updated_at`      | string                             | ISO 8601 last-updated timestamp            |
 
+## Key Concepts
+
+### Event Patterns
+
+Each webhook subscribes to one or more event patterns using dot-separated hierarchy:
+
+| Pattern        | Matches                          |
+| -------------- | -------------------------------- |
+| `file.created` | Exactly the `file.created` event |
+| `file.*`       | Any event starting with `file.`  |
+| `*`            | Every event in the project       |
+
+### Delivery
+
+When an event matches a webhook, the server sends an HTTP POST to the webhook URL. The request includes three headers:
+
+| Header             | Description                                                                |
+| ------------------ | -------------------------------------------------------------------------- |
+| `X-Soat-Event`     | The event type (e.g., `file.created`)                                      |
+| `X-Soat-Delivery`  | Unique delivery ID                                                         |
+| `X-Soat-Signature` | HMAC-SHA256 hex digest of the request body, signed with the webhook secret |
+
+Deliveries are retried up to three times. Each attempt and its outcome are recorded in a delivery log queryable through the API.
+
+### Secret and Signature Verification
+
+Every webhook has a secret generated at creation time. The secret is returned in the response body on create or secret rotation. You can also retrieve it explicitly via `GET /api/v1/projects/{project_id}/webhooks/{webhook_id}/secret` (requires `webhooks:GetWebhookSecret`).
+
+To verify a delivery:
+
+```js
+const crypto = require('crypto');
+
+const isValid = (secret, body, signature) => {
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(body)
+    .digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+};
+```
+
+### Policy Gating
+
+Attach a project policy to a webhook to filter deliveries without changing your event subscriptions. When a policy is set, the event is only delivered if the policy evaluates to _allow_ for the event context.
+
+### Formation Support
+
+Webhooks can be created as part of a [Formation](./formations.md). The webhook secret can be captured as a formation output using a `ref_attr` expression:
+
+```json
+{
+  "resources": {
+    "MyWebhook": {
+      "type": "webhook",
+      "properties": {
+        "name": "my-hook",
+        "url": "https://example.com/hook",
+        "events": ["*"]
+      }
+    }
+  },
+  "outputs": {
+    "webhookId": { "ref": "MyWebhook" },
+    "webhookSecret": { "ref_attr": "MyWebhook.secret" }
+  }
+}
+```
+
 ## Examples
 
 ### Create a webhook
@@ -115,12 +138,8 @@ soat create-webhook \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-// SDK
 import { SoatClient } from '@soat/sdk';
-const soat = new SoatClient({
-  baseUrl: 'https://api.example.com',
-  token: 'sk_...',
-});
+const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
 
 const { data, error } = await soat.webhooks.createWebhook({
   path: { project_id: 'proj_ABC' },
@@ -150,28 +169,3 @@ curl -X POST https://api.example.com/api/v1/projects/proj_ABC/webhooks \
 
 </TabItem>
 </Tabs>
-
-## Formation Support
-
-Webhooks can be created as part of a [Formation](./formations.md). The webhook secret can be captured as a formation output using a `ref_attr` expression:
-
-```json
-{
-  "resources": {
-    "MyWebhook": {
-      "type": "webhook",
-      "properties": {
-        "name": "my-hook",
-        "url": "https://example.com/hook",
-        "events": ["*"]
-      }
-    }
-  },
-  "outputs": {
-    "webhookId": { "ref": "MyWebhook" },
-    "webhookSecret": { "ref_attr": "MyWebhook.secret" }
-  }
-}
-```
-
-The `ref_attr` expression resolves `<ResourceName>.<attribute>` where `attribute` is `secret` for webhooks. This lets you pass the signing secret to other resources or inspect it after deployment without calling the API separately.

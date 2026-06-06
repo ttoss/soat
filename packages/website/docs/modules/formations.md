@@ -1,6 +1,9 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Formations
 
-Formations is a CloudFormation-inspired declarative deployment layer that lets you describe an entire AI agent stack in a single JSON/YAML template and deploy it with one API call. SOAT resolves resource dependencies automatically, provisions resources in the correct order, and tracks every change in an immutable event log.
+A CloudFormation-inspired declarative deployment layer that provisions an entire AI agent stack from a single JSON/YAML template.
 
 > **Note:** Creating a formation also creates underlying resources (agents, memories, etc.). The calling identity must also have the relevant `agents:CreateAgent`, `memories:CreateMemory`, etc. permissions.
 
@@ -49,6 +52,46 @@ SOAT detects that `MyAgent` depends on `MyProvider` and `MyMemory` through the `
 - [Deploy a Multi-Agent App with Agent Formation - Step 3 (Write the formation template)](/docs/tutorials/formations#step-3--write-the-formation-template)
 - [Deploy a Multi-Agent App with Agent Formation - Step 6 (Deploy the formation)](/docs/tutorials/formations#step-6--deploy-the-formation)
 - [Deploy a Multi-Agent App with Agent Formation - Step 10 (Update the formation)](/docs/tutorials/formations#step-10--update-the-formation)
+
+## Data Model
+
+### Formation
+
+| Field        | Type     | Description                                                                    |
+| ------------ | -------- | ------------------------------------------------------------------------------ |
+| `id`         | string   | Public ID (`af_` prefix)                                                       |
+| `project_id` | string   | Project public ID                                                              |
+| `name`       | string   | Formation name (unique per project)                                            |
+| `template`   | object   | The last applied template                                                      |
+| `outputs`    | object   | Resolved output values                                                         |
+| `status`     | string   | `creating` \| `active` \| `updating` \| `failed` \| `deleting` \| `deleted` \| `delete_failed` |
+| `metadata`   | object   | Arbitrary metadata                                                             |
+| `resources`  | array    | Resources managed by the formation                                             |
+| `created_at` | string   | ISO 8601 creation timestamp                                                    |
+| `updated_at` | string   | ISO 8601 last-updated timestamp                                                |
+
+### FormationResource
+
+| Field                  | Type   | Description                                                         |
+| ---------------------- | ------ | ------------------------------------------------------------------- |
+| `id`                   | string | Public ID (`afr_` prefix)                                           |
+| `logical_id`           | string | Logical ID from the template                                        |
+| `resource_type`        | string | Resource type (`agent`, `tool`, `memory`, etc.)                     |
+| `physical_resource_id` | string | Public ID of the physical SOAT resource                             |
+| `status`               | string | `pending` \| `created` \| `updated` \| `deleted` \| `failed`        |
+
+### FormationOperation
+
+| Field            | Type   | Description                                           |
+| ---------------- | ------ | ----------------------------------------------------- |
+| `id`             | string | Public ID (`afo_` prefix)                             |
+| `operation_type` | string | `create` \| `update` \| `delete`                      |
+| `status`         | string | `pending` \| `running` \| `succeeded` \| `failed`     |
+| `plan`           | object | Planned changes computed before execution             |
+| `events`         | array  | Per-resource event log with timestamp, action, status |
+| `error`          | object | Error details if operation failed                     |
+| `created_at`     | string | ISO 8601 creation timestamp                           |
+| `updated_at`     | string | ISO 8601 last-updated timestamp                       |
 
 ## Key Concepts
 
@@ -267,42 +310,125 @@ Every deploy (create, update, delete) creates a `FormationOperation` record with
 
 Use `GET /api/v1/formations/{formation_id}/events` to retrieve the full history.
 
-## Data Model
+## Examples
 
-### Formation
+### Deploy a formation
 
-| Field        | Type     | Description                         |
-| ------------ | -------- | ----------------------------------- |
-| `id`         | string   | Public ID (`af_…`)                  |
-| `project_id` | string   | Project public ID                   |
-| `name`       | string   | Formation name (unique per project) |
-| `template`   | object   | The last applied template           |
-| `outputs`    | object   | Resolved output values              |
-| `status`     | string   | Formation status                    |
-| `metadata`   | object   | Arbitrary metadata                  |
-| `resources`  | array    | Resources managed by the formation  |
-| `created_at` | datetime |                                     |
-| `updated_at` | datetime |                                     |
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
 
-### FormationResource
+```bash
+soat create-formation \
+  --project-id "$PROJECT_ID" \
+  --name "my-stack" \
+  --template-file formation.json
+```
 
-| Field                  | Type   | Description                             |
-| ---------------------- | ------ | --------------------------------------- |
-| `id`                   | string | Public ID (`afr_…`)                     |
-| `logical_id`           | string | Logical ID from the template            |
-| `resource_type`        | string | Resource type                           |
-| `physical_resource_id` | string | Public ID of the physical SOAT resource |
-| `status`               | string | Resource status                         |
+</TabItem>
+<TabItem value="sdk" label="SDK">
 
-### FormationOperation
+```ts
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
 
-| Field            | Type     | Description                       |
-| ---------------- | -------- | --------------------------------- | ------ | ------- |
-| `id`             | string   | Public ID (`afo_…`)               |
-| `operation_type` | string   | `create                           | update | delete` |
-| `status`         | string   | Operation status                  |
-| `plan`           | object   | Planned changes                   |
-| `events`         | array    | Per-resource event log            |
-| `error`          | object   | Error details if operation failed |
-| `created_at`     | datetime |                                   |
-| `updated_at`     | datetime |                                   |
+const { data, error } = await soat.formations.createFormation({
+  body: {
+    project_id: 'proj_ABC',
+    name: 'my-stack',
+    template: {
+      resources: {
+        MyProvider: {
+          type: 'ai_provider',
+          properties: { name: 'GPT-4o', provider: 'openai', default_model: 'gpt-4o' },
+        },
+        MyAgent: {
+          type: 'agent',
+          properties: {
+            name: 'Support Bot',
+            ai_provider_id: { ref: 'MyProvider' },
+            instructions: 'You are a helpful assistant.',
+          },
+        },
+      },
+      outputs: { agentId: { ref: 'MyAgent' } },
+    },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+// data.outputs.agentId contains the provisioned agent's public ID
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/formations \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "name": "my-stack",
+    "template": {
+      "resources": {
+        "MyProvider": {
+          "type": "ai_provider",
+          "properties": { "name": "GPT-4o", "provider": "openai", "default_model": "gpt-4o" }
+        },
+        "MyAgent": {
+          "type": "agent",
+          "properties": {
+            "name": "Support Bot",
+            "ai_provider_id": { "ref": "MyProvider" },
+            "instructions": "You are a helpful assistant."
+          }
+        }
+      },
+      "outputs": { "agentId": { "ref": "MyAgent" } }
+    }
+  }'
+```
+
+</TabItem>
+</Tabs>
+
+### Update a formation
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat update-formation \
+  --formation-id af_01 \
+  --template-file formation.json \
+  --parameter AppUrl=https://staging.example.com
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.formations.updateFormation({
+  path: { formation_id: 'af_01' },
+  body: {
+    template: { /* updated template */ },
+    parameters: { AppUrl: 'https://staging.example.com' },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PUT https://api.example.com/api/v1/formations/af_01 \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "template": { "resources": { ... } },
+    "parameters": { "AppUrl": "https://staging.example.com" }
+  }'
+```
+
+</TabItem>
+</Tabs>

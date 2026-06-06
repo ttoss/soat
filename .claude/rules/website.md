@@ -33,14 +33,49 @@ Module docs live at `packages/website/docs/modules/<module>.md`. Each page must 
 **Canonical section order:**
 
 ```
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Module Name
 {one-sentence description}
+
 ## Overview
+
+## Related Tutorials    [only when tutorials exist]
+
 ## Data Model           [always]
+
 ## Key Concepts         [optional — omit if trivial]
+
 ## Configuration        [only if the module requires env vars]
+
 ## Examples             [always]
 ```
+
+### Section rules
+
+**`# Module Name` line:** One sentence only — the resource name and its primary purpose. No verbs like "provides" or "manages" unless necessary.
+
+**`## Overview`:** 2–5 sentences expanding the one-liner. State the main use cases and cross-link closely related modules. End with:
+> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
+
+**`## Related Tutorials`:** Bullet list of `- [Tutorial name - step N (Action)](path)` links. Include only when at least one tutorial covers this module.
+
+**`## Data Model`:** One table per resource type exposed by the module. Columns: `Field`, `Type`, `Description`. Brief prose below the table only for non-obvious relationships (e.g. uniqueness constraints, nullable semantics). Never add a Data Model section for a resource defined in another module — reference it with a link instead.
+
+**`## Key Concepts`:** Named `###` subsections for non-obvious behaviors (business rules, algorithms, invariants, lifecycle transitions). Omit entirely for simple CRUD modules. Never reproduce another module's data model or behavioral rules here — cross-reference with a link.
+
+**`## Configuration`:** Table with columns `Environment Variable`, `Required`, `Description`. Include only when the module reads runtime environment variables.
+
+**`## Examples`:** One `<Tabs groupId="client">` block per key operation. Always include CLI, SDK, and curl tabs (in that order). Show at minimum: the create/primary operation and one read operation.
+
+### Cross-referencing rules
+
+1. **Define once, reference everywhere.** If concept X is fully documented in module Y, write one sentence pointing there: `See [X](./y.md#anchor).` Do not summarise or repeat the definition.
+2. **Tool types** (http, client, mcp, soat) are defined in [Tools](./tools.md). Agents references them but does not re-document them.
+3. **Trace ancestry model** is defined in [Traces](./traces.md#trace-ancestry-model). Agents references it but does not re-document it.
+4. **IAM policy format and evaluation rules** are defined in [IAM](./iam.md). Policies and API Keys reference them but do not re-document them.
+5. **User data model** is defined in [Users](./users.md). IAM references it but does not re-document it.
 
 Do **not** add a `## Permissions` section to module docs. Instead, add this line at the end of the overview or as a callout:
 

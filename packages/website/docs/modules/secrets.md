@@ -3,11 +3,11 @@ import TabItem from '@theme/TabItem';
 
 # Secrets
 
-The Secrets module provides encrypted storage for sensitive values such as API keys and credentials. Values are encrypted at rest using AES-256-GCM and are never returned by any API response.
+Encrypted storage for sensitive values such as API keys and credentials.
 
 ## Overview
 
-Secrets are associated with a project. Once stored, a secret's value can only be replaced — it is never readable again. All operations return a `has_value` boolean to indicate whether an encrypted value is on file.
+Secrets are associated with a project. Values are encrypted at rest using AES-256-GCM and are **never returned** by any API response. Once stored, a secret's value can only be replaced. All operations return a `has_value` boolean to indicate whether an encrypted value is on file.
 
 Secrets can be linked to [AI Providers](./ai-providers.md) to supply credentials at inference time.
 
@@ -17,18 +17,6 @@ Secrets can be linked to [AI Providers](./ai-providers.md) to supply credentials
 
 - [Connect Third-Party LLMs - Step 3 (Store provider credentials as secrets)](/docs/tutorials/connect-third-party-llms#step-3--store-provider-credentials-as-secrets)
 - [Connect Third-Party LLMs - Step 4 (Create provider records)](/docs/tutorials/connect-third-party-llms#step-4--create-provider-records)
-
-## Configuration
-
-| Environment Variable     | Required | Description                                                                                      |
-| ------------------------ | -------- | ------------------------------------------------------------------------------------------------ |
-| `SECRETS_ENCRYPTION_KEY` | Yes      | 64-character hex string (32 bytes). Used for AES-256-GCM encryption of all stored secret values. |
-
-Generate a key with:
-
-```bash
-openssl rand -hex 32
-```
 
 ## Data Model
 
@@ -41,9 +29,23 @@ openssl rand -hex 32
 | `created_at` | string  | ISO 8601 creation timestamp              |
 | `updated_at` | string  | ISO 8601 last-updated timestamp          |
 
-## Deletion behaviour
+## Key Concepts
+
+### Deletion
 
 By default, deleting a secret that is still referenced by one or more AI providers returns `409 Conflict`. Pass `?force=true` to cascade-delete the dependent AI providers along with the secret.
+
+## Configuration
+
+| Environment Variable     | Required | Description                                                                                      |
+| ------------------------ | -------- | ------------------------------------------------------------------------------------------------ |
+| `SECRETS_ENCRYPTION_KEY` | Yes      | 64-character hex string (32 bytes). Used for AES-256-GCM encryption of all stored secret values. |
+
+Generate a key with:
+
+```bash
+openssl rand -hex 32
+```
 
 ## Examples
 
@@ -60,12 +62,8 @@ soat create-secret --project-id proj_ABC --name "OpenAI Key"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-// SDK
 import { SoatClient } from '@soat/sdk';
-const soat = new SoatClient({
-  baseUrl: 'https://api.example.com',
-  token: 'sk_...',
-});
+const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
 
 const { data, error } = await soat.secrets.createSecret({
   body: { project_id: 'proj_ABC', name: 'OpenAI Key' },
@@ -99,7 +97,6 @@ soat update-secret --secret-id sec_01 --value sk-abc123...
 <TabItem value="sdk" label="SDK">
 
 ```ts
-// SDK
 const { data, error } = await soat.secrets.updateSecret({
   path: { secret_id: 'sec_01' },
   body: { value: 'sk-abc123...' },

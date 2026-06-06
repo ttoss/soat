@@ -3,11 +3,11 @@ import TabItem from '@theme/TabItem';
 
 # Agents
 
+Persistent configurations for multi-step AI workflows that execute reasoning-and-acting loops.
+
 ## Overview
 
-Agents are persistent configurations for multi-step AI workflows. Unlike simple [chat](./chats.md) completions that make a single model call, agents execute **reasoning-and-acting loops**: the model can call tools, observe results, and continue reasoning until it reaches a final answer or hits a step limit.
-
-Each agent stores its AI provider, instructions, tool references, and execution parameters. To run an agent, send a prompt (and optional message history) — the server builds the agent from the stored configuration, executes the full loop, and returns the result.
+Agents differ from [Chats](./chats.md) in that they can call tools, observe results, and continue reasoning across multiple steps until they reach a final answer or a step limit. Each agent stores its AI provider, instructions, tool references, and execution parameters. To run an agent, send a prompt — the server builds the agent from the stored configuration, executes the full loop, and returns the result.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -17,209 +17,80 @@ Each agent stores its AI provider, instructions, tool references, and execution 
 - [Agent SOAT Tools and Preset Parameters - Step 7 (Create the agent)](/docs/tutorials/agent-soat-tools#step-7--create-the-agent)
 - [Multi-Agent Sonnet with Nested Agent Calls - Step 6 (Create stanza agents)](/docs/tutorials/multi-agent-orchestration#step-6--create-the-four-stanza-agents)
 
+## Data Model
+
+### Agent
+
+| Field                      | Type          | Description                                                                                                                      |
+| -------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                       | string        | Unique identifier (`agt_` prefix)                                                                                                |
+| `project_id`               | string        | Project the agent belongs to                                                                                                     |
+| `ai_provider_id`           | string        | AI provider used for the model                                                                                                   |
+| `name`                     | string        | Display name                                                                                                                     |
+| `instructions`             | string        | System instructions guiding agent behavior                                                                                       |
+| `model`                    | string        | Model identifier (falls back to AI provider default)                                                                             |
+| `tool_ids`                 | array         | IDs of tools attached to this agent — see [Tools](./tools.md)                                                                   |
+| `max_steps`                | number        | Maximum reasoning steps before stopping (default: `20`)                                                                          |
+| `tool_choice`              | string/object | How the model selects tools — see [Tool Choice](#tool-choice)                                                                    |
+| `stop_conditions`          | array         | Additional stop conditions — see [Stop Conditions](#stop-conditions)                                                             |
+| `active_tool_ids`          | array         | Subset of `tool_ids` available at each step — see [Active Tools](#active-tools)                                                  |
+| `step_rules`               | array         | Per-step overrides for `tool_choice` and `active_tool_ids` — see [Step Rules](#step-rules)                                       |
+| `boundary_policy`          | object        | Boundary policy that limits which `soat` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions) |
+| `temperature`              | number        | Sampling temperature                                                                                                             |
+| `knowledge_config`         | object        | Knowledge retrieval config injected before every generation — see [Knowledge Config](#knowledge-config)                          |
+| `max_context_messages`     | number        | Maximum number of recent messages sent to the model per generation — see [Context Window Limiting](#context-window-limiting)     |
+| `single_session_per_actor` | boolean       | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)         |
+| `created_at`               | string        | ISO 8601 creation timestamp                                                                                                      |
+| `updated_at`               | string        | ISO 8601 last-updated timestamp                                                                                                  |
+
+### Generation
+
+A generation is a persisted lifecycle record for a single agent execution. While a [trace](./traces.md) captures _what happened_ (steps), a generation captures _the lifecycle_ (who started it, when it started/completed, and why it stopped).
+
+| Field                     | Type        | Description                                             |
+| ------------------------- | ----------- | ------------------------------------------------------- |
+| `id`                      | string      | Public identifier (`agt_gen_` prefix)                   |
+| `project_id`              | string      | Project the generation belongs to                       |
+| `agent_id`                | string      | Agent that was executed                                 |
+| `trace_id`                | string      | Associated trace ID — see [Traces](./traces.md)         |
+| `initiator_generation_id` | string/null | Generation that spawned this one (for nested calls)     |
+| `status`                  | string      | Current lifecycle state — see [Generation Status](#generation-status) |
+| `started_at`              | string      | ISO 8601 timestamp when execution began                 |
+| `completed_at`            | string/null | ISO 8601 timestamp when execution finished              |
+| `last_activity_at`        | string/null | ISO 8601 timestamp of last step activity                |
+| `stop_reason`             | string/null | Why the generation ended — see [Stop Reason](#stop-reason) |
+| `started_by`              | object/null | Identity of the principal that triggered the generation |
+| `created_at`              | string      | ISO 8601 creation timestamp                             |
+
+#### Generation Status
+
+| Status            | Description                                       |
+| ----------------- | ------------------------------------------------- |
+| `in_progress`     | The generation is actively running                |
+| `requires_action` | Paused waiting for client tool outputs            |
+| `completed`       | The generation finished                           |
+| `failed`          | The generation encountered an unrecoverable error |
+
+#### Stop Reason
+
+When `status` is `completed`, `stop_reason` indicates why:
+
+| Stop Reason               | Description                                        |
+| ------------------------- | -------------------------------------------------- |
+| `end_turn`                | Model produced a final response with no tool calls |
+| `max_steps`               | Step count reached `max_steps`                     |
+| `stop_condition`          | A configured `stop_conditions` rule was triggered  |
+| `no_executor`             | A tool without an executor was called (non-client) |
+| `stream_response_started` | Streaming generation handed off to the SSE stream  |
+| `depth_limit`             | Nested call exceeded `max_call_depth`              |
+
 ## Key Concepts
 
-### Agent Resource
+### Tools
 
-| Field              | Type          | Required | Description                                                                                                                      |
-| ------------------ | ------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `id`               | string        | auto     | Unique identifier (`agt_` prefix)                                                                                                |
-| `project_id`       | string        | yes      | Project the agent belongs to                                                                                                     |
-| `ai_provider_id`   | string        | yes      | AI provider used for the model                                                                                                   |
-| `name`             | string        | no       | Display name                                                                                                                     |
-| `instructions`     | string        | no       | System instructions guiding agent behavior                                                                                       |
-| `model`            | string        | no       | Model identifier (falls back to AI provider default)                                                                             |
-| `tool_ids`         | array         | no       | IDs of agent tools attached to this agent                                                                                        |
-| `max_steps`        | number        | no       | Maximum reasoning steps before stopping (default: `20`)                                                                          |
-| `tool_choice`      | string/object | no       | How the model selects tools — see [Tool Choice](#tool-choice)                                                                    |
-| `stop_conditions`  | array         | no       | Additional stop conditions — see [Stop Conditions](#stop-conditions)                                                             |
-| `active_tool_ids`  | array         | no       | Subset of `tool_ids` available at each step — see [Active Tools](#active-tools)                                                  |
-| `step_rules`       | array         | no       | Per-step overrides for `tool_choice` and `active_tool_ids` — see [Step Rules](#step-rules)                                       |
-| `boundary_policy`  | object        | no       | Boundary policy that limits which `soat` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions) |
-| `temperature`      | number        | no       | Sampling temperature                                                                                                             |
-| `knowledge_config` | object        | no       | Knowledge retrieval config injected before every generation — see [Knowledge Config](#knowledge-config)                          |
-| `max_context_messages` | number    | no       | Maximum number of recent messages sent to the model per generation — see [Context Window Limiting](#context-window-limiting)     |
-| `single_session_per_actor` | boolean | no  | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)         |
+Agents reference [Tools](./tools.md) by their IDs via the `tool_ids` field. A single tool can be attached to many agents. For tool types (`http`, `client`, `mcp`, `soat`), execution behavior, preset parameters, and tool name resolution, see the [Tools module](./tools.md).
 
-### Agent Tool
-
-Agent tools are reusable tool definitions that can be shared across multiple agents. Each tool is its own resource with a dedicated CRUD API.
-
-| Field               | Type   | Required | Description                                                                                                                                                                                                                                                                                     |
-| ------------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                | string | auto     | Unique identifier (`agt_tool_` prefix)                                                                                                                                                                                                                                                          |
-| `project_id`        | string | yes      | Project the tool belongs to                                                                                                                                                                                                                                                                     |
-| `type`              | string | yes      | `http`, `client`, `mcp`, or `soat` (default: `"http"`)                                                                                                                                                                                                                                          |
-| `name`              | string | yes      | Tool name (`http`/`client`) or namespace prefix for the connection (`mcp`/`soat`)                                                                                                                                                                                                               |
-| `description`       | string | no       | What the tool does (sent to the model for selection)                                                                                                                                                                                                                                            |
-| `parameters`        | object | cond.    | JSON Schema for the tool's input — required for `http` and `client`                                                                                                                                                                                                                             |
-| `execute`           | object | cond.    | Execution configuration — required when `type` is `http`                                                                                                                                                                                                                                        |
-| `execute.url`       | string | yes      | HTTP endpoint called to execute the tool. May contain `{param_name}` placeholders (e.g. `/users/{user_id}`) that are replaced at call time with the corresponding tool argument value (URL-encoded). Arguments consumed as path parameters are excluded from the query string and request body. |
-| `execute.method`    | string | no       | HTTP method to use (default: `POST`). For `GET`, `HEAD`, or `DELETE` the tool arguments are appended as query-string parameters instead of a request body.                                                                                                                                      |
-| `execute.headers`   | object | no       | Additional headers sent with the execution request                                                                                                                                                                                                                                              |
-| `mcp`               | object | cond.    | MCP server configuration — required when `type` is `mcp`                                                                                                                                                                                                                                        |
-| `mcp.url`           | string | yes      | URL of the MCP server (SSE or Streamable HTTP transport)                                                                                                                                                                                                                                        |
-| `mcp.headers`       | object | no       | Additional headers sent when connecting to the MCP server                                                                                                                                                                                                                                       |
-| `actions`           | array  | cond.    | List of SOAT platform actions to expose — required when `type` is `soat`                                                                                                                                                                                                                        |
-| `preset_parameters` | object | no       | Fixed parameter values for `soat` tools. Keys are removed from the schema shown to the model and injected automatically at execution time — see [Preset Parameters](#preset-parameters)                                                                                                         |
-
-Agents reference tools by their IDs via the `tool_ids` field. A single tool can be attached to many agents.
-
-#### Tool ID vs Tool Name
-
-A **tool ID** is the auto-generated resource identifier (e.g., `agt_tool_k8x2f3np`). It is used in `tool_ids`, `active_tool_ids`, and `step_rules[].active_tool_ids`.
-
-A **tool name** is the name the AI model sees at runtime (e.g., `"search"`). For `http` and `client` tools, one tool ID → one tool name (the `name` field). For `mcp` and `soat` tools, one tool ID → **many** tool names discovered from the MCP server or the platform’s action registry. See [Tool Name Resolution](#tool-name-resolution) for details.
-
-`tool_choice` and `stop_conditions` reference tools by **name** (not by ID).
-
-#### Tool Types
-
-The `type` field is required at creation time and defaults to `"http"`. Supported types: `http`, `client`, `mcp`, and `soat`.
-
-##### http
-
-When the model decides to call a tool, the server sends an HTTP request to the configured `execute.url` using the method specified in `execute.method` (defaults to `POST`). For `POST`, `PUT`, and `PATCH` requests the tool arguments are sent as a JSON body. For `GET`, `HEAD`, and `DELETE` requests the tool arguments are appended as query-string parameters.
-
-`execute.url` may contain `{param_name}` placeholders. At invocation time each placeholder is replaced with the corresponding tool argument (URL-encoded via `encodeURIComponent`). Arguments consumed as path parameters are removed from the remaining args before query-string or body serialization. Placeholders with no matching argument are left as-is.
-
-Example — a `DELETE` tool with path parameters:
-
-```json
-{
-  "name": "delete-post",
-  "type": "http",
-  "execute": {
-    "url": "https://api.example.com/users/{user_id}/posts/{post_id}",
-    "method": "DELETE"
-  },
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "user_id": { "type": "string" },
-      "post_id": { "type": "string" }
-    },
-    "required": ["user_id", "post_id"]
-  }
-}
-```
-
-When the model calls this tool with `{ "user_id": "123", "post_id": "456" }`, the server issues:
-
-```
-DELETE https://api.example.com/users/123/posts/456
-```
-
-##### client
-
-The tool is registered with `description` and `parameters` but has **no server-side `execute`**. When the model calls a `client` tool the generation **pauses** and returns the pending tool calls to the API caller. The caller executes the tool locally, then sends the results back to continue the loop.
-
-Client tool flow:
-
-1. The caller starts a generation (`POST /agents/{agent_id}/generate`).
-2. The agent loop runs normally — `http` tools execute on the server.
-3. When the model calls a `client` tool, the server **cannot** execute it. The generation suspends and responds with `status: "requires_action"` plus the pending tool calls.
-4. The caller inspects the tool calls, runs them locally, and submits the results via `POST /agents/{agent_id}/generate/{generation_id}/tool-outputs`.
-5. The server resumes the loop from where it left off, feeding the submitted tool results back to the model.
-6. Steps 2–5 repeat until the loop terminates normally (final text, `max_steps`, or a stop condition).
-
-Example response when a client tool is called:
-
-```json
-{
-  "status": "requires_action",
-  "generation_id": "agt_gen_abc123",
-  "required_action": {
-    "type": "submit_tool_outputs",
-    "tool_calls": [
-      {
-        "tool_call_id": "call_xyz",
-        "tool_name": "read_local_file",
-        "args": { "path": "/tmp/data.csv" }
-      }
-    ]
-  }
-}
-```
-
-Submitting tool outputs:
-
-```json
-POST /agents/{agent_id}/generate/{generation_id}/tool-outputs
-
-{
-  "tool_outputs": [
-    {
-      "tool_call_id": "call_xyz",
-      "output": "col1,col2\n1,2\n3,4"
-    }
-  ]
-}
-```
-
-The response has the same shape as a normal generation — either a final result or another `requires_action` if the model calls more client tools.
-
-##### mcp
-
-The tool represents a connection to an [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) server. At generation time, the SOAT server connects to the MCP endpoint, discovers all available tools, and registers them with the AI model. One MCP tool ID provides **many** tool names — you only configure the connection, and each discovered tool's name, description, and parameters come from the MCP server.
-
-MCP tools execute on the MCP server side. The SOAT server acts as a proxy: it receives the model's tool call, forwards it to the MCP server, and feeds the result back into the loop.
-
-##### soat
-
-The tool exposes actions from the SOAT platform itself (documents, conversations, files, secrets, etc.). Instead of pointing to an external endpoint, you list the platform actions the agent is allowed to use via the `actions` array. Each action name corresponds to an existing MCP tool registered on the platform (e.g., `get-document`, `search-documents`, `create-file`). The server executes these actions in-process, reusing the same permission checks as the REST API.
-
-Available actions come from the platform's registered MCP tools: actors, ai-providers, chats, conversations, documents, files, projects, and secrets.
-
-##### Preset Parameters
-
-`preset_parameters` lets you bake fixed values into a `soat` tool definition. When a key in `preset_parameters` matches a field in the action's input schema:
-
-1. That field is **removed from the schema shown to the model** — the model never sees or fills it in.
-2. The preset value is **merged into every call** before the request is dispatched.
-
-This eliminates the probabilistic risk of the model choosing a wrong value for parameters that should always be fixed (e.g., the ID of a specific document). It also enables creating multiple tool instances for different resources from the same action.
-
-Example — two tools backed by the same `update-document` action, each locked to a different document:
-
-```json
-{
-  "name": "public_doc",
-  "type": "soat",
-  "actions": ["update-document"],
-  "preset_parameters": { "id": "doc_abc123" }
-}
-```
-
-```json
-{
-  "name": "private_doc",
-  "type": "soat",
-  "actions": ["update-document"],
-  "preset_parameters": { "id": "doc_xyz789" }
-}
-```
-
-The model calls `public_doc_update-document` with only the fields it needs to supply (e.g., `content`). The server automatically injects `id: "doc_abc123"` before executing the request.
-
-#### Tool Name Resolution
-
-Since `mcp` and `soat` tools can expose **many** tool names from a single Agent Tool ID, the model needs a way to distinguish tools that may share the same name across different sources. Tool names are resolved as follows:
-
-| Tool Type | Name the model sees    | Example                                              |
-| --------- | ---------------------- | ---------------------------------------------------- |
-| `http`    | `{name}`               | `search`                                             |
-| `client`  | `{name}`               | `read_local_file`                                    |
-| `mcp`     | `{name}_{mcpToolName}` | `github_create_issue`, `github_list_repos`           |
-| `soat`    | `{name}_{action}`      | `platform_get_document`, `platform_search_documents` |
-
-For `http` and `client` tools, the `name` field is used directly — each Agent Tool maps to exactly one tool name.
-
-For `mcp` tools, the Agent Tool's `name` is used as a **prefix** joined with an underscore to each tool name discovered from the MCP server. This guarantees uniqueness even when two MCP servers expose tools with the same name (e.g., `github_search` vs `jira_search`).
-
-For `soat` tools, the same convention applies — the `name` prefix is joined with each action name from the `actions` array.
-
-`tool_choice` and `stop_conditions` reference tools by their **resolved** name (e.g., `github_create_issue`, not just `create_issue`).
+`tool_choice` and `stop_conditions` reference tools by their **resolved name** (e.g., `github_create_issue`), not by ID. See [Tool Name Resolution](./tools.md#tool-name-resolution) in the Tools module.
 
 ### Instructions
 
@@ -227,7 +98,7 @@ The `instructions` field sets the agent's system prompt. It defines the agent's 
 
 ### AI Provider Resolution
 
-Same as chats — the agent resolves its AI provider by `ai_provider_id`. The provider's secret is decrypted and used to authenticate with the upstream model API. If `model` is not set on the agent, the provider's `default_model` is used.
+The agent resolves its AI provider by `ai_provider_id`. The provider's secret is decrypted and used to authenticate with the upstream model API. If `model` is not set on the agent, the provider's `default_model` is used. See [AI Providers](./ai-providers.md).
 
 ### Tool Choice
 
@@ -243,7 +114,7 @@ Using `"required"` is useful when combined with a tool that has no `execute` con
 
 ### Step Rules
 
-The `step_rules` array lets you control `tool_choice` and `active_tool_ids` on specific steps. Each rule targets a step number (1-indexed) and overrides the agent defaults for that step only.
+The `step_rules` array lets you override `tool_choice` and `active_tool_ids` on specific steps. Each rule targets a step number (1-indexed).
 
 | Field             | Type          | Required | Description                         |
 | ----------------- | ------------- | -------- | ----------------------------------- |
@@ -251,24 +122,18 @@ The `step_rules` array lets you control `tool_choice` and `active_tool_ids` on s
 | `tool_choice`     | string/object | no       | Override tool choice for this step  |
 | `active_tool_ids` | array         | no       | Override active tools for this step |
 
-Example — force `search` on step 1, then `analyze` on step 2, then let the model decide:
+Example — force `search` on step 1, then `analyze` on step 2:
 
 ```json
 {
   "step_rules": [
     { "step": 1, "tool_choice": { "type": "tool", "tool_name": "search" } },
-    {
-      "step": 2,
-      "tool_choice": { "type": "tool", "tool_name": "analyze" },
-      "active_tool_ids": ["agt_tool_j5v1d6yt", "agt_tool_h2t9e3ul"]
-    }
+    { "step": 2, "tool_choice": { "type": "tool", "tool_name": "analyze" } }
   ]
 }
 ```
 
-Steps without a matching rule use the agent's default `tool_choice` and `active_tool_ids`.
-
-For **dynamic** per-step control (when you don't know the plan in advance), use `client` tools to create pause points. When submitting tool outputs, you can pass overrides at three levels:
+For **dynamic** per-step control (when you don't know the plan in advance), use `client` tools as pause points. When submitting tool outputs, you can pass overrides at multiple levels:
 
 | Field             | Scope                             | Description                                                                    |
 | ----------------- | --------------------------------- | ------------------------------------------------------------------------------ |
@@ -277,27 +142,7 @@ For **dynamic** per-step control (when you don't know the plan in advance), use 
 | `step_rules`      | Specific upcoming steps           | Array of `{ step, tool_choice?, active_tool_ids? }` targeting future steps     |
 | `defaults`        | All remaining steps in generation | Object with `tool_choice` and/or `active_tool_ids` that replace agent defaults |
 
-```json
-POST /agents/{agent_id}/generate/{generation_id}/tool-outputs
-
-{
-  "tool_outputs": [
-    { "tool_call_id": "call_xyz", "output": "result" }
-  ],
-  "tool_choice": { "type": "tool", "tool_name": "summarize" },
-  "active_tool_ids": ["agt_tool_p4s8a2kd"],
-  "step_rules": [
-    { "step": 5, "tool_choice": "auto" },
-    { "step": 6, "tool_choice": { "type": "tool", "tool_name": "transform" } }
-  ],
-  "defaults": {
-    "tool_choice": "required",
-    "active_tool_ids": ["agt_tool_p4s8a2kd", "agt_tool_n9c3y8ms"]
-  }
-}
-```
-
-**Priority** (highest → lowest): next-step overrides (`tool_choice`/`active_tool_ids`) → `step_rules` for that step → `defaults` → agent config.
+**Priority** (highest → lowest): next-step overrides → `step_rules` for that step → `defaults` → agent config.
 
 ### Stop Conditions
 
@@ -316,47 +161,13 @@ Example — stop after the model calls a `done` tool **or** after 50 steps:
 }
 ```
 
-### Context Window Limiting
-
-By default, every user and assistant text message in the session's conversation history is sent to the model on each generation. In long sessions the growing number of turns increases the context size, which can cause degradation: hallucinated tool success, stale parameters, and silent no-ops.
-
-Set `max_context_messages` on the agent to cap how many recent messages are included. Only the last `N` messages are sent; older messages are silently dropped from the context for that generation (the full history is still stored in the database).
-
-```json
-{
-  "max_context_messages": 20
-}
-```
-
-When `null` (the default), all messages are included.
-
-### Single Session Per Actor
-
-When `single_session_per_actor` is `true`, the server enforces that only one open session per `actor_id` can exist at a time for that agent.
-
-- If a second `POST /agents/:id/sessions` is made with the same `actor_id` while an open session already exists, the server returns `409 Conflict` with error code `SINGLE_SESSION_CONFLICT` and `meta.session_id` pointing to the existing session.
-- Requests without an `actor_id` are not affected regardless of this flag.
-- Closing or deleting the existing session allows a new one to be created.
-
-```json
-{
-  "error": {
-    "code": "SINGLE_SESSION_CONFLICT",
-    "message": "An open session already exists for this actor.",
-    "meta": {
-      "session_id": "sess_..."
-    }
-  }
-}
-```
-
 ### Active Tools
 
 By default, all tools in `tool_ids` are available at every step. Use `active_tool_ids` to restrict which tools the model can see globally. For phased workflows where different steps need different tools, use [Step Rules](#step-rules) instead.
 
 `active_tool_ids` must be a subset of `tool_ids`. If omitted, all tools in `tool_ids` are active.
 
-### Generation
+### Generation Loop
 
 Running an agent creates a **generation** — a single execution of the tool loop. The agent calls the model, checks if it wants to invoke a tool, executes the tool (if configured), and feeds the result back. This loop continues until:
 
@@ -365,7 +176,7 @@ Running an agent creates a **generation** — a single execution of the tool loo
 - A stop condition in `stop_conditions` is met.
 - A tool without an `execute` configuration is called (including `client` tools — which pause the generation instead of terminating it).
 
-Use `POST /agents/{agent_id}/generate` to run a generation. It accepts `prompt` (string) and/or `messages` (array) as input. You can also pass `tool_choice`, `active_tool_ids`, `step_rules`, `stop_conditions`, and `max_call_depth` to override the agent defaults for that request.
+Use `POST /agents/{agent_id}/generate` to run a generation. The request accepts:
 
 | Parameter         | Type          | Required | Description                                                                                                                                 |
 | ----------------- | ------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -375,19 +186,15 @@ Use `POST /agents/{agent_id}/generate` to run a generation. It accepts `prompt` 
 | `active_tool_ids` | array         | no       | Override the agent's `active_tool_ids` for this generation                                                                                  |
 | `step_rules`      | array         | no       | Override the agent's `step_rules` for this generation                                                                                       |
 | `stop_conditions` | array         | no       | Override the agent's `stop_conditions` for this generation                                                                                  |
-| `max_call_depth`  | number        | no       | Maximum nesting depth for agent-to-agent calls (default: `10`) — see [Nested Agent Calls](#nested-agent-calls)                              |
+| `max_call_depth`  | number        | no       | Maximum nesting depth for agent-to-agent calls (default: `10`)                                                                              |
 | `stream`          | boolean       | no       | Stream results as Server-Sent Events                                                                                                        |
 | `tool_context`    | object        | no       | Key-value pairs forwarded as `X-Soat-Context-*` headers on tool calls — see [Tool Context](#tool-context)                                   |
 
 #### Tool Output Message Content
 
-`messages[].content` can be a plain string (default), a `tool_output` object, or a `document` object. This keeps all non-text message input under the same `content` field.
+`messages[].content` can be a plain string, a `tool_output` object, or a `document` object.
 
-When `tool_output` is used, the server executes the referenced tool before model inference and replaces the message content with the extracted result.
-
-When `content.type` is `document`, the server loads the referenced document and uses its content as the message content.
-
-Use this when user input must be transformed first (for example, audio URL -> transcription text).
+When `content.type` is `tool_output`, the server executes the referenced tool before model inference and replaces the message content with the extracted result. Use this when user input must be transformed first (e.g., audio URL → transcription text).
 
 ```json
 {
@@ -405,32 +212,7 @@ Use this when user input must be transformed first (for example, audio URL -> tr
 }
 ```
 
-`tool_id` is required. `output_path` is optional and accepts a jq expression used to select the value from the tool result. If `output_path` is omitted, the entire tool output is passed as the message content. For tools that expose multiple actions (`soat`, `mcp`), provide `action` as well.
-
-Example tool result object:
-
-```json
-{
-  "data": {
-    "transcription": {
-      "text": "Olá Pedro, seu pedido foi aprovado.",
-      "language": "pt-BR",
-      "confidence": 0.97
-    },
-    "duration_ms": 18420
-  },
-  "meta": {
-    "provider": "whisper",
-    "request_id": "req_abc123"
-  }
-}
-```
-
-If `output_path` is `.data.transcription.text`, the extracted value passed to the generation input is:
-
-```json
-"Olá Pedro, seu pedido foi aprovado."
-```
+`tool_id` is required. `output_path` is optional — a jq expression that selects a value from the tool result. If omitted, the entire tool output is used as the message content. For tools that expose multiple actions (`soat`, `mcp`), provide `action` as well.
 
 Useful jq patterns:
 
@@ -439,17 +221,14 @@ Useful jq patterns:
 - Fallback values: `.text // .data.text // ""`
 - Transform and join: `.segments | map(.text) | join(" ")`
 
-Document-based message example:
+When `content.type` is `document`, the server loads the referenced document and uses its content as the message content:
 
 ```json
 {
   "messages": [
     {
       "role": "user",
-      "content": {
-        "type": "document",
-        "document_id": "doc_abc123"
-      }
+      "content": { "type": "document", "document_id": "doc_abc123" }
     }
   ]
 }
@@ -461,48 +240,133 @@ Pass `stream: true` to receive results as Server-Sent Events (SSE). Each step's 
 
 ### Tool Context
 
-`tool_context` lets callers inject key-value pairs that are forwarded as HTTP headers to every tool call made during a generation. This enables server-side tools to perform authorization decisions based on the caller's identity without trusting data embedded in the prompt.
+`tool_context` lets callers inject key-value pairs forwarded as HTTP headers to every tool call in a generation. This enables server-side tools to perform authorization decisions based on the caller's identity without trusting data embedded in the prompt.
 
-#### Shape
-
-`tool_context` is a flat `Record<string, string>` — every key-value pair is forwarded to **all** tool calls in the generation.
-
-```json
-{
-  "tool_context": {
-    "userId": "usr_abc123",
-    "tenantId": "tenant_xyz"
-  }
-}
-```
-
-#### Header Naming
-
-Each key is title-cased (first character uppercased) and prefixed with `X-Soat-Context-`:
+`tool_context` is a flat `Record<string, string>`. Each key is title-cased and prefixed with `X-Soat-Context-`:
 
 | `tool_context` key | Forwarded header          |
 | ------------------ | ------------------------- |
 | `userId`           | `X-Soat-Context-UserId`   |
 | `tenantId`         | `X-Soat-Context-TenantId` |
 
-#### Supported Tool Types
-
 | Tool type | Context headers forwarded | Notes                                                     |
 | --------- | ------------------------- | --------------------------------------------------------- |
 | `http`    | Yes                       | Injected as request headers                               |
 | `mcp`     | Yes                       | Injected as request headers on the MCP `tools/call` fetch |
-| `soat`    | Yes                       | Propagated into nested agent generations (see below)      |
+| `soat`    | Yes                       | Propagated into nested agent generations                  |
 | `client`  | No                        | Executes on the caller's side                             |
 
-Context headers are injected **after** any headers configured on the tool definition, so tool-level authentication headers cannot be overridden by the caller.
+Context headers are injected **after** any headers configured on the tool definition. When a generation pauses with `status: "requires_action"`, the `tool_context` from the original request is preserved and automatically reapplied on resume.
 
-#### Propagation Through Nested Agent Calls
+### Context Window Limiting
 
-When an agent invokes another agent via a `soat` tool (`create-agent-generation`), the parent's `tool_context` is automatically forwarded to the child generation. This means the original caller's identity flows through the entire agent chain without any extra configuration.
+Set `max_context_messages` to cap how many recent messages are sent to the model per generation. Only the last N messages are included; older messages are dropped from that generation's context (the full history is still stored).
 
-#### Persistence Across `requires_action` Pauses
+```json
+{ "max_context_messages": 20 }
+```
 
-When a generation pauses with `status: "requires_action"` (client tool), the `tool_context` provided in the original request is preserved and automatically reapplied when the generation resumes via `POST /agents/{agent_id}/generate/{generation_id}/tool-outputs`.
+When `null` (default), all messages are included.
+
+### Single Session Per Actor
+
+When `single_session_per_actor` is `true`, the server enforces that only one open session per `actor_id` exists at a time for that agent. A second `POST /agents/:id/sessions` with the same `actor_id` returns `409 Conflict` with error code `SINGLE_SESSION_CONFLICT` and `meta.session_id` pointing to the existing session.
+
+```json
+{
+  "error": {
+    "code": "SINGLE_SESSION_CONFLICT",
+    "message": "An open session already exists for this actor.",
+    "meta": { "session_id": "sess_..." }
+  }
+}
+```
+
+Requests without an `actor_id` are not affected. Closing or deleting the existing session allows a new one to be created.
+
+### Knowledge Config
+
+An agent can automatically retrieve relevant knowledge before every generation by setting `knowledge_config`. The server embeds the latest user message, runs a unified knowledge search, and injects matching results as system messages.
+
+| Field            | Type       | Description                                                                                 |
+| ---------------- | ---------- | ------------------------------------------------------------------------------------------- |
+| `memory_ids`     | `string[]` | Search entries within these specific memories (`mem_` prefix)                               |
+| `memory_tags`    | `string[]` | Search entries in memories whose tags match any of these patterns (glob supported: `user*`) |
+| `document_ids`   | `string[]` | Scope document results to these specific document IDs                                       |
+| `document_paths` | `string[]` | Scope document results to files under these path prefixes                                   |
+| `min_score`      | `number`   | Minimum relevance score (0–1) for results to be included (default: 0.5)                     |
+| `limit`          | `number`   | Maximum number of results to inject (default: 5)                                            |
+| `write_memory_id`| `string`   | When set, automatically injects a `write_memory` tool that writes facts to this memory      |
+
+The per-generation `knowledge_config` is merged with the agent's stored config. Arrays are **unioned**; scalars use the per-generation value when present. See [Memories](./memories.md#agent-integration) for details on how the `write_memory` tool works.
+
+Results are injected as system messages prepended to the conversation:
+
+```
+[Document: /reports/q1.txt] Q1 revenue was $4.2M across all regions.
+[Memory: Customer Preferences] Customer prefers email over phone calls.
+```
+
+### SOAT Action Permissions
+
+When an agent executes a `soat` tool action, two policies are evaluated — both must allow the action:
+
+1. **Caller policy** — the permissions of the user or API key that triggered the generation.
+2. **Agent boundary policy** — an optional `boundary_policy` stored on the agent itself.
+
+The effective permission is the intersection of the two:
+
+```
+effective = callerIsAllowed(action) AND agentBoundaryIsAllowed(action)
+```
+
+This follows the same pattern as [API keys](./api-keys.md#permission-inheritance) — the agent creator scopes what the agent can do at most. A caller can never use an agent to exceed their own permissions. If `boundary_policy` is omitted, only the caller's permissions apply.
+
+The boundary policy only governs `soat` actions. For `http`, `client`, and `mcp` tools the actions execute externally and are outside the platform's permission model.
+
+Example — agent restricted to reading and searching documents regardless of caller permissions:
+
+```json
+{
+  "boundary_policy": {
+    "statement": [
+      {
+        "effect": "Allow",
+        "action": ["documents:GetDocument", "documents:SearchDocuments"],
+        "resource": ["*"]
+      }
+    ]
+  }
+}
+```
+
+### Nested Agent Calls
+
+An agent can invoke another agent through a `soat` tool action (`create-agent-generation`). The server enforces a **maximum call depth** controlled by `max_call_depth` on the generate request (default: **10**). Each nested generation receives `remaining_depth - 1`. When `remaining_depth` reaches `0`, the call returns an error instead of spawning the child generation.
+
+For observability, every generation creates its own **trace** linked to the parent via `parent_trace_id` and the shared `root_trace_id`. The child's `trace_id` appears in the parent's step data, making the full call graph reconstructable. See [Traces](./traces.md#trace-ancestry-model) for the ancestry model, invariants, and tree traversal.
+
+### Generation Endpoints
+
+#### List Generations
+
+```
+GET /api/v1/agents/generations?project_id=proj_ABC&agent_id=agt_01&status=in_progress&limit=20&offset=0
+```
+
+Query parameters: `project_id`, `agent_id`, `status`, `limit` (default: 50), `offset` (default: 0).
+
+#### Get Generation
+
+```
+GET /api/v1/agents/generations/{generation_id}
+```
+
+#### Monitoring Running Generations
+
+```
+GET /api/v1/agents/generations?status=in_progress&project_id=proj_ABC
+```
 
 ## Examples
 
@@ -523,12 +387,8 @@ soat create-agent \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-// SDK
 import { SoatClient } from '@soat/sdk';
-const soat = new SoatClient({
-  baseUrl: 'https://api.example.com',
-  token: 'sk_...',
-});
+const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
 
 const { data, error } = await soat.agents.createAgent({
   body: {
@@ -574,7 +434,6 @@ soat create-agent-generation \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-// SDK
 const { data, error } = await soat.agents.createAgentGeneration({
   path: { agent_id: 'agt_01' },
   body: { prompt: 'What is the capital of France?' },
@@ -601,28 +460,16 @@ curl -X POST https://api.example.com/api/v1/agents/agt_01/generate \
 
 **Use when:** all tools are `http` and the model should decide what to do on its own.
 
-**Setup:**
-
 ```json
 {
   "ai_provider_id": "aip_openai",
   "instructions": "You are a research assistant.",
-  "tool_ids": ["agt_tool_k8x2f3np", "agt_tool_m3p9qw7j"],
+  "tool_ids": ["tool_k8x2f3np", "tool_m3p9qw7j"],
   "max_steps": 10
 }
 ```
 
-Where `agt_tool_k8x2f3np` → `"search"` (http) and `agt_tool_m3p9qw7j` → `"fetch_url"` (http).
-
 No `tool_choice`, `step_rules`, or `stop_conditions` — everything defaults to `"auto"`.
-
-**What happens:**
-
-1. Caller sends `POST /agents/{agent_id}/generate` with `{ "prompt": "Summarize the latest news on AI regulation" }`.
-2. The model decides to call `search` → server POSTs to the tool's `execute.url` → result fed back.
-3. The model decides to call `fetch_url` → server executes → result fed back.
-4. The model produces a final text summary → generation complete.
-5. Caller receives `{ "status": "completed", "text": "..." }`.
 
 ---
 
@@ -630,43 +477,16 @@ No `tool_choice`, `step_rules`, or `stop_conditions` — everything defaults to 
 
 **Use when:** the tool needs access to the caller's environment (local files, browser, private APIs).
 
-**Setup:**
-
 ```json
 {
   "ai_provider_id": "aip_openai",
   "instructions": "You help users analyze local data files.",
-  "tool_ids": ["agt_tool_r7w4n1hc", "agt_tool_j5v1d6yt"],
+  "tool_ids": ["tool_r7w4n1hc", "tool_j5v1d6yt"],
   "max_steps": 10
 }
 ```
 
-Where `agt_tool_r7w4n1hc` → `"read_file"` (client) and `agt_tool_j5v1d6yt` → `"analyze"` (http).
-
-**What happens:**
-
-1. Caller sends `POST /agents/{agent_id}/generate` with `{ "prompt": "Analyze /tmp/sales.csv" }`.
-2. The model calls `read_file` → server has no `execute` for it → generation **pauses**.
-3. Caller receives:
-   ```json
-   {
-     "status": "requires_action",
-     "generation_id": "agt_gen_abc",
-     "required_action": {
-       "type": "submit_tool_outputs",
-       "tool_calls": [
-         {
-           "tool_call_id": "call_1",
-           "tool_name": "read_file",
-           "args": { "path": "/tmp/sales.csv" }
-         }
-       ]
-     }
-   }
-   ```
-4. Caller reads the file locally and submits: `POST /agents/{agent_id}/generate/agt_gen_abc/tool-outputs` with `{ "tool_outputs": [{ "tool_call_id": "call_1", "output": "date,amount\n..." }] }`.
-5. The model calls `analyze` (http) → server executes → result fed back.
-6. The model produces final text → `{ "status": "completed", "text": "Sales grew by 15%..." }`.
+When the model calls the `client` tool, the generation suspends with `status: "requires_action"`. The caller submits results via `POST /agents/{agent_id}/generate/{generation_id}/tool-outputs` and the loop resumes. See [client tools](./tools.md#client) for the full interaction pattern.
 
 ---
 
@@ -674,13 +494,10 @@ Where `agt_tool_r7w4n1hc` → `"read_file"` (client) and `agt_tool_j5v1d6yt` →
 
 **Use when:** you know the exact sequence of tools the agent should follow.
 
-**Setup:**
-
 ```json
 {
   "ai_provider_id": "aip_openai",
-  "instructions": "Extract data, transform it, then summarize.",
-  "tool_ids": ["agt_tool_e2h6t0bx", "agt_tool_n9c3y8ms", "agt_tool_p4s8a2kd"],
+  "tool_ids": ["tool_e2h6t0bx", "tool_n9c3y8ms", "tool_p4s8a2kd"],
   "max_steps": 5,
   "step_rules": [
     { "step": 1, "tool_choice": { "type": "tool", "tool_name": "extract" } },
@@ -690,481 +507,55 @@ Where `agt_tool_r7w4n1hc` → `"read_file"` (client) and `agt_tool_j5v1d6yt` →
 }
 ```
 
-Where `agt_tool_e2h6t0bx` → `"extract"`, `agt_tool_n9c3y8ms` → `"transform"`, `agt_tool_p4s8a2kd` → `"summarize"` (all http).
-
-**What happens:**
-
-1. Caller sends `POST /agents/{agent_id}/generate` with `{ "prompt": "Process order #1234" }`.
-2. Step 1 — model is **forced** to call `extract` → server executes → result fed back.
-3. Step 2 — model is **forced** to call `transform` → server executes → result fed back.
-4. Step 3 — model is **forced** to call `summarize` → server executes → result fed back.
-5. Step 4 — no rule → falls back to `"auto"` → model produces final text.
-
 ---
 
-### 4. Dynamic Control (decide at runtime)
+### 4. Done Tool Pattern (forced structured output)
 
-**Use when:** the next step depends on previous results and you can't plan the pipeline in advance.
-
-**Setup:**
-
-```json
-{
-  "ai_provider_id": "aip_openai",
-  "instructions": "You are a coding assistant.",
-  "tool_ids": ["agt_tool_g1m7k4re", "agt_tool_w3f5r9aj", "agt_tool_d8j4v0zp"],
-  "max_steps": 20
-}
-```
-
-Where `agt_tool_g1m7k4re` → `"search_code"` (http), `agt_tool_w3f5r9aj` → `"run_tests"` (http), `agt_tool_d8j4v0zp` → `"checkpoint"` (client — a pause point the caller uses to inspect intermediate results and steer the next step).
-
-**What happens:**
-
-1. Caller sends `POST /agents/{agent_id}/generate` with `{ "prompt": "Find and fix the failing test in auth.ts" }`.
-2. The model calls `search_code` (http) → result fed back. Then calls `checkpoint` (client) → **pauses**.
-3. Caller inspects the search results in the `requires_action` response and decides the model should run tests next, then search again. Submits tool outputs **with overrides at multiple levels**:
-   ```json
-   {
-     "tool_outputs": [{ "tool_call_id": "call_2", "output": "proceed" }],
-     "tool_choice": { "type": "tool", "tool_name": "run_tests" },
-     "active_tool_ids": ["agt_tool_w3f5r9aj"],
-     "step_rules": [
-       {
-         "step": 4,
-         "tool_choice": { "type": "tool", "tool_name": "search_code" },
-         "active_tool_ids": ["agt_tool_g1m7k4re"]
-       }
-     ],
-     "defaults": {
-       "tool_choice": "required"
-     }
-   }
-   ```
-4. Step 3 — next-step override wins → model is **forced** to call `run_tests` → server executes → result fed back.
-5. Step 4 — `step_rules` override wins → model is **forced** to call `search_code` → server executes → result fed back.
-6. Step 5+ — no rule, no next-step override → `defaults` apply → `tool_choice: "required"` so the model must call a tool, but can choose which one.
-
----
-
-### 5. Done Tool Pattern (forced termination)
-
-**Use when:** the model should always "commit" its final answer through a structured tool instead of free-form text.
-
-**Setup:**
+**Use when:** the model should always commit its final answer through a structured tool.
 
 ```json
 {
   "ai_provider_id": "aip_openai",
   "instructions": "Research the topic and call done with your structured answer.",
-  "tool_ids": ["agt_tool_k8x2f3np", "agt_tool_q6b2x5wf"],
+  "tool_ids": ["tool_k8x2f3np", "tool_q6b2x5wf"],
   "tool_choice": "required",
   "stop_conditions": [{ "type": "hasToolCall", "tool_name": "done" }],
   "max_steps": 15
 }
 ```
 
-Where `agt_tool_k8x2f3np` → `"search"` (http) and `agt_tool_q6b2x5wf` → `"done"` (client, no execute).
-
-**What happens:**
-
-1. Caller sends `POST /agents/{agent_id}/generate`.
-2. `tool_choice: "required"` → the model **must** call a tool at every step. It cannot respond with free-form text.
-3. The model calls `search` repeatedly gathering data.
-4. When ready, the model calls `done` with structured arguments (e.g., `{ "title": "...", "summary": "..." }`).
-5. The `hasToolCall` stop condition fires → loop terminates immediately.
-6. Caller receives the generation result including the `done` tool's arguments as structured output.
+`tool_choice: "required"` forces the model to always call a tool. The `hasToolCall` stop condition fires when the model calls `done`, terminating the loop with structured output.
 
 ---
 
-### 6. MCP Tools (tools from an MCP server)
+### 5. MCP Tools (tools from an MCP server)
 
-**Use when:** you want the agent to use tools provided by an external MCP server (e.g., GitHub, Slack, a custom internal service).
-
-**Setup:**
+**Use when:** you want the agent to use tools provided by an external MCP server (e.g., GitHub, Slack).
 
 ```json
 {
   "ai_provider_id": "aip_anthropic",
-  "instructions": "You manage GitHub repositories. Use the available tools to help the user.",
-  "tool_ids": ["agt_tool_c5n8f2vb"],
+  "instructions": "You manage GitHub repositories.",
+  "tool_ids": ["tool_c5n8f2vb"],
   "max_steps": 10
 }
 ```
 
-Where `agt_tool_c5n8f2vb` is an `mcp` tool connected to a GitHub MCP server. At generation time, the server discovers tools like `search_repositories`, `create_issue`, `list_pull_requests`, `get_file_contents`, etc. — all from a single tool ID.
-
-**What happens:**
-
-1. Caller sends `POST /agents/{agent_id}/generate` with `{ "prompt": "Create an issue in acme/api titled 'Fix auth bug'" }`.
-2. The server connects to the MCP endpoint configured on `agt_tool_c5n8f2vb`, discovers all available tool names, and registers them with the model.
-3. The model decides to call `create_issue` → the server proxies the call to the MCP server → result fed back.
-4. The model produces a final text confirmation → generation complete.
-5. Caller receives `{ "status": "completed", "text": "Created issue #42 ..." }`.
-
-You can combine MCP tools with `http` and `client` tools in the same agent — all tool names from all sources are available to the model.
+`tool_c5n8f2vb` is an `mcp` tool connected to a GitHub MCP server. At generation time, the server discovers all available tool names from the MCP server and registers them with the model. See [mcp tools](./tools.md#mcp).
 
 ---
 
-### 7. SOAT Tools (platform actions)
+### 6. SOAT Tools (platform actions)
 
-**Use when:** the agent needs to interact with data on the SOAT platform itself — reading documents, searching files, managing conversations, etc.
-
-**Setup:**
+**Use when:** the agent needs to interact with SOAT platform data — reading documents, searching files, managing conversations.
 
 ```json
 {
   "ai_provider_id": "aip_openai",
-  "instructions": "You are a knowledge assistant. Use the project’s documents to answer user questions.",
-  "tool_ids": ["agt_tool_s2d7p4qx"],
+  "instructions": "You are a knowledge assistant. Use the project's documents to answer user questions.",
+  "tool_ids": ["tool_s2d7p4qx"],
   "max_steps": 10
 }
 ```
 
-Where `agt_tool_s2d7p4qx` is a `soat` tool configured as:
-
-```json
-{
-  "type": "soat",
-  "name": "docs",
-  "actions": ["search-documents", "get-document"]
-}
-```
-
-**What happens:**
-
-1. Caller sends `POST /agents/{agent_id}/generate` with `{ "prompt": "What does our API rate-limiting policy say?" }`.
-2. The server registers two tools with the model: `docs_search_documents` and `docs_get_document` (names derived from `{name}_{action}`).
-3. The model calls `docs_search_documents` with `{ "query": "rate limiting policy" }` → the server executes the `search-documents` action in-process → result fed back.
-4. The model calls `docs_get_document` with `{ "id": "doc_abc" }` to get the full text → server executes → result fed back.
-5. The model produces a final answer → generation complete.
-6. Caller receives `{ "status": "completed", "text": "The rate-limiting policy states…" }`.
-
-You can combine `soat` tools with `http`, `client`, and `mcp` tools in the same agent.
-
-## Knowledge Config
-
-An agent can automatically retrieve relevant knowledge before every generation by setting a `knowledge_config` on the agent resource. The server embeds the latest user message, runs a unified knowledge search across documents and memory entries, and injects matching results as system messages at the top of the conversation.
-
-### Config Shape
-
-| Field            | Type       | Description                                                                                 |
-| ---------------- | ---------- | ------------------------------------------------------------------------------------------- |
-| `memory_ids`     | `string[]` | Search entries within these specific memories (`mem_` prefix)                               |
-| `memory_tags`    | `string[]` | Search entries in memories whose tags match any of these patterns (glob supported: `user*`) |
-| `document_ids`   | `string[]` | Scope document results to these specific document IDs                                       |
-| `document_paths` | `string[]` | Scope document results to files under these path prefixes                                   |
-| `min_score`      | `number`   | Minimum relevance score (0–1) for results to be included (default: 0.5)                     |
-| `limit`          | `number`   | Maximum number of results to inject (default: 5)                                            |
-
-### Merge Semantics
-
-The per-generation `knowledge_config` (passed on the generate request) is merged with the agent's stored `knowledge_config`. Arrays (`memory_ids`, `memory_tags`, `document_ids`, `document_paths`) are **unioned**. Scalars (`min_score`, `limit`) use the per-generation value when present, otherwise fall back to the agent config.
-
-### Context Injection
-
-Results are injected as system messages prepended to the conversation, one message per result:
-
-```
-[Document: /reports/q1.txt] Q1 revenue was $4.2M across all regions.
-[Memory: Customer Preferences] Customer prefers email over phone calls.
-```
-
-The agent receives this context before generating its first response.
-
-### Example — Agent With Memory Knowledge Config
-
-```json
-{
-  "ai_provider_id": "aip_openai",
-  "name": "Customer Support Agent",
-  "instructions": "You are a helpful customer support agent.",
-  "knowledge_config": {
-    "memory_ids": ["mem_customer_prefs"],
-    "memory_tags": ["support*"],
-    "document_ids": [],
-    "document_paths": ["/docs/products/"],
-    "min_score": 0.6,
-    "limit": 8
-  }
-}
-```
-
-### `write_memory` Tool
-
-When an agent has `knowledge_config.memory_ids` set and a `soat` tool with the `memories:WriteMemoryEntry` action, it can write new facts to those memories during generation. See the [Memories module](./memories.md#agent-integration) for details.
-
-## SOAT Action Permissions
-
-When an agent executes a `soat` tool action, the server must decide whether the action is allowed. Two policies are evaluated — both must allow the action for it to proceed:
-
-1. **Caller policy** — the permissions of the user or API key that triggered the generation. This is the same policy evaluation used by every other REST endpoint.
-2. **Agent boundary policy** — an optional `boundary_policy` stored on the agent itself that caps what the agent is allowed to do, regardless of who calls it.
-
-The effective permission is the **intersection** of the two:
-
-```
-effective = callerIsAllowed(action) AND agentBoundaryIsAllowed(action)
-```
-
-This follows the same pattern as project API keys, where the key's policy intersects the user's policy.
-
-### Why two layers?
-
-- **Principle of least privilege** — the agent creator scopes what the agent can do at most. A document-search agent shouldn't be able to delete files even if the caller can.
-- **Callers can't escalate** — a user with read-only permissions can't use an agent whose boundary allows writes to bypass their own restrictions.
-- **No boundary = caller-only** — if `boundary_policy` is omitted, only the caller's permissions apply (backward compatible).
-
-### Example
-
-```json
-{
-  "ai_provider_id": "aip_openai",
-  "instructions": "You answer questions using project documents.",
-  "tool_ids": ["agt_tool_s2d7p4qx"],
-  "boundary_policy": {
-    "statement": [
-      {
-        "effect": "Allow",
-        "action": ["documents:GetDocument", "documents:SearchDocuments"],
-        "resource": ["*"]
-      }
-    ]
-  }
-}
-```
-
-Even if the caller has `documents:*` (full access), this agent can only read and search documents — never create or delete them.
-
-### Scope
-
-The boundary policy only governs `soat` actions, which execute against platform data. For `http`, `client`, and `mcp` tools the actions execute externally and are outside the platform's permission model.
-
-## Nested Agent Calls
-
-An agent can invoke another agent through a `soat` tool action (e.g., `create-agent-generation`). Without safeguards this can lead to unbounded recursion (`A→B→A→…`).
-
-The server enforces a **maximum call depth** controlled by the `max_call_depth` parameter on the generate request (default: **10**). Internally, the server converts this into a `remaining_depth` counter. Each time a `soat` action triggers a child generation, the child receives `remaining_depth - 1`. When `remaining_depth` reaches `0`, the action returns an error instead of spawning the child generation.
-
-This design is self-contained: each generation only needs its own `remaining_depth` — it does not need to know the original `max_call_depth` or any shared trace state.
-
-For observability, every generation creates its own **trace** with a unique `trace_id` (`trc_` prefix). Each trace in a chain shares a common `root_trace_id` pointing back to the top-level trace, and each child trace carries a `parent_trace_id` pointing to its immediate parent. This is internal server plumbing — agents do not receive or propagate `trace_id`.
-
-When an agent spawns a child generation, the parent's `generation_id` is recorded as the child's `initiator_generation_id`. This creates a generation-to-generation chain that lets you reconstruct the full call graph. The child's `trace_id` also appears in the parent's step data (as the tool call result), making tree traversal possible from either the FK fields or the step content.
-
-Example: A caller starts Agent A with `max_call_depth: 3`. Agent A runs with `remaining_depth: 3` and calls Agent B (`remaining_depth: 2`). Agent B calls Agent C (`remaining_depth: 1`). Agent C can still run but cannot nest further — if it tries to call Agent D, `remaining_depth` would be `0` → the server rejects the call.
-
-## Traces
-
-A trace is the execution log of a single generation — it records every step the agent took (model calls, tool invocations, results). Traces are persisted as **metadata in the database** with the full step content stored on disk as a [File](./files.md) record.
-
-### Trace Data Model
-
-| Field             | Type           | Description                                                                            |
-| ----------------- | -------------- | -------------------------------------------------------------------------------------- |
-| `id`              | string         | Public identifier (`trc_` prefix)                                                      |
-| `project_id`      | string         | Project the trace belongs to                                                           |
-| `agent_id`        | string         | Agent that produced the trace                                                          |
-| `file_id`         | string \| null | ID of the File record containing the full JSON steps (on disk)                         |
-| `step_count`      | number         | Total number of steps recorded                                                         |
-| `parent_trace_id` | string \| null | ID of the immediate parent trace; `null` for top-level (root) traces                   |
-| `root_trace_id`   | string \| null | ID of the root trace in a multi-agent chain; `null` when this trace is itself the root |
-| `created_at`      | string         | ISO 8601 creation timestamp                                                            |
-
-> For the full trace ancestry model — including invariants, a concrete multi-level example, and tree reconstruction guidance — see the [Traces module](./traces.md#trace-ancestry-model).
-
-### Trace Content
-
-The full trace content (steps array) is **not** stored in the database. Instead, it is written to disk as a JSON file under the project's `traces` category:
-
-```
-{FILES_STORAGE_DIR}/{projectPublicId}/traces/{traceId}.json
-```
-
-To retrieve the content, use the `file_id` from the trace metadata and download the file via `GET /api/v1/files/{file_id}/download`.
-
-### Trace Endpoints
-
-#### List Traces
-
-```
-GET /api/v1/agents/traces?project_id=proj_ABC&agent_id=agt_01&limit=20&offset=0
-```
-
-Returns paginated metadata — no step content:
-
-```json
-{
-  "data": [
-    {
-      "id": "trc_abc123",
-      "project_id": "proj_ABC",
-      "agent_id": "agt_01",
-      "file_id": "file_xyz",
-      "step_count": 5,
-      "parent_trace_id": null,
-      "root_trace_id": null,
-      "created_at": "2025-01-15T10:30:00Z"
-    }
-  ],
-  "total": 42,
-  "limit": 20,
-  "offset": 0
-}
-```
-
-#### Get Trace
-
-```
-GET /api/v1/agents/traces/{trace_id}
-```
-
-Returns trace metadata including `file_id`. To get the full steps, download the file:
-
-```json
-{
-  "id": "trc_abc123",
-  "project_id": "proj_ABC",
-  "agent_id": "agt_01",
-  "file_id": "file_xyz",
-  "step_count": 5,
-  "parent_trace_id": null,
-  "root_trace_id": null,
-  "created_at": "2025-01-15T10:30:00Z"
-}
-```
-
-### Tree Traversal
-
-Every trace carries explicit `parent_trace_id` and `root_trace_id` foreign keys so the full execution tree can be reconstructed without inspecting step content:
-
-- **`parent_trace_id`** — the ID of the immediate parent trace (`null` for the root trace).
-- **`root_trace_id`** — the ID of the root trace shared by every trace in the chain (`null` on the root trace itself).
-
-The recommended way to retrieve the full tree is the dedicated endpoint:
-
-```
-GET /api/v1/traces/{trace_id}/tree
-```
-
-This returns the root node with all descendants nested under `children`, regardless of which trace ID in the chain you supply. See the [Traces module](./traces.md) for full details, invariants, and a concrete example.
-
-You can also navigate the tree manually using the FK fields, or reconstruct it by inspecting step content: the tool call result for a `create-agent-generation` `soat` action contains the child's `trace_id`.
-
-## Generations
-
-A generation is a persisted lifecycle record for a single agent execution. While a trace captures _what happened_ (steps), a generation captures _the lifecycle_ (who started it, when it started/completed, and why it stopped).
-
-### Generation Data Model
-
-| Field                     | Type        | Description                                             |
-| ------------------------- | ----------- | ------------------------------------------------------- |
-| `id`                      | string      | Public identifier (`agt_gen_` prefix)                   |
-| `project_id`              | string      | Project the generation belongs to                       |
-| `agent_id`                | string      | Agent that was executed                                 |
-| `trace_id`                | string      | Associated trace ID                                     |
-| `initiator_generation_id` | string/null | Generation that spawned this one (for nested calls)     |
-| `status`                  | string      | Current lifecycle state (see below)                     |
-| `started_at`              | string      | ISO 8601 timestamp when execution began                 |
-| `completed_at`            | string/null | ISO 8601 timestamp when execution finished              |
-| `last_activity_at`        | string/null | ISO 8601 timestamp of last step activity                |
-| `stop_reason`             | string/null | Why the generation ended (see below)                    |
-| `started_by`              | object/null | Identity of the principal that triggered the generation |
-| `created_at`              | string      | ISO 8601 creation timestamp                             |
-
-### Generation Status
-
-| Status            | Description                                       |
-| ----------------- | ------------------------------------------------- |
-| `in_progress`     | The generation is actively running                |
-| `requires_action` | Paused waiting for client tool outputs            |
-| `completed`       | The generation finished                           |
-| `failed`          | The generation encountered an unrecoverable error |
-
-### Stop Reason
-
-When `status` is `completed`, `stop_reason` indicates why:
-
-| Stop Reason               | Description                                        |
-| ------------------------- | -------------------------------------------------- |
-| `end_turn`                | Model produced a final response with no tool calls |
-| `max_steps`               | Step count reached `max_steps`                     |
-| `stop_condition`          | A configured `stop_conditions` rule was triggered  |
-| `no_executor`             | A tool without an executor was called (non-client) |
-| `stream_response_started` | Streaming generation handed off to the SSE stream  |
-| `depth_limit`             | Nested call exceeded `max_call_depth`              |
-
-### Initiator Generation
-
-When an agent spawns a nested generation (via `soat` tool action `create-agent-generation`), the server automatically sets `initiator_generation_id` on the child generation. You can also pass it explicitly:
-
-```json
-POST /api/v1/agents/{agent_id}/generate
-
-{
-  "messages": [{"role": "user", "content": "Do the thing"}],
-  "initiator_generation_id": "agt_gen_parent123"
-}
-```
-
-This forms a generation chain: `gen_A → gen_B → gen_C`. To trace the full call graph, follow `initiator_generation_id` pointers.
-
-### Generation Endpoints
-
-#### List Generations
-
-```
-GET /api/v1/agents/generations?project_id=proj_ABC&agent_id=agt_01&status=in_progress&limit=20&offset=0
-```
-
-Query parameters:
-
-| Parameter    | Type   | Description                                         |
-| ------------ | ------ | --------------------------------------------------- |
-| `project_id` | string | Filter by project                                   |
-| `agent_id`   | string | Filter by agent                                     |
-| `status`     | string | Filter by status (`in_progress`, `completed`, etc.) |
-| `limit`      | number | Page size (default: 50)                             |
-| `offset`     | number | Pagination offset (default: 0)                      |
-
-Response:
-
-```json
-{
-  "data": [
-    {
-      "id": "agt_gen_abc123",
-      "project_id": "proj_ABC",
-      "agent_id": "agt_01",
-      "trace_id": "agt_trace_def456",
-      "initiator_generation_id": null,
-      "status": "in_progress",
-      "started_at": "2025-01-15T10:30:00Z",
-      "completed_at": null,
-      "last_activity_at": "2025-01-15T10:30:05Z",
-      "stop_reason": null,
-      "started_by": { "type": "api_key", "id": "key_xyz" },
-      "created_at": "2025-01-15T10:30:00Z"
-    }
-  ],
-  "total": 15,
-  "limit": 20,
-  "offset": 0
-}
-```
-
-#### Get Generation
-
-```
-GET /api/v1/agents/generations/{generation_id}
-```
-
-Returns the full generation record (same shape as list items).
-
-### Monitoring Running Generations
-
-To find all currently active generations (useful for dashboards and health checks):
-
-```
-GET /api/v1/agents/generations?status=in_progress&project_id=proj_ABC
-```
+`tool_s2d7p4qx` is a `soat` tool with `"name": "docs"` and `"actions": ["search-documents", "get-document"]`. The model sees `docs_search-documents` and `docs_get-document` as tool names. See [soat tools](./tools.md#soat) and [preset parameters](./tools.md#preset-parameters).
