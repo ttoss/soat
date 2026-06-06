@@ -52,8 +52,8 @@ jobs:
 
       - name: Publish SDK and CLI
         run: |
-          pnpm --filter @soat/sdk publish --no-git-checks
-          pnpm --filter @soat/cli publish --no-git-checks
+          pnpm --filter @soat/sdk publish --no-git-checks --provenance
+          pnpm --filter @soat/cli publish --no-git-checks --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -74,6 +74,9 @@ jobs:
     needs: release
     name: Publish Docker Image
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      attestations: write
 
     steps:
       - uses: actions/checkout@v6
@@ -97,9 +100,18 @@ jobs:
             type=raw,value=latest
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           target: production
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          provenance: mode=max
+          sbom: true
+
+      - name: Attest Docker image
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: index.docker.io/ttoss/soat
+          subject-digest: ${{ steps.build.outputs.digest }}
