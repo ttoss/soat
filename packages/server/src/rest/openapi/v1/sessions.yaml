@@ -784,9 +784,9 @@ components:
                 properties:
                   id:
                     type: string
-                  name:
+                  tool_name:
                     type: string
-                  arguments:
+                  args:
                     type: object
 
     SendSessionMessageResponse:
@@ -819,9 +819,9 @@ components:
                 properties:
                   id:
                     type: string
-                  name:
+                  tool_name:
                     type: string
-                  arguments:
+                  args:
                     type: object
 
     SubmitSessionToolOutputsRequest:
