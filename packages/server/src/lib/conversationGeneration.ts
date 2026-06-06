@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { createGeneration, type GenerationResult } from './agents';
+import type { GenerationInputMessage } from './generationInputMessages';
 import { addConversationMessage } from './conversationMessages';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 
@@ -61,10 +62,24 @@ const buildMessageEntry = (args: {
 
 const buildConversationHistory = (args: {
   messages: Array<ConversationMessage>;
-}) => {
-  return args.messages.map((msg) => {
-    return buildMessageEntry({ msg });
-  });
+}): Array<{ role: string; content: unknown }> => {
+  const result: Array<{ role: string; content: unknown }> = [];
+  for (const msg of args.messages) {
+    if (msg.role === 'assistant') {
+      const toolMessages = (msg as { metadata?: Record<string, unknown> | null })
+        .metadata?.toolMessages;
+      if (Array.isArray(toolMessages) && toolMessages.length > 0) {
+        for (const tm of toolMessages) {
+          result.push(tm as { role: string; content: unknown });
+        }
+      } else {
+        result.push(buildMessageEntry({ msg }));
+      }
+    } else {
+      result.push(buildMessageEntry({ msg }));
+    }
+  }
+  return result;
 };
 
 type InternalGenerationResult =
@@ -74,6 +89,7 @@ type InternalGenerationResult =
       traceId: string;
       content: string;
       model: string;
+      toolMessages?: unknown[];
     }
   | {
       status: 'requires_action';
@@ -84,13 +100,13 @@ type InternalGenerationResult =
 
 const runAgentGeneration = async (args: {
   agent: InstanceType<(typeof db)['Agent']>;
-  messagesForModel: Array<{ role: string; content: string }>;
+  messagesForModel: Array<{ role: string; content: unknown }>;
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
 }): Promise<InternalGenerationResult> => {
   const result = await createGeneration({
     agentId: args.agent.publicId,
-    messages: args.messagesForModel,
+    messages: args.messagesForModel as GenerationInputMessage[],
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
   });
@@ -117,12 +133,13 @@ const runAgentGeneration = async (args: {
     traceId: result.traceId,
     content: result.output?.content ?? '',
     model: result.output?.model ?? '',
+    toolMessages: result.output?.toolMessages,
   };
 };
 
 const runGenerationForAgent = async (args: {
   generatingAgent: GenerationContext['generatingAgent'];
-  messagesForModel: Array<{ role: string; content: string }>;
+  messagesForModel: Array<{ role: string; content: unknown }>;
   model?: string;
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
@@ -255,6 +272,7 @@ export const generateConversationMessage = async (args: {
     traceId,
     content: assistantContent,
     model: modelName,
+    toolMessages,
   } = genResult;
 
   const persisted = await addConversationMessage({
@@ -263,6 +281,8 @@ export const generateConversationMessage = async (args: {
     role: 'assistant',
     agentId: args.agentId,
     position: snapshotPosition + 1,
+    metadata:
+      toolMessages && toolMessages.length > 0 ? { toolMessages } : undefined,
   });
 
   if (!persisted) {

@@ -26,6 +26,7 @@ export type PendingGeneration = {
   }>;
   messages: Array<unknown>;
   steps: unknown[];
+  allMessagesCount: number;
   resolvedModel: LanguageModel;
   agentConfig: {
     instructions: string | null;
@@ -48,6 +49,7 @@ export type GenerationResult = {
     model: string;
     content: string;
     finishReason: string;
+    toolMessages?: unknown[];
   };
   requiredAction?: {
     type: 'submit_tool_outputs';
@@ -81,8 +83,8 @@ export const pendingGenerations = new Map<string, PendingGeneration>();
 
 export const buildAllMessages = (
   instructions: string | null,
-  messages: Array<{ role: string; content: string }>
-): Array<{ role: string; content: string }> => {
+  messages: Array<{ role: string; content: unknown }>
+): Array<{ role: string; content: unknown }> => {
   if (!instructions) return messages;
   return [{ role: 'system', content: instructions }, ...messages];
 };
@@ -132,7 +134,7 @@ const buildPrepareStep = (
 
 export const runStreamGeneration = (args: {
   model: LanguageModel;
-  allMessages: Array<{ role: string; content: string }>;
+  allMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
   typedAgent: TypedAgent;
   generationId: string;
@@ -143,7 +145,7 @@ export const runStreamGeneration = (args: {
 }): ReadableStream => {
   const system = args.allMessages.find((m) => {
     return m.role === 'system';
-  })?.content;
+  })?.content as string | undefined;
   const nonSystemMessages = args.allMessages.filter((m) => {
     return m.role !== 'system';
   });
@@ -223,7 +225,7 @@ const storePendingGenerationState = (args: {
     toolName: string;
     input: unknown;
   }>;
-  allMessages: Array<{ role: string; content: string }>;
+  allMessages: Array<{ role: string; content: unknown }>;
   result: { steps: unknown[]; response: { messages: unknown[] } };
   model: LanguageModel;
   resolvedTools: Record<string, Tool>;
@@ -246,6 +248,7 @@ const storePendingGenerationState = (args: {
     }),
     messages: [...args.allMessages, ...args.result.response.messages],
     steps: serializeSteps(args.result.steps),
+    allMessagesCount: args.allMessages.length,
     resolvedModel: args.model,
     agentConfig: {
       instructions: args.typedAgent.instructions,
@@ -276,6 +279,7 @@ const storePendingGenerationState = (args: {
     rootTraceId: args.rootTraceId ?? null,
     toolContext: args.toolContext ?? null,
     remainingDepth: args.remainingDepth ?? null,
+    allMessagesCount: args.allMessages.length,
   };
   updateGenerationRecord({
     publicId: args.generationId,
@@ -293,7 +297,7 @@ export const savePendingGeneration = (args: {
     toolName: string;
     input: unknown;
   }>;
-  allMessages: Array<{ role: string; content: string }>;
+  allMessages: Array<{ role: string; content: unknown }>;
   result: { steps: unknown[]; response: { messages: unknown[] } };
   model: LanguageModel;
   typedAgent: TypedAgent;
@@ -346,7 +350,7 @@ export const buildCompletedGenerationResult = async (args: {
   rootTraceId?: string | null;
   result: {
     steps: unknown[];
-    response?: { modelId?: string };
+    response?: { modelId?: string; messages?: unknown[] };
     text: string;
     finishReason: string;
   };
@@ -380,6 +384,7 @@ export const buildCompletedGenerationResult = async (args: {
       model: args.result.response?.modelId ?? args.typedAgent.model ?? '',
       content: args.result.text,
       finishReason: args.result.finishReason,
+      toolMessages: args.result.response?.messages ?? [],
     },
   };
 

@@ -83,6 +83,7 @@ type PendingStateDb = {
   rootTraceId: string | null;
   toolContext: Record<string, string> | null;
   remainingDepth: number | null;
+  allMessagesCount?: number;
 };
 
 const buildPendingFromState = async (args: {
@@ -134,6 +135,7 @@ const buildPendingFromState = async (args: {
     }),
     messages: args.pendingState.messages,
     steps: args.pendingState.steps ?? [],
+    allMessagesCount: args.pendingState.allMessagesCount ?? 0,
     resolvedModel: model,
     agentConfig: {
       instructions: args.typedAgent.instructions,

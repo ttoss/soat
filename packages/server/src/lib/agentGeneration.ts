@@ -44,7 +44,7 @@ type GenerationContext = {
   typedAgent: TypedAgent;
   model: LanguageModel;
   resolvedTools: Record<string, Tool>;
-  allMessages: Array<{ role: string; content: string }>;
+  allMessages: Array<{ role: string; content: unknown }>;
   generationId: string;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
@@ -146,7 +146,7 @@ const buildGenerationContext = async (args: {
   const knowledgeMessages = await buildKnowledgeMessages({
     knowledgeConfig: typedAgent.knowledgeConfig,
     projectIds: args.projectIds,
-    messages: resolvedMessages,
+    messages: resolvedMessages as Array<{ role: string; content: string }>,
   });
 
   log(
@@ -394,13 +394,11 @@ export const submitToolOutputs = async (args: {
     pendingToolCalls: pending.pendingToolCalls,
   });
   const allMessages = [...pending.messages, ...toolResultMessages];
-  const typedPendingMessages = pending.messages as Array<{
-    role: string;
-    content: string;
-  }>;
-  const system = typedPendingMessages.find((m) => {
-    return m.role === 'system';
-  })?.content;
+  const system = (
+    pending.messages.find(
+      (m) => (m as { role: string }).role === 'system'
+    ) as { role: string; content: string } | undefined
+  )?.content;
   const nonSystemMessages = allMessages.filter((m) => {
     return (m as { role?: string }).role !== 'system';
   });
@@ -421,6 +419,10 @@ export const submitToolOutputs = async (args: {
     temperature: pending.agentConfig.temperature ?? undefined,
   });
 
+  // Extract the tool exchange messages that weren't already in the conversation history
+  const pendingToolMessages = pending.messages.slice(
+    pending.allMessagesCount ?? 0
+  );
   const completedResult: GenerationResult = {
     id: args.generationId,
     traceId: pending.traceId,
@@ -429,6 +431,11 @@ export const submitToolOutputs = async (args: {
       model: result.response?.modelId ?? '',
       content: result.text,
       finishReason: result.finishReason,
+      toolMessages: [
+        ...pendingToolMessages,
+        ...toolResultMessages,
+        ...(result.response?.messages ?? []),
+      ],
     },
   };
 

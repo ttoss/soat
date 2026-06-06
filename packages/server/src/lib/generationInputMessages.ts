@@ -6,21 +6,26 @@ import {
 
 export type GenerationInputMessage = {
   role: string;
-  content: ResolvableMessageContent;
+  content: ResolvableMessageContent | unknown[];
 };
 
 export const resolveGenerationInputMessages = async (args: {
   projectIds?: number[];
-  messages: GenerationInputMessage[];
+  messages: Array<{ role: string; content: ResolvableMessageContent | unknown[] }>;
   authHeader?: string;
   authUser?: AuthUser;
   allowedToolIds?: string[];
   agentBoundaryPolicy?: unknown;
-}): Promise<Array<{ role: string; content: string }>> => {
+}): Promise<Array<{ role: string; content: unknown }>> => {
   const resolved = await Promise.all(
     args.messages.map(async (message) => {
+      // Pass through complex content (e.g. AI SDK tool messages) without resolution
+      if (Array.isArray(message.content)) {
+        return { role: message.role, content: message.content };
+      }
+
       const resolvedContent = await resolveMessageContent({
-        content: message.content,
+        content: message.content as ResolvableMessageContent,
         projectIds: args.projectIds,
         authHeader: args.authHeader,
         authUser: args.authUser,
