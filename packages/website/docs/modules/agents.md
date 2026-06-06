@@ -135,7 +135,7 @@ Example response when a client tool is called:
       {
         "tool_call_id": "call_xyz",
         "tool_name": "read_local_file",
-        "arguments": { "path": "/tmp/data.csv" }
+        "args": { "path": "/tmp/data.csv" }
       }
     ]
   }
@@ -658,7 +658,7 @@ Where `agt_tool_r7w4n1hc` → `"read_file"` (client) and `agt_tool_j5v1d6yt` →
          {
            "tool_call_id": "call_1",
            "tool_name": "read_file",
-           "arguments": { "path": "/tmp/sales.csv" }
+           "args": { "path": "/tmp/sales.csv" }
          }
        ]
      }
