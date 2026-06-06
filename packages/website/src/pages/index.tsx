@@ -168,38 +168,41 @@ const CodeShowcase = () => {
         <div className="row">
           <div className={clsx('col col--6', styles.showcaseCopy)}>
             <Heading as="h2">
-              Plan, deploy, and inspect the stack from the CLI.
+              From zero to running agent in three commands.
             </Heading>
             <p>
-              Formations make an agent backend reproducible. The same template
-              can create an AI provider, memory, tools, and the agent that uses
-              them, while SOAT records outputs and operation events.
+              Create an agent, open a session to persist conversation state, and
+              run a generation — all from the CLI. Every step is recorded as a
+              traceable operation.
             </p>
             <ul className={styles.checkList}>
-              <li>Define the stack once in a formation template</li>
-              <li>Preview changes before deployment with a plan</li>
-              <li>Use refs instead of hand-wiring generated resource IDs</li>
+              <li>Attach any AI provider with a single flag</li>
+              <li>Sessions accumulate message history automatically</li>
+              <li>Traces capture every tool call and model response</li>
             </ul>
             <Link
               className="button button--primary button--lg"
-              to="/docs/modules/formations"
+              to="/docs/modules/agents"
             >
-              Read Agent Formations
+              Read the Agents docs
             </Link>
           </div>
           <div className={clsx('col col--6', styles.showcaseCode)}>
             <CodeBlock language="bash" title="Terminal">
-              {`TEMPLATE=$(cat agent-stack.json)
+              {`soat create-agent \\
+  --project-id "$PROJECT_ID" \\
+  --ai-provider-id "$PROVIDER_ID" \\
+  --name "support-bot" \\
+  --instructions "You are a helpful support assistant."
 
-soat plan-agent-formation \\
-  --template "$TEMPLATE"
+soat create-agent-session \\
+  --agent-id "$AGENT_ID" \\
+  --name "user-chat-42"
 
-soat create-agent-formation \\
-  --name "support-stack" \\
-  --template "$TEMPLATE"
-
-soat list-agent-formation-events \\
-  --formation_id "af_V1StGXR8Z5jdHi6B"`}
+soat create-agent-generation \\
+  --agent-id "$AGENT_ID" \\
+  --session-id "$SESSION_ID" \\
+  --messages '[{"role":"user","content":"Hello!"}]'`}
             </CodeBlock>
           </div>
         </div>
@@ -246,8 +249,8 @@ export default function Home(): React.ReactNode {
       <HomepageHeader />
       <main>
         <ArchitectureBand />
-        <FormationsSpotlight />
         <HomepageSurfaces />
+        <FormationsSpotlight />
         <CodeShowcase />
         <FinalCta />
       </main>
