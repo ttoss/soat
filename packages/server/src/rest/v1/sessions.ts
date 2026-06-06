@@ -96,6 +96,7 @@ sessionsRouter.post('/', async (ctx: Context) => {
     autoGenerate?: boolean;
     toolContext?: Record<string, string> | null;
     inactivityTtlSeconds?: number;
+    messageDelaySeconds?: number | null;
   };
 
   const result = await createSession({
@@ -106,6 +107,7 @@ sessionsRouter.post('/', async (ctx: Context) => {
     autoGenerate: body.autoGenerate,
     toolContext: body.toolContext,
     inactivityTtlSeconds: body.inactivityTtlSeconds,
+    messageDelaySeconds: body.messageDelaySeconds,
   });
 
   ctx.status = 201;
@@ -179,6 +181,7 @@ sessionsRouter.patch('/:session_id', async (ctx: Context) => {
     status?: string;
     autoGenerate?: boolean;
     toolContext?: Record<string, string> | null;
+    messageDelaySeconds?: number | null;
   };
 
   const result = await updateSession({
@@ -188,6 +191,7 @@ sessionsRouter.patch('/:session_id', async (ctx: Context) => {
     status: body.status,
     autoGenerate: body.autoGenerate,
     toolContext: body.toolContext,
+    messageDelaySeconds: body.messageDelaySeconds,
   });
 
   ctx.body = result;

@@ -581,6 +581,14 @@ components:
           default: 0
           description: Number of seconds of inactivity after which the session expires. 0 means the session never expires.
           example: 300
+        message_delay_seconds:
+          type: integer
+          nullable: true
+          default: null
+          description: >
+            Number of seconds to wait after the last user message before sending to the LLM.
+            Acts as a debounce: each new message resets the timer. null or absent means no delay (immediate processing).
+          example: 3
         last_activity_at:
           type: string
           format: date-time
@@ -630,6 +638,14 @@ components:
           default: 0
           description: Number of seconds of inactivity after which the session expires. 0 means the session never expires.
           example: 300
+        message_delay_seconds:
+          type: integer
+          nullable: true
+          default: null
+          description: >
+            Number of seconds to wait after the last user message before sending to the LLM.
+            Acts as a debounce: each new message resets the timer. null or absent means no delay (immediate processing).
+          example: 3
 
     UpdateSessionRequest:
       type: object
@@ -651,6 +667,13 @@ components:
             type: string
           nullable: true
           description: Key-value pairs injected as context headers into all tool call requests made during this session.
+        message_delay_seconds:
+          type: integer
+          nullable: true
+          description: >
+            Number of seconds to wait after the last user message before sending to the LLM.
+            Acts as a debounce: each new message resets the timer. Set to null to disable the delay.
+          example: 3
 
     AddSessionMessageRequest:
       oneOf:
