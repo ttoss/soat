@@ -3,22 +3,15 @@ import TabItem from '@theme/TabItem';
 
 # Tools
 
-Standalone, reusable tool definitions that can be attached to agents and invoked directly via the API.
+Standalone, reusable tool definitions that agents call during generation.
 
 ## Overview
 
-The Tools module lets you define callable tools that agents use during generation. A tool encapsulates its type, input schema, and execution config in one record. Tools are project-scoped and can be shared across multiple agents.
+The Tools module lets you define callable tools that agents use during a generation loop. A tool encapsulates its type, input schema, and execution configuration in one project-scoped record. Tools can be shared across multiple agents and invoked directly via the API independently of any agent.
 
-Four tool types are supported:
+Four tool types are supported: `http` (calls an external HTTP endpoint), `client` (signals the calling application to execute locally), `mcp` (proxies an MCP server), and `soat` (invokes a SOAT platform action).
 
-| Type     | Description                                                                          |
-| -------- | ------------------------------------------------------------------------------------ |
-| `http`   | Calls an external HTTP endpoint with the model's arguments                           |
-| `client` | Signals the calling client to execute a UI action (e.g. show a dialog)               |
-| `mcp`    | Proxies a call to an MCP (Model Context Protocol) server                             |
-| `soat`   | Invokes a SOAT platform action (e.g. `files:ListFiles`, `documents:SearchDocuments`) |
-
-See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
+> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Related Tutorials
 
@@ -28,68 +21,171 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 
 ## Data Model
 
-### Tool
-
-| Field               | Type                                          | Description                                                                                                       |
-| ------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `id`                | `string`                                      | Public ID (`tool_` prefix)                                                                                        |
-| `project_id`        | `string`                                      | ID of the owning project                                                                                          |
-| `name`              | `string`                                      | Machine-readable tool name sent to the model                                                                      |
-| `type`              | `"http"` \| `"client"` \| `"mcp"` \| `"soat"` | Tool type                                                                                                         |
-| `description`       | `string\|null`                                | Human-readable description sent to the model                                                                      |
-| `parameters`        | `object\|null`                                | JSON Schema describing the tool's input                                                                           |
-| `execute`           | `object\|null`                                | HTTP execution config (`url`, `method`, `headers`). The `url` supports `{paramName}` path placeholders.           |
-| `mcp`               | `object\|null`                                | MCP server config (`url`, `headers`)                                                                              |
-| `actions`           | `string[]\|null`                              | SOAT platform actions to expose (e.g. `["files:ListFiles"]`). Only for `soat` type.                               |
-| `preset_parameters` | `object\|null`                                | Fixed parameter values merged into every call. These fields are hidden from the model and injected automatically. |
-| `created_at`        | `string`                                      | ISO 8601 creation timestamp                                                                                       |
-| `updated_at`        | `string`                                      | ISO 8601 last-updated timestamp                                                                                   |
+| Field               | Type                                            | Description                                                                                                       |
+| ------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `id`                | `string`                                        | Public ID (`tool_` prefix)                                                                                        |
+| `project_id`        | `string`                                        | ID of the owning project                                                                                          |
+| `name`              | `string`                                        | Machine-readable tool name sent to the model (or namespace prefix for `mcp`/`soat`)                               |
+| `type`              | `"http"` \| `"client"` \| `"mcp"` \| `"soat"`  | Tool type — determines execution behaviour                                                                        |
+| `description`       | `string \| null`                                | Human-readable description sent to the model for tool selection                                                   |
+| `parameters`        | `object \| null`                                | JSON Schema describing the tool's input. Required for `http` and `client` types.                                  |
+| `execute`           | `object \| null`                                | HTTP execution config (`url`, `method`, `headers`). Required for `http` type.                                     |
+| `execute.url`       | `string`                                        | HTTP endpoint. Supports `{paramName}` path placeholders replaced at call time with URL-encoded argument values.   |
+| `execute.method`    | `string`                                        | HTTP method (default: `POST`). For `GET`, `HEAD`, `DELETE` the arguments become query-string parameters.          |
+| `execute.headers`   | `object`                                        | Additional headers sent with the execution request.                                                               |
+| `mcp`               | `object \| null`                                | MCP server config (`url`, `headers`). Required for `mcp` type.                                                    |
+| `mcp.url`           | `string`                                        | URL of the MCP server (SSE or Streamable HTTP transport).                                                         |
+| `mcp.headers`       | `object`                                        | Additional headers sent when connecting to the MCP server.                                                        |
+| `actions`           | `string[] \| null`                              | SOAT platform actions to expose (e.g. `["search-documents"]`). Required for `soat` type.                         |
+| `preset_parameters` | `object \| null`                                | Fixed parameter values merged into every call. Keys are hidden from the model and injected automatically.         |
+| `created_at`        | `string`                                        | ISO 8601 creation timestamp                                                                                       |
+| `updated_at`        | `string`                                        | ISO 8601 last-updated timestamp                                                                                   |
 
 ## Key Concepts
 
-### HTTP Tools
+### Tool ID vs Tool Name
 
-HTTP tools call an external URL when invoked. The `execute.url` field supports `{paramName}` placeholders that are replaced with the corresponding argument value at call time. Arguments consumed as path parameters are excluded from the request body.
+A **tool ID** is the auto-generated resource identifier (e.g., `tool_k8x2f3np`). It is used when attaching tools to agents via `tool_ids`, `active_tool_ids`, and `step_rules[].active_tool_ids`.
+
+A **tool name** is the name the AI model sees at runtime (e.g., `"search"`). For `http` and `client` tools, one tool ID → one tool name (the `name` field). For `mcp` and `soat` tools, one tool ID exposes **many** tool names discovered from the MCP server or the platform's action registry.
+
+`tool_choice` and `stop_conditions` on agents reference tools by **name** (not by ID).
+
+### Tool Name Resolution
+
+| Tool type | Name the model sees    | Example                                              |
+| --------- | ---------------------- | ---------------------------------------------------- |
+| `http`    | `{name}`               | `search`                                             |
+| `client`  | `{name}`               | `read_local_file`                                    |
+| `mcp`     | `{name}_{mcpToolName}` | `github_create_issue`, `github_list_repos`           |
+| `soat`    | `{name}_{action}`      | `platform_get_document`, `platform_search_documents` |
+
+For `http` and `client`, the `name` field maps directly to the tool name the model calls.
+
+For `mcp` and `soat`, the tool's `name` is a **prefix** joined with an underscore to each discovered sub-tool name. This guarantees uniqueness when two MCP servers or action sets share the same sub-tool name (e.g., `github_search` vs `jira_search`).
+
+### http
+
+When the model calls an `http` tool, the server sends an HTTP request to `execute.url` using the configured method. For `POST`, `PUT`, and `PATCH` the tool arguments are sent as a JSON body. For `GET`, `HEAD`, and `DELETE` the arguments become query-string parameters.
+
+`execute.url` may contain `{paramName}` placeholders. At invocation time each placeholder is replaced with the corresponding tool argument (URL-encoded via `encodeURIComponent`). Arguments consumed as path parameters are excluded from the request body or query string.
+
+Example — a `DELETE` tool with path parameters:
 
 ```json
 {
-  "name": "get-weather",
+  "name": "delete-post",
   "type": "http",
-  "description": "Fetches current weather for a city",
+  "execute": {
+    "url": "https://api.example.com/users/{user_id}/posts/{post_id}",
+    "method": "DELETE"
+  },
   "parameters": {
     "type": "object",
-    "properties": { "city": { "type": "string" } },
-    "required": ["city"]
-  },
-  "execute": {
-    "url": "https://api.weather.example/v1/current?city={city}",
-    "method": "GET"
+    "properties": {
+      "user_id": { "type": "string" },
+      "post_id": { "type": "string" }
+    },
+    "required": ["user_id", "post_id"]
   }
 }
 ```
 
-### SOAT Tools
+When the model calls this tool with `{ "user_id": "123", "post_id": "456" }`, the server issues:
 
-SOAT tools expose one or more SOAT platform actions to the model. The `actions` array lists the action strings (e.g. `files:ListFiles`). At call time, the caller supplies an `action` discriminant to select which action to run.
+```
+DELETE https://api.example.com/users/123/posts/456
+```
 
-`preset_parameters` lets you inject fixed arguments invisibly. For example, pinning a `documentId` means the model never needs to know or supply it.
+### client
+
+Client tools have no server-side `execute`. When the model calls a `client` tool, the generation **pauses** and returns the pending tool calls to the API caller. The caller executes the tool locally, then submits the results via `POST /agents/{agent_id}/generate/{generation_id}/tool-outputs` to resume the loop.
+
+Client tool flow:
+
+1. Caller starts a generation (`POST /agents/{agent_id}/generate`).
+2. Agent loop runs normally — `http` tools execute on the server.
+3. When the model calls a `client` tool, generation **suspends** with `status: "requires_action"` and the pending tool calls.
+4. Caller inspects the tool calls, executes them locally, and submits results via `POST /agents/{agent_id}/generate/{generation_id}/tool-outputs`.
+5. The server resumes the loop, feeding the submitted results back to the model.
+6. Steps 2–5 repeat until the loop terminates.
+
+Example response when a client tool is called:
 
 ```json
 {
-  "name": "docs-search",
-  "type": "soat",
-  "actions": ["documents:SearchDocuments"],
-  "preset_parameters": { "documentId": "doc_abc123" }
+  "status": "requires_action",
+  "generation_id": "agt_gen_abc123",
+  "required_action": {
+    "type": "submit_tool_outputs",
+    "tool_calls": [
+      {
+        "tool_call_id": "call_xyz",
+        "tool_name": "read_local_file",
+        "args": { "path": "/tmp/data.csv" }
+      }
+    ]
+  }
 }
 ```
 
-### Client Tools
+Submitting tool outputs:
 
-Client tools (`type: client`) are not executed by the server. When an agent produces a client tool call, the generation status transitions to `requires_action`. The calling application is responsible for executing the action and submitting the result back via `POST /agents/{agent_id}/generate/{generation_id}/tool-outputs`.
+```json
+POST /agents/{agent_id}/generate/{generation_id}/tool-outputs
 
-### MCP Tools
+{
+  "tool_outputs": [
+    {
+      "tool_call_id": "call_xyz",
+      "output": "col1,col2\n1,2\n3,4"
+    }
+  ]
+}
+```
 
-MCP tools proxy a call to an external MCP server. The `mcp` field contains `url` and optional `headers` for the server connection.
+The response has the same shape as a normal generation — either a final result or another `requires_action` if the model calls more client tools.
+
+### mcp
+
+An `mcp` tool represents a connection to a [Model Context Protocol](https://modelcontextprotocol.io/) server. At generation time, the SOAT server connects to the MCP endpoint, discovers all available tools, and registers them with the AI model. One `mcp` tool ID provides **many** tool names — you configure only the connection; each discovered tool's name, description, and parameters come from the MCP server.
+
+The SOAT server acts as a proxy: it receives the model's tool call, forwards it to the MCP server, and feeds the result back into the loop.
+
+### soat
+
+A `soat` tool exposes actions from the SOAT platform itself (documents, conversations, files, secrets, etc.). Instead of pointing to an external endpoint, you list the platform actions the agent is allowed to use via the `actions` array. Each action name corresponds to an MCP tool registered on the platform (e.g., `get-document`, `search-documents`, `create-file`). The server executes these actions in-process, applying the same permission checks as the REST API.
+
+### Preset Parameters
+
+`preset_parameters` lets you bake fixed values into a `soat` (or any) tool definition. When a key in `preset_parameters` matches a field in the action's input schema:
+
+1. That field is **removed from the schema shown to the model** — the model never sees or fills it in.
+2. The preset value is **merged into every call** before the request is dispatched.
+
+This eliminates the probabilistic risk of the model choosing a wrong value for parameters that should always be fixed (e.g., the ID of a specific document). It also enables creating multiple tool instances targeting different resources from the same action.
+
+Example — two tools backed by the same `update-document` action, each locked to a different document:
+
+```json
+{
+  "name": "public_doc",
+  "type": "soat",
+  "actions": ["update-document"],
+  "preset_parameters": { "id": "doc_abc123" }
+}
+```
+
+```json
+{
+  "name": "private_doc",
+  "type": "soat",
+  "actions": ["update-document"],
+  "preset_parameters": { "id": "doc_xyz789" }
+}
+```
+
+The model calls `public_doc_update-document` with only the fields it needs to supply (e.g., `content`). The server automatically injects `id: "doc_abc123"` before executing the request.
 
 ### Calling a Tool Directly
 
@@ -97,46 +193,152 @@ Tools can be invoked independently of an agent via `POST /api/v1/tools/{tool_id}
 
 ## Examples
 
-<Tabs>
-<TabItem value="cli" label="CLI">
+### Create an HTTP tool
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
 
 ```bash
-# Create an HTTP tool
 soat create-tool \
+  --project-id "$PROJECT_ID" \
   --name "get-weather" \
   --type http \
-  --description "Fetches current weather" \
+  --description "Fetches current weather for a city" \
   --execute '{"url":"https://api.weather.example/v1/current?city={city}","method":"GET"}' \
   --parameters '{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}'
+```
 
-# List tools in a project
-soat list-tools --project-id "$PROJECT_ID"
+</TabItem>
+<TabItem value="sdk" label="SDK">
 
-# Call a tool directly
+```ts
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
+
+const { data, error } = await soat.tools.createTool({
+  body: {
+    project_id: 'proj_ABC',
+    name: 'get-weather',
+    type: 'http',
+    description: 'Fetches current weather for a city',
+    execute: {
+      url: 'https://api.weather.example/v1/current?city={city}',
+      method: 'GET',
+    },
+    parameters: {
+      type: 'object',
+      properties: { city: { type: 'string' } },
+      required: ['city'],
+    },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/tools \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "name": "get-weather",
+    "type": "http",
+    "description": "Fetches current weather for a city",
+    "execute": {
+      "url": "https://api.weather.example/v1/current?city={city}",
+      "method": "GET"
+    },
+    "parameters": {
+      "type": "object",
+      "properties": { "city": { "type": "string" } },
+      "required": ["city"]
+    }
+  }'
+```
+
+</TabItem>
+</Tabs>
+
+### Create a SOAT tool with preset parameters
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-tool \
+  --project-id "$PROJECT_ID" \
+  --name "docs-search" \
+  --type soat \
+  --description "Searches the project knowledge base" \
+  --actions '["search-documents"]'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.tools.createTool({
+  body: {
+    project_id: 'proj_ABC',
+    name: 'docs-search',
+    type: 'soat',
+    description: 'Searches the project knowledge base',
+    actions: ['search-documents'],
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/tools \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "name": "docs-search",
+    "type": "soat",
+    "description": "Searches the project knowledge base",
+    "actions": ["search-documents"]
+  }'
+```
+
+</TabItem>
+</Tabs>
+
+### Call a tool directly
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
 soat call-tool --tool-id "$TOOL_ID" --input '{"city":"São Paulo"}'
 ```
 
 </TabItem>
-<TabItem value="rest" label="REST">
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.tools.callTool({
+  path: { tool_id: 'tool_abc' },
+  body: { input: { city: 'São Paulo' } },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
 
 ```bash
-# Create a SOAT tool
-curl -X POST "$SOAT_BASE_URL/api/v1/tools" \
-  -H "Authorization: Bearer $TOKEN" \
+curl -X POST https://api.example.com/api/v1/tools/tool_abc/call \
+  -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{
-    "project_id": "'"$PROJECT_ID"'",
-    "name": "list-files",
-    "type": "soat",
-    "description": "Lists files in the project",
-    "actions": ["files:ListFiles"]
-  }'
-
-# Call a tool directly
-curl -X POST "$SOAT_BASE_URL/api/v1/tools/$TOOL_ID/call" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"action":"files:ListFiles","input":{}}'
+  -d '{"input":{"city":"São Paulo"}}'
 ```
 
 </TabItem>
