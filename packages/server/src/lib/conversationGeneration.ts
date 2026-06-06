@@ -3,9 +3,9 @@ import fs from 'node:fs';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { createGeneration, type GenerationResult } from './agents';
-import type { GenerationInputMessage } from './generationInputMessages';
 import { addConversationMessage } from './conversationMessages';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
+import type { GenerationInputMessage } from './generationInputMessages';
 
 type ConversationMessage = InstanceType<(typeof db)['ConversationMessage']> & {
   document?: InstanceType<(typeof db)['Document']> & {
@@ -66,8 +66,9 @@ const buildConversationHistory = (args: {
   const result: Array<{ role: string; content: unknown }> = [];
   for (const msg of args.messages) {
     if (msg.role === 'assistant') {
-      const toolMessages = (msg as { metadata?: Record<string, unknown> | null })
-        .metadata?.toolMessages;
+      const toolMessages = (
+        msg as { metadata?: Record<string, unknown> | null }
+      ).metadata?.toolMessages;
       if (Array.isArray(toolMessages) && toolMessages.length > 0) {
         for (const tm of toolMessages) {
           result.push(tm as { role: string; content: unknown });

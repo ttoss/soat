@@ -395,9 +395,9 @@ export const submitToolOutputs = async (args: {
   });
   const allMessages = [...pending.messages, ...toolResultMessages];
   const system = (
-    pending.messages.find(
-      (m) => (m as { role: string }).role === 'system'
-    ) as { role: string; content: string } | undefined
+    pending.messages.find((m) => {
+      return (m as { role: string }).role === 'system';
+    }) as { role: string; content: string } | undefined
   )?.content;
   const nonSystemMessages = allMessages.filter((m) => {
     return (m as { role?: string }).role !== 'system';

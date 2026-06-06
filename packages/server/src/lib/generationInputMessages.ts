@@ -11,7 +11,10 @@ export type GenerationInputMessage = {
 
 export const resolveGenerationInputMessages = async (args: {
   projectIds?: number[];
-  messages: Array<{ role: string; content: ResolvableMessageContent | unknown[] }>;
+  messages: Array<{
+    role: string;
+    content: ResolvableMessageContent | unknown[];
+  }>;
   authHeader?: string;
   authUser?: AuthUser;
   allowedToolIds?: string[];
