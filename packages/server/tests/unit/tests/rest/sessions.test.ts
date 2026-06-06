@@ -1971,4 +1971,148 @@ describe('Sessions', () => {
       expect(sess2.status).toBe(201);
     });
   });
+
+  // ── Message Delay ──────────────────────────────────────────────────────
+
+  describe('message delay', () => {
+    test('can create a session with message_delay_seconds', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ message_delay_seconds: 5 });
+      expect(res.status).toBe(201);
+      expect(res.body.message_delay_seconds).toBe(5);
+    });
+
+    test('message_delay_seconds defaults to null', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({});
+      expect(res.status).toBe(201);
+      expect(res.body.message_delay_seconds).toBeNull();
+    });
+
+    test('PATCH can set and clear message_delay_seconds', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({});
+      expect(createRes.status).toBe(201);
+      const sessionId = createRes.body.id;
+
+      const setRes = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${agentId}/sessions/${sessionId}`)
+        .send({ message_delay_seconds: 10 });
+      expect(setRes.status).toBe(200);
+      expect(setRes.body.message_delay_seconds).toBe(10);
+
+      const clearRes = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${agentId}/sessions/${sessionId}`)
+        .send({ message_delay_seconds: null });
+      expect(clearRes.status).toBe(200);
+      expect(clearRes.body.message_delay_seconds).toBeNull();
+    });
+
+    describe('POST /messages with message_delay_seconds and auto_generate', () => {
+      let delaySessionId: string;
+
+      beforeAll(async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${agentId}/sessions`)
+          .send({ auto_generate: true, message_delay_seconds: 1 });
+        expect(res.status).toBe(201);
+        delaySessionId = res.body.id;
+      });
+
+      afterEach(() => {
+        jest.clearAllMocks();
+      });
+
+      test('returns user message immediately instead of triggering generation synchronously', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post(
+            `/api/v1/agents/${agentId}/sessions/${delaySessionId}/messages`
+          )
+          .send({ message: 'hello with delay' });
+        expect(res.status).toBe(201);
+        expect(res.body.role).toBe('user');
+        expect(res.body.content).toBe('hello with delay');
+        expect(res.body).not.toHaveProperty('generation_id');
+      });
+
+      test('after delay elapses, generation is triggered', async () => {
+        let signalGenerationStarted!: () => void;
+        const generationStarted = new Promise<void>((r) => {
+          signalGenerationStarted = r;
+        });
+
+        mockCreateGeneration.mockImplementationOnce(() => {
+          return new Promise((resolve) => {
+            signalGenerationStarted();
+            resolve({
+              id: 'gen_delay_01',
+              traceId: 'trc_delay_01',
+              status: 'completed',
+              output: {
+                model: 'test-model',
+                content: 'Delayed reply',
+                finishReason: 'stop',
+              },
+            });
+          });
+        });
+
+        await authenticatedTestClient(userToken)
+          .post(
+            `/api/v1/agents/${agentId}/sessions/${delaySessionId}/messages`
+          )
+          .send({ message: 'trigger delayed gen' });
+
+        await generationStarted;
+        expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+      });
+
+      test('second message within delay window resets the timer (debounce)', async () => {
+        let callCount = 0;
+        let signalGenerationStarted!: () => void;
+        const generationStarted = new Promise<void>((r) => {
+          signalGenerationStarted = r;
+        });
+
+        mockCreateGeneration.mockImplementation(() => {
+          callCount++;
+          signalGenerationStarted();
+          return Promise.resolve({
+            id: `gen_debounce_0${callCount}`,
+            traceId: `trc_debounce_0${callCount}`,
+            status: 'completed',
+            output: {
+              model: 'test-model',
+              content: 'Debounced reply',
+              finishReason: 'stop',
+            },
+          });
+        });
+
+        // Send two messages in quick succession (well within the 1-second delay)
+        await authenticatedTestClient(userToken)
+          .post(
+            `/api/v1/agents/${agentId}/sessions/${delaySessionId}/messages`
+          )
+          .send({ message: 'first message' });
+
+        await authenticatedTestClient(userToken)
+          .post(
+            `/api/v1/agents/${agentId}/sessions/${delaySessionId}/messages`
+          )
+          .send({ message: 'second message within delay' });
+
+        // Wait for the delay to elapse and exactly one generation to fire
+        await generationStarted;
+        await new Promise((resolve) => {
+          return setTimeout(resolve, 200);
+        });
+
+        expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+      });
+    });
+  });
 });

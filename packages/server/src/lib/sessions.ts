@@ -50,6 +50,7 @@ const extractSessionOptional = (session: Parameters<typeof mapSession>[0]) => {
     generatingAt: session.generatingAt ?? null,
     inactivityTtlSeconds: session.inactivityTtlSeconds ?? 0,
     lastActivityAt: session.lastActivityAt ?? null,
+    messageDelaySeconds: session.messageDelaySeconds ?? null,
   };
 };
 
@@ -81,6 +82,7 @@ export const createSession = async (args: {
   autoGenerate?: boolean;
   toolContext?: Record<string, string> | null;
   inactivityTtlSeconds?: number;
+  messageDelaySeconds?: number | null;
 }) => {
   const agent = await db.Agent.findByPk(args.agentId);
   if (!agent) {
@@ -127,6 +129,7 @@ export const createSession = async (args: {
       autoGenerate: args.autoGenerate,
       toolContext: args.toolContext,
       inactivityTtlSeconds: args.inactivityTtlSeconds,
+      messageDelaySeconds: args.messageDelaySeconds,
       transaction: t,
     });
   });
@@ -233,6 +236,7 @@ export const updateSession = async (args: {
   status?: string;
   autoGenerate?: boolean;
   toolContext?: Record<string, string> | null;
+  messageDelaySeconds?: number | null;
 }) => {
   const session = await db.Session.findOne({
     where: { publicId: args.sessionId, agentId: args.agentId },
@@ -259,6 +263,10 @@ export const updateSession = async (args: {
 
   if (args.toolContext !== undefined) {
     session.toolContext = args.toolContext;
+  }
+
+  if (args.messageDelaySeconds !== undefined) {
+    session.messageDelaySeconds = args.messageDelaySeconds;
   }
 
   await session.save();

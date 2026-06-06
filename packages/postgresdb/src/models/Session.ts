@@ -127,6 +127,14 @@ export class Session extends Model {
   @Column({ type: DataType.DATE, allowNull: true, field: 'last_activity_at' })
   declare lastActivityAt: Date | null;
 
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    defaultValue: null,
+    field: 'message_delay_seconds',
+  })
+  declare messageDelaySeconds: number | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

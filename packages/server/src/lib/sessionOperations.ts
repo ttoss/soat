@@ -4,6 +4,7 @@ import { DomainError } from '../errors';
 import { submitToolOutputs } from './agents';
 import { generateConversationMessage } from './conversationGeneration';
 import { listConversationMessages } from './conversations';
+import { triggerOrScheduleGeneration } from './sessionDelayHelpers';
 import {
   emitGenerationCompleted,
   emitGenerationRequiresAction,
@@ -13,7 +14,6 @@ import {
 import {
   addResolvedSessionUserMessage,
   assertSessionMessageInput,
-  triggerOrReturnMessage,
 } from './sessionMessageHelpers';
 
 const GENERATING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
@@ -328,13 +328,13 @@ export const addSessionMessage = async (args: {
 
   await session.update({ lastActivityAt: new Date() });
 
-  return triggerOrReturnMessage({
+  return triggerOrScheduleGeneration({
     session,
     agentId: args.agentId,
     sessionId: args.sessionId,
-    toolContext: args.toolContext,
     savedContent,
     savedDocumentId,
+    toolContext: args.toolContext,
     generateFn: generateSessionResponse,
   });
 };
