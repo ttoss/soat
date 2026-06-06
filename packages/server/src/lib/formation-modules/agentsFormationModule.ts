@@ -7,6 +7,7 @@ import {
   toNullableNumber,
   toNullableObject,
   toNullableString,
+  toNullableStringOrObject,
   toOptionalString,
 } from '../resource-inputs/normalizers';
 import {
@@ -71,7 +72,7 @@ const mapAgentProperties = (properties: Record<string, unknown>) => {
     model: toOptionalString(properties.model),
     toolIds: toOptional(toNullableArray<string>(properties.tool_ids)),
     maxSteps: toOptional(toNullableNumber(properties.max_steps)),
-    toolChoice: toOptional(toNullableObject(properties.tool_choice)),
+    toolChoice: toOptional(toNullableStringOrObject(properties.tool_choice)),
     stopConditions: toOptional(
       toNullableArray<object>(properties.stop_conditions)
     ),
@@ -145,7 +146,7 @@ export const agentsFormationModule: FormationModule = {
       model: toNullableString(properties.model),
       toolIds: toNullableArray<string>(properties.tool_ids),
       maxSteps: toNullableNumber(properties.max_steps),
-      toolChoice: toNullableObject(properties.tool_choice),
+      toolChoice: toNullableStringOrObject(properties.tool_choice),
       stopConditions: toNullableArray<object>(properties.stop_conditions),
       activeToolIds: toNullableArray<string>(properties.active_tool_ids),
       stepRules: toNullableArray<object>(properties.step_rules),
