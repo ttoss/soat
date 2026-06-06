@@ -68,6 +68,37 @@ Content-Type: application/json
 
 The explicit `POST .../generate` endpoint continues to work regardless of this setting. Async generation (`?async=true`) is also supported on `POST .../messages` when `auto_generate` is enabled — the request returns `202 Accepted` immediately and generation proceeds in the background.
 
+### Message Delay (Debounce)
+
+When `message_delay_seconds` is set on a session, `POST .../messages` does **not** trigger LLM generation immediately. Instead, a timer is started. If another message arrives before the timer expires, the timer resets. The LLM is only called after the configured delay has elapsed with no new messages.
+
+This is a debounce: only the last message in a rapid burst triggers generation, ensuring the model sees the complete context before responding.
+
+```http
+POST /agents/:agent_id/sessions
+Content-Type: application/json
+
+{ "auto_generate": true, "message_delay_seconds": 3 }
+```
+
+With the above configuration:
+
+- User sends "What's the" → timer starts (3 s)
+- User sends "weather in" → timer resets (3 s)
+- User sends "Paris?" → timer resets (3 s)
+- 3 seconds of silence → LLM is called with all three messages in context
+
+`POST .../messages` always returns immediately with the saved user message (`role: "user"`), regardless of the delay setting. The generation fires asynchronously after the delay elapses.
+
+**When to use:**
+- Messaging apps (WhatsApp, SMS, Slack) where users send multiple short messages in sequence
+- Voice-to-text inputs that arrive in fragments
+- Any channel where you want to wait for the user to "finish typing" before responding
+
+**Clearing the delay:** set `message_delay_seconds` to `null` to revert to immediate processing.
+
+`message_delay_seconds` has no effect when `auto_generate` is `false` or when a generation is already in progress.
+
 ### Single Session Per Actor
 
 When the parent agent has `single_session_per_actor: true`, `POST /agents/:id/sessions` with an `actor_id` will return `409 Conflict` if an open session for that actor already exists. The error body includes `meta.session_id` with the existing session's ID so the caller can reuse it without a separate lookup:
@@ -235,6 +266,7 @@ This is useful for local testing where no actor record exists yet. The values yo
 | `actor_id`                | string \| null | Optional public ID of the Actor associated with this session (`actr_` prefix); `null` when no actor is set     |
 | `tags`                    | object         | Free-form key-value metadata                                                                                   |
 | `auto_generate`           | boolean        | When `true`, saving a message via `POST .../messages` automatically triggers LLM generation (default: `false`) |
+| `message_delay_seconds`   | integer \| null | Debounce delay in seconds before the LLM is called after a user message. Each new message resets the timer. `null` means no delay (default: `null`) |
 | `inactivity_ttl_seconds`  | integer        | Seconds of inactivity before the session expires. `0` means never expires (default: `0`)                       |
 | `last_activity_at`        | string \| null | ISO 8601 timestamp of the last user message; `null` until the first message is added                           |
 | `created_at`              | string         | ISO 8601 creation timestamp                                                                                    |
