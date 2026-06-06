@@ -493,9 +493,8 @@ components:
           nullable: true
           description: Maximum reasoning steps
         tool_choice:
-          type: object
           nullable: true
-          description: Tool choice strategy
+          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "name": "my_tool" }`).'
         stop_conditions:
           type: array
           nullable: true
@@ -589,7 +588,7 @@ components:
         max_steps:
           type: integer
         tool_choice:
-          type: object
+          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "name": "my_tool" }`).'
         stop_conditions:
           type: array
           items:
@@ -663,8 +662,8 @@ components:
           type: integer
           nullable: true
         tool_choice:
-          type: object
           nullable: true
+          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "name": "my_tool" }`).'
         stop_conditions:
           type: array
           nullable: true

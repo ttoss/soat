@@ -21,7 +21,7 @@ export type MappedAgent = {
   model: string | null;
   toolIds: string[] | null;
   maxSteps: number | null;
-  toolChoice: object | null;
+  toolChoice: string | object | null;
   stopConditions: object[] | null;
   activeToolIds: string[] | null;
   stepRules: object[] | null;
@@ -81,7 +81,7 @@ type AgentUpdateFields = {
   model?: string | null;
   toolIds?: string[] | null;
   maxSteps?: number | null;
-  toolChoice?: object | null;
+  toolChoice?: string | object | null;
   stopConditions?: object[] | null;
   activeToolIds?: string[] | null;
   stepRules?: object[] | null;
@@ -136,7 +136,7 @@ export const createAgent = async (args: {
   model?: string;
   toolIds?: string[];
   maxSteps?: number;
-  toolChoice?: object;
+  toolChoice?: string | object;
   stopConditions?: object[];
   activeToolIds?: string[];
   stepRules?: object[];

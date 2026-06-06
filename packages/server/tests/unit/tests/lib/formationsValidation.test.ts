@@ -900,23 +900,50 @@ describe('validateFormationTemplate', () => {
     ).toBe(true);
   });
 
-  test('returns invalid when agent tool_choice is not an object', () => {
+  test('accepts string values for agent tool_choice', () => {
+    for (const value of ['auto', 'required', 'none']) {
+      const result = validateFormationTemplate({
+        resources: {
+          MyAgent: {
+            type: 'agent',
+            properties: {
+              ai_provider_id: 'aip_1',
+              tool_choice: value,
+            },
+          },
+        },
+      });
+      expect(result.valid).toBe(true);
+    }
+  });
+
+  test('accepts object values for agent tool_choice', () => {
     const result = validateFormationTemplate({
       resources: {
         MyAgent: {
           type: 'agent',
           properties: {
             ai_provider_id: 'aip_1',
-            tool_choice: 'auto',
+            tool_choice: { type: 'tool', name: 'my_tool' },
           },
         },
       },
     });
-    expect(result.valid).toBe(false);
-    expect(
-      result.errors.some((e) => {
-        return e.path === 'resources.MyAgent.properties.tool_choice';
-      })
-    ).toBe(true);
+    expect(result.valid).toBe(true);
+  });
+
+  test('accepts null for agent tool_choice', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyAgent: {
+          type: 'agent',
+          properties: {
+            ai_provider_id: 'aip_1',
+            tool_choice: null,
+          },
+        },
+      },
+    });
+    expect(result.valid).toBe(true);
   });
 });

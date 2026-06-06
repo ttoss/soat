@@ -67,7 +67,7 @@ const parseUpdateAgentBody = (body: Record<string, unknown>) => {
     model: parseNullableString(body.model),
     toolIds: parseOptional<string[] | null>(body.toolIds),
     maxSteps: parseOptional<number | null>(body.maxSteps),
-    toolChoice: parseOptional<object | null>(body.toolChoice),
+    toolChoice: parseOptional<string | object | null>(body.toolChoice),
     stopConditions: parseOptional<object[] | null>(body.stopConditions),
     activeToolIds: parseOptional<string[] | null>(body.activeToolIds),
     stepRules: parseOptional<object[] | null>(body.stepRules),
@@ -117,7 +117,7 @@ const buildCreateAgentArgs = (
     model: typeof body.model === 'string' ? body.model : undefined,
     toolIds: Array.isArray(body.toolIds) ? body.toolIds : undefined,
     maxSteps: parseNumber(body.maxSteps),
-    toolChoice: body.toolChoice as object | undefined,
+    toolChoice: body.toolChoice as string | object | undefined,
     stopConditions: Array.isArray(body.stopConditions)
       ? body.stopConditions
       : undefined,

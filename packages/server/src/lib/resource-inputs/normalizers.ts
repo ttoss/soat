@@ -30,6 +30,16 @@ export const toNullableObject = (value: unknown): object | null | undefined => {
     : undefined;
 };
 
+export const toNullableStringOrObject = (
+  value: unknown
+): string | object | null | undefined => {
+  if (value === null) return null;
+  if (typeof value === 'string') return value;
+  return typeof value === 'object' && !Array.isArray(value)
+    ? (value as object)
+    : undefined;
+};
+
 /**
  * Accepts either camelCase or snake_case key, returning the first defined value.
  * Used to normalise fields that arrive as camelCase from the REST middleware but
