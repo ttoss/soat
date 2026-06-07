@@ -3,6 +3,66 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.6.7](https://127.0.0.1/42723/git/ttoss/compare/v0.6.6...v0.6.7) (2026-06-07)
+
+### Bug Fixes
+
+* accept string values for tool_choice in agents and formations ([#151](https://127.0.0.1/42723/git/ttoss/issues/151)) ([322bf45](https://127.0.0.1/42723/git/ttoss/commits/322bf4538d42aca7dfba1de3f60b1be4d0f22cd9))
+
+### Features
+
+* **sessions:** add message_delay_seconds for debounced LLM processing ([#148](https://127.0.0.1/42723/git/ttoss/issues/148)) ([1406654](https://127.0.0.1/42723/git/ttoss/commits/1406654ac85a2971220358591cfb73e9a96c1e51))
+
+## [0.6.7](https://127.0.0.1/42723/git/ttoss/compare/v0.6.6...v0.6.7) (2026-06-07)
+
+### Bug Fixes
+
+* accept string values for tool_choice in agents and formations ([#151](https://127.0.0.1/42723/git/ttoss/issues/151)) ([322bf45](https://127.0.0.1/42723/git/ttoss/commits/322bf4538d42aca7dfba1de3f60b1be4d0f22cd9))
+
+### Features
+
+* **sessions:** add message_delay_seconds for debounced LLM processing ([#148](https://127.0.0.1/42723/git/ttoss/issues/148)) ([1406654](https://127.0.0.1/42723/git/ttoss/commits/1406654ac85a2971220358591cfb73e9a96c1e51))
+
+## [0.6.7](https://127.0.0.1/42723/git/ttoss/compare/v0.6.6...v0.6.7) (2026-06-07)
+
+### Bug Fixes
+
+* accept string values for tool_choice in agents and formations ([#151](https://127.0.0.1/42723/git/ttoss/issues/151)) ([322bf45](https://127.0.0.1/42723/git/ttoss/commits/322bf4538d42aca7dfba1de3f60b1be4d0f22cd9))
+
+### Features
+
+* **sessions:** add message_delay_seconds for debounced LLM processing ([#148](https://127.0.0.1/42723/git/ttoss/issues/148)) ([1406654](https://127.0.0.1/42723/git/ttoss/commits/1406654ac85a2971220358591cfb73e9a96c1e51))
+
+## [0.6.7](https://127.0.0.1/34089/git/ttoss/compare/v0.6.6...v0.6.7) (2026-06-07)
+
+### Bug Fixes
+
+* accept string values for tool_choice in agents and formations ([#151](https://127.0.0.1/34089/git/ttoss/issues/151)) ([322bf45](https://127.0.0.1/34089/git/ttoss/commits/322bf4538d42aca7dfba1de3f60b1be4d0f22cd9))
+
+### Features
+
+* **sessions:** add message_delay_seconds for debounced LLM processing ([#148](https://127.0.0.1/34089/git/ttoss/issues/148)) ([1406654](https://127.0.0.1/34089/git/ttoss/commits/1406654ac85a2971220358591cfb73e9a96c1e51))
+
+## [0.6.7](https://127.0.0.1/34089/git/ttoss/compare/v0.6.6...v0.6.7) (2026-06-07)
+
+### Bug Fixes
+
+* accept string values for tool_choice in agents and formations ([#151](https://127.0.0.1/34089/git/ttoss/issues/151)) ([322bf45](https://127.0.0.1/34089/git/ttoss/commits/322bf4538d42aca7dfba1de3f60b1be4d0f22cd9))
+
+### Features
+
+* **sessions:** add message_delay_seconds for debounced LLM processing ([#148](https://127.0.0.1/34089/git/ttoss/issues/148)) ([1406654](https://127.0.0.1/34089/git/ttoss/commits/1406654ac85a2971220358591cfb73e9a96c1e51))
+
+## [0.6.7](https://127.0.0.1/34089/git/ttoss/compare/v0.6.6...v0.6.7) (2026-06-07)
+
+### Bug Fixes
+
+* accept string values for tool_choice in agents and formations ([#151](https://127.0.0.1/34089/git/ttoss/issues/151)) ([322bf45](https://127.0.0.1/34089/git/ttoss/commits/322bf4538d42aca7dfba1de3f60b1be4d0f22cd9))
+
+### Features
+
+* **sessions:** add message_delay_seconds for debounced LLM processing ([#148](https://127.0.0.1/34089/git/ttoss/issues/148)) ([1406654](https://127.0.0.1/34089/git/ttoss/commits/1406654ac85a2971220358591cfb73e9a96c1e51))
+
 ## [0.6.6](https://github.com/ttoss/soat/compare/v0.6.5...v0.6.6) (2026-06-05)
 
 **Note:** Version bump only for package @soat/server
