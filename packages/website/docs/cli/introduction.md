@@ -25,11 +25,16 @@ soat configure
 
 You will be prompted for:
 
-| Prompt       | Description                                            |
-| ------------ | ------------------------------------------------------ |
-| Profile name | Name for this profile (`default` if left blank)        |
-| Base URL     | URL of your SOAT server (e.g. `http://localhost:5047`) |
-| Token        | JWT session token or `sk_`-prefixed project key        |
+| Prompt   | Description                                            |
+| -------- | ------------------------------------------------------ |
+| Base URL | URL of your SOAT server (e.g. `http://localhost:5047`) |
+| Token    | JWT session token or `sk_`-prefixed project key        |
+
+To save under a named profile, pass `--profile`:
+
+```bash
+soat configure --profile prod
+```
 
 Profiles are stored in `~/.soat/config.json`.
 

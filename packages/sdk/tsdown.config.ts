@@ -1,3 +1,7 @@
-import { tsdownConfig } from '@ttoss/config';
+import { defineConfig } from 'tsdown';
 
-export default tsdownConfig();
+export default defineConfig({
+  entry: ['src/index.ts'],
+  format: ['cjs', 'esm'],
+  dts: true,
+});

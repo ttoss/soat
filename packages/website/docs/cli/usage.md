@@ -10,18 +10,16 @@ Common workflows using the SOAT CLI. All examples assume a configured profile â€
 
 ```bash
 soat configure
-# Profile name (leave blank for "default"): default
 # Base URL: http://localhost:5047
-# Token: <your-jwt-or-sdk-key>
+# Token (hidden): <your-jwt-or-sdk-key>
 ```
 
 Use `--profile` to work with multiple environments:
 
 ```bash
-soat configure
-# Profile name: prod
+soat configure --profile prod
 # Base URL: https://api.example.com
-# Token: sk_...
+# Token (hidden): sk_...
 
 soat --profile prod list-actors --project-id prj_01
 ```
