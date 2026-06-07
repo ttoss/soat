@@ -274,6 +274,7 @@ export const runToolOutputGeneration = async (args: {
 }): Promise<{
   text: string;
   finishReason: string;
+  steps: unknown[];
   response?: { modelId?: string; messages?: unknown[] };
 }> => {
   const { pending, toolResultMessages } = args;
