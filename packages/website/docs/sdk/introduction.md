@@ -28,11 +28,11 @@ const soat = new SoatClient({
 });
 ```
 
-| Option    | Type                     | Required | Description                                                        |
-| --------- | ------------------------ | -------- | ------------------------------------------------------------------ |
-| `baseUrl` | `string`                 | No       | Base URL including `/api/v1`. Defaults to `/api/v1` (same-origin). |
-| `token`   | `string`                 | No       | Bearer token — JWT session token or `sk_`-prefixed project key.    |
-| `headers` | `Record<string, string>` | No       | Additional headers merged into every request.                      |
+| Option    | Type                     | Required | Description                                                                          |
+| --------- | ------------------------ | -------- | ------------------------------------------------------------------------------------ |
+| `baseUrl` | `string`                 | No       | Server base URL (e.g. `https://api.example.com`). Defaults to the current origin.   |
+| `token`   | `string`                 | No       | Bearer token — JWT session token or `sk_`-prefixed project key.                      |
+| `headers` | `Record<string, string>` | No       | Additional headers merged into every request.                                        |
 
 ## Calling Methods
 
@@ -104,7 +104,7 @@ import { Actors, createClient, createConfig } from '@soat/sdk';
 
 const client = createClient(
   createConfig({
-    baseUrl: 'https://your-soat-server.com/api/v1',
+    baseUrl: 'https://your-soat-server.com',
     headers: { Authorization: 'Bearer sk_...' },
   })
 );
