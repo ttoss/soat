@@ -33,7 +33,7 @@ describe('CLI auth flows', () => {
     jest.clearAllMocks();
     process.env = { ...originalEnv };
     delete process.env['SOAT_BASE_URL'];
-    delete process.env['SOAT_TOKEN'];
+    delete process.env['SOAT_API_KEY'];
     delete process.env['SOAT_PROFILE'];
   });
 
@@ -41,10 +41,10 @@ describe('CLI auth flows', () => {
     process.env = originalEnv;
   });
 
-  describe('env var auth (SOAT_BASE_URL + SOAT_TOKEN)', () => {
+  describe('env var auth (SOAT_BASE_URL + SOAT_API_KEY)', () => {
     test('uses both env vars directly when both are set', async () => {
       process.env['SOAT_BASE_URL'] = 'https://env.example.com';
-      process.env['SOAT_TOKEN'] = 'env-token';
+      process.env['SOAT_API_KEY'] = 'env-token';
 
       const { mock, requests } = makeFetchMock();
       globalThis.fetch = mock as unknown as typeof fetch;
@@ -64,7 +64,7 @@ describe('CLI auth flows', () => {
 
     test('does not consult the config file when both env vars are set', () => {
       process.env['SOAT_BASE_URL'] = 'https://env.example.com';
-      process.env['SOAT_TOKEN'] = 'env-token';
+      process.env['SOAT_API_KEY'] = 'env-token';
 
       resolveClient();
 
@@ -145,7 +145,7 @@ describe('CLI auth flows', () => {
 
     test('SOAT_BASE_URL overrides the profile base URL while keeping the profile token', async () => {
       process.env['SOAT_BASE_URL'] = 'https://override.example.com';
-      // SOAT_TOKEN is NOT set — falls through to profile lookup
+      // SOAT_API_KEY is NOT set — falls through to profile lookup
       mockReadFileSync.mockReturnValue(PROFILE_STORE);
 
       const { mock, requests } = makeFetchMock();

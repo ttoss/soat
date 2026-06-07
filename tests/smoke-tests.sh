@@ -70,7 +70,7 @@ if [ -z "$ADMIN_USER_ID" ] || [ "$ADMIN_USER_ID" = "null" ]; then
 fi
 echo "Token: $(echo "$TOKEN" | cut -c1-20)..."
 
-export SOAT_TOKEN="$TOKEN"
+export SOAT_API_KEY="$TOKEN"
 echo "CLI: $SOAT_CLI"
 
 # 3. Create a project
@@ -178,7 +178,7 @@ fi
 
 # Verify API key authentication works
 set +e
-SOAT_TOKEN="$API_KEY_RAW" $SOAT_CLI list-files >/dev/null 2>&1
+SOAT_API_KEY="$API_KEY_RAW" $SOAT_CLI list-files >/dev/null 2>&1
 API_KEY_AUTH_STATUS=$?
 set -e
 if [ "$API_KEY_AUTH_STATUS" != "0" ]; then
@@ -579,7 +579,7 @@ fi
 echo "Orchestration-scoped auth: OK"
 
 echo "--- Creating orchestration ---"
-ORCH_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
+ORCH_RESP=$(SOAT_API_KEY="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name "smoke-orchestration" \
   --nodes '[{"id":"seed","type":"transform","expression":{"var":"theme"},"output_mapping":{"result":"state.theme"}},{"id":"decorate","type":"transform","expression":{"cat":[{"var":"theme"}," sonnet"]},"output_mapping":{"result":"state.title"}}]' \
@@ -593,7 +593,7 @@ fi
 echo "Orchestration id: $ORCH_ID"
 
 echo "--- Listing orchestrations ---"
-ORCH_LIST_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestrations --project-id "$PROJECT_PUBLIC_ID")
+ORCH_LIST_RESP=$(SOAT_API_KEY="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestrations --project-id "$PROJECT_PUBLIC_ID")
 if ! printf '%s\n' "$ORCH_LIST_RESP" | jq -e --arg id "$ORCH_ID" 'map(.id) | index($id) != null' >/dev/null 2>&1; then
   echo "list-orchestrations did not include created orchestration"
   printf '%s\n' "$ORCH_LIST_RESP"
@@ -602,7 +602,7 @@ fi
 echo "Orchestration list: OK"
 
 echo "--- Getting orchestration ---"
-ORCH_GET_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration --orchestration-id "$ORCH_ID")
+ORCH_GET_RESP=$(SOAT_API_KEY="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration --orchestration-id "$ORCH_ID")
 if ! printf '%s\n' "$ORCH_GET_RESP" | jq -e --arg id "$ORCH_ID" '.id == $id' >/dev/null 2>&1; then
   echo "get-orchestration returned unexpected response"
   printf '%s\n' "$ORCH_GET_RESP"
@@ -611,7 +611,7 @@ fi
 echo "Get orchestration: OK"
 
 echo "--- Updating orchestration ---"
-ORCH_UPDATE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI update-orchestration \
+ORCH_UPDATE_RESP=$(SOAT_API_KEY="$ORCH_API_KEY_RAW" $SOAT_CLI update-orchestration \
   --orchestration-id "$ORCH_ID" \
   --description "Smoke orchestration coverage")
 if ! printf '%s\n' "$ORCH_UPDATE_RESP" | jq -e '.description == "Smoke orchestration coverage"' >/dev/null 2>&1; then
@@ -622,7 +622,7 @@ fi
 echo "Update orchestration: OK"
 
 echo "--- Starting completed run ---"
-ORCH_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
+ORCH_RUN_RESP=$(SOAT_API_KEY="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$ORCH_ID" \
   --input '{"theme":"orchestration"}')
 ORCH_RUN_ID=$(printf '%s\n' "$ORCH_RUN_RESP" | jq -r '.id')
@@ -636,7 +636,7 @@ fi
 echo "Completed run: OK"
 
 echo "--- Getting run ---"
-ORCH_RUN_GET_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run \
+ORCH_RUN_GET_RESP=$(SOAT_API_KEY="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run \
   --orchestration-id "$ORCH_ID" \
   --run-id "$ORCH_RUN_ID")
 if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e --arg id "$ORCH_RUN_ID" '.id == $id and .status == "completed"' >/dev/null 2>&1; then
@@ -647,7 +647,7 @@ fi
 echo "Get run: OK"
 
 echo "--- Listing runs ---"
-ORCH_RUN_LIST_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --orchestration-id "$ORCH_ID")
+ORCH_RUN_LIST_RESP=$(SOAT_API_KEY="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --orchestration-id "$ORCH_ID")
 if ! printf '%s\n' "$ORCH_RUN_LIST_RESP" | jq -e --arg id "$ORCH_RUN_ID" 'map(.id) | index($id) != null' >/dev/null 2>&1; then
   echo "list-orchestration-runs did not include completed run"
   printf '%s\n' "$ORCH_RUN_LIST_RESP"
@@ -656,7 +656,7 @@ fi
 echo "List runs: OK"
 
 echo "--- Creating human-review orchestration ---"
-HUMAN_ORCH_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
+HUMAN_ORCH_RESP=$(SOAT_API_KEY="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name "smoke-human-orchestration" \
   --nodes '[{"id":"approval","type":"human","prompt":"Approve the poem?","options":["approve","reject"],"output_mapping":{"choice":"state.review"}},{"id":"finalize","type":"transform","expression":{"var":"review"},"output_mapping":{"result":"state.finalReview"}}]' \
@@ -670,7 +670,7 @@ fi
 echo "Human orchestration id: $HUMAN_ORCH_ID"
 
 echo "--- Starting paused run ---"
-HUMAN_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
+HUMAN_RUN_RESP=$(SOAT_API_KEY="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$HUMAN_ORCH_ID" \
   --input '{}')
 HUMAN_RUN_ID=$(printf '%s\n' "$HUMAN_RUN_RESP" | jq -r '.id')
@@ -684,7 +684,7 @@ fi
 echo "Paused run: OK"
 
 echo "--- Submitting human input ---"
-HUMAN_INPUT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI submit-human-input \
+HUMAN_INPUT_RESP=$(SOAT_API_KEY="$ORCH_API_KEY_RAW" $SOAT_CLI submit-human-input \
   --orchestration-id "$HUMAN_ORCH_ID" \
   --run-id "$HUMAN_RUN_ID" \
   --node-id "$HUMAN_NODE_ID" \
@@ -697,7 +697,7 @@ fi
 echo "Submit human input: OK"
 
 echo "--- Resuming a paused run without input ---"
-RESUME_CANDIDATE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
+RESUME_CANDIDATE_RESP=$(SOAT_API_KEY="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$HUMAN_ORCH_ID" \
   --input '{}')
 RESUME_RUN_ID=$(printf '%s\n' "$RESUME_CANDIDATE_RESP" | jq -r '.id')
@@ -706,7 +706,7 @@ if ! printf '%s\n' "$RESUME_CANDIDATE_RESP" | jq -e '.status == "paused" and .re
   printf '%s\n' "$RESUME_CANDIDATE_RESP"
   exit 1
 fi
-HUMAN_RESUME_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI resume-orchestration-run \
+HUMAN_RESUME_RESP=$(SOAT_API_KEY="$ORCH_API_KEY_RAW" $SOAT_CLI resume-orchestration-run \
   --orchestration-id "$HUMAN_ORCH_ID" \
   --run-id "$RESUME_RUN_ID")
 if ! printf '%s\n' "$HUMAN_RESUME_RESP" | jq -e '.status == "paused" and .required_action.node_id == "approval"' >/dev/null 2>&1; then
@@ -717,7 +717,7 @@ fi
 echo "Resume run: OK"
 
 echo "--- Cancelling a paused run ---"
-CANCEL_CANDIDATE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
+CANCEL_CANDIDATE_RESP=$(SOAT_API_KEY="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$HUMAN_ORCH_ID" \
   --input '{}')
 CANCEL_RUN_ID=$(printf '%s\n' "$CANCEL_CANDIDATE_RESP" | jq -r '.id')
@@ -726,7 +726,7 @@ if ! printf '%s\n' "$CANCEL_CANDIDATE_RESP" | jq -e '.status == "paused"' >/dev/
   printf '%s\n' "$CANCEL_CANDIDATE_RESP"
   exit 1
 fi
-CANCEL_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI cancel-orchestration-run \
+CANCEL_RUN_RESP=$(SOAT_API_KEY="$ORCH_API_KEY_RAW" $SOAT_CLI cancel-orchestration-run \
   --orchestration-id "$HUMAN_ORCH_ID" \
   --run-id "$CANCEL_RUN_ID")
 if ! printf '%s\n' "$CANCEL_RUN_RESP" | jq -e '.status == "cancelled"' >/dev/null 2>&1; then
@@ -737,17 +737,17 @@ fi
 echo "Cancel run: OK"
 
 echo "--- Deleting orchestrations ---"
-SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI delete-orchestration --orchestration-id "$ORCH_ID"
-SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI delete-orchestration --orchestration-id "$HUMAN_ORCH_ID"
-SOAT_TOKEN="$ORCH_API_KEY_RAW" expect_cli_error_status 404 get-orchestration --orchestration-id "$ORCH_ID"
-SOAT_TOKEN="$ORCH_API_KEY_RAW" expect_cli_error_status 404 get-orchestration --orchestration-id "$HUMAN_ORCH_ID"
+SOAT_API_KEY="$ORCH_API_KEY_RAW" $SOAT_CLI delete-orchestration --orchestration-id "$ORCH_ID"
+SOAT_API_KEY="$ORCH_API_KEY_RAW" $SOAT_CLI delete-orchestration --orchestration-id "$HUMAN_ORCH_ID"
+SOAT_API_KEY="$ORCH_API_KEY_RAW" expect_cli_error_status 404 get-orchestration --orchestration-id "$ORCH_ID"
+SOAT_API_KEY="$ORCH_API_KEY_RAW" expect_cli_error_status 404 get-orchestration --orchestration-id "$HUMAN_ORCH_ID"
 $SOAT_CLI delete-api-key --api-key-id "$ORCH_API_KEY_ID"
 $SOAT_CLI delete-policy --policy-id "$ORCH_POLICY_ID"
 echo "Orchestrations coverage: OK"
 
 # 14. Chat completion — 401 without auth
 echo "--- Chat completion: 401 without auth ---"
-SOAT_TOKEN=invalid expect_cli_error_status 401 create-chat-completion --messages '[{"role":"user","content":"hello"}]'
+SOAT_API_KEY=invalid expect_cli_error_status 401 create-chat-completion --messages '[{"role":"user","content":"hello"}]'
 echo "401 without auth: OK"
 
 # 15. Chat completion — 400 without messages

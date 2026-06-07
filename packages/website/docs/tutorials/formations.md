@@ -71,7 +71,7 @@ Admin is the built-in superuser. See [Users](/docs/modules/users#examples) for f
 
 ```bash
 ADMIN_TOKEN=$(soat login-user --username admin --password Admin1234! | jq -r '.token')
-export SOAT_TOKEN=$ADMIN_TOKEN
+export SOAT_API_KEY=$ADMIN_TOKEN
 ```
 
 </TabItem>

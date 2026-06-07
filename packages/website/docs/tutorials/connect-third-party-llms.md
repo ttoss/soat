@@ -60,7 +60,7 @@ Admin is the built-in superuser role. It bypasses policy evaluation entirely. Se
 
 ```bash
 ADMIN_TOKEN=$(soat login-user --username admin --password Admin1234! | jq -r '.token')
-export SOAT_TOKEN=$ADMIN_TOKEN
+export SOAT_API_KEY=$ADMIN_TOKEN
 ```
 
 </TabItem>

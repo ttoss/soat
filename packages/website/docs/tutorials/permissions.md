@@ -590,14 +590,14 @@ Confirm that each key behaves as expected. The file upload and list operations u
 ```bash
 echo "hello world" > sample.txt
 
-SOAT_TOKEN="$ALICE_API_KEY" soat upload-file-base64 \
+SOAT_API_KEY="$ALICE_API_KEY" soat upload-file-base64 \
   --project-id "$PROJECT_ID" \
   --content "$(base64 -w 0 sample.txt)" \
   --filename "sample.txt"
 
 # Switch to Bob's profile to test his permissions
 # → expect-fail
-SOAT_TOKEN="$BOB_API_KEY" soat upload-file-base64 \
+SOAT_API_KEY="$BOB_API_KEY" soat upload-file-base64 \
   --project-id "$PROJECT_ID" \
   --content "$(base64 -w 0 sample.txt)" \
   --filename "sample.txt"
@@ -670,7 +670,7 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 
 ```bash
 # Bob can list files — read is allowed
-SOAT_TOKEN="$BOB_API_KEY" soat list-files --project-id "$PROJECT_ID"
+SOAT_API_KEY="$BOB_API_KEY" soat list-files --project-id "$PROJECT_ID"
 ```
 
 </TabItem>
@@ -714,7 +714,7 @@ ESCALATED_KEY=$(soat --profile bob create-api-key \
   --policy-ids '["'"$FULL_POLICY_ID"'"]' | jq -r '.key')
 
 # → expect-fail
-SOAT_TOKEN="$ESCALATED_KEY" soat upload-file-base64 \
+SOAT_API_KEY="$ESCALATED_KEY" soat upload-file-base64 \
   --project-id "$PROJECT_ID" \
   --content "$(base64 -w 0 sample.txt)" \
   --filename "sample.txt"

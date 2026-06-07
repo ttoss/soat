@@ -25,10 +25,10 @@ Add a server entry to `~/Library/Application Support/Claude/claude_desktop_confi
         "mcp-remote",
         "http://localhost:5047/mcp",
         "--header",
-        "Authorization: Bearer ${SOAT_TOKEN}"
+        "Authorization: Bearer ${SOAT_API_KEY}"
       ],
       "env": {
-        "SOAT_TOKEN": "<your-bearer-token>"
+        "SOAT_API_KEY": "<your-bearer-token>"
       }
     }
   }
