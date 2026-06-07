@@ -25,11 +25,16 @@ soat configure
 
 You will be prompted for:
 
-| Prompt       | Description                                            |
-| ------------ | ------------------------------------------------------ |
-| Profile name | Name for this profile (`default` if left blank)        |
-| Base URL     | URL of your SOAT server (e.g. `http://localhost:5047`) |
-| Token        | JWT session token or `sk_`-prefixed project key        |
+| Prompt   | Description                                            |
+| -------- | ------------------------------------------------------ |
+| Base URL | URL of your SOAT server (e.g. `http://localhost:5047`) |
+| Token    | JWT session token or `sk_`-prefixed project key        |
+
+To save under a named profile, pass `--profile`:
+
+```bash
+soat configure --profile prod
+```
 
 Profiles are stored in `~/.soat/config.json`.
 
@@ -45,11 +50,11 @@ Profiles are stored in `~/.soat/config.json`.
 
 Environment variables take precedence over stored profiles:
 
-| Variable        | Description                                                   |
-| --------------- | ------------------------------------------------------------- |
-| `SOAT_BASE_URL` | Server base URL — skips profile lookup entirely               |
-| `SOAT_TOKEN`    | Bearer token — skips profile lookup entirely                  |
-| `SOAT_PROFILE`  | Name of the profile to use when no `--profile` flag is passed |
+| Variable        | Description                                                                                                      |
+| --------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `SOAT_BASE_URL` | Server base URL. When set together with `SOAT_TOKEN`, skips profile lookup entirely. When set alone, overrides the base URL of the resolved profile. |
+| `SOAT_TOKEN`    | Bearer token. Must be set together with `SOAT_BASE_URL` to skip profile lookup entirely.                         |
+| `SOAT_PROFILE`  | Name of the profile to use when no `--profile` flag is passed.                                                   |
 
 ## Available Commands
 
