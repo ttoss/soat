@@ -1,6 +1,5 @@
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
-import type { LanguageModel, ModelMessage, Tool } from 'ai';
-import { generateText, stepCountIs } from 'ai';
+import type { LanguageModel, Tool } from 'ai';
 import createDebug from 'debug';
 import type { AuthUser } from 'src/Context';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
@@ -15,15 +14,15 @@ import {
 } from './agentGenerationHelpers';
 import {
   buildDepthGuardResult,
-  recoverPendingFromDb,
   resolveAgentForGeneration,
+  resolvePendingGeneration,
 } from './agentGenerationRecovery';
-import { buildKnowledgeMessages, buildWriteMemoryTool } from './agentKnowledge';
+import { buildKnowledgeMessages, buildKnowledgeTools } from './agentKnowledge';
 import { buildModel } from './agentModel';
 import {
-  buildPrepareStep,
   buildToolResultMessages as buildToolResultMessagesFromOutputs,
   runNonStreamGeneration,
+  runToolOutputGeneration,
 } from './agentNonStreamGeneration';
 import { resolveAgentTools } from './agentToolResolver';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
@@ -48,21 +47,6 @@ type GenerationContext = {
   generationId: string;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
-};
-
-const buildKnowledgeTools = (args: {
-  typedAgent: TypedAgent;
-  resolvedTools: Record<string, unknown>;
-}): void => {
-  const knowledgeConfig = args.typedAgent.knowledgeConfig as
-    | { writeMemoryId?: string }
-    | null
-    | undefined;
-  if (knowledgeConfig?.writeMemoryId) {
-    args.resolvedTools['write_memory'] = buildWriteMemoryTool({
-      writeMemoryId: knowledgeConfig.writeMemoryId,
-    });
-  }
 };
 
 const resolveGenerationModel = async (args: {
@@ -369,57 +353,16 @@ export const submitToolOutputs = async (args: {
   toolOutputs: Array<{ toolCallId: string; output: unknown }>;
   authHeader?: string;
 }): Promise<GenerationResult> => {
-  let pending = pendingGenerations.get(args.generationId);
-
-  // If not in memory (e.g. server restarted), recover from DB.
-  if (!pending) {
-    pending = await recoverPendingFromDb({
-      generationId: args.generationId,
-      agentId: args.agentId,
-      projectIds: args.projectIds,
-      authHeader: args.authHeader,
-    });
-  }
-  if (!pending || pending.agentId !== args.agentId) {
-    throw new DomainError(
-      'GENERATION_NOT_FOUND',
-      `Generation '${args.generationId}' not found or does not belong to agent '${args.agentId}'.`
-    );
-  }
-
+  const pending = await resolvePendingGeneration(args);
   pendingGenerations.delete(args.generationId);
 
   const toolResultMessages = buildToolResultMessagesFromOutputs({
     toolOutputs: args.toolOutputs,
     pendingToolCalls: pending.pendingToolCalls,
   });
-  const allMessages = [...pending.messages, ...toolResultMessages];
-  const system = (
-    pending.messages.find((m) => {
-      return (m as { role: string }).role === 'system';
-    }) as { role: string; content: string } | undefined
-  )?.content;
-  const nonSystemMessages = allMessages.filter((m) => {
-    return (m as { role?: string }).role !== 'system';
-  });
 
-  const result = await generateText({
-    model: pending.resolvedModel,
-    system,
-    messages: nonSystemMessages as ModelMessage[],
-    tools:
-      Object.keys(pending.resolvedTools).length > 0
-        ? pending.resolvedTools
-        : undefined,
-    prepareStep: buildPrepareStep({
-      stepRules: pending.agentConfig.stepRules,
-      logContext: 'non_stream',
-    }),
-    stopWhen: stepCountIs(pending.agentConfig.maxSteps),
-    temperature: pending.agentConfig.temperature ?? undefined,
-  });
+  const result = await runToolOutputGeneration({ pending, toolResultMessages });
 
-  // Extract the tool exchange messages that weren't already in the conversation history
   const pendingToolMessages = pending.messages.slice(
     pending.allMessagesCount ?? 0
   );

@@ -267,3 +267,35 @@ export const buildToolResultMessages = (args: {
     };
   });
 };
+
+export const runToolOutputGeneration = async (args: {
+  pending: PendingGeneration;
+  toolResultMessages: unknown[];
+}) => {
+  const { pending, toolResultMessages } = args;
+  const allMessages = [...pending.messages, ...toolResultMessages];
+  const system = (
+    pending.messages.find((m) => {
+      return (m as { role: string }).role === 'system';
+    }) as { role: string; content: string } | undefined
+  )?.content;
+  const nonSystemMessages = allMessages.filter((m) => {
+    return (m as { role?: string }).role !== 'system';
+  });
+
+  return generateText({
+    model: pending.resolvedModel,
+    system,
+    messages: nonSystemMessages as ModelMessage[],
+    tools:
+      Object.keys(pending.resolvedTools).length > 0
+        ? pending.resolvedTools
+        : undefined,
+    prepareStep: buildPrepareStep({
+      stepRules: pending.agentConfig.stepRules,
+      logContext: 'non_stream',
+    }),
+    stopWhen: stepCountIs(pending.agentConfig.maxSteps),
+    temperature: pending.agentConfig.temperature ?? undefined,
+  });
+};

@@ -1,9 +1,11 @@
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 
 import { db } from '../db';
+import { DomainError } from '../errors';
 import {
   type GenerationResult,
   type PendingGeneration,
+  pendingGenerations,
   type TypedAgent,
 } from './agentGenerationHelpers';
 import { buildModel } from './agentModel';
@@ -182,4 +184,29 @@ export const recoverPendingFromDb = async (args: {
     traceId: gen.traceId,
     pendingState,
   });
+};
+
+export const resolvePendingGeneration = async (args: {
+  generationId: string;
+  agentId: string;
+  projectIds?: number[];
+  authHeader?: string;
+}): Promise<PendingGeneration> => {
+  const pending =
+    pendingGenerations.get(args.generationId) ??
+    (await recoverPendingFromDb({
+      generationId: args.generationId,
+      agentId: args.agentId,
+      projectIds: args.projectIds,
+      authHeader: args.authHeader,
+    }));
+
+  if (!pending || pending.agentId !== args.agentId) {
+    throw new DomainError(
+      'GENERATION_NOT_FOUND',
+      `Generation '${args.generationId}' not found or does not belong to agent '${args.agentId}'.`
+    );
+  }
+
+  return pending;
 };
