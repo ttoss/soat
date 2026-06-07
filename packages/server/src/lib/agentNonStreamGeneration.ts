@@ -271,7 +271,11 @@ export const buildToolResultMessages = (args: {
 export const runToolOutputGeneration = async (args: {
   pending: PendingGeneration;
   toolResultMessages: unknown[];
-}) => {
+}): Promise<{
+  text: string;
+  finishReason: string;
+  response?: { modelId?: string; messages?: unknown[] };
+}> => {
   const { pending, toolResultMessages } = args;
   const allMessages = [...pending.messages, ...toolResultMessages];
   const system = (
