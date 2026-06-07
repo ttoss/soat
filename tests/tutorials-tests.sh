@@ -19,7 +19,7 @@
 #   write a profile file directly (bypassing the interactive "soat configure"
 #   prompt).  A subsequent "soat configure [--profile X]" line is therefore
 #   silently skipped.  Commands using "--profile X" are rewritten to use the
-#   SOAT_API_KEY env var loaded from the written profile.
+#   SOAT_TOKEN env var loaded from the written profile.
 
 set -e
 

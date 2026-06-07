@@ -32,7 +32,7 @@ export const resolveClient = (
   profileName?: string
 ): ReturnType<typeof createClient> => {
   const envBaseUrl = process.env['SOAT_BASE_URL'];
-  const envToken = process.env['SOAT_API_KEY'];
+  const envToken = process.env['SOAT_TOKEN'];
 
   // 1. Both env vars set — use them directly, no profile needed.
   if (envBaseUrl && envToken) {
