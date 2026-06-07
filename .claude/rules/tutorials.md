@@ -13,9 +13,9 @@ Tutorials demonstrate real SOAT workflows end-to-end. Every tutorial must be ful
 - **Three-tab pattern for every code block**: `CLI` (default), `SDK`, `curl`. Use `<Tabs groupId="client">` so all code blocks on the page switch together.
 - **Prerequisites section must not include installation or bootstrap steps** — assume the reader has already installed SOAT and bootstrapped their first admin. Link to the relevant docs instead. (Note: when running the dev server locally, SOAT_ADMIN credentials are already defined in `.env`, so the first admin account exists automatically.)
 - **Prerequisite env-var block** must export the correct values per client:
-  - CLI tab: `export SOAT_BASE_URL=http://localhost:5047/api/v1` (the CLI and SDK consume this base URL and append `/users/login` etc.)
-  - curl tab: `export SOAT_URL=http://localhost:5047` (curl examples append the full path manually, e.g. `$SOAT_URL/api/v1/users/login`)
-  - SDK tab: `createConfig({ baseUrl: 'http://localhost:5047/api/v1', auth: '' })`
+  - CLI tab: `export SOAT_BASE_URL=http://localhost:5047` (the CLI and SDK append `/api/v1/...` route paths internally — do NOT include `/api/v1`)
+  - curl tab: `export SOAT_BASE_URL=http://localhost:5047` (curl examples append the full path manually, e.g. `$SOAT_BASE_URL/api/v1/users/login`)
+  - SDK tab: `new SoatClient({ baseUrl: 'http://localhost:5047', token: '...' })` (do NOT include `/api/v1` — the SDK appends route paths itself)
 - **Write steps in order**. Number them `Step 1`, `Step 2`, … Use sub-steps (e.g. `### 3a`, `### 3b`) only when a single logical step has multiple variants.
 - **Cross-link to module docs at the point where a concept is first introduced**. Add a brief inline sentence linking to the relevant module page (e.g. [IAM](/docs/modules/iam), [Policies](/docs/modules/policies)) so readers can look up details without leaving the tutorial flow. Only link once per concept — do not repeat the same link in every step.
 - **Every step must reference at least one doc**. Each `## Step N` section must contain an inline link to either a SOAT module doc (`/docs/modules/<module>`) or a relevant third-party doc (e.g. [Ollama](https://ollama.com), [OpenAI](https://platform.openai.com/docs)). Steps that introduce a new resource must link to its module page; steps that only operate on an already-introduced resource may link to a specific subsection anchor (e.g. `[Sessions — Async Generation](/docs/modules/sessions#async-generation)`).
@@ -156,8 +156,7 @@ Wait until `http://localhost:5047/health` returns `{"status":"ok"}`. The first a
 ### 2. Set environment variables
 
 ```bash
-export SOAT_BASE_URL=http://localhost:5047/api/v1   # CLI + SDK
-export SOAT_URL=http://localhost:5047               # curl examples
+export SOAT_BASE_URL=http://localhost:5047   # CLI, SDK, and curl — do NOT append /api/v1
 ```
 
 ### 3. Run every CLI command in order
@@ -232,8 +231,8 @@ When a CLI command fails:
 | Using `files:ListFiles` as an action      | Use `files:GetFile` — the server uses the same action for both listing and getting                                                                                                             |
 | Using POST for policy attachment          | It is `PUT /users/{userId}/policies` (replaces entire list)                                                                                                                                    |
 | `--id` for user-scoped commands           | Use `--user-id` (path param is `userId`)                                                                                                                                                       |
-| `baseUrl: 'http://localhost:5047'` in SDK | Must be `baseUrl: 'http://localhost:5047/api/v1'`                                                                                                                                              |
-| `SOAT_URL=http://localhost:5047` for CLI  | Must be `SOAT_BASE_URL=http://localhost:5047/api/v1`                                                                                                                                           |
+| `baseUrl: 'http://localhost:5047/api/v1'` in SDK | Must be `baseUrl: 'http://localhost:5047'` — the SDK appends `/api/v1/...` paths itself; including it doubles the prefix |
+| `SOAT_URL=http://localhost:5047` for CLI         | Use `SOAT_BASE_URL=http://localhost:5047` (no `/api/v1`)                                                                 |
 | Shell quoting mixed IDs in policy JSON    | Use single-quoted JSON with `'"$VAR"'` interpolation: `--document '{"key": "'"$VAR"'"}'`. The tutorial runner does not handle double-quoted multi-line strings.                                |
 | Omitting `resource` in policy documents   | Always include `"resource": ["soat:$PROJECT_ID:*:*"]` for project-scoped examples. Omitting it defaults to `["*"]` (all projects), which masks scoping bugs and is rarely the tutorial intent. |
 | Wrong SRN format in policy resource       | Must be `soat:<projectId>:<singularType>:<id-or-path>` — exactly 4 colon-separated segments. Wrong: `srn::`, `documents:path:`, 5 segments with `path:` infix.                                 |
@@ -251,9 +250,8 @@ Before opening a PR with a new or updated tutorial:
 - [ ] All three tabs (CLI, SDK, curl) have working examples — CLI validation proves correctness
 - [ ] `pnpm run build` in `packages/website` passes without errors or warnings
 - [ ] Action names in policy documents match what the server handler actually checks
-- [ ] SDK `baseUrl` ends with `/api/v1`
-- [ ] CLI prerequisite exports `SOAT_BASE_URL` (not `SOAT_URL`)
-- [ ] curl prerequisite exports `SOAT_URL` (without `/api/v1` — curl appends the full path)
+- [ ] SDK `baseUrl` is the server host only, e.g. `http://localhost:5047` — no `/api/v1`
+- [ ] CLI and curl prerequisites export `SOAT_BASE_URL` (not `SOAT_URL`), no `/api/v1`
 - [ ] JSON CLI arguments use single-quoted strings with `'"$VAR"'` for variable interpolation
 - [ ] SRN values follow `soat:<projectId>:<singularType>:<id-or-path>` — exactly 4 colon-separated segments
 - [ ] Automated tutorial test (`TUTORIAL_ID=<name> docker compose ...`) passes with exit code 0
