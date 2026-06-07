@@ -244,6 +244,18 @@ describe('resolveGenerationInputMessages', () => {
     ).rejects.toThrow("Document 'doc_missing' not found");
   });
 
+  test('passes through array content unchanged', async () => {
+    const { resolveGenerationInputMessages } =
+      await loadGenerationInputMessagesModule();
+
+    const arrayContent = [{ type: 'tool-result', toolCallId: 'tc_1' }];
+    const result = await resolveGenerationInputMessages({
+      messages: [{ role: 'tool', content: arrayContent }],
+    });
+
+    expect(result).toEqual([{ role: 'tool', content: arrayContent }]);
+  });
+
   test('keeps string message content unchanged', async () => {
     const { resolveGenerationInputMessages } =
       await loadGenerationInputMessagesModule();
