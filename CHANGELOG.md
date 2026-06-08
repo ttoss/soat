@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.6.10](https://github.com/ttoss/soat/compare/v0.6.6...v0.6.10) (2026-06-08)
+
+### Bug Fixes
+
+* accept string values for tool_choice in agents and formations ([#151](https://github.com/ttoss/soat/issues/151)) ([322bf45](https://github.com/ttoss/soat/commit/322bf4538d42aca7dfba1de3f60b1be4d0f22cd9))
+* use branch ref for workflow_dispatch trigger ([#165](https://github.com/ttoss/soat/issues/165)) ([a4b3877](https://github.com/ttoss/soat/commit/a4b3877967fe53ea906a46d1b032ceb530c0891f)), closes [#164](https://github.com/ttoss/soat/issues/164)
+
+### Features
+
+* **sessions:** add message_delay_seconds for debounced LLM processing ([#148](https://github.com/ttoss/soat/issues/148)) ([1406654](https://github.com/ttoss/soat/commit/1406654ac85a2971220358591cfb73e9a96c1e51))
+
 ## [0.6.9](https://github.com/ttoss/soat/compare/v0.6.6...v0.6.9) (2026-06-08)
 
 ### Bug Fixes
