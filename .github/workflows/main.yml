@@ -150,7 +150,7 @@ jobs:
           aws-region: us-east-1
 
       - name: Deploy Website
-        run: pnpm turbo run deploy --filter=@soat/website
+        run: pnpm turbo run deploy --filter=@soat/website -- -e Production
         env:
           CARLIN_BRANCH: main
           CARLIN_ACM: ${{ vars.AWS_ACM }}
