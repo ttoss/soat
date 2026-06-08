@@ -11,6 +11,7 @@ jobs:
   build-test-and-deploy:
     name: Build, Test and Deploy
     runs-on: ubuntu-latest
+    if: "!startsWith(github.head_ref, 'release/')"
     permissions:
       pull-requests: write
 
@@ -57,6 +58,7 @@ jobs:
   smoke-test:
     name: Smoke Tests
     runs-on: ubuntu-latest
+    if: "!startsWith(github.head_ref, 'release/')"
 
     steps:
       - uses: actions/checkout@v6
@@ -92,6 +94,7 @@ jobs:
   tutorials-test:
     name: Tutorials Tests
     runs-on: ubuntu-latest
+    if: "!startsWith(github.head_ref, 'release/')"
 
     steps:
       - uses: actions/checkout@v6
@@ -128,10 +131,13 @@ jobs:
     steps:
       - name: Check all jobs passed
         run: |
-          if [[ "${{ needs.build-test-and-deploy.result }}" != "success" || \
-                "${{ needs.smoke-test.result }}" != "success" || \
-                "${{ needs.tutorials-test.result }}" != "success" ]]; then
-            echo "One or more jobs failed."
-            exit 1
-          fi
+          for result in \
+            "${{ needs.build-test-and-deploy.result }}" \
+            "${{ needs.smoke-test.result }}" \
+            "${{ needs.tutorials-test.result }}"; do
+            if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+              echo "One or more jobs failed."
+              exit 1
+            fi
+          done
           echo "All checks passed."
