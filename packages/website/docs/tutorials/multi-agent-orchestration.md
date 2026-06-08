@@ -7,14 +7,14 @@ import TabItem from '@theme/TabItem';
 
 # Multi-Agent Sonnet with Nested Agent Calls
 
-This tutorial demonstrates how to build a **nested-agent** pipeline where one agent coordinates multiple sub-agents using [SOAT tools](/docs/modules/agents#soat). If you want the same sonnet workflow with the [Orchestrations](/docs/modules/orchestrations#examples) module calling each agent directly, see [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet). This nested-agent pattern applies to any workflow that can be decomposed into sequential or parallel sub-tasks — content pipelines, data processing, multi-step analysis, code generation, report assembly, and more.
+This tutorial demonstrates how to build a **nested-agent** pipeline where one agent coordinates multiple sub-agents using [SOAT tools](/docs/modules/agents#soat-tools-platform-actions). If you want the same sonnet workflow with the [Orchestrations](/docs/modules/orchestrations#examples) module calling each agent directly, see [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet). This nested-agent pattern applies to any workflow that can be decomposed into sequential or parallel sub-tasks — content pipelines, data processing, multi-step analysis, code generation, report assembly, and more.
 
 As a concrete example, you will build a system that composes a sonnet: an orchestrator agent creates the poem title itself and then delegates each stanza to a specialized sub-agent, all collaborating through a shared document. The same architecture works for any scenario where:
 
 1. A **coordinator agent** receives a request, performs initial work, and breaks the rest into sub-tasks.
 2. **Worker agents** each have tools to read shared state and write their results.
 3. The coordinator calls workers in sequence (or in parallel), accumulating results.
-4. A [trace](/docs/modules/agents#traces) captures the full execution tree for observability.
+4. A [trace](/docs/modules/traces) captures the full execution tree for observability.
 
 By the end you will understand:
 
@@ -239,7 +239,7 @@ echo "POEM_DOC_ID: $POEM_DOC_ID"
 
 ## Step 5 — Create fixed SOAT tools for stanza agents
 
-Each stanza agent needs two [SOAT tools](/docs/modules/agents#soat) with fixed parameters:
+Each stanza agent needs two [SOAT tools](/docs/modules/agents#soat-tools-platform-actions) with fixed parameters:
 
 1. **poem-read** — reads the shared poem document (`get-document` action)
 2. **poem-write** — updates the shared poem document (`update-document` action)
@@ -475,7 +475,7 @@ echo "STANZA4_AGENT_ID: $STANZA4_AGENT_ID"
 
 ## Step 7 — Create fixed call tools for the orchestrator
 
-The orchestrator should not choose `agentId` dynamically. Create one tool per stanza with fixed `preset_parameters.agentId`, plus one fixed reader tool for the final poem. See [Agents — SOAT](/docs/modules/agents#soat).
+The orchestrator should not choose `agentId` dynamically. Create one tool per stanza with fixed `preset_parameters.agentId`, plus one fixed reader tool for the final poem. See [Agents — SOAT](/docs/modules/agents#soat-tools-platform-actions).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

@@ -184,7 +184,7 @@ echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 
 ## Step 4 — Create the poem document and a fixed write tool
 
-The final poem will be persisted in a [document](/docs/modules/documents#examples). A fixed [SOAT tool](/docs/modules/agents#soat) will later update that document from the orchestration.
+The final poem will be persisted in a [document](/docs/modules/documents#examples). A fixed [SOAT tool](/docs/modules/agents#soat-tools-platform-actions) will later update that document from the orchestration.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
