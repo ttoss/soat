@@ -13,7 +13,7 @@ jobs:
   build-and-test:
     name: Build and Test
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.event.head_commit.message, 'chore(release):') && github.ref_type != 'tag' }}
+    if: "startsWith(github.event.head_commit.message, 'chore(release): publish packages')"
 
     steps:
       - uses: actions/checkout@v6
@@ -42,7 +42,7 @@ jobs:
   smoke-test:
     name: Smoke Tests
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.event.head_commit.message, 'chore(release):') && github.ref_type != 'tag' }}
+    if: "startsWith(github.event.head_commit.message, 'chore(release): publish packages')"
 
     steps:
       - uses: actions/checkout@v6
@@ -203,7 +203,7 @@ jobs:
   tutorials-test:
     name: Tutorials Tests
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.event.head_commit.message, 'chore(release):') && github.ref_type != 'tag' }}
+    if: "startsWith(github.event.head_commit.message, 'chore(release): publish packages')"
 
     steps:
       - uses: actions/checkout@v6
