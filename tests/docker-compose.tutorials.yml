@@ -19,6 +19,8 @@ services:
     image: ollama/ollama:0.20.6
     volumes:
       - ${HOME}/.ollama:/root/.ollama
+    environment:
+      OLLAMA_NUM_CTX: '16384'
     entrypoint:
       - /bin/sh
       - -c
