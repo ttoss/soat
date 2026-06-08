@@ -44,7 +44,7 @@ type GenerationContext = {
   typedAgent: TypedAgent;
   model: LanguageModel;
   resolvedTools: Record<string, Tool>;
-  allMessages: Array<{ role: string; content: string }>;
+  allMessages: Array<{ role: string; content: unknown }>;
   generationId: string;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
@@ -394,11 +394,9 @@ export const submitToolOutputs = async (args: {
     pendingToolCalls: pending.pendingToolCalls,
   });
   const allMessages = [...pending.messages, ...toolResultMessages];
-  const typedPendingMessages = pending.messages as Array<{
-    role: string;
-    content: string;
-  }>;
-  const system = typedPendingMessages.find((m) => {
+  const system = (
+    pending.messages as Array<{ role: string; content: string }>
+  ).find((m) => {
     return m.role === 'system';
   })?.content;
   const nonSystemMessages = allMessages.filter((m) => {
@@ -429,6 +427,7 @@ export const submitToolOutputs = async (args: {
       model: result.response?.modelId ?? '',
       content: result.text,
       finishReason: result.finishReason,
+      responseMessages: result.response?.messages as Array<unknown> | undefined,
     },
   };
 

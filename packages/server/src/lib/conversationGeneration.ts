@@ -46,8 +46,11 @@ const buildMessageEntry = (args: {
   const meta = (args.msg as { metadata?: Record<string, unknown> | null })
     .metadata;
   const metadataStr =
-    meta && Object.keys(meta).length > 0
+    meta && Object.keys(meta).length > 0 && !meta.responseMessages
       ? ` [${Object.entries(meta)
+          .filter(([k]) => {
+            return k !== 'responseMessages';
+          })
           .map(([k, v]) => {
             return `${k}: ${v}`;
           })
@@ -61,9 +64,17 @@ const buildMessageEntry = (args: {
 
 const buildConversationHistory = (args: {
   messages: Array<ConversationMessage>;
-}) => {
-  return args.messages.map((msg) => {
-    return buildMessageEntry({ msg });
+}): Array<{ role: string; content: unknown }> => {
+  return args.messages.flatMap((msg) => {
+    const meta = (msg as { metadata?: Record<string, unknown> | null })
+      .metadata;
+    const responseMessages = meta?.responseMessages;
+    // Expand stored AI SDK response messages (tool calls, tool results, final text)
+    // so the LLM sees the full tool-use chain on subsequent turns.
+    if (Array.isArray(responseMessages) && responseMessages.length > 0) {
+      return responseMessages as Array<{ role: string; content: unknown }>;
+    }
+    return [buildMessageEntry({ msg })];
   });
 };
 
@@ -74,6 +85,7 @@ type InternalGenerationResult =
       traceId: string;
       content: string;
       model: string;
+      output?: GenerationResult['output'];
     }
   | {
       status: 'requires_action';
@@ -84,7 +96,7 @@ type InternalGenerationResult =
 
 const runAgentGeneration = async (args: {
   agent: InstanceType<(typeof db)['Agent']>;
-  messagesForModel: Array<{ role: string; content: string }>;
+  messagesForModel: Array<{ role: string; content: unknown }>;
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
 }): Promise<InternalGenerationResult> => {
@@ -117,12 +129,13 @@ const runAgentGeneration = async (args: {
     traceId: result.traceId,
     content: result.output?.content ?? '',
     model: result.output?.model ?? '',
+    output: result.output,
   };
 };
 
 const runGenerationForAgent = async (args: {
   generatingAgent: GenerationContext['generatingAgent'];
-  messagesForModel: Array<{ role: string; content: string }>;
+  messagesForModel: Array<{ role: string; content: unknown }>;
   model?: string;
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
@@ -233,7 +246,7 @@ export const generateConversationMessage = async (args: {
 
   const history = buildConversationHistory({ messages });
   const personaSystem = buildPersonaSystem(generatingAgent);
-  const messagesForModel = [
+  const messagesForModel: Array<{ role: string; content: unknown }> = [
     { role: 'system', content: personaSystem },
     ...history,
   ];
@@ -257,12 +270,17 @@ export const generateConversationMessage = async (args: {
     model: modelName,
   } = genResult;
 
+  const responseMessages = genResult.output?.responseMessages;
   const persisted = await addConversationMessage({
     conversationId: args.conversationId,
     message: assistantContent,
     role: 'assistant',
     agentId: args.agentId,
     position: snapshotPosition + 1,
+    metadata:
+      responseMessages && responseMessages.length > 0
+        ? { responseMessages }
+        : undefined,
   });
 
   if (!persisted) {

@@ -1,3 +1,4 @@
+import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Conversations', () => {
@@ -923,6 +924,151 @@ describe('Conversations', () => {
         .patch(`/api/v1/conversations/${conversationId}/tags`)
         .send({});
       expect(response.status).toBe(401);
+    });
+  });
+
+  describe('Tool-call history preservation (regression for issue #147)', () => {
+    let agentId: string;
+    let convId: string;
+
+    const toolCallMsg = {
+      role: 'assistant',
+      content: [
+        {
+          type: 'tool-call',
+          toolCallId: 'tc_reg_1',
+          toolName: 'create-account',
+          args: { name: 'Alice' },
+        },
+      ],
+    };
+    const toolResultMsg = {
+      role: 'tool',
+      content: [
+        {
+          type: 'tool-result',
+          toolCallId: 'tc_reg_1',
+          toolName: 'create-account',
+          result: 'ok',
+        },
+      ],
+    };
+    const finalTextMsg = { role: 'assistant', content: 'Account created.' };
+
+    beforeAll(async () => {
+      const aiProvRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'ToolRegressionProvider',
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        });
+
+      const agentRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProvRes.body.id,
+          name: 'ToolRegressionAgent',
+        });
+      agentId = agentRes.body.id;
+
+      const convRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ project_id: projectId });
+      convId = convRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${convId}/messages`)
+        .send({ role: 'user', message: 'Please create an account for Alice.' });
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    test('stores responseMessages in metadata when generation includes tool calls', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_reg_1',
+        traceId: 'trc_reg_1',
+        status: 'completed',
+        output: {
+          model: 'gpt-4o',
+          content: 'Account created.',
+          finishReason: 'stop',
+          responseMessages: [toolCallMsg, toolResultMsg, finalTextMsg],
+        },
+      });
+
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${convId}/generate`)
+        .send({ agent_id: agentId });
+
+      expect(res.status).toBe(200);
+      expect(res.body.content).toBe('Account created.');
+
+      // Verify message was stored
+      const msgsRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/conversations/${convId}/messages`
+      );
+      expect(msgsRes.status).toBe(200);
+      const assistantMsg = msgsRes.body.data.find(
+        (m: { role: string }) => m.role === 'assistant'
+      );
+      expect(assistantMsg).toBeDefined();
+    });
+
+    test('expands stored tool-call chain into LLM input on next turn', async () => {
+      // First turn: agent responds with tool calls
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_reg_2a',
+        traceId: 'trc_reg_2a',
+        status: 'completed',
+        output: {
+          model: 'gpt-4o',
+          content: 'Account created.',
+          finishReason: 'stop',
+          responseMessages: [toolCallMsg, toolResultMsg, finalTextMsg],
+        },
+      });
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${convId}/generate`)
+        .send({ agent_id: agentId });
+
+      // Add a follow-up user message
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${convId}/messages`)
+        .send({ role: 'user', message: 'What did you just do?' });
+
+      // Second turn: capture messages sent to the LLM
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_reg_2b',
+        traceId: 'trc_reg_2b',
+        status: 'completed',
+        output: {
+          model: 'gpt-4o',
+          content: 'I created an account.',
+          finishReason: 'stop',
+        },
+      });
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${convId}/generate`)
+        .send({ agent_id: agentId });
+
+      const secondCallMessages: Array<{ role: string; content: unknown }> =
+        mockCreateGeneration.mock.calls[mockCreateGeneration.mock.calls.length - 1][0].messages;
+
+      // The full tool chain must be present in the LLM input
+      const hasToolCall = secondCallMessages.some(
+        (m) => m.role === 'assistant' && Array.isArray(m.content)
+      );
+      const hasToolResult = secondCallMessages.some((m) => m.role === 'tool');
+
+      expect(hasToolCall).toBe(true);
+      expect(hasToolResult).toBe(true);
     });
   });
 });
