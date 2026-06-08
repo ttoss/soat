@@ -28,7 +28,7 @@ You will be prompted for:
 | Prompt   | Description                                            |
 | -------- | ------------------------------------------------------ |
 | Base URL | URL of your SOAT server (e.g. `http://localhost:5047`) |
-| Token    | JWT session token or `sk_`-prefixed project key        |
+| Token    | JWT session token or `sk_`-prefixed API key            |
 
 To save under a named profile, pass `--profile`:
 
