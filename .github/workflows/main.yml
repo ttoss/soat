@@ -75,6 +75,24 @@ jobs:
         env:
           COMPOSE_BAKE: '1'
 
+  push-release-tag:
+    name: Push Release Tag
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, 'chore(release):')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Read version from lerna.json
+        id: version
+        run: echo "version=$(node -e "console.log(require('./lerna.json').version)")" >> "$GITHUB_OUTPUT"
+
+      - name: Push tag
+        run: |
+          git tag "v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
+
   tutorials-test:
     name: Tutorials Tests
     runs-on: ubuntu-latest
