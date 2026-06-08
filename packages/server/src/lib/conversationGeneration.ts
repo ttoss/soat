@@ -48,7 +48,9 @@ const buildMessageEntry = (args: {
   const metadataStr =
     meta && Object.keys(meta).length > 0 && !meta.responseMessages
       ? ` [${Object.entries(meta)
-          .filter(([k]) => k !== 'responseMessages')
+          .filter(([k]) => {
+            return k !== 'responseMessages';
+          })
           .map(([k, v]) => {
             return `${k}: ${v}`;
           })
@@ -64,7 +66,8 @@ const buildConversationHistory = (args: {
   messages: Array<ConversationMessage>;
 }): Array<{ role: string; content: unknown }> => {
   return args.messages.flatMap((msg) => {
-    const meta = (msg as { metadata?: Record<string, unknown> | null }).metadata;
+    const meta = (msg as { metadata?: Record<string, unknown> | null })
+      .metadata;
     const responseMessages = meta?.responseMessages;
     // Expand stored AI SDK response messages (tool calls, tool results, final text)
     // so the LLM sees the full tool-use chain on subsequent turns.
