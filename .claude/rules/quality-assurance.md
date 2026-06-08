@@ -2,6 +2,16 @@
 
 Every implementation is complete only when **all** of the following checks pass without errors or warnings.
 
+## Test-Driven Development (Red/Green)
+
+All fixes and new features **must** follow red/green TDD:
+
+1. **Red** — Write a failing test that reproduces the bug or specifies the new behavior. Run it and confirm it fails for the right reason before writing any production code.
+2. **Green** — Write the minimum production code to make the test pass. Run the test again and confirm it is now green.
+3. **Refactor** — Clean up without breaking the green test.
+
+Never write production code before a failing test exists. A fix without a red test first is incomplete.
+
 ## Definition of Done
 
 Run these commands from the relevant package root (`packages/server`, etc.):
