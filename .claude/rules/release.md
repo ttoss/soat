@@ -48,21 +48,23 @@ fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
 
 ### Step 2 — Run lerna version
 
+Always pass `--no-push` — branch protection blocks direct pushes to `main`, and the PR flow handles the push. Never run lerna without `--no-push` or it will attempt (and fail) to push to `main` directly.
+
 If no bump type is specified, lerna reads the commit history with `--conventional-commits` and determines the correct bump automatically (patch / minor / major):
 
 ```bash
-pnpm lerna version --yes
+pnpm lerna version --yes --no-push
 ```
 
 To force a specific bump:
 
 ```bash
-pnpm lerna version patch --yes   # 0.6.9 → 0.6.10
-pnpm lerna version minor --yes   # 0.6.9 → 0.7.0
-pnpm lerna version major --yes   # 0.6.9 → 1.0.0
+pnpm lerna version patch --yes --no-push   # 0.6.9 → 0.6.10
+pnpm lerna version minor --yes --no-push   # 0.6.9 → 0.7.0
+pnpm lerna version major --yes --no-push   # 0.6.9 → 1.0.0
 ```
 
-Lerna will create a `chore(release): publish packages` commit and tag locally, then fail pushing (403 — branch protection). That is expected.
+Lerna will create a `chore(release): publish packages` commit and tag locally.
 
 ### Step 3 — Restore engines
 
