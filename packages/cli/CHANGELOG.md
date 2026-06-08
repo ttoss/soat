@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.6.10](https://github.com/ttoss/soat/compare/v0.6.6...v0.6.10) (2026-06-08)
+
+**Note:** Version bump only for package @soat/cli
+
 ## [0.6.9](https://github.com/ttoss/soat/compare/v0.6.6...v0.6.9) (2026-06-08)
 
 **Note:** Version bump only for package @soat/cli
