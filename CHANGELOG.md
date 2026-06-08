@@ -3,6 +3,31 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# 0.7.0 (2026-06-08)
+
+### Bug Fixes
+
+* accept string values for tool_choice in agents and formations ([#151](https://github.com/ttoss/soat/issues/151)) ([322bf45](https://github.com/ttoss/soat/commit/322bf4538d42aca7dfba1de3f60b1be4d0f22cd9))
+* add shell-safe @VAR_NAME and bare-key syntax to --parameter for --env-file integration ([#114](https://github.com/ttoss/soat/issues/114)) ([906dd0c](https://github.com/ttoss/soat/commit/906dd0cf79a1d5b6cd312e7489ac6a549c3e011b))
+* add single_session_per_actor and max_context_messages to formation agent validator ([#141](https://github.com/ttoss/soat/issues/141)) ([a644d95](https://github.com/ttoss/soat/commit/a644d95e31dda50ea0f4660bdebd0de8af05848e)), closes [#140](https://github.com/ttoss/soat/issues/140) [#135](https://github.com/ttoss/soat/issues/135) [#129](https://github.com/ttoss/soat/issues/129)
+* await saveTrace in sync generation so trace file_id is immediately available ([#130](https://github.com/ttoss/soat/issues/130)) ([862b981](https://github.com/ttoss/soat/commit/862b981bfb70ece71d2c59b597537580ec3a9850))
+* deploy website ([67eeaac](https://github.com/ttoss/soat/commit/67eeaacc09430188ddce1e07bed26720967bfef2))
+* HTTP tool DELETE requests now send body and preserve Content-Type header ([#131](https://github.com/ttoss/soat/issues/131)) ([a536f29](https://github.com/ttoss/soat/commit/a536f29e32a79443f9a87ed2f5f4dbc5fbab22a7)), closes [#128](https://github.com/ttoss/soat/issues/128)
+* increase Ollama context window to 16384 to prevent prompt truncation ([#174](https://github.com/ttoss/soat/issues/174)) ([6354f9e](https://github.com/ttoss/soat/commit/6354f9ee158d2068152e79a6bb481247999f1166))
+* issue 124 ([#125](https://github.com/ttoss/soat/issues/125)) ([b56320b](https://github.com/ttoss/soat/commit/b56320beddd901748a68fe21eb022821279e1eff))
+* preserve tool call/result messages in conversation history ([#175](https://github.com/ttoss/soat/issues/175)) ([459d419](https://github.com/ttoss/soat/commit/459d4194c12c6b4b941b1146182e16ef70b78e6a)), closes [#147](https://github.com/ttoss/soat/issues/147) [#147](https://github.com/ttoss/soat/issues/147)
+* use branch ref for workflow_dispatch trigger ([#165](https://github.com/ttoss/soat/issues/165)) ([a4b3877](https://github.com/ttoss/soat/commit/a4b3877967fe53ea906a46d1b032ceb530c0891f)), closes [#164](https://github.com/ttoss/soat/issues/164)
+
+### Features
+
+* agent tool output ([#121](https://github.com/ttoss/soat/issues/121)) ([8bd54eb](https://github.com/ttoss/soat/commit/8bd54eb3a4c5adce111f30f52203b80bd04ca45c))
+* **agents:** single_session_per_actor — enforce one open session per actor ([#137](https://github.com/ttoss/soat/issues/137)) ([a72549b](https://github.com/ttoss/soat/commit/a72549beb78eb7381156c8a355dd86f7bca94a31)), closes [#135](https://github.com/ttoss/soat/issues/135)
+* context window limiting and trace lifecycle fix (issue [#129](https://github.com/ttoss/soat/issues/129)) ([#134](https://github.com/ttoss/soat/issues/134)) ([2688612](https://github.com/ttoss/soat/commit/268861201365de568d62ee16c51c33bfc7b41206))
+* **sessions:** add expired status with lazy TTL update ([#138](https://github.com/ttoss/soat/issues/138)) ([2fc6a0c](https://github.com/ttoss/soat/commit/2fc6a0cdc6f5dea7b10c4737a2bf3d1eea723b22))
+* **sessions:** add idempotency_key to addSessionMessage ([#144](https://github.com/ttoss/soat/issues/144)) ([b242655](https://github.com/ttoss/soat/commit/b242655848ca9f3356ee6aa63bc13b9473bf787b))
+* **sessions:** add message_delay_seconds for debounced LLM processing ([#148](https://github.com/ttoss/soat/issues/148)) ([1406654](https://github.com/ttoss/soat/commit/1406654ac85a2971220358591cfb73e9a96c1e51))
+* **sessions:** session auto-expiry via inactivity TTL ([#133](https://github.com/ttoss/soat/issues/133)) ([1c25329](https://github.com/ttoss/soat/commit/1c253291a94a5e9d27b537842ac57c9bde5a467e)), closes [#129](https://github.com/ttoss/soat/issues/129) [#132](https://github.com/ttoss/soat/issues/132)
+
 ## [0.6.13](https://github.com/ttoss/soat/compare/v0.6.12...v0.6.13) (2026-06-08)
 
 ### Bug Fixes
