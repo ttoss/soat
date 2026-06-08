@@ -79,7 +79,7 @@ jobs:
     name: Push Release Tag
     runs-on: ubuntu-latest
 
-    if: github.event.head_commit.message == format('chore(release): publish packages')
+    if: github.event.head_commit.message == 'chore(release): publish packages'
     permissions:
       contents: write
     steps:
@@ -98,6 +98,7 @@ jobs:
   release:
     name: Release
     needs: push-release-tag
+    if: needs.push-release-tag.result == 'success'
     uses: ./.github/workflows/tag.yml
     secrets: inherit
 
