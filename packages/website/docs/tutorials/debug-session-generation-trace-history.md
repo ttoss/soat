@@ -21,7 +21,7 @@ By the end, you will be able to:
 3. Inspect each trace and trace tree.
 4. Reverse lookup from trace_id to generation_id and session_id using your debug ledger.
 
-This workflow uses [Sessions debugging links](/docs/modules/sessions#debugging-links-session-generation-trace), [Agent traces](/docs/modules/agents#traces), [Trace debugging joins](/docs/modules/traces#debugging-joins-trace-generation-session), and [Files examples](/docs/modules/files#examples).
+This workflow uses [Sessions debugging links](/docs/modules/sessions#debugging-session-generation-trace), [Agent traces](/docs/modules/traces), [Trace debugging joins](/docs/modules/traces#debugging-joins-trace-generation-session), and [Files examples](/docs/modules/files#examples).
 
 ## Prerequisites
 
@@ -197,7 +197,7 @@ SESSION_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/sessions" \
 
 ## Step 3 - Run two generations and capture generation_id + trace_id
 
-Use [Sessions debugging links](/docs/modules/sessions#debugging-links-session-generation-trace) and [Sessions async generation](/docs/modules/sessions#async-generation) endpoints to produce assistant replies and capture the correlation IDs.
+Use [Sessions debugging links](/docs/modules/sessions#debugging-session-generation-trace) and [Sessions async generation](/docs/modules/sessions#async-generation) endpoints to produce assistant replies and capture the correlation IDs.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -497,4 +497,4 @@ You now have a deterministic debugging workflow for:
 - trace -> raw steps and trace tree
 - trace -> session via your debug ledger
 
-For direct module references, see [Sessions debugging links](/docs/modules/sessions#debugging-links-session-generation-trace), [Agent traces](/docs/modules/agents#traces), [Trace debugging joins](/docs/modules/traces#debugging-joins-trace-generation-session), and [Files key concepts](/docs/modules/files#key-concepts).
+For direct module references, see [Sessions debugging links](/docs/modules/sessions#debugging-session-generation-trace), [Agent traces](/docs/modules/traces), [Trace debugging joins](/docs/modules/traces#debugging-joins-trace-generation-session), and [Files key concepts](/docs/modules/files#key-concepts).
