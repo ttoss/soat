@@ -1414,6 +1414,47 @@ describe('Sessions', () => {
       );
     });
 
+    test('persists response_messages in metadata after tool-output completion', async () => {
+      const responseMessages = [
+        { role: 'assistant', content: [{ type: 'tool-call', toolCallId: 'tc_meta_01', toolName: 'get_weather', args: { city: 'Paris' } }] },
+        { role: 'tool', content: [{ type: 'tool-result', toolCallId: 'tc_meta_01', result: '18C' }] },
+        { role: 'assistant', content: [{ type: 'text', text: 'Weather in Paris: 18C' }] },
+      ];
+
+      submitToolOutputsSpy.mockResolvedValueOnce({
+        id: 'gen_meta_done_01',
+        traceId: 'trc_meta_done_01',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: 'Weather in Paris: 18C',
+          finishReason: 'stop',
+          responseMessages,
+        },
+      });
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/tool-outputs`)
+        .send({
+          generationId: 'gen_meta_done_01',
+          toolOutputs: [{ toolCallId: 'tc_meta_01', output: '18C' }],
+        });
+
+      const messagesResponse = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/${sessionId}/messages`
+      );
+
+      expect(messagesResponse.status).toBe(200);
+      const assistantMsg = messagesResponse.body.data.find(
+        (m: { role: string; content: string }) =>
+          m.role === 'assistant' && m.content === 'Weather in Paris: 18C'
+      );
+      expect(assistantMsg).toBeDefined();
+      expect(assistantMsg.metadata).not.toBeNull();
+      expect(assistantMsg.metadata.response_messages).toBeDefined();
+      expect(assistantMsg.metadata.response_messages).toHaveLength(3);
+    });
+
     test('returns requires_action result when more tool outputs are needed', async () => {
       submitToolOutputsSpy.mockResolvedValueOnce({
         id: 'gen_submit_req_01',

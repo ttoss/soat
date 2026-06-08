@@ -75,11 +75,16 @@ export const processToolOutputResult = async (args: {
   agentPublicId: string;
 }) => {
   if (args.result.status === 'completed' && args.result.output?.content) {
+    const responseMessages = args.result.output.responseMessages;
     await addConversationMessage({
       conversationId: args.conversation.publicId,
       message: args.result.output.content,
       role: 'assistant',
       agentId: args.agentPublicId,
+      metadata:
+        responseMessages && responseMessages.length > 0
+          ? { responseMessages }
+          : undefined,
     });
   }
 
