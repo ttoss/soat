@@ -27,6 +27,72 @@ pnpm --filter @soat/server test --testPathPatterns=users.test.ts
 
 Tests are integration tests that run against `app.callback()` via supertest. A real PostgreSQL instance is spun up via testcontainers, configured in `setupTestsAfterEnv.ts`. No mocking of the database layer is needed.
 
+## Mocking Philosophy — Minimize Mocks
+
+**Keep mocks to the absolute minimum.** Excessive mocking makes tests brittle, hard to read, and easy to write incorrectly (the mock may not reflect real behavior).
+
+### Rules
+
+1. **Never mock the database.** Use the real PostgreSQL container. Set up state by calling the REST API in `beforeAll` / `beforeEach` — the same way a real client would.
+
+2. **Only mock external I/O that cannot run in CI**: AI model calls (`createGeneration`), external HTTP services, email providers. Use the shared spy `mockCreateGeneration` from `setupTestsAfterEnv.ts` for this.
+
+3. **Prefer `jest.spyOn` over `jest.mock`.** `jest.mock` with a factory creates a new object that is invisible to modules already loaded by `app.ts`. `jest.spyOn` mutates the live export, which all modules share.
+
+4. **Do not use `jest.doMock` + `jest.resetModules()` in REST tests.** That pattern is only appropriate for testing pure lib functions that are not transitively imported by `app.ts`. For everything else, use `jest.spyOn`.
+
+5. **Set up DB state through the API, not through mocks.** If a test needs a conversation with specific messages, call `POST /api/v1/conversations` and `POST /api/v1/conversations/:id/messages` in `beforeAll`. The assertion then calls the endpoint under test with real data.
+
+### Correct pattern (integration test with minimal mock)
+
+```ts
+import { mockCreateGeneration } from '../../setupTestsAfterEnv';
+import { authenticatedTestClient } from '../../testClient';
+
+describe('POST /api/v1/conversations/:id/generate', () => {
+  let convId: string;
+
+  beforeAll(async () => {
+    // Set up real DB state via the API
+    const res = await authenticatedTestClient(userToken)
+      .post('/api/v1/conversations')
+      .send({ project_id: projectId });
+    convId = res.body.id;
+
+    await authenticatedTestClient(userToken)
+      .post(`/api/v1/conversations/${convId}/messages`)
+      .send({ role: 'user', message: 'Hello' });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks(); // reset call counts; do NOT call restoreAllMocks
+  });
+
+  test('stores tool-call responseMessages in metadata', async () => {
+    mockCreateGeneration.mockResolvedValueOnce({
+      id: 'gen_1', traceId: 'trc_1', status: 'completed',
+      output: { model: 'gpt-4o', content: 'Done.', finishReason: 'stop',
+        responseMessages: [toolCallMsg, toolResultMsg, finalTextMsg] },
+    });
+
+    const res = await authenticatedTestClient(userToken)
+      .post(`/api/v1/conversations/${convId}/generate`)
+      .send({ agent_id: agentId });
+
+    expect(res.status).toBe(200);
+  });
+});
+```
+
+### Wrong pattern (too many mocks)
+
+```ts
+// ❌ — mocks the DB, eventBus, and agents — breaks easily and hides real behavior
+jest.doMock('src/db', () => ({ db: { Conversation: { findOne: jest.fn()... } } }));
+jest.doMock('src/lib/agents', () => ({ createGeneration: jest.fn()... }));
+jest.doMock('src/lib/eventBus', () => ({ emitEvent: jest.fn()... }));
+```
+
 ### Helpers (from `tests/unit/testClient.ts`)
 
 - `testClient` — unauthenticated supertest client
