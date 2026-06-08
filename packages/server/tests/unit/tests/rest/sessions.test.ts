@@ -1427,7 +1427,7 @@ describe('Sessions', () => {
         status: 'completed',
         output: {
           model: 'test-model',
-          content: 'Weather in Paris: 18C',
+          content: 'Unique metadata regression reply',
           finishReason: 'stop',
           responseMessages,
         },
@@ -1447,7 +1447,8 @@ describe('Sessions', () => {
       expect(messagesResponse.status).toBe(200);
       const assistantMsg = messagesResponse.body.data.find(
         (m: { role: string; content: string }) =>
-          m.role === 'assistant' && m.content === 'Weather in Paris: 18C'
+          m.role === 'assistant' &&
+          m.content === 'Unique metadata regression reply'
       );
       expect(assistantMsg).toBeDefined();
       expect(assistantMsg.metadata).not.toBeNull();
