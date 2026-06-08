@@ -956,9 +956,22 @@ describe('Conversations', () => {
     const finalTextMsg = { role: 'assistant', content: 'Account created.' };
 
     beforeAll(async () => {
+      const aiProvRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'ToolRegressionProvider',
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        });
+
       const agentRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/agents')
-        .send({ project_id: projectId, name: 'ToolRegressionAgent' });
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProvRes.body.id,
+          name: 'ToolRegressionAgent',
+        });
       agentId = agentRes.body.id;
 
       const convRes = await authenticatedTestClient(userToken)
