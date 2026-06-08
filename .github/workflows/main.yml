@@ -79,7 +79,7 @@ jobs:
     name: Push Release Tag
     runs-on: ubuntu-latest
 
-    if: github.event.head_commit.message == format('chore(release): publish packages')
+    if: "startsWith(github.event.head_commit.message, 'chore(release): publish packages')"
     permissions:
       contents: write
     steps:
@@ -94,12 +94,10 @@ jobs:
           git tag "v${{ steps.version.outputs.version }}"
           git push origin "v${{ steps.version.outputs.version }}"
 
-
-  release:
-    name: Release
-    needs: push-release-tag
-    uses: ./.github/workflows/tag.yml
-    secrets: inherit
+      - name: Trigger release workflow
+        run: gh workflow run tag.yml --ref main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   tutorials-test:
     name: Tutorials Tests
