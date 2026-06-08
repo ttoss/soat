@@ -69,7 +69,7 @@ const callGenerateText = async (args: {
   agentId: string;
   model: LanguageModel;
   system: string | undefined;
-  nonSystemMessages: Array<{ role: string; content: string }>;
+  nonSystemMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
   typedAgent: TypedAgent;
   prepareStep: ReturnType<typeof buildPrepareStep>;
@@ -118,7 +118,7 @@ const resolveGenerationResult = async (args: {
   traceId: string;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
-  allMessages: Array<{ role: string; content: string }>;
+  allMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
   model: LanguageModel;
   typedAgent: TypedAgent;
@@ -174,7 +174,7 @@ const resolveGenerationResult = async (args: {
 
 export const runNonStreamGeneration = async (args: {
   model: LanguageModel;
-  allMessages: Array<{ role: string; content: string }>;
+  allMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
   typedAgent: TypedAgent;
   generationId: string;
@@ -188,7 +188,7 @@ export const runNonStreamGeneration = async (args: {
 }): Promise<GenerationResult> => {
   const system = args.allMessages.find((message) => {
     return message.role === 'system';
-  })?.content;
+  })?.content as string | undefined;
 
   const nonSystemMessages = args.allMessages.filter((message) => {
     return message.role !== 'system';

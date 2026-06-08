@@ -44,7 +44,7 @@ type GenerationContext = {
   typedAgent: TypedAgent;
   model: LanguageModel;
   resolvedTools: Record<string, Tool>;
-  allMessages: Array<{ role: string; content: string }>;
+  allMessages: Array<{ role: string; content: unknown }>;
   generationId: string;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
@@ -429,6 +429,7 @@ export const submitToolOutputs = async (args: {
       model: result.response?.modelId ?? '',
       content: result.text,
       finishReason: result.finishReason,
+      responseMessages: result.response?.messages as Array<unknown> | undefined,
     },
   };
 

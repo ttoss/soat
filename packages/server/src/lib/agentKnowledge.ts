@@ -44,7 +44,7 @@ const formatResult = (
 export const buildKnowledgeMessages = async (args: {
   knowledgeConfig: unknown;
   projectIds?: number[];
-  messages: Array<{ role: string; content: string }>;
+  messages: Array<{ role: string; content: unknown }>;
 }): Promise<Array<{ role: string; content: string }>> => {
   const config = args.knowledgeConfig as KnowledgeConfig | null | undefined;
   if (!config) return [];
@@ -52,7 +52,10 @@ export const buildKnowledgeMessages = async (args: {
   const lastUserMessage = [...args.messages].reverse().find((m) => {
     return m.role === 'user';
   });
-  const query = lastUserMessage?.content ?? config.query;
+  const query =
+    (typeof lastUserMessage?.content === 'string'
+      ? lastUserMessage.content
+      : undefined) ?? config.query;
 
   log(
     'buildKnowledgeMessages: query=%s memoryIds=%o documentPaths=%o',
