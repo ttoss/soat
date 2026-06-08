@@ -78,6 +78,7 @@ jobs:
   push-release-tag:
     name: Push Release Tag
     runs-on: ubuntu-latest
+
     if: github.event.head_commit.message == format('chore(release): publish packages')
     permissions:
       contents: write
@@ -92,6 +93,7 @@ jobs:
         run: |
           git tag "v${{ steps.version.outputs.version }}"
           git push origin "v${{ steps.version.outputs.version }}"
+
 
   release:
     name: Release
