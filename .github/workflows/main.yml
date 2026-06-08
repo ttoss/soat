@@ -94,13 +94,10 @@ jobs:
           git tag "v${{ steps.version.outputs.version }}"
           git push origin "v${{ steps.version.outputs.version }}"
 
-
-  release:
-    name: Release
-    needs: push-release-tag
-    if: needs.push-release-tag.result == 'success'
-    uses: ./.github/workflows/tag.yml
-    secrets: inherit
+      - name: Trigger release workflow
+        run: gh workflow run tag.yml --ref "v${{ steps.version.outputs.version }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   tutorials-test:
     name: Tutorials Tests
