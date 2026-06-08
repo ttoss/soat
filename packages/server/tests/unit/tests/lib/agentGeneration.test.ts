@@ -254,6 +254,30 @@ describe('resolveGenerationInputMessages', () => {
     expect(result).toEqual([{ role: 'user', content: 'hello' }]);
   });
 
+  test('passes array content through unchanged (raw AI SDK tool messages)', async () => {
+    const { resolveGenerationInputMessages } =
+      await loadGenerationInputMessagesModule();
+
+    const toolCallContent = [
+      { type: 'tool-call', toolCallId: 'tc_1', toolName: 'create-account', args: {} },
+    ];
+    const toolResultContent = [
+      { type: 'tool-result', toolCallId: 'tc_1', toolName: 'create-account', result: 'ok' },
+    ];
+
+    const result = await resolveGenerationInputMessages({
+      messages: [
+        { role: 'assistant', content: toolCallContent },
+        { role: 'tool', content: toolResultContent },
+      ],
+    });
+
+    expect(result).toEqual([
+      { role: 'assistant', content: toolCallContent },
+      { role: 'tool', content: toolResultContent },
+    ]);
+  });
+
   test('executes tool_output content and resolves output_path', async () => {
     const toolsModule = jest.requireActual('src/lib/tools') as {
       getTool: (...args: unknown[]) => Promise<unknown>;
