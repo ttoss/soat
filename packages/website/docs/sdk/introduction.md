@@ -31,7 +31,7 @@ const soat = new SoatClient({
 | Option    | Type                     | Required | Description                                                                          |
 | --------- | ------------------------ | -------- | ------------------------------------------------------------------------------------ |
 | `baseUrl` | `string`                 | No       | Server base URL (e.g. `https://api.example.com`). Defaults to the current origin.   |
-| `token`   | `string`                 | No       | Bearer token — JWT session token or `sk_`-prefixed project key.                      |
+| `token`   | `string`                 | No       | Bearer token — JWT session token or `sk_`-prefixed API key.                          |
 | `headers` | `Record<string, string>` | No       | Additional headers merged into every request.                                        |
 
 ## Calling Methods
@@ -85,13 +85,13 @@ When `error` is set, `data` is `undefined`. Use early returns or throws to guard
 SOAT accepts two token types as the `token` option:
 
 - **JWT session token** — obtained from `POST /api/v1/users/login`
-- **Project-scoped API key** — prefixed `sk_`, obtained from `POST /api/v1/project-keys`
+- **API key** — prefixed `sk_`, obtained from `POST /api/v1/api-keys`
 
 ```ts
 // JWT token
 const soat = new SoatClient({ baseUrl, token: sessionToken });
 
-// Project key
+// API key
 const soat = new SoatClient({ baseUrl, token: 'sk_...' });
 ```
 

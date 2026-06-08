@@ -471,12 +471,12 @@ soat configure --profile alice
 soat login-user --username bob --password Bob1234!
 soat configure --profile bob
 
-# Create Alice's project key (using her profile)
+# Create Alice's API key (using her profile)
 ALICE_API_KEY=$(soat --profile alice create-api-key \
   --name "alice-analytics-key" \
   --project-id "$PROJECT_ID" | jq -r '.key')
 
-# Create Bob's project key, explicitly restricting it to the read-only policy
+# Create Bob's API key, explicitly restricting it to the read-only policy
 BOB_API_KEY=$(soat --profile bob create-api-key \
   --name "bob-analytics-key" \
   --project-id "$PROJECT_ID" \
@@ -551,14 +551,14 @@ BOB_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
   -H "Content-Type: application/json" \
   -d '{"username":"bob","password":"Bob1234!"}' | jq -r '.token')
 
-# Alice's project key — inherits full-access
+# Alice's API key — inherits full-access
 ALICE_API_KEY=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/api-keys" \
   -H "Authorization: Bearer $ALICE_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"name\":\"alice-analytics-key\",\"project_id\":\"$PROJECT_ID\"}" \
   | jq -r '.key')
 
-# Bob's project key — further restricted to read-only
+# Bob's API key — further restricted to read-only
 BOB_API_KEY=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/api-keys" \
   -H "Authorization: Bearer $BOB_TOKEN" \
   -H "Content-Type: application/json" \
