@@ -3,6 +3,28 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 0.7.1 (2026-06-09)
+
+### Bug Fixes
+
+* accept string values for tool_choice in agents and formations ([#151](https://127.0.0.1/46205/git/ttoss/issues/151)) ([322bf45](https://127.0.0.1/46205/git/ttoss/commits/322bf4538d42aca7dfba1de3f60b1be4d0f22cd9))
+* add single_session_per_actor and max_context_messages to formation agent validator ([#141](https://127.0.0.1/46205/git/ttoss/issues/141)) ([a644d95](https://127.0.0.1/46205/git/ttoss/commits/a644d95e31dda50ea0f4660bdebd0de8af05848e)), closes [#140](https://127.0.0.1/46205/git/ttoss/issues/140) [#135](https://127.0.0.1/46205/git/ttoss/issues/135) [#129](https://127.0.0.1/46205/git/ttoss/issues/129)
+* await saveTrace in sync generation so trace file_id is immediately available ([#130](https://127.0.0.1/46205/git/ttoss/issues/130)) ([862b981](https://127.0.0.1/46205/git/ttoss/commits/862b981bfb70ece71d2c59b597537580ec3a9850))
+* HTTP tool DELETE requests now send body and preserve Content-Type header ([#131](https://127.0.0.1/46205/git/ttoss/issues/131)) ([a536f29](https://127.0.0.1/46205/git/ttoss/commits/a536f29e32a79443f9a87ed2f5f4dbc5fbab22a7)), closes [#128](https://127.0.0.1/46205/git/ttoss/issues/128)
+* issue 124 ([#125](https://127.0.0.1/46205/git/ttoss/issues/125)) ([b56320b](https://127.0.0.1/46205/git/ttoss/commits/b56320beddd901748a68fe21eb022821279e1eff))
+* persist responseMessages metadata after tool-output submission ([#177](https://127.0.0.1/46205/git/ttoss/issues/177)) ([a2f963a](https://127.0.0.1/46205/git/ttoss/commits/a2f963a0f58e4419508c0e4e40888c192fcfd71b))
+* preserve tool call/result messages in conversation history ([#175](https://127.0.0.1/46205/git/ttoss/issues/175)) ([459d419](https://127.0.0.1/46205/git/ttoss/commits/459d4194c12c6b4b941b1146182e16ef70b78e6a)), closes [#147](https://127.0.0.1/46205/git/ttoss/issues/147) [#147](https://127.0.0.1/46205/git/ttoss/issues/147)
+
+### Features
+
+* agent tool output ([#121](https://127.0.0.1/46205/git/ttoss/issues/121)) ([8bd54eb](https://127.0.0.1/46205/git/ttoss/commits/8bd54eb3a4c5adce111f30f52203b80bd04ca45c))
+* **agents:** single_session_per_actor — enforce one open session per actor ([#137](https://127.0.0.1/46205/git/ttoss/issues/137)) ([a72549b](https://127.0.0.1/46205/git/ttoss/commits/a72549beb78eb7381156c8a355dd86f7bca94a31)), closes [#135](https://127.0.0.1/46205/git/ttoss/issues/135)
+* context window limiting and trace lifecycle fix (issue [#129](https://127.0.0.1/46205/git/ttoss/issues/129)) ([#134](https://127.0.0.1/46205/git/ttoss/issues/134)) ([2688612](https://127.0.0.1/46205/git/ttoss/commits/268861201365de568d62ee16c51c33bfc7b41206))
+* **sessions:** add expired status with lazy TTL update ([#138](https://127.0.0.1/46205/git/ttoss/issues/138)) ([2fc6a0c](https://127.0.0.1/46205/git/ttoss/commits/2fc6a0cdc6f5dea7b10c4737a2bf3d1eea723b22))
+* **sessions:** add idempotency_key to addSessionMessage ([#144](https://127.0.0.1/46205/git/ttoss/issues/144)) ([b242655](https://127.0.0.1/46205/git/ttoss/commits/b242655848ca9f3356ee6aa63bc13b9473bf787b))
+* **sessions:** add message_delay_seconds for debounced LLM processing ([#148](https://127.0.0.1/46205/git/ttoss/issues/148)) ([1406654](https://127.0.0.1/46205/git/ttoss/commits/1406654ac85a2971220358591cfb73e9a96c1e51))
+* **sessions:** session auto-expiry via inactivity TTL ([#133](https://127.0.0.1/46205/git/ttoss/issues/133)) ([1c25329](https://127.0.0.1/46205/git/ttoss/commits/1c253291a94a5e9d27b537842ac57c9bde5a467e)), closes [#129](https://127.0.0.1/46205/git/ttoss/issues/129) [#132](https://127.0.0.1/46205/git/ttoss/issues/132)
+
 # 0.7.0 (2026-06-08)
 
 ### Bug Fixes
