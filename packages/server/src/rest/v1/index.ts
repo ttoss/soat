@@ -10,6 +10,7 @@ import { conversationsRouter } from './conversations';
 import { documentsRouter } from './documents';
 import { filesRouter } from './files';
 import { formationsRouter } from './formations';
+import { generationsRouter } from './generations';
 import { knowledgeRouter } from './knowledge';
 import { memoriesRouter } from './memories';
 import { orchestrationsRouter } from './orchestrations';
@@ -24,6 +25,7 @@ import { webhooksRouter } from './webhooks';
 const v1Router = new Router();
 
 v1Router.use(formationsRouter.routes());
+v1Router.use(generationsRouter.routes());
 v1Router.use(agentsRouter.routes());
 v1Router.use(chatsRouter.routes());
 v1Router.use(actorsRouter.routes());

@@ -254,6 +254,22 @@ components:
           description: >
             Public ID of the root trace for the entire execution tree.
             Null if this trace is itself the root.
+        error:
+          type: object
+          nullable: true
+          description: >
+            Structured error payload recorded when a generation in this trace
+            failed (e.g. an upstream AI provider error). Null if no failure
+            has been recorded.
+          properties:
+            code:
+              type: string
+              example: AI_PROVIDER_ERROR
+            message:
+              type: string
+              example: 'Provider returned 402: insufficient credits'
+            meta:
+              type: object
         created_at:
           type: string
           format: date-time
@@ -280,6 +296,10 @@ components:
         root_trace_id:
           type: string
           nullable: true
+        error:
+          type: object
+          nullable: true
+          description: Structured error payload recorded when a generation in this trace failed
         created_at:
           type: string
           format: date-time
@@ -307,4 +327,16 @@ components:
       type: object
       properties:
         error:
-          type: string
+          oneOf:
+            - type: string
+              description: Generic error message (e.g. "Internal Server Error")
+            - type: object
+              description: Structured domain error
+              properties:
+                code:
+                  type: string
+                  example: RESOURCE_NOT_FOUND
+                message:
+                  type: string
+                meta:
+                  type: object

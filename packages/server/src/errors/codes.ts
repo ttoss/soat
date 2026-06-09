@@ -23,6 +23,11 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'A referenced AI provider does not exist.',
   },
+  AI_PROVIDER_ERROR: {
+    httpStatus: 502,
+    description:
+      'The upstream AI provider returned an error (e.g. insufficient credits, rate limit, or the provider is unreachable).',
+  },
   GENERATION_NOT_FOUND: {
     httpStatus: 404,
     description:

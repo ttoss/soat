@@ -341,6 +341,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: >
+            Upstream AI provider error (AI_PROVIDER_ERROR). The error `meta`
+            includes the `generation_id` and `trace_id` of the failed
+            generation for post-mortem debugging via GET /api/v1/generations/{generation_id}.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/agents/{agent_id}/sessions/{session_id}/tool-outputs:
     post:

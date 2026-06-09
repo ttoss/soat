@@ -317,6 +317,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: >
+            Upstream AI provider error (AI_PROVIDER_ERROR). The error `meta`
+            includes the `generation_id` and `trace_id` of the failed
+            generation for post-mortem debugging via GET /api/v1/generations/{generation_id}.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/agents/{agent_id}/generate/{generation_id}/tool-outputs:
     post:
@@ -877,5 +886,18 @@ components:
         - error
       properties:
         error:
-          type: string
-          example: Unauthorized
+          oneOf:
+            - type: string
+              description: Generic error message (e.g. "Unauthorized" or "Internal Server Error")
+              example: Unauthorized
+            - type: object
+              description: Structured domain error
+              properties:
+                code:
+                  type: string
+                  example: AI_PROVIDER_ERROR
+                message:
+                  type: string
+                  example: 'Provider returned 402: insufficient credits'
+                meta:
+                  type: object

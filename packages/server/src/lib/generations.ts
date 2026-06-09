@@ -3,7 +3,7 @@ import { DomainError } from '../errors';
 
 export type PersistedGeneration = {
   id: string;
-  projectId: number;
+  projectId: string;
   agentId: string;
   traceId: string;
   initiatorGenerationId: string | null;
@@ -14,6 +14,7 @@ export type PersistedGeneration = {
   completedAt: Date | null;
   lastActivityAt: Date | null;
   stopReason: string | null;
+  error: Record<string, unknown> | null;
   metadata: Record<string, unknown> | null;
   createdAt: Date;
   updatedAt: Date;
@@ -21,18 +22,19 @@ export type PersistedGeneration = {
 
 const mapGeneration = (
   gen: InstanceType<(typeof db)['Generation']> & {
+    project?: InstanceType<(typeof db)['Project']>;
     agent?: InstanceType<(typeof db)['Agent']>;
     trace?: InstanceType<(typeof db)['Trace']>;
     initiatorGeneration?: InstanceType<(typeof db)['Generation']> | null;
   }
 ): PersistedGeneration => {
-  if (!gen.agent || !gen.trace) {
+  if (!gen.project || !gen.agent || !gen.trace) {
     throw new Error('Generation associations are required for serialization.');
   }
 
   return {
     id: gen.publicId,
-    projectId: gen.projectId,
+    projectId: gen.project.publicId,
     agentId: gen.agent.publicId,
     traceId: gen.trace.publicId,
     initiatorGenerationId: gen.initiatorGeneration?.publicId ?? null,
@@ -43,6 +45,7 @@ const mapGeneration = (
     completedAt: gen.completedAt,
     lastActivityAt: gen.lastActivityAt,
     stopReason: gen.stopReason,
+    error: gen.error,
     metadata: gen.metadata,
     createdAt: gen.createdAt,
     updatedAt: gen.updatedAt,
@@ -143,11 +146,13 @@ export const createGenerationRecord = async (args: {
     completedAt: null,
     lastActivityAt: null,
     stopReason: null,
+    error: null,
     metadata: null,
   });
 
   const fullGeneration = await db.Generation.findByPk(gen.id, {
     include: [
+      { model: db.Project, as: 'project' },
       { model: db.Agent, as: 'agent' },
       { model: db.Trace, as: 'trace' },
       { model: db.Generation, as: 'initiatorGeneration' },
@@ -170,6 +175,7 @@ export const updateGenerationRecord = async (args: {
   completedAt?: Date | null;
   lastActivityAt?: Date | null;
   stopReason?: string | null;
+  error?: Record<string, unknown> | null;
   metadata?: Record<string, unknown> | null;
 }) => {
   const gen = await db.Generation.findOne({
@@ -183,12 +189,14 @@ export const updateGenerationRecord = async (args: {
   if (args.lastActivityAt !== undefined)
     updates.lastActivityAt = args.lastActivityAt;
   if (args.stopReason !== undefined) updates.stopReason = args.stopReason;
+  if (args.error !== undefined) updates.error = args.error;
   if (args.metadata !== undefined) updates.metadata = args.metadata;
 
   await gen.update(updates);
 
   const fullGeneration = await db.Generation.findByPk(gen.id, {
     include: [
+      { model: db.Project, as: 'project' },
       { model: db.Agent, as: 'agent' },
       { model: db.Trace, as: 'trace' },
       { model: db.Generation, as: 'initiatorGeneration' },
@@ -233,6 +241,7 @@ export const listGenerations = async (args: {
   const { count, rows } = await db.Generation.findAndCountAll({
     where: Object.keys(where).length > 0 ? where : undefined,
     include: [
+      { model: db.Project, as: 'project' },
       { model: db.Agent, as: 'agent' },
       { model: db.Trace, as: 'trace' },
       { model: db.Generation, as: 'initiatorGeneration' },
@@ -255,6 +264,7 @@ export const getGeneration = async (args: {
   const gen = await db.Generation.findOne({
     where,
     include: [
+      { model: db.Project, as: 'project' },
       { model: db.Agent, as: 'agent' },
       { model: db.Trace, as: 'trace' },
       { model: db.Generation, as: 'initiatorGeneration' },

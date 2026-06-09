@@ -109,6 +109,11 @@ export class Trace extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
   declare stepCount: number;
 
+  // Structured error payload recorded when a generation in this trace fails
+  // (e.g. upstream AI provider errors).
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare error: Record<string, unknown> | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

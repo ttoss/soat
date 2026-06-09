@@ -1,0 +1,172 @@
+openapi: 3.0.3
+info:
+  title: Generations API
+  version: 1.0.0
+  description: >
+    Generation records track individual LLM generation runs started by agents.
+    Each record carries the lifecycle status ('in_progress', 'requires_action',
+    'completed', or 'failed'), the stop reason, and — when the generation
+    failed — a structured error payload for post-mortem debugging. Generation
+    IDs for a trace can be listed via GET /api/v1/traces/{trace_id}/generations.
+  contact:
+    name: SOAT API Support
+
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+
+tags:
+  - name: Generations
+    description: Inspect generation records
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/generations/{generation_id}:
+    get:
+      tags:
+        - Generations
+      summary: Get a generation
+      description: >
+        Returns a single generation record by ID, including its status and the
+        structured `error` payload when the generation failed (e.g. because the
+        upstream AI provider returned an error).
+      operationId: getGeneration
+      parameters:
+        - name: generation_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Public ID of the generation
+      responses:
+        '200':
+          description: Generation details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Generation'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Generation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Generation:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public ID of the generation
+          example: gen_V1StGXR8Z5jdHi6B
+        project_id:
+          type: string
+          description: Public ID of the project
+        agent_id:
+          type: string
+          description: Public ID of the agent that ran this generation
+        trace_id:
+          type: string
+          description: Public ID of the trace this generation belongs to
+        initiator_generation_id:
+          type: string
+          nullable: true
+          description: >
+            Public ID of the generation that triggered this one via a
+            sub-agent call. Null for top-level generations.
+        started_by_principal_type:
+          type: string
+          nullable: true
+          description: Type of the principal that started the generation
+        started_by_principal_id:
+          type: string
+          nullable: true
+          description: ID of the principal that started the generation
+        status:
+          type: string
+          description: Lifecycle status of the generation
+          enum: [in_progress, requires_action, completed, failed]
+          example: failed
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the generation reached a terminal state
+        last_activity_at:
+          type: string
+          format: date-time
+          nullable: true
+        stop_reason:
+          type: string
+          nullable: true
+          description: Why the generation stopped (e.g. 'stop', 'error')
+          example: error
+        error:
+          type: object
+          nullable: true
+          description: >
+            Structured error payload recorded when the generation failed.
+            Contains at least `message`; `code` is set for mapped errors
+            (e.g. AI_PROVIDER_ERROR for upstream provider failures).
+          properties:
+            code:
+              type: string
+              example: AI_PROVIDER_ERROR
+            message:
+              type: string
+              example: 'Provider returned 402: insufficient credits'
+            meta:
+              type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          oneOf:
+            - type: string
+              description: Generic error message (e.g. "Internal Server Error")
+            - type: object
+              description: Structured domain error
+              properties:
+                code:
+                  type: string
+                  example: RESOURCE_NOT_FOUND
+                message:
+                  type: string
+                meta:
+                  type: object
