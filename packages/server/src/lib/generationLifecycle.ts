@@ -32,18 +32,19 @@ export const recordGenerationFailure = async (args: {
     errorPayload
   );
 
-  await Promise.all([
+  // Persistence failures must not mask the original generation error.
+  await Promise.allSettled([
     updateGenerationRecord({
       publicId: args.generationId,
       status: 'failed',
       completedAt: new Date(),
       stopReason: 'error',
       error: errorPayload,
-    }).catch(() => {}),
+    }),
     recordTraceError({
       traceId: args.traceId,
       error: errorPayload,
-    }).catch(() => {}),
+    }),
   ]);
 
   if (args.error instanceof DomainError) {
@@ -59,40 +60,65 @@ export const recordGenerationFailure = async (args: {
   return args.error;
 };
 
-export const fireCompletionSideEffects = (args: {
+type CompletionSideEffectsArgs = {
   generationId: string;
   pending: NonNullable<ReturnType<typeof pendingGenerations.get>>;
   result: { steps: unknown[]; finishReason: string };
   completedResult: GenerationResult;
-}): void => {
+};
+
+const runCompletionSideEffects = async (
+  args: CompletionSideEffectsArgs
+): Promise<void> => {
   const prevSteps = args.pending.steps ?? [];
   const allSteps = [...prevSteps, ...serializeSteps(args.result.steps)];
-  saveTrace({
-    traceId: args.pending.traceId,
-    projectId: args.pending.projectId,
-    projectPublicId: args.pending.projectPublicId,
-    agentId: args.pending.agentId,
-    steps: allSteps,
-    parentTraceId: args.pending.parentTraceId ?? undefined,
-    rootTraceId: args.pending.rootTraceId ?? undefined,
-  }).catch(() => {});
-  updateGenerationRecord({
-    publicId: args.generationId,
-    status: 'completed',
-    completedAt: new Date(),
-    stopReason: args.result.finishReason,
-  }).catch(() => {});
-  resolveProjectPublicId({ projectId: args.pending.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'agents.generation.completed',
-        projectId: args.pending.projectId,
-        projectPublicId,
-        resourceType: 'generation',
-        resourceId: args.generationId,
-        data: args.completedResult as unknown as Record<string, unknown>,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+
+  await Promise.allSettled([
+    saveTrace({
+      traceId: args.pending.traceId,
+      projectId: args.pending.projectId,
+      projectPublicId: args.pending.projectPublicId,
+      agentId: args.pending.agentId,
+      steps: allSteps,
+      parentTraceId: args.pending.parentTraceId ?? undefined,
+      rootTraceId: args.pending.rootTraceId ?? undefined,
+    }),
+    updateGenerationRecord({
+      publicId: args.generationId,
+      status: 'completed',
+      completedAt: new Date(),
+      stopReason: args.result.finishReason,
+    }),
+  ]);
+
+  try {
+    const projectPublicId = await resolveProjectPublicId({
+      projectId: args.pending.projectId,
+    });
+    emitEvent({
+      type: 'agents.generation.completed',
+      projectId: args.pending.projectId,
+      projectPublicId,
+      resourceType: 'generation',
+      resourceId: args.generationId,
+      data: args.completedResult as unknown as Record<string, unknown>,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    log(
+      'runCompletionSideEffects: failed to emit completion event generationId=%s error=%s',
+      args.generationId,
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+};
+
+/**
+ * Fire-and-forget completion side effects: persists the trace, marks the
+ * generation completed, and emits the completion event. Never throws.
+ */
+export const fireCompletionSideEffects = (
+  args: CompletionSideEffectsArgs
+): void => {
+  void runCompletionSideEffects(args);
 };

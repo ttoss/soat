@@ -174,7 +174,13 @@ describe('submitToolOutputs', () => {
     });
     expect(pendingGenerations.has('gen_pending_1')).toBe(false);
 
-    await Promise.resolve();
+    // Completion side effects run fire-and-forget after trace/generation
+    // persistence settles — wait until the event pipeline has been invoked.
+    for (let i = 0; i < 50 && resolveProjectSpy.mock.calls.length === 0; i++) {
+      await new Promise((resolve) => {
+        return setImmediate(resolve);
+      });
+    }
     expect(resolveProjectSpy).toHaveBeenCalledWith({ projectId: 1 });
     expect(emitEventSpy).toHaveBeenCalled();
   });
@@ -259,10 +265,20 @@ describe('resolveGenerationInputMessages', () => {
       await loadGenerationInputMessagesModule();
 
     const toolCallContent = [
-      { type: 'tool-call', toolCallId: 'tc_1', toolName: 'create-account', args: {} },
+      {
+        type: 'tool-call',
+        toolCallId: 'tc_1',
+        toolName: 'create-account',
+        args: {},
+      },
     ];
     const toolResultContent = [
-      { type: 'tool-result', toolCallId: 'tc_1', toolName: 'create-account', result: 'ok' },
+      {
+        type: 'tool-result',
+        toolCallId: 'tc_1',
+        toolName: 'create-account',
+        result: 'ok',
+      },
     ];
 
     const result = await resolveGenerationInputMessages({
