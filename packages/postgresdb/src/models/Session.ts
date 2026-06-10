@@ -15,13 +15,6 @@ import { Project } from './Project';
 
 @Table({
   tableName: 'sessions',
-  indexes: [
-    {
-      unique: true,
-      fields: ['agent_id', 'actor_id'],
-      where: { status: 'open' },
-    },
-  ],
   hooks: {
     beforeValidate: (instance: Session) => {
       if (!instance.publicId) {

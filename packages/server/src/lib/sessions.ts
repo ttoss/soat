@@ -1,5 +1,3 @@
-import { DatabaseError } from '@ttoss/postgresdb';
-
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
@@ -76,12 +74,7 @@ const mapSession = (
   };
 };
 
-const resolveActorId = async (args: {
-  actorId: string;
-  projectId: number;
-  agentId: number;
-  singleSessionPerActor: boolean;
-}) => {
+const resolveActorId = async (args: { actorId: string; projectId: number }) => {
   const existingActor = await db.Actor.findOne({
     where: { publicId: args.actorId, projectId: args.projectId },
   });
@@ -91,49 +84,41 @@ const resolveActorId = async (args: {
       `Actor '${args.actorId}' not found.`
     );
   }
-
-  if (args.singleSessionPerActor) {
-    const conflictingSession = await db.Session.findOne({
-      where: {
-        agentId: args.agentId,
-        actorId: existingActor.id,
-        status: 'open',
-      },
-    });
-    if (conflictingSession) {
-      await checkAndExpireSession(conflictingSession);
-      if (conflictingSession.status === 'open') {
-        throw new DomainError(
-          'SINGLE_SESSION_CONFLICT',
-          'An open session already exists for this actor.',
-          { session_id: conflictingSession.publicId }
-        );
-      }
-    }
-  }
-
   return existingActor.id;
 };
 
-const throwIfUniqueConflict = async (args: {
-  error: unknown;
+const checkSingleSessionConflict = async (args: {
   agentId: number;
   actorId: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  transaction: any;
 }) => {
-  const isUniqueViolation =
-    args.error instanceof DatabaseError &&
-    (args.error.original as { code?: string } | undefined)?.code === '23505';
-  if (!isUniqueViolation) {
-    throw args.error;
-  }
-  const conflicting = await db.Session.findOne({
-    where: { agentId: args.agentId, actorId: args.actorId, status: 'open' },
+  // Acquire a transaction-scoped advisory lock keyed on (agentId, actorId) to
+  // serialize concurrent createSession calls for the same actor. The lock is
+  // released automatically when the transaction commits or rolls back.
+  await db.sequelize.query('SELECT pg_advisory_xact_lock(:agentId, :actorId)', {
+    replacements: { agentId: args.agentId, actorId: args.actorId },
+    transaction: args.transaction,
   });
-  throw new DomainError(
-    'SINGLE_SESSION_CONFLICT',
-    'An open session already exists for this actor.',
-    { session_id: conflicting?.publicId ?? null }
-  );
+
+  const conflictingSession = await db.Session.findOne({
+    where: { agentId: args.agentId, actorId: args.actorId, status: 'open' },
+    transaction: args.transaction,
+  });
+
+  if (!conflictingSession) {
+    return;
+  }
+
+  await checkAndExpireSession(conflictingSession);
+
+  if (conflictingSession.status === 'open') {
+    throw new DomainError(
+      'SINGLE_SESSION_CONFLICT',
+      'An open session already exists for this actor.',
+      { session_id: conflictingSession.publicId }
+    );
+  }
 };
 
 export const createSession = async (args: {
@@ -159,36 +144,29 @@ export const createSession = async (args: {
     existingActorId = await resolveActorId({
       actorId: args.actorId,
       projectId: args.projectId,
-      agentId: agent.id,
-      singleSessionPerActor: agent.singleSessionPerActor,
     });
   }
 
-  let session;
-  try {
-    session = await db.sequelize.transaction((t) => {
-      return createSessionTransaction({
-        projectId: args.projectId,
-        agentId: agent.id,
-        name: args.name,
-        existingActorId,
-        autoGenerate: args.autoGenerate,
-        toolContext: args.toolContext,
-        inactivityTtlSeconds: args.inactivityTtlSeconds,
-        messageDelaySeconds: args.messageDelaySeconds,
-        transaction: t,
-      });
-    });
-  } catch (error) {
+  const session = await db.sequelize.transaction(async (t) => {
     if (agent.singleSessionPerActor && existingActorId) {
-      await throwIfUniqueConflict({
-        error,
+      await checkSingleSessionConflict({
         agentId: agent.id,
         actorId: existingActorId,
+        transaction: t,
       });
     }
-    throw error;
-  }
+    return createSessionTransaction({
+      projectId: args.projectId,
+      agentId: agent.id,
+      name: args.name,
+      existingActorId,
+      autoGenerate: args.autoGenerate,
+      toolContext: args.toolContext,
+      inactivityTtlSeconds: args.inactivityTtlSeconds,
+      messageDelaySeconds: args.messageDelaySeconds,
+      transaction: t,
+    });
+  });
 
   const sessionWithIncludes = await db.Session.findOne({
     where: { id: session.id },
