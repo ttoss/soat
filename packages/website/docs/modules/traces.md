@@ -237,7 +237,7 @@ soat get-trace-tree --trace-id trc_abc123
 ```ts
 import { createSoatClient } from '@soat/sdk';
 
-const client = createSoatClient({ apiKey: process.env.SOAT_API_KEY });
+const client = createSoatClient({ apiKey: process.env.SOAT_TOKEN });
 
 // List traces
 const { data: traces } = await client.GET('/api/v1/traces', {
