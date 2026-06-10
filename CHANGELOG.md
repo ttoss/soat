@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.8.1](https://github.com/ttoss/soat/compare/v0.8.0...v0.8.1) (2026-06-10)
+
+### Bug Fixes
+
+* expire stale sessions during singleSessionPerActor conflict check ([#185](https://github.com/ttoss/soat/issues/185)) ([1b4dece](https://github.com/ttoss/soat/commit/1b4dece66cf4eb26fe39b1aebe48b8f1e0924fe6))
+
 # 0.8.0 (2026-06-10)
 
 ### Bug Fixes
