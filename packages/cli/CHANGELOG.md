@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# 0.9.0 (2026-06-10)
+
+### Bug Fixes
+
+* add shell-safe @VAR_NAME and bare-key syntax to --parameter for --env-file integration ([#114](https://github.com/ttoss/soat/issues/114)) ([906dd0c](https://github.com/ttoss/soat/commit/906dd0cf79a1d5b6cd312e7489ac6a549c3e011b))
+* HTTP tool DELETE requests now send body and preserve Content-Type header ([#131](https://github.com/ttoss/soat/issues/131)) ([a536f29](https://github.com/ttoss/soat/commit/a536f29e32a79443f9a87ed2f5f4dbc5fbab22a7)), closes [#128](https://github.com/ttoss/soat/issues/128)
+
+### Features
+
+* **sessions:** add idempotency_key to addSessionMessage ([#144](https://github.com/ttoss/soat/issues/144)) ([b242655](https://github.com/ttoss/soat/commit/b242655848ca9f3356ee6aa63bc13b9473bf787b))
+
 # 0.8.0 (2026-06-10)
 
 ### Bug Fixes

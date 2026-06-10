@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# 0.9.0 (2026-06-10)
+
+### Bug Fixes
+
+* HTTP tool DELETE requests now send body and preserve Content-Type header ([#131](https://github.com/ttoss/soat/issues/131)) ([a536f29](https://github.com/ttoss/soat/commit/a536f29e32a79443f9a87ed2f5f4dbc5fbab22a7)), closes [#128](https://github.com/ttoss/soat/issues/128)
+
 # 0.8.0 (2026-06-10)
 
 ### Bug Fixes
