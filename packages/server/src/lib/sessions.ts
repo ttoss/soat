@@ -74,6 +74,53 @@ const mapSession = (
   };
 };
 
+const resolveActorId = async (args: { actorId: string; projectId: number }) => {
+  const existingActor = await db.Actor.findOne({
+    where: { publicId: args.actorId, projectId: args.projectId },
+  });
+  if (!existingActor) {
+    throw new DomainError(
+      'ACTOR_NOT_FOUND',
+      `Actor '${args.actorId}' not found.`
+    );
+  }
+  return existingActor.id;
+};
+
+const checkSingleSessionConflict = async (args: {
+  agentId: number;
+  actorId: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  transaction: any;
+}) => {
+  // Acquire a transaction-scoped advisory lock keyed on (agentId, actorId) to
+  // serialize concurrent createSession calls for the same actor. The lock is
+  // released automatically when the transaction commits or rolls back.
+  await db.sequelize.query('SELECT pg_advisory_xact_lock(:agentId, :actorId)', {
+    replacements: { agentId: args.agentId, actorId: args.actorId },
+    transaction: args.transaction,
+  });
+
+  const conflictingSession = await db.Session.findOne({
+    where: { agentId: args.agentId, actorId: args.actorId, status: 'open' },
+    transaction: args.transaction,
+  });
+
+  if (!conflictingSession) {
+    return;
+  }
+
+  await checkAndExpireSession(conflictingSession);
+
+  if (conflictingSession.status === 'open') {
+    throw new DomainError(
+      'SINGLE_SESSION_CONFLICT',
+      'An open session already exists for this actor.',
+      { session_id: conflictingSession.publicId }
+    );
+  }
+};
+
 export const createSession = async (args: {
   projectId: number;
   agentId: number;
@@ -92,38 +139,22 @@ export const createSession = async (args: {
     );
   }
 
-  // If actorId provided, verify the actor exists in the project
   let existingActorId: number | null = null;
   if (args.actorId) {
-    const existingActor = await db.Actor.findOne({
-      where: { publicId: args.actorId, projectId: args.projectId },
+    existingActorId = await resolveActorId({
+      actorId: args.actorId,
+      projectId: args.projectId,
     });
-    if (!existingActor) {
-      throw new DomainError(
-        'ACTOR_NOT_FOUND',
-        `Actor '${args.actorId}' not found.`
-      );
-    }
-    existingActorId = existingActor.id;
-
-    if (agent.singleSessionPerActor) {
-      const conflictingSession = await db.Session.findOne({
-        where: { agentId: agent.id, actorId: existingActorId, status: 'open' },
-      });
-      if (conflictingSession) {
-        await checkAndExpireSession(conflictingSession);
-        if (conflictingSession.status === 'open') {
-          throw new DomainError(
-            'SINGLE_SESSION_CONFLICT',
-            'An open session already exists for this actor.',
-            { session_id: conflictingSession.publicId }
-          );
-        }
-      }
-    }
   }
 
-  const session = await db.sequelize.transaction((t) => {
+  const session = await db.sequelize.transaction(async (t) => {
+    if (agent.singleSessionPerActor && existingActorId) {
+      await checkSingleSessionConflict({
+        agentId: agent.id,
+        actorId: existingActorId,
+        transaction: t,
+      });
+    }
     return createSessionTransaction({
       projectId: args.projectId,
       agentId: agent.id,

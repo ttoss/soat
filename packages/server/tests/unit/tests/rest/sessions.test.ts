@@ -2037,6 +2037,29 @@ describe('Sessions', () => {
         .send({ actor_id: actorId });
       expect(sess2.status).toBe(201);
     });
+
+    test('concurrent createSession calls return 409 for the second request', async () => {
+      const actorRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'Concurrent Actor' });
+      const concurrentActorId = actorRes.body.id;
+
+      const [res1, res2] = await Promise.all([
+        authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+          .send({ actor_id: concurrentActorId }),
+        authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+          .send({ actor_id: concurrentActorId }),
+      ]);
+
+      const statuses = [res1.status, res2.status].sort();
+      expect(statuses).toEqual([201, 409]);
+
+      const conflict = res1.status === 409 ? res1 : res2;
+      expect(conflict.body.error.code).toBe('SINGLE_SESSION_CONFLICT');
+      expect(conflict.body.error.meta.session_id).toMatch(/^sess_/);
+    });
   });
 
   // ── Message Delay ──────────────────────────────────────────────────────
