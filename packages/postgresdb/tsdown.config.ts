@@ -1,14 +1,9 @@
-import { tsdownConfig } from '@ttoss/config';
+import { defineConfig } from 'tsdown';
 
-const config = tsdownConfig({
+export default defineConfig({
   entry: ['src/index.ts'],
+  format: ['cjs', 'esm'],
+  dts: true,
+  clean: true,
+  target: 'es2024',
 });
-
-// Remove the formatjs plugin that causes build failures in this environment
-if (Array.isArray(config.plugins)) {
-  config.plugins = config.plugins.filter(
-    (p: { name?: string }) => p.name !== 'formatjs'
-  );
-}
-
-export default config;
