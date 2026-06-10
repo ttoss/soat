@@ -13,7 +13,7 @@ jobs:
   build-and-test:
     name: Build and Test
     runs-on: ubuntu-latest
-    if: "startsWith(github.event.head_commit.message, 'chore(release): publish packages')"
+    if: "startsWith(github.event.head_commit.message, 'chore(release):')"
 
     steps:
       - uses: actions/checkout@v6
@@ -42,7 +42,7 @@ jobs:
   smoke-test:
     name: Smoke Tests
     runs-on: ubuntu-latest
-    if: "startsWith(github.event.head_commit.message, 'chore(release): publish packages')"
+    if: "startsWith(github.event.head_commit.message, 'chore(release):')"
 
     steps:
       - uses: actions/checkout@v6
@@ -79,7 +79,7 @@ jobs:
     name: Push Release Tag
     runs-on: ubuntu-latest
     needs: [build-and-test, smoke-test, tutorials-test]
-    if: "startsWith(github.event.head_commit.message, 'chore(release): publish packages')"
+    if: "startsWith(github.event.head_commit.message, 'chore(release):')"
     permissions:
       contents: write
     steps:
@@ -204,7 +204,7 @@ jobs:
   tutorials-test:
     name: Tutorials Tests
     runs-on: ubuntu-latest
-    if: "startsWith(github.event.head_commit.message, 'chore(release): publish packages')"
+    if: "startsWith(github.event.head_commit.message, 'chore(release):')"
 
     steps:
       - uses: actions/checkout@v6
