@@ -15,6 +15,7 @@ export type Trace = {
   stepCount: number;
   parentTraceId: string | null;
   rootTraceId: string | null;
+  error: Record<string, unknown> | null;
   createdAt: Date;
 };
 
@@ -68,8 +69,23 @@ const mapTrace = (
     stepCount: row.stepCount,
     parentTraceId: row.parentTrace?.publicId ?? null,
     rootTraceId: row.rootTrace?.publicId ?? null,
+    error: row.error,
     createdAt: row.createdAt,
   };
+};
+
+/**
+ * Records a structured error payload on a trace so failed generations are
+ * distinguishable from pending ones. Fire-and-forget safe.
+ */
+export const recordTraceError = async (args: {
+  traceId: string;
+  error: Record<string, unknown>;
+}): Promise<void> => {
+  log('recordTraceError: traceId=%s', args.traceId);
+  const trace = await db.Trace.findOne({ where: { publicId: args.traceId } });
+  if (!trace) return;
+  await trace.update({ error: args.error });
 };
 
 const findTraceId = async (

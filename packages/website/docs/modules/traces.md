@@ -30,6 +30,7 @@ Traces support **parent-child relationships**: when an agent spawns a sub-agent 
 | `step_count`      | number         | Number of reasoning steps recorded                                                     |
 | `parent_trace_id` | string \| null | ID of the immediate parent trace; `null` when this trace is itself the root            |
 | `root_trace_id`   | string \| null | ID of the root trace in a multi-agent chain; `null` when this trace is itself the root |
+| `error`           | object \| null | Structured error payload recorded when a generation in this trace failed; `null` otherwise |
 | `created_at`      | string         | ISO 8601 creation timestamp                                                            |
 
 ## Key Concepts
@@ -37,6 +38,10 @@ Traces support **parent-child relationships**: when an agent spawns a sub-agent 
 ### Trace Tree
 
 When agents call other agents (via SOAT tools), each nested generation creates its own trace. All traces in one chain share the same `root_trace_id`. The `GET /traces/:id/tree` endpoint returns the entire tree — the root node with all its descendants nested under `children` — from any trace ID in the chain.
+
+### Generation Failures
+
+When a generation in a trace fails (e.g. the upstream AI provider returns an error), the structured error payload is recorded on the trace's `error` field and on the corresponding generation record (`GET /generations/:generation_id`). This makes failed runs distinguishable from runs that have not started yet (which also have `step_count: 0`).
 
 ### Step Serialization
 

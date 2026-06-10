@@ -1,0 +1,10 @@
+{
+  "module": "generations",
+  "operations": [
+    {
+      "operationId": "getGeneration",
+      "action": "generations:GetGeneration",
+      "description": "Get a generation record by ID"
+    }
+  ]
+}

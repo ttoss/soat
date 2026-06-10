@@ -10,6 +10,8 @@ import {
   savePendingGeneration,
   type TypedAgent,
 } from './agentGenerationHelpers';
+import { recordGenerationFailure } from './generationLifecycle';
+import { toProviderDomainError } from './providerError';
 
 const log = createDebug('soat:generation');
 
@@ -102,7 +104,7 @@ const callGenerateText = async (args: {
       error instanceof Error ? error.message : String(error),
       error instanceof Error ? error.stack : ''
     );
-    throw error;
+    throw toProviderDomainError(error) ?? error;
   }
 };
 
@@ -237,6 +239,37 @@ export const runNonStreamGeneration = async (args: {
     ...args,
     result: result as GenerateTextResult,
   });
+};
+
+export const runToolOutputsGeneration = async (args: {
+  generationId: string;
+  pending: PendingGeneration;
+  system: string | undefined;
+  nonSystemMessages: unknown[];
+}): Promise<GenerateTextResult> => {
+  try {
+    return await generateText({
+      model: args.pending.resolvedModel,
+      system: args.system,
+      messages: args.nonSystemMessages as ModelMessage[],
+      tools:
+        Object.keys(args.pending.resolvedTools).length > 0
+          ? args.pending.resolvedTools
+          : undefined,
+      prepareStep: buildPrepareStep({
+        stepRules: args.pending.agentConfig.stepRules,
+        logContext: 'non_stream',
+      }),
+      stopWhen: stepCountIs(args.pending.agentConfig.maxSteps),
+      temperature: args.pending.agentConfig.temperature ?? undefined,
+    });
+  } catch (error) {
+    throw await recordGenerationFailure({
+      generationId: args.generationId,
+      traceId: args.pending.traceId,
+      error: toProviderDomainError(error) ?? error,
+    });
+  }
 };
 
 export const buildToolResultMessages = (args: {

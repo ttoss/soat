@@ -8,6 +8,7 @@ import {
 
 describe('generations', () => {
   let projectId: number;
+  let projectPublicId: string;
   let aiProviderId: number;
   const agentId = 'agt_gen_lib_test_001';
 
@@ -26,6 +27,7 @@ describe('generations', () => {
   beforeAll(async () => {
     const project = await db.Project.create({ name: 'Generations Lib Test' });
     projectId = project.id;
+    projectPublicId = project.publicId;
 
     const aiProvider = await db.AiProvider.create({
       projectId,
@@ -54,7 +56,7 @@ describe('generations', () => {
 
       expect(gen.id).toBe('gen_create_test001');
       expect(gen.status).toBe('in_progress');
-      expect(gen.projectId).toBe(projectId);
+      expect(gen.projectId).toBe(projectPublicId);
       expect(gen.agentId).toBe(agentId);
       expect(gen.traceId).toBe('trc_gen_create_001');
       expect(gen.completedAt).toBeNull();
@@ -249,7 +251,7 @@ describe('generations', () => {
 
       const gen = result.data[0];
       expect(gen.id).toBeDefined();
-      expect(gen.projectId).toBe(projectId);
+      expect(gen.projectId).toBe(projectPublicId);
       expect(gen.agentId).toBe('agt_list_001');
       expect(gen.traceId).toBeDefined();
       expect(gen.status).toBe('in_progress');
@@ -282,7 +284,7 @@ describe('generations', () => {
 
       expect(result).not.toBeNull();
       expect(result?.id).toBe('gen_get_test001');
-      expect(result?.projectId).toBe(projectId);
+      expect(result?.projectId).toBe(projectPublicId);
     });
 
     test('returns null when projectIds does not include the project', async () => {

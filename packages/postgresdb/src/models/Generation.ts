@@ -138,6 +138,11 @@ export class Generation extends Model {
   @Column({ type: DataType.STRING(64), allowNull: true })
   declare stopReason: string | null;
 
+  // Structured error payload recorded when the generation fails
+  // (e.g. upstream AI provider errors).
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare error: Record<string, unknown> | null;
+
   @Column({ type: DataType.JSONB, allowNull: true })
   declare metadata: Record<string, unknown> | null;
 

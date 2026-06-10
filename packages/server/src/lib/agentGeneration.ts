@@ -1,6 +1,5 @@
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
-import type { LanguageModel, ModelMessage, Tool } from 'ai';
-import { generateText, stepCountIs } from 'ai';
+import type { LanguageModel, Tool } from 'ai';
 import createDebug from 'debug';
 import type { AuthUser } from 'src/Context';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
@@ -21,18 +20,20 @@ import {
 import { buildKnowledgeMessages, buildWriteMemoryTool } from './agentKnowledge';
 import { buildModel } from './agentModel';
 import {
-  buildPrepareStep,
   buildToolResultMessages as buildToolResultMessagesFromOutputs,
   runNonStreamGeneration,
+  runToolOutputsGeneration,
 } from './agentNonStreamGeneration';
 import { resolveAgentTools } from './agentToolResolver';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
 import {
   type GenerationInputMessage,
   resolveGenerationInputMessages,
 } from './generationInputMessages';
-import { createGenerationRecord, updateGenerationRecord } from './generations';
-import { saveTrace, serializeSteps } from './traces';
+import {
+  fireCompletionSideEffects,
+  recordGenerationFailure,
+} from './generationLifecycle';
+import { createGenerationRecord } from './generations';
 
 const log = createDebug('soat:generation');
 
@@ -241,7 +242,9 @@ const resolveContextAndRecord = async (args: {
     remainingDepth: args.remainingDepth,
   });
 
-  createGenerationRecord({
+  // Awaited so the record reliably exists before the generation runs and a
+  // failure can be persisted on it. Creation failures are non-fatal.
+  await createGenerationRecord({
     publicId: ctx.generationId,
     projectId: ctx.typedAgent.project.id as number,
     agentId: args.agentId,
@@ -249,7 +252,13 @@ const resolveContextAndRecord = async (args: {
     initiatorGenerationId: args.initiatorGenerationId ?? null,
     startedByPrincipalType: null,
     startedByPrincipalId: null,
-  }).catch(() => {});
+  }).catch((error) => {
+    log(
+      'resolveContextAndRecord: failed to create generation record generationId=%s error=%s',
+      ctx.generationId,
+      error instanceof Error ? error.message : String(error)
+    );
+  });
 
   return ctx;
 };
@@ -311,56 +320,26 @@ export const createGeneration = async (args: {
 
   log('createGeneration: agentId=%s stream=%s', args.agentId, args.stream);
 
-  return dispatchGeneration({
-    stream: args.stream,
-    ctx,
-    traceId,
-    agentId: args.agentId,
-    parentTraceId: args.parentTraceId,
-    rootTraceId: args.rootTraceId,
-    abortSignal: args.abortSignal,
-  });
+  try {
+    return await dispatchGeneration({
+      stream: args.stream,
+      ctx,
+      traceId,
+      agentId: args.agentId,
+      parentTraceId: args.parentTraceId,
+      rootTraceId: args.rootTraceId,
+      abortSignal: args.abortSignal,
+    });
+  } catch (error) {
+    throw await recordGenerationFailure({
+      generationId: ctx.generationId,
+      traceId,
+      error,
+    });
+  }
 };
 
 // ── Submit Tool Outputs ───────────────────────────────────────────────────
-
-const fireCompletionSideEffects = (args: {
-  generationId: string;
-  pending: NonNullable<ReturnType<typeof pendingGenerations.get>>;
-  result: { steps: unknown[]; finishReason: string };
-  completedResult: GenerationResult;
-}): void => {
-  const prevSteps = args.pending.steps ?? [];
-  const allSteps = [...prevSteps, ...serializeSteps(args.result.steps)];
-  saveTrace({
-    traceId: args.pending.traceId,
-    projectId: args.pending.projectId,
-    projectPublicId: args.pending.projectPublicId,
-    agentId: args.pending.agentId,
-    steps: allSteps,
-    parentTraceId: args.pending.parentTraceId ?? undefined,
-    rootTraceId: args.pending.rootTraceId ?? undefined,
-  }).catch(() => {});
-  updateGenerationRecord({
-    publicId: args.generationId,
-    status: 'completed',
-    completedAt: new Date(),
-    stopReason: args.result.finishReason,
-  }).catch(() => {});
-  resolveProjectPublicId({ projectId: args.pending.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'agents.generation.completed',
-        projectId: args.pending.projectId,
-        projectPublicId,
-        resourceType: 'generation',
-        resourceId: args.generationId,
-        data: args.completedResult as unknown as Record<string, unknown>,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
-};
 
 export const submitToolOutputs = async (args: {
   projectIds?: number[];
@@ -403,20 +382,11 @@ export const submitToolOutputs = async (args: {
     return (m as { role?: string }).role !== 'system';
   });
 
-  const result = await generateText({
-    model: pending.resolvedModel,
+  const result = await runToolOutputsGeneration({
+    generationId: args.generationId,
+    pending,
     system,
-    messages: nonSystemMessages as ModelMessage[],
-    tools:
-      Object.keys(pending.resolvedTools).length > 0
-        ? pending.resolvedTools
-        : undefined,
-    prepareStep: buildPrepareStep({
-      stepRules: pending.agentConfig.stepRules,
-      logContext: 'non_stream',
-    }),
-    stopWhen: stepCountIs(pending.agentConfig.maxSteps),
-    temperature: pending.agentConfig.temperature ?? undefined,
+    nonSystemMessages,
   });
 
   const completedResult: GenerationResult = {
