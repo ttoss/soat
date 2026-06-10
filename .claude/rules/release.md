@@ -23,7 +23,7 @@ When the release PR is merged, the `chore(release): publish packages` commit lan
 push-release-tag   →   release (npm publish + website deploy)   →   publish-docker
 ```
 
-- `build-and-test`, `smoke-test`, and `tutorials-test` are **skipped** on release commits (guarded by `chore(release):` in the commit message).
+- `build-and-test`, `smoke-test`, and `tutorials-test` are **skipped** on non-release commits; they only run when the commit message starts with `chore(release):`.
 - `push-release-tag` pushes the `vX.Y.Z` git tag.
 - `release` publishes `@soat/sdk` and `@soat/cli` to npm and deploys the website.
 - `publish-docker` builds and pushes the Docker image to Docker Hub.
@@ -93,6 +93,8 @@ git checkout -b release/vX.Y.Z
 git push -u origin release/vX.Y.Z
 # open PR targeting main
 ```
+
+The PR title must start with `chore(release):` — the release pipeline in `main.yml` is gated on `startsWith(github.event.head_commit.message, 'chore(release):')`. A title like `chore(release): publish packages` or `chore(release): v0.8.1` both work.
 
 Merge the PR once CI passes. The release pipeline runs automatically.
 
