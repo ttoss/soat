@@ -1952,6 +1952,31 @@ describe('Sessions', () => {
       expect(sess2.status).toBe(201);
     });
 
+    test('expired session is lazily expired during createSession without prior GET', async () => {
+      const actorRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'Lazy Expire Actor' });
+      const lazyActorId = actorRes.body.id;
+
+      // Create a session with very short TTL
+      const sess1 = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({ actor_id: lazyActorId, inactivity_ttl_seconds: 1 });
+      expect(sess1.status).toBe(201);
+
+      // Wait for TTL to elapse — do NOT call GET to trigger lazy expiry
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 1500);
+      });
+
+      // createSession itself must expire the stale open session and succeed
+      const sess2 = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
+        .send({ actor_id: lazyActorId });
+      expect(sess2.status).toBe(201);
+      expect(sess2.body.id).not.toBe(sess1.body.id);
+    });
+
     test('no enforcement when actor_id is absent', async () => {
       const res1 = await authenticatedTestClient(userToken)
         .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
