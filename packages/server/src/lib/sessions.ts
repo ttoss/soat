@@ -111,11 +111,14 @@ export const createSession = async (args: {
         where: { agentId: agent.id, actorId: existingActorId, status: 'open' },
       });
       if (conflictingSession) {
-        throw new DomainError(
-          'SINGLE_SESSION_CONFLICT',
-          'An open session already exists for this actor.',
-          { session_id: conflictingSession.publicId }
-        );
+        await checkAndExpireSession(conflictingSession);
+        if (conflictingSession.status === 'open') {
+          throw new DomainError(
+            'SINGLE_SESSION_CONFLICT',
+            'An open session already exists for this actor.',
+            { session_id: conflictingSession.publicId }
+          );
+        }
       }
     }
   }
