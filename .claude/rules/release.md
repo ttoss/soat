@@ -32,7 +32,15 @@ push-release-tag   →   release (npm publish + website deploy)   →   publish-
 
 Branch protection prevents direct pushes to `main`, so releases go through a PR.
 
-### Step 1 — Patch engines (environment workaround)
+### Step 1 — Fetch tags
+
+Lerna determines the changelog range and version bump from the last git tag. Always fetch tags before running lerna, otherwise it will fall back to including all commits and produce duplicate changelog entries:
+
+```bash
+git fetch --tags origin
+```
+
+### Step 2 — Patch engines (environment workaround)
 
 This environment runs Node 22 / pnpm 10 but the project declares `^24` / `^11`. Temporarily relax the constraint before running lerna:
 
@@ -46,7 +54,7 @@ fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
 "
 ```
 
-### Step 2 — Run lerna version
+### Step 3 — Run lerna version
 
 Always pass `--no-push` — branch protection blocks direct pushes to `main`, and the PR flow handles the push. Never run lerna without `--no-push` or it will attempt (and fail) to push to `main` directly.
 
@@ -66,7 +74,7 @@ pnpm lerna version major --yes --no-push   # 0.6.9 → 1.0.0
 
 Lerna will create a `chore(release): publish packages` commit and tag locally.
 
-### Step 3 — Restore engines
+### Step 4 — Restore engines
 
 ```bash
 node -e "
@@ -78,7 +86,7 @@ fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
 " && git add package.json && git commit --amend --no-edit
 ```
 
-### Step 4 — Push to a release branch and open a PR
+### Step 5 — Push to a release branch and open a PR
 
 ```bash
 git checkout -b release/vX.Y.Z
