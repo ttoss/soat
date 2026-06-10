@@ -956,6 +956,9 @@ components:
         auto_generate:
           type: boolean
           description: Whether to automatically generate a response when messages are sent
+        inactivity_ttl_seconds:
+          type: integer
+          description: Number of seconds of inactivity after which the session expires. 0 means never expires.
         tool_context:
           type: object
           additionalProperties: true

@@ -127,6 +127,10 @@ export const sessionsFormationModule: FormationModule = {
         typeof properties.auto_generate === 'boolean'
           ? properties.auto_generate
           : undefined,
+      inactivityTtlSeconds:
+        typeof properties.inactivity_ttl_seconds === 'number'
+          ? properties.inactivity_ttl_seconds
+          : undefined,
       toolContext:
         (toNullableObject(properties.tool_context) as Record<
           string,
@@ -195,6 +199,7 @@ export const sessionsFormationModule: FormationModule = {
         name: session.name,
         actor_id: session.actorId,
         auto_generate: session.autoGenerate,
+        inactivity_ttl_seconds: session.inactivityTtlSeconds,
         tool_context: session.toolContext,
       };
     } catch {
