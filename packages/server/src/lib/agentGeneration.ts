@@ -21,6 +21,7 @@ import { buildKnowledgeMessages, buildWriteMemoryTool } from './agentKnowledge';
 import { buildModel } from './agentModel';
 import {
   buildToolResultMessages as buildToolResultMessagesFromOutputs,
+  resolveToolOutputsResult,
   runNonStreamGeneration,
   runToolOutputsGeneration,
 } from './agentNonStreamGeneration';
@@ -29,10 +30,7 @@ import {
   type GenerationInputMessage,
   resolveGenerationInputMessages,
 } from './generationInputMessages';
-import {
-  fireCompletionSideEffects,
-  recordGenerationFailure,
-} from './generationLifecycle';
+import { recordGenerationFailure } from './generationLifecycle';
 import { createGenerationRecord } from './generations';
 
 const log = createDebug('soat:generation');
@@ -389,24 +387,11 @@ export const submitToolOutputs = async (args: {
     nonSystemMessages,
   });
 
-  const completedResult: GenerationResult = {
-    id: args.generationId,
-    traceId: pending.traceId,
-    status: 'completed',
-    output: {
-      model: result.response?.modelId ?? '',
-      content: result.text,
-      finishReason: result.finishReason,
-      responseMessages: result.response?.messages as Array<unknown> | undefined,
-    },
-  };
-
-  fireCompletionSideEffects({
+  return resolveToolOutputsResult({
     generationId: args.generationId,
+    agentId: args.agentId,
     pending,
+    allMessages,
     result,
-    completedResult,
   });
-
-  return completedResult;
 };

@@ -85,6 +85,121 @@ describe('submitToolOutputs', () => {
     ).rejects.toThrow('not found');
   });
 
+  test('returns requires_action when continuation produces a new client tool call', async () => {
+    jest.doMock('ai', () => {
+      const actual = jest.requireActual('ai');
+      return {
+        ...actual,
+        generateText: jest.fn().mockResolvedValue({
+          text: 'I will send the reply.',
+          finishReason: 'tool-calls',
+          steps: [
+            {
+              toolCalls: [
+                {
+                  toolCallId: 'tc_new_1',
+                  toolName: 'send-reply',
+                  input: { message: 'Hello from bot' },
+                },
+              ],
+            },
+          ],
+          response: {
+            modelId: 'mock-model',
+            messages: [
+              {
+                role: 'assistant',
+                content: [
+                  { type: 'text', text: 'I will send the reply.' },
+                  {
+                    type: 'tool-call',
+                    toolCallId: 'tc_new_1',
+                    toolName: 'send-reply',
+                    args: { message: 'Hello from bot' },
+                  },
+                ],
+              },
+            ],
+          },
+        }),
+      };
+    });
+    jest.doMock('src/lib/eventBus', () => {
+      const actual = jest.requireActual('src/lib/eventBus');
+      return {
+        ...actual,
+        resolveProjectPublicId: jest.fn().mockResolvedValue('prj_test'),
+        emitEvent: jest.fn(),
+      };
+    });
+    jest.doMock('src/lib/generations', () => {
+      return {
+        createGenerationRecord: jest.fn().mockResolvedValue(undefined),
+        getGeneration: jest.fn().mockResolvedValue(null),
+        updateGenerationRecord: jest.fn().mockResolvedValue(undefined),
+      };
+    });
+
+    const { submitToolOutputs } = await loadAgentGenerationModule();
+    const { pendingGenerations } = await loadGenerationHelpersModule();
+
+    const sendReplyClientTool = {
+      description: 'Send reply to channel',
+      inputSchema: {},
+    };
+
+    const pending: PendingGeneration = {
+      agentId: 'agt_test',
+      projectId: 1,
+      projectPublicId: 'prj_test',
+      traceId: 'trc_test',
+      parentTraceId: null,
+      rootTraceId: null,
+      generationId: 'gen_pending_2',
+      initiatorGenerationId: null,
+      pendingToolCalls: [
+        { toolCallId: 'tc_1', toolName: 'send-reply', args: { message: 'Hi' } },
+      ],
+      messages: [{ role: 'user', content: 'hello' }],
+      steps: [],
+      resolvedModel: {} as never,
+      agentConfig: {
+        instructions: null,
+        maxSteps: 5,
+        toolChoice: 'auto',
+        stopConditions: null,
+        activeToolIds: null,
+        stepRules: null,
+        temperature: null,
+      },
+      resolvedTools: { 'send-reply': sendReplyClientTool as never },
+    };
+
+    pendingGenerations.set('gen_pending_2', pending);
+
+    const result = await submitToolOutputs({
+      agentId: 'agt_test',
+      generationId: 'gen_pending_2',
+      toolOutputs: [{ toolCallId: 'tc_1', output: 'sent' }],
+    });
+
+    expect(result).toMatchObject({
+      id: 'gen_pending_2',
+      traceId: 'trc_test',
+      status: 'requires_action',
+      requiredAction: {
+        type: 'submit_tool_outputs',
+        toolCalls: [
+          expect.objectContaining({
+            toolName: 'send-reply',
+            id: 'tc_new_1',
+          }),
+        ],
+      },
+    });
+    expect(pendingGenerations.has('gen_pending_2')).toBe(true);
+  });
+
   test('processes pending tool outputs and returns completed result', async () => {
     jest.doMock('ai', () => {
       const actual = jest.requireActual('ai');
