@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.9.0](https://127.0.0.1/40289/git/ttoss/compare/v0.8.2...v0.9.0) (2026-06-11)
+
+### Features
+
+* **tools:** support ${body.xxx} path parameter interpolation in HTTP tool URLs ([#195](https://127.0.0.1/40289/git/ttoss/issues/195)) ([85f8eb4](https://127.0.0.1/40289/git/ttoss/commits/85f8eb43bf65a47330c3a2b7a25ed94693ccd894)), closes [#194](https://127.0.0.1/40289/git/ttoss/issues/194)
+
 ## [0.8.2](https://127.0.0.1/41431/git/ttoss/compare/v0.8.1...v0.8.2) (2026-06-11)
 
 ### Bug Fixes
