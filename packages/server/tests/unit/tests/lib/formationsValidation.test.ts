@@ -798,6 +798,31 @@ describe('validateFormationTemplate', () => {
     expect(result.errors).toHaveLength(0);
   });
 
+  test('returns valid when sub expression in HTTP tool URL uses body.xxx path interpolation', () => {
+    const result = validateFormationTemplate({
+      parameters: {
+        AppUrl: { type: 'string', default: 'https://example.com' },
+      },
+      resources: {
+        MyTool: {
+          type: 'tool',
+          properties: {
+            type: 'http',
+            name: 'patch-expense',
+            execute: {
+              url: {
+                sub: '${AppUrl}/api/finance/recurring-expenses/${body.publicUuid}',
+              },
+              method: 'PATCH',
+            },
+          },
+        },
+      },
+    });
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
   test('returns valid for a template with param expression in resource properties', () => {
     const result = validateFormationTemplate({
       parameters: {

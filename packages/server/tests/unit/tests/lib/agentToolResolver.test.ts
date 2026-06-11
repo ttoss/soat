@@ -4,6 +4,7 @@ import {
   HttpToolError,
   isSoatActionAllowedByBoundary,
   resolveAgentTools,
+  resolveBodyParamInterpolations,
   resolveUrlPathParams,
 } from 'src/lib/agentToolResolver';
 
@@ -577,6 +578,44 @@ describe('resolveUrlPathParams', () => {
     });
     expect(result.resolvedUrl).toBe('https://example.com/{id}/details');
     expect(result.remainingArgs).toEqual({});
+  });
+});
+
+describe('resolveBodyParamInterpolations', () => {
+  test('replaces ${body.field} with toolArg value and removes it from remainingArgs', () => {
+    const result = resolveBodyParamInterpolations({
+      url: 'https://example.com/api/items/${body.itemId}',
+      toolArgs: { itemId: 'abc-123', other: 'value' },
+    });
+    expect(result.resolvedUrl).toBe('https://example.com/api/items/abc-123');
+    expect(result.remainingArgs).toEqual({ other: 'value' });
+  });
+
+  test('replaces multiple ${body.xxx} placeholders', () => {
+    const result = resolveBodyParamInterpolations({
+      url: 'https://example.com/${body.projectId}/items/${body.itemId}',
+      toolArgs: { projectId: 'prj-1', itemId: 'itm-2', extra: 'x' },
+    });
+    expect(result.resolvedUrl).toBe('https://example.com/prj-1/items/itm-2');
+    expect(result.remainingArgs).toEqual({ extra: 'x' });
+  });
+
+  test('URL-encodes body param values', () => {
+    const result = resolveBodyParamInterpolations({
+      url: 'https://example.com/search/${body.query}',
+      toolArgs: { query: 'hello world' },
+    });
+    expect(result.resolvedUrl).toBe('https://example.com/search/hello%20world');
+    expect(result.remainingArgs).toEqual({});
+  });
+
+  test('leaves placeholder unchanged when arg not provided', () => {
+    const result = resolveBodyParamInterpolations({
+      url: 'https://example.com/items/${body.id}',
+      toolArgs: { other: 'value' },
+    });
+    expect(result.resolvedUrl).toBe('https://example.com/items/${body.id}');
+    expect(result.remainingArgs).toEqual({ other: 'value' });
   });
 });
 

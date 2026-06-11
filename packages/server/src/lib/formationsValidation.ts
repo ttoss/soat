@@ -125,6 +125,8 @@ const validateResourceProperties = (args: {
   }
 
   for (const ref of collectParamRefs(properties)) {
+    // body.xxx refs are runtime tool-argument interpolations, not formation params
+    if (ref.startsWith('body.')) continue;
     if (!paramNames.has(ref)) {
       errors.push({
         path: `${basePath}.properties`,

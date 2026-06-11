@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import type { Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
@@ -17,13 +18,6 @@ const log = createDebug('soat:toolResolver');
 
 // ── Path Parameter Interpolation ─────────────────────────────────────────
 
-/**
- * Resolves `{paramName}` placeholders in a URL template using values from
- * toolArgs. Returns the resolved URL and the remaining args (those not consumed
- * as path parameters) to be used for query-string or body serialization.
- *
- * Placeholders that have no matching key in toolArgs are left as-is.
- */
 export const resolveUrlPathParams = (args: {
   url: string;
   toolArgs: Record<string, unknown>;
@@ -49,6 +43,33 @@ export const resolveUrlPathParams = (args: {
     }
   }
 
+  return { resolvedUrl, remainingArgs };
+};
+
+const BODY_PARAM_RE = /\$\{body\.(\w+)\}/g;
+
+// Resolves ${body.fieldName} placeholders from toolArgs at call time.
+export const resolveBodyParamInterpolations = (args: {
+  url: string;
+  toolArgs: Record<string, unknown>;
+}): { resolvedUrl: string; remainingArgs: Record<string, unknown> } => {
+  const bodyParams = new Set(
+    [...args.url.matchAll(BODY_PARAM_RE)].map((m) => {
+      return m[1];
+    })
+  );
+  const remainingArgs: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(args.toolArgs)) {
+    if (!bodyParams.has(k)) remainingArgs[k] = v;
+  }
+  const resolvedUrl = args.url.replace(
+    BODY_PARAM_RE,
+    (original, field: string) => {
+      const value = args.toolArgs[field];
+      if (value === undefined) return original;
+      return encodeURIComponent(String(value));
+    }
+  );
   return { resolvedUrl, remainingArgs };
 };
 
@@ -277,9 +298,13 @@ export const buildHttpToolExecute = (
         : {};
     let url = args.execute.url;
     try {
-      const { resolvedUrl, remainingArgs } = resolveUrlPathParams({
-        url: args.execute.url,
-        toolArgs: rawArgs,
+      const {
+        resolvedUrl: afterPathParams,
+        remainingArgs: afterPathParamsArgs,
+      } = resolveUrlPathParams({ url: args.execute.url, toolArgs: rawArgs });
+      const { resolvedUrl, remainingArgs } = resolveBodyParamInterpolations({
+        url: afterPathParams,
+        toolArgs: afterPathParamsArgs,
       });
       url = buildHttpRequestUrl({
         resolvedUrl,

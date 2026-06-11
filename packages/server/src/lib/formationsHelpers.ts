@@ -148,7 +148,9 @@ export const resolveParamExpressions = (
     return resolved;
   }
   if (isSub(value)) {
-    return value.sub.replace(SUB_PARAM_RE, (_, name: string) => {
+    return value.sub.replace(SUB_PARAM_RE, (original, name: string) => {
+      // body.xxx refs are resolved at tool-call time, not formation-apply time
+      if (name.startsWith('body.')) return original;
       const resolved = resolvedParams.get(name);
       if (resolved === undefined) {
         throw new Error(`Unresolved parameter in sub expression: ${name}`);
