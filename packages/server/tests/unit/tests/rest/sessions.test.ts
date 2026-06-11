@@ -1860,6 +1860,61 @@ describe('Sessions', () => {
 
       expect(genRes.status).toBe(200);
     });
+
+    test('GET session returns persisted inactivity_ttl_seconds', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ inactivity_ttl_seconds: 450 });
+      expect(createRes.status).toBe(201);
+      const sessionId = createRes.body.id;
+
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/${sessionId}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.inactivity_ttl_seconds).toBe(450);
+    });
+
+    test('PATCH session can update inactivity_ttl_seconds', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ inactivity_ttl_seconds: 300 });
+      expect(createRes.status).toBe(201);
+      const sessionId = createRes.body.id;
+
+      const patchRes = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${agentId}/sessions/${sessionId}`)
+        .send({ inactivity_ttl_seconds: 900 });
+      expect(patchRes.status).toBe(200);
+      expect(patchRes.body.inactivity_ttl_seconds).toBe(900);
+
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/${sessionId}`
+      );
+      expect(getRes.body.inactivity_ttl_seconds).toBe(900);
+    });
+
+    test('updating inactivity_ttl_seconds to 0 disables expiry', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ inactivity_ttl_seconds: 1 });
+      expect(createRes.status).toBe(201);
+      const sessionId = createRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${agentId}/sessions/${sessionId}`)
+        .send({ inactivity_ttl_seconds: 0 });
+
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 1200);
+      });
+
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/${sessionId}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.status).toBe('open');
+    });
   });
 
   // ── single_session_per_actor ───────────────────────────────────────────

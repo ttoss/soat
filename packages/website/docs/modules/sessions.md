@@ -136,6 +136,8 @@ Sessions can expire automatically after a period of inactivity using `inactivity
 
 When a session exceeds its TTL, its `status` is lazily updated to `expired` the next time it is fetched or listed. Once expired, `POST .../generate` returns `410 Gone` with error code `SESSION_EXPIRED`. Open a fresh session to continue.
 
+The TTL is stored server-side at session creation and persists without requiring the client to re-send it. It can also be updated at any time via `PATCH .../sessions/:session_id` — the inactivity clock continues from the last `last_activity_at` timestamp, so changing the TTL takes effect on the next fetch.
+
 ```json
 HTTP 410 Gone
 {

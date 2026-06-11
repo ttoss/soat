@@ -270,6 +270,7 @@ export const updateSession = async (args: {
   status?: string;
   autoGenerate?: boolean;
   toolContext?: Record<string, string> | null;
+  inactivityTtlSeconds?: number;
   messageDelaySeconds?: number | null;
 }) => {
   const session = await db.Session.findOne({
@@ -297,6 +298,10 @@ export const updateSession = async (args: {
 
   if (args.toolContext !== undefined) {
     session.toolContext = args.toolContext;
+  }
+
+  if (args.inactivityTtlSeconds !== undefined) {
+    session.inactivityTtlSeconds = args.inactivityTtlSeconds;
   }
 
   if (args.messageDelaySeconds !== undefined) {

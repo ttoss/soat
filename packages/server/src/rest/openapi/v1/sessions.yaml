@@ -676,6 +676,13 @@ components:
             type: string
           nullable: true
           description: Key-value pairs injected as context headers into all tool call requests made during this session.
+        inactivity_ttl_seconds:
+          type: integer
+          description: >
+            Number of seconds of inactivity after which the session expires.
+            0 means the session never expires. Updates the stored TTL; the inactivity clock
+            continues from the last activity timestamp.
+          example: 300
         message_delay_seconds:
           type: integer
           nullable: true

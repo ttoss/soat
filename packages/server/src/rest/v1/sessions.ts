@@ -181,6 +181,7 @@ sessionsRouter.patch('/:session_id', async (ctx: Context) => {
     status?: string;
     autoGenerate?: boolean;
     toolContext?: Record<string, string> | null;
+    inactivityTtlSeconds?: number;
     messageDelaySeconds?: number | null;
   };
 
@@ -191,6 +192,7 @@ sessionsRouter.patch('/:session_id', async (ctx: Context) => {
     status: body.status,
     autoGenerate: body.autoGenerate,
     toolContext: body.toolContext,
+    inactivityTtlSeconds: body.inactivityTtlSeconds,
     messageDelaySeconds: body.messageDelaySeconds,
   });
 
