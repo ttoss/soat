@@ -1,6 +1,8 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { cancelDelayTimer } from './sessionDelayHelpers';
+import { abortSessionGeneration } from './sessionOperations';
 import { createSessionTransaction } from './sessionTransaction';
 
 const isSessionExpired = (session: InstanceType<(typeof db)['Session']>) => {
@@ -309,6 +311,15 @@ export const updateSession = async (args: {
   }
 
   await session.save();
+
+  // When a session is closed, cancel any pending delay timers and abort any
+  // in-flight LLM call for this session. This prevents a closed session from
+  // replaying its message history and re-executing tool calls via a stale timer.
+  if (args.status === 'closed' || args.status === 'expired') {
+    const sessionKey = `${args.agentId}#${args.sessionId}`;
+    cancelDelayTimer(sessionKey);
+    abortSessionGeneration(sessionKey);
+  }
 
   const sessionWithIncludes = await db.Session.findOne({
     where: { id: session.id },

@@ -27,7 +27,7 @@ const sessionAbortControllers = new Map<string, AbortController>();
  * Abort and remove the controller for the given session key, if one exists.
  * Safe to call when no controller is registered.
  */
-const abortSessionGeneration = (sessionKey: string) => {
+export const abortSessionGeneration = (sessionKey: string) => {
   const existing = sessionAbortControllers.get(sessionKey);
   if (existing) {
     existing.abort();
@@ -175,6 +175,13 @@ export const generateSessionResponse = async (args: {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
   }
 
+  if (session.status === 'closed') {
+    throw new DomainError(
+      'SESSION_CLOSED',
+      'The session is closed. Open a new session to continue.'
+    );
+  }
+
   await checkSessionExpiry(session);
 
   const sessionKey = `${args.agentId}#${args.sessionId}`;
@@ -289,6 +296,20 @@ export const addSessionMessage = async (args: {
 
   if (!session) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
+  }
+
+  if (session.status === 'closed') {
+    throw new DomainError(
+      'SESSION_CLOSED',
+      'The session is closed. Open a new session to continue.'
+    );
+  }
+
+  if (session.status === 'expired') {
+    throw new DomainError(
+      'SESSION_EXPIRED',
+      'The session has expired due to inactivity. Open a new session to continue.'
+    );
   }
 
   const conversation = session.conversation as InstanceType<
