@@ -10,7 +10,10 @@ import {
   savePendingGeneration,
   type TypedAgent,
 } from './agentGenerationHelpers';
-import { recordGenerationFailure } from './generationLifecycle';
+import {
+  fireCompletionSideEffects,
+  recordGenerationFailure,
+} from './generationLifecycle';
 import { toProviderDomainError } from './providerError';
 
 const log = createDebug('soat:generation');
@@ -270,6 +273,104 @@ export const runToolOutputsGeneration = async (args: {
       error: toProviderDomainError(error) ?? error,
     });
   }
+};
+
+type ToolOutputsGenerationResult = {
+  steps: unknown[];
+  response?: { messages?: unknown[]; modelId?: string };
+  text: string;
+  finishReason: string;
+};
+
+const buildTypedAgentFromPending = (pending: PendingGeneration): TypedAgent => {
+  return {
+    instructions: pending.agentConfig.instructions,
+    model: null,
+    toolIds: null,
+    maxSteps: pending.agentConfig.maxSteps,
+    toolChoice: pending.agentConfig.toolChoice,
+    stopConditions: pending.agentConfig.stopConditions,
+    activeToolIds: pending.agentConfig.activeToolIds,
+    stepRules: pending.agentConfig.stepRules,
+    boundaryPolicy: null,
+    temperature: pending.agentConfig.temperature,
+    knowledgeConfig: null,
+    project: { id: pending.projectId, publicId: pending.projectPublicId },
+    aiProvider: { publicId: '' },
+  };
+};
+
+export const resolveToolOutputsResult = (args: {
+  generationId: string;
+  agentId: string;
+  pending: PendingGeneration;
+  allMessages: unknown[];
+  result: ToolOutputsGenerationResult;
+}): GenerationResult => {
+  const newPendingToolCalls = findPendingClientTools(
+    args.result.steps as Array<{
+      toolCalls?: Array<{
+        toolCallId: string;
+        toolName: string;
+        input: unknown;
+      }>;
+    }>,
+    args.pending.resolvedTools
+  );
+
+  if (newPendingToolCalls.length > 0) {
+    log(
+      'resolveToolOutputsResult: continuation produced %d new client tool calls generationId=%s',
+      newPendingToolCalls.length,
+      args.generationId
+    );
+    return savePendingGeneration({
+      generationId: args.generationId,
+      traceId: args.pending.traceId,
+      parentTraceId: args.pending.parentTraceId,
+      rootTraceId: args.pending.rootTraceId,
+      pendingToolCalls: newPendingToolCalls,
+      allMessages: args.allMessages as Array<{
+        role: string;
+        content: unknown;
+      }>,
+      result: args.result as {
+        steps: unknown[];
+        response: { messages: unknown[]; modelId?: string };
+        text: string;
+        finishReason: string;
+      },
+      model: args.pending.resolvedModel,
+      typedAgent: buildTypedAgentFromPending(args.pending),
+      agentId: args.agentId,
+      resolvedTools: args.pending.resolvedTools,
+      toolContext: args.pending.toolContext ?? null,
+      remainingDepth: null,
+    });
+  }
+
+  const completedResult: GenerationResult = {
+    id: args.generationId,
+    traceId: args.pending.traceId,
+    status: 'completed',
+    output: {
+      model: args.result.response?.modelId ?? '',
+      content: args.result.text,
+      finishReason: args.result.finishReason,
+      responseMessages: args.result.response?.messages as
+        | Array<unknown>
+        | undefined,
+    },
+  };
+
+  fireCompletionSideEffects({
+    generationId: args.generationId,
+    pending: args.pending,
+    result: args.result as { steps: unknown[]; finishReason: string },
+    completedResult,
+  });
+
+  return completedResult;
 };
 
 export const buildToolResultMessages = (args: {
