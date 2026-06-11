@@ -174,17 +174,23 @@ describe('resolveAgentTools', () => {
     expect(httpError.status).toBe(401);
     expect(httpError.message).toContain('HTTP 401');
     expect(httpError.body).toContain('Unauthorized');
+    expect(httpError.url).toContain('example.com');
+    expect(httpError.method).toBe('GET');
     expect(JSON.stringify(httpError)).not.toBe('{}');
     const serialized = JSON.parse(JSON.stringify(httpError)) as {
       message: string;
       name: string;
       status: number;
       body: string;
+      url: string;
+      method: string;
     };
     expect(serialized.message).toContain('HTTP 401');
     expect(serialized.name).toBe('HttpToolError');
     expect(serialized.status).toBe(401);
     expect(serialized.body).toContain('Unauthorized');
+    expect(serialized.url).toContain('example.com');
+    expect(serialized.method).toBe('GET');
 
     fetchMock.mockRestore();
   });
@@ -369,11 +375,13 @@ describe('resolveAgentTools', () => {
 });
 
 describe('HttpToolError', () => {
-  test('serializes to JSON with message, name, status, and body', () => {
+  test('serializes to JSON with message, name, status, url, method, and body', () => {
     const error = new HttpToolError(
-      'HTTP 401: Unauthorized',
+      'HTTP 401 GET https://api.example.com/items: Unauthorized',
       401,
-      'Unauthorized'
+      'Unauthorized',
+      'https://api.example.com/items',
+      'GET'
     );
     const json = JSON.stringify(error);
     expect(json).not.toBe('{}');
@@ -382,18 +390,24 @@ describe('HttpToolError', () => {
       name: string;
       status: number;
       body: string;
+      url: string;
+      method: string;
     };
-    expect(parsed.message).toBe('HTTP 401: Unauthorized');
+    expect(parsed.message).toContain('HTTP 401');
     expect(parsed.name).toBe('HttpToolError');
     expect(parsed.status).toBe(401);
     expect(parsed.body).toBe('Unauthorized');
+    expect(parsed.url).toBe('https://api.example.com/items');
+    expect(parsed.method).toBe('GET');
   });
 
   test('is an instance of Error', () => {
     const error = new HttpToolError(
-      'HTTP 500: Internal Server Error',
+      'HTTP 500 POST https://api.example.com/items: Internal Server Error',
       500,
-      'Internal Server Error'
+      'Internal Server Error',
+      'https://api.example.com/items',
+      'POST'
     );
     expect(error).toBeInstanceOf(Error);
     expect(error.name).toBe('HttpToolError');

@@ -254,12 +254,22 @@ const buildHttpRequestUrl = (args: {
 export class HttpToolError extends Error {
   status: number;
   body: string;
+  url: string;
+  method: string;
 
-  constructor(message: string, status: number, body: string) {
+  constructor(
+    message: string,
+    status: number,
+    body: string,
+    url: string,
+    method: string
+  ) {
     super(message);
     this.name = 'HttpToolError';
     this.status = status;
     this.body = body;
+    this.url = url;
+    this.method = method;
   }
 
   toJSON() {
@@ -267,6 +277,8 @@ export class HttpToolError extends Error {
       message: this.message,
       name: this.name,
       status: this.status,
+      url: this.url,
+      method: this.method,
       body: this.body,
     };
   }
@@ -324,9 +336,11 @@ export const buildHttpToolExecute = (
       if (!response.ok) {
         const body = await response.text();
         throw new HttpToolError(
-          `HTTP ${response.status}: ${body}`,
+          `HTTP ${response.status} ${method} ${url}: ${body}`,
           response.status,
-          body
+          body,
+          url,
+          method
         );
       }
       return response.json();
