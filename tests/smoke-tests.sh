@@ -868,6 +868,14 @@ if ! printf '%s\n' "$KC_GET_RESP" | jq -e --arg mem "$MEM_ID" '.knowledge_config
   echo "$KC_GET_RESP" >&2
   exit 1
 fi
+# Object form: provider/model/prompt overrides must round-trip too.
+KC_OBJ_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
+  --knowledge_config "{\"write_memory_id\":\"$MEM_ID\",\"extraction\":{\"model\":\"smoke-extraction-model\",\"prompt\":\"Extract decisions only.\"}}")
+if ! printf '%s\n' "$KC_OBJ_RESP" | jq -e '.knowledge_config.extraction.model == "smoke-extraction-model" and .knowledge_config.extraction.prompt == "Extract decisions only."' >/dev/null 2>&1; then
+  echo "ERROR: update-agent did not round-trip the extraction object form" >&2
+  echo "$KC_OBJ_RESP" >&2
+  exit 1
+fi
 # Disable extraction again so later generations in this script do not
 # trigger extra extraction LLM calls (extraction itself is asynchronous and
 # LLM-dependent, so its behavior is covered by unit tests, not smoke).

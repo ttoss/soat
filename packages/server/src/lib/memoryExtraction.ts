@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import type { KnowledgeConfig } from './agentKnowledge';
+import type { ExtractionConfig, KnowledgeConfig } from './agentKnowledge';
 import { updateGenerationRecord } from './generations';
 import { writeMemoryEntry } from './memoryEntries';
 import * as extractionCompletion from './memoryExtractionCompletion';
@@ -9,6 +9,25 @@ import * as extractionCompletion from './memoryExtractionCompletion';
 const log = createDebug('soat:memory-extraction');
 
 const MAX_EXTRACTION_CANDIDATES = 20;
+
+/**
+ * Normalizes the `extraction` knowledge-config field: `true` means "enabled
+ * with defaults", the object form is enabled unless `enabled: false`.
+ * Returns null when extraction is disabled or not configured.
+ */
+export const resolveExtractionConfig = (
+  extraction: KnowledgeConfig['extraction']
+): ExtractionConfig | null => {
+  if (extraction === true) return {};
+  if (
+    extraction &&
+    typeof extraction === 'object' &&
+    extraction.enabled !== false
+  ) {
+    return extraction;
+  }
+  return null;
+};
 
 export type ExtractionSummary = {
   candidates: number;
@@ -19,11 +38,22 @@ export type ExtractionSummary = {
 
 export type ExtractionMessage = { role: string; content: unknown };
 
-const buildExtractionPrompt = (args: { transcript: string }): string => {
+const DEFAULT_EXTRACTION_INSTRUCTIONS = [
+  'Extract discrete, atomic facts from this conversation that are worth remembering long-term.',
+  'Skip transient information such as greetings, acknowledgments, and small talk.',
+  'Each fact must be a single, self-contained sentence.',
+].join('\n');
+
+const buildExtractionPrompt = (args: {
+  transcript: string;
+  instructions?: string;
+}): string => {
+  // A custom prompt replaces only the task instructions. The response
+  // contract and the transcript are always engine-owned: the parser accepts
+  // nothing but a JSON array, so letting a prompt change the output format
+  // would only break extraction silently.
   return [
-    'Extract discrete, atomic facts from this conversation that are worth remembering long-term.',
-    'Skip transient information such as greetings, acknowledgments, and small talk.',
-    'Each fact must be a single, self-contained sentence.',
+    args.instructions ?? DEFAULT_EXTRACTION_INSTRUCTIONS,
     'Respond with a JSON array of strings and nothing else. Respond with [] when there is nothing worth remembering.',
     '',
     'Conversation:',
@@ -117,15 +147,21 @@ const recordExtractionSummary = async (args: {
   });
 };
 
+type ExtractionTarget = {
+  memory: InstanceType<(typeof db)['Memory']>;
+  extraction: ExtractionConfig;
+};
+
 /**
- * Resolves the extraction target memory. Returns null (with a log line)
- * unless the agent exists, its knowledge config has `extraction: true` and a
- * `write_memory_id`, and the target memory exists.
+ * Resolves the extraction target memory and normalized extraction config.
+ * Returns null (with a log line) unless the agent exists, its knowledge
+ * config has extraction enabled and a `write_memory_id`, and the target
+ * memory exists.
  */
 const resolveExtractionTarget = async (args: {
   agentId: string;
   projectIds?: number[];
-}): Promise<InstanceType<(typeof db)['Memory']> | null> => {
+}): Promise<ExtractionTarget | null> => {
   const where: Record<string, unknown> = { publicId: args.agentId };
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
 
@@ -136,9 +172,10 @@ const resolveExtractionTarget = async (args: {
   }
 
   const config = agent.knowledgeConfig as KnowledgeConfig | null | undefined;
-  if (config?.extraction !== true || !config.writeMemoryId) {
+  const extraction = resolveExtractionConfig(config?.extraction);
+  if (!extraction || !config?.writeMemoryId) {
     log(
-      'resolveExtractionTarget: extraction not enabled agentId=%s extraction=%s writeMemoryId=%s',
+      'resolveExtractionTarget: extraction not enabled agentId=%s extraction=%o writeMemoryId=%s',
       args.agentId,
       config?.extraction,
       config?.writeMemoryId
@@ -155,8 +192,9 @@ const resolveExtractionTarget = async (args: {
       args.agentId,
       config.writeMemoryId
     );
+    return null;
   }
-  return memory;
+  return { memory, extraction };
 };
 
 const writeCandidates = async (args: {
@@ -206,11 +244,12 @@ export const runMemoryExtraction = async (args: {
   messages: ExtractionMessage[];
   assistantContent: string;
 }): Promise<ExtractionSummary | null> => {
-  const memory = await resolveExtractionTarget({
+  const target = await resolveExtractionTarget({
     agentId: args.agentId,
     projectIds: args.projectIds,
   });
-  if (!memory) return null;
+  if (!target) return null;
+  const { memory, extraction } = target;
 
   const transcript = buildTranscript({
     messages: args.messages,
@@ -226,7 +265,12 @@ export const runMemoryExtraction = async (args: {
     completionText = await extractionCompletion.runExtractionCompletion({
       agentId: args.agentId,
       projectIds: args.projectIds,
-      prompt: buildExtractionPrompt({ transcript }),
+      prompt: buildExtractionPrompt({
+        transcript,
+        instructions: extraction.prompt,
+      }),
+      aiProviderId: extraction.aiProviderId,
+      model: extraction.model,
     });
   } catch (error) {
     log(

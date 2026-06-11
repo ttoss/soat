@@ -131,7 +131,7 @@ You can set `write_memory_id` to the same memory used for retrieval (so the agen
 
 #### Automatic Extraction
 
-Set `extraction: true` alongside `write_memory_id` to have the server extract facts from completed generation turns automatically — no explicit `write_memory` call by the agent is needed:
+Set `extraction` alongside `write_memory_id` to have the server extract facts from completed generation turns automatically — no explicit `write_memory` call by the agent is needed. Pass `true` for the defaults, or an object to customize the provider, model, and prompt used for extraction:
 
 ```json
 {
@@ -142,14 +142,40 @@ Set `extraction: true` alongside `write_memory_id` to have the server extract fa
 }
 ```
 
+```json
+{
+  "knowledge_config": {
+    "write_memory_id": "mem_alice",
+    "extraction": {
+      "ai_provider_id": "aip_cheap",
+      "model": "gpt-4o-mini",
+      "prompt": "Extract only customer food preferences and dietary restrictions."
+    }
+  }
+}
+```
+
 How it works:
 
 - After a conversation, session, or direct agent generation completes, the server runs a fire-and-forget extraction step. It never blocks or fails the generation response.
-- The extraction step sends the turn's transcript to the agent's own AI provider and model as a plain completion (no tools, no knowledge injection) and asks for a JSON array of atomic facts. Transient content such as greetings is skipped.
+- The extraction step sends the turn's transcript as a plain completion (no tools, no knowledge injection) and asks for a JSON array of atomic facts. Transient content such as greetings is skipped.
 - Each candidate fact (at most 20 per turn) goes through the standard [write algorithm](#write-algorithm) — duplicates are skipped, related facts are merged. Entries are tagged with `source: "extraction"`.
 - A summary (`{ candidates, created, updated, skipped }`) is recorded on the originating generation's `metadata.extraction` field for observability via the [Generations](./generations.md) API.
 
-Extraction is opt-in and requires both fields: `extraction: true` without `write_memory_id` does nothing. Streaming generations and `requires_action` (client-tool) turns do not trigger extraction; the turn must complete in the same request.
+Object form fields (all optional):
+
+| Field            | Default                  | Description                                                                                              |
+| ---------------- | ------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `enabled`        | `true`                   | Set `false` to keep the configuration but disable extraction                                              |
+| `ai_provider_id` | agent's provider         | Provider override for extraction calls — must belong to the agent's project                               |
+| `model`          | see below                | Model override for extraction calls                                                                       |
+| `prompt`         | built-in instructions    | Replaces the default task instructions; the JSON response contract and the transcript are always appended |
+
+Model resolution order: `extraction.model` → the override provider's `default_model` (when `ai_provider_id` is set) → the agent's `model` → the agent provider's `default_model`. A provider override switches the fallback to *that* provider's default because the agent's model name is usually meaningless on a different provider.
+
+The custom `prompt` controls *what* to extract, not the response format — the server always appends the JSON-array contract line and the conversation transcript, since the extraction parser accepts nothing else.
+
+Extraction is opt-in and requires both fields: `extraction` without `write_memory_id` does nothing. Streaming generations and `requires_action` (client-tool) turns do not trigger extraction; the turn must complete in the same request.
 
 ## Examples
 

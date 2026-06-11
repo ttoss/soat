@@ -278,6 +278,136 @@ describe('Memory Extraction', () => {
     });
   });
 
+  describe('extraction object form (overrides)', () => {
+    test('passes provider, model, and prompt overrides to the completion call', async () => {
+      const memoryId = await createMemory('Override Memory');
+
+      const otherProvRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'ExtractionOverrideProvider',
+          provider: 'ollama',
+          default_model: 'cheap-model',
+        });
+      const otherProviderId = otherProvRes.body.id as string;
+
+      const agentId = await createAgent({
+        name: 'OverrideExtractionAgent',
+        knowledgeConfig: {
+          write_memory_id: memoryId,
+          extraction: {
+            ai_provider_id: otherProviderId,
+            model: 'cheap-model-2',
+            prompt: 'Extract only food preferences.',
+          },
+        },
+      });
+      const convId = await createConversationWithMessage('I love sushi.');
+
+      mockCreateGeneration.mockResolvedValueOnce(
+        completedGeneration('gen_ext_7', 'Sushi noted.')
+      );
+      mockRunExtractionCompletion.mockResolvedValueOnce('["User loves sushi"]');
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/conversations/${convId}/generate`)
+        .send({ agent_id: agentId });
+      expect(res.status).toBe(200);
+
+      const entries = await waitForEntries(memoryId, 1);
+      expect(entries).toHaveLength(1);
+
+      expect(mockRunExtractionCompletion).toHaveBeenCalledTimes(1);
+      const callArgs = mockRunExtractionCompletion.mock.calls[0][0];
+      expect(callArgs.aiProviderId).toBe(otherProviderId);
+      expect(callArgs.model).toBe('cheap-model-2');
+      // The custom prompt replaces the default task instructions...
+      expect(callArgs.prompt).toContain('Extract only food preferences.');
+      expect(callArgs.prompt).not.toContain('discrete, atomic facts');
+      // ...but the JSON response contract and the transcript are kept.
+      expect(callArgs.prompt).toContain('JSON array');
+      expect(callArgs.prompt).toContain('I love sushi.');
+    });
+
+    test('extraction object without overrides uses agent defaults', async () => {
+      const memoryId = await createMemory('Object Defaults Memory');
+      const agentId = await createAgent({
+        name: 'ObjectDefaultsAgent',
+        knowledgeConfig: { write_memory_id: memoryId, extraction: {} },
+      });
+      const convId = await createConversationWithMessage('I use vim.');
+
+      mockCreateGeneration.mockResolvedValueOnce(
+        completedGeneration('gen_ext_8', 'Noted.')
+      );
+      mockRunExtractionCompletion.mockResolvedValueOnce('["User uses vim"]');
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/conversations/${convId}/generate`)
+        .send({ agent_id: agentId });
+      expect(res.status).toBe(200);
+
+      const entries = await waitForEntries(memoryId, 1);
+      expect(entries).toHaveLength(1);
+
+      const callArgs = mockRunExtractionCompletion.mock.calls[0][0];
+      expect(callArgs.aiProviderId).toBeUndefined();
+      expect(callArgs.model).toBeUndefined();
+      expect(callArgs.prompt).toContain('discrete, atomic facts');
+    });
+
+    test('extraction object with enabled false does not trigger', async () => {
+      const memoryId = await createMemory('Disabled Object Memory');
+      const agentId = await createAgent({
+        name: 'DisabledObjectAgent',
+        knowledgeConfig: {
+          write_memory_id: memoryId,
+          extraction: { enabled: false, model: 'kept-but-off' },
+        },
+      });
+      const convId = await createConversationWithMessage('Hello.');
+
+      mockCreateGeneration.mockResolvedValueOnce(
+        completedGeneration('gen_ext_9', 'Hi!')
+      );
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/conversations/${convId}/generate`)
+        .send({ agent_id: agentId });
+      expect(res.status).toBe(200);
+
+      await sleep(400);
+      expect(mockRunExtractionCompletion).not.toHaveBeenCalled();
+      expect(await listEntries(memoryId)).toHaveLength(0);
+    });
+
+    test('agent create round-trips the extraction object fields', async () => {
+      const memoryId = await createMemory('Override Contract Memory');
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'OverrideContractAgent',
+          knowledge_config: {
+            write_memory_id: memoryId,
+            extraction: {
+              ai_provider_id: aiProviderId,
+              model: 'small-model',
+              prompt: 'Extract decisions only.',
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      const extraction = res.body.knowledge_config.extraction;
+      expect(extraction.ai_provider_id).toBe(aiProviderId);
+      expect(extraction.model).toBe('small-model');
+      expect(extraction.prompt).toBe('Extract decisions only.');
+    });
+  });
+
   describe('direct agent generation trigger', () => {
     test('extracts facts after POST /agents/:id/generate completes', async () => {
       const memoryId = await createMemory('Direct Extraction Memory');

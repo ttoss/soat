@@ -137,6 +137,121 @@ describe('memoryExtractionCompletion lib', () => {
     expect(lastRequestBody?.model).toBe('override-stub-model');
   });
 
+  describe('provider override', () => {
+    let overrideServer: Server;
+    let overrideRequestBody: Record<string, unknown> | undefined;
+    let overrideProviderId: string;
+
+    beforeAll(async () => {
+      overrideServer = createServer((req, res) => {
+        let raw = '';
+        req.on('data', (chunk) => {
+          raw += chunk;
+        });
+        req.on('end', () => {
+          overrideRequestBody = JSON.parse(raw);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              id: 'chatcmpl-override',
+              object: 'chat.completion',
+              created: 0,
+              model: 'override-stub',
+              choices: [
+                {
+                  index: 0,
+                  message: { role: 'assistant', content: '["override fact"]' },
+                  finish_reason: 'stop',
+                },
+              ],
+              usage: {
+                prompt_tokens: 1,
+                completion_tokens: 1,
+                total_tokens: 2,
+              },
+            })
+          );
+        });
+      });
+      await new Promise<void>((resolve) => {
+        overrideServer.listen(0, '127.0.0.1', resolve);
+      });
+      const { port } = overrideServer.address() as AddressInfo;
+
+      const provRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'ComplOverrideProvider',
+          provider: 'ollama',
+          default_model: 'override-default-model',
+          base_url: `http://127.0.0.1:${port}`,
+        });
+      overrideProviderId = provRes.body.id;
+    });
+
+    afterAll(async () => {
+      await new Promise<void>((resolve, reject) => {
+        overrideServer.close((err) => {
+          return err ? reject(err) : resolve();
+        });
+      });
+    });
+
+    test('routes the call to the override provider and uses its default model', async () => {
+      const agentId = await createAgent({ name: 'ComplProviderOverrideAgent' });
+
+      const text = await runExtractionCompletion({
+        agentId,
+        aiProviderId: overrideProviderId,
+        prompt: 'Extract.',
+      });
+
+      expect(text).toBe('["override fact"]');
+      // Provider override switches the model fallback to ITS default_model,
+      // not the agent provider's.
+      expect(overrideRequestBody?.model).toBe('override-default-model');
+    });
+
+    test('model override wins over the override provider default', async () => {
+      const agentId = await createAgent({ name: 'ComplModelOverrideAgent' });
+
+      const text = await runExtractionCompletion({
+        agentId,
+        aiProviderId: overrideProviderId,
+        model: 'tiny-model',
+        prompt: 'Extract.',
+      });
+
+      expect(text).toBe('["override fact"]');
+      expect(overrideRequestBody?.model).toBe('tiny-model');
+    });
+
+    test('rejects a provider from another project', async () => {
+      const otherProjectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Extraction Foreign Project' });
+      const foreignProvRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: otherProjectRes.body.id,
+          name: 'ForeignProvider',
+          provider: 'ollama',
+          default_model: 'foreign-model',
+        });
+
+      const agentId = await createAgent({ name: 'ComplForeignProviderAgent' });
+
+      await expect(
+        runExtractionCompletion({
+          agentId,
+          aiProviderId: foreignProvRes.body.id,
+          prompt: 'Extract.',
+        })
+      ).rejects.toMatchObject({ code: 'AI_PROVIDER_NOT_FOUND' });
+    });
+  });
+
   test('throws RESOURCE_NOT_FOUND for an unknown agent', async () => {
     await expect(
       runExtractionCompletion({
