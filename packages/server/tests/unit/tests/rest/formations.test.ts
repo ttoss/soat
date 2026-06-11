@@ -1540,4 +1540,134 @@ resources:
       expect(res.status).toBe(200);
     });
   });
+
+  // ── agent knowledge_config extraction ───────────────────────────────
+
+  describe('Formation agent with knowledge_config extraction', () => {
+    let extractionFormationId: string;
+    let extractionAgentId: string;
+    let aiProviderId: string;
+    let memoryId: string;
+
+    beforeAll(async () => {
+      const aiProvRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'FormationExtractionProvider',
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        });
+      aiProviderId = aiProvRes.body.id;
+
+      const memRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/memories')
+        .send({ project_id: projectId, name: 'Formation Extraction Memory' });
+      memoryId = memRes.body.id;
+    });
+
+    test('validate accepts knowledge_config with the extraction object form', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              ExtractionAgent: {
+                type: 'agent',
+                properties: {
+                  ai_provider_id: aiProviderId,
+                  name: 'extraction-agent',
+                  knowledge_config: {
+                    write_memory_id: memoryId,
+                    extraction: {
+                      model: 'cheap-model',
+                      prompt: 'Extract decisions only.',
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(true);
+    });
+
+    test('creates an agent whose knowledge_config includes extraction', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `extraction-formation-${Date.now()}`,
+          template: {
+            resources: {
+              ExtractionAgent: {
+                type: 'agent',
+                properties: {
+                  ai_provider_id: aiProviderId,
+                  name: 'extraction-agent',
+                  knowledge_config: {
+                    write_memory_id: memoryId,
+                    extraction: {
+                      model: 'cheap-model',
+                      prompt: 'Extract decisions only.',
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      extractionFormationId = res.body.id;
+      extractionAgentId = res.body.resources[0].physical_resource_id;
+      expect(extractionAgentId).toMatch(/^agent_/);
+
+      const agentRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/agents/${extractionAgentId}`
+      );
+      expect(agentRes.status).toBe(200);
+      expect(agentRes.body.knowledge_config.write_memory_id).toBe(memoryId);
+      expect(agentRes.body.knowledge_config.extraction.model).toBe(
+        'cheap-model'
+      );
+      expect(agentRes.body.knowledge_config.extraction.prompt).toBe(
+        'Extract decisions only.'
+      );
+    });
+
+    test('formation update can switch extraction to the boolean form', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${extractionFormationId}`)
+        .send({
+          template: {
+            resources: {
+              ExtractionAgent: {
+                type: 'agent',
+                properties: {
+                  ai_provider_id: aiProviderId,
+                  name: 'extraction-agent',
+                  knowledge_config: {
+                    write_memory_id: memoryId,
+                    extraction: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('active');
+
+      const agentRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/agents/${extractionAgentId}`
+      );
+      expect(agentRes.status).toBe(200);
+      expect(agentRes.body.knowledge_config.extraction).toBe(true);
+    });
+  });
 });
