@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.8.2](https://127.0.0.1/41431/git/ttoss/compare/v0.8.1...v0.8.2) (2026-06-11)
+
+### Bug Fixes
+
+* **sessions:** enforce singleSessionPerActor at DB level to prevent race condition ([#191](https://127.0.0.1/41431/git/ttoss/issues/191)) ([0db866e](https://127.0.0.1/41431/git/ttoss/commits/0db866ef7334279bce7aadbd5538596dd7c7b9b3)), closes [#190](https://127.0.0.1/41431/git/ttoss/issues/190)
+* **sessions:** persist and honor inactivity_ttl_seconds ([#192](https://127.0.0.1/41431/git/ttoss/issues/192)) ([dabb6a7](https://127.0.0.1/41431/git/ttoss/commits/dabb6a7219720e344b9f1542e614b6c6a31fb723)), closes [#189](https://127.0.0.1/41431/git/ttoss/issues/189)
+
 ## [0.8.1](https://127.0.0.1/37303/git/ttoss/compare/v0.8.0...v0.8.1) (2026-06-10)
 
 ### Bug Fixes
