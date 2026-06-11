@@ -129,6 +129,28 @@ Set `write_memory_id` in the agent's `knowledge_config` to automatically inject 
 
 You can set `write_memory_id` to the same memory used for retrieval (so the agent reads from and writes to the same pool) or to a separate memory.
 
+#### Automatic Extraction
+
+Set `extraction: true` alongside `write_memory_id` to have the server extract facts from completed generation turns automatically — no explicit `write_memory` call by the agent is needed:
+
+```json
+{
+  "knowledge_config": {
+    "write_memory_id": "mem_alice",
+    "extraction": true
+  }
+}
+```
+
+How it works:
+
+- After a conversation, session, or direct agent generation completes, the server runs a fire-and-forget extraction step. It never blocks or fails the generation response.
+- The extraction step sends the turn's transcript to the agent's own AI provider and model as a plain completion (no tools, no knowledge injection) and asks for a JSON array of atomic facts. Transient content such as greetings is skipped.
+- Each candidate fact (at most 20 per turn) goes through the standard [write algorithm](#write-algorithm) — duplicates are skipped, related facts are merged. Entries are tagged with `source: "extraction"`.
+- A summary (`{ candidates, created, updated, skipped }`) is recorded on the originating generation's `metadata.extraction` field for observability via the [Generations](./generations.md) API.
+
+Extraction is opt-in and requires both fields: `extraction: true` without `write_memory_id` does nothing. Streaming generations and `requires_action` (client-tool) turns do not trigger extraction; the turn must complete in the same request.
+
 ## Examples
 
 ### Create a memory

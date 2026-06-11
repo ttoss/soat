@@ -18,7 +18,7 @@
 | Entity graph queries               | ❌ Future      | `entity_ids`, `entity_names`, `actor_ids` filters; `resolveEntitySearch()`                       |
 | Hybrid vector + entity search      | ❌ Future      | Entity filter narrows candidates, vector search ranks within                                     |
 | Graph traversal queries            | ❌ Future      | `relationship` and `direction` filters for edge-based traversal                                  |
-| Post-conversation extraction       | ❌ Future      | Async trigger on conversation turn; facts written via `writeMemoryEntry()`                       |
+| Post-conversation extraction       | ✅ Implemented | Fire-and-forget trigger on completed turns; facts written via `writeMemoryEntry()` (see prd-memories.md Phase 4) |
 
 ## Implementation Phases
 
@@ -121,20 +121,17 @@ All entity parameters are optional and compose with existing vector/memory/docum
 
 ---
 
-### Phase 4 — Post-Conversation Extraction (async) ❌ Future
+### Phase 4 — Post-Conversation Extraction (async) ✅ Complete
 
 **Goal:** Wire the memory extraction algorithm (defined in prd-memories.md Phase 4) into the conversation/agent pipeline so facts are extracted automatically after each turn — with no changes needed to the caller.
 
-**Dependencies:** Phase 2 of this PRD (memory integration) must be complete. Memory extraction algorithm (prd-memories.md Phase 4) must be complete.
+**Deliverables (as implemented — see prd-memories.md Phase 4 for full details):**
 
-**Deliverables:**
-
-- Fire-and-forget extraction trigger at the end of `createGeneration()` — non-blocking; does not affect generation latency
-- Trigger condition: agent's merged `knowledgeConfig` includes at least one `memory_id` and `extraction` is not disabled
-- Calls `extractMemoryFacts({ messages, memoryIds })` — runs LLM to extract candidate facts, then `writeMemoryEntry()` for each
-- Extraction result (`{ created, updated, skipped }`) stored on the `Generation` trace for observability
-- Config flag `extraction: false` on `knowledgeConfig` to opt out per-agent or per-generation
-- Tests: extraction triggered on generation complete, not triggered when no memory IDs, extraction result recorded on trace
+- ✅ Fire-and-forget extraction trigger after completed turns — non-blocking; fired from `conversationGeneration.ts` (covers conversations and sessions) and the direct `POST /agents/:id/generate` route. *(Design deviation: the trigger lives at the post-completion call sites instead of inside `createGeneration()`, keeping the generation pipeline extraction-free and the trigger covered by REST integration tests.)*
+- ✅ Trigger condition: **opt-in** — agent's `knowledgeConfig` has `extraction: true` and a `write_memory_id` (the write target). *(Design deviation: opt-in rather than opt-out, so enabling memory retrieval never silently adds LLM extraction cost.)*
+- ✅ `runMemoryExtraction()` in `memoryExtraction.ts` — runs the extraction completion (`memoryExtractionCompletion.ts`, plain completion on the agent's own provider/model), then `writeMemoryEntry()` for each candidate with `source: 'extraction'`
+- ✅ Extraction result (`{ candidates, created, updated, skipped }`) stored on the generation record's `metadata.extraction`
+- ✅ Tests: trigger conditions, dedup during extraction, malformed output, completion failure (`memoryExtraction.test.ts` in `rest/` and `lib/`)
 
 **Unlocks:** Zero-effort conversational memory — agents accumulate knowledge just by talking, no explicit `write_memory` calls needed.
 

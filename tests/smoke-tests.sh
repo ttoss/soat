@@ -853,6 +853,27 @@ if ! printf '%s\n' "$AGENT_STREAM_RESP" | grep -q "data: \[DONE\]"; then
 fi
 echo "Agent SSE stream OK."
 
+# 22b2. Knowledge config: automatic extraction flag round-trip
+echo "--- Setting knowledge_config with extraction flag ---"
+KC_UPDATE_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
+  --knowledge_config "{\"write_memory_id\":\"$MEM_ID\",\"extraction\":true}")
+if ! printf '%s\n' "$KC_UPDATE_RESP" | jq -e '.knowledge_config.extraction == true' >/dev/null 2>&1; then
+  echo "ERROR: update-agent did not round-trip knowledge_config.extraction" >&2
+  echo "$KC_UPDATE_RESP" >&2
+  exit 1
+fi
+KC_GET_RESP=$($SOAT_CLI get-agent --agent-id "$AGENT_ID")
+if ! printf '%s\n' "$KC_GET_RESP" | jq -e --arg mem "$MEM_ID" '.knowledge_config.write_memory_id == $mem and .knowledge_config.extraction == true' >/dev/null 2>&1; then
+  echo "ERROR: get-agent did not return knowledge_config extraction settings" >&2
+  echo "$KC_GET_RESP" >&2
+  exit 1
+fi
+# Disable extraction again so later generations in this script do not
+# trigger extra extraction LLM calls (extraction itself is asynchronous and
+# LLM-dependent, so its behavior is covered by unit tests, not smoke).
+$SOAT_CLI update-agent --agent-id "$AGENT_ID" --knowledge_config '{}' >/dev/null
+echo "knowledge_config extraction round-trip: OK"
+
 # 22c. Create a deterministic HTTP tool for tool_output message content
 echo "--- Creating project-detail tool ---"
 PROJECT_DETAIL_TOOL_RESP=$($SOAT_CLI create-tool \

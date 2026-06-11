@@ -559,6 +559,10 @@ components:
               type: string
               nullable: true
               description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
+            extraction:
+              type: boolean
+              nullable: true
+              description: When true and write_memory_id is set, atomic facts are automatically extracted from each completed generation turn and written to the write memory through the standard dedup/merge/skip algorithm.
         max_context_messages:
           type: integer
           nullable: true
@@ -641,6 +645,10 @@ components:
               type: string
               nullable: true
               description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
+            extraction:
+              type: boolean
+              nullable: true
+              description: When true and write_memory_id is set, atomic facts are automatically extracted from each completed generation turn and written to the write memory through the standard dedup/merge/skip algorithm.
         max_context_messages:
           type: integer
           description: Maximum number of recent messages included in the context window. Null means no limit.
@@ -722,6 +730,10 @@ components:
               type: string
               nullable: true
               description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
+            extraction:
+              type: boolean
+              nullable: true
+              description: When true and write_memory_id is set, atomic facts are automatically extracted from each completed generation turn and written to the write memory through the standard dedup/merge/skip algorithm.
         max_context_messages:
           type: integer
           nullable: true

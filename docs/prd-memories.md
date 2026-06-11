@@ -11,7 +11,7 @@
 | Entry REST endpoints           | ✅ Implemented | `POST/GET/PUT/DELETE /api/v1/memories/:memoryId/entries`; POST returns `action` field                                            |
 | Entry permissions              | ✅ Implemented | `WriteMemoryEntry`, `ReadMemoryEntry`, `ListMemoryEntries`, `UpdateMemoryEntry`, `DeleteMemoryEntry`                             |
 | `knowledgeConfig` on Agent     | ✅ Implemented | JSONB field on Agent model; merged with per-generation config; drives automatic context injection                                |
-| Extraction (post-conversation) | ❌ Not started | Auto-extract facts from conversation turns                                                                                       |
+| Extraction (post-conversation) | ✅ Implemented | `runMemoryExtraction()` in `memoryExtraction.ts`; opt-in via `knowledge_config.extraction: true` + `write_memory_id`; summary on generation `metadata.extraction` |
 | Knowledge integration          | ✅ Implemented | `resolveMemorySearch()` in `knowledgeMemory.ts`; `memoryIds`/`memoryTags` in `searchKnowledge()`                                 |
 | MemoryEntity model             | ❌ Not started | Project-scoped extracted nouns/objects with `mey_` prefix, embedding column, optional `actorId` FK; deduplicated across memories |
 | MemoryEntryEntity join table   | ❌ Not started | Links entries to entities with relationship label and direction                                                                  |
@@ -69,18 +69,20 @@
 
 ---
 
-### Phase 4 — Automatic Extraction ❌ Not started
+### Phase 4 — Automatic Extraction ✅ Complete
 
 **Goal:** Agents learn passively. Facts are extracted from conversations automatically — no explicit `write_memory` call needed.
 
 **Deliverables:**
 
-- Post-generation extraction pipeline (fire-and-forget, non-blocking)
-- LLM prompt to extract atomic facts from completed conversation turn
-- Each candidate runs through the standard `writeMemoryEntry()` write algorithm
-- Extraction triggered when an agent's `knowledge_config` includes `memory_ids` with `extraction: true`
-- Return summary `{ created, updated, skipped }` in the generation trace
-- Tests covering extraction trigger, candidate extraction, dedup during extraction
+- ✅ Post-generation extraction pipeline (fire-and-forget, non-blocking) — `fireMemoryExtraction()` in `src/lib/memoryExtraction.ts`, triggered after completed conversation/session generations (`conversationGeneration.ts`) and direct `POST /agents/:id/generate` calls
+- ✅ LLM prompt to extract atomic facts from the completed turn — runs as a plain completion against the agent's own provider/model (`memoryExtractionCompletion.ts`), with no tools and no knowledge injection, so extraction cannot trigger agent side effects
+- ✅ Each candidate (max 20 per turn) runs through the standard `writeMemoryEntry()` write algorithm with `source: 'extraction'`
+- ✅ Extraction trigger: **opt-in** via `knowledge_config.extraction: true` + `write_memory_id` — the designated write target, reusing the `write_memory` tool's semantics. *(Design deviation: the original plan keyed extraction off `memory_ids`, but those define the read scope and can be plural; the single write target is unambiguous.)*
+- ✅ Summary `{ candidates, created, updated, skipped }` recorded on the generation record's `metadata.extraction`
+- ✅ Tests covering trigger conditions, candidate extraction, dedup during extraction, malformed LLM output, and completion failure (`tests/unit/tests/rest/memoryExtraction.test.ts`, `tests/unit/tests/lib/memoryExtraction.test.ts`)
+
+**Not triggered for:** streaming generations and `requires_action` (client-tool) turns — the turn must complete in the same request.
 
 **Unlocks:** Zero-effort conversational memory — agents accumulate knowledge just by talking.
 
@@ -424,7 +426,7 @@ STEP 3 — RETURN
   Return a summary: { created: number, updated: number, skipped: number }
 ```
 
-Extraction is triggered when an agent or chat with attached memories completes a generation.
+Extraction is triggered when an agent whose `knowledge_config` has `extraction: true` and a `write_memory_id` completes a non-streaming generation (conversation, session, or direct generate). Facts are written to the `write_memory_id` memory.
 
 ## Agent Integration
 
@@ -501,7 +503,7 @@ Both sets of results are injected as **system messages**, ordered by score.
 2. **Search** — call `searchKnowledge()` with the merged config filters and the conversation context as the query.
 3. **Inject** — prepend results as system messages, tagged by source.
 4. **Generate** — send to LLM with instructions + knowledge + conversation.
-5. **Post-generate (async)** — if the merged config includes `memory_ids`, the extraction algorithm runs on the completed conversation turn, writing new facts to those memories.
+5. **Post-generate (async)** — if the config has `extraction: true` and a `write_memory_id`, the extraction algorithm runs on the completed turn, writing new facts to the write memory.
 
 ### Agent Memory Tools (soat-tools)
 

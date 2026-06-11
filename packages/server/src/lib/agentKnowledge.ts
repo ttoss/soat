@@ -17,6 +17,8 @@ export type KnowledgeConfig = {
   limit?: number;
   query?: string;
   writeMemoryId?: string;
+  /** When true (and writeMemoryId is set), facts are extracted from completed turns automatically. */
+  extraction?: boolean;
 };
 
 const anyLength = (arr: unknown[] | undefined): boolean => {
