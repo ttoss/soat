@@ -12,7 +12,7 @@
 | Entry permissions              | ✅ Implemented | `WriteMemoryEntry`, `ReadMemoryEntry`, `ListMemoryEntries`, `UpdateMemoryEntry`, `DeleteMemoryEntry`                             |
 | `knowledgeConfig` on Agent     | ✅ Implemented | JSONB field on Agent model; merged with per-generation config; drives automatic context injection                                |
 | Extraction (post-conversation) | ❌ Not started | Auto-extract facts from conversation turns                                                                                       |
-| Knowledge integration          | ✅ Implemented | `resolveMemorySearch()` in `knowledge.ts`; `memoryIds`/`memoryTags` in `searchKnowledge()`                                       |
+| Knowledge integration          | ✅ Implemented | `resolveMemorySearch()` in `knowledgeMemory.ts`; `memoryIds`/`memoryTags` in `searchKnowledge()`                                 |
 | MemoryEntity model             | ❌ Not started | Project-scoped extracted nouns/objects with `mey_` prefix, embedding column, optional `actorId` FK; deduplicated across memories |
 | MemoryEntryEntity join table   | ❌ Not started | Links entries to entities with relationship label and direction                                                                  |
 | Entity extraction on write     | ❌ Not started | Synchronous best-effort extraction inside `writeMemoryEntry()`; LLM extracts subject/relationship/object triples                 |
@@ -37,7 +37,7 @@
 
 ---
 
-### Phase 2 — Agent Read & Write ✅ Partially complete
+### Phase 2 — Agent Read & Write ✅ Complete
 
 **Goal:** Make agents memory-aware. Agents can recall facts before generating and write new facts during generation. This is the minimum needed for a compelling AI app tutorial.
 
@@ -475,7 +475,7 @@ There are three ways to provide knowledge to an agent:
 | ---------------------------------------------------------------- | ------------------------------- | ----------------------------- | -------------------------------- |
 | **Agent config** (`knowledge_config` on agent)                   | Every generation, automatically | Agent creator (at setup time) | System messages                  |
 | **Per-generation request** (`knowledge_config` in generate body) | One specific generation         | Caller (at request time)      | System messages                  |
-| **Agent self-retrieval**                                         | During generation, dynamically  | The agent (LLM decides)       | Via `search_knowledge` soat-tool |
+| **Agent self-retrieval**                                         | During generation, dynamically  | The agent (LLM decides)       | Via `search-knowledge` soat-tool |
 
 ### Merge Behavior (Agent Config + Per-Generation)
 
@@ -510,7 +510,7 @@ When an agent has a `knowledgeConfig` with memory IDs, it gains access to these 
 | Tool               | Description                                                          |
 | ------------------ | -------------------------------------------------------------------- |
 | `write_memory`     | Write content to a memory (system decides: create, merge, or skip)   |
-| `search_knowledge` | Search across memories and documents (delegated to knowledge module) |
+| `search-knowledge` | Search across memories and documents (delegated to knowledge module) |
 
 These tools are gated by the agent's boundary policy.
 
