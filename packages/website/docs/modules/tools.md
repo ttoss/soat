@@ -30,7 +30,7 @@ Four tool types are supported: `http` (calls an external HTTP endpoint), `client
 | `description`       | `string \| null`                                | Human-readable description sent to the model for tool selection                                                   |
 | `parameters`        | `object \| null`                                | JSON Schema describing the tool's input. Required for `http` and `client` types.                                  |
 | `execute`           | `object \| null`                                | HTTP execution config (`url`, `method`, `headers`). Required for `http` type.                                     |
-| `execute.url`       | `string`                                        | HTTP endpoint. Supports `{paramName}` path placeholders replaced at call time with URL-encoded argument values.   |
+| `execute.url`       | `string`                                        | HTTP endpoint. Supports `{paramName}` and `${body.fieldName}` path placeholders replaced at call time with URL-encoded argument values.   |
 | `execute.method`    | `string`                                        | HTTP method (default: `POST`). For `GET`, `HEAD`, `DELETE` the arguments become query-string parameters.          |
 | `execute.headers`   | `object`                                        | Additional headers sent with the execution request.                                                               |
 | `mcp`               | `object \| null`                                | MCP server config (`url`, `headers`). Required for `mcp` type.                                                    |
@@ -68,7 +68,10 @@ For `mcp` and `soat`, the tool's `name` is a **prefix** joined with an underscor
 
 When the model calls an `http` tool, the server sends an HTTP request to `execute.url` using the configured method. For `POST`, `PUT`, and `PATCH` the tool arguments are sent as a JSON body. For `GET`, `HEAD`, and `DELETE` the arguments become query-string parameters.
 
-`execute.url` may contain `{paramName}` placeholders. At invocation time each placeholder is replaced with the corresponding tool argument (URL-encoded via `encodeURIComponent`). Arguments consumed as path parameters are excluded from the request body or query string.
+`execute.url` supports two placeholder syntaxes for injecting tool arguments into the URL path at invocation time:
+
+- **`{paramName}`** — replaced with the corresponding tool argument (URL-encoded). Use this syntax when the tool is defined directly via the API or CLI.
+- **`${body.fieldName}`** — same behavior, but used inside formation template `sub` expressions where `${...}` is the interpolation syntax. Arguments consumed by either placeholder form are excluded from the request body or query string.
 
 Example — a `DELETE` tool with path parameters:
 
@@ -95,6 +98,37 @@ When the model calls this tool with `{ "user_id": "123", "post_id": "456" }`, th
 
 ```
 DELETE https://api.example.com/users/123/posts/456
+```
+
+In a formation template, use `${body.fieldName}` inside a `sub` expression to interpolate tool arguments into the URL path:
+
+```yaml
+parameters:
+  AppUrl:
+    type: string
+    default: 'https://api.example.com'
+resources:
+  PatchExpense:
+    type: tool
+    properties:
+      type: http
+      name: patch-recurring-expense
+      execute:
+        url: { sub: '${AppUrl}/finance/recurring-expenses/${body.publicUuid}' }
+        method: PATCH
+      parameters:
+        type: object
+        properties:
+          publicUuid: { type: string }
+          amount: { type: number }
+        required: [publicUuid]
+```
+
+When called with `{ "publicUuid": "exp_abc", "amount": 42 }`, the server issues:
+
+```
+PATCH https://api.example.com/finance/recurring-expenses/exp_abc
+Body: { "amount": 42 }
 ```
 
 ### client

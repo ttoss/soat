@@ -201,23 +201,48 @@ describe('serializeSteps', () => {
     class CustomError extends Error {
       status: number;
       body: string;
-      constructor(message: string, status: number, body: string) {
+      url: string;
+      method: string;
+      constructor(
+        message: string,
+        status: number,
+        body: string,
+        url: string,
+        method: string
+      ) {
         super(message);
         this.name = 'CustomError';
         this.status = status;
         this.body = body;
+        this.url = url;
+        this.method = method;
       }
     }
-    const error = new CustomError('HTTP 401: Denied', 401, 'Denied');
+    const error = new CustomError(
+      'HTTP 401 PATCH https://example.com/items/1: Denied',
+      401,
+      'Denied',
+      'https://example.com/items/1',
+      'PATCH'
+    );
     const steps = [{ type: 'tool-error', error }];
     const serialized = serializeSteps(steps) as Array<{
       type: string;
-      error: { message: string; name: string; status: number; body: string };
+      error: {
+        message: string;
+        name: string;
+        status: number;
+        body: string;
+        url: string;
+        method: string;
+      };
     }>;
-    expect(serialized[0].error.message).toBe('HTTP 401: Denied');
+    expect(serialized[0].error.message).toContain('HTTP 401');
     expect(serialized[0].error.name).toBe('CustomError');
     expect(serialized[0].error.status).toBe(401);
     expect(serialized[0].error.body).toBe('Denied');
+    expect(serialized[0].error.url).toBe('https://example.com/items/1');
+    expect(serialized[0].error.method).toBe('PATCH');
   });
 
   test('handles nested Error objects', () => {

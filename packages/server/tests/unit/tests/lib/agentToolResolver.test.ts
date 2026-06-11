@@ -4,6 +4,7 @@ import {
   HttpToolError,
   isSoatActionAllowedByBoundary,
   resolveAgentTools,
+  resolveBodyParamInterpolations,
   resolveUrlPathParams,
 } from 'src/lib/agentToolResolver';
 
@@ -173,17 +174,23 @@ describe('resolveAgentTools', () => {
     expect(httpError.status).toBe(401);
     expect(httpError.message).toContain('HTTP 401');
     expect(httpError.body).toContain('Unauthorized');
+    expect(httpError.url).toContain('example.com');
+    expect(httpError.method).toBe('GET');
     expect(JSON.stringify(httpError)).not.toBe('{}');
     const serialized = JSON.parse(JSON.stringify(httpError)) as {
       message: string;
       name: string;
       status: number;
       body: string;
+      url: string;
+      method: string;
     };
     expect(serialized.message).toContain('HTTP 401');
     expect(serialized.name).toBe('HttpToolError');
     expect(serialized.status).toBe(401);
     expect(serialized.body).toContain('Unauthorized');
+    expect(serialized.url).toContain('example.com');
+    expect(serialized.method).toBe('GET');
 
     fetchMock.mockRestore();
   });
@@ -368,11 +375,13 @@ describe('resolveAgentTools', () => {
 });
 
 describe('HttpToolError', () => {
-  test('serializes to JSON with message, name, status, and body', () => {
+  test('serializes to JSON with message, name, status, url, method, and body', () => {
     const error = new HttpToolError(
-      'HTTP 401: Unauthorized',
+      'HTTP 401 GET https://api.example.com/items: Unauthorized',
       401,
-      'Unauthorized'
+      'Unauthorized',
+      'https://api.example.com/items',
+      'GET'
     );
     const json = JSON.stringify(error);
     expect(json).not.toBe('{}');
@@ -381,18 +390,24 @@ describe('HttpToolError', () => {
       name: string;
       status: number;
       body: string;
+      url: string;
+      method: string;
     };
-    expect(parsed.message).toBe('HTTP 401: Unauthorized');
+    expect(parsed.message).toContain('HTTP 401');
     expect(parsed.name).toBe('HttpToolError');
     expect(parsed.status).toBe(401);
     expect(parsed.body).toBe('Unauthorized');
+    expect(parsed.url).toBe('https://api.example.com/items');
+    expect(parsed.method).toBe('GET');
   });
 
   test('is an instance of Error', () => {
     const error = new HttpToolError(
-      'HTTP 500: Internal Server Error',
+      'HTTP 500 POST https://api.example.com/items: Internal Server Error',
       500,
-      'Internal Server Error'
+      'Internal Server Error',
+      'https://api.example.com/items',
+      'POST'
     );
     expect(error).toBeInstanceOf(Error);
     expect(error.name).toBe('HttpToolError');
@@ -577,6 +592,44 @@ describe('resolveUrlPathParams', () => {
     });
     expect(result.resolvedUrl).toBe('https://example.com/{id}/details');
     expect(result.remainingArgs).toEqual({});
+  });
+});
+
+describe('resolveBodyParamInterpolations', () => {
+  test('replaces ${body.field} with toolArg value and removes it from remainingArgs', () => {
+    const result = resolveBodyParamInterpolations({
+      url: 'https://example.com/api/items/${body.itemId}',
+      toolArgs: { itemId: 'abc-123', other: 'value' },
+    });
+    expect(result.resolvedUrl).toBe('https://example.com/api/items/abc-123');
+    expect(result.remainingArgs).toEqual({ other: 'value' });
+  });
+
+  test('replaces multiple ${body.xxx} placeholders', () => {
+    const result = resolveBodyParamInterpolations({
+      url: 'https://example.com/${body.projectId}/items/${body.itemId}',
+      toolArgs: { projectId: 'prj-1', itemId: 'itm-2', extra: 'x' },
+    });
+    expect(result.resolvedUrl).toBe('https://example.com/prj-1/items/itm-2');
+    expect(result.remainingArgs).toEqual({ extra: 'x' });
+  });
+
+  test('URL-encodes body param values', () => {
+    const result = resolveBodyParamInterpolations({
+      url: 'https://example.com/search/${body.query}',
+      toolArgs: { query: 'hello world' },
+    });
+    expect(result.resolvedUrl).toBe('https://example.com/search/hello%20world');
+    expect(result.remainingArgs).toEqual({});
+  });
+
+  test('leaves placeholder unchanged when arg not provided', () => {
+    const result = resolveBodyParamInterpolations({
+      url: 'https://example.com/items/${body.id}',
+      toolArgs: { other: 'value' },
+    });
+    expect(result.resolvedUrl).toBe('https://example.com/items/${body.id}');
+    expect(result.remainingArgs).toEqual({ other: 'value' });
   });
 });
 
