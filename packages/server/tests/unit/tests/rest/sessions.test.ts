@@ -707,6 +707,87 @@ describe('Sessions', () => {
     });
   });
 
+  // ── Closed session guards (regression: session replay duplicates) ─────
+
+  describe('closed session guards', () => {
+    let closedSessionId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'Close Guard Test' });
+      closedSessionId = res.body.id;
+
+      // Add a message so the session has history
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${closedSessionId}/messages`)
+        .send({ message: 'Message before close' });
+
+      // Close the session
+      const closeRes = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${agentId}/sessions/${closedSessionId}`)
+        .send({ status: 'closed' });
+      expect(closeRes.status).toBe(200);
+      expect(closeRes.body.status).toBe('closed');
+    });
+
+    test('adding a message to a closed session returns 409 SESSION_CLOSED', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${closedSessionId}/messages`)
+        .send({ message: 'Should not be added' });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('SESSION_CLOSED');
+    });
+
+    test('generating for a closed session returns 409 SESSION_CLOSED', async () => {
+      const response = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/sessions/${closedSessionId}/generate`
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('SESSION_CLOSED');
+    });
+
+    test('a new session created after close starts with zero messages', async () => {
+      const newSessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'Fresh Session After Close' });
+
+      expect(newSessionRes.status).toBe(201);
+      const newSessionId = newSessionRes.body.id;
+
+      const messagesRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/sessions/${newSessionId}/messages`
+      );
+
+      expect(messagesRes.status).toBe(200);
+      expect(messagesRes.body.data).toHaveLength(0);
+    });
+
+    test('a new session accepts messages independently of the closed session', async () => {
+      const newSessionRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions`)
+        .send({ name: 'Independent Session' });
+      const newSessionId = newSessionRes.body.id;
+
+      const addRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${newSessionId}/messages`)
+        .send({ message: 'Fresh start' });
+
+      expect(addRes.status).toBe(201);
+      expect(addRes.body.content).toBe('Fresh start');
+
+      // Confirm old closed session still rejects
+      const rejectRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/sessions/${closedSessionId}/messages`)
+        .send({ message: 'Still rejected' });
+
+      expect(rejectRes.status).toBe(409);
+      expect(rejectRes.body.error.code).toBe('SESSION_CLOSED');
+    });
+  });
+
   // ── Permission checks ─────────────────────────────────────────────────
 
   describe('Permission enforcement', () => {

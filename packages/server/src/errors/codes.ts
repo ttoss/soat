@@ -48,6 +48,11 @@ export const ERROR_CODES = {
     description:
       'The session has expired due to inactivity. Open a new session to continue.',
   },
+  SESSION_CLOSED: {
+    httpStatus: 409,
+    description:
+      'The session is closed and does not accept new messages or generation requests. Open a new session to continue.',
+  },
   AGENT_AND_CHAT_EXCLUSIVE: {
     httpStatus: 400,
     description:
