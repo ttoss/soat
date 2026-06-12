@@ -32,6 +32,11 @@ import {
 } from './generationInputMessages';
 import { recordGenerationFailure } from './generationLifecycle';
 import { createGenerationRecord } from './generations';
+import {
+  type ProviderOptionsMap,
+  type ReasoningConfig,
+  resolveReasoningForContext,
+} from './reasoning';
 
 const log = createDebug('soat:generation');
 
@@ -47,6 +52,9 @@ type GenerationContext = {
   generationId: string;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
+  reasoningConfig?: ReasoningConfig | null;
+  providerOptions?: ProviderOptionsMap;
+  maxOutputTokens?: number;
 };
 
 const buildKnowledgeTools = (args: {
@@ -79,13 +87,44 @@ const resolveGenerationModel = async (args: {
     );
   }
 
-  return buildModel({
+  const model = await buildModel({
     provider: resolved.provider,
     secretValue: resolved.secretValue,
     model: args.typedAgent.model ?? resolved.defaultModel,
     baseUrl: resolved.baseUrl,
     config: resolved.config as Record<string, unknown> | undefined,
   });
+
+  return { model, provider: resolved.provider };
+};
+
+const assembleContextMessages = async (args: {
+  agentId: string;
+  projectIds?: number[];
+  typedAgent: TypedAgent;
+  resolvedMessages: Array<{ role: string; content: unknown }>;
+}): Promise<Array<{ role: string; content: unknown }>> => {
+  const knowledgeMessages = await buildKnowledgeMessages({
+    knowledgeConfig: args.typedAgent.knowledgeConfig,
+    projectIds: args.projectIds,
+    messages: args.resolvedMessages,
+  });
+
+  log(
+    'assembleContextMessages: agentId=%s knowledgeMessages=%d userMessages=%d',
+    args.agentId,
+    knowledgeMessages.length,
+    args.resolvedMessages.length
+  );
+
+  const allMessages = buildAllMessages(args.typedAgent.instructions, [
+    ...knowledgeMessages,
+    ...args.resolvedMessages,
+  ]);
+
+  log('assembleContextMessages: allMessages=%o', allMessages);
+
+  return allMessages;
 };
 
 const buildGenerationContext = async (args: {
@@ -99,6 +138,7 @@ const buildGenerationContext = async (args: {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
   remainingDepth?: number;
+  reasoning?: object;
 }): Promise<GenerationContext> => {
   const typedAgent = await resolveAgentForGeneration({
     agentId: args.agentId,
@@ -121,9 +161,15 @@ const buildGenerationContext = async (args: {
       : undefined,
     agentBoundaryPolicy: typedAgent.boundaryPolicy,
   });
-  const model = await resolveGenerationModel({
+  const { model, provider } = await resolveGenerationModel({
     agentId: args.agentId,
     typedAgent,
+  });
+
+  const { reasoningConfig, reasoningOptions } = resolveReasoningForContext({
+    typedAgent,
+    override: args.reasoning,
+    provider,
   });
 
   const resolvedTools = typedAgent.toolIds
@@ -142,25 +188,12 @@ const buildGenerationContext = async (args: {
 
   buildKnowledgeTools({ typedAgent, resolvedTools });
 
-  const knowledgeMessages = await buildKnowledgeMessages({
-    knowledgeConfig: typedAgent.knowledgeConfig,
+  const allMessages = await assembleContextMessages({
+    agentId: args.agentId,
     projectIds: args.projectIds,
-    messages: resolvedMessages,
+    typedAgent,
+    resolvedMessages,
   });
-
-  log(
-    'buildGenerationContext: agentId=%s knowledgeMessages=%d userMessages=%d',
-    args.agentId,
-    knowledgeMessages.length,
-    resolvedMessages.length
-  );
-
-  const allMessages = buildAllMessages(typedAgent.instructions, [
-    ...knowledgeMessages,
-    ...resolvedMessages,
-  ]);
-
-  log('buildGenerationContext: allMessages=%o', allMessages);
 
   return {
     typedAgent,
@@ -170,6 +203,9 @@ const buildGenerationContext = async (args: {
     generationId: generatePublicId(PUBLIC_ID_PREFIXES.generation),
     toolContext: args.toolContext ?? null,
     remainingDepth: args.remainingDepth ?? null,
+    reasoningConfig,
+    providerOptions: reasoningOptions?.providerOptions,
+    maxOutputTokens: reasoningOptions?.maxOutputTokens,
   };
 };
 
@@ -195,6 +231,8 @@ const dispatchGeneration = (args: {
       agentId: args.agentId,
       parentTraceId: args.parentTraceId ?? null,
       rootTraceId: args.rootTraceId ?? null,
+      providerOptions: args.ctx.providerOptions,
+      maxOutputTokens: args.ctx.maxOutputTokens,
     });
     return Promise.resolve(stream);
   }
@@ -211,6 +249,9 @@ const dispatchGeneration = (args: {
     abortSignal: args.abortSignal,
     toolContext: args.ctx.toolContext ?? null,
     remainingDepth: args.ctx.remainingDepth ?? null,
+    providerOptions: args.ctx.providerOptions,
+    maxOutputTokens: args.ctx.maxOutputTokens,
+    reasoningConfig: args.ctx.reasoningConfig,
   });
 };
 
@@ -226,6 +267,7 @@ const resolveContextAndRecord = async (args: {
   rootTraceId?: string | null;
   initiatorGenerationId?: string | null;
   remainingDepth?: number;
+  reasoning?: object;
 }): Promise<GenerationContext> => {
   const ctx = await buildGenerationContext({
     agentId: args.agentId,
@@ -238,6 +280,7 @@ const resolveContextAndRecord = async (args: {
     parentTraceId: args.parentTraceId,
     rootTraceId: args.rootTraceId,
     remainingDepth: args.remainingDepth,
+    reasoning: args.reasoning,
   });
 
   // Awaited so the record reliably exists before the generation runs and a
@@ -275,6 +318,7 @@ export const createGeneration = async (args: {
   authUser?: AuthUser;
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
+  reasoning?: object;
 }): Promise<GenerationResult | ReadableStream> => {
   const maxDepth = args.remainingDepth ?? 10;
   const traceId = args.traceId ?? generatePublicId(PUBLIC_ID_PREFIXES.trace);
@@ -314,6 +358,7 @@ export const createGeneration = async (args: {
     rootTraceId: args.rootTraceId,
     initiatorGenerationId: args.initiatorGenerationId,
     remainingDepth: maxDepth,
+    reasoning: args.reasoning,
   });
 
   log('createGeneration: agentId=%s stream=%s', args.agentId, args.stream);

@@ -3,26 +3,23 @@ import createDebug from 'debug';
 
 import { resolveCompletionModel } from './completionModel';
 
-const log = createDebug('soat:memory-extraction');
+const log = createDebug('soat:reasoning');
 
 /**
- * Runs the fact-extraction completion as a plain text completion — no tools,
- * no knowledge injection — so the extraction prompt cannot trigger agent side
+ * Runs a reasoning step (critique or revision) as a plain text completion —
+ * no tools, no knowledge injection — so reflection cannot trigger agent side
  * effects.
  *
- * Provider/model resolution (including the project-scope check for
- * `aiProviderId` overrides) is shared with the reasoning completions via
- * `resolveCompletionModel`.
- *
  * Kept in its own module so tests can replace the LLM boundary with
- * `jest.spyOn` while the orchestration in `memoryExtraction.ts` runs for real.
+ * `jest.spyOn` while the orchestration in `reasoning.ts` runs for real.
  */
-export const runExtractionCompletion = async (args: {
+export const runReasoningCompletion = async (args: {
   agentId: string;
   projectIds?: number[];
   prompt: string;
   aiProviderId?: string;
   model?: string;
+  temperature?: number;
 }): Promise<string> => {
   const { model, modelName } = await resolveCompletionModel({
     agentId: args.agentId,
@@ -31,12 +28,12 @@ export const runExtractionCompletion = async (args: {
     model: args.model,
   });
 
-  log('runExtractionCompletion: agentId=%s model=%s', args.agentId, modelName);
+  log('runReasoningCompletion: agentId=%s model=%s', args.agentId, modelName);
 
   const { text } = await generateText({
     model,
     prompt: args.prompt,
-    temperature: 0,
+    temperature: args.temperature ?? 0,
   });
 
   return text;

@@ -15,6 +15,11 @@ import {
   recordGenerationFailure,
 } from './generationLifecycle';
 import { toProviderDomainError } from './providerError';
+import {
+  maybeApplyReflectionToResult,
+  type ProviderOptionsMap,
+  type ReasoningConfig,
+} from './reasoning';
 
 const log = createDebug('soat:generation');
 
@@ -79,6 +84,8 @@ const callGenerateText = async (args: {
   typedAgent: TypedAgent;
   prepareStep: ReturnType<typeof buildPrepareStep>;
   abortSignal?: AbortSignal;
+  providerOptions?: ProviderOptionsMap;
+  maxOutputTokens?: number;
 }) => {
   const hasTools = Object.keys(args.resolvedTools).length > 0;
 
@@ -98,6 +105,8 @@ const callGenerateText = async (args: {
       stopWhen: stepCountIs((args.typedAgent.maxSteps as number) ?? 20),
       temperature: (args.typedAgent.temperature as number) ?? undefined,
       abortSignal: args.abortSignal,
+      providerOptions: args.providerOptions,
+      maxOutputTokens: args.maxOutputTokens,
     });
   } catch (error) {
     log(
@@ -131,6 +140,7 @@ const resolveGenerationResult = async (args: {
   result: GenerateTextResult;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
+  reasoningConfig?: ReasoningConfig | null;
 }): Promise<GenerationResult> => {
   const pendingToolCalls = findPendingClientTools(
     args.result.steps as Array<{
@@ -166,6 +176,18 @@ const resolveGenerationResult = async (args: {
     });
   }
 
+  // Reflect mode (deep thinking): critique and revise the draft BEFORE the
+  // completion result is built, so the trace, the completion event, and the
+  // API response all carry the final text.
+  await maybeApplyReflectionToResult({
+    reasoningConfig: args.reasoningConfig,
+    agentId: args.agentId,
+    generationId: args.generationId,
+    messages: args.allMessages,
+    result: args.result,
+    temperature: args.typedAgent.temperature as number | null,
+  });
+
   return buildCompletedGenerationResult({
     generationId: args.generationId,
     traceId: args.traceId,
@@ -190,6 +212,9 @@ export const runNonStreamGeneration = async (args: {
   abortSignal?: AbortSignal;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
+  providerOptions?: ProviderOptionsMap;
+  maxOutputTokens?: number;
+  reasoningConfig?: ReasoningConfig | null;
 }): Promise<GenerationResult> => {
   const system = args.allMessages.find((message) => {
     return message.role === 'system';
@@ -218,6 +243,8 @@ export const runNonStreamGeneration = async (args: {
     typedAgent: args.typedAgent,
     prepareStep,
     abortSignal: args.abortSignal,
+    providerOptions: args.providerOptions,
+    maxOutputTokens: args.maxOutputTokens,
   };
 
   let result;
@@ -295,6 +322,7 @@ const buildTypedAgentFromPending = (pending: PendingGeneration): TypedAgent => {
     boundaryPolicy: null,
     temperature: pending.agentConfig.temperature,
     knowledgeConfig: null,
+    reasoningConfig: null,
     project: { id: pending.projectId, publicId: pending.projectPublicId },
     aiProvider: { publicId: '' },
   };

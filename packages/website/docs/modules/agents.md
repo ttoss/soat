@@ -38,6 +38,7 @@ Agents differ from [Chats](./chats.md) in that they can call tools, observe resu
 | `boundary_policy`          | object        | Boundary policy that limits which `soat` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions) |
 | `temperature`              | number        | Sampling temperature                                                                                                             |
 | `knowledge_config`         | object        | Knowledge retrieval config injected before every generation — see [Knowledge Config](#knowledge-config)                          |
+| `reasoning`                | object        | Deep-thinking configuration (provider-native effort and reflect mode) — see [Reasoning (Deep Thinking)](#reasoning-deep-thinking) |
 | `max_context_messages`     | number        | Maximum number of recent messages sent to the model per generation — see [Context Window Limiting](#context-window-limiting)     |
 | `single_session_per_actor` | boolean       | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)         |
 | `created_at`               | string        | ISO 8601 creation timestamp                                                                                                      |
@@ -307,6 +308,30 @@ Results are injected as system messages prepended to the conversation:
 [Document: /reports/q1.txt] Q1 revenue was $4.2M across all regions.
 [Memory: Customer Preferences] Customer prefers email over phone calls.
 ```
+
+### Reasoning (Deep Thinking)
+
+The `reasoning` config makes an agent think harder before answering. It applies to non-streaming generations across all flows (direct generate, conversations, sessions) and can be set on the agent or overridden per request in the generate body (object replace, not merge).
+
+| Field      | Type     | Description                                                                                                          |
+| ---------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
+| `effort`   | string   | `low` \| `medium` \| `high` — forwarded as provider-native reasoning options (OpenAI reasoning effort, Anthropic extended-thinking budget, Google thinking budget). Ignored on providers without a mapping. |
+| `mode`     | string   | `none` (default) \| `reflect` — orchestrated reasoning strategy                                                       |
+| `critique` | object   | Reflect only — `{ ai_provider_id?, model?, prompt? }` overrides for the critique pass (same contract as [extraction overrides](./memories.md#automatic-extraction)) |
+
+**Reflect mode** runs three steps behind a single generate call: the agent drafts an answer, a critique pass reviews it (on the agent's own model, or the `critique` override — a different model family catches blind spots the drafting model shares with itself), and a revision pass produces the final answer. If the critique approves the draft, the revision is skipped. The response is a normal generation result; the outcome is recorded on the generation's `metadata.reasoning` (`{ mode, applied, reason }`).
+
+```json
+{
+  "reasoning": {
+    "effort": "high",
+    "mode": "reflect",
+    "critique": { "ai_provider_id": "aip_cheap", "model": "gpt-4o-mini" }
+  }
+}
+```
+
+Failure semantics: reflection never makes a generation worse — if the critique or revision call fails, the draft is returned. Reflect mode does not run for streaming generations or `requires_action` (client-tool) turns; `effort` applies to streaming as well.
 
 ### SOAT Action Permissions
 

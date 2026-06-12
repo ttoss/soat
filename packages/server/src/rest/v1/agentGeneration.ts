@@ -111,6 +111,7 @@ agentGenerationRouter.post(
       rootTraceId,
       maxCallDepth,
       toolContext,
+      reasoning,
     } = ctx.request.body as {
       messages?: unknown;
       stream?: boolean;
@@ -119,6 +120,7 @@ agentGenerationRouter.post(
       rootTraceId?: string;
       maxCallDepth?: unknown;
       toolContext?: Record<string, string>;
+      reasoning?: object;
     };
 
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -142,6 +144,8 @@ agentGenerationRouter.post(
       authHeader: (ctx.headers.authorization as string) ?? '',
       authUser: ctx.authUser,
       toolContext,
+      reasoning:
+        reasoning && typeof reasoning === 'object' ? reasoning : undefined,
     });
 
     fireExtractionForCompletedResult({

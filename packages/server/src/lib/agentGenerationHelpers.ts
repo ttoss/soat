@@ -4,6 +4,7 @@ import createDebug from 'debug';
 
 import { emitEvent } from './eventBus';
 import { updateGenerationRecord } from './generations';
+import type { ProviderOptionsMap } from './reasoning';
 import { saveTrace, serializeSteps } from './traces';
 
 const log = createDebug('soat:generation');
@@ -73,6 +74,7 @@ export type TypedAgent = {
   boundaryPolicy: unknown;
   temperature: unknown;
   knowledgeConfig: unknown;
+  reasoningConfig: unknown;
   project: { id: unknown; publicId: string };
   aiProvider: { publicId: string };
 };
@@ -142,6 +144,8 @@ export const runStreamGeneration = (args: {
   agentId: string;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
+  providerOptions?: ProviderOptionsMap;
+  maxOutputTokens?: number;
 }): ReadableStream => {
   const system = args.allMessages.find((m) => {
     return m.role === 'system';
@@ -176,6 +180,8 @@ export const runStreamGeneration = (args: {
     prepareStep,
     stopWhen: stepCountIs((args.typedAgent.maxSteps as number) ?? 20),
     temperature: (args.typedAgent.temperature as number) ?? undefined,
+    providerOptions: args.providerOptions,
+    maxOutputTokens: args.maxOutputTokens,
     onFinish: ({ steps, finishReason }) => {
       saveTrace({
         traceId: args.traceId,
