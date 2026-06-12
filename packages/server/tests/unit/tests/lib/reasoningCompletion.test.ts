@@ -108,6 +108,24 @@ describe('reasoningCompletion lib', () => {
     );
   });
 
+  test('defaults the temperature to 0 when not provided', async () => {
+    const agentRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents')
+      .send({
+        project_id: projectId,
+        ai_provider_id: aiProviderId,
+        name: 'ReasoningComplDefaultTempAgent',
+      });
+
+    const text = await runReasoningCompletion({
+      agentId: agentRes.body.id,
+      prompt: 'Critique deterministically.',
+    });
+
+    expect(text).toBe('critique text');
+    expect(lastRequestBody?.temperature).toBe(0);
+  });
+
   test('rejects a provider override from another project', async () => {
     const otherProjectRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/projects')
