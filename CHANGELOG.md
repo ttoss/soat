@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.9.1](https://github.com/ttoss/soat/compare/v0.9.0...v0.9.1) (2026-06-12)
+
+### Bug Fixes
+
+* return requires_action when continuation produces new client tool calls ([#197](https://github.com/ttoss/soat/issues/197)) ([5e4221a](https://github.com/ttoss/soat/commit/5e4221af1c3081d02cb940915189d75ace05a745))
+* **sessions:** reject messages/generation on closed sessions and cancel stale timers ([#198](https://github.com/ttoss/soat/issues/198)) ([4597368](https://github.com/ttoss/soat/commit/4597368821a80e2e09e774dec400f1306625ba90))
+
 # [0.9.0](https://github.com/ttoss/soat/compare/v0.8.2...v0.9.0) (2026-06-11)
 
 ### Features
