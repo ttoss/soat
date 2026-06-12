@@ -211,4 +211,108 @@ describe('reasoning pipeline wiring', () => {
     expect(result.status).toBe('completed');
     expect(result.output?.content).toBe('draft answer');
   });
+
+  test('debate mode replaces the final text before completion', async () => {
+    jest.doMock('ai', () => {
+      const actual = jest.requireActual('ai');
+      return {
+        ...actual,
+        generateText: jest.fn().mockImplementation(draftResult),
+      };
+    });
+
+    const { runNonStreamGeneration } = await loadNonStreamModule();
+    const helpersModule = await loadHelpersModule();
+    const reasoningCompletionModule = await loadReasoningCompletionModule();
+
+    // 3 auto-persona perspectives × 1 round + 1 synthesis = 4 calls
+    jest
+      .spyOn(reasoningCompletionModule, 'runReasoningCompletion')
+      .mockResolvedValueOnce('advocate says yes')
+      .mockResolvedValueOnce('skeptic says no')
+      .mockResolvedValueOnce('pragmatist says maybe')
+      .mockResolvedValueOnce('debate synthesis answer');
+
+    jest.spyOn(helpersModule, 'findPendingClientTools').mockReturnValue([]);
+    const buildCompletedSpy = jest
+      .spyOn(helpersModule, 'buildCompletedGenerationResult')
+      .mockImplementation(async (args) => {
+        return {
+          id: args.generationId,
+          traceId: args.traceId,
+          status: 'completed',
+          output: {
+            model: 'model-a',
+            content: args.result.text,
+            finishReason: args.result.finishReason,
+          },
+        };
+      });
+
+    const result = await runNonStreamGeneration({
+      model: {} as never,
+      allMessages: [{ role: 'user', content: 'hard debate question' }],
+      resolvedTools: {},
+      typedAgent: buildTypedAgent({ mode: 'debate', perspectives: 3 }),
+      generationId: 'gen_4',
+      traceId: 'trc_4',
+      agentId: 'agent_4',
+      reasoningConfig: { mode: 'debate', perspectives: 3 },
+    });
+
+    expect(buildCompletedSpy).toHaveBeenCalledTimes(1);
+    expect(buildCompletedSpy.mock.calls[0][0].result.text).toBe(
+      'debate synthesis answer'
+    );
+    expect(result.status).toBe('completed');
+    expect(result.output?.content).toBe('debate synthesis answer');
+  });
+
+  test('debate full-failure falls back to the draft', async () => {
+    jest.doMock('ai', () => {
+      const actual = jest.requireActual('ai');
+      return {
+        ...actual,
+        generateText: jest.fn().mockImplementation(draftResult),
+      };
+    });
+
+    const { runNonStreamGeneration } = await loadNonStreamModule();
+    const helpersModule = await loadHelpersModule();
+    const reasoningCompletionModule = await loadReasoningCompletionModule();
+
+    jest
+      .spyOn(reasoningCompletionModule, 'runReasoningCompletion')
+      .mockRejectedValue(new Error('all perspectives down'));
+
+    jest.spyOn(helpersModule, 'findPendingClientTools').mockReturnValue([]);
+    jest
+      .spyOn(helpersModule, 'buildCompletedGenerationResult')
+      .mockImplementation(async (args) => {
+        return {
+          id: args.generationId,
+          traceId: args.traceId,
+          status: 'completed',
+          output: {
+            model: 'model-a',
+            content: args.result.text,
+            finishReason: args.result.finishReason,
+          },
+        };
+      });
+
+    const result = await runNonStreamGeneration({
+      model: {} as never,
+      allMessages: [{ role: 'user', content: 'hard debate question' }],
+      resolvedTools: {},
+      typedAgent: buildTypedAgent({ mode: 'debate', perspectives: 3 }),
+      generationId: 'gen_5',
+      traceId: 'trc_5',
+      agentId: 'agent_5',
+      reasoningConfig: { mode: 'debate', perspectives: 3 },
+    });
+
+    expect(result.status).toBe('completed');
+    expect(result.output?.content).toBe('draft answer');
+  });
 });

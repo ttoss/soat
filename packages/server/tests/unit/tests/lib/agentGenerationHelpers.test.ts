@@ -224,9 +224,7 @@ describe('savePendingGeneration', () => {
     savePendingGeneration({
       generationId: 'gen_notrace01',
       traceId: 'trc_notrace01',
-      pendingToolCalls: [
-        { toolCallId: 'tc_1', toolName: 'myTool', input: {} },
-      ],
+      pendingToolCalls: [{ toolCallId: 'tc_1', toolName: 'myTool', input: {} }],
       allMessages: [{ role: 'user', content: 'Hello' }],
       result: { steps: [], response: { messages: [] } },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -246,9 +244,7 @@ describe('savePendingGeneration', () => {
     savePendingGeneration({
       generationId: 'gen_steps01',
       traceId: 'trc_steps01',
-      pendingToolCalls: [
-        { toolCallId: 'tc_1', toolName: 'myTool', input: {} },
-      ],
+      pendingToolCalls: [{ toolCallId: 'tc_1', toolName: 'myTool', input: {} }],
       allMessages: [{ role: 'user', content: 'Hello' }],
       result: { steps: firstCallSteps, response: { messages: [] } },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

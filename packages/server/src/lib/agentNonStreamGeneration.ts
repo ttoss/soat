@@ -10,16 +10,13 @@ import {
   savePendingGeneration,
   type TypedAgent,
 } from './agentGenerationHelpers';
+import { applyOrchestration } from './deliberation';
 import {
   fireCompletionSideEffects,
   recordGenerationFailure,
 } from './generationLifecycle';
 import { toProviderDomainError } from './providerError';
-import {
-  maybeApplyReflectionToResult,
-  type ProviderOptionsMap,
-  type ReasoningConfig,
-} from './reasoning';
+import { type ProviderOptionsMap, type ReasoningConfig } from './reasoning';
 
 const log = createDebug('soat:generation');
 
@@ -176,10 +173,9 @@ const resolveGenerationResult = async (args: {
     });
   }
 
-  // Reflect mode (deep thinking): critique and revise the draft BEFORE the
-  // completion result is built, so the trace, the completion event, and the
-  // API response all carry the final text.
-  await maybeApplyReflectionToResult({
+  // Deep thinking: apply orchestrated reasoning BEFORE the completion result
+  // is built, so the trace, event, and API response all carry the final text.
+  await applyOrchestration({
     reasoningConfig: args.reasoningConfig,
     agentId: args.agentId,
     generationId: args.generationId,

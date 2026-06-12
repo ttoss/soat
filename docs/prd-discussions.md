@@ -10,9 +10,8 @@
 | Shared completion resolver                  | ✅ Implemented | `resolveCompletionModel()` in `completionModel.ts`; used by extraction and reasoning completions |
 | `reasoning` config (agent + per-generate)   | ✅ Implemented | `Agent.reasoningConfig` JSONB (`reasoning` on the wire) + per-generate override (object replace) |
 | Reflect mode (draft → critique → revise)    | ✅ Implemented | `applyReflection()` in `reasoning.ts`; APPROVED short-circuit; failures degrade to the draft     |
-| Debate mode (homogeneous)                   | ❌ Not started | N auto-personas on the agent's own provider/model → bounded rounds → synthesis                  |
-| Heterogeneous perspectives                  | ❌ Not started | Per-perspective `{ name, prompt, ai_provider_id, model }` overrides                             |
-| Synthesis overrides                         | ❌ Not started | `synthesis: { ai_provider_id?, model?, prompt? }`                                               |
+| Debate mode (homogeneous + heterogeneous)   | ✅ Implemented | `runDebate()` in `deliberation.ts`; auto-personas or explicit `perspectives[]`; `maxRounds` (cap 3); `synthesis` override triple; perspective failures drop (quorum continues); full-failure/synthesis-failure degrade to draft |
+| `applyOrchestration` pipeline hook          | ✅ Implemented | Single hook dispatches to reflect or debate; wired into `resolveGenerationResult` in `agentNonStreamGeneration.ts` |
 | Trace integration                           | ❌ Not started | Each internal call recorded as trace steps tagged with perspective name + model                 |
 | Discussions resource module                 | ❌ Not started | Visible transcript, organizer-selected turns, human participants (original PRD, now Phase 4)    |
 
@@ -48,7 +47,7 @@
 
 ---
 
-### Phase 2 — Debate Mode ❌ Not started
+### Phase 2 — Debate Mode ✅ Complete
 
 **Goal:** Internal multi-perspective deliberation behind a single generate call. This is the deliberation engine — built as an internal library, not a REST resource.
 

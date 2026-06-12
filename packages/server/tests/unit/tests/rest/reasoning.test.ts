@@ -88,6 +88,74 @@ describe('Reasoning config', () => {
     });
   });
 
+  describe('debate config round-trip', () => {
+    test('agent create round-trips integer perspectives and synthesis override', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'DebateContractAgent',
+          reasoning: {
+            mode: 'debate',
+            perspectives: 2,
+            max_rounds: 1,
+            synthesis: {
+              ai_provider_id: aiProviderId,
+              model: 'synth-model',
+              prompt: 'Weigh the arguments and commit.',
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.reasoning.mode).toBe('debate');
+      expect(res.body.reasoning.perspectives).toBe(2);
+      expect(res.body.reasoning.max_rounds).toBe(1);
+      expect(res.body.reasoning.synthesis.ai_provider_id).toBe(aiProviderId);
+      expect(res.body.reasoning.synthesis.model).toBe('synth-model');
+      expect(res.body.reasoning.synthesis.prompt).toBe(
+        'Weigh the arguments and commit.'
+      );
+    });
+
+    test('agent create round-trips explicit perspective objects', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'HeterogeneousDebateAgent',
+          reasoning: {
+            mode: 'debate',
+            perspectives: [
+              {
+                name: 'Skeptic',
+                prompt: 'Find the fatal flaw.',
+                ai_provider_id: aiProviderId,
+                model: 'skeptic-model',
+              },
+              { name: 'Advocate' },
+            ],
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.reasoning.mode).toBe('debate');
+      expect(Array.isArray(res.body.reasoning.perspectives)).toBe(true);
+      expect(res.body.reasoning.perspectives).toHaveLength(2);
+      expect(res.body.reasoning.perspectives[0].name).toBe('Skeptic');
+      expect(res.body.reasoning.perspectives[0].prompt).toBe(
+        'Find the fatal flaw.'
+      );
+      expect(res.body.reasoning.perspectives[0].ai_provider_id).toBe(
+        aiProviderId
+      );
+      expect(res.body.reasoning.perspectives[0].model).toBe('skeptic-model');
+      expect(res.body.reasoning.perspectives[1].name).toBe('Advocate');
+    });
+  });
+
   describe('per-generate reasoning override', () => {
     test('generate route forwards the reasoning override to the pipeline', async () => {
       const agentRes = await authenticatedTestClient(adminToken)

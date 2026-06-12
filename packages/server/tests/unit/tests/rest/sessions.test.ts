@@ -472,7 +472,10 @@ describe('Sessions', () => {
       test('first call with idempotency_key returns 201', async () => {
         const response = await authenticatedTestClient(userToken)
           .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
-          .send({ message: 'Idempotent message', idempotency_key: 'idem-key-1' });
+          .send({
+            message: 'Idempotent message',
+            idempotency_key: 'idem-key-1',
+          });
 
         expect(response.status).toBe(201);
         expect(response.body.role).toBe('user');
@@ -512,7 +515,9 @@ describe('Sessions', () => {
         expect(first.status).toBe(201);
 
         const second = await authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${agentId}/sessions/${secondSessionId}/messages`)
+          .post(
+            `/api/v1/agents/${agentId}/sessions/${secondSessionId}/messages`
+          )
           .send({ message: 'Session 2 message', idempotency_key: key });
 
         expect(second.status).toBe(201);
@@ -1497,9 +1502,27 @@ describe('Sessions', () => {
 
     test('persists response_messages in metadata after tool-output completion', async () => {
       const responseMessages = [
-        { role: 'assistant', content: [{ type: 'tool-call', toolCallId: 'tc_meta_01', toolName: 'get_weather', args: { city: 'Paris' } }] },
-        { role: 'tool', content: [{ type: 'tool-result', toolCallId: 'tc_meta_01', result: '18C' }] },
-        { role: 'assistant', content: [{ type: 'text', text: 'Weather in Paris: 18C' }] },
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool-call',
+              toolCallId: 'tc_meta_01',
+              toolName: 'get_weather',
+              args: { city: 'Paris' },
+            },
+          ],
+        },
+        {
+          role: 'tool',
+          content: [
+            { type: 'tool-result', toolCallId: 'tc_meta_01', result: '18C' },
+          ],
+        },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Weather in Paris: 18C' }],
+        },
       ];
 
       submitToolOutputsSpy.mockResolvedValueOnce({
@@ -1527,9 +1550,12 @@ describe('Sessions', () => {
 
       expect(messagesResponse.status).toBe(200);
       const assistantMsg = messagesResponse.body.data.find(
-        (m: { role: string; content: string }) =>
-          m.role === 'assistant' &&
-          m.content === 'Unique metadata regression reply'
+        (m: { role: string; content: string }) => {
+          return (
+            m.role === 'assistant' &&
+            m.content === 'Unique metadata regression reply'
+          );
+        }
       );
       expect(assistantMsg).toBeDefined();
       expect(assistantMsg.metadata).not.toBeNull();
@@ -2254,9 +2280,7 @@ describe('Sessions', () => {
 
       test('returns user message immediately instead of triggering generation synchronously', async () => {
         const res = await authenticatedTestClient(userToken)
-          .post(
-            `/api/v1/agents/${agentId}/sessions/${delaySessionId}/messages`
-          )
+          .post(`/api/v1/agents/${agentId}/sessions/${delaySessionId}/messages`)
           .send({ message: 'hello with delay' });
         expect(res.status).toBe(201);
         expect(res.body.role).toBe('user');
@@ -2287,9 +2311,7 @@ describe('Sessions', () => {
         });
 
         await authenticatedTestClient(userToken)
-          .post(
-            `/api/v1/agents/${agentId}/sessions/${delaySessionId}/messages`
-          )
+          .post(`/api/v1/agents/${agentId}/sessions/${delaySessionId}/messages`)
           .send({ message: 'trigger delayed gen' });
 
         await generationStarted;
@@ -2320,15 +2342,11 @@ describe('Sessions', () => {
 
         // Send two messages in quick succession (well within the 1-second delay)
         await authenticatedTestClient(userToken)
-          .post(
-            `/api/v1/agents/${agentId}/sessions/${delaySessionId}/messages`
-          )
+          .post(`/api/v1/agents/${agentId}/sessions/${delaySessionId}/messages`)
           .send({ message: 'first message' });
 
         await authenticatedTestClient(userToken)
-          .post(
-            `/api/v1/agents/${agentId}/sessions/${delaySessionId}/messages`
-          )
+          .post(`/api/v1/agents/${agentId}/sessions/${delaySessionId}/messages`)
           .send({ message: 'second message within delay' });
 
         // Wait for the delay to elapse and exactly one generation to fire
