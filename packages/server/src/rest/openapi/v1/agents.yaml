@@ -580,7 +580,7 @@ components:
         reasoning:
           type: object
           nullable: true
-          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning options; `mode: reflect` runs a draft-critique-revise loop before returning the answer.'
+          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning; `mode: reflect` critiques and revises; `mode: debate` runs multiple perspectives then synthesizes.'
           properties:
             effort:
               type: string
@@ -588,21 +588,53 @@ components:
               description: Provider-native reasoning effort, forwarded to providers that support it (OpenAI reasoning models, Anthropic extended thinking, Google thinking budgets). Ignored elsewhere.
             mode:
               type: string
-              enum: [none, reflect]
-              description: Orchestrated reasoning strategy. `reflect` drafts an answer, critiques it, and revises it before responding. Applies to non-streaming completed generations only.
+              enum: [none, reflect, debate]
+              description: 'Orchestrated reasoning strategy. `reflect` drafts, critiques, and revises. `debate` runs multiple perspectives then synthesizes. Applies to non-streaming completed generations only.'
             critique:
               type: object
-              description: Overrides for the reflect critique pass.
+              description: Reflect only — overrides for the critique pass.
               properties:
                 ai_provider_id:
                   type: string
-                  description: AI provider override for the critique call. Must belong to the agent's project. Its default_model becomes the model fallback.
+                  description: AI provider override for the critique call. Must belong to the agent's project.
                 model:
                   type: string
                   description: Model override for the critique call.
                 prompt:
                   type: string
-                  description: Replaces the default critique instructions. The question, draft, and approval contract are always appended by the server.
+                  description: Replaces the default critique instructions.
+            perspectives:
+              description: 'Debate only — number of auto-generated perspectives (2–5) or an array of explicit perspective objects.'
+              oneOf:
+                - type: integer
+                - type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      prompt:
+                        type: string
+                      ai_provider_id:
+                        type: string
+                      model:
+                        type: string
+            max_rounds:
+              type: integer
+              description: Debate only — rounds of perspective turns. Default 1, max 3.
+            synthesis:
+              type: object
+              description: Debate only — override triple for the synthesis pass.
+              properties:
+                ai_provider_id:
+                  type: string
+                  description: AI provider override for the synthesis call. Must belong to the agent's project.
+                model:
+                  type: string
+                  description: Model override for the synthesis call.
+                prompt:
+                  type: string
+                  description: Replaces the default synthesis instructions.
         max_context_messages:
           type: integer
           nullable: true
@@ -706,7 +738,7 @@ components:
         reasoning:
           type: object
           nullable: true
-          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning options; `mode: reflect` runs a draft-critique-revise loop before returning the answer.'
+          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning; `mode: reflect` critiques and revises; `mode: debate` runs multiple perspectives then synthesizes.'
           properties:
             effort:
               type: string
@@ -714,21 +746,53 @@ components:
               description: Provider-native reasoning effort, forwarded to providers that support it (OpenAI reasoning models, Anthropic extended thinking, Google thinking budgets). Ignored elsewhere.
             mode:
               type: string
-              enum: [none, reflect]
-              description: Orchestrated reasoning strategy. `reflect` drafts an answer, critiques it, and revises it before responding. Applies to non-streaming completed generations only.
+              enum: [none, reflect, debate]
+              description: 'Orchestrated reasoning strategy. `reflect` drafts, critiques, and revises. `debate` runs multiple perspectives then synthesizes.'
             critique:
               type: object
-              description: Overrides for the reflect critique pass.
+              description: Reflect only — overrides for the critique pass.
               properties:
                 ai_provider_id:
                   type: string
-                  description: AI provider override for the critique call. Must belong to the agent's project. Its default_model becomes the model fallback.
+                  description: AI provider override for the critique call. Must belong to the agent's project.
                 model:
                   type: string
                   description: Model override for the critique call.
                 prompt:
                   type: string
-                  description: Replaces the default critique instructions. The question, draft, and approval contract are always appended by the server.
+                  description: Replaces the default critique instructions.
+            perspectives:
+              description: 'Debate only — number of auto-generated perspectives (2–5) or an array of explicit perspective objects.'
+              oneOf:
+                - type: integer
+                - type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      prompt:
+                        type: string
+                      ai_provider_id:
+                        type: string
+                      model:
+                        type: string
+            max_rounds:
+              type: integer
+              description: Debate only — rounds of perspective turns. Default 1, max 3.
+            synthesis:
+              type: object
+              description: Debate only — override triple for the synthesis pass.
+              properties:
+                ai_provider_id:
+                  type: string
+                  description: AI provider override for the synthesis call. Must belong to the agent's project.
+                model:
+                  type: string
+                  description: Model override for the synthesis call.
+                prompt:
+                  type: string
+                  description: Replaces the default synthesis instructions.
         max_context_messages:
           type: integer
           description: Maximum number of recent messages included in the context window. Null means no limit.
@@ -831,7 +895,7 @@ components:
         reasoning:
           type: object
           nullable: true
-          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning options; `mode: reflect` runs a draft-critique-revise loop before returning the answer.'
+          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning; `mode: reflect` critiques and revises; `mode: debate` runs multiple perspectives then synthesizes.'
           properties:
             effort:
               type: string
@@ -839,21 +903,53 @@ components:
               description: Provider-native reasoning effort, forwarded to providers that support it (OpenAI reasoning models, Anthropic extended thinking, Google thinking budgets). Ignored elsewhere.
             mode:
               type: string
-              enum: [none, reflect]
-              description: Orchestrated reasoning strategy. `reflect` drafts an answer, critiques it, and revises it before responding. Applies to non-streaming completed generations only.
+              enum: [none, reflect, debate]
+              description: 'Orchestrated reasoning strategy. `reflect` drafts, critiques, and revises. `debate` runs multiple perspectives then synthesizes.'
             critique:
               type: object
-              description: Overrides for the reflect critique pass.
+              description: Reflect only — overrides for the critique pass.
               properties:
                 ai_provider_id:
                   type: string
-                  description: AI provider override for the critique call. Must belong to the agent's project. Its default_model becomes the model fallback.
+                  description: AI provider override for the critique call. Must belong to the agent's project.
                 model:
                   type: string
                   description: Model override for the critique call.
                 prompt:
                   type: string
-                  description: Replaces the default critique instructions. The question, draft, and approval contract are always appended by the server.
+                  description: Replaces the default critique instructions.
+            perspectives:
+              description: 'Debate only — number of auto-generated perspectives (2–5) or an array of explicit perspective objects.'
+              oneOf:
+                - type: integer
+                - type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      prompt:
+                        type: string
+                      ai_provider_id:
+                        type: string
+                      model:
+                        type: string
+            max_rounds:
+              type: integer
+              description: Debate only — rounds of perspective turns. Default 1, max 3.
+            synthesis:
+              type: object
+              description: Debate only — override triple for the synthesis pass.
+              properties:
+                ai_provider_id:
+                  type: string
+                  description: AI provider override for the synthesis call. Must belong to the agent's project.
+                model:
+                  type: string
+                  description: Model override for the synthesis call.
+                prompt:
+                  type: string
+                  description: Replaces the default synthesis instructions.
         max_context_messages:
           type: integer
           nullable: true
@@ -930,11 +1026,11 @@ components:
               description: Provider-native reasoning effort for this generation.
             mode:
               type: string
-              enum: [none, reflect]
+              enum: [none, reflect, debate]
               description: Orchestrated reasoning strategy for this generation.
             critique:
               type: object
-              description: Overrides for the reflect critique pass.
+              description: Reflect only — overrides for the critique pass.
               properties:
                 ai_provider_id:
                   type: string
@@ -945,6 +1041,38 @@ components:
                 prompt:
                   type: string
                   description: Replaces the default critique instructions.
+            perspectives:
+              description: 'Debate only — number of auto-generated perspectives (2–5) or an array of explicit perspective objects.'
+              oneOf:
+                - type: integer
+                - type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      prompt:
+                        type: string
+                      ai_provider_id:
+                        type: string
+                      model:
+                        type: string
+            max_rounds:
+              type: integer
+              description: Debate only — rounds of perspective turns. Default 1, max 3.
+            synthesis:
+              type: object
+              description: Debate only — override triple for the synthesis pass.
+              properties:
+                ai_provider_id:
+                  type: string
+                  description: AI provider override for the synthesis call. Must belong to the agent's project.
+                model:
+                  type: string
+                  description: Model override for the synthesis call.
+                prompt:
+                  type: string
+                  description: Replaces the default synthesis instructions.
 
     ToolOutputMessageContent:
       type: object

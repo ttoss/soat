@@ -15,13 +15,26 @@ export type ReasoningOverrideTriple = {
   prompt?: string;
 };
 
+export type PerspectiveConfig = {
+  name?: string;
+  prompt?: string;
+  aiProviderId?: string;
+  model?: string;
+};
+
 export type ReasoningConfig = {
   /** Provider-native reasoning effort, forwarded to providers that support it. */
   effort?: ReasoningEffort;
   /** Orchestrated reasoning strategy. Defaults to none. */
-  mode?: 'none' | 'reflect';
+  mode?: 'none' | 'reflect' | 'debate';
   /** Reflect only — overrides for the critique pass. */
   critique?: ReasoningOverrideTriple;
+  /** Debate only — integer count (2–5) or explicit perspective objects. */
+  perspectives?: number | PerspectiveConfig[];
+  /** Debate only — rounds of perspective turns. Default 1, max 3. */
+  maxRounds?: number;
+  /** Debate only — override triple for the synthesis pass. */
+  synthesis?: ReasoningOverrideTriple;
 };
 
 export type ReasoningMessage = { role: string; content: unknown };

@@ -38,7 +38,7 @@ Agents differ from [Chats](./chats.md) in that they can call tools, observe resu
 | `boundary_policy`          | object        | Boundary policy that limits which `soat` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions) |
 | `temperature`              | number        | Sampling temperature                                                                                                             |
 | `knowledge_config`         | object        | Knowledge retrieval config injected before every generation — see [Knowledge Config](#knowledge-config)                          |
-| `reasoning`                | object        | Deep-thinking configuration (provider-native effort and reflect mode) — see [Reasoning (Deep Thinking)](#reasoning-deep-thinking) |
+| `reasoning`                | object        | Deep-thinking configuration (provider-native effort, reflect mode, or debate mode) — see [Reasoning (Deep Thinking)](#reasoning-deep-thinking) |
 | `max_context_messages`     | number        | Maximum number of recent messages sent to the model per generation — see [Context Window Limiting](#context-window-limiting)     |
 | `single_session_per_actor` | boolean       | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)         |
 | `created_at`               | string        | ISO 8601 creation timestamp                                                                                                      |
@@ -315,9 +315,12 @@ The `reasoning` config makes an agent think harder before answering. It applies 
 
 | Field      | Type     | Description                                                                                                          |
 | ---------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
-| `effort`   | string   | `low` \| `medium` \| `high` — forwarded as provider-native reasoning options (OpenAI reasoning effort, Anthropic extended-thinking budget, Google thinking budget). Ignored on providers without a mapping. |
-| `mode`     | string   | `none` (default) \| `reflect` — orchestrated reasoning strategy                                                       |
-| `critique` | object   | Reflect only — `{ ai_provider_id?, model?, prompt? }` overrides for the critique pass (same contract as [extraction overrides](./memories.md#automatic-extraction)) |
+| `effort`        | string          | `low` \| `medium` \| `high` — forwarded as provider-native reasoning options (OpenAI reasoning effort, Anthropic extended-thinking budget, Google thinking budget). Ignored on providers without a mapping. |
+| `mode`          | string          | `none` (default) \| `reflect` \| `debate` — orchestrated reasoning strategy                                     |
+| `critique`      | object          | Reflect only — `{ ai_provider_id?, model?, prompt? }` overrides for the critique pass (same contract as [extraction overrides](./memories.md#automatic-extraction)) |
+| `perspectives`  | integer\|array  | Debate only — number of auto-generated personas (2–5, default 3) or an array of `{ name?, prompt?, ai_provider_id?, model? }` objects |
+| `max_rounds`    | integer         | Debate only — perspective rounds, default 1, capped at 3                                                        |
+| `synthesis`     | object          | Debate only — `{ ai_provider_id?, model?, prompt? }` override for the final synthesis pass                      |
 
 **Reflect mode** runs three steps behind a single generate call: the agent drafts an answer, a critique pass reviews it (on the agent's own model, or the `critique` override — a different model family catches blind spots the drafting model shares with itself), and a revision pass produces the final answer. If the critique approves the draft, the revision is skipped. The response is a normal generation result; the outcome is recorded on the generation's `metadata.reasoning` (`{ mode, applied, reason }`).
 
@@ -331,7 +334,22 @@ The `reasoning` config makes an agent think harder before answering. It applies 
 }
 ```
 
-Failure semantics: reflection never makes a generation worse — if the critique or revision call fails, the draft is returned. Reflect mode does not run for streaming generations or `requires_action` (client-tool) turns; `effort` applies to streaming as well.
+**Debate mode** runs N perspectives on the question (using auto-generated personas such as Advocate/Skeptic/Pragmatist, or explicit perspective objects with per-perspective provider/model/prompt overrides), then a synthesis pass produces the final answer. Each perspective sees the question and all prior turns in the transcript.
+
+```json
+{
+  "reasoning": {
+    "mode": "debate",
+    "perspectives": [
+      { "name": "Skeptic", "prompt": "Attack the strongest claim.", "ai_provider_id": "aip_alt", "model": "claude-sonnet-4-6" },
+      { "name": "Advocate", "prompt": "Steelman the proposal with evidence." }
+    ],
+    "synthesis": { "ai_provider_id": "aip_flagship", "prompt": "Weigh the arguments; commit to a recommendation." }
+  }
+}
+```
+
+Failure semantics: neither reflect nor debate makes a generation worse. Individual perspective failures are dropped (quorum continues); if all perspectives fail or synthesis fails, the draft from the initial generation is returned. Both modes skip streaming generations and `requires_action` (client-tool) turns; `effort` applies to streaming as well.
 
 ### SOAT Action Permissions
 
