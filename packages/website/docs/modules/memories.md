@@ -18,6 +18,7 @@ Agents can retrieve relevant entries automatically via `knowledge_config` and wr
 - [Agent with Persistent Memory - Step 4 (Create a memory)](/docs/tutorials/memories-agent#step-4--create-a-memory)
 - [Agent with Persistent Memory - Step 5 (Write memory entries)](/docs/tutorials/memories-agent#step-5--write-memory-entries)
 - [Agent with Persistent Memory - Step 10 (Observe the agent writing to memory)](/docs/tutorials/memories-agent#step-10--observe-the-agent-writing-to-memory)
+- [Agent with Persistent Memory - Step 11 (Enable automatic extraction)](/docs/tutorials/memories-agent#step-11--enable-automatic-extraction)
 
 ## Data Model
 
