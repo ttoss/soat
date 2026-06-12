@@ -28,6 +28,7 @@ export type MappedAgent = {
   boundaryPolicy: object | null;
   temperature: number | null;
   knowledgeConfig: object | null;
+  reasoning: object | null;
   maxContextMessages: number | null;
   singleSessionPerActor: boolean;
   createdAt: Date;
@@ -65,6 +66,7 @@ const mapAgent = (
     boundaryPolicy: agent.boundaryPolicy,
     temperature: agent.temperature,
     knowledgeConfig: agent.knowledgeConfig,
+    reasoning: agent.reasoningConfig,
     maxContextMessages: agent.maxContextMessages,
     singleSessionPerActor: agent.singleSessionPerActor,
     createdAt: agent.createdAt,
@@ -88,6 +90,7 @@ type AgentUpdateFields = {
   boundaryPolicy?: object | null;
   temperature?: number | null;
   knowledgeConfig?: object | null;
+  reasoningConfig?: object | null;
   maxContextMessages?: number | null;
   singleSessionPerActor?: boolean;
 };
@@ -105,6 +108,7 @@ const AGENT_SCALAR_FIELDS = [
   'boundaryPolicy',
   'temperature',
   'knowledgeConfig',
+  'reasoningConfig',
   'maxContextMessages',
   'singleSessionPerActor',
 ] as const;
@@ -143,6 +147,7 @@ export const createAgent = async (args: {
   boundaryPolicy?: object;
   temperature?: number;
   knowledgeConfig?: object;
+  reasoningConfig?: object;
   maxContextMessages?: number;
   singleSessionPerActor?: boolean;
 }): Promise<MappedAgent> => {

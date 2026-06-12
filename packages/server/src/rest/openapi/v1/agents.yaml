@@ -577,6 +577,32 @@ components:
                     prompt:
                       type: string
                       description: Replaces the default task instructions. The JSON response contract and the conversation transcript are always appended by the server.
+        reasoning:
+          type: object
+          nullable: true
+          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning options; `mode: reflect` runs a draft-critique-revise loop before returning the answer.'
+          properties:
+            effort:
+              type: string
+              enum: [low, medium, high]
+              description: Provider-native reasoning effort, forwarded to providers that support it (OpenAI reasoning models, Anthropic extended thinking, Google thinking budgets). Ignored elsewhere.
+            mode:
+              type: string
+              enum: [none, reflect]
+              description: Orchestrated reasoning strategy. `reflect` drafts an answer, critiques it, and revises it before responding. Applies to non-streaming completed generations only.
+            critique:
+              type: object
+              description: Overrides for the reflect critique pass.
+              properties:
+                ai_provider_id:
+                  type: string
+                  description: AI provider override for the critique call. Must belong to the agent's project. Its default_model becomes the model fallback.
+                model:
+                  type: string
+                  description: Model override for the critique call.
+                prompt:
+                  type: string
+                  description: Replaces the default critique instructions. The question, draft, and approval contract are always appended by the server.
         max_context_messages:
           type: integer
           nullable: true
@@ -677,6 +703,32 @@ components:
                     prompt:
                       type: string
                       description: Replaces the default task instructions. The JSON response contract and the conversation transcript are always appended by the server.
+        reasoning:
+          type: object
+          nullable: true
+          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning options; `mode: reflect` runs a draft-critique-revise loop before returning the answer.'
+          properties:
+            effort:
+              type: string
+              enum: [low, medium, high]
+              description: Provider-native reasoning effort, forwarded to providers that support it (OpenAI reasoning models, Anthropic extended thinking, Google thinking budgets). Ignored elsewhere.
+            mode:
+              type: string
+              enum: [none, reflect]
+              description: Orchestrated reasoning strategy. `reflect` drafts an answer, critiques it, and revises it before responding. Applies to non-streaming completed generations only.
+            critique:
+              type: object
+              description: Overrides for the reflect critique pass.
+              properties:
+                ai_provider_id:
+                  type: string
+                  description: AI provider override for the critique call. Must belong to the agent's project. Its default_model becomes the model fallback.
+                model:
+                  type: string
+                  description: Model override for the critique call.
+                prompt:
+                  type: string
+                  description: Replaces the default critique instructions. The question, draft, and approval contract are always appended by the server.
         max_context_messages:
           type: integer
           description: Maximum number of recent messages included in the context window. Null means no limit.
@@ -776,6 +828,32 @@ components:
                     prompt:
                       type: string
                       description: Replaces the default task instructions. The JSON response contract and the conversation transcript are always appended by the server.
+        reasoning:
+          type: object
+          nullable: true
+          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning options; `mode: reflect` runs a draft-critique-revise loop before returning the answer.'
+          properties:
+            effort:
+              type: string
+              enum: [low, medium, high]
+              description: Provider-native reasoning effort, forwarded to providers that support it (OpenAI reasoning models, Anthropic extended thinking, Google thinking budgets). Ignored elsewhere.
+            mode:
+              type: string
+              enum: [none, reflect]
+              description: Orchestrated reasoning strategy. `reflect` drafts an answer, critiques it, and revises it before responding. Applies to non-streaming completed generations only.
+            critique:
+              type: object
+              description: Overrides for the reflect critique pass.
+              properties:
+                ai_provider_id:
+                  type: string
+                  description: AI provider override for the critique call. Must belong to the agent's project. Its default_model becomes the model fallback.
+                model:
+                  type: string
+                  description: Model override for the critique call.
+                prompt:
+                  type: string
+                  description: Replaces the default critique instructions. The question, draft, and approval contract are always appended by the server.
         max_context_messages:
           type: integer
           nullable: true
@@ -841,6 +919,32 @@ components:
             type: string
           nullable: true
           description: Key-value pairs injected as context headers into all tool call requests made during this generation.
+        reasoning:
+          type: object
+          nullable: true
+          description: Per-generation deep-thinking override. Replaces the agent's stored reasoning config for this request (object replace, not merge). Same shape as the agent `reasoning` field.
+          properties:
+            effort:
+              type: string
+              enum: [low, medium, high]
+              description: Provider-native reasoning effort for this generation.
+            mode:
+              type: string
+              enum: [none, reflect]
+              description: Orchestrated reasoning strategy for this generation.
+            critique:
+              type: object
+              description: Overrides for the reflect critique pass.
+              properties:
+                ai_provider_id:
+                  type: string
+                  description: AI provider override for the critique call. Must belong to the agent's project.
+                model:
+                  type: string
+                  description: Model override for the critique call.
+                prompt:
+                  type: string
+                  description: Replaces the default critique instructions.
 
     ToolOutputMessageContent:
       type: object

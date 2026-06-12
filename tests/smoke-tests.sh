@@ -882,6 +882,26 @@ fi
 $SOAT_CLI update-agent --agent-id "$AGENT_ID" --knowledge_config '{}' >/dev/null
 echo "knowledge_config extraction round-trip: OK"
 
+# 22b3. Reasoning config (deep thinking) round-trip
+echo "--- Setting reasoning config ---"
+RC_UPDATE_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
+  --reasoning '{"mode":"reflect","effort":"low","critique":{"prompt":"Critique factual accuracy only."}}')
+if ! printf '%s\n' "$RC_UPDATE_RESP" | jq -e '.reasoning.mode == "reflect" and .reasoning.effort == "low"' >/dev/null 2>&1; then
+  echo "ERROR: update-agent did not round-trip the reasoning config" >&2
+  echo "$RC_UPDATE_RESP" >&2
+  exit 1
+fi
+RC_GET_RESP=$($SOAT_CLI get-agent --agent-id "$AGENT_ID")
+if ! printf '%s\n' "$RC_GET_RESP" | jq -e '.reasoning.critique.prompt == "Critique factual accuracy only."' >/dev/null 2>&1; then
+  echo "ERROR: get-agent did not return the reasoning critique config" >&2
+  echo "$RC_GET_RESP" >&2
+  exit 1
+fi
+# Disable again so later generations in this script stay single-pass
+# (reflect behavior is LLM-dependent and covered by unit tests, not smoke).
+$SOAT_CLI update-agent --agent-id "$AGENT_ID" --reasoning '{"mode":"none"}' >/dev/null
+echo "reasoning config round-trip: OK"
+
 # 22c. Create a deterministic HTTP tool for tool_output message content
 echo "--- Creating project-detail tool ---"
 PROJECT_DETAIL_TOOL_RESP=$($SOAT_CLI create-tool \

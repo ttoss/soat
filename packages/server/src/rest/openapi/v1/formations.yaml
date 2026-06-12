@@ -581,6 +581,32 @@ components:
                     prompt:
                       type: string
                       description: Replaces the default task instructions. The JSON response contract and the conversation transcript are always appended by the server.
+        reasoning:
+          type: object
+          nullable: true
+          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning options; `mode: reflect` runs a draft-critique-revise loop before returning the answer.'
+          properties:
+            effort:
+              type: string
+              enum: [low, medium, high]
+              description: Provider-native reasoning effort, forwarded to providers that support it.
+            mode:
+              type: string
+              enum: [none, reflect]
+              description: Orchestrated reasoning strategy.
+            critique:
+              type: object
+              description: Overrides for the reflect critique pass.
+              properties:
+                ai_provider_id:
+                  type: string
+                  description: AI provider override for the critique call. Must belong to the agent's project.
+                model:
+                  type: string
+                  description: Model override for the critique call.
+                prompt:
+                  type: string
+                  description: Replaces the default critique instructions.
 
     ActorResourceProperties:
       description: >-

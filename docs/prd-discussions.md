@@ -6,10 +6,10 @@
 
 | Component                                   | Status         | Notes                                                                                          |
 | ------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------- |
-| Provider-native reasoning passthrough       | ❌ Not started | `reasoning_effort` / thinking-budget params forwarded to providers that support them            |
-| Shared completion resolver                  | ❌ Not started | Extract provider/model resolution (incl. project-scope check) from `memoryExtractionCompletion` |
-| `reasoning` config (agent + per-generate)   | ❌ Not started | `mode: "none" \| "reflect" \| "debate"` on `Agent.reasoningConfig` and generate body override   |
-| Reflect mode (draft → critique → revise)    | ❌ Not started | Single agent, ~3 calls; optional `critique` override block                                      |
+| Provider-native reasoning passthrough       | ✅ Implemented | `reasoning.effort` (low/medium/high) mapped to OpenAI reasoningEffort, Anthropic thinking budget, Google thinking budget in `reasoning.ts` |
+| Shared completion resolver                  | ✅ Implemented | `resolveCompletionModel()` in `completionModel.ts`; used by extraction and reasoning completions |
+| `reasoning` config (agent + per-generate)   | ✅ Implemented | `Agent.reasoningConfig` JSONB (`reasoning` on the wire) + per-generate override (object replace) |
+| Reflect mode (draft → critique → revise)    | ✅ Implemented | `applyReflection()` in `reasoning.ts`; APPROVED short-circuit; failures degrade to the draft     |
 | Debate mode (homogeneous)                   | ❌ Not started | N auto-personas on the agent's own provider/model → bounded rounds → synthesis                  |
 | Heterogeneous perspectives                  | ❌ Not started | Per-perspective `{ name, prompt, ai_provider_id, model }` overrides                             |
 | Synthesis overrides                         | ❌ Not started | `synthesis: { ai_provider_id?, model?, prompt? }`                                               |
@@ -18,30 +18,31 @@
 
 ## Implementation Phases
 
-### Phase 0 — Provider-Native Reasoning Passthrough ❌ Not started
+### Phase 0 — Provider-Native Reasoning Passthrough ✅ Complete
 
 **Goal:** The cheapest deep thinking is one LLM call with the provider's own reasoning mode turned on. Expose it before building any orchestration.
 
-**Deliverables:**
+**Deliverables (as implemented):**
 
-- `reasoning_effort` (or provider-appropriate thinking-budget) field on the Agent and on the generate request body, forwarded via the AI SDK provider options for providers that support it (Anthropic extended thinking, OpenAI reasoning models, etc.); ignored otherwise
-- OpenAPI + SDK/CLI regeneration, docs, tests
+- ✅ `reasoning.effort` (`low` / `medium` / `high`) on the Agent and the generate request body, forwarded via AI SDK `providerOptions` — OpenAI `reasoningEffort`, Anthropic `thinking` budget (4096/16384/32768 tokens, with `maxOutputTokens` raised above the budget), Google `thinkingBudget`; a no-op on providers without a mapping. *(Design deviation: effort lives inside the unified `reasoning` object rather than a separate `reasoning_effort` field — one config, one column, and effort/mode compose.)*
+- ✅ OpenAPI + SDK/CLI regeneration, docs, tests
 
 **Unlocks:** Better answers with zero added latency architecture — and a baseline to measure reflect/debate against.
 
 ---
 
-### Phase 1 — Reflect Mode ❌ Not started
+### Phase 1 — Reflect Mode ✅ Complete
 
 **Goal:** Draft → self-critique → revise. One agent, no personas, roughly 3 LLM calls. The biggest quality-per-dollar step after Phase 0.
 
-**Deliverables:**
+**Deliverables (as implemented):**
 
-- `reasoningConfig` JSONB on Agent (mirrors `knowledgeConfig` pattern); per-generate `reasoning` body field merged over it (scalar override semantics)
-- Flow inside the generation pipeline: produce a draft, run a critique completion, run a revision completion, return the revision as the normal `GenerationResult`
-- **`critique` override block** `{ ai_provider_id?, model?, prompt? }` — same triple, resolution, and project-scope validation as `knowledge_config.extraction` (see [Override Semantics](#override-semantics)). Cross-model critique decorrelates errors: a different model family reviewing the draft catches blind spots the drafting model shares with itself
-- Critique/revision calls are plain completions (no tools) recorded in the trace; the draft is preserved as a trace artifact
-- Tests: reflect produces a completed result; critique override routes to the right provider/model; failure of the critique call degrades to returning the draft (logged, noted in trace)
+- ✅ `reasoningConfig` JSONB on Agent (mirrors `knowledgeConfig`); per-generate `reasoning` body field replaces it (object replace, not merge)
+- ✅ Reflect flow inside the generation pipeline (`maybeApplyReflectionToResult` hooked before the completion result is built, so the trace, completion event, and API response all carry the final text): draft → critique → revise, with an APPROVED short-circuit that skips the revision call when the critique finds nothing to improve
+- ✅ **`critique` override block** `{ ai_provider_id?, model?, prompt? }` — same triple, resolution, and project-scope validation as `knowledge_config.extraction`, via the shared `resolveCompletionModel()`
+- ✅ Critique/revision calls are plain completions (no tools); the outcome is recorded on the generation record's `metadata.reasoning` (`{ mode, applied, reason }`)
+- ✅ Tests: pipeline wiring (providerOptions forwarding, text replacement, fallback), reflect orchestration (override routing, APPROVED, failure degradation), real-execution completion boundary, REST config round-trip
+- **Scope notes:** reflect applies to non-streaming completed generations; streaming and `requires_action` (client-tool) continuations are skipped. When reflection rewrites the text, the draft's `responseMessages` are dropped so conversation replay does not resurrect the draft.
 
 **Unlocks:** "Think before you answer" on any existing agent with one config field.
 
