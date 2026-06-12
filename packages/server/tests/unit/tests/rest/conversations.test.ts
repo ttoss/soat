@@ -1013,9 +1013,9 @@ describe('Conversations', () => {
         `/api/v1/conversations/${convId}/messages`
       );
       expect(msgsRes.status).toBe(200);
-      const assistantMsg = msgsRes.body.data.find(
-        (m: { role: string }) => m.role === 'assistant'
-      );
+      const assistantMsg = msgsRes.body.data.find((m: { role: string }) => {
+        return m.role === 'assistant';
+      });
       expect(assistantMsg).toBeDefined();
     });
 
@@ -1059,13 +1059,17 @@ describe('Conversations', () => {
         .send({ agent_id: agentId });
 
       const secondCallMessages: Array<{ role: string; content: unknown }> =
-        mockCreateGeneration.mock.calls[mockCreateGeneration.mock.calls.length - 1][0].messages;
+        mockCreateGeneration.mock.calls[
+          mockCreateGeneration.mock.calls.length - 1
+        ][0].messages;
 
       // The full tool chain must be present in the LLM input
-      const hasToolCall = secondCallMessages.some(
-        (m) => m.role === 'assistant' && Array.isArray(m.content)
-      );
-      const hasToolResult = secondCallMessages.some((m) => m.role === 'tool');
+      const hasToolCall = secondCallMessages.some((m) => {
+        return m.role === 'assistant' && Array.isArray(m.content);
+      });
+      const hasToolResult = secondCallMessages.some((m) => {
+        return m.role === 'tool';
+      });
 
       expect(hasToolCall).toBe(true);
       expect(hasToolResult).toBe(true);

@@ -1,7 +1,4 @@
-import {
-  maybeApplyDebateToResult,
-  runDebate,
-} from 'src/lib/deliberation';
+import { maybeApplyDebateToResult, runDebate } from 'src/lib/deliberation';
 import * as reasoningCompletionModule from 'src/lib/reasoningCompletion';
 
 const mockRunReasoningCompletion = jest.spyOn(
@@ -57,9 +54,7 @@ describe('deliberation lib', () => {
       const secondCall = mockRunReasoningCompletion.mock.calls[1][0];
       expect(firstCall.prompt).toContain('Advocate');
       expect(secondCall.prompt).toContain('Skeptic');
-      expect(firstCall.prompt).toContain(
-        'Should we invest in this project?'
-      );
+      expect(firstCall.prompt).toContain('Should we invest in this project?');
     });
 
     test('later perspective turns see earlier turns in the transcript', async () => {
@@ -147,8 +142,7 @@ describe('deliberation lib', () => {
         },
       });
 
-      const synthCall =
-        mockRunReasoningCompletion.mock.calls[2][0];
+      const synthCall = mockRunReasoningCompletion.mock.calls[2][0];
       expect(synthCall.aiProviderId).toBe('aip_flagship');
       expect(synthCall.model).toBe('flagship-model');
     });
@@ -164,8 +158,7 @@ describe('deliberation lib', () => {
         reasoning: { mode: 'debate', perspectives: 2 },
       });
 
-      const synthCall =
-        mockRunReasoningCompletion.mock.calls[2][0];
+      const synthCall = mockRunReasoningCompletion.mock.calls[2][0];
       expect(synthCall.prompt).toContain('advocate text');
       expect(synthCall.prompt).toContain('skeptic text');
     });
