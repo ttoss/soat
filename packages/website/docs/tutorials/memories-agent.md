@@ -15,7 +15,8 @@ This tutorial shows how to give an agent a long-term memory that persists across
 4. Create an [agent](/docs/modules/agents#examples) that retrieves from both memories and the document via `knowledge_config`, with `write_memory_id` enabled so the agent can persist new facts it learns.
 5. Run a generation and observe the model answering accurately from injected context — with no RAG logic in the prompt.
 6. Observe the agent writing a new fact to memory with `source: "agent"`.
-7. Query the knowledge layer directly to see memory entries and document chunks side by side.
+7. Enable automatic extraction so facts are captured from every completed turn — even when the model never calls `write_memory`.
+8. Query the knowledge layer directly to see memory entries and document chunks side by side.
 
 By the end you will understand how Memories, Documents, and the Knowledge search layer compose with agents to build stateful, context-aware AI assistants.
 
@@ -745,7 +746,136 @@ If the model called `write_memory`, you will see an entry with `"source": "agent
 
 ---
 
-## Step 11 — Query the knowledge layer directly
+## Step 11 — Enable automatic extraction
+
+The `write_memory` tool depends on the model *deciding* to call it — a smaller model may simply answer and move on, and the fact is lost. [Automatic extraction](/docs/modules/memories#automatic-extraction) removes that dependency: after every completed turn, the server runs a separate extraction step that pulls atomic facts from the transcript and writes them through the same deduplication algorithm, tagged with `source: "extraction"`.
+
+Enable it by adding `extraction` to the agent's `knowledge_config`:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat update-agent \
+  --agent-id "$AGENT_ID" \
+  --knowledge-config '{"memory_ids":["'"$MEMORY_ID"'"],"document_paths":["/alice/"],"limit":5,"write_memory_id":"'"$MEMORY_ID"'","extraction":true}'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+await adminSoat.agents.updateAgent({
+  path: { agent_id: AGENT_ID },
+  body: {
+    knowledge_config: {
+      memory_ids: [MEMORY_ID],
+      document_paths: ['/alice/'],
+      limit: 5,
+      write_memory_id: MEMORY_ID,
+      extraction: true,
+    },
+  },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s -X PUT "$SOAT_URL/api/v1/agents/$AGENT_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"knowledge_config\":{\"memory_ids\":[\"$MEMORY_ID\"],\"document_paths\":[\"/alice/\"],\"limit\":5,\"write_memory_id\":\"$MEMORY_ID\",\"extraction\":true}}" \
+  | jq '.knowledge_config'
+```
+
+</TabItem>
+</Tabs>
+
+`extraction: true` uses the agent's own provider and model with a built-in extraction prompt. The object form customizes all three — useful for running extraction on a cheaper model:
+
+```json
+{
+  "extraction": {
+    "ai_provider_id": "aip_cheap",
+    "model": "llama3.2:1b",
+    "prompt": "Extract only durable facts about the customer: preferences, deadlines, and account details."
+  }
+}
+```
+
+Now send a message that reveals a new fact, without asking the agent to remember anything:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-agent-generation \
+  --agent-id "$AGENT_ID" \
+  --messages '[{"role":"user","content":"By the way, Alice signed a 2-year contract renewal last week."}]' \
+  | jq '{status: .status}'
+```
+
+Extraction runs asynchronously after the generation response returns — give it a few seconds, then list the extracted entries:
+
+```bash
+sleep 5
+soat list-memory-entries --memory-id "$MEMORY_ID" \
+  | jq '[.[] | select(.source == "extraction") | {content: .content, source: .source}]'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+await adminSoat.agents.createAgentGeneration({
+  path: { agent_id: AGENT_ID },
+  body: {
+    messages: [
+      {
+        role: 'user',
+        content: 'By the way, Alice signed a 2-year contract renewal last week.',
+      },
+    ],
+  },
+});
+
+// Extraction runs asynchronously after the generation response returns.
+await new Promise((resolve) => setTimeout(resolve, 5000));
+
+const { data: entries } = await MemoryEntries.listMemoryEntries({
+  client: authClient,
+  path: { memory_id: MEMORY_ID },
+});
+const extracted = entries.filter((e) => e.source === 'extraction');
+console.log(extracted.map((e) => e.content));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"By the way, Alice signed a 2-year contract renewal last week."}]}' \
+  | jq '{status: .status}'
+
+sleep 5
+curl -s "$SOAT_URL/api/v1/memories/$MEMORY_ID/entries" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '[.[] | select(.source == "extraction") | {content: .content, source: .source}]'
+```
+
+</TabItem>
+</Tabs>
+
+You should see an entry like `"Alice signed a 2-year contract renewal"` with `"source": "extraction"`. Unlike Step 10, this did not rely on the model choosing to call a tool — the server captured the fact unconditionally. The extraction summary (`{ candidates, created, updated, skipped }`) is recorded on the generation's `metadata.extraction` field for debugging via the [Generations](/docs/modules/generations) API.
+
+---
+
+## Step 12 — Query the knowledge layer directly
 
 The [Knowledge](/docs/modules/knowledge#examples) endpoint is the same search layer the agent uses internally. Pass both `memory_ids` and `document_paths` to see exactly which chunks — from both sources — would be injected for a given question.
 
@@ -811,6 +941,7 @@ curl -s -X POST "$SOAT_URL/api/v1/knowledge/search" \
 
 ## What's next
 
+- **Cheaper extraction** — use the [extraction object form](/docs/modules/memories#automatic-extraction) to run fact extraction on a smaller, cheaper model than the one answering, and tailor the extraction prompt to your domain.
 - **Tag-based filtering** — create separate memories per customer (e.g. `tags: ["bob"]`) and set `memory_tags: ["alice"]` on the agent to ensure each agent only retrieves the right customer's facts.
 - **Agent-sourced entries** — set `source: "agent"` when writing entries programmatically from an agent's output to distinguish automated facts from manually curated ones.
 - **Document subtrees** — use `document_paths` prefixes like `/alice/` to scope retrieval to one customer's documents, keeping context focused and token-efficient.

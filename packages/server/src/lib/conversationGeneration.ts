@@ -5,6 +5,7 @@ import { DomainError } from '../errors';
 import { createGeneration, type GenerationResult } from './agents';
 import { addConversationMessage } from './conversationMessages';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { fireMemoryExtraction } from './memoryExtraction';
 
 type ConversationMessage = InstanceType<(typeof db)['ConversationMessage']> & {
   document?: InstanceType<(typeof db)['Document']> & {
@@ -214,6 +215,44 @@ const buildPersonaSystem = (agent: {
   return lines.join('\n\n');
 };
 
+const firePostTurnSideEffects = (args: {
+  conversationId: string;
+  agentId: string;
+  projectId: number;
+  generationId: string;
+  traceId: string;
+  documentId: string;
+  messagesForModel: Array<{ role: string; content: unknown }>;
+  assistantContent: string;
+}): void => {
+  fireMemoryExtraction({
+    agentId: args.agentId,
+    projectIds: [args.projectId],
+    generationId: args.generationId,
+    messages: args.messagesForModel,
+    assistantContent: args.assistantContent,
+  });
+
+  resolveProjectPublicId({ projectId: args.projectId }).then(
+    (projectPublicId) => {
+      emitEvent({
+        type: 'conversations.message.generated',
+        projectId: args.projectId,
+        projectPublicId,
+        resourceType: 'conversation_message',
+        resourceId: args.documentId,
+        data: {
+          conversationId: args.conversationId,
+          agentId: args.agentId,
+          generationId: args.generationId,
+          traceId: args.traceId,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
+  );
+};
+
 export type GenerateConversationMessageResult =
   | {
       status: 'completed';
@@ -287,24 +326,16 @@ export const generateConversationMessage = async (args: {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
   }
 
-  resolveProjectPublicId({ projectId: conversation.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'conversations.message.generated',
-        projectId: conversation.projectId,
-        projectPublicId,
-        resourceType: 'conversation_message',
-        resourceId: persisted.documentId,
-        data: {
-          conversationId: args.conversationId,
-          agentId: args.agentId,
-          generationId,
-          traceId,
-        },
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  firePostTurnSideEffects({
+    conversationId: args.conversationId,
+    agentId: args.agentId,
+    projectId: conversation.projectId as number,
+    generationId,
+    traceId,
+    documentId: persisted.documentId,
+    messagesForModel,
+    assistantContent,
+  });
 
   return {
     status: 'completed',

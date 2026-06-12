@@ -14,7 +14,7 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 ## Related Tutorials
 
 - [Agent with Persistent Memory - Step 8 (Create an agent with knowledge_config)](/docs/tutorials/memories-agent#step-8--create-an-agent-with-knowledge_config)
-- [Agent with Persistent Memory - Step 11 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-11--query-the-knowledge-layer-directly)
+- [Agent with Persistent Memory - Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly)
 
 ## Data Model
 

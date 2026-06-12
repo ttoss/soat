@@ -8,6 +8,17 @@ import { writeMemoryEntry } from './memoryEntries';
 
 const log = createDebug('soat:knowledge');
 
+export type ExtractionConfig = {
+  /** Defaults to true when the object form is used; set false to keep the config but disable extraction. */
+  enabled?: boolean;
+  /** AI provider override for extraction calls. Must belong to the agent's project. */
+  aiProviderId?: string;
+  /** Model override for extraction calls. */
+  model?: string;
+  /** Replaces the default task instructions. The JSON response contract and transcript are always appended. */
+  prompt?: string;
+};
+
 export type KnowledgeConfig = {
   memoryIds?: string[];
   memoryTags?: string[];
@@ -17,6 +28,12 @@ export type KnowledgeConfig = {
   limit?: number;
   query?: string;
   writeMemoryId?: string;
+  /**
+   * Automatic fact extraction from completed turns (requires writeMemoryId).
+   * `true` enables it with defaults; the object form customizes provider,
+   * model, and prompt.
+   */
+  extraction?: boolean | ExtractionConfig;
 };
 
 const anyLength = (arr: unknown[] | undefined): boolean => {

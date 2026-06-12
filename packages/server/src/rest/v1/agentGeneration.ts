@@ -5,6 +5,10 @@ import type { Context } from 'src/Context';
 import type { GenerationResult } from 'src/lib/agentGeneration';
 import { createGeneration, submitToolOutputs } from 'src/lib/agents';
 import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
+import {
+  type ExtractionMessage,
+  fireMemoryExtraction,
+} from 'src/lib/memoryExtraction';
 
 const pipeStreamToResponse = async (
   stream: ReadableStream,
@@ -55,6 +59,27 @@ const handleGenerationResult = async (
     return;
   }
   ctx.body = result;
+};
+
+const fireExtractionForCompletedResult = (args: {
+  agentId: string;
+  projectIds?: number[];
+  result: GenerationResult | ReadableStream;
+  messages: ExtractionMessage[];
+}): void => {
+  if (
+    args.result instanceof ReadableStream ||
+    args.result.status !== 'completed'
+  ) {
+    return;
+  }
+  fireMemoryExtraction({
+    agentId: args.agentId,
+    projectIds: args.projectIds,
+    generationId: args.result.id,
+    messages: args.messages,
+    assistantContent: args.result.output?.content ?? '',
+  });
 };
 
 export const agentGenerationRouter = new Router<Context>();
@@ -117,6 +142,13 @@ agentGenerationRouter.post(
       authHeader: (ctx.headers.authorization as string) ?? '',
       authUser: ctx.authUser,
       toolContext,
+    });
+
+    fireExtractionForCompletedResult({
+      agentId: ctx.params.agent_id,
+      projectIds,
+      result,
+      messages: messages as ExtractionMessage[],
     });
 
     await handleGenerationResult(ctx, result, stream);

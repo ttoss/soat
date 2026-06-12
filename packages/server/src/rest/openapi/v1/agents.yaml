@@ -559,6 +559,24 @@ components:
               type: string
               nullable: true
               description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
+            extraction:
+              description: Automatic fact extraction from completed generation turns (requires write_memory_id). Pass `true` to enable with defaults, or an object to customize the provider, model, and prompt used for the extraction completion. Extracted facts are written to the write memory through the standard dedup/merge/skip algorithm.
+              oneOf:
+                - type: boolean
+                - type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                      description: Defaults to true when the object form is used. Set false to keep the configuration but disable extraction.
+                    ai_provider_id:
+                      type: string
+                      description: AI provider override for extraction calls. Must belong to the agent's project. Its default_model becomes the model fallback.
+                    model:
+                      type: string
+                      description: Model override for extraction calls.
+                    prompt:
+                      type: string
+                      description: Replaces the default task instructions. The JSON response contract and the conversation transcript are always appended by the server.
         max_context_messages:
           type: integer
           nullable: true
@@ -641,6 +659,24 @@ components:
               type: string
               nullable: true
               description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
+            extraction:
+              description: Automatic fact extraction from completed generation turns (requires write_memory_id). Pass `true` to enable with defaults, or an object to customize the provider, model, and prompt used for the extraction completion. Extracted facts are written to the write memory through the standard dedup/merge/skip algorithm.
+              oneOf:
+                - type: boolean
+                - type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                      description: Defaults to true when the object form is used. Set false to keep the configuration but disable extraction.
+                    ai_provider_id:
+                      type: string
+                      description: AI provider override for extraction calls. Must belong to the agent's project. Its default_model becomes the model fallback.
+                    model:
+                      type: string
+                      description: Model override for extraction calls.
+                    prompt:
+                      type: string
+                      description: Replaces the default task instructions. The JSON response contract and the conversation transcript are always appended by the server.
         max_context_messages:
           type: integer
           description: Maximum number of recent messages included in the context window. Null means no limit.
@@ -722,6 +758,24 @@ components:
               type: string
               nullable: true
               description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
+            extraction:
+              description: Automatic fact extraction from completed generation turns (requires write_memory_id). Pass `true` to enable with defaults, or an object to customize the provider, model, and prompt used for the extraction completion. Extracted facts are written to the write memory through the standard dedup/merge/skip algorithm.
+              oneOf:
+                - type: boolean
+                - type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                      description: Defaults to true when the object form is used. Set false to keep the configuration but disable extraction.
+                    ai_provider_id:
+                      type: string
+                      description: AI provider override for extraction calls. Must belong to the agent's project. Its default_model becomes the model fallback.
+                    model:
+                      type: string
+                      description: Model override for extraction calls.
+                    prompt:
+                      type: string
+                      description: Replaces the default task instructions. The JSON response contract and the conversation transcript are always appended by the server.
         max_context_messages:
           type: integer
           nullable: true

@@ -297,6 +297,7 @@ An agent can automatically retrieve relevant knowledge before every generation b
 | `min_score`      | `number`   | Minimum relevance score (0–1) for results to be included (default: 0.5)                     |
 | `limit`          | `number`   | Maximum number of results to inject (default: 5)                                            |
 | `write_memory_id`| `string`   | When set, automatically injects a `write_memory` tool that writes facts to this memory      |
+| `extraction`     | `boolean` \| `object` | Automatic fact extraction from completed turns (requires `write_memory_id`). `true` enables defaults; the object form customizes provider, model, and prompt — see [Automatic Extraction](./memories.md#automatic-extraction) |
 
 The per-generation `knowledge_config` is merged with the agent's stored config. Arrays are **unioned**; scalars use the per-generation value when present. See [Memories](./memories.md#agent-integration) for details on how the `write_memory` tool works.
 
