@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.11.0](https://github.com/ttoss/soat/compare/v0.9.1...v0.11.0) (2026-06-13)
+
+### Features
+
+* **app:** OpenAPI-driven generic UI engine with workspace shell ([#205](https://github.com/ttoss/soat/issues/205)) ([54a8272](https://github.com/ttoss/soat/commit/54a8272d3d73f1831fef4318895a1bc74c876807)), closes [#1A73E8](https://github.com/ttoss/soat/issues/1A73E8) [#00E5FF](https://github.com/ttoss/soat/issues/00E5FF)
+* debate mode — Phase 2 multi-perspective deliberation ([#202](https://github.com/ttoss/soat/issues/202)) ([d3e66c3](https://github.com/ttoss/soat/commit/d3e66c3e19aeafb941d285e4008b2eddede8ada8))
+* **server:** deep-thinking reasoning — PRD reframe + provider-native effort + reflect mode ([#200](https://github.com/ttoss/soat/issues/200)) ([dec6192](https://github.com/ttoss/soat/commit/dec61927979ac72bbce33f3b5c6428fa228a9a56))
+
 # [0.10.0](https://github.com/ttoss/soat/compare/v0.9.1...v0.10.0) (2026-06-13)
 
 ### Bug Fixes

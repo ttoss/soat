@@ -1,6 +1,6 @@
 {
   "name": "@soat/sdk",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "TypeScript SDK for the SOAT API",
   "type": "module",
   "main": "dist/index.mjs",
