@@ -109,6 +109,41 @@ describe('parseModules', () => {
     expect(parseModules(spec)).toHaveLength(0);
   });
 
+  test('accepts snake_case operation_id from the server caseTransform middleware', () => {
+    const spec = {
+      paths: {
+        '/api/v1/agents': {
+          // @ts-expect-error intentionally using server snake_case shape
+          get: { operation_id: 'listAgents', tags: ['Agents'] },
+        },
+      },
+    } as OpenApiSpec;
+    const modules = parseModules(spec);
+    expect(modules).toHaveLength(1);
+    expect(modules[0].listOp?.operation.operationId).toBe('listAgents');
+  });
+
+  test('produces correct labels for already-spaced and CamelCase tags', () => {
+    const spec = {
+      paths: {
+        '/api/v1/ai-providers': {
+          get: { operationId: 'listAiProviders', tags: ['AI Providers'] },
+        },
+        '/api/v1/api-keys': {
+          get: { operationId: 'listApiKeys', tags: ['API Keys'] },
+        },
+        '/api/v1/memory-entries': {
+          get: { operationId: 'listMemoryEntries', tags: ['MemoryEntries'] },
+        },
+      },
+    } as OpenApiSpec;
+    const modules = parseModules(spec);
+    const label = (tag: string) => byTag(modules, tag).label;
+    expect(label('AI Providers')).toBe('AI Providers');
+    expect(label('API Keys')).toBe('API Keys');
+    expect(label('MemoryEntries')).toBe('Memory Entries');
+  });
+
   test('falls back to the "Other" tag when none is given', () => {
     const spec: OpenApiSpec = {
       paths: { '/api/v1/x': { get: { operationId: 'getX' } } },

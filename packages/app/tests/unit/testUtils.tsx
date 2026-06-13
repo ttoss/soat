@@ -1,8 +1,10 @@
 import { render } from '@testing-library/react';
 import * as React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 
 import { AuthProvider } from '@/auth/authContext';
 import { NavigationProvider, useNavigation } from '@/engine/navigationContext';
+import { SpecProvider } from '@/engine/specContext';
 
 const TOKEN_KEY = 'soat_token';
 
@@ -23,16 +25,21 @@ export const NavProbe = (): React.ReactElement => {
  * `/users/me` handler), so no internal component is mocked — only the API.
  *
  * Engine views receive `module`/`spec`/`pathParams` as props, so the spec
- * provider is not required here.
+ * provider is not required here but NavigationProvider needs a Router + Spec
+ * context to resolve URL-based navigation.
  */
 export const renderWithAuth = (
   ui: React.ReactElement,
-  { token = 'test-token' }: { token?: string } = {}
+  { token = 'test-token', initialPath = '/app/' }: { token?: string; initialPath?: string } = {}
 ) => {
   localStorage.setItem(TOKEN_KEY, token);
   return render(
-    <AuthProvider>
-      <NavigationProvider>{ui}</NavigationProvider>
-    </AuthProvider>
+    <MemoryRouter initialEntries={[initialPath]}>
+      <AuthProvider>
+        <SpecProvider token={token}>
+          <NavigationProvider>{ui}</NavigationProvider>
+        </SpecProvider>
+      </AuthProvider>
+    </MemoryRouter>
   );
 };

@@ -13,7 +13,11 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:5047',
+      '/api': {
+        target: 'https://soat.lets.rocks',
+        changeOrigin: true,
+        secure: true,
+      },
     },
   },
   resolve: {

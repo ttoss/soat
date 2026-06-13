@@ -84,6 +84,24 @@ export const testSpec: OpenApiSpec = {
         },
       },
     },
+    '/api/v1/projects/{project_id}': {
+      get: { operationId: 'getProject', tags: ['Projects'] },
+      put: {
+        operationId: 'updateProject',
+        tags: ['Projects'],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: { name: { type: 'string' } },
+              },
+            },
+          },
+        },
+      },
+      delete: { operationId: 'deleteProject', tags: ['Projects'] },
+    },
     '/api/v1/projects/{project_id}/webhooks': {
       get: { operationId: 'listWebhooks', tags: ['Webhooks'] },
       post: { operationId: 'createWebhook', tags: ['Webhooks'] },

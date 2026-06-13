@@ -1,11 +1,29 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, test } from 'vitest';
 
 import {
   NavigationProvider,
   useNavigation,
 } from '@/engine/navigationContext';
+import { SpecProvider } from '@/engine/specContext';
+
+// NavigationProvider derives its view from the URL and the loaded spec,
+// so every test needs a Router context and a SpecProvider.
+const Wrapper = ({
+  children,
+  initialPath = '/app/',
+}: {
+  children: React.ReactNode;
+  initialPath?: string;
+}) => (
+  <MemoryRouter initialEntries={[initialPath]}>
+    <SpecProvider token="test-token">
+      <NavigationProvider>{children}</NavigationProvider>
+    </SpecProvider>
+  </MemoryRouter>
+);
 
 const Harness = () => {
   const { view, activeProjectId, navigate, setProject } = useNavigation();
@@ -31,27 +49,27 @@ const Harness = () => {
 };
 
 describe('NavigationProvider', () => {
-  test('navigate sets the active view descriptor', async () => {
+  test('navigate pushes the correct URL and derives the view from it', async () => {
     render(
-      <NavigationProvider>
+      <Wrapper>
         <Harness />
-      </NavigationProvider>
+      </Wrapper>
     );
     await userEvent.click(screen.getByRole('button', { name: 'go' }));
-    expect(screen.getByTestId('state')).toHaveTextContent('"mode":"list"');
+    // The spec has listAgents at /api/v1/agents → URL becomes /app/v1/agents
+    // → view is derived back to mode:'list'
+    expect(await screen.findByTestId('state')).toHaveTextContent('"mode":"list"');
   });
 
-  test('setProject sets the project and clears the current view', async () => {
+  test('setProject navigates to the project URL', async () => {
     render(
-      <NavigationProvider>
+      <Wrapper>
         <Harness />
-      </NavigationProvider>
+      </Wrapper>
     );
-    await userEvent.click(screen.getByRole('button', { name: 'go' }));
     await userEvent.click(screen.getByRole('button', { name: 'set-project' }));
-
-    const state = screen.getByTestId('state');
-    expect(state).toHaveTextContent('"activeProjectId":"prj_1"');
-    expect(state).toHaveTextContent('"view":null');
+    // /app/v1/projects/prj_1 — Projects tag includes {project_id} in some paths
+    // so activeProjectId is set from the URL path param
+    expect(await screen.findByTestId('state')).toHaveTextContent('"activeProjectId":"prj_1"');
   });
 });

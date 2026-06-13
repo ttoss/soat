@@ -3,6 +3,7 @@ import type {
   JsonValue,
   ModuleInfo,
   ModuleOp,
+  OpenApiOperation,
   OpenApiSchema,
   OpenApiSpec,
 } from './types';
@@ -12,11 +13,7 @@ type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 const SKIP_TAGS = new Set(['Sessions', 'Generations', 'Actor Tags']);
 
 const toLabel = (tag: string): string => {
-  return tag
-    .replace(/([A-Z])/g, (_m, p1: string, offset: number) => {
-      return offset > 0 ? ` ${p1}` : p1;
-    })
-    .trim();
+  return tag.replace(/([a-z])([A-Z])/g, '$1 $2');
 };
 
 const isCollectionPath = (pathTemplate: string): boolean => {
@@ -127,8 +124,14 @@ export const parseModules = (spec: OpenApiSpec): ModuleInfo[] => {
 
   for (const [pathTemplate, pathItem] of Object.entries(spec.paths ?? {})) {
     for (const method of methods) {
-      const operation = pathItem[method];
-      if (!operation?.operationId) continue;
+      const raw = pathItem[method] as (OpenApiOperation & { operation_id?: string }) | undefined;
+      if (!raw) continue;
+      // The server's caseTransform middleware converts operationId → operation_id;
+      // normalise back so the rest of the engine can rely on operationId.
+      const operation: OpenApiOperation = raw.operationId
+        ? raw
+        : { ...raw, operationId: raw.operation_id ?? '' };
+      if (!operation.operationId) continue;
       for (const tag of operation.tags ?? ['Other']) {
         if (SKIP_TAGS.has(tag)) continue;
         if (!tagOps.has(tag)) tagOps.set(tag, []);

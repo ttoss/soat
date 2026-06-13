@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, test } from 'vitest';
 
 import { AuthProvider } from '@/auth/authContext';
@@ -10,16 +11,18 @@ import { Workspace } from '@/views/workspace';
 
 import { server } from '../msw/server';
 
-const renderWorkspace = (): void => {
+const renderWorkspace = (initialPath = '/app/'): void => {
   localStorage.setItem('soat_token', 'test-token');
   render(
-    <AuthProvider>
-      <SpecProvider token="test-token">
-        <NavigationProvider>
-          <Workspace />
-        </NavigationProvider>
-      </SpecProvider>
-    </AuthProvider>
+    <MemoryRouter initialEntries={[initialPath]}>
+      <AuthProvider>
+        <SpecProvider token="test-token">
+          <NavigationProvider>
+            <Workspace />
+          </NavigationProvider>
+        </SpecProvider>
+      </AuthProvider>
+    </MemoryRouter>
   );
 };
 
