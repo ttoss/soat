@@ -36,8 +36,9 @@ describe('webhookDispatcher', () => {
 
   test('dispatcher delivers webhook for exact event match', async () => {
     await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/webhooks`)
+      .post(`/api/v1/webhooks`)
       .send({
+        project_id: projectId,
         name: 'Exact Match Webhook',
         url: 'https://example.com/hook-exact',
         events: ['files.created'],
@@ -69,8 +70,9 @@ describe('webhookDispatcher', () => {
 
   test('dispatcher delivers webhook for wildcard event match', async () => {
     await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/webhooks`)
+      .post(`/api/v1/webhooks`)
       .send({
+        project_id: projectId,
         name: 'Wildcard Webhook',
         url: 'https://example.com/hook-wildcard',
         events: ['*'],
@@ -94,8 +96,9 @@ describe('webhookDispatcher', () => {
 
   test('dispatcher delivers webhook for prefix wildcard event match', async () => {
     await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/webhooks`)
+      .post(`/api/v1/webhooks`)
       .send({
+        project_id: projectId,
         name: 'Prefix Wildcard Webhook',
         url: 'https://example.com/hook-prefix',
         events: ['agents.*'],
@@ -121,8 +124,9 @@ describe('webhookDispatcher', () => {
     fetchMock.mockClear();
 
     await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/webhooks`)
+      .post(`/api/v1/webhooks`)
       .send({
+        project_id: projectId,
         name: 'Non-Matching Webhook',
         url: 'https://example.com/hook-nomatch',
         events: ['files.deleted'],
@@ -155,8 +159,9 @@ describe('webhookDispatcher', () => {
     fetchMock.mockClear();
 
     await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/webhooks`)
+      .post(`/api/v1/webhooks`)
       .send({
+        project_id: projectId,
         name: 'Files Prefix Webhook',
         url: 'https://example.com/hook-files-prefix',
         events: ['files.*'],
@@ -190,8 +195,9 @@ describe('webhookDispatcher', () => {
     fetchMock.mockRejectedValue(new Error('Network unreachable'));
 
     await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/webhooks`)
+      .post(`/api/v1/webhooks`)
       .send({
+        project_id: projectId,
         name: 'Retry Failure Webhook',
         url: 'https://example.com/hook-retry-fail',
         events: ['files.created'],
@@ -229,8 +235,9 @@ describe('webhookDispatcher', () => {
     );
 
     await authenticatedTestClient(adminToken)
-      .post(`/api/v1/projects/${projectId}/webhooks`)
+      .post(`/api/v1/webhooks`)
       .send({
+        project_id: projectId,
         name: 'Non-OK Status Webhook',
         url: 'https://example.com/hook-non-ok',
         events: ['files.created'],

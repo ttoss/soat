@@ -533,8 +533,8 @@ const WEBHOOK_BASE_URL =
 
 const { data: webhook, error: webhookErr } =
   await adminSoat.webhooks.createWebhook({
-    path: { project_id: PROJECT_ID },
     body: {
+      project_id: PROJECT_ID,
       name: 'session-events',
       url: `${WEBHOOK_BASE_URL}/webhook`,
       events: ['sessions.generation.*'],
@@ -550,10 +550,10 @@ const WEBHOOK_ID = webhook.id; // whk_...
 <TabItem value="curl" label="curl">
 
 ```bash
-WEBHOOK_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/projects/$PROJECT_ID/webhooks" \
+WEBHOOK_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/webhooks" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"name\":\"session-events\",\"url\":\"$WEBHOOK_BASE_URL/webhook\",\"events\":[\"sessions.generation.*\"]}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"session-events\",\"url\":\"$WEBHOOK_BASE_URL/webhook\",\"events\":[\"sessions.generation.*\"]}" \
   | jq -r '.id')
 echo "WEBHOOK_ID: $WEBHOOK_ID"
 ```
@@ -662,10 +662,9 @@ Wait for the async delivery, inspect the webhook listener output, then fetch ses
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-for _ in $(seq 1 20); do soat list-webhook-deliveries --project-id "$PROJECT_ID" --webhook-id "$WEBHOOK_ID" | jq -e '[.data[] | select(.status == "completed")] | length > 0' && break || sleep 1; done # → ignore
+for _ in $(seq 1 20); do soat list-webhook-deliveries --webhook-id "$WEBHOOK_ID" | jq -e '[.data[] | select(.status == "completed")] | length > 0' && break || sleep 1; done # → ignore
 
 soat list-webhook-deliveries \
-  --project-id "$PROJECT_ID" \
   --webhook-id "$WEBHOOK_ID" | jq '.data[] | {event_type, status, status_code}'
 
 cat session-webhooks.log
@@ -684,7 +683,7 @@ wait "$LISTENER_PID" 2>/dev/null || true
 ```ts
 const { data: deliveries, error: deliveriesErr } =
   await adminSoat.webhooks.listWebhookDeliveries({
-    path: { project_id: PROJECT_ID, webhook_id: WEBHOOK_ID },
+    path: { webhook_id: WEBHOOK_ID },
   });
 
 if (deliveriesErr) throw new Error(JSON.stringify(deliveriesErr));
@@ -709,7 +708,7 @@ for (const msg of messages2.data ?? []) {
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_BASE_URL/api/v1/projects/$PROJECT_ID/webhooks/$WEBHOOK_ID/deliveries" \
+curl -s "$SOAT_BASE_URL/api/v1/webhooks/$WEBHOOK_ID/deliveries" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   | jq '.data[] | {event_type, status, status_code}'
 

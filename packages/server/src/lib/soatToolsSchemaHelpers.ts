@@ -102,3 +102,58 @@ export const resolveParameter = (
   }
   return param;
 };
+
+export const buildPathFn = (
+  pathTemplate: string,
+  pathParams: Array<{ name: string; camelName: string }>
+): ((args: Record<string, unknown>) => string) => {
+  return (args: Record<string, unknown>) => {
+    let result = pathTemplate;
+    for (const { name, camelName } of pathParams) {
+      const value = args[camelName];
+      if (value !== undefined) {
+        result = result.replace(`{${name}}`, encodeURIComponent(String(value)));
+      }
+    }
+    return result;
+  };
+};
+
+export const buildQueryFn = (
+  queryParams: Array<{ name: string; camelName: string }>
+): ((args: Record<string, unknown>) => string) | undefined => {
+  if (queryParams.length === 0) return undefined;
+
+  return (args: Record<string, unknown>) => {
+    const search = new URLSearchParams();
+    for (const { name, camelName } of queryParams) {
+      const value = args[camelName];
+      if (value === undefined || value === null) continue;
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          search.append(name, String(item));
+        }
+      } else {
+        search.append(name, String(value));
+      }
+    }
+    const qs = search.toString();
+    return qs ? `?${qs}` : '';
+  };
+};
+
+export const buildBodyFn = (
+  bodyProps: Array<{ snakeName: string; camelName: string }>
+): ((args: Record<string, unknown>) => Record<string, unknown>) | undefined => {
+  if (bodyProps.length === 0) return undefined;
+
+  return (args: Record<string, unknown>) => {
+    const body: Record<string, unknown> = {};
+    for (const { snakeName, camelName } of bodyProps) {
+      if (args[camelName] !== undefined) {
+        body[snakeName] = args[camelName];
+      }
+    }
+    return body;
+  };
+};

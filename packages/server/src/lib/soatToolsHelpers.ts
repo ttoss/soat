@@ -8,6 +8,9 @@ import type { JSONSchema7 } from 'ai';
 import createDebug from 'debug';
 
 import {
+  buildBodyFn,
+  buildPathFn,
+  buildQueryFn,
   resolveParameter as resolveOpenApiParameter,
   resolveSchema as resolveOpenApiSchema,
 } from './soatToolsSchemaHelpers';
@@ -20,6 +23,7 @@ export interface ToolDefinition {
   inputSchema: JsonObjectSchema;
   method: string;
   path: (args: Record<string, unknown>) => string;
+  query?: (args: Record<string, unknown>) => string;
   body?: (args: Record<string, unknown>) => Record<string, unknown>;
   iamAction?: string;
 }
@@ -209,41 +213,6 @@ export const buildInputSchema = (
   };
 };
 
-export const buildPathFn = (
-  pathTemplate: string,
-  pathParams: Array<{ name: string; camelName: string }>
-): ((args: Record<string, unknown>) => string) => {
-  return (args: Record<string, unknown>) => {
-    let result = pathTemplate;
-    for (const { name, camelName } of pathParams) {
-      const value = args[camelName];
-      if (value !== undefined) {
-        result = result.replace(`{${name}}`, encodeURIComponent(String(value)));
-      }
-    }
-    return result;
-  };
-};
-
-export const buildBodyFn = (
-  bodyProps: Array<{
-    snakeName: string;
-    camelName: string;
-  }>
-): ((args: Record<string, unknown>) => Record<string, unknown>) | undefined => {
-  if (bodyProps.length === 0) return undefined;
-
-  return (args: Record<string, unknown>) => {
-    const body: Record<string, unknown> = {};
-    for (const { snakeName, camelName } of bodyProps) {
-      if (args[camelName] !== undefined) {
-        body[snakeName] = args[camelName];
-      }
-    }
-    return body;
-  };
-};
-
 export const extractPathParams = (args: {
   parameters: Array<{ name?: string; in?: string; [key: string]: unknown }>;
   spec: OpenApiSpec;
@@ -407,6 +376,7 @@ export const processOperation = (args: {
     inputSchema,
     method: httpMethod,
     path: buildPathFn(args.pathTemplate, pathParams),
+    query: buildQueryFn(queryParams),
     body: buildBodyFn(bodyProps),
     iamAction: args.operation['x-iam-action'],
   };
