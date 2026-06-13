@@ -48,6 +48,44 @@ describe('POST /api/v1/users/login', () => {
   });
 });
 
+describe('GET /api/v1/users/me', () => {
+  let adminToken: string;
+  let userToken: string;
+
+  beforeAll(async () => {
+    adminToken = await loginAs('admin', 'supersecret');
+    await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'me_user', password: 'mepass', role: 'user' });
+    userToken = await loginAs('me_user', 'mepass');
+  });
+
+  test('authenticated admin gets own profile', async () => {
+    const response = await authenticatedTestClient(adminToken).get(
+      '/api/v1/users/me'
+    );
+    expect(response.status).toBe(200);
+    expect(response.body.id).toBeDefined();
+    expect(response.body.username).toBe('admin');
+    expect(response.body.role).toBe('admin');
+    expect(response.body.password).toBeUndefined();
+  });
+
+  test('authenticated regular user gets own profile', async () => {
+    const response = await authenticatedTestClient(userToken).get(
+      '/api/v1/users/me'
+    );
+    expect(response.status).toBe(200);
+    expect(response.body.username).toBe('me_user');
+    expect(response.body.role).toBe('user');
+  });
+
+  test('unauthenticated request returns 401', async () => {
+    const response = await testClient.get('/api/v1/users/me');
+    expect(response.status).toBe(401);
+  });
+});
+
 describe('Admin user operations', () => {
   let adminToken: string;
 

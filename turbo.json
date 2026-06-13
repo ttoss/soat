@@ -17,6 +17,10 @@
       "inputs": ["$TURBO_DEFAULT$", "../server/src/rest/openapi/v1/**"],
       "outputs": ["dist/**", "src/generated/**"]
     },
+    "@soat/server#build": {
+      "dependsOn": ["^build", "@soat/app#build"],
+      "outputs": ["dist/**"]
+    },
     "lint": {
       "dependsOn": ["^build", "build"],
       "outputs": []

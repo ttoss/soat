@@ -21,6 +21,26 @@ tags:
 security:
   - bearerAuth: []
 paths:
+  /api/v1/users/me:
+    get:
+      tags:
+        - Users
+      summary: Get the current authenticated user
+      description: Returns the profile of the currently authenticated user
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: Current user returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/users:
     get:
       tags:
