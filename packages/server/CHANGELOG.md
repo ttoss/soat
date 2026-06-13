@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.10.0](https://127.0.0.1/37241/git/ttoss/compare/v0.9.1...v0.10.0) (2026-06-13)
+
+### Bug Fixes
+
+* **server:** add coverage for SPA static middleware to meet 65% threshold ([24d14dc](https://127.0.0.1/37241/git/ttoss/commits/24d14dcb0837e9174718446c77f19ecbd63365df))
+
+### Features
+
+* **app:** add @soat/app — auth flow with login page and welcome screen ([ef45db5](https://127.0.0.1/37241/git/ttoss/commits/ef45db5f4d8980efa635052ab2a7f84d55a7721a))
+* debate mode — Phase 2 multi-perspective deliberation ([#202](https://127.0.0.1/37241/git/ttoss/issues/202)) ([d3e66c3](https://127.0.0.1/37241/git/ttoss/commits/d3e66c3e19aeafb941d285e4008b2eddede8ada8))
+* **server:** deep-thinking reasoning — PRD reframe + provider-native effort + reflect mode ([#200](https://127.0.0.1/37241/git/ttoss/issues/200)) ([dec6192](https://127.0.0.1/37241/git/ttoss/commits/dec61927979ac72bbce33f3b5c6428fa228a9a56))
+
 ## [0.9.1](https://127.0.0.1/46713/git/ttoss/compare/v0.9.0...v0.9.1) (2026-06-12)
 
 ### Bug Fixes
