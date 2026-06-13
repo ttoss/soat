@@ -51,7 +51,9 @@ export const loadMergedOpenApiSpec = (): MergedSpec => {
 
   const files = fs
     .readdirSync(specDir)
-    .filter((f) => f.endsWith('.yaml'))
+    .filter((f) => {
+      return f.endsWith('.yaml');
+    })
     .sort();
 
   for (const file of files) {

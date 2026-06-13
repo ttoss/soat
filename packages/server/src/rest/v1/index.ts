@@ -13,6 +13,7 @@ import { formationsRouter } from './formations';
 import { generationsRouter } from './generations';
 import { knowledgeRouter } from './knowledge';
 import { memoriesRouter } from './memories';
+import { openapiRouter } from './openapi';
 import { orchestrationsRouter } from './orchestrations';
 import { policiesRouter } from './policies';
 import { projectsRouter } from './projects';
@@ -20,7 +21,6 @@ import { secretsRouter } from './secrets';
 import { toolsRouter } from './tools';
 import { tracesRouter } from './traces';
 import { usersRouter } from './users';
-import { openapiRouter } from './openapi';
 import { webhooksRouter } from './webhooks';
 
 const v1Router = new Router();
