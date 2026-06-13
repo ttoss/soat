@@ -20,6 +20,7 @@ import { secretsRouter } from './secrets';
 import { toolsRouter } from './tools';
 import { tracesRouter } from './traces';
 import { usersRouter } from './users';
+import { openapiRouter } from './openapi';
 import { webhooksRouter } from './webhooks';
 
 const v1Router = new Router();
@@ -45,5 +46,6 @@ v1Router.use(toolsRouter.routes());
 v1Router.use(tracesRouter.routes());
 v1Router.use(usersRouter.routes());
 v1Router.use(webhooksRouter.routes());
+v1Router.use(openapiRouter.routes());
 
 export { v1Router };
