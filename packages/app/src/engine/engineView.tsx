@@ -1,5 +1,6 @@
 import type * as React from 'react';
 
+import { ActionView } from './actionView';
 import { DetailView } from './detailView';
 import { FormView } from './formView';
 import { ListView } from './listView';
@@ -73,6 +74,17 @@ export const EngineView = ({
         spec={spec}
         pathParams={descriptor.pathParams}
         mode="edit"
+      />
+    );
+  }
+
+  if (descriptor.mode === 'action') {
+    return (
+      <ActionView
+        module={module}
+        spec={spec}
+        pathParams={descriptor.pathParams}
+        operationId={descriptor.operationId}
       />
     );
   }

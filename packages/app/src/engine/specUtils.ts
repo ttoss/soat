@@ -3,7 +3,6 @@ import type {
   JsonValue,
   ModuleInfo,
   ModuleOp,
-  OpenApiOperation,
   OpenApiSchema,
   OpenApiSpec,
 } from './types';
@@ -43,72 +42,104 @@ export const humanizeKey = (key: string): string => {
   });
 };
 
-type OpKey = 'listOp' | 'getOp' | 'createOp' | 'updateOp' | 'deleteOp';
+export const extractPathParams = (pathTemplate: string): string[] => {
+  return Array.from(pathTemplate.matchAll(/\{([^}]+)\}/g)).map((m) => {
+    return m[1];
+  });
+};
 
-const classifyOp = (method: string, pathTemplate: string): OpKey | null => {
+export const actionLabel = (op: ModuleOp): string => {
+  const last = op.pathTemplate.split('/').filter(Boolean).pop();
+  return humanizeKey(last ?? op.operation.operationId);
+};
+
+type OpKey = 'listOp' | 'getOp' | 'updateOp' | 'deleteOp';
+
+const classifyNonPost = (method: HttpMethod, pathTemplate: string): OpKey => {
   if (method === 'get') {
     return isCollectionPath(pathTemplate) ? 'listOp' : 'getOp';
   }
-  if (method === 'post' && isCollectionPath(pathTemplate)) return 'createOp';
-  if (method === 'put' || method === 'patch') return 'updateOp';
-  if (method === 'delete') return 'deleteOp';
-  return null;
+  return method === 'delete' ? 'deleteOp' : 'updateOp';
 };
 
-const assignOp = (
+const segmentCount = (pathTemplate: string): number => {
+  return pathTemplate.split('/').filter(Boolean).length;
+};
+
+// The collection path is where new items are created and listed
+// (e.g. /agents or /projects/{project_id}/webhooks). Pick the shortest
+// collection-shaped GET so deeper sub-collections never win.
+const collectionPath = (ops: ModuleOp[]): string | undefined => {
+  return ops
+    .filter((op) => {
+      return op.method === 'get' && isCollectionPath(op.pathTemplate);
+    })
+    .sort((a, b) => {
+      return segmentCount(a.pathTemplate) - segmentCount(b.pathTemplate);
+    })[0]?.pathTemplate;
+};
+
+const isCreatePost = (pathTemplate: string, collection: string | undefined) => {
+  if (collection) return pathTemplate === collection;
+  return isCollectionPath(pathTemplate) && !pathTemplate.includes('{');
+};
+
+const classifyInto = (
   module: ModuleInfo,
-  method: HttpMethod,
-  op: ModuleOp
+  op: ModuleOp,
+  collection: string | undefined
 ): void => {
-  const key = classifyOp(method, op.pathTemplate);
-  if (key && !module[key]) {
-    module[key] = op;
-  }
-};
-
-const processTag = (
-  tag: string,
-  method: HttpMethod,
-  pathTemplate: string,
-  operation: OpenApiOperation,
-  tagMap: Map<string, ModuleInfo>
-): void => {
-  if (!tagMap.has(tag)) {
-    tagMap.set(tag, { tag, label: toLabel(tag), isProjectScoped: false });
-  }
-  const module = tagMap.get(tag)!;
-  if (pathTemplate.includes('{project_id}')) {
-    module.isProjectScoped = true;
-  }
-  assignOp(module, method, { method, pathTemplate, operation });
-};
-
-const processOperation = (
-  pathTemplate: string,
-  method: HttpMethod,
-  operation: OpenApiOperation | undefined,
-  tagMap: Map<string, ModuleInfo>
-): void => {
-  if (!operation?.operationId) return;
-  const tags = operation.tags ?? ['Other'];
-  for (const tag of tags) {
-    if (!SKIP_TAGS.has(tag)) {
-      processTag(tag, method, pathTemplate, operation, tagMap);
+  if (op.method === 'post') {
+    if (isCreatePost(op.pathTemplate, collection)) {
+      if (!module.createOp) module.createOp = op;
+    } else {
+      module.actions = module.actions ?? [];
+      module.actions.push(op);
     }
+    return;
   }
+  const key = classifyNonPost(op.method, op.pathTemplate);
+  if (!module[key]) module[key] = op;
+};
+
+const buildModule = (tag: string, ops: ModuleOp[]): ModuleInfo => {
+  const module: ModuleInfo = {
+    tag,
+    label: toLabel(tag),
+    isProjectScoped: ops.some((op) => {
+      return op.pathTemplate.includes('{project_id}');
+    }),
+  };
+  const collection = collectionPath(ops);
+  // Classify shallow paths first so list/detail/create win over sub-paths.
+  const sorted = [...ops].sort((a, b) => {
+    return segmentCount(a.pathTemplate) - segmentCount(b.pathTemplate);
+  });
+  for (const op of sorted) {
+    classifyInto(module, op, collection);
+  }
+  return module;
 };
 
 export const parseModules = (spec: OpenApiSpec): ModuleInfo[] => {
-  const tagMap = new Map<string, ModuleInfo>();
   const methods = ['get', 'post', 'put', 'patch', 'delete'] as const;
+  const tagOps = new Map<string, ModuleOp[]>();
 
   for (const [pathTemplate, pathItem] of Object.entries(spec.paths ?? {})) {
     for (const method of methods) {
-      processOperation(pathTemplate, method, pathItem[method], tagMap);
+      const operation = pathItem[method];
+      if (!operation?.operationId) continue;
+      for (const tag of operation.tags ?? ['Other']) {
+        if (SKIP_TAGS.has(tag)) continue;
+        if (!tagOps.has(tag)) tagOps.set(tag, []);
+        tagOps.get(tag)!.push({ method, pathTemplate, operation });
+      }
     }
   }
 
-  return Array.from(tagMap.values());
+  return Array.from(tagOps.entries()).map(([tag, ops]) => {
+    return buildModule(tag, ops);
+  });
 };
 
 export const getIdParamName = (getPath: string, listPath: string): string => {
