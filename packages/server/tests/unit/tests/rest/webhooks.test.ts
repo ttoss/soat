@@ -55,11 +55,12 @@ describe('Webhooks', () => {
       .send({ policy_ids: [policyId] });
   });
 
-  describe('POST /api/v1/projects/:projectId/webhooks', () => {
+  describe('POST /api/v1/webhooks', () => {
     test('authenticated user can create a webhook', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/projects/${projectId}/webhooks`)
+        .post('/api/v1/webhooks')
         .send({
+          project_id: projectId,
           name: 'Test Webhook',
           url: 'https://example.com/hook',
           events: ['file.created', 'file.*'],
@@ -77,20 +78,31 @@ describe('Webhooks', () => {
 
     test('returns 400 when required fields are missing', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/projects/${projectId}/webhooks`)
-        .send({ name: 'No URL' });
+        .post('/api/v1/webhooks')
+        .send({ project_id: projectId, name: 'No URL' });
 
       expect(response.status).toBe(400);
     });
 
-    test('unauthenticated request returns 401', async () => {
-      const response = await testClient
-        .post(`/api/v1/projects/${projectId}/webhooks`)
+    test('returns 400 when project_id is missing', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/webhooks')
         .send({
           name: 'Test',
           url: 'https://example.com/hook',
           events: ['*'],
         });
+
+      expect(response.status).toBe(400);
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient.post('/api/v1/webhooks').send({
+        project_id: projectId,
+        name: 'Test',
+        url: 'https://example.com/hook',
+        events: ['*'],
+      });
 
       expect(response.status).toBe(401);
     });
@@ -105,8 +117,9 @@ describe('Webhooks', () => {
       const noPermToken = await loginAs('webhooksnoperm', 'pass123');
 
       const response = await authenticatedTestClient(noPermToken)
-        .post(`/api/v1/projects/${projectId}/webhooks`)
+        .post('/api/v1/webhooks')
         .send({
+          project_id: projectId,
           name: 'Test',
           url: 'https://example.com/hook',
           events: ['*'],
@@ -116,10 +129,10 @@ describe('Webhooks', () => {
     });
   });
 
-  describe('GET /api/v1/projects/:projectId/webhooks', () => {
-    test('authenticated user can list webhooks', async () => {
+  describe('GET /api/v1/webhooks', () => {
+    test('authenticated user can list webhooks filtered by project', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/projects/${projectId}/webhooks`
+        `/api/v1/webhooks?project_id=${projectId}`
       );
 
       expect(response.status).toBe(200);
@@ -129,20 +142,21 @@ describe('Webhooks', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.get(
-        `/api/v1/projects/${projectId}/webhooks`
+        `/api/v1/webhooks?project_id=${projectId}`
       );
 
       expect(response.status).toBe(401);
     });
   });
 
-  describe('GET /api/v1/projects/:projectId/webhooks/:webhookId', () => {
+  describe('GET /api/v1/webhooks/:webhookId', () => {
     let webhookId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/projects/${projectId}/webhooks`)
+        .post('/api/v1/webhooks')
         .send({
+          project_id: projectId,
           name: 'Get Test',
           url: 'https://example.com/get',
           events: ['*'],
@@ -152,7 +166,7 @@ describe('Webhooks', () => {
 
     test('authenticated user can get a webhook', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/projects/${projectId}/webhooks/${webhookId}`
+        `/api/v1/webhooks/${webhookId}`
       );
 
       expect(response.status).toBe(200);
@@ -163,28 +177,27 @@ describe('Webhooks', () => {
 
     test('returns 404 for non-existent webhook', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/projects/${projectId}/webhooks/nonexistent`
+        '/api/v1/webhooks/nonexistent'
       );
 
       expect(response.status).toBe(404);
     });
 
     test('unauthenticated request returns 401', async () => {
-      const response = await testClient.get(
-        `/api/v1/projects/${projectId}/webhooks/${webhookId}`
-      );
+      const response = await testClient.get(`/api/v1/webhooks/${webhookId}`);
 
       expect(response.status).toBe(401);
     });
   });
 
-  describe('GET /api/v1/projects/:projectId/webhooks/:webhookId/secret', () => {
+  describe('GET /api/v1/webhooks/:webhookId/secret', () => {
     let webhookId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/projects/${projectId}/webhooks`)
+        .post('/api/v1/webhooks')
         .send({
+          project_id: projectId,
           name: 'Secret Test',
           url: 'https://example.com/secret',
           events: ['*'],
@@ -194,7 +207,7 @@ describe('Webhooks', () => {
 
     test('authenticated user can get the webhook secret', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/projects/${projectId}/webhooks/${webhookId}/secret`
+        `/api/v1/webhooks/${webhookId}/secret`
       );
 
       expect(response.status).toBe(200);
@@ -204,7 +217,7 @@ describe('Webhooks', () => {
 
     test('returns 404 for non-existent webhook', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/projects/${projectId}/webhooks/nonexistent/secret`
+        '/api/v1/webhooks/nonexistent/secret'
       );
 
       expect(response.status).toBe(404);
@@ -212,7 +225,7 @@ describe('Webhooks', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.get(
-        `/api/v1/projects/${projectId}/webhooks/${webhookId}/secret`
+        `/api/v1/webhooks/${webhookId}/secret`
       );
 
       expect(response.status).toBe(401);
@@ -245,20 +258,21 @@ describe('Webhooks', () => {
         .send({ policy_ids: [limitedPolicyRes.body.id] });
 
       const response = await authenticatedTestClient(noSecretPermToken).get(
-        `/api/v1/projects/${projectId}/webhooks/${webhookId}/secret`
+        `/api/v1/webhooks/${webhookId}/secret`
       );
 
       expect(response.status).toBe(403);
     });
   });
 
-  describe('PUT /api/v1/projects/:projectId/webhooks/:webhookId', () => {
+  describe('PUT /api/v1/webhooks/:webhookId', () => {
     let webhookId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/projects/${projectId}/webhooks`)
+        .post('/api/v1/webhooks')
         .send({
+          project_id: projectId,
           name: 'Update Test',
           url: 'https://example.com/update',
           events: ['*'],
@@ -268,7 +282,7 @@ describe('Webhooks', () => {
 
     test('authenticated user can update a webhook', async () => {
       const response = await authenticatedTestClient(userToken)
-        .put(`/api/v1/projects/${projectId}/webhooks/${webhookId}`)
+        .put(`/api/v1/webhooks/${webhookId}`)
         .send({
           name: 'Updated Name',
           active: false,
@@ -283,20 +297,21 @@ describe('Webhooks', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
-        .put(`/api/v1/projects/${projectId}/webhooks/${webhookId}`)
+        .put(`/api/v1/webhooks/${webhookId}`)
         .send({ name: 'X' });
 
       expect(response.status).toBe(401);
     });
   });
 
-  describe('POST /api/v1/projects/:projectId/webhooks/:webhookId/rotate-secret', () => {
+  describe('POST /api/v1/webhooks/:webhookId/rotate-secret', () => {
     let webhookId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/projects/${projectId}/webhooks`)
+        .post('/api/v1/webhooks')
         .send({
+          project_id: projectId,
           name: 'Rotate Test',
           url: 'https://example.com/rotate',
           events: ['*'],
@@ -306,7 +321,7 @@ describe('Webhooks', () => {
 
     test('authenticated user can rotate secret', async () => {
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/projects/${projectId}/webhooks/${webhookId}/rotate-secret`
+        `/api/v1/webhooks/${webhookId}/rotate-secret`
       );
 
       expect(response.status).toBe(200);
@@ -316,20 +331,21 @@ describe('Webhooks', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.post(
-        `/api/v1/projects/${projectId}/webhooks/${webhookId}/rotate-secret`
+        `/api/v1/webhooks/${webhookId}/rotate-secret`
       );
 
       expect(response.status).toBe(401);
     });
   });
 
-  describe('GET /api/v1/projects/:projectId/webhooks/:webhookId/deliveries', () => {
+  describe('GET /api/v1/webhooks/:webhookId/deliveries', () => {
     let webhookId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/projects/${projectId}/webhooks`)
+        .post('/api/v1/webhooks')
         .send({
+          project_id: projectId,
           name: 'Deliveries Test',
           url: 'https://example.com/deliveries',
           events: ['*'],
@@ -339,7 +355,7 @@ describe('Webhooks', () => {
 
     test('authenticated user can list deliveries', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/projects/${projectId}/webhooks/${webhookId}/deliveries`
+        `/api/v1/webhooks/${webhookId}/deliveries`
       );
 
       expect(response.status).toBe(200);
@@ -350,20 +366,21 @@ describe('Webhooks', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.get(
-        `/api/v1/projects/${projectId}/webhooks/${webhookId}/deliveries`
+        `/api/v1/webhooks/${webhookId}/deliveries`
       );
 
       expect(response.status).toBe(401);
     });
   });
 
-  describe('GET /api/v1/projects/:projectId/webhooks/:webhookId/deliveries/:deliveryId', () => {
+  describe('GET /api/v1/webhooks/:webhookId/deliveries/:deliveryId', () => {
     let webhookId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/projects/${projectId}/webhooks`)
+        .post('/api/v1/webhooks')
         .send({
+          project_id: projectId,
           name: 'Delivery detail test',
           url: 'https://example.com/delivery-detail',
           events: ['*'],
@@ -373,7 +390,7 @@ describe('Webhooks', () => {
 
     test('returns 404 for non-existent delivery', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/projects/${projectId}/webhooks/${webhookId}/deliveries/wdh_nonexistent`
+        `/api/v1/webhooks/${webhookId}/deliveries/wdh_nonexistent`
       );
 
       expect(response.status).toBe(404);
@@ -381,20 +398,21 @@ describe('Webhooks', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.get(
-        `/api/v1/projects/${projectId}/webhooks/${webhookId}/deliveries/wdh_nonexistent`
+        `/api/v1/webhooks/${webhookId}/deliveries/wdh_nonexistent`
       );
 
       expect(response.status).toBe(401);
     });
   });
 
-  describe('DELETE /api/v1/projects/:projectId/webhooks/:webhookId', () => {
+  describe('DELETE /api/v1/webhooks/:webhookId', () => {
     let webhookId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/projects/${projectId}/webhooks`)
+        .post('/api/v1/webhooks')
         .send({
+          project_id: projectId,
           name: 'Delete Test',
           url: 'https://example.com/delete',
           events: ['*'],
@@ -404,21 +422,19 @@ describe('Webhooks', () => {
 
     test('authenticated user can delete a webhook', async () => {
       const response = await authenticatedTestClient(userToken).delete(
-        `/api/v1/projects/${projectId}/webhooks/${webhookId}`
+        `/api/v1/webhooks/${webhookId}`
       );
 
       expect(response.status).toBe(204);
 
       const getResponse = await authenticatedTestClient(userToken).get(
-        `/api/v1/projects/${projectId}/webhooks/${webhookId}`
+        `/api/v1/webhooks/${webhookId}`
       );
       expect(getResponse.status).toBe(404);
     });
 
     test('unauthenticated request returns 401', async () => {
-      const response = await testClient.delete(
-        `/api/v1/projects/${projectId}/webhooks/someid`
-      );
+      const response = await testClient.delete('/api/v1/webhooks/someid');
 
       expect(response.status).toBe(401);
     });

@@ -14,46 +14,77 @@ import {
   updateWebhook,
 } from 'src/lib/webhooks';
 
+const resolveProjectPublicId = (args: {
+  bodyProjectId: string | undefined;
+  apiKeyProjectPublicId: string | undefined;
+}): string | undefined => {
+  return args.bodyProjectId ?? args.apiKeyProjectPublicId;
+};
+
+const resolvePolicyId = async (
+  policyPublicId: string | undefined
+): Promise<{ id: number | null } | { error: string }> => {
+  if (!policyPublicId) return { id: null };
+  const policy = await db.Policy.findOne({
+    where: { publicId: policyPublicId },
+  });
+  if (!policy) return { error: 'Invalid policy' };
+  return { id: policy.id };
+};
+
 const webhooksRouter = new Router<Context>();
 
-webhooksRouter.get('/projects/:project_id/webhooks', async (ctx: Context) => {
+webhooksRouter.get('/webhooks', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: ctx.params.project_id,
+  const projectPublicId = ctx.query.projectId as string | undefined;
+
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    projectPublicId,
     action: 'webhooks:ListWebhooks',
   });
-  if (!allowed) {
+
+  if (projectIds === null) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
     return;
   }
 
-  const project = await db.Project.findOne({
-    where: { publicId: ctx.params.project_id },
-  });
-  if (!project) {
-    ctx.status = 404;
-    ctx.body = { error: 'Project not found' };
-    return;
-  }
-
-  ctx.body = await listWebhooks({ projectIds: [project.id] });
+  ctx.body = await listWebhooks({ projectIds: projectIds ?? [] });
 });
 
-webhooksRouter.post('/projects/:project_id/webhooks', async (ctx: Context) => {
+webhooksRouter.post('/webhooks', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
+  const body = ctx.request.body as {
+    projectId?: string;
+    name?: string;
+    description?: string;
+    url?: string;
+    events?: string[];
+    policyId?: string;
+  };
+
+  const resolvedProjectPublicId = resolveProjectPublicId({
+    bodyProjectId: body.projectId,
+    apiKeyProjectPublicId: ctx.authUser.apiKeyProjectPublicId,
+  });
+  if (!resolvedProjectPublicId) {
+    ctx.status = 400;
+    ctx.body = { error: 'project_id is required' };
+    return;
+  }
+
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: ctx.params.project_id,
+    projectPublicId: resolvedProjectPublicId,
     action: 'webhooks:CreateWebhook',
   });
   if (!allowed) {
@@ -61,23 +92,6 @@ webhooksRouter.post('/projects/:project_id/webhooks', async (ctx: Context) => {
     ctx.body = { error: 'Forbidden' };
     return;
   }
-
-  const project = await db.Project.findOne({
-    where: { publicId: ctx.params.project_id },
-  });
-  if (!project) {
-    ctx.status = 404;
-    ctx.body = { error: 'Project not found' };
-    return;
-  }
-
-  const body = ctx.request.body as {
-    name?: string;
-    description?: string;
-    url?: string;
-    events?: string[];
-    policyId?: string;
-  };
 
   if (!body.name || !body.url || !body.events || body.events.length === 0) {
     ctx.status = 400;
@@ -87,22 +101,25 @@ webhooksRouter.post('/projects/:project_id/webhooks', async (ctx: Context) => {
     return;
   }
 
-  let policyInternalId: number | null = null;
-  if (body.policyId) {
-    const policy = await db.Policy.findOne({
-      where: { publicId: body.policyId },
-    });
-    if (!policy) {
-      ctx.status = 400;
-      ctx.body = { error: 'Invalid policy' };
-      return;
-    }
-    policyInternalId = policy.id;
+  const project = await db.Project.findOne({
+    where: { publicId: resolvedProjectPublicId },
+  });
+  if (!project) {
+    ctx.status = 400;
+    ctx.body = { error: 'Invalid project ID' };
+    return;
+  }
+
+  const policyResult = await resolvePolicyId(body.policyId);
+  if ('error' in policyResult) {
+    ctx.status = 400;
+    ctx.body = { error: policyResult.error };
+    return;
   }
 
   const webhook = await createWebhook({
     projectId: project.id,
-    policyId: policyInternalId,
+    policyId: policyResult.id,
     name: body.name,
     description: body.description,
     url: body.url,
@@ -113,193 +130,176 @@ webhooksRouter.post('/projects/:project_id/webhooks', async (ctx: Context) => {
   ctx.body = webhook;
 });
 
+webhooksRouter.get('/webhooks/:webhook_id', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const webhook = await getWebhook({ id: ctx.params.webhook_id });
+  if (!webhook) {
+    ctx.status = 404;
+    ctx.body = { error: 'Webhook not found' };
+    return;
+  }
+
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: webhook.projectId!,
+    action: 'webhooks:GetWebhook',
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  ctx.body = webhook;
+});
+
+webhooksRouter.put('/webhooks/:webhook_id', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const webhook = await getWebhook({ id: ctx.params.webhook_id });
+  if (!webhook) {
+    ctx.status = 404;
+    ctx.body = { error: 'Webhook not found' };
+    return;
+  }
+
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: webhook.projectId!,
+    action: 'webhooks:UpdateWebhook',
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const body = ctx.request.body as {
+    name?: string;
+    description?: string;
+    url?: string;
+    events?: string[];
+    active?: boolean;
+    policyId?: string | null;
+  };
+
+  let policyInternalId: number | null | undefined;
+  if (body.policyId !== undefined) {
+    const policyResult = await resolvePolicyId(body.policyId ?? undefined);
+    if ('error' in policyResult) {
+      ctx.status = 400;
+      ctx.body = { error: policyResult.error };
+      return;
+    }
+    policyInternalId = policyResult.id;
+  }
+
+  const updated = await updateWebhook({
+    id: ctx.params.webhook_id,
+    name: body.name,
+    description: body.description,
+    url: body.url,
+    events: body.events,
+    active: body.active,
+    policyId: policyInternalId,
+  });
+
+  ctx.body = updated;
+});
+
+webhooksRouter.delete('/webhooks/:webhook_id', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const webhook = await getWebhook({ id: ctx.params.webhook_id });
+  if (!webhook) {
+    ctx.status = 404;
+    ctx.body = { error: 'Webhook not found' };
+    return;
+  }
+
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: webhook.projectId!,
+    action: 'webhooks:DeleteWebhook',
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  await deleteWebhook({ id: ctx.params.webhook_id });
+  ctx.status = 204;
+});
+
+webhooksRouter.get('/webhooks/:webhook_id/deliveries', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const webhook = await getWebhook({ id: ctx.params.webhook_id });
+  if (!webhook) {
+    ctx.status = 404;
+    ctx.body = { error: 'Webhook not found' };
+    return;
+  }
+
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: webhook.projectId!,
+    action: 'webhooks:ListWebhookDeliveries',
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const webhookRecord = await db.Webhook.findOne({
+    where: { publicId: ctx.params.webhook_id },
+  });
+
+  const limit = ctx.query.limit ? parseInt(ctx.query.limit as string, 10) : 50;
+  const offset = ctx.query.offset
+    ? parseInt(ctx.query.offset as string, 10)
+    : 0;
+
+  ctx.body = await listWebhookDeliveries({
+    webhookId: webhookRecord!.id,
+    limit,
+    offset,
+  });
+});
+
 webhooksRouter.get(
-  '/projects/:project_id/webhooks/:webhook_id',
+  '/webhooks/:webhook_id/deliveries/:delivery_id',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
       ctx.body = { error: 'Unauthorized' };
-      return;
-    }
-
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: ctx.params.project_id,
-      action: 'webhooks:GetWebhook',
-    });
-    if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
       return;
     }
 
     const webhook = await getWebhook({ id: ctx.params.webhook_id });
-    if (!webhook || webhook.projectId !== ctx.params.project_id) {
+    if (!webhook) {
       ctx.status = 404;
       ctx.body = { error: 'Webhook not found' };
       return;
     }
 
-    ctx.body = webhook;
-  }
-);
-
-webhooksRouter.put(
-  '/projects/:project_id/webhooks/:webhook_id',
-  async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
-
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: ctx.params.project_id,
-      action: 'webhooks:UpdateWebhook',
-    });
-    if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
-
-    const webhook = await getWebhook({ id: ctx.params.webhook_id });
-    if (!webhook || webhook.projectId !== ctx.params.project_id) {
-      ctx.status = 404;
-      ctx.body = { error: 'Webhook not found' };
-      return;
-    }
-
-    const body = ctx.request.body as {
-      name?: string;
-      description?: string;
-      url?: string;
-      events?: string[];
-      active?: boolean;
-      policyId?: string | null;
-    };
-
-    let policyInternalId: number | null | undefined;
-    if (body.policyId !== undefined) {
-      if (body.policyId === null) {
-        policyInternalId = null;
-      } else {
-        const policy = await db.Policy.findOne({
-          where: { publicId: body.policyId },
-        });
-        if (!policy) {
-          ctx.status = 400;
-          ctx.body = { error: 'Invalid policy' };
-          return;
-        }
-        policyInternalId = policy.id;
-      }
-    }
-
-    const updated = await updateWebhook({
-      id: ctx.params.webhook_id,
-      name: body.name,
-      description: body.description,
-      url: body.url,
-      events: body.events,
-      active: body.active,
-      policyId: policyInternalId,
-    });
-
-    ctx.body = updated;
-  }
-);
-
-webhooksRouter.delete(
-  '/projects/:project_id/webhooks/:webhook_id',
-  async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
-
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: ctx.params.project_id,
-      action: 'webhooks:DeleteWebhook',
-    });
-    if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
-
-    const webhook = await getWebhook({ id: ctx.params.webhook_id });
-    if (!webhook || webhook.projectId !== ctx.params.project_id) {
-      ctx.status = 404;
-      ctx.body = { error: 'Webhook not found' };
-      return;
-    }
-
-    await deleteWebhook({ id: ctx.params.webhook_id });
-    ctx.status = 204;
-  }
-);
-
-webhooksRouter.get(
-  '/projects/:project_id/webhooks/:webhook_id/deliveries',
-  async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
-
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: ctx.params.project_id,
-      action: 'webhooks:ListWebhookDeliveries',
-    });
-    if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
-
-    const webhookRecord = await db.Webhook.findOne({
-      where: { publicId: ctx.params.webhook_id },
-      include: [{ model: db.Project, as: 'project' }],
-    });
-
-    if (
-      !webhookRecord ||
-      (webhookRecord as unknown as { project: { publicId: string } }).project
-        .publicId !== ctx.params.project_id
-    ) {
-      ctx.status = 404;
-      ctx.body = { error: 'Webhook not found' };
-      return;
-    }
-
-    const limit = ctx.query.limit
-      ? parseInt(ctx.query.limit as string, 10)
-      : 50;
-    const offset = ctx.query.offset
-      ? parseInt(ctx.query.offset as string, 10)
-      : 0;
-
-    ctx.body = await listWebhookDeliveries({
-      webhookId: webhookRecord.id,
-      limit,
-      offset,
-    });
-  }
-);
-
-webhooksRouter.get(
-  '/projects/:project_id/webhooks/:webhook_id/deliveries/:delivery_id',
-  async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
-
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: ctx.params.project_id,
+      projectPublicId: webhook.projectId!,
       action: 'webhooks:GetWebhookDelivery',
     });
     if (!allowed) {
@@ -321,36 +321,33 @@ webhooksRouter.get(
   }
 );
 
-webhooksRouter.get(
-  '/projects/:project_id/webhooks/:webhook_id/secret',
-  async (ctx: Context) => {
-    if (!ctx.authUser) {
-      throw new DomainError('UNAUTHORIZED', 'Unauthorized');
-    }
-
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: ctx.params.project_id,
-      action: 'webhooks:GetWebhookSecret',
-    });
-    if (!allowed) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
-    }
-
-    const webhook = await getWebhook({ id: ctx.params.webhook_id });
-    if (!webhook || webhook.projectId !== ctx.params.project_id) {
-      throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
-    }
-
-    const secretData = await findWebhookSecret({ id: ctx.params.webhook_id });
-    if (!secretData) {
-      throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
-    }
-    ctx.body = secretData;
+webhooksRouter.get('/webhooks/:webhook_id/secret', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    throw new DomainError('UNAUTHORIZED', 'Unauthorized');
   }
-);
+
+  const webhook = await getWebhook({ id: ctx.params.webhook_id });
+  if (!webhook) {
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
+  }
+
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: webhook.projectId!,
+    action: 'webhooks:GetWebhookSecret',
+  });
+  if (!allowed) {
+    throw new DomainError('FORBIDDEN', 'Forbidden');
+  }
+
+  const secretData = await findWebhookSecret({ id: ctx.params.webhook_id });
+  if (!secretData) {
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
+  }
+  ctx.body = secretData;
+});
 
 webhooksRouter.post(
-  '/projects/:project_id/webhooks/:webhook_id/rotate-secret',
+  '/webhooks/:webhook_id/rotate-secret',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -358,20 +355,20 @@ webhooksRouter.post(
       return;
     }
 
+    const webhook = await getWebhook({ id: ctx.params.webhook_id });
+    if (!webhook) {
+      ctx.status = 404;
+      ctx.body = { error: 'Webhook not found' };
+      return;
+    }
+
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: ctx.params.project_id,
+      projectPublicId: webhook.projectId!,
       action: 'webhooks:RotateWebhookSecret',
     });
     if (!allowed) {
       ctx.status = 403;
       ctx.body = { error: 'Forbidden' };
-      return;
-    }
-
-    const webhook = await getWebhook({ id: ctx.params.webhook_id });
-    if (!webhook || webhook.projectId !== ctx.params.project_id) {
-      ctx.status = 404;
-      ctx.body = { error: 'Webhook not found' };
       return;
     }
 
