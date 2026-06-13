@@ -44,36 +44,52 @@ const MIME_TYPES: Record<string, string> = {
   '.txt': 'text/plain',
 };
 
-const APP_DIST =
-  process.env.APP_DIST_PATH ??
-  join(fileURLToPath(new URL('.', import.meta.url)), '../../app/dist');
+const DEFAULT_APP_DIST = join(
+  fileURLToPath(new URL('.', import.meta.url)),
+  '../../app/dist'
+);
+
+const resolveServePath = (
+  appDist: string,
+  urlPath: string
+): string | null | undefined => {
+  const subPath = urlPath.slice('/app'.length) || '/';
+  const safeSub =
+    subPath.replace(/\.\./g, '').replace(/^\/+/, '') || 'index.html';
+  const candidate = resolve(join(appDist, safeSub));
+  const root = resolve(appDist);
+
+  if (!candidate.startsWith(root)) {
+    return null;
+  }
+
+  const resolved =
+    !existsSync(candidate) || statSync(candidate).isDirectory()
+      ? join(appDist, 'index.html')
+      : candidate;
+
+  return existsSync(resolved) ? resolved : undefined;
+};
 
 app.use(async (ctx: Context, next: () => Promise<void>) => {
   if (!ctx.path.startsWith('/app')) {
     return next();
   }
 
-  if (!existsSync(APP_DIST)) {
+  const appDist = process.env.APP_DIST_PATH ?? DEFAULT_APP_DIST;
+
+  if (!existsSync(appDist)) {
     return next();
   }
 
-  const subPath = ctx.path.slice('/app'.length) || '/';
-  const safeSub =
-    subPath.replace(/\.\./g, '').replace(/^\/+/, '') || 'index.html';
-  const candidate = resolve(join(APP_DIST, safeSub));
-  const root = resolve(APP_DIST);
+  const servePath = resolveServePath(appDist, ctx.path);
 
-  if (!candidate.startsWith(root)) {
+  if (servePath === null) {
     ctx.status = 403;
     return;
   }
 
-  const servePath =
-    !existsSync(candidate) || statSync(candidate).isDirectory()
-      ? join(APP_DIST, 'index.html')
-      : candidate;
-
-  if (!existsSync(servePath)) {
+  if (!servePath) {
     return next();
   }
 
