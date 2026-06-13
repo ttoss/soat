@@ -13,6 +13,20 @@ import {
 
 const usersRouter = new Router<Context>();
 
+usersRouter.get('/users/me', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  ctx.body = {
+    id: ctx.authUser.publicId,
+    username: ctx.authUser.username,
+    role: ctx.authUser.role,
+  };
+});
+
 usersRouter.get('/users', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;

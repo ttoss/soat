@@ -7,6 +7,7 @@ RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 
 # Copy workspace manifests
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY packages/app/package.json ./packages/app/
 COPY packages/cli/package.json ./packages/cli/
 COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/server/package.json ./packages/server/
@@ -17,6 +18,7 @@ RUN echo "node-linker=hoisted" > .npmrc
 RUN pnpm install --frozen-lockfile
 
 # Copy source code
+COPY packages/app ./packages/app
 COPY packages/cli ./packages/cli
 COPY packages/sdk ./packages/sdk
 COPY packages/server ./packages/server
@@ -29,7 +31,8 @@ RUN pnpm --filter @soat/postgresdb build
 RUN pnpm --filter @soat/sdk build
 RUN pnpm --filter @soat/cli build
 
-# Build server
+# Build app and server
+RUN pnpm --filter @soat/app build
 RUN pnpm --filter @soat/server build
 
 # ---- Smoke-test image ----
@@ -80,6 +83,7 @@ COPY packages/postgresdb/package.json ./packages/postgresdb/
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 # Copy built artifacts
+COPY --from=builder /app/packages/app/dist ./packages/app/dist
 COPY --from=builder /app/packages/server/dist ./packages/server/dist
 COPY --from=builder /app/packages/postgresdb/dist ./packages/postgresdb/dist
 
