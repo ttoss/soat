@@ -2,6 +2,16 @@ import { createClient } from '@soat/sdk';
 
 export type ApiError = { message: string; code?: string };
 
+/**
+ * The app is served from the same origin as the API (the server mounts both
+ * `/app` and `/api/v1`), so requests resolve against the current origin. An
+ * explicit base URL is required because the SDK builds a `Request` object,
+ * whose constructor rejects relative URLs outside the browser.
+ */
+export const apiBaseUrl = (): string | undefined => {
+  return typeof window !== 'undefined' ? window.location.origin : undefined;
+};
+
 export type ApiResult<T> =
   | { ok: true; data: T }
   | { ok: false; status: number; error: ApiError };
@@ -30,6 +40,7 @@ export const apiFetch = async <T>(args: {
   token: string;
 }): Promise<ApiResult<T>> => {
   const client = createClient({
+    baseUrl: apiBaseUrl(),
     headers: { Authorization: `Bearer ${args.token}` },
   });
 

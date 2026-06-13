@@ -1,6 +1,8 @@
 import { createClient } from '@soat/sdk';
 import * as React from 'react';
 
+import { apiBaseUrl } from '@/api/client';
+
 import { parseModules } from './specUtils';
 import type { ModuleInfo, OpenApiSpec } from './types';
 
@@ -25,6 +27,7 @@ const SpecContext = React.createContext<SpecContextValue>({
 
 const fetchSpec = async (token: string): Promise<OpenApiSpec> => {
   const client = createClient({
+    baseUrl: apiBaseUrl(),
     headers: { Authorization: `Bearer ${token}` },
   });
   const result = await client.get({ url: '/api/v1/openapi.json' });
