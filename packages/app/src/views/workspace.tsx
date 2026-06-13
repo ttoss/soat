@@ -77,7 +77,7 @@ const NavItem = ({
         'w-full rounded-md px-3 py-1.5 text-left text-sm transition-colors',
         indent ? 'pl-6' : '',
         active
-          ? 'bg-primary text-primary-foreground'
+          ? 'bg-primary text-primary-foreground dark:shadow-glow'
           : 'text-foreground hover:bg-muted',
       ].join(' ')}
     >
@@ -203,7 +203,9 @@ const LeftNav = ({
   return (
     <nav className="flex h-full flex-col gap-4 overflow-y-auto py-4 px-2">
       <div className="px-3">
-        <h1 className="text-lg font-bold">{'SOAT'}</h1>
+        <h1 className="w-fit bg-galaxy-gradient bg-clip-text text-lg font-bold tracking-heading text-transparent">
+          {'SOAT'}
+        </h1>
       </div>
 
       <NavSection title={'Projects'}>

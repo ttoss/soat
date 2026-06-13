@@ -2,26 +2,88 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * SOAT theme — derived from BRANDBOOK.md (Vector Galaxy palette).
+ * Dual-theme by design: light mode uses Electric Blue as the functional
+ * primary; dark mode shifts to Core Cyan. Colors are stored as HSL channels
+ * so Tailwind can compose them with opacity modifiers.
+ */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Light Mode — Accessibility First */
+    --background: 0 0% 100%; /* Pure White #FFFFFF */
+    --foreground: 222 26% 14%; /* Deep Space Grey #1A1F2C */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
+    --card-foreground: 222 26% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 26% 14%;
+    --primary: 214 82% 51%; /* Electric Blue #1A73E8 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 216 33% 97%; /* Pale Cosmos #F5F7FA */
+    --secondary-foreground: 222 26% 14%;
+    --muted: 216 33% 97%; /* Pale Cosmos #F5F7FA */
+    --muted-foreground: 215 16% 47%;
+    --accent: 216 33% 97%;
+    --accent-foreground: 222 26% 14%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 214 82% 51%; /* Electric Blue focus ring */
+    /* Brand DNA — decorative only in light mode (never functional text) */
+    --brand-violet: 282 44% 47%; /* Deep Violet #8E44AD */
+    --brand-cyan: 186 100% 50%; /* Core Cyan #00E5FF */
     --radius: 0.5rem;
+  }
+
+  .dark {
+    /* Dark Mode — Glow & Contrast (native environment) */
+    --background: 220 43% 6%; /* Space Black #080C14 */
+    --foreground: 208 100% 97%; /* Starlight White #F0F8FF */
+    --card: 215 21% 11%; /* Nebula Navy #161B22 */
+    --card-foreground: 208 100% 97%;
+    --popover: 215 21% 11%;
+    --popover-foreground: 208 100% 97%;
+    --primary: 186 100% 50%; /* Core Cyan #00E5FF */
+    --primary-foreground: 220 43% 6%; /* Space Black text on cyan */
+    --secondary: 215 21% 11%; /* Nebula Navy #161B22 */
+    --secondary-foreground: 208 100% 97%;
+    --muted: 215 21% 11%;
+    --muted-foreground: 215 16% 65%;
+    --accent: 215 21% 14%;
+    --accent-foreground: 208 100% 97%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 208 100% 97%;
+    --border: 215 21% 18%;
+    --input: 215 21% 18%;
+    --ring: 186 100% 50%; /* Core Cyan focus ring */
+    --brand-violet: 282 44% 47%;
+    --brand-cyan: 186 100% 50%;
+  }
+
+  /* Respect the OS preference out of the box when no theme class is set. */
+  @media (prefers-color-scheme: dark) {
+    :root:not(.light) {
+      --background: 220 43% 6%;
+      --foreground: 208 100% 97%;
+      --card: 215 21% 11%;
+      --card-foreground: 208 100% 97%;
+      --popover: 215 21% 11%;
+      --popover-foreground: 208 100% 97%;
+      --primary: 186 100% 50%;
+      --primary-foreground: 220 43% 6%;
+      --secondary: 215 21% 11%;
+      --secondary-foreground: 208 100% 97%;
+      --muted: 215 21% 11%;
+      --muted-foreground: 215 16% 65%;
+      --accent: 215 21% 14%;
+      --accent-foreground: 208 100% 97%;
+      --destructive: 0 72% 51%;
+      --destructive-foreground: 208 100% 97%;
+      --border: 215 21% 18%;
+      --input: 215 21% 18%;
+      --ring: 186 100% 50%;
+    }
   }
 }
 
@@ -29,7 +91,31 @@
   * {
     @apply border-border;
   }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
+  }
+
+  /*
+   * Headings use Space Grotesk for engineered precision, with slightly
+   * increased letter-spacing per the brandbook typography hierarchy.
+   */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-heading tracking-tight;
+  }
+
+  code,
+  pre,
+  kbd,
+  samp {
+    @apply font-mono;
   }
 }
