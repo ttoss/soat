@@ -1,4 +1,37 @@
 import { extractBodyProps } from 'src/lib/soatToolsHelpers';
+import { buildQueryFn } from 'src/lib/soatToolsSchemaHelpers';
+
+describe('buildQueryFn', () => {
+  test('returns undefined when there are no query params', () => {
+    expect(buildQueryFn([])).toBeUndefined();
+  });
+
+  test('builds a query string from camelCase args using snake_case keys', () => {
+    const fn = buildQueryFn([
+      { name: 'project_id', camelName: 'projectId' },
+      { name: 'limit', camelName: 'limit' },
+    ]);
+    expect(fn?.({ projectId: 'prj_01', limit: 50 })).toBe(
+      '?project_id=prj_01&limit=50'
+    );
+  });
+
+  test('omits undefined and null values', () => {
+    const fn = buildQueryFn([
+      { name: 'project_id', camelName: 'projectId' },
+      { name: 'limit', camelName: 'limit' },
+    ]);
+    expect(fn?.({ projectId: 'prj_01', limit: undefined })).toBe(
+      '?project_id=prj_01'
+    );
+    expect(fn?.({})).toBe('');
+  });
+
+  test('repeats the key for array values', () => {
+    const fn = buildQueryFn([{ name: 'events', camelName: 'events' }]);
+    expect(fn?.({ events: ['a', 'b'] })).toBe('?events=a&events=b');
+  });
+});
 
 describe('extractBodyProps', () => {
   const emptySpec = {};

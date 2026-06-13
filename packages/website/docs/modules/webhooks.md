@@ -76,7 +76,7 @@ Deliveries are retried up to three times. Each attempt and its outcome are recor
 
 ### Secret and Signature Verification
 
-Every webhook has a secret generated at creation time. The secret is returned in the response body on create or secret rotation. You can also retrieve it explicitly via `GET /api/v1/projects/{project_id}/webhooks/{webhook_id}/secret` (requires `webhooks:GetWebhookSecret`).
+Every webhook has a secret generated at creation time. The secret is returned in the response body on create or secret rotation. You can also retrieve it explicitly via `GET /api/v1/webhooks/{webhook_id}/secret` (requires `webhooks:GetWebhookSecret`).
 
 To verify a delivery:
 
@@ -142,8 +142,8 @@ import { SoatClient } from '@soat/sdk';
 const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
 
 const { data, error } = await soat.webhooks.createWebhook({
-  path: { project_id: 'proj_ABC' },
   body: {
+    project_id: 'proj_ABC',
     name: 'My Webhook',
     url: 'https://example.com/hook',
     events: ['sessions.*'],
@@ -157,10 +157,11 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X POST https://api.example.com/api/v1/projects/proj_ABC/webhooks \
+curl -X POST https://api.example.com/api/v1/webhooks \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
+    "project_id": "proj_ABC",
     "name": "My Webhook",
     "url": "https://example.com/hook",
     "events": ["sessions.*"]

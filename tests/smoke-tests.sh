@@ -1511,7 +1511,7 @@ echo "Webhooks listed."
 
 # Get webhook
 echo "--- Getting webhook ---"
-WEBHOOK_GET_RESP=$($SOAT_CLI get-webhook --project-id "$PROJECT_PUBLIC_ID" --webhook-id "$WEBHOOK_ID")
+WEBHOOK_GET_RESP=$($SOAT_CLI get-webhook --webhook-id "$WEBHOOK_ID")
 if ! printf '%s\n' "$WEBHOOK_GET_RESP" | jq -e --arg id "$WEBHOOK_ID" '.id == $id' >/dev/null 2>&1; then
   echo "ERROR: GET webhook returned unexpected payload" >&2
   echo "$WEBHOOK_GET_RESP" >&2
@@ -1521,7 +1521,7 @@ echo "Webhook retrieved."
 
 # Update webhook
 echo "--- Updating webhook ---"
-WEBHOOK_UPDATE_RESP=$($SOAT_CLI update-webhook --project-id "$PROJECT_PUBLIC_ID" --webhook-id "$WEBHOOK_ID" \
+WEBHOOK_UPDATE_RESP=$($SOAT_CLI update-webhook --webhook-id "$WEBHOOK_ID" \
   --name "Updated Smoke Webhook" --active false)
 if ! printf '%s\n' "$WEBHOOK_UPDATE_RESP" | jq -e '.active == false' >/dev/null 2>&1; then
   echo "ERROR: UPDATE webhook did not return active=false" >&2
@@ -1532,12 +1532,12 @@ echo "Webhook updated."
 
 # Rotate secret
 echo "--- Rotating webhook secret ---"
-$SOAT_CLI rotate-webhook-secret --project-id "$PROJECT_PUBLIC_ID" --webhook-id "$WEBHOOK_ID" >/dev/null
+$SOAT_CLI rotate-webhook-secret --webhook-id "$WEBHOOK_ID" >/dev/null
 echo "Webhook secret rotated."
 
 # List deliveries
 echo "--- Listing webhook deliveries ---"
-WEBHOOK_DELIVERIES_RESP=$($SOAT_CLI list-webhook-deliveries --project-id "$PROJECT_PUBLIC_ID" --webhook-id "$WEBHOOK_ID")
+WEBHOOK_DELIVERIES_RESP=$($SOAT_CLI list-webhook-deliveries --webhook-id "$WEBHOOK_ID")
 if ! printf '%s\n' "$WEBHOOK_DELIVERIES_RESP" | jq -e '((type == "array") or (type == "object" and (.data | type == "array")))' >/dev/null 2>&1; then
   echo "ERROR: LIST webhook deliveries did not return an array" >&2
   echo "$WEBHOOK_DELIVERIES_RESP" >&2
@@ -1547,7 +1547,7 @@ echo "Webhook deliveries listed."
 
 # Delete webhook
 echo "--- Deleting webhook ---"
-$SOAT_CLI delete-webhook --project-id "$PROJECT_PUBLIC_ID" --webhook-id "$WEBHOOK_ID"
+$SOAT_CLI delete-webhook --webhook-id "$WEBHOOK_ID"
 echo "Webhook deleted."
 echo "Webhooks coverage: OK"
 

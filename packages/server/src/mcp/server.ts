@@ -32,9 +32,10 @@ for (const tool of soatTools) {
     description: tool.description,
     inputSchema: tool.inputSchema,
     handler: async (args: Record<string, unknown>) => {
+      const url = tool.path(args) + (tool.query ? tool.query(args) : '');
       const data = await apiCall(
         tool.method,
-        tool.path(args),
+        url,
         tool.body ? { body: tool.body(args) } : {}
       );
       return { content: [{ type: 'text' as const, text: toMcpText(data) }] };
