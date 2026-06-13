@@ -1,3 +1,4 @@
+import { createClient } from '@soat/sdk';
 import * as React from 'react';
 
 import { parseModules } from './specUtils';
@@ -23,11 +24,14 @@ const SpecContext = React.createContext<SpecContextValue>({
 });
 
 const fetchSpec = async (token: string): Promise<OpenApiSpec> => {
-  const res = await fetch('/api/v1/openapi.json', {
+  const client = createClient({
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(`Failed to load spec: ${res.status}`);
-  return res.json() as Promise<OpenApiSpec>;
+  const result = await client.get({ url: '/api/v1/openapi.json' });
+  if (result.error !== undefined) {
+    throw new Error(`Failed to load spec: ${result.response?.status ?? 0}`);
+  }
+  return result.data as OpenApiSpec;
 };
 
 export const SpecProvider = ({

@@ -1,25 +1,26 @@
+import { createClient } from '@soat/sdk';
+
 export type ApiError = { message: string; code?: string };
 
 export type ApiResult<T> =
   | { ok: true; data: T }
   | { ok: false; status: number; error: ApiError };
 
-const extractError = async (res: Response): Promise<ApiError> => {
-  try {
-    const body = (await res.json()) as {
-      error?: { message?: string; code?: string } | string;
-    };
-    if (typeof body.error === 'string') return { message: body.error };
-    if (typeof body.error === 'object' && body.error !== null) {
+const extractError = (errorBody: unknown, status: number): ApiError => {
+  if (typeof errorBody === 'object' && errorBody !== null) {
+    const body = errorBody as Record<string, unknown>;
+    const err = body['error'];
+    if (typeof err === 'string') return { message: err };
+    if (typeof err === 'object' && err !== null) {
+      const e = err as Record<string, unknown>;
       return {
-        message: body.error.message ?? `HTTP ${res.status}`,
-        code: body.error.code,
+        message:
+          typeof e['message'] === 'string' ? e['message'] : `HTTP ${status}`,
+        code: typeof e['code'] === 'string' ? e['code'] : undefined,
       };
     }
-  } catch {
-    // ignore parse error
   }
-  return { message: `HTTP ${res.status}` };
+  return { message: `HTTP ${status}` };
 };
 
 export const apiFetch = async <T>(args: {
@@ -28,20 +29,28 @@ export const apiFetch = async <T>(args: {
   body?: unknown;
   token: string;
 }): Promise<ApiResult<T>> => {
-  const res = await fetch(args.url, {
-    method: args.method ?? 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${args.token}`,
-    },
-    body: args.body !== undefined ? JSON.stringify(args.body) : undefined,
+  const client = createClient({
+    headers: { Authorization: `Bearer ${args.token}` },
   });
 
-  if (!res.ok) {
-    const error = await extractError(res);
-    return { ok: false, status: res.status, error };
+  type Method =
+    | 'GET'
+    | 'POST'
+    | 'PUT'
+    | 'PATCH'
+    | 'DELETE'
+    | 'HEAD'
+    | 'OPTIONS';
+  const result = await client.request({
+    url: args.url,
+    method: (args.method ?? 'GET') as Method,
+    body: args.body,
+  });
+
+  if (result.error !== undefined) {
+    const status = result.response?.status ?? 0;
+    return { ok: false, status, error: extractError(result.error, status) };
   }
 
-  const data = (await res.json()) as T;
-  return { ok: true, data };
+  return { ok: true, data: result.data as T };
 };
