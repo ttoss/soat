@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.10.0](https://github.com/ttoss/soat/compare/v0.9.1...v0.10.0) (2026-06-13)
+
+### Bug Fixes
+
+* **server:** add coverage for SPA static middleware to meet 65% threshold ([24d14dc](https://github.com/ttoss/soat/commit/24d14dcb0837e9174718446c77f19ecbd63365df))
+
+### Features
+
+* **app:** add @soat/app — auth flow with login page and welcome screen ([ef45db5](https://github.com/ttoss/soat/commit/ef45db5f4d8980efa635052ab2a7f84d55a7721a))
+* debate mode — Phase 2 multi-perspective deliberation ([#202](https://github.com/ttoss/soat/issues/202)) ([d3e66c3](https://github.com/ttoss/soat/commit/d3e66c3e19aeafb941d285e4008b2eddede8ada8))
+* **server:** deep-thinking reasoning — PRD reframe + provider-native effort + reflect mode ([#200](https://github.com/ttoss/soat/issues/200)) ([dec6192](https://github.com/ttoss/soat/commit/dec61927979ac72bbce33f3b5c6428fa228a9a56))
+
 ## [0.9.1](https://github.com/ttoss/soat/compare/v0.9.0...v0.9.1) (2026-06-12)
 
 ### Bug Fixes
