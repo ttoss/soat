@@ -1,6 +1,7 @@
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
+  darkMode: 'class',
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
@@ -30,10 +31,36 @@ const config: Config = {
           DEFAULT: 'hsl(var(--accent))',
           foreground: 'hsl(var(--accent-foreground))',
         },
+        popover: {
+          DEFAULT: 'hsl(var(--popover))',
+          foreground: 'hsl(var(--popover-foreground))',
+        },
         card: {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        // Brand DNA — decorative accents (logo, gradients, glows).
+        brand: {
+          violet: 'hsl(var(--brand-violet))',
+          cyan: 'hsl(var(--brand-cyan))',
+        },
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        heading: ['"Space Grotesk"', 'Inter', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+      },
+      letterSpacing: {
+        heading: '0.02em',
+      },
+      boxShadow: {
+        // Neon glow for active elements in dark mode (Core Cyan).
+        glow: '0 0 16px 0 hsl(var(--brand-cyan) / 0.45)',
+      },
+      backgroundImage: {
+        // Vector Galaxy flow gradient (Deep Violet -> primary).
+        'galaxy-gradient':
+          'linear-gradient(135deg, hsl(var(--brand-violet)), hsl(var(--primary)))',
       },
       borderRadius: {
         lg: 'var(--radius)',

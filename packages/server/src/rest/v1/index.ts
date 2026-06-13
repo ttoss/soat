@@ -13,6 +13,7 @@ import { formationsRouter } from './formations';
 import { generationsRouter } from './generations';
 import { knowledgeRouter } from './knowledge';
 import { memoriesRouter } from './memories';
+import { openapiRouter } from './openapi';
 import { orchestrationsRouter } from './orchestrations';
 import { policiesRouter } from './policies';
 import { projectsRouter } from './projects';
@@ -45,5 +46,6 @@ v1Router.use(toolsRouter.routes());
 v1Router.use(tracesRouter.routes());
 v1Router.use(usersRouter.routes());
 v1Router.use(webhooksRouter.routes());
+v1Router.use(openapiRouter.routes());
 
 export { v1Router };

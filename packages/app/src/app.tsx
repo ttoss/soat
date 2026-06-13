@@ -1,6 +1,20 @@
 import { AuthProvider, useAuth } from './auth/authContext';
 import { LoginForm } from './auth/loginForm';
-import { WelcomePage } from './views/welcomePage';
+import { NavigationProvider } from './engine/navigationContext';
+import { SpecProvider } from './engine/specContext';
+import { Workspace } from './views/workspace';
+
+const AuthenticatedApp = () => {
+  const { state } = useAuth();
+  if (state.status !== 'authenticated') return null;
+  return (
+    <SpecProvider token={state.token}>
+      <NavigationProvider>
+        <Workspace />
+      </NavigationProvider>
+    </SpecProvider>
+  );
+};
 
 const AppContent = () => {
   const { state } = useAuth();
@@ -8,7 +22,7 @@ const AppContent = () => {
   if (state.status === 'loading') {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="text-muted-foreground">Loading…</div>
+        <div className="text-muted-foreground">{'Loading…'}</div>
       </div>
     );
   }
@@ -17,7 +31,7 @@ const AppContent = () => {
     return <LoginForm />;
   }
 
-  return <WelcomePage />;
+  return <AuthenticatedApp />;
 };
 
 export const App = () => {
