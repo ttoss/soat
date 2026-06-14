@@ -2,6 +2,7 @@ import 'dotenv/config';
 
 import createDebug from 'debug';
 
+import pkg from '../package.json' assert { type: 'json' };
 import { app } from './app';
 import { initializeDatabase } from './db';
 import { createFirstAdminUser } from './lib/users';
@@ -46,8 +47,7 @@ const startServer = async () => {
   const server = app.listen(SOAT_PORT, () => {
     // eslint-disable-next-line no-console
     console.log(
-      'startServer: server running on http://localhost:%d',
-      SOAT_PORT
+      `startServer: server ${pkg.version} running on http://localhost:${SOAT_PORT}`
     );
   });
 
