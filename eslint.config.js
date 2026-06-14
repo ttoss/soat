@@ -8,6 +8,7 @@ export default [
   {
     rules: {
       'turbo/no-undeclared-env-vars': 'off',
+      'formatjs/no-literal-string-in-jsx': 'off',
     },
   },
 ];
