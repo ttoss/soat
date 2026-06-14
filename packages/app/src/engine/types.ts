@@ -1,4 +1,4 @@
-export type ViewMode = 'list' | 'detail' | 'create' | 'edit';
+export type ViewMode = 'list' | 'detail' | 'create' | 'edit' | 'action';
 
 export type ViewDescriptor = {
   tag: string;
@@ -78,6 +78,9 @@ export type ModuleInfo = {
   createOp?: ModuleOp;
   updateOp?: ModuleOp;
   deleteOp?: ModuleOp;
+  // Item-scoped POST operations that are not the module's create
+  // (e.g. POST /agents/{agent_id}/generate). Rendered as action forms.
+  actions?: ModuleOp[];
 };
 
 export type JsonObject = { [key: string]: JsonValue };

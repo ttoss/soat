@@ -1,3 +1,5 @@
+import { BrowserRouter } from 'react-router-dom';
+
 import { AuthProvider, useAuth } from './auth/authContext';
 import { LoginForm } from './auth/loginForm';
 import { NavigationProvider } from './engine/navigationContext';
@@ -36,8 +38,10 @@ const AppContent = () => {
 
 export const App = () => {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </BrowserRouter>
   );
 };

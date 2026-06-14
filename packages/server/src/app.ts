@@ -72,6 +72,11 @@ const resolveServePath = (
 };
 
 app.use(async (ctx: Context, next: () => Promise<void>) => {
+  if (ctx.path === '/') {
+    ctx.redirect('/app');
+    return;
+  }
+
   if (!ctx.path.startsWith('/app')) {
     return next();
   }

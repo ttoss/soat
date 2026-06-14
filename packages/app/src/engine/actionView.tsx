@@ -1,0 +1,231 @@
+import * as React from 'react';
+
+import { apiFetch } from '@/api/client';
+import { useAuth } from '@/auth/authContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
+import { FieldEditor } from './fieldEditor';
+import {
+  buildRequestBody,
+  getOpRequestSchema,
+  initFormData,
+} from './formHelpers';
+import { useNavigation } from './navigationContext';
+import {
+  actionLabel,
+  buildUrl,
+  extractPathParams,
+  humanizeKey,
+} from './specUtils';
+import type {
+  JsonObject,
+  ModuleInfo,
+  ModuleOp,
+  OpenApiSchema,
+  OpenApiSpec,
+} from './types';
+
+const findAction = (
+  module: ModuleInfo,
+  operationId: string
+): ModuleOp | undefined => {
+  return module.actions?.find((a) => {
+    return a.operation.operationId === operationId;
+  });
+};
+
+const formFields = (
+  schema: OpenApiSchema | undefined
+): { properties: Record<string, OpenApiSchema>; required: Set<string> } => {
+  return {
+    properties: schema?.properties ?? {},
+    required: new Set(schema?.required ?? []),
+  };
+};
+
+type MissingParamInputsProps = {
+  names: string[];
+  values: Record<string, string>;
+  onChange: (name: string, value: string) => void;
+};
+
+const MissingParamInputs = ({
+  names,
+  values,
+  onChange,
+}: MissingParamInputsProps) => {
+  return names.map((name) => {
+    return (
+      <div key={name} className="flex flex-col gap-1">
+        <Label htmlFor={`param-${name}`}>
+          {humanizeKey(name)}
+          <span className="text-destructive">{' *'}</span>
+        </Label>
+        <Input
+          id={`param-${name}`}
+          value={values[name] ?? ''}
+          onChange={(e) => {
+            return onChange(name, e.target.value);
+          }}
+        />
+      </div>
+    );
+  });
+};
+
+const ActionResultPanel = ({ result }: { result: JsonObject }) => {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm font-medium text-muted-foreground">
+        {'Result'}
+      </span>
+      <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-md border bg-muted/30 p-3 font-mono text-xs">
+        {JSON.stringify(result, null, 2)}
+      </pre>
+    </div>
+  );
+};
+
+type ActionViewProps = {
+  module: ModuleInfo;
+  spec: OpenApiSpec;
+  pathParams: Record<string, string>;
+  operationId: string;
+};
+
+export const ActionView = ({
+  module,
+  spec,
+  pathParams,
+  operationId,
+}: ActionViewProps) => {
+  const { state } = useAuth();
+  const { navigate } = useNavigation();
+  const actionOp = findAction(module, operationId);
+  const schema = getOpRequestSchema(actionOp, spec);
+  const [formData, setFormData] = React.useState<Record<string, string>>(() => {
+    return initFormData(schema, {});
+  });
+  const [paramValues, setParamValues] = React.useState<Record<string, string>>(
+    {}
+  );
+  const [submitting, setSubmitting] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [result, setResult] = React.useState<JsonObject | null>(null);
+
+  const token = state.status === 'authenticated' ? state.token : '';
+
+  const handleBack = () => {
+    return navigate(null);
+  };
+
+  if (!actionOp) {
+    return (
+      <div className="text-muted-foreground text-sm">
+        {'Action not found in spec.'}
+      </div>
+    );
+  }
+
+  const missingParams = extractPathParams(actionOp.pathTemplate).filter((p) => {
+    return !pathParams[p];
+  });
+  const { properties, required } = formFields(schema);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setSubmitting(true);
+    setError(null);
+    setResult(null);
+
+    const bodyResult = buildRequestBody(formData, schema);
+    if (!bodyResult.ok) {
+      setError(bodyResult.error);
+      setSubmitting(false);
+      return;
+    }
+
+    const url = buildUrl(actionOp.pathTemplate, {
+      ...pathParams,
+      ...paramValues,
+    });
+    const res = await apiFetch<JsonObject>({
+      url,
+      method: 'POST',
+      body: bodyResult.body,
+      token,
+    });
+
+    setSubmitting(false);
+    if (!res.ok) {
+      setError(res.error.message);
+      return;
+    }
+    setResult(res.data);
+  };
+
+  return (
+    <div className="flex max-w-lg flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold">{actionLabel(actionOp)}</h2>
+        <Button variant="outline" size="sm" onClick={handleBack}>
+          {'← Back'}
+        </Button>
+      </div>
+
+      {actionOp.operation.summary && (
+        <p className="text-sm text-muted-foreground">
+          {actionOp.operation.summary}
+        </p>
+      )}
+
+      {error && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <MissingParamInputs
+          names={missingParams}
+          values={paramValues}
+          onChange={(name, value) => {
+            return setParamValues((prev) => {
+              return { ...prev, [name]: value };
+            });
+          }}
+        />
+        {Object.entries(properties).map(([name, fieldSchema]) => {
+          return (
+            <FieldEditor
+              key={name}
+              name={name}
+              schema={fieldSchema}
+              value={formData[name] ?? ''}
+              onChange={(v) => {
+                return setFormData((prev) => {
+                  return { ...prev, [name]: v };
+                });
+              }}
+              required={required.has(name)}
+            />
+          );
+        })}
+
+        <div className="flex gap-2 pt-2">
+          <Button type="submit" disabled={submitting}>
+            {submitting ? 'Running…' : 'Run'}
+          </Button>
+          <Button type="button" variant="outline" onClick={handleBack}>
+            {'Cancel'}
+          </Button>
+        </div>
+      </form>
+
+      {result && <ActionResultPanel result={result} />}
+    </div>
+  );
+};

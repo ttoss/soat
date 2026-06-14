@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 
 import { useNavigation } from './navigationContext';
 import {
+  actionLabel,
   buildUrl,
   formatValue,
   humanizeKey,
@@ -38,6 +39,35 @@ const FieldRow = ({ label, value }: { label: string; value: JsonValue }) => {
       )}
     </div>
   );
+};
+
+const DetailActions = ({
+  module,
+  pathParams,
+}: {
+  module: ModuleInfo;
+  pathParams: Record<string, string>;
+}) => {
+  const { navigate } = useNavigation();
+  return (module.actions ?? []).map((action) => {
+    return (
+      <Button
+        key={action.operation.operationId}
+        variant="secondary"
+        size="sm"
+        onClick={() => {
+          return navigate({
+            tag: module.tag,
+            operationId: action.operation.operationId,
+            pathParams,
+            mode: 'action',
+          });
+        }}
+      >
+        {actionLabel(action)}
+      </Button>
+    );
+  });
 };
 
 type DetailViewProps = {
@@ -145,6 +175,7 @@ export const DetailView = ({
               {'Edit'}
             </Button>
           )}
+          <DetailActions module={module} pathParams={pathParams} />
           {module.deleteOp && !confirmDelete && (
             <Button
               variant="destructive"
