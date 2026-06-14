@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
@@ -5,8 +7,16 @@ import type { ConsentSelection } from 'src/lib/oauthConsent';
 import { buildConsentPolicy, buildConsentScopes } from 'src/lib/oauthConsent';
 import { getPermissionCatalog } from 'src/lib/permissionCatalog';
 import { getProject, listProjects } from 'src/lib/projects';
+import {
+  CONSENT_COOKIE,
+  PROJECT_SCOPE_PREFIX,
+  putConsentSession,
+} from 'src/oauth/server';
 
 const oauthRouter = new Router<Context>();
+
+const MCP_ACCESS_SCOPE = 'mcp:access';
+const CONSENT_COOKIE_MAX_AGE_MS = 10 * 60 * 1000;
 
 const parseSelection = (value: unknown): ConsentSelection => {
   if (!value || typeof value !== 'object') {
@@ -51,17 +61,13 @@ const parseSelection = (value: unknown): ConsentSelection => {
  *     description: >
  *       Returns the projects the caller can grant access to and the full
  *       permission catalog (modules and their granular actions) used to render
- *       the three-tier permission selector.
+ *       the three-tier permission selector in the app.
  *     tags: [OAuth]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       '200':
  *         description: Consent screen data.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/OauthConsentInfo'
  *       '401':
  *         description: Unauthenticated.
  */
@@ -87,28 +93,23 @@ oauthRouter.get('/oauth/consent-info', async (ctx: Context) => {
  * /api/v1/oauth/consent:
  *   post:
  *     operationId: createOauthConsent
- *     summary: Resolve a consent selection into scopes and an IAM policy
+ *     summary: Record a consent decision and resolve it into scopes + an IAM policy
  *     description: >
  *       Validates the chosen project and permission selection and returns the
- *       granted scopes and the project-scoped IAM policy document that an
- *       issued access token would carry. The selection may grant all
- *       permissions, whole modules, or individual actions.
+ *       granted scopes and the project-scoped IAM policy document an issued
+ *       access token would carry. The selection may grant all permissions,
+ *       whole modules, or individual actions.
+ *
+ *       When `authorize_query` (the original OAuth `/authorize` query string)
+ *       is supplied, a single-use consent grant is stored, a consent cookie is
+ *       set, and `authorize_url` is returned for the app to navigate back to so
+ *       the authorization server can complete the flow.
  *     tags: [OAuth]
  *     security:
  *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/OauthConsentRequest'
  *     responses:
  *       '200':
- *         description: Resolved scopes and policy.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/OauthConsentResult'
+ *         description: Resolved scopes/policy (and authorize_url when authorizing).
  *       '400':
  *         description: Invalid selection.
  *       '401':
@@ -124,6 +125,7 @@ oauthRouter.post('/oauth/consent', async (ctx: Context) => {
   const body = (ctx.request.body ?? {}) as {
     projectId?: string;
     selection?: unknown;
+    authorizeQuery?: string;
   };
 
   if (!body.projectId || typeof body.projectId !== 'string') {
@@ -134,14 +136,43 @@ oauthRouter.post('/oauth/consent', async (ctx: Context) => {
   await getProject({ id: body.projectId, authUser: ctx.authUser });
 
   const selection = parseSelection(body.selection);
-  const scopes = buildConsentScopes(selection);
+  const granted = buildConsentScopes(selection);
   const policy = buildConsentPolicy({
     projectPublicId: body.projectId,
     selection,
   });
 
+  const result: {
+    projectId: string;
+    scopes: string[];
+    policy: typeof policy;
+    authorizeUrl?: string;
+  } = { projectId: body.projectId, scopes: granted, policy };
+
+  // When completing an OAuth flow, store the grant, set the consent cookie, and
+  // hand the app the URL to navigate back to so /authorize can issue a code.
+  if (typeof body.authorizeQuery === 'string' && body.authorizeQuery.length) {
+    const scopes = [
+      ...granted,
+      MCP_ACCESS_SCOPE,
+      `${PROJECT_SCOPE_PREFIX}${body.projectId}`,
+    ];
+    const consentId = randomUUID();
+    putConsentSession({
+      id: consentId,
+      subject: ctx.authUser.publicId,
+      scopes,
+    });
+    ctx.cookies.set(CONSENT_COOKIE, consentId, {
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: CONSENT_COOKIE_MAX_AGE_MS,
+    });
+    result.authorizeUrl = `/authorize?${body.authorizeQuery}`;
+  }
+
   ctx.status = 200;
-  ctx.body = { projectId: body.projectId, scopes, policy };
+  ctx.body = result;
 });
 
 export { oauthRouter };

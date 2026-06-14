@@ -5,8 +5,9 @@
  * authorize/PKCE flow against this server.
  *
  * ttoss owns the protocol mechanics (discovery, DCR, PKCE, token grants); SOAT
- * owns the three hooks below — token minting, consent, and refresh validation —
- * plus the consent screen itself (see `consentPage.ts`).
+ * owns the hooks below — token minting and consent — while the consent UI
+ * itself lives in the app (SPA) at /app/oauth/consent. /authorize redirects
+ * there; the app records the decision via POST /api/v1/oauth/consent.
  */
 import {
   createMemoryAuthCodeStore,
@@ -79,7 +80,8 @@ const buildConsentRedirect = (request: {
     scope: request.scopes.join(' '),
   });
   if (request.state) params.set('state', request.state);
-  return `/oauth/consent?${params.toString()}`;
+  // The consent UI lives in the app (SPA), served under /app.
+  return `/app/oauth/consent?${params.toString()}`;
 };
 
 const parseCookie = (

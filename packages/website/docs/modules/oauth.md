@@ -17,24 +17,28 @@ consent, and refresh validation — plus the consent screen.
 MCP client ──GET /authorize──▶ Authorization Server
                                   │  no consent cookie
                                   ▼
-                            302 → /oauth/consent  (consent screen)
-                                  │  user picks project + permissions
+                       302 → /app/oauth/consent   (consent screen in the app/SPA)
+                                  │  user signs in (app login) if needed,
+                                  │  picks a project + permissions
                                   ▼
-                            POST /oauth/consent/decision
-                                  │  sets single-use consent cookie
+                       POST /api/v1/oauth/consent  (bearer token + authorize_query)
+                                  │  sets single-use consent cookie,
+                                  │  returns authorize_url
                                   ▼
-                            302 → /authorize ──▶ issues code ──▶ client
+   app navigates → GET /authorize ──▶ issues code ──▶ client
                             client ──POST /token──▶ access token (JWT)
 ```
 
-Login is handled by the app: the consent screen requires an authenticated SOAT
-user (the app/SPA calls it with the user's bearer token). The screen never
-asks for a password itself.
+Login is handled by the app (the SPA): `/authorize` redirects the browser to
+the consent screen at `/app/oauth/consent`, where the app's normal sign-in
+applies. The consent screen then calls the JSON API below with the user's
+bearer token. The server never renders a login or consent page itself.
 
 ## Consent screen
 
-The screen lets the user choose **one project** and grant permissions at three
-levels of granularity:
+The consent screen lives in the app (`packages/app`, `src/oauth/consentView.tsx`).
+It lets the user choose **one project** and grant permissions at three levels
+of granularity:
 
 | Tier | Control | Resulting scope |
 |---|---|---|
@@ -52,19 +56,18 @@ Whatever the tier, the grant is always scoped to the chosen project via the SRN
 
 ## Endpoints
 
-REST (the backend the app/SPA renders the screen against):
+REST (the backend the app renders the screen against; bearer auth):
 
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/v1/oauth/consent-info` | Projects the caller can grant + the permission catalog |
-| `POST` | `/api/v1/oauth/consent` | Resolve a selection into scopes + a project-scoped policy |
+| `POST` | `/api/v1/oauth/consent` | Resolve a selection into scopes + a project-scoped policy. When `authorize_query` is supplied, also stores a single-use consent grant, sets the consent cookie, and returns `authorize_url` for the app to navigate back to |
 
-Browser (server-rendered fallback screen + decision):
+App (SPA) route:
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/oauth/consent` | Render the consent screen |
-| `POST` | `/oauth/consent/decision` | Record the grant, set the consent cookie, return to `/authorize` |
+| Path | Description |
+|---|---|
+| `/app/oauth/consent` | The consent screen; `/authorize` redirects here, carrying the original authorize query string |
 
 Authorization-server protocol endpoints (`/authorize`, `/token`, `/register`,
 `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource`)

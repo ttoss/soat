@@ -9,7 +9,6 @@ import { initializeDispatcher } from './lib/webhookDispatcher';
 import { setupMcpMiddleware } from './mcp/server';
 import { authMiddleware } from './middleware/auth';
 import { errorLoggerMiddleware } from './middleware/errorLogger';
-import { oauthConsentPageRouter } from './oauth/consentPage';
 import { oauthAuthorizationServer } from './oauth/server';
 import { restRouter } from './rest/router';
 
@@ -25,12 +24,9 @@ app.use(bodyParser());
 app.use(authMiddleware);
 
 // OAuth 2.1 authorization server (issuer side): /authorize, /token, /register,
-// and discovery metadata. Public — the routes do their own validation.
+// and discovery metadata. Public — the routes do their own validation. The
+// consent UI itself lives in the app (SPA); /authorize redirects to it.
 app.use(oauthAuthorizationServer.routes());
-
-// Consent screen (login is handled by the app via the user's bearer token).
-app.use(oauthConsentPageRouter.routes());
-app.use(oauthConsentPageRouter.allowedMethods());
 
 app.use(restRouter.routes());
 app.use(restRouter.allowedMethods());
