@@ -1,5 +1,10 @@
 import { buildUrl } from './specUtils';
-import type { ModuleInfo, OpenApiSpec, ViewDescriptor, ViewMode } from './types';
+import type {
+  ModuleInfo,
+  OpenApiSpec,
+  ViewDescriptor,
+  ViewMode,
+} from './types';
 
 const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const;
 
@@ -26,11 +31,13 @@ export const matchTemplate = (
   return params;
 };
 
-const appToApi = (appPath: string): string =>
-  appPath.replace(/^\/app\//, '/api/');
+const appToApi = (appPath: string): string => {
+  return appPath.replace(/^\/app\//, '/api/');
+};
 
-const apiToApp = (apiPath: string): string =>
-  apiPath.replace(/^\/api\//, '/app/');
+const apiToApp = (apiPath: string): string => {
+  return apiPath.replace(/^\/api\//, '/app/');
+};
 
 // Find the path template for a given operationId. Handles both camelCase
 // operationId and the snake_case operation_id the server emits.
@@ -67,48 +74,97 @@ export const viewToPath = (
   return appPath;
 };
 
+const findCreateViewForPath = (
+  apiPath: string,
+  modules: ModuleInfo[]
+): ViewDescriptor | null => {
+  for (const mod of modules) {
+    if (!mod.createOp || !mod.listOp) continue;
+    const params = matchTemplate(apiPath, mod.listOp.pathTemplate);
+    if (params !== null) {
+      return {
+        tag: mod.tag,
+        operationId: mod.createOp.operation.operationId,
+        pathParams: params,
+        mode: 'create',
+      };
+    }
+  }
+  return null;
+};
+
+const findEditViewForPath = (
+  apiPath: string,
+  modules: ModuleInfo[]
+): ViewDescriptor | null => {
+  for (const mod of modules) {
+    if (!mod.updateOp || !mod.getOp) continue;
+    const params = matchTemplate(apiPath, mod.getOp.pathTemplate);
+    if (params !== null) {
+      return {
+        tag: mod.tag,
+        operationId: mod.updateOp.operation.operationId,
+        pathParams: params,
+        mode: 'edit',
+      };
+    }
+  }
+  return null;
+};
+
+type RawPathItem = Record<string, Record<string, unknown> | undefined>;
+
+const extractOpId = (op: Record<string, unknown>): string => {
+  return (op['operationId'] ?? op['operation_id']) as string;
+};
+
+const extractTag = (op: Record<string, unknown>): string => {
+  return (op['tags'] as string[] | undefined)?.[0] ?? 'Other';
+};
+
+const findViewFromSpecPath = (
+  template: string,
+  pathItem: RawPathItem,
+  params: Record<string, string>
+): ViewDescriptor | null => {
+  const getOp = pathItem['get'];
+  const postOp = pathItem['post'];
+
+  if (getOp) {
+    const lastSegment = template.split('/').filter(Boolean).pop() ?? '';
+    const mode: ViewMode = lastSegment.startsWith('{') ? 'detail' : 'list';
+    return {
+      tag: extractTag(getOp),
+      operationId: extractOpId(getOp),
+      pathParams: params,
+      mode,
+    };
+  }
+
+  if (postOp) {
+    return {
+      tag: extractTag(postOp),
+      operationId: extractOpId(postOp),
+      pathParams: params,
+      mode: 'action',
+    };
+  }
+
+  return null;
+};
+
 // Derive a ViewDescriptor from the current app URL pathname + loaded spec.
 export const pathToView = (
   pathname: string,
   spec: OpenApiSpec,
   modules: ModuleInfo[]
 ): ViewDescriptor | null => {
-  // /new suffix → create mode
   if (pathname.endsWith('/new')) {
-    const parentAppPath = pathname.slice(0, -4);
-    const parentApiPath = appToApi(parentAppPath);
-    for (const mod of modules) {
-      if (!mod.createOp || !mod.listOp) continue;
-      const params = matchTemplate(parentApiPath, mod.listOp.pathTemplate);
-      if (params !== null) {
-        return {
-          tag: mod.tag,
-          operationId: mod.createOp.operation.operationId,
-          pathParams: params,
-          mode: 'create',
-        };
-      }
-    }
-    return null;
+    return findCreateViewForPath(appToApi(pathname.slice(0, -4)), modules);
   }
 
-  // /edit suffix → edit mode
   if (pathname.endsWith('/edit')) {
-    const itemAppPath = pathname.slice(0, -5);
-    const itemApiPath = appToApi(itemAppPath);
-    for (const mod of modules) {
-      if (!mod.updateOp || !mod.getOp) continue;
-      const params = matchTemplate(itemApiPath, mod.getOp.pathTemplate);
-      if (params !== null) {
-        return {
-          tag: mod.tag,
-          operationId: mod.updateOp.operation.operationId,
-          pathParams: params,
-          mode: 'edit',
-        };
-      }
-    }
-    return null;
+    return findEditViewForPath(appToApi(pathname.slice(0, -5)), modules);
   }
 
   const apiPath = appToApi(pathname);
@@ -116,29 +172,20 @@ export const pathToView = (
   for (const [template, pathItem] of Object.entries(spec.paths ?? {})) {
     const params = matchTemplate(apiPath, template);
     if (params === null) continue;
-
-    const raw = pathItem as Record<string, Record<string, unknown> | undefined>;
-    const getOp = raw['get'];
-    const postOp = raw['post'];
-
-    if (getOp) {
-      const opId = (getOp['operationId'] ?? getOp['operation_id']) as string;
-      const tag = (getOp['tags'] as string[] | undefined)?.[0] ?? 'Other';
-      const lastSegment = template.split('/').filter(Boolean).pop() ?? '';
-      const mode: ViewMode = lastSegment.startsWith('{') ? 'detail' : 'list';
-      return { tag, operationId: opId, pathParams: params, mode };
-    }
-
-    if (postOp) {
-      const opId = (postOp['operationId'] ?? postOp['operation_id']) as string;
-      const tag = (postOp['tags'] as string[] | undefined)?.[0] ?? 'Other';
-      return { tag, operationId: opId, pathParams: params, mode: 'action' };
-    }
+    const view = findViewFromSpecPath(
+      template,
+      pathItem as RawPathItem,
+      params
+    );
+    if (view) return view;
   }
 
   return null;
 };
 
 // Extract project_id from the view's path params (if any).
-export const extractProjectId = (view: ViewDescriptor | null): string | null =>
-  view?.pathParams['project_id'] ?? null;
+export const extractProjectId = (
+  view: ViewDescriptor | null
+): string | null => {
+  return view?.pathParams['project_id'] ?? null;
+};

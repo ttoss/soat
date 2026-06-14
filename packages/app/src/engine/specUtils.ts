@@ -118,25 +118,41 @@ const buildModule = (tag: string, ops: ModuleOp[]): ModuleInfo => {
   return module;
 };
 
+type RawOp = OpenApiOperation & { operation_id?: string };
+
+const collectTagOps = (
+  pathTemplate: string,
+  method: HttpMethod,
+  pathItem: Record<string, unknown>,
+  tagOps: Map<string, ModuleOp[]>
+): void => {
+  const raw = pathItem[method] as RawOp | undefined;
+  if (!raw) return;
+  // The server's caseTransform middleware converts operationId → operation_id;
+  // normalise back so the rest of the engine can rely on operationId.
+  const operation: OpenApiOperation = raw.operationId
+    ? raw
+    : { ...raw, operationId: raw.operation_id ?? '' };
+  if (!operation.operationId) return;
+  for (const tag of operation.tags ?? ['Other']) {
+    if (SKIP_TAGS.has(tag)) continue;
+    if (!tagOps.has(tag)) tagOps.set(tag, []);
+    tagOps.get(tag)!.push({ method, pathTemplate, operation });
+  }
+};
+
 export const parseModules = (spec: OpenApiSpec): ModuleInfo[] => {
   const methods = ['get', 'post', 'put', 'patch', 'delete'] as const;
   const tagOps = new Map<string, ModuleOp[]>();
 
   for (const [pathTemplate, pathItem] of Object.entries(spec.paths ?? {})) {
     for (const method of methods) {
-      const raw = pathItem[method] as (OpenApiOperation & { operation_id?: string }) | undefined;
-      if (!raw) continue;
-      // The server's caseTransform middleware converts operationId → operation_id;
-      // normalise back so the rest of the engine can rely on operationId.
-      const operation: OpenApiOperation = raw.operationId
-        ? raw
-        : { ...raw, operationId: raw.operation_id ?? '' };
-      if (!operation.operationId) continue;
-      for (const tag of operation.tags ?? ['Other']) {
-        if (SKIP_TAGS.has(tag)) continue;
-        if (!tagOps.has(tag)) tagOps.set(tag, []);
-        tagOps.get(tag)!.push({ method, pathTemplate, operation });
-      }
+      collectTagOps(
+        pathTemplate,
+        method,
+        pathItem as Record<string, unknown>,
+        tagOps
+      );
     }
   }
 
