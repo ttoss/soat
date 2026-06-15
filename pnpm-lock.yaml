@@ -266,9 +266,15 @@ importers:
       '@soat/postgresdb':
         specifier: workspace:*
         version: link:../postgresdb
+      '@ttoss/auth-core':
+        specifier: ^0.7.0
+        version: 0.7.0
       '@ttoss/http-server':
         specifier: ^0.5.17
         version: 0.5.17
+      '@ttoss/http-server-auth':
+        specifier: ^0.3.3
+        version: 0.3.3(@ttoss/http-server@0.5.17)
       '@ttoss/http-server-mcp':
         specifier: ^0.13.3
         version: 0.13.3(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))
@@ -4506,6 +4512,9 @@ packages:
   '@ttoss/auth-core@0.4.16':
     resolution: {integrity: sha512-VRNiHGB3PGMyG/CqlEc1kghuXIRS2/9wbR921JYYMH/Ajy8s71SR9/pEICp+ZKrT8gXVl9p6ge3flO3oiKUx8A==}
 
+  '@ttoss/auth-core@0.7.0':
+    resolution: {integrity: sha512-RttFzYhLYn6i67yVUTdSqVZQQ6cFSM1EPvAhiVpxmJePijdbCtqHLzaNww9tlMi/BWTdVFhCGqys6Bf1iH7tTA==}
+
   '@ttoss/cloudformation@0.13.6':
     resolution: {integrity: sha512-Sg4YXnWAl4PWRc1i/uBtrsXE7VDhqdIvxroeKRXCpvB9ufBs6UESrgu9qViZhZcwfyKPEURx5QnqtLA0cBDzIg==}
 
@@ -4517,6 +4526,11 @@ packages:
     resolution: {integrity: sha512-RJ9ZJsi+3W4/MACrpsK8uf7FMsL7EGIzJekhxhFaV+pPMf9Q9mZFazfI6ICMYgRujEnqb+5D0iT2nV+R91/Oyw==}
     peerDependencies:
       eslint: ^9
+
+  '@ttoss/http-server-auth@0.3.3':
+    resolution: {integrity: sha512-7GZf/FNP+eYuzP7yRD3AEBBERNlFqG2vSUGelP7wPouB8oM8noB5Hvb+UsScfYqw278YcSpmHHsoCrJdkgjvxg==}
+    peerDependencies:
+      '@ttoss/http-server': ^0.7.1
 
   '@ttoss/http-server-mcp@0.13.3':
     resolution: {integrity: sha512-xg1ASXeuG9V9EWlpRrfQfhKaxZtSm6GscVW73oSiOCNvZIBOZgHA0u43tWAXA0ydikH2WpuG8AOllmfzPhcbgQ==}
@@ -18874,6 +18888,10 @@ snapshots:
     dependencies:
       aws-jwt-verify: 4.0.1
 
+  '@ttoss/auth-core@0.7.0':
+    dependencies:
+      aws-jwt-verify: 4.0.1
+
   '@ttoss/cloudformation@0.13.6':
     dependencies:
       '@ttoss/read-config-file': 2.2.16
@@ -18933,6 +18951,11 @@ snapshots:
       - supports-color
       - ts-jest
       - typescript
+
+  '@ttoss/http-server-auth@0.3.3(@ttoss/http-server@0.5.17)':
+    dependencies:
+      '@ttoss/auth-core': 0.7.0
+      '@ttoss/http-server': 0.5.17
 
   '@ttoss/http-server-mcp@0.13.3(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))':
     dependencies:
