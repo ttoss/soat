@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { apiFetch } from '@/api/client';
 import { useAuth } from '@/auth/authContext';
+import { GuideChat } from '@/chat/guideChat';
 import { Button } from '@/components/ui/button';
 import { EngineView } from '@/engine/engineView';
 import { useNavigation } from '@/engine/navigationContext';
@@ -338,6 +339,7 @@ export const Workspace = () => {
       <main className="flex-1 overflow-y-auto p-6">
         <MainArea />
       </main>
+      <GuideChat />
     </div>
   );
 };
