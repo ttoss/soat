@@ -4,38 +4,168 @@ import { apiFetch } from '@/api/client';
 import { useAuth } from '@/auth/authContext';
 import { Button } from '@/components/ui/button';
 
+import { ALL_STATUSES, EmptyState, ListToolbar } from './listToolbar';
 import { useNavigation } from './navigationContext';
 import {
   buildUrl,
+  deriveColumns,
   extractItems,
   formatValue,
   humanizeKey,
   isSensitiveKey,
 } from './specUtils';
+import { StatusBadge } from './statusBadge';
 import type { JsonObject, JsonValue, ModuleInfo, OpenApiSpec } from './types';
 
-const HIDDEN_COLUMNS = new Set(['id']);
-const MAX_COLUMNS = 6;
-
-const deriveColumns = (items: JsonObject[]): string[] => {
-  if (items.length === 0) return [];
-  const keys = Object.keys(items[0]);
-  return keys
-    .filter((k) => {
-      return !HIDDEN_COLUMNS.has(k) && !isSensitiveKey(k);
-    })
-    .slice(0, MAX_COLUMNS);
-};
+const PER_PAGE = 15;
 
 const CellValue = ({ colKey, value }: { colKey: string; value: JsonValue }) => {
   if (isSensitiveKey(colKey)) {
     return <span className="text-muted-foreground italic">{'[hidden]'}</span>;
+  }
+  if (colKey === 'status' && typeof value === 'string' && value) {
+    return <StatusBadge status={value} />;
+  }
+  if (colKey === 'error') {
+    return value ? (
+      <StatusBadge error />
+    ) : (
+      <span className="text-muted-foreground">{'—'}</span>
+    );
   }
   const formatted = formatValue(colKey, value);
   if (formatted.length > 60) {
     return <span title={formatted}>{`${formatted.slice(0, 57)}…`}</span>;
   }
   return <span>{formatted}</span>;
+};
+
+const distinctStatuses = (items: JsonObject[]): string[] => {
+  const set = new Set<string>();
+  for (const item of items) {
+    if (typeof item.status === 'string' && item.status) set.add(item.status);
+  }
+  return Array.from(set);
+};
+
+const matchesSearch = (item: JsonObject, query: string): boolean => {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return Object.values(item).some((value) => {
+    return (
+      (typeof value === 'string' || typeof value === 'number') &&
+      String(value).toLowerCase().includes(q)
+    );
+  });
+};
+
+const PaginationFooter = ({
+  total,
+  page,
+  onPrev,
+  onNext,
+}: {
+  total: number;
+  page: number;
+  onPrev: () => void;
+  onNext: () => void;
+}) => {
+  const from = page * PER_PAGE + 1;
+  const to = Math.min((page + 1) * PER_PAGE, total);
+  const hasPrev = page > 0;
+  const hasNext = to < total;
+
+  return (
+    <div className="flex items-center justify-between pt-2 text-sm text-muted-foreground">
+      <span>{`${from}–${to} of ${total}`}</span>
+      <div className="flex gap-1">
+        <button
+          onClick={onPrev}
+          disabled={!hasPrev}
+          aria-label="Previous page"
+          className="rounded px-2 py-1 text-xs hover:bg-muted disabled:opacity-40"
+        >
+          {'‹'}
+        </button>
+        <button
+          onClick={onNext}
+          disabled={!hasNext}
+          aria-label="Next page"
+          className="rounded px-2 py-1 text-xs hover:bg-muted disabled:opacity-40"
+        >
+          {'›'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const ItemTable = ({
+  items,
+  columns,
+  hasDetail,
+  onRowClick,
+}: {
+  items: JsonObject[];
+  columns: string[];
+  hasDetail: boolean;
+  onRowClick: (item: JsonObject) => void;
+}) => {
+  return (
+    <div className="overflow-x-auto rounded-md border">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-muted/50">
+            {columns.map((col) => {
+              return (
+                <th
+                  key={col}
+                  className="px-4 py-2 text-left font-medium text-muted-foreground"
+                >
+                  {humanizeKey(col)}
+                </th>
+              );
+            })}
+            {hasDetail && <th className="px-4 py-2" />}
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item, idx) => {
+            return (
+              <tr
+                key={String(item.id ?? idx)}
+                className="border-b last:border-0 hover:bg-muted/30 transition-colors"
+              >
+                {columns.map((col) => {
+                  return (
+                    <td key={col} className="px-4 py-2">
+                      <CellValue
+                        colKey={col}
+                        value={item[col] ?? (null as JsonValue)}
+                      />
+                    </td>
+                  );
+                })}
+                {hasDetail && (
+                  <td className="px-4 py-2 text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        return onRowClick(item);
+                      }}
+                    >
+                      {'View →'}
+                    </Button>
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 };
 
 type ListViewProps = {
@@ -48,6 +178,90 @@ type ViewState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'ok'; items: JsonObject[] };
+
+type LoadedListProps = {
+  module: ModuleInfo;
+  items: JsonObject[];
+  onRowClick: (item: JsonObject) => void;
+  onCreate: () => void;
+};
+
+const LoadedList = ({
+  module,
+  items,
+  onRowClick,
+  onCreate,
+}: LoadedListProps) => {
+  const [page, setPage] = React.useState(0);
+  const [search, setSearch] = React.useState('');
+  const [statusFilter, setStatusFilter] = React.useState<string>(ALL_STATUSES);
+
+  const columns = deriveColumns(items);
+  const statuses = distinctStatuses(items);
+  const filtered = items.filter((item) => {
+    const statusOk =
+      statusFilter === ALL_STATUSES || item.status === statusFilter;
+    return statusOk && matchesSearch(item, search);
+  });
+  const paginated = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  const isFiltered = search.trim() !== '' || statusFilter !== ALL_STATUSES;
+
+  return (
+    <>
+      {items.length > 0 && (
+        <ListToolbar
+          search={search}
+          onSearch={(value) => {
+            setSearch(value);
+            setPage(0);
+          }}
+          label={module.label}
+          statuses={statuses}
+          selectedStatus={statusFilter}
+          onSelectStatus={(status) => {
+            setStatusFilter(status);
+            setPage(0);
+          }}
+        />
+      )}
+
+      {filtered.length === 0 ? (
+        <EmptyState
+          label={module.label}
+          filtered={isFiltered}
+          canCreate={Boolean(module.createOp)}
+          onCreate={onCreate}
+        />
+      ) : (
+        <>
+          <ItemTable
+            items={paginated}
+            columns={columns}
+            hasDetail={Boolean(module.getOp)}
+            onRowClick={onRowClick}
+          />
+          {filtered.length > PER_PAGE && (
+            <PaginationFooter
+              total={filtered.length}
+              page={page}
+              onPrev={() => {
+                return setPage((p) => {
+                  return Math.max(0, p - 1);
+                });
+              }}
+              onNext={() => {
+                return setPage((p) => {
+                  return Math.min(totalPages - 1, p + 1);
+                });
+              }}
+            />
+          )}
+        </>
+      )}
+    </>
+  );
+};
 
 export const ListView = ({
   module,
@@ -130,7 +344,6 @@ export const ListView = ({
   }
 
   const { items } = viewState;
-  const columns = deriveColumns(items);
 
   return (
     <div className="flex flex-col gap-4">
@@ -141,72 +354,19 @@ export const ListView = ({
             {'Refresh'}
           </Button>
           {module.createOp && (
-            <Button size="sm" onClick={handleCreate}>
+            <Button variant="gradient" size="sm" onClick={handleCreate}>
               {'Create'}
             </Button>
           )}
         </div>
       </div>
 
-      {items.length === 0 ? (
-        <p className="py-8 text-center text-muted-foreground">
-          {'No items found.'}
-        </p>
-      ) : (
-        <div className="overflow-x-auto rounded-md border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                {columns.map((col) => {
-                  return (
-                    <th
-                      key={col}
-                      className="px-4 py-2 text-left font-medium text-muted-foreground"
-                    >
-                      {humanizeKey(col)}
-                    </th>
-                  );
-                })}
-                {module.getOp && <th className="px-4 py-2" />}
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, idx) => {
-                return (
-                  <tr
-                    key={String(item.id ?? idx)}
-                    className="border-b last:border-0 hover:bg-muted/30 transition-colors"
-                  >
-                    {columns.map((col) => {
-                      return (
-                        <td key={col} className="px-4 py-2">
-                          <CellValue
-                            colKey={col}
-                            value={item[col] ?? (null as JsonValue)}
-                          />
-                        </td>
-                      );
-                    })}
-                    {module.getOp && (
-                      <td className="px-4 py-2 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            return handleRowClick(item);
-                          }}
-                        >
-                          {'View →'}
-                        </Button>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <LoadedList
+        module={module}
+        items={items}
+        onRowClick={handleRowClick}
+        onCreate={handleCreate}
+      />
     </div>
   );
 };

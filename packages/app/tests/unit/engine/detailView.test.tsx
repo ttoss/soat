@@ -101,4 +101,80 @@ describe('DetailView', () => {
     );
     expect(deleted).toBe(true);
   });
+
+  test('shows the item name as the primary heading', async () => {
+    server.use(itemHandler());
+    renderDetail();
+    expect(await screen.findByRole('heading', { name: 'Alpha' })).toBeInTheDocument();
+  });
+
+  test('shows the status as a badge next to the title', async () => {
+    server.use(
+      http.get('*/api/v1/agents/:agent_id', () =>
+        HttpResponse.json({ id: 'agt_1', name: 'Alpha', status: 'active' })
+      )
+    );
+    renderDetail();
+
+    const badge = await screen.findByText('Active');
+    expect(badge).toHaveClass('rounded-full');
+  });
+
+  test('groups fields into labeled section cards', async () => {
+    server.use(
+      http.get('*/api/v1/agents/:agent_id', () =>
+        HttpResponse.json({
+          id: 'agt_1',
+          name: 'Alpha',
+          status: 'active',
+          model: 'gpt-4o',
+        })
+      )
+    );
+    renderDetail();
+
+    expect(await screen.findByText('Overview')).toBeInTheDocument();
+  });
+
+  test('renders long/multiline fields in their own mono block card', async () => {
+    const instructions = 'You are a helpful assistant.\n'.repeat(8);
+    server.use(
+      http.get('*/api/v1/agents/:agent_id', () =>
+        HttpResponse.json({
+          id: 'agt_1',
+          name: 'Alpha',
+          instructions,
+        })
+      )
+    );
+    renderDetail();
+
+    expect(await screen.findByText('Instructions')).toBeInTheDocument();
+    const pre = document.querySelector('pre');
+    expect(pre).not.toBeNull();
+    expect(pre?.textContent).toContain('You are a helpful assistant.');
+  });
+
+  test('shows sub-resource tabs and loads their items', async () => {
+    server.use(
+      itemHandler(),
+      http.get('*/api/v1/agents/:agent_id/sessions', () =>
+        HttpResponse.json([{ id: 'ses_1', name: 'Session One' }])
+      )
+    );
+    renderWithAuth(
+      <>
+        <DetailView
+          module={agentsModule()}
+          spec={testSpec}
+          pathParams={{ agent_id: 'agt_1' }}
+          modules={parseModules(testSpec)}
+        />
+        <NavProbe />
+      </>
+    );
+    expect(await screen.findByRole('button', { name: /sessions/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /sessions/i }));
+    expect(await screen.findByText('Session One')).toBeInTheDocument();
+  });
 });

@@ -1,3 +1,4 @@
+import { MessageSquare, X } from 'lucide-react';
 import * as React from 'react';
 
 import { useAuth } from '@/auth/authContext';
@@ -340,7 +341,7 @@ export const GuideChat = () => {
             return setCollapsed(false);
           }}
         >
-          {'💬'}
+          <MessageSquare className="h-4 w-4" />
         </Button>
       </aside>
     );
@@ -349,7 +350,10 @@ export const GuideChat = () => {
   return (
     <aside className="flex h-full w-80 shrink-0 flex-col border-l bg-muted/20">
       <div className="flex items-center justify-between border-b px-3 py-2">
-        <span className="text-sm font-semibold">{'AI Guide'}</span>
+        <div className="flex items-center gap-2">
+          <MessageSquare className="h-3.5 w-3.5 text-primary" />
+          <span className="text-sm font-semibold">{'AI Guide'}</span>
+        </div>
         <Button
           variant="ghost"
           size="icon"
@@ -358,7 +362,7 @@ export const GuideChat = () => {
             return setCollapsed(true);
           }}
         >
-          {'×'}
+          <X className="h-4 w-4" />
         </Button>
       </div>
       {guideProjectId ? (

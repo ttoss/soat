@@ -1,15 +1,49 @@
+import { Cpu, Key, LogOut, Settings, Shield, Users } from 'lucide-react';
 import * as React from 'react';
 
 import { apiFetch } from '@/api/client';
 import { useAuth } from '@/auth/authContext';
 import { GuideChat } from '@/chat/guideChat';
-import { Button } from '@/components/ui/button';
 import { EngineView } from '@/engine/engineView';
 import { useNavigation } from '@/engine/navigationContext';
 import { useSpec } from '@/engine/specContext';
 import type { JsonObject, ModuleInfo } from '@/engine/types';
 
-type Project = { id: string; name: string };
+import type { Project } from './navComponents';
+import {
+  buildGroups,
+  ModuleGroups,
+  NavItem,
+  ProjectPicker,
+} from './navComponents';
+
+const ADMIN_TAGS = new Set([
+  'Users',
+  'Policies',
+  'Ai Providers',
+  'AiProviders',
+  'AI Providers',
+]);
+
+const ADMIN_ICONS: Record<string, React.ElementType> = {
+  Users,
+  Policies: Shield,
+  'Ai Providers': Settings,
+  AiProviders: Settings,
+  'AI Providers': Settings,
+  'Api Keys': Key,
+  'API Keys': Key,
+};
+
+const buildPathParams = (
+  module: ModuleInfo,
+  projectId: string | null
+): Record<string, string> => {
+  if (module.isProjectScoped && projectId) {
+    return { project_id: projectId };
+  }
+  return {};
+};
 
 const extractProjects = (data: unknown): Project[] => {
   const list = Array.isArray(data) ? data : [];
@@ -43,96 +77,7 @@ const useProjects = (token: string) => {
   return { projects, loading };
 };
 
-const NavSection = ({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) => {
-  return (
-    <div className="flex flex-col gap-1">
-      <p className="px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        {title}
-      </p>
-      {children}
-    </div>
-  );
-};
-
-const NavItem = ({
-  label,
-  active,
-  onClick,
-  indent,
-}: {
-  label: string;
-  active?: boolean;
-  onClick: () => void;
-  indent?: boolean;
-}) => {
-  return (
-    <button
-      onClick={onClick}
-      className={[
-        'w-full rounded-md px-3 py-1.5 text-left text-sm transition-colors',
-        indent ? 'pl-6' : '',
-        active
-          ? 'bg-primary text-primary-foreground dark:shadow-glow'
-          : 'text-foreground hover:bg-muted',
-      ].join(' ')}
-    >
-      {label}
-    </button>
-  );
-};
-
-const ADMIN_TAGS = new Set([
-  'Users',
-  'Policies',
-  'Ai Providers',
-  'AiProviders',
-  'AI Providers',
-]);
-
-type NavModuleListProps = {
-  modules: ModuleInfo[];
-  activeTag: string | null;
-  indent?: boolean;
-  onSelect: (m: ModuleInfo) => void;
-};
-
-const NavModuleList = ({
-  modules,
-  activeTag,
-  indent,
-  onSelect,
-}: NavModuleListProps) => {
-  return modules.map((m) => {
-    return (
-      <NavItem
-        key={m.tag}
-        label={m.label}
-        active={activeTag === m.tag}
-        indent={indent}
-        onClick={() => {
-          return onSelect(m);
-        }}
-      />
-    );
-  });
-};
-
-const buildPathParams = (
-  module: ModuleInfo,
-  projectId: string | null
-): Record<string, string> => {
-  const pathParams: Record<string, string> = {};
-  if (module.isProjectScoped && projectId) {
-    pathParams.project_id = projectId;
-  }
-  return pathParams;
-};
+// ─── LeftNav ──────────────────────────────────────────────────────────────────
 
 const LeftNav = ({
   projects,
@@ -142,25 +87,27 @@ const LeftNav = ({
   projectsLoading: boolean;
 }) => {
   const { state, logout } = useAuth();
-  const { modules, spec } = useSpec();
+  const { modules } = useSpec();
   const { view, activeProjectId, navigate, setProject } = useNavigation();
   const user = state.status === 'authenticated' ? state.user : null;
 
+  const [openGroups, setOpenGroups] = React.useState<Set<string>>(() => {
+    return new Set(['orchestration']);
+  });
+
   const activeListTag = view?.mode === 'list' ? view.tag : null;
 
-  const projectModules = React.useMemo(() => {
-    return modules.filter((m) => {
-      return m.isProjectScoped;
+  const toggleGroup = (key: string) => {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
     });
-  }, [modules]);
-
-  const adminModules = React.useMemo(() => {
-    return modules.filter((m) => {
-      return (
-        !m.isProjectScoped && m.tag !== 'Projects' && !ADMIN_TAGS.has(m.label)
-      );
-    });
-  }, [modules]);
+  };
 
   const adminOnlyModules = React.useMemo(() => {
     return user?.role === 'admin'
@@ -173,6 +120,16 @@ const LeftNav = ({
         })
       : [];
   }, [modules, user]);
+
+  const navModules = React.useMemo(() => {
+    return modules.filter((m) => {
+      return m.tag !== 'Projects' && !ADMIN_TAGS.has(m.label);
+    });
+  }, [modules]);
+
+  const groups = React.useMemo(() => {
+    return buildGroups(navModules);
+  }, [navModules]);
 
   const navigateToModule = React.useCallback(
     (m: ModuleInfo) => {
@@ -187,99 +144,70 @@ const LeftNav = ({
     [navigate, activeProjectId]
   );
 
-  const navigateToProjects = React.useCallback(() => {
-    if (!spec) return;
-    const mod = modules.find((m) => {
-      return m.tag === 'Projects';
-    });
-    if (!mod?.listOp) return;
-    navigate({
-      tag: 'Projects',
-      operationId: mod.listOp.operation.operationId,
-      pathParams: {},
-      mode: 'list',
-    });
-  }, [spec, modules, navigate]);
-
   return (
-    <nav className="flex h-full flex-col gap-4 overflow-y-auto py-4 px-2">
-      <div className="px-3">
-        <h1 className="w-fit bg-galaxy-gradient bg-clip-text text-lg font-bold tracking-heading text-transparent">
+    <nav className="flex h-full w-56 shrink-0 flex-col overflow-hidden border-r bg-muted/20">
+      <div className="px-3.5 pb-3 pt-4">
+        <h1 className="w-fit bg-galaxy-gradient bg-clip-text text-base font-bold tracking-heading text-transparent">
           {'SOAT'}
         </h1>
       </div>
 
-      <NavSection title={'Projects'}>
-        <NavItem
-          label={'All Projects'}
-          active={activeListTag === 'Projects'}
-          onClick={navigateToProjects}
-        />
-        {projectsLoading && (
-          <p className="px-3 text-xs text-muted-foreground">{'Loading…'}</p>
-        )}
-        {projects.map((p) => {
-          return (
-            <NavItem
-              key={p.id}
-              label={p.name}
-              active={activeProjectId === p.id && !view}
-              indent
-              onClick={() => {
-                return setProject(p.id);
-              }}
-            />
-          );
-        })}
-      </NavSection>
+      <ProjectPicker
+        projects={projects}
+        loading={projectsLoading}
+        activeProjectId={activeProjectId}
+        onSelect={setProject}
+      />
 
-      {activeProjectId && projectModules.length > 0 && (
-        <NavSection title={'Project'}>
-          <NavModuleList
-            modules={projectModules}
-            activeTag={activeListTag}
-            indent
-            onSelect={navigateToModule}
-          />
-        </NavSection>
-      )}
-
-      {adminModules.length > 0 && (
-        <NavSection title={'Other'}>
-          <NavModuleList
-            modules={adminModules}
-            activeTag={activeListTag}
-            onSelect={navigateToModule}
-          />
-        </NavSection>
-      )}
+      <ModuleGroups
+        groups={groups}
+        openGroups={openGroups}
+        activeListTag={activeListTag}
+        onToggle={toggleGroup}
+        onSelect={navigateToModule}
+      />
 
       {adminOnlyModules.length > 0 && (
-        <NavSection title={'Admin'}>
-          <NavModuleList
-            modules={adminOnlyModules}
-            activeTag={activeListTag}
-            onSelect={navigateToModule}
-          />
-        </NavSection>
+        <div className="border-t py-1.5">
+          <p className="mb-1 px-2.5 pt-1 text-[0.67rem] font-bold uppercase tracking-widest text-muted-foreground/60">
+            {'Admin'}
+          </p>
+          {adminOnlyModules.map((m) => {
+            const Icon = ADMIN_ICONS[m.label] ?? Settings;
+            return (
+              <NavItem
+                key={m.tag}
+                label={m.label}
+                Icon={Icon}
+                active={activeListTag === m.tag}
+                onClick={() => {
+                  return navigateToModule(m);
+                }}
+              />
+            );
+          })}
+        </div>
       )}
 
-      <div className="mt-auto flex flex-col gap-1 border-t pt-4">
-        <p className="px-3 text-xs text-muted-foreground">
-          {user ? `${user.username} · ${user.role}` : ''}
-        </p>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="justify-start"
+      <div className="border-t px-2.5 py-2">
+        {user && (
+          <p className="mb-1.5 px-1 text-xs text-muted-foreground/70">
+            {`${user.username} · ${user.role}`}
+          </p>
+        )}
+        <button
           onClick={logout}
+          className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
+          <LogOut className="h-3.5 w-3.5 shrink-0" />
           {'Sign out'}
-        </Button>
+        </button>
       </div>
     </nav>
   );
 };
+
+// ─── MainArea ─────────────────────────────────────────────────────────────────
 
 const MainArea = () => {
   const { view, activeProjectId } = useNavigation();
@@ -317,14 +245,23 @@ const MainArea = () => {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
-      <p className="text-lg font-medium text-foreground">{'Welcome to SOAT'}</p>
-      <p className="text-sm">
-        {'Select a project or browse resources from the left navigation.'}
-      </p>
+    <div className="flex flex-col items-center justify-center gap-6 py-16 text-muted-foreground">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-galaxy-gradient">
+        <Cpu className="h-7 w-7 text-white" />
+      </div>
+      <div className="text-center">
+        <p className="font-heading text-xl font-bold text-foreground">
+          {'Welcome to SOAT'}
+        </p>
+        <p className="mt-1 text-sm">
+          {'Select a project to start deploying AI agents.'}
+        </p>
+      </div>
     </div>
   );
 };
+
+// ─── Workspace ────────────────────────────────────────────────────────────────
 
 export const Workspace = () => {
   const { state } = useAuth();
@@ -333,9 +270,7 @@ export const Workspace = () => {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <aside className="w-56 shrink-0 border-r bg-muted/20">
-        <LeftNav projects={projects} projectsLoading={projectsLoading} />
-      </aside>
+      <LeftNav projects={projects} projectsLoading={projectsLoading} />
       <main className="flex-1 overflow-y-auto p-6">
         <MainArea />
       </main>

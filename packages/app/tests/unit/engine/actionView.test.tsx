@@ -102,4 +102,54 @@ describe('ActionView', () => {
 
     expect(await screen.findByText('model offline')).toBeInTheDocument();
   });
+
+  test('renders the action form inside a centered modal dialog', () => {
+    renderWithAuth(
+      <ActionView
+        module={agentsModule()}
+        spec={testSpec}
+        pathParams={{ agent_id: 'agt_1' }}
+        operationId="generateAgent"
+      />
+    );
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  test('shows a completion status line with status and id when the result returns', async () => {
+    server.use(
+      http.post('*/api/v1/agents/:agent_id/generate', () =>
+        HttpResponse.json({ id: 'gen_9', status: 'completed' })
+      )
+    );
+
+    renderWithAuth(
+      <ActionView
+        module={agentsModule()}
+        spec={testSpec}
+        pathParams={{ agent_id: 'agt_1' }}
+        operationId="generateAgent"
+      />
+    );
+
+    await userEvent.type(screen.getByLabelText(/prompt/i), 'Hello');
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    // A tonal status badge plus the returned id appear as a completion line.
+    expect(await screen.findByText('Completed')).toHaveClass('rounded-full');
+    // id appears in the completion line (and again in the raw JSON dump).
+    expect(screen.getAllByText(/gen_9/).length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('shows the POST method badge and endpoint path', () => {
+    renderWithAuth(
+      <ActionView
+        module={agentsModule()}
+        spec={testSpec}
+        pathParams={{ agent_id: 'agt_1' }}
+        operationId="generateAgent"
+      />
+    );
+    expect(screen.getByText('POST')).toBeInTheDocument();
+    expect(screen.getByText(/\/api\/v1\/agents/)).toBeInTheDocument();
+  });
 });

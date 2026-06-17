@@ -85,4 +85,97 @@ describe('ListView', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Create' }));
     expect(screen.getByTestId('nav-probe')).toHaveTextContent('"mode":"create"');
   });
+
+  test('paginates: shows at most 15 rows, next/prev buttons cycle pages', async () => {
+    const items = Array.from({ length: 16 }, (_, i) => ({
+      id: `item_${i}`,
+      name: `Item ${i}`,
+    }));
+    server.use(
+      http.get('*/api/v1/agents', () => HttpResponse.json(items))
+    );
+    renderList();
+
+    await screen.findByText('Item 0');
+    expect(screen.queryByText('Item 15')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Next page' }));
+
+    expect(await screen.findByText('Item 15')).toBeInTheDocument();
+    expect(screen.queryByText('Item 0')).not.toBeInTheDocument();
+  });
+
+  test('renders a status badge instead of plain text for status columns', async () => {
+    server.use(
+      http.get('*/api/v1/agents', () =>
+        HttpResponse.json([
+          { id: 'agt_1', name: 'Alpha', status: 'active' },
+          { id: 'agt_2', name: 'Beta', status: 'inactive' },
+        ])
+      )
+    );
+    renderList();
+
+    // "Active" appears both as a filter chip and in the row cell; both are badges.
+    const actives = await screen.findAllByText('Active');
+    expect(actives.length).toBeGreaterThanOrEqual(1);
+    actives.forEach((el) => {
+      return expect(el).toHaveClass('rounded-full');
+    });
+    screen.getAllByText('Inactive').forEach((el) => {
+      return expect(el).toHaveClass('rounded-full');
+    });
+  });
+
+  test('search filters items client-side across string fields', async () => {
+    server.use(
+      http.get('*/api/v1/agents', () =>
+        HttpResponse.json([
+          { id: 'agt_1', name: 'Alpha', model: 'gpt-4o' },
+          { id: 'agt_2', name: 'Beta', model: 'claude' },
+        ])
+      )
+    );
+    renderList();
+
+    await screen.findByText('Alpha');
+    await userEvent.type(screen.getByPlaceholderText(/search/i), 'claude');
+
+    expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+    expect(screen.getByText('Beta')).toBeInTheDocument();
+  });
+
+  test('status filter chips narrow the list to the selected status', async () => {
+    server.use(
+      http.get('*/api/v1/agents', () =>
+        HttpResponse.json([
+          { id: 'agt_1', name: 'Alpha', status: 'active' },
+          { id: 'agt_2', name: 'Beta', status: 'inactive' },
+        ])
+      )
+    );
+    renderList();
+
+    await screen.findByText('Alpha');
+    await userEvent.click(
+      screen.getByRole('button', { name: /^inactive$/i })
+    );
+
+    expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+    expect(screen.getByText('Beta')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /^all$/i }));
+    expect(screen.getByText('Alpha')).toBeInTheDocument();
+  });
+
+  test('empty state offers a "Create your first" CTA that navigates to create', async () => {
+    server.use(http.get('*/api/v1/agents', () => HttpResponse.json([])));
+    renderList();
+
+    const cta = await screen.findByRole('button', {
+      name: /create your first/i,
+    });
+    await userEvent.click(cta);
+    expect(screen.getByTestId('nav-probe')).toHaveTextContent('"mode":"create"');
+  });
 });

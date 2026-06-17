@@ -10,7 +10,7 @@ import type {
 
 type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
-const SKIP_TAGS = new Set(['Sessions', 'Generations', 'Actor Tags']);
+const SKIP_TAGS = new Set(['Generations', 'Actor Tags']);
 
 const toLabel = (tag: string): string => {
   return tag.replace(/([a-z])([A-Z])/g, '$1 $2');
@@ -210,6 +210,22 @@ const SENSITIVE_KEYS = /secret|password|key|token/i;
 
 export const isSensitiveKey = (key: string): boolean => {
   return SENSITIVE_KEYS.test(key);
+};
+
+const HIDDEN_COLUMNS = new Set(['id']);
+const MAX_COLUMNS = 6;
+
+export const deriveColumns = (items: JsonObject[]): string[] => {
+  if (items.length === 0) return [];
+  const allKeys = items.flatMap((item) => {
+    return Object.keys(item);
+  });
+  const unique = Array.from(new Set(allKeys));
+  return unique
+    .filter((k) => {
+      return !HIDDEN_COLUMNS.has(k) && !isSensitiveKey(k);
+    })
+    .slice(0, MAX_COLUMNS);
 };
 
 const DATE_KEYS = /created_at|updated_at|_at$/i;

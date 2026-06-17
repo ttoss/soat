@@ -69,7 +69,7 @@ const HomepageHeader = () => {
         </p>
         <div className={clsx(styles.buttons, styles.heroButtons)}>
           <Link
-            className="button button--secondary button--lg"
+            className="button button--primary button--lg"
             to="/docs/getting-started"
           >
             Get Started — 5 min
