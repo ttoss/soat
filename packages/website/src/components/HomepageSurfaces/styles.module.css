@@ -17,14 +17,20 @@
 .surfaceCard {
   text-align: center;
   padding: 1.5rem;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--ifm-background-color);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--ifm-color-emphasis-300);
   border-radius: 8px;
   transition:
     border-color 0.25s ease,
     box-shadow 0.25s ease;
+}
+
+html[data-theme='dark'] .surfaceCard {
+  /* Cosmic glass on the dark surface band */
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .surfaceCard:hover {

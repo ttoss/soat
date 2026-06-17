@@ -28,6 +28,20 @@ describe('LoginForm', () => {
     expect(await screen.findByText('Invalid credentials')).toBeInTheDocument();
   });
 
+  test('renders the SOAT wordmark with the galaxy gradient', () => {
+    renderLogin();
+    const wordmark = screen.getByText('SOAT');
+    expect(wordmark).toHaveClass('bg-galaxy-gradient');
+    expect(wordmark).toHaveClass('bg-clip-text');
+    expect(wordmark).toHaveClass('text-transparent');
+  });
+
+  test('uses the gradient variant for the submit button', () => {
+    renderLogin();
+    const submit = screen.getByRole('button', { name: 'Sign in' });
+    expect(submit).toHaveClass('bg-galaxy-gradient');
+  });
+
   test('submits valid credentials without showing an error', async () => {
     renderLogin();
     await userEvent.type(screen.getByLabelText('Username'), 'tester');

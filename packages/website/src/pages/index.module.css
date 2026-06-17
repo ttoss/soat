@@ -131,7 +131,7 @@
   padding: 1rem;
   border: 1px solid var(--ifm-color-emphasis-300);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.68);
+  background: var(--ifm-card-background-color);
 }
 
 .platformPillar h3 {

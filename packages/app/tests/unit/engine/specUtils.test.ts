@@ -97,8 +97,8 @@ describe('parseModules', () => {
   test('skips operations without an operationId and skipped tags', () => {
     const spec: OpenApiSpec = {
       paths: {
-        '/api/v1/sessions': {
-          get: { operationId: 'listSessions', tags: ['Sessions'] },
+        '/api/v1/generations': {
+          get: { operationId: 'listGenerations', tags: ['Generations'] },
         },
         '/api/v1/noid': {
           // @ts-expect-error intentionally missing operationId

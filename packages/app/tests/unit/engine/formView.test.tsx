@@ -85,6 +85,19 @@ describe('FormView (create)', () => {
 
     expect(await screen.findByText('name taken')).toBeInTheDocument();
   });
+
+  test('shows the HTTP method badge and endpoint path', () => {
+    renderWithAuth(
+      <FormView
+        module={agentsModule()}
+        spec={testSpec}
+        pathParams={{}}
+        mode="create"
+      />
+    );
+    expect(screen.getByText('POST')).toBeInTheDocument();
+    expect(screen.getByText(/\/api\/v1\/agents/)).toBeInTheDocument();
+  });
 });
 
 describe('FormView (edit)', () => {

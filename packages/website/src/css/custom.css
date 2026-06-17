@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 
 /**
  * SOAT Brand Theme
@@ -218,9 +218,9 @@ h6 {
   background:
     linear-gradient(
       90deg,
-      rgba(8, 12, 20, 0.45) 0%,
-      rgba(8, 12, 20, 0.3) 34%,
-      rgba(8, 12, 20, 0.1) 66%,
+      rgba(8, 12, 20, 0.78) 0%,
+      rgba(8, 12, 20, 0.5) 40%,
+      rgba(8, 12, 20, 0.12) 72%,
       rgba(8, 12, 20, 0.02) 100%
     ),
     url('/img/hero.png');
@@ -244,10 +244,10 @@ html[data-theme='dark'] .hero.hero--primary {
   background:
     linear-gradient(
       90deg,
-      rgba(8, 12, 20, 0.55) 0%,
-      rgba(8, 12, 20, 0.4) 34%,
-      rgba(8, 12, 20, 0.14) 66%,
-      rgba(8, 12, 20, 0.03) 100%
+      rgba(8, 12, 20, 0.92) 0%,
+      rgba(8, 12, 20, 0.6) 40%,
+      rgba(8, 12, 20, 0.12) 72%,
+      rgba(8, 12, 20, 0.02) 100%
     ),
     url('/img/hero.png');
   background-size: cover;
@@ -319,6 +319,12 @@ html[data-theme='dark'] .hero.hero--primary .hero__title {
    NAVBAR & SIDEBAR
    =================================================================== */
 
+/* Glassmorphism navbar */
+.navbar {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
 /* Dark Mode Glow Effects */
 html[data-theme='dark'] .navbar__link:hover {
   text-shadow: 0 0 15px rgba(0, 229, 255, 0.8);
@@ -331,7 +337,8 @@ html[data-theme='dark'] .navbar__link--active {
 
 /* Sidebar Active Item */
 .theme-doc-sidebar-item-link-level-1.menu__link--active {
-  border-left: 3px solid transparent;
+  border-left: 3px solid var(--ifm-color-primary);
+  background: color-mix(in srgb, var(--ifm-color-primary) 8%, transparent);
 }
 
 .theme-doc-sidebar-menu.menu__list {
@@ -341,7 +348,6 @@ html[data-theme='dark'] .navbar__link--active {
 html[data-theme='dark']
   .theme-doc-sidebar-item-link-level-1.menu__link--active {
   box-shadow: 0 0 20px rgba(0, 229, 255, 0.2);
-  border-left-color: var(--ifm-color-primary);
 }
 
 .menu__link {

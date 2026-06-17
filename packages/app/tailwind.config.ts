@@ -56,6 +56,11 @@ const config: Config = {
       boxShadow: {
         // Neon glow for active elements in dark mode (Core Cyan).
         glow: '0 0 16px 0 hsl(var(--brand-cyan) / 0.45)',
+        // Full glow / elevation scale from the design system (effects.css).
+        'glow-cyan-sm': '0 0 8px 0 hsl(var(--brand-cyan) / 0.3)',
+        'glow-cyan-md': '0 0 20px 0 hsl(var(--brand-cyan) / 0.3)',
+        'glow-cyan-lg': '0 0 30px 0 hsl(var(--brand-cyan) / 0.5)',
+        'glow-violet-md': '0 0 24px 0 hsl(var(--brand-violet) / 0.3)',
       },
       backgroundImage: {
         // Vector Galaxy flow gradient (Deep Violet -> primary).

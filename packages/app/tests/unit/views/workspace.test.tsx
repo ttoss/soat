@@ -27,7 +27,22 @@ const renderWorkspace = (initialPath = '/app/'): void => {
 };
 
 describe('Workspace', () => {
-  test('renders the navigation with projects and modules', async () => {
+  test('renders the navigation with modules and welcome state', async () => {
+    renderWorkspace();
+
+    // SOAT wordmark is always visible
+    expect(await screen.findByText('SOAT')).toBeInTheDocument();
+
+    // Agents module button appears inside the open Orchestration group
+    expect(
+      await screen.findByRole('button', { name: 'Agents' })
+    ).toBeInTheDocument();
+
+    // Welcome message shown when no project or view is active
+    expect(screen.getByText('Welcome to SOAT')).toBeInTheDocument();
+  });
+
+  test('project picker opens and shows available projects', async () => {
     server.use(
       http.get('*/api/v1/projects', () =>
         HttpResponse.json([{ id: 'prj_1', name: 'Proj One' }])
@@ -35,10 +50,14 @@ describe('Workspace', () => {
     );
     renderWorkspace();
 
+    // Open the project picker
+    const pickerBtn = await screen.findByRole('button', {
+      name: /select project/i,
+    });
+    await userEvent.click(pickerBtn);
+
+    // Project name appears in the dropdown
     expect(await screen.findByText('Proj One')).toBeInTheDocument();
-    expect(screen.getByText('SOAT')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Agents' })).toBeInTheDocument();
-    expect(screen.getByText('Welcome to SOAT')).toBeInTheDocument();
   });
 
   test('selecting a module renders its list in the main area', async () => {

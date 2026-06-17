@@ -12,6 +12,7 @@ import {
   getOpRequestSchema,
   initFormData,
 } from './formHelpers';
+import { MethodBadge } from './methodBadge';
 import { useNavigation } from './navigationContext';
 import {
   actionLabel,
@@ -19,6 +20,7 @@ import {
   extractPathParams,
   humanizeKey,
 } from './specUtils';
+import { StatusBadge } from './statusBadge';
 import type {
   JsonObject,
   ModuleInfo,
@@ -75,12 +77,25 @@ const MissingParamInputs = ({
   });
 };
 
+const CompletionLine = ({ result }: { result: JsonObject }) => {
+  const status = typeof result.status === 'string' ? result.status : undefined;
+  const id = typeof result.id === 'string' ? result.id : undefined;
+  if (!status && !id) return null;
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      {status && <StatusBadge status={status} />}
+      {id && <span className="font-mono text-muted-foreground">{id}</span>}
+    </div>
+  );
+};
+
 const ActionResultPanel = ({ result }: { result: JsonObject }) => {
   return (
     <div className="flex flex-col gap-2">
       <span className="text-sm font-medium text-muted-foreground">
         {'Result'}
       </span>
+      <CompletionLine result={result} />
       <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-md border bg-muted/30 p-3 font-mono text-xs">
         {JSON.stringify(result, null, 2)}
       </pre>
@@ -168,64 +183,89 @@ export const ActionView = ({
   };
 
   return (
-    <div className="flex max-w-lg flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">{actionLabel(actionOp)}</h2>
-        <Button variant="outline" size="sm" onClick={handleBack}>
-          {'← Back'}
-        </Button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/50"
+        aria-hidden="true"
+        onClick={handleBack}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={actionLabel(actionOp)}
+        className="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col gap-6 overflow-y-auto rounded-lg border bg-background p-6 shadow-glow-violet-md"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-xl font-semibold">{actionLabel(actionOp)}</h2>
+            <div className="flex items-center gap-2">
+              <MethodBadge method="POST" />
+              <span className="font-mono text-xs text-muted-foreground">
+                {actionOp.pathTemplate}
+              </span>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Close"
+            onClick={handleBack}
+          >
+            {'✕'}
+          </Button>
+        </div>
+
+        {actionOp.operation.summary && (
+          <p className="text-sm text-muted-foreground">
+            {actionOp.operation.summary}
+          </p>
+        )}
+
+        {error && (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <MissingParamInputs
+            names={missingParams}
+            values={paramValues}
+            onChange={(name, value) => {
+              return setParamValues((prev) => {
+                return { ...prev, [name]: value };
+              });
+            }}
+          />
+          {Object.entries(properties).map(([name, fieldSchema]) => {
+            return (
+              <FieldEditor
+                key={name}
+                name={name}
+                schema={fieldSchema}
+                value={formData[name] ?? ''}
+                onChange={(v) => {
+                  return setFormData((prev) => {
+                    return { ...prev, [name]: v };
+                  });
+                }}
+                required={required.has(name)}
+              />
+            );
+          })}
+
+          <div className="flex gap-2 pt-2">
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Running…' : 'Run'}
+            </Button>
+            <Button type="button" variant="outline" onClick={handleBack}>
+              {'Cancel'}
+            </Button>
+          </div>
+        </form>
+
+        {result && <ActionResultPanel result={result} />}
       </div>
-
-      {actionOp.operation.summary && (
-        <p className="text-sm text-muted-foreground">
-          {actionOp.operation.summary}
-        </p>
-      )}
-
-      {error && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <MissingParamInputs
-          names={missingParams}
-          values={paramValues}
-          onChange={(name, value) => {
-            return setParamValues((prev) => {
-              return { ...prev, [name]: value };
-            });
-          }}
-        />
-        {Object.entries(properties).map(([name, fieldSchema]) => {
-          return (
-            <FieldEditor
-              key={name}
-              name={name}
-              schema={fieldSchema}
-              value={formData[name] ?? ''}
-              onChange={(v) => {
-                return setFormData((prev) => {
-                  return { ...prev, [name]: v };
-                });
-              }}
-              required={required.has(name)}
-            />
-          );
-        })}
-
-        <div className="flex gap-2 pt-2">
-          <Button type="submit" disabled={submitting}>
-            {submitting ? 'Running…' : 'Run'}
-          </Button>
-          <Button type="button" variant="outline" onClick={handleBack}>
-            {'Cancel'}
-          </Button>
-        </div>
-      </form>
-
-      {result && <ActionResultPanel result={result} />}
     </div>
   );
 };

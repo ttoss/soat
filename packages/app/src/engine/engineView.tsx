@@ -52,6 +52,7 @@ export const EngineView = ({
         module={module}
         spec={spec}
         pathParams={descriptor.pathParams}
+        modules={modules}
       />
     );
   }

@@ -106,6 +106,13 @@ export const testSpec: OpenApiSpec = {
       get: { operationId: 'listWebhooks', tags: ['Webhooks'] },
       post: { operationId: 'createWebhook', tags: ['Webhooks'] },
     },
+    '/api/v1/agents/{agent_id}/sessions': {
+      get: {
+        operationId: 'listAgentSessions',
+        tags: ['Sessions'],
+        summary: 'List agent sessions',
+      },
+    },
   },
   components: {
     schemas: {
