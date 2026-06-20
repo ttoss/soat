@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
@@ -7,16 +5,11 @@ import type { ConsentSelection } from 'src/lib/oauthConsent';
 import { buildConsentPolicy, buildConsentScopes } from 'src/lib/oauthConsent';
 import { getPermissionCatalog } from 'src/lib/permissionCatalog';
 import { getProject, listProjects } from 'src/lib/projects';
-import {
-  CONSENT_COOKIE,
-  PROJECT_SCOPE_PREFIX,
-  putConsentSession,
-} from 'src/oauth/server';
+import { PROJECT_SCOPE_PREFIX, saveConsentGrant } from 'src/oauth/server';
 
 const oauthRouter = new Router<Context>();
 
 const MCP_ACCESS_SCOPE = 'mcp:access';
-const CONSENT_COOKIE_MAX_AGE_MS = 10 * 60 * 1000;
 
 const parseSelection = (value: unknown): ConsentSelection => {
   if (!value || typeof value !== 'object') {
@@ -149,24 +142,27 @@ oauthRouter.post('/oauth/consent', async (ctx: Context) => {
     authorizeUrl?: string;
   } = { projectId: body.projectId, scopes: granted, policy };
 
-  // When completing an OAuth flow, store the grant, set the consent cookie, and
-  // hand the app the URL to navigate back to so /authorize can issue a code.
+  // When completing an OAuth flow, store the grant keyed by PKCE code_challenge
+  // and hand the app the URL to navigate back to so /authorize can issue a code.
   if (typeof body.authorizeQuery === 'string' && body.authorizeQuery.length) {
+    const params = new URLSearchParams(body.authorizeQuery);
+    const codeChallenge = params.get('code_challenge');
+    if (!codeChallenge) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        'authorize_query must include code_challenge.'
+      );
+    }
+
     const scopes = [
       ...granted,
       MCP_ACCESS_SCOPE,
       `${PROJECT_SCOPE_PREFIX}${body.projectId}`,
     ];
-    const consentId = randomUUID();
-    putConsentSession({
-      id: consentId,
+    await saveConsentGrant({
+      codeChallenge,
       subject: ctx.authUser.publicId,
       scopes,
-    });
-    ctx.cookies.set(CONSENT_COOKIE, consentId, {
-      httpOnly: true,
-      sameSite: 'lax',
-      maxAge: CONSENT_COOKIE_MAX_AGE_MS,
     });
     result.authorizeUrl = `/authorize?${body.authorizeQuery}`;
   }
