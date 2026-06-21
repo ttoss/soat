@@ -93,21 +93,32 @@ export const oauthAuthorizationServer = oauthServer({
   clientStore,
   authCodeStore,
   scopesSupported: ['mcp:access'],
-  issueTokens: ({ subject, scopes }) => {
+  issueTokens: async ({ subject, scopes }) => {
     const project = scopes
       .find((s) => {
         return s.startsWith(PROJECT_SCOPE_PREFIX);
       })
       ?.slice(PROJECT_SCOPE_PREFIX.length);
+
+    const user = await db.User.findOne({ where: { publicId: subject } });
+    const role = user?.role ?? 'user';
+
     log(
-      'issueTokens: subject=%s project=%s scopes=%d',
+      'issueTokens: subject=%s project=%s scopes=%d role=%s',
       subject,
       project,
-      scopes.length
+      scopes.length,
+      role
     );
     return {
       accessToken: signJwt({
-        payload: { sub: subject, scope: scopes.join(' '), prj: project },
+        payload: {
+          sub: subject,
+          publicId: subject,
+          role,
+          scope: scopes.join(' '),
+          prj: project,
+        },
         secret: JWT_SECRET,
         expiresInSeconds: ACCESS_TOKEN_TTL_SECONDS,
       }),
