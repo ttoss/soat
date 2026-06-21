@@ -905,47 +905,49 @@ describe('MCP tools - happy path', () => {
 
   // ── Docs ─────────────────────────────────────────────────────────────────
 
-  const MOCK_LLMS_TXT =
-    '# SOAT Documentation\n\n- [Agents](https://soat.ttoss.dev/docs/modules/agents)\n';
-  const MOCK_PAGE = '# Agents\n\nAgents are the core reasoning units.\n';
+  describe('Docs tools', () => {
+    const MOCK_LLMS_TXT =
+      '# SOAT Documentation\n\n- [Agents](https://soat.ttoss.dev/docs/modules/agents)\n';
+    const MOCK_PAGE = '# Agents\n\nAgents are the core reasoning units.\n';
 
-  let fetchSpy: jest.SpyInstance;
+    let fetchSpy: jest.SpyInstance;
 
-  beforeEach(() => {
-    fetchSpy = jest
-      .spyOn(global, 'fetch')
-      .mockImplementation(async (url: RequestInfo | URL) => {
-        const urlStr = url.toString();
-        if (urlStr.endsWith('/llms.txt')) {
-          return new Response(MOCK_LLMS_TXT, { status: 200 });
-        }
-        if (urlStr.includes('soat.ttoss.dev')) {
-          return new Response(MOCK_PAGE, { status: 200 });
-        }
-        return new Response('Not Found', { status: 404 });
-      });
-  });
-
-  afterEach(() => {
-    fetchSpy.mockRestore();
-  });
-
-  test('get-docs returns the documentation index', async () => {
-    const res = await mcpCall('get-docs');
-    expect(res.status).toBe(200);
-    const text = res.body.result?.content?.[0]?.text;
-    expect(typeof text).toBe('string');
-    expect(text).toContain('SOAT Documentation');
-  });
-
-  test('get-doc-page returns page content for a valid docs URL', async () => {
-    const res = await mcpCall('get-doc-page', {
-      url: 'https://soat.ttoss.dev/docs/modules/agents',
+    beforeEach(() => {
+      fetchSpy = jest
+        .spyOn(global, 'fetch')
+        .mockImplementation(async (url: RequestInfo | URL) => {
+          const urlStr = url.toString();
+          if (urlStr.endsWith('/llms.txt')) {
+            return new Response(MOCK_LLMS_TXT, { status: 200 });
+          }
+          if (urlStr.includes('soat.ttoss.dev')) {
+            return new Response(MOCK_PAGE, { status: 200 });
+          }
+          return new Response('Not Found', { status: 404 });
+        });
     });
-    expect(res.status).toBe(200);
-    const text = res.body.result?.content?.[0]?.text;
-    expect(typeof text).toBe('string');
-    expect(text).toContain('Agents');
+
+    afterEach(() => {
+      fetchSpy.mockRestore();
+    });
+
+    test('get-docs returns the documentation index', async () => {
+      const res = await mcpCall('get-docs');
+      expect(res.status).toBe(200);
+      const text = res.body.result?.content?.[0]?.text;
+      expect(typeof text).toBe('string');
+      expect(text).toContain('SOAT Documentation');
+    });
+
+    test('get-doc-page returns page content for a valid docs URL', async () => {
+      const res = await mcpCall('get-doc-page', {
+        url: 'https://soat.ttoss.dev/docs/modules/agents',
+      });
+      expect(res.status).toBe(200);
+      const text = res.body.result?.content?.[0]?.text;
+      expect(typeof text).toBe('string');
+      expect(text).toContain('Agents');
+    });
   });
 });
 
