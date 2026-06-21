@@ -942,4 +942,23 @@ describe('MCP OAuth discovery (RFC 9728)', () => {
       });
     expect(res.status).toBe(401);
   });
+
+  test('initialize returns Mcp-Session-Id header', async () => {
+    const res = await testClient
+      .post('/mcp')
+      .set('Content-Type', 'application/json')
+      .set('Accept', 'application/json, text/event-stream')
+      .send({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2024-11-05',
+          capabilities: {},
+          clientInfo: { name: 'test-client', version: '1.0.0' },
+        },
+      });
+    expect(res.status).toBe(200);
+    expect(res.headers['mcp-session-id']).toBeDefined();
+  });
 });

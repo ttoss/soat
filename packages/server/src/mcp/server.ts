@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { App } from '@ttoss/http-server';
 import {
   apiCall,
@@ -46,6 +48,7 @@ for (const tool of soatTools) {
 
 const mcpRouter = createMcpRouter(mcpServer, {
   aliases: ['/'],
+  sessionIdGenerator: () => randomUUID(),
   apiBaseUrl: `http://localhost:${process.env.PORT || 5047}`,
   getApiHeaders: (ctx) => {
     return {
