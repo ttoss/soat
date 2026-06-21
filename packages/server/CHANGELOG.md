@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.12.0](https://127.0.0.1/37599/git/ttoss/compare/v0.11.0...v0.12.0) (2026-06-21)
+
+### Features
+
+* **app:** action endpoints in the rendering engine (Phase 3) ([#207](https://127.0.0.1/37599/git/ttoss/issues/207)) ([1feaf1e](https://127.0.0.1/37599/git/ttoss/commits/1feaf1e418a576228ef56138c50b2f6b73ad8afd))
+* **mcp:** add root alias and OAuth discovery for Claude Connectors ([#218](https://127.0.0.1/37599/git/ttoss/issues/218)) ([69bc80e](https://127.0.0.1/37599/git/ttoss/commits/69bc80e8fd9341faaf6a2d4c0f0de43a721e4f32))
+* **mcp:** lean on @ttoss/http-server-mcp built-ins for OAuth discovery (A3) ([#217](https://127.0.0.1/37599/git/ttoss/issues/217)) ([ec6bfb9](https://127.0.0.1/37599/git/ttoss/commits/ec6bfb9be4e53d05cac0fe127b0871f4a03cf507))
+* **server:** OAuth 2.1 consent screen for MCP ([#212](https://127.0.0.1/37599/git/ttoss/issues/212)) ([d1d4b21](https://127.0.0.1/37599/git/ttoss/commits/d1d4b21813e575652b7fec1593d737df6b3711a6))
+* **server:** replace in-memory OAuth stores with Postgres (A1+A2) ([#216](https://127.0.0.1/37599/git/ttoss/issues/216)) ([73544ea](https://127.0.0.1/37599/git/ttoss/commits/73544ea1a0f72d3361d33266f01211e36ebac2c5))
+
 # [0.11.0](https://127.0.0.1/45259/git/ttoss/compare/v0.9.1...v0.11.0) (2026-06-13)
 
 ### Features

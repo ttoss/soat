@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.12.0](https://github.com/ttoss/soat/compare/v0.11.0...v0.12.0) (2026-06-21)
+
+### Features
+
+* **app,website:** implement SOAT design system ([#214](https://github.com/ttoss/soat/issues/214)) ([73aad7b](https://github.com/ttoss/soat/commit/73aad7b1bb0c2108ec3c10086969806f6da7c4c2))
+* **app:** action endpoints in the rendering engine (Phase 3) ([#207](https://github.com/ttoss/soat/issues/207)) ([1feaf1e](https://github.com/ttoss/soat/commit/1feaf1e418a576228ef56138c50b2f6b73ad8afd))
+* **app:** AI Guide Chat sidebar (Phase 4) ([#213](https://github.com/ttoss/soat/issues/213)) ([01d5164](https://github.com/ttoss/soat/commit/01d5164b8ad15736c852a9635c121de6b1711ce0))
+* **mcp:** add root alias and OAuth discovery for Claude Connectors ([#218](https://github.com/ttoss/soat/issues/218)) ([69bc80e](https://github.com/ttoss/soat/commit/69bc80e8fd9341faaf6a2d4c0f0de43a721e4f32))
+* **mcp:** lean on @ttoss/http-server-mcp built-ins for OAuth discovery (A3) ([#217](https://github.com/ttoss/soat/issues/217)) ([ec6bfb9](https://github.com/ttoss/soat/commit/ec6bfb9be4e53d05cac0fe127b0871f4a03cf507))
+* **server:** OAuth 2.1 consent screen for MCP ([#212](https://github.com/ttoss/soat/issues/212)) ([d1d4b21](https://github.com/ttoss/soat/commit/d1d4b21813e575652b7fec1593d737df6b3711a6))
+* **server:** replace in-memory OAuth stores with Postgres (A1+A2) ([#216](https://github.com/ttoss/soat/issues/216)) ([73544ea](https://github.com/ttoss/soat/commit/73544ea1a0f72d3361d33266f01211e36ebac2c5))
+
 # [0.11.0](https://github.com/ttoss/soat/compare/v0.9.1...v0.11.0) (2026-06-13)
 
 ### Features

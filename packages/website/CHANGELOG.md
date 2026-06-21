@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.12.0](https://127.0.0.1/37599/git/ttoss/compare/v0.11.0...v0.12.0) (2026-06-21)
+
+### Features
+
+* **app,website:** implement SOAT design system ([#214](https://127.0.0.1/37599/git/ttoss/issues/214)) ([73aad7b](https://127.0.0.1/37599/git/ttoss/commits/73aad7b1bb0c2108ec3c10086969806f6da7c4c2))
+* **server:** OAuth 2.1 consent screen for MCP ([#212](https://127.0.0.1/37599/git/ttoss/issues/212)) ([d1d4b21](https://127.0.0.1/37599/git/ttoss/commits/d1d4b21813e575652b7fec1593d737df6b3711a6))
+
 # [0.11.0](https://127.0.0.1/45259/git/ttoss/compare/v0.9.1...v0.11.0) (2026-06-13)
 
 ### Features
