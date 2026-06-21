@@ -141,6 +141,11 @@ export const ERROR_CODES = {
     description:
       'The orchestration run exceeded the maximum number of iterations.',
   },
+  EMBEDDING_NOT_CONFIGURED: {
+    httpStatus: 503,
+    description:
+      'The embedding service is not configured. Set EMBEDDING_PROVIDER and EMBEDDING_MODEL environment variables.',
+  },
 } as const satisfies Record<
   string,
   { httpStatus: number; description: string }
