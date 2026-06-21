@@ -948,6 +948,36 @@ describe('MCP tools - happy path', () => {
       expect(typeof text).toBe('string');
       expect(text).toContain('Agents');
     });
+
+    test('get-docs returns an error when the fetch fails', async () => {
+      fetchSpy.mockImplementation(async () => new Response('Gone', { status: 503 }));
+      const res = await mcpCall('get-docs');
+      expect(res.status).toBe(200);
+      expect(res.body.result?.isError).toBe(true);
+    });
+
+    test('get-doc-page returns an error for an invalid URL', async () => {
+      const res = await mcpCall('get-doc-page', { url: 'not-a-url' });
+      expect(res.status).toBe(200);
+      expect(res.body.result?.isError).toBe(true);
+    });
+
+    test('get-doc-page returns an error for a URL from a different domain', async () => {
+      const res = await mcpCall('get-doc-page', {
+        url: 'https://evil.example.com/steal',
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.result?.isError).toBe(true);
+    });
+
+    test('get-doc-page returns an error when the page fetch fails', async () => {
+      fetchSpy.mockImplementation(async () => new Response('Not Found', { status: 404 }));
+      const res = await mcpCall('get-doc-page', {
+        url: 'https://soat.ttoss.dev/docs/modules/missing',
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.result?.isError).toBe(true);
+    });
   });
 });
 
