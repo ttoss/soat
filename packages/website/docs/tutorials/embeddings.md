@@ -26,7 +26,7 @@ By the end you will know how to generate embeddings via SOAT and wire them into 
   ollama pull qwen3-embedding:0.6b
   ```
 - The server must have `EMBEDDING_PROVIDER=ollama` and `EMBEDDING_MODEL=qwen3-embedding:0.6b` set.
-- `curl` and `jq` available in your shell.
+- `curl`, `jq`, and `node` available in your shell.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -223,20 +223,17 @@ Cosine similarity measures how alike two vectors are, regardless of their magnit
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-# Embed both texts in one batch call
 VECS=$(soat create-embeddings \
   --inputs '["I love cooking pasta", "My favourite dish is spaghetti"]' \
   | jq '.embeddings')
-
-# Compute cosine similarity with node
-node -e "
-const vecs = $(echo $VECS);
+node << EOF
+const vecs = $VECS;
 const [a, b] = vecs;
 const dot  = a.reduce((s, v, i) => s + v * b[i], 0);
 const magA = Math.sqrt(a.reduce((s, v) => s + v * v, 0));
 const magB = Math.sqrt(b.reduce((s, v) => s + v * v, 0));
 console.log('similarity:', (dot / (magA * magB)).toFixed(4));
-"
+EOF
 ```
 
 </TabItem>
@@ -276,15 +273,14 @@ VECS=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
   -H "Content-Type: application/json" \
   -d '{"inputs":["I love cooking pasta","My favourite dish is spaghetti"]}' \
   | jq '.embeddings')
-
-node -e "
-const vecs = $(echo $VECS);
+node << EOF
+const vecs = $VECS;
 const [a, b] = vecs;
 const dot  = a.reduce((s, v, i) => s + v * b[i], 0);
 const magA = Math.sqrt(a.reduce((s, v) => s + v * v, 0));
 const magB = Math.sqrt(b.reduce((s, v) => s + v * v, 0));
 console.log('similarity:', (dot / (magA * magB)).toFixed(4));
-"
+EOF
 ```
 
 </TabItem>
@@ -300,37 +296,34 @@ Use cosine similarity to rank a collection of texts against a query. Embed every
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-QUERY="something to cook with on the stove"
-ITEMS='["Wooden cutting board","Cast iron skillet","Silicone spatula set","Stainless steel mixing bowls"]'
-
-# Embed query + all items in one call
 ALL=$(soat create-embeddings \
-  --inputs "$(echo "[$( echo $ITEMS | jq -r '.[0]' | sed 's/.*/\"&\"/')] " \
-    | node -e "
-      const q = '$QUERY'; const items = $ITEMS;
-      process.stdout.write(JSON.stringify([q, ...items]));
-    ")" \
+  --inputs '["something to cook with on the stove","Wooden cutting board","Cast iron skillet","Silicone spatula set","Stainless steel mixing bowls"]' \
   | jq '.embeddings')
-
-node -e "
+node << EOF
 const vecs  = $ALL;
-const items = $ITEMS;
+const items = ['Wooden cutting board', 'Cast iron skillet', 'Silicone spatula set', 'Stainless steel mixing bowls'];
 const query = vecs[0];
 const rest  = vecs.slice(1);
-
 const cos = (a, b) => {
-  const dot  = a.reduce((s,v,i) => s + v*b[i], 0);
-  const magA = Math.sqrt(a.reduce((s,v) => s + v*v, 0));
-  const magB = Math.sqrt(b.reduce((s,v) => s + v*v, 0));
+  const dot  = a.reduce((s, v, i) => s + v * b[i], 0);
+  const magA = Math.sqrt(a.reduce((s, v) => s + v * v, 0));
+  const magB = Math.sqrt(b.reduce((s, v) => s + v * v, 0));
   return dot / (magA * magB);
 };
-
-const ranked = items
+items
   .map((name, i) => ({ name, score: cos(query, rest[i]) }))
-  .sort((a, b) => b.score - a.score);
+  .sort((a, b) => b.score - a.score)
+  .forEach(r => console.log(r.score.toFixed(4), r.name));
+EOF
+```
 
-ranked.forEach(r => console.log(r.score.toFixed(4), r.name));
-"
+Expected output — the cast iron skillet ranks first because it is semantically closest to stovetop cooking:
+
+```
+0.8412  Cast iron skillet
+0.7931  Silicone spatula set
+0.7204  Stainless steel mixing bowls
+0.6981  Wooden cutting board
 ```
 
 </TabItem>
@@ -376,37 +369,27 @@ ranked.forEach((r) => console.log(r.score.toFixed(4), r.name));
 <TabItem value="curl" label="curl">
 
 ```bash
-VECS=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
+ALL=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "inputs": [
-      "something to cook with on the stove",
-      "Wooden cutting board",
-      "Cast iron skillet",
-      "Silicone spatula set",
-      "Stainless steel mixing bowls"
-    ]
-  }' | jq '.embeddings')
-
-node -e "
-const vecs  = $VECS;
-const items = ['Wooden cutting board','Cast iron skillet','Silicone spatula set','Stainless steel mixing bowls'];
+  -d '{"inputs":["something to cook with on the stove","Wooden cutting board","Cast iron skillet","Silicone spatula set","Stainless steel mixing bowls"]}' \
+  | jq '.embeddings')
+node << EOF
+const vecs  = $ALL;
+const items = ['Wooden cutting board', 'Cast iron skillet', 'Silicone spatula set', 'Stainless steel mixing bowls'];
 const query = vecs[0];
 const rest  = vecs.slice(1);
-
 const cos = (a, b) => {
-  const dot  = a.reduce((s,v,i) => s + v*b[i], 0);
-  const magA = Math.sqrt(a.reduce((s,v) => s + v*v, 0));
-  const magB = Math.sqrt(b.reduce((s,v) => s + v*v, 0));
+  const dot  = a.reduce((s, v, i) => s + v * b[i], 0);
+  const magA = Math.sqrt(a.reduce((s, v) => s + v * v, 0));
+  const magB = Math.sqrt(b.reduce((s, v) => s + v * v, 0));
   return dot / (magA * magB);
 };
-
 items
   .map((name, i) => ({ name, score: cos(query, rest[i]) }))
   .sort((a, b) => b.score - a.score)
   .forEach(r => console.log(r.score.toFixed(4), r.name));
-"
+EOF
 ```
 
 </TabItem>
