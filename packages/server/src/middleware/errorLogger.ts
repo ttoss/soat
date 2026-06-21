@@ -68,9 +68,25 @@ const toDatabaseErrorDetails = (
   return undefined;
 };
 
+type KoaHttpError = Error & {
+  status: number;
+  expose: boolean;
+  headers?: Record<string, string>;
+};
+
+const isKoaHttpError = (error: unknown): error is KoaHttpError => {
+  if (!(error instanceof Error)) return false;
+  const e = error as unknown as Record<string, unknown>;
+  return typeof e.status === 'number' && typeof e.expose === 'boolean';
+};
+
 const getErrorStatus = (args: { error: unknown }) => {
   if (args.error instanceof DomainError) {
     return args.error.httpStatus;
+  }
+
+  if (isKoaHttpError(args.error)) {
+    return args.error.status;
   }
 
   return 500;
@@ -103,34 +119,49 @@ const writeErrorLog = (args: {
   );
 };
 
+const applyErrorResponse = (ctx: Context, error: unknown, status: number) => {
+  ctx.status = status;
+
+  if (error instanceof DomainError) {
+    ctx.body = {
+      error: {
+        code: error.code,
+        message: error.message,
+        ...(error.meta !== undefined && { meta: error.meta }),
+      },
+    };
+    return;
+  }
+
+  if (isKoaHttpError(error)) {
+    if (error.headers) {
+      for (const [key, value] of Object.entries(error.headers)) {
+        ctx.set(key, value);
+      }
+    }
+    ctx.body = {
+      error: error.expose ? error.message : 'Internal Server Error',
+    };
+    return;
+  }
+
+  ctx.body = { error: 'Internal Server Error' };
+};
+
 const errorLoggerMiddleware = async (ctx: Context, next: Next) => {
   try {
     await next();
   } catch (error) {
     const status = getErrorStatus({ error });
 
-    if (isErrorLoggingEnabled()) {
-      writeErrorLog({
-        ctx,
-        status,
-        error,
-      });
+    if (
+      isErrorLoggingEnabled() &&
+      !(isKoaHttpError(error) && error.status < 500)
+    ) {
+      writeErrorLog({ ctx, status, error });
     }
 
-    ctx.status = status;
-
-    if (error instanceof DomainError) {
-      ctx.body = {
-        error: {
-          code: error.code,
-          message: error.message,
-          ...(error.meta !== undefined && { meta: error.meta }),
-        },
-      };
-      return;
-    }
-
-    ctx.body = { error: 'Internal Server Error' };
+    applyErrorResponse(ctx, error, status);
   }
 };
 
