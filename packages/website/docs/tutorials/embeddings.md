@@ -7,28 +7,38 @@ import TabItem from '@theme/TabItem';
 
 # Generating Embeddings
 
-This tutorial shows how to use the SOAT [Embeddings](/docs/modules/embeddings) endpoint to convert text into numeric vectors. You will:
+This tutorial shows how to use the SOAT [Embeddings](/docs/modules/embeddings) endpoint to convert text into numeric vectors, and how to feed those vectors into [Meilisearch](https://www.meilisearch.com/) for hybrid semantic search. You will:
 
 1. Authenticate and call the endpoint with a single text input.
 2. Embed a batch of texts in one request.
-3. Compute the cosine similarity between two vectors to measure semantic relatedness.
+3. Configure a Meilisearch index with a `userProvided` embedder backed by SOAT.
+4. Index documents using SOAT-generated embedding vectors.
+5. Run a hybrid semantic search against the indexed documents.
 
-By the end you will know how to produce embeddings for any text and use them in your own downstream pipelines — similarity search, clustering, classification, or feeding a custom index.
+By the end you will know how to generate embeddings via SOAT and wire them into any downstream pipeline — including Meilisearch's hybrid search engine.
 
 ## Prerequisites
 
-- SOAT running locally with an embedding model configured. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
+- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
 - New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) first.
 - For production hardening (env vars, secrets), see [Advanced Configuration](/docs/getting-started/advanced-config).
-- [Ollama](https://ollama.com) running locally with an embedding model pulled, for example `ollama pull qwen3-embedding:0.6b`.
-- Server is at `http://localhost:5047`.
-- The server must have `EMBEDDING_PROVIDER` and `EMBEDDING_MODEL` set in its environment.
+- [Ollama](https://ollama.com) running locally with an embedding model pulled, for example:
+  ```bash
+  ollama pull qwen3-embedding:0.6b
+  ```
+- The server must have `EMBEDDING_PROVIDER=ollama` and `EMBEDDING_MODEL=qwen3-embedding:0.6b` set.
+- [Meilisearch](https://www.meilisearch.com/docs/learn/getting_started/installation) running locally (Steps 3–5):
+  ```bash
+  docker run -d -p 7700:7700 getmeili/meilisearch:latest
+  ```
+- `curl` and `jq` available in your shell.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
 export SOAT_BASE_URL=http://localhost:5047
+export MEILI_URL=http://localhost:7700
 ```
 
 </TabItem>
@@ -43,6 +53,7 @@ import { Embeddings, createClient, createConfig } from '@soat/sdk';
 
 ```bash
 export SOAT_BASE_URL=http://localhost:5047
+export MEILI_URL=http://localhost:7700
 ```
 
 </TabItem>
@@ -133,7 +144,7 @@ const { data } = await Embeddings.createEmbeddings({
   },
 });
 
-console.log(data.embedding.length);    // 1024
+console.log(data.embedding.length);      // 1024
 console.log(data.embedding.slice(0, 3)); // first three values
 ```
 
@@ -162,7 +173,7 @@ Pass `inputs` (an array) to generate multiple vectors in a single request. The [
 
 ```bash
 soat create-embeddings \
-  --inputs '["The dog barked at the mailman.", "The cat slept on the sofa.", "Machine learning is a subset of artificial intelligence."]' \
+  --inputs '["Wooden cutting board", "Cast iron skillet", "Silicone spatula set", "Stainless steel mixing bowls"]' \
   | jq '{count: (.embeddings | length), dims: (.embeddings[0] | length)}'
 ```
 
@@ -170,7 +181,7 @@ Expected output:
 
 ```json
 {
-  "count": 3,
+  "count": 4,
   "dims": 1024
 }
 ```
@@ -183,15 +194,16 @@ const { data } = await Embeddings.createEmbeddings({
   client,
   body: {
     inputs: [
-      'The dog barked at the mailman.',
-      'The cat slept on the sofa.',
-      'Machine learning is a subset of artificial intelligence.',
+      'Wooden cutting board',
+      'Cast iron skillet',
+      'Silicone spatula set',
+      'Stainless steel mixing bowls',
     ],
   },
 });
 
-console.log(data.embeddings.length);      // 3
-console.log(data.embeddings[0].length);   // 1024
+console.log(data.embeddings.length);    // 4
+console.log(data.embeddings[0].length); // 1024
 ```
 
 </TabItem>
@@ -201,7 +213,7 @@ console.log(data.embeddings[0].length);   // 1024
 curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"inputs":["The dog barked at the mailman.","The cat slept on the sofa.","Machine learning is a subset of artificial intelligence."]}' \
+  -d '{"inputs":["Wooden cutting board","Cast iron skillet","Silicone spatula set","Stainless steel mixing bowls"]}' \
   | jq '{count: (.embeddings | length), dims: (.embeddings[0] | length)}'
 ```
 
@@ -210,258 +222,248 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
 
 ---
 
-## Step 4 — Compute cosine similarity
+## Step 4 — Configure a Meilisearch index with a `userProvided` embedder
 
-Embeddings encode meaning as direction in vector space. Two texts with similar meaning will have vectors that point in nearly the same direction — cosine similarity close to 1. Unrelated texts will have similarity close to 0.
+Meilisearch's [hybrid search](https://www.meilisearch.com/docs/capabilities/hybrid_search/getting_started) combines keyword ranking with semantic vector search. The `userProvided` embedder source lets you supply your own vectors at index time — so SOAT generates the embeddings and Meilisearch handles the search.
 
-Embed two texts in a single batch call, then compute their cosine similarity:
+First, create the index and configure the embedder:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-# Embed two texts together
-RESULT=$(soat create-embeddings \
-  --inputs '["I love programming in TypeScript.", "I enjoy writing code in TypeScript."]')
+# Create the kitchenware index
+curl -s -X POST "$MEILI_URL/indexes" \
+  -H "Content-Type: application/json" \
+  -d '{"uid":"kitchenware","primaryKey":"id"}' | jq .
 
-VEC_A=$(echo "$RESULT" | jq '.embeddings[0]')
-VEC_B=$(echo "$RESULT" | jq '.embeddings[1]')
-
-# Compute dot product and magnitudes using jq
-python3 - <<'EOF'
-import json, sys, math
-
-result = json.loads(sys.stdin.read())
-a = result['embeddings'][0]
-b = result['embeddings'][1]
-
-dot   = sum(x * y for x, y in zip(a, b))
-mag_a = math.sqrt(sum(x * x for x in a))
-mag_b = math.sqrt(sum(x * x for x in b))
-similarity = dot / (mag_a * mag_b)
-
-print(f"Cosine similarity: {similarity:.4f}")
-EOF <<< "$RESULT"
-```
-
-Expected output (values vary by model):
-
-```
-Cosine similarity: 0.9523
+# Configure a userProvided embedder named "soat"
+curl -s -X PATCH "$MEILI_URL/indexes/kitchenware/settings/embedders" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "soat": {
+      "source": "userProvided",
+      "dimensions": 1024
+    }
+  }' | jq .
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data } = await Embeddings.createEmbeddings({
-  client,
-  body: {
-    inputs: [
-      'I love programming in TypeScript.',
-      'I enjoy writing code in TypeScript.',
-    ],
-  },
+// Use fetch directly — Meilisearch is outside the SOAT SDK scope
+await fetch(`${MEILI_URL}/indexes`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ uid: 'kitchenware', primaryKey: 'id' }),
 });
 
-const [a, b] = data.embeddings;
-
-const dot   = a.reduce((sum, val, i) => sum + val * b[i], 0);
-const magA  = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
-const magB  = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
-const similarity = dot / (magA * magB);
-
-console.log(`Cosine similarity: ${similarity.toFixed(4)}`); // e.g. 0.9523
+await fetch(`${MEILI_URL}/indexes/kitchenware/settings/embedders`, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    soat: { source: 'userProvided', dimensions: 1024 },
+  }),
+});
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-RESULT=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
+curl -s -X POST "$MEILI_URL/indexes" \
   -H "Content-Type: application/json" \
-  -d '{"inputs":["I love programming in TypeScript.","I enjoy writing code in TypeScript."]}')
+  -d '{"uid":"kitchenware","primaryKey":"id"}' | jq .
 
-python3 - <<'EOF'
-import json, sys, math
-
-result = json.loads(sys.stdin.read())
-a = result['embeddings'][0]
-b = result['embeddings'][1]
-
-dot   = sum(x * y for x, y in zip(a, b))
-mag_a = math.sqrt(sum(x * x for x in a))
-mag_b = math.sqrt(sum(x * x for x in b))
-similarity = dot / (mag_a * mag_b)
-
-print(f"Cosine similarity: {similarity:.4f}")
-EOF <<< "$RESULT"
+curl -s -X PATCH "$MEILI_URL/indexes/kitchenware/settings/embedders" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "soat": {
+      "source": "userProvided",
+      "dimensions": 1024
+    }
+  }' | jq .
 ```
 
 </TabItem>
 </Tabs>
 
-Now try two semantically unrelated texts to see the similarity drop:
-
-<Tabs groupId="client">
-<TabItem value="cli" label="CLI" default>
-
-```bash
-RESULT=$(soat create-embeddings \
-  --inputs '["I love programming in TypeScript.", "The weather in São Paulo is hot today."]')
-
-python3 - <<'EOF'
-import json, sys, math
-
-result = json.loads(sys.stdin.read())
-a = result['embeddings'][0]
-b = result['embeddings'][1]
-
-dot   = sum(x * y for x, y in zip(a, b))
-mag_a = math.sqrt(sum(x * x for x in a))
-mag_b = math.sqrt(sum(x * x for x in b))
-similarity = dot / (mag_a * mag_b)
-
-print(f"Cosine similarity: {similarity:.4f}")
-EOF <<< "$RESULT"
-```
-
-Expected output (values vary by model):
-
-```
-Cosine similarity: 0.3148
-```
-
-</TabItem>
-<TabItem value="sdk" label="SDK">
-
-```ts
-const { data: data2 } = await Embeddings.createEmbeddings({
-  client,
-  body: {
-    inputs: [
-      'I love programming in TypeScript.',
-      'The weather in São Paulo is hot today.',
-    ],
-  },
-});
-
-const [c, d] = data2.embeddings;
-
-const dot2  = c.reduce((sum, val, i) => sum + val * d[i], 0);
-const magC  = Math.sqrt(c.reduce((sum, val) => sum + val * val, 0));
-const magD  = Math.sqrt(d.reduce((sum, val) => sum + val * val, 0));
-
-console.log(`Cosine similarity: ${(dot2 / (magC * magD)).toFixed(4)}`); // e.g. 0.3148
-```
-
-</TabItem>
-<TabItem value="curl" label="curl">
-
-```bash
-RESULT=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"inputs":["I love programming in TypeScript.","The weather in São Paulo is hot today."]}')
-
-python3 - <<'EOF'
-import json, sys, math
-
-result = json.loads(sys.stdin.read())
-a = result['embeddings'][0]
-b = result['embeddings'][1]
-
-dot   = sum(x * y for x, y in zip(a, b))
-mag_a = math.sqrt(sum(x * x for x in a))
-mag_b = math.sqrt(sum(x * x for x in b))
-similarity = dot / (mag_a * mag_b)
-
-print(f"Cosine similarity: {similarity:.4f}")
-EOF <<< "$RESULT"
-```
-
-</TabItem>
-</Tabs>
-
-The gap between the two scores shows the model is capturing semantic meaning, not just lexical overlap.
+The `dimensions` value must match the vector length produced by `EMBEDDING_DIMENSIONS` on your SOAT server (default `1024`).
 
 ---
 
-## Step 5 — Combine single and batch in one call
+## Step 5 — Index documents with SOAT-generated embeddings
 
-You can pass both `input` and `inputs` in the same request. The response will contain both `embedding` and `embeddings`. This is useful when you want to compare one query against a fixed set of candidates without making two round trips.
+Use SOAT's embeddings endpoint to compute vectors for each product description, then index the documents into Meilisearch. Each document receives a `_vectors.soat` field containing its embedding vector.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-embeddings \
-  --input "What is the capital of France?" \
-  --inputs '["Paris is the capital city of France.", "Berlin is the capital of Germany.", "The Eiffel Tower is in Paris."]' \
-  | jq '{
-      query_dims: (.embedding | length),
-      candidates: (.embeddings | length)
-    }'
+# Define the product catalogue
+PRODUCTS='[
+  {"id":1,"name":"Wooden cutting board","category":"prep"},
+  {"id":2,"name":"Cast iron skillet","category":"cookware"},
+  {"id":3,"name":"Silicone spatula set","category":"utensils"},
+  {"id":4,"name":"Stainless steel mixing bowls","category":"prep"}
+]'
+
+# Embed all names in one batch call
+NAMES=$(echo "$PRODUCTS" | jq -r '[.[].name]')
+EMBEDDINGS=$(soat create-embeddings --inputs "$NAMES" | jq '.embeddings')
+
+# Merge each document with its embedding vector
+DOCS=$(echo "$PRODUCTS" | jq --argjson vecs "$EMBEDDINGS" \
+  '[to_entries[] | .value + {"_vectors": {"soat": $vecs[.key]}}]')
+
+# Index into Meilisearch
+curl -s -X POST "$MEILI_URL/indexes/kitchenware/documents" \
+  -H "Content-Type: application/json" \
+  -d "$DOCS" | jq .
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data } = await Embeddings.createEmbeddings({
+const products = [
+  { id: 1, name: 'Wooden cutting board',      category: 'prep'     },
+  { id: 2, name: 'Cast iron skillet',          category: 'cookware' },
+  { id: 3, name: 'Silicone spatula set',       category: 'utensils' },
+  { id: 4, name: 'Stainless steel mixing bowls', category: 'prep'  },
+];
+
+// Embed all product names in one batch request
+const { data: embResult } = await Embeddings.createEmbeddings({
   client,
-  body: {
-    input: 'What is the capital of France?',
-    inputs: [
-      'Paris is the capital city of France.',
-      'Berlin is the capital of Germany.',
-      'The Eiffel Tower is in Paris.',
-    ],
-  },
+  body: { inputs: products.map((p) => p.name) },
 });
 
-// Rank candidates by cosine similarity to the query
-const query = data.embedding;
-const ranked = data.embeddings
-  .map((vec, i) => {
-    const dot  = query.reduce((s, v, j) => s + v * vec[j], 0);
-    const magQ = Math.sqrt(query.reduce((s, v) => s + v * v, 0));
-    const magV = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
-    return { index: i, score: dot / (magQ * magV) };
-  })
-  .sort((a, b) => b.score - a.score);
+// Attach embedding vectors as _vectors.soat
+const docs = products.map((p, i) => ({
+  ...p,
+  _vectors: { soat: embResult.embeddings[i] },
+}));
 
-console.log('Best match index:', ranked[0].index);
-// → 0 ("Paris is the capital city of France.")
+// Index into Meilisearch
+await fetch(`${MEILI_URL}/indexes/kitchenware/documents`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(docs),
+});
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
+# Get batch embeddings from SOAT
+EMBEDDINGS=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "input": "What is the capital of France?",
-    "inputs": [
-      "Paris is the capital city of France.",
-      "Berlin is the capital of Germany.",
-      "The Eiffel Tower is in Paris."
-    ]
-  }' \
-  | jq '{query_dims: (.embedding | length), candidates: (.embeddings | length)}'
+  -d '{"inputs":["Wooden cutting board","Cast iron skillet","Silicone spatula set","Stainless steel mixing bowls"]}' \
+  | jq '.embeddings')
+
+# Build Meilisearch document payload
+DOCS=$(jq -n --argjson vecs "$EMBEDDINGS" '[
+  {"id":1,"name":"Wooden cutting board","category":"prep","_vectors":{"soat":$vecs[0]}},
+  {"id":2,"name":"Cast iron skillet","category":"cookware","_vectors":{"soat":$vecs[1]}},
+  {"id":3,"name":"Silicone spatula set","category":"utensils","_vectors":{"soat":$vecs[2]}},
+  {"id":4,"name":"Stainless steel mixing bowls","category":"prep","_vectors":{"soat":$vecs[3]}}
+]')
+
+curl -s -X POST "$MEILI_URL/indexes/kitchenware/documents" \
+  -H "Content-Type: application/json" \
+  -d "$DOCS" | jq .
 ```
 
 </TabItem>
 </Tabs>
+
+---
+
+## Step 6 — Run a hybrid semantic search
+
+With documents indexed, use Meilisearch's hybrid search to combine keyword ranking with semantic similarity. Set `semanticRatio` between `0` (pure keyword) and `1` (pure vector). A value around `0.9` favours semantic meaning while still boosting exact keyword matches.
+
+See [Meilisearch — Hybrid Search](https://www.meilisearch.com/docs/capabilities/hybrid_search/getting_started#choose-an-embedder-model) for full configuration options.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+curl -s -X POST "$MEILI_URL/indexes/kitchenware/search" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "q": "something to cook with on the stove",
+    "hybrid": {
+      "embedder": "soat",
+      "semanticRatio": 0.9
+    }
+  }' | jq '[.hits[] | {id, name, category}]'
+```
+
+Expected output — the cast iron skillet ranks first because it is semantically closest to stovetop cooking:
+
+```json
+[
+  { "id": 2, "name": "Cast iron skillet",           "category": "cookware" },
+  { "id": 3, "name": "Silicone spatula set",         "category": "utensils" },
+  { "id": 1, "name": "Wooden cutting board",         "category": "prep" },
+  { "id": 4, "name": "Stainless steel mixing bowls", "category": "prep" }
+]
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const res = await fetch(`${MEILI_URL}/indexes/kitchenware/search`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    q: 'something to cook with on the stove',
+    hybrid: { embedder: 'soat', semanticRatio: 0.9 },
+  }),
+});
+
+const { hits } = await res.json();
+console.log(hits.map((h) => h.name));
+// ["Cast iron skillet", "Silicone spatula set", ...]
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s -X POST "$MEILI_URL/indexes/kitchenware/search" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "q": "something to cook with on the stove",
+    "hybrid": {
+      "embedder": "soat",
+      "semanticRatio": 0.9
+    }
+  }' | jq '[.hits[] | {id, name, category}]'
+```
+
+</TabItem>
+</Tabs>
+
+Try varying `semanticRatio` to see how it shifts rankings:
+
+| `semanticRatio` | Behaviour |
+|---|---|
+| `0.0` | Pure keyword — only exact matches rank |
+| `0.5` | Balanced hybrid |
+| `1.0` | Pure vector — ranking is entirely semantic |
 
 ---
 
 ## What's next
 
-- **Semantic search** — Index your own documents by storing their embeddings and performing nearest-neighbor search. SOAT already does this internally for [Documents](/docs/modules/documents) and [Memories](/docs/modules/memories); the embeddings endpoint gives you the same capability for any external store.
-- **Clustering** — Group customer feedback, support tickets, or log messages by semantic similarity using k-means or DBSCAN on the returned vectors.
-- **Agents with knowledge** — See [Agent with Persistent Memory](/docs/tutorials/memories-agent) to learn how SOAT uses embeddings automatically to inject relevant context before every agent generation.
-- **Knowledge search** — Use `POST /api/v1/knowledge/search` to query across documents and memories using the same embedding model. See [Knowledge](/docs/modules/knowledge).
+- **Re-embed on update** — when a document's text changes, call SOAT's embeddings endpoint again and re-index with the new `_vectors.soat` value. Only changed documents need reprocessing.
+- **Multiple embedders** — configure additional named embedders on the same Meilisearch index (e.g. one for titles, one for descriptions) and choose which to use per query.
+- **Agents with knowledge** — see [Agent with Persistent Memory](/docs/tutorials/memories-agent) to learn how SOAT uses embeddings automatically to inject relevant context before every agent generation, without any external search engine.
+- **Knowledge search** — use `POST /api/v1/knowledge/search` to query across SOAT Documents and Memories using the same embedding model. See [Knowledge](/docs/modules/knowledge).
