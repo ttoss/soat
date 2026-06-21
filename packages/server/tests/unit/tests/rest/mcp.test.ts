@@ -905,12 +905,78 @@ describe('MCP tools - happy path', () => {
 });
 
 describe('MCP OAuth discovery (RFC 9728)', () => {
+  let adminToken: string;
+
+  beforeAll(async () => {
+    adminToken = await loginAs('mcphappy', 'mcphappypass');
+  });
+
   test('GET /.well-known/oauth-protected-resource returns protected resource metadata', async () => {
     const res = await testClient.get('/.well-known/oauth-protected-resource');
     expect(res.status).toBe(200);
     expect(typeof res.body.resource).toBe('string');
     expect(Array.isArray(res.body.authorization_servers)).toBe(true);
     expect(res.body.authorization_servers.length).toBeGreaterThan(0);
+  });
+
+  test('initialize without a token returns 401 with WWW-Authenticate header', async () => {
+    // The handshake itself must be challenged so OAuth-aware clients (e.g.
+    // Claude connectors) begin the OAuth flow instead of treating the server
+    // as public.
+    const res = await testClient
+      .post('/mcp')
+      .set('Content-Type', 'application/json')
+      .set('Accept', 'application/json, text/event-stream')
+      .send({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'test-client', version: '1.0.0' },
+        },
+      });
+    expect(res.status).toBe(401);
+    expect(res.headers['www-authenticate']).toBeDefined();
+  });
+
+  test('notifications/initialized without a token returns 401', async () => {
+    const res = await testClient
+      .post('/mcp')
+      .set('Content-Type', 'application/json')
+      .set('Accept', 'application/json, text/event-stream')
+      .send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    expect(res.status).toBe(401);
+    expect(res.headers['www-authenticate']).toBeDefined();
+  });
+
+  test('initialize with a valid token returns 200', async () => {
+    const res = await authenticatedTestClient(adminToken)
+      .post('/mcp')
+      .set('Content-Type', 'application/json')
+      .set('Accept', 'application/json, text/event-stream')
+      .send({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'test-client', version: '1.0.0' },
+        },
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.result.serverInfo.name).toBe('soat');
+  });
+
+  test('tools/list without a token returns 401', async () => {
+    const res = await testClient
+      .post('/mcp')
+      .set('Content-Type', 'application/json')
+      .set('Accept', 'application/json, text/event-stream')
+      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+    expect(res.status).toBe(401);
   });
 
   test('tools/call without a token returns 401 with WWW-Authenticate header', async () => {
@@ -942,4 +1008,5 @@ describe('MCP OAuth discovery (RFC 9728)', () => {
       });
     expect(res.status).toBe(401);
   });
+
 });

@@ -11,6 +11,29 @@ SOAT's MCP endpoint uses Streamable HTTP transport. Most modern MCP clients supp
 - A running SOAT server (default port `5047`)
 - A valid Bearer token — either a JWT session token or an `sk_`-prefixed project key
 
+## Claude (OAuth connector)
+
+Clients that support remote MCP connectors (e.g. Claude's custom connectors) can
+authenticate via OAuth — no manually provisioned token required. Add the server
+by its URL alone:
+
+```
+https://<your-soat-host>/mcp
+```
+
+The MCP endpoint challenges every request (including the `initialize`
+handshake) with `401` + `WWW-Authenticate`, which triggers the client's OAuth
+flow: it discovers the authorization server via
+`/.well-known/oauth-protected-resource`, registers dynamically, and runs the
+authorize + PKCE flow against the SOAT consent screen. After you pick a project
+and grant permissions, the connector receives a scoped access token and the
+tools appear. See [OAuth](/docs/modules/oauth) for the full flow.
+
+> Because the handshake is authenticated, tools are listed only **after** OAuth
+> completes. A connector that never prompts for sign-in and reports "no tools
+> available" is talking to a server whose MCP endpoint is left unauthenticated —
+> SOAT's is not.
+
 ## Claude Desktop
 
 Add a server entry to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
