@@ -1012,6 +1012,38 @@ if ! echo "$MCP_DIRECT_TEXT" | grep -qi "mcp-agent-lister\|$MCP_AGENT_ID"; then
 fi
 echo "MCP direct tools/call: OK"
 
+# 27a. OAuth discovery endpoints (required for Claude Connectors / MCP OAuth 2.1)
+echo "--- Validating OAuth discovery endpoints ---"
+OAUTH_AS_META=$(curl -sf "$SERVER_URL/.well-known/oauth-authorization-server")
+if ! echo "$OAUTH_AS_META" | jq -e '.issuer' >/dev/null 2>&1; then
+  echo "ERROR: /.well-known/oauth-authorization-server did not return expected metadata" >&2
+  echo "$OAUTH_AS_META" >&2
+  exit 1
+fi
+echo "OAuth authorization server metadata: OK"
+
+OAUTH_PR_META=$(curl -sf "$SERVER_URL/.well-known/oauth-protected-resource")
+if ! echo "$OAUTH_PR_META" | jq -e '.resource' >/dev/null 2>&1; then
+  echo "ERROR: /.well-known/oauth-protected-resource did not return expected metadata" >&2
+  echo "$OAUTH_PR_META" >&2
+  exit 1
+fi
+echo "OAuth protected resource metadata: OK"
+
+# 27b. MCP root alias (required for Claude Connectors — they POST to the resource URL, not /mcp)
+echo "--- Validating MCP root alias ---"
+MCP_ROOT_RESP=$(curl -s -X POST "$SERVER_URL/" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":"root-alias","method":"tools/list","params":{}}')
+if ! printf '%s\n' "$MCP_ROOT_RESP" | jq -e '.result.tools' >/dev/null 2>&1; then
+  echo "ERROR: MCP root alias (POST /) did not return tool list" >&2
+  echo "$MCP_ROOT_RESP" >&2
+  exit 1
+fi
+echo "MCP root alias: OK"
+
 # 28. Ask the agent to list agents via MCP (LLM-driven, best effort)
 echo "--- Running MCP agent generation ---"
 # Bound this call to keep smoke runs deterministic when model/tool orchestration stalls.
