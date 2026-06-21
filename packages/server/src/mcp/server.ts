@@ -58,6 +58,13 @@ const mcpRouter = createMcpRouter(mcpServer, {
       if (!payload) throw new Error('Invalid token');
       return payload;
     },
+    // Protect every JSON-RPC method, including `initialize`. The default
+    // (`['initialize', 'tools/list']`) lets the handshake start unauthenticated,
+    // which makes OAuth-aware clients (e.g. Claude connectors) treat the server
+    // as public and never begin the OAuth flow — while `notifications/initialized`
+    // still 401s and breaks the handshake. Challenging on `initialize` with a
+    // `WWW-Authenticate` header is what triggers the client's OAuth discovery.
+    publicMethods: [],
     resourceServerUrl: ISSUER,
     authorizationServerUrl: ISSUER,
     resourceMetadataUrl: `${ISSUER}/.well-known/oauth-protected-resource`,
