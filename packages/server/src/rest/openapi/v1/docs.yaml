@@ -1,0 +1,113 @@
+openapi: 3.0.3
+info:
+  title: SOAT Docs API
+  version: 1.0.0
+  description: Access SOAT platform documentation
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Docs
+    description: SOAT platform documentation
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/docs:
+    get:
+      tags:
+        - Docs
+      summary: List documentation pages
+      description: Returns a list of all available SOAT documentation pages with their paths, titles, and descriptions. Use this to discover what topics are documented before fetching specific content.
+      operationId: listDocs
+      x-iam-action: docs:ListDocs
+      responses:
+        '200':
+          description: List of documentation pages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocPage'
+        '401':
+          description: Unauthorized
+  /api/v1/docs/content:
+    get:
+      tags:
+        - Docs
+      summary: Get documentation page content
+      description: Returns the full Markdown content of a documentation page by its path. Use `list-docs` first to discover available paths.
+      operationId: getDocContent
+      x-iam-action: docs:GetDocContent
+      parameters:
+        - name: path
+          in: query
+          required: true
+          description: Path of the documentation page (e.g. `modules/agents`, `tutorials/permissions`, `introduction`)
+          schema:
+            type: string
+            example: modules/agents
+      responses:
+        '200':
+          description: Documentation page content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocContent'
+        '400':
+          description: Missing path parameter
+        '401':
+          description: Unauthorized
+        '404':
+          description: Documentation page not found
+components:
+  schemas:
+    DocPage:
+      type: object
+      required:
+        - path
+        - title
+        - description
+      properties:
+        path:
+          type: string
+          description: Relative path of the documentation page (without .md extension)
+          example: modules/agents
+        title:
+          type: string
+          description: Title of the documentation page
+          example: Agents
+        description:
+          type: string
+          description: Short description extracted from the page content
+          example: Agents are the core reasoning units that run LLM inference loops.
+    DocContent:
+      type: object
+      required:
+        - path
+        - title
+        - content
+      properties:
+        path:
+          type: string
+          description: Relative path of the documentation page
+          example: modules/agents
+        title:
+          type: string
+          description: Title of the documentation page
+          example: Agents
+        content:
+          type: string
+          description: Full Markdown content of the documentation page
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
