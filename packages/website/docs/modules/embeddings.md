@@ -11,7 +11,7 @@ The Embeddings module exposes the server's embedding model as a REST endpoint. A
 
 The embedding model is configured server-side via environment variables (`EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`). Callers do not choose the model at request time; the server always uses the configured model so all vectors in a deployment share the same space.
 
-> See the [Permissions Reference](./permissions.md) for the IAM action strings for this module.
+> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Configuration
 
