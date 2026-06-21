@@ -247,25 +247,25 @@ importers:
     dependencies:
       '@ai-sdk/amazon-bedrock':
         specifier: ^4.0.112
-        version: 4.0.112(zod@4.3.6)
+        version: 4.0.112(zod@4.4.3)
       '@ai-sdk/anthropic':
         specifier: ^3.0.81
-        version: 3.0.81(zod@4.3.6)
+        version: 3.0.81(zod@4.4.3)
       '@ai-sdk/azure':
         specifier: ^3.0.69
-        version: 3.0.69(zod@4.3.6)
+        version: 3.0.69(zod@4.4.3)
       '@ai-sdk/google':
         specifier: ^3.0.80
-        version: 3.0.80(zod@4.3.6)
+        version: 3.0.80(zod@4.4.3)
       '@ai-sdk/groq':
         specifier: ^3.0.39
-        version: 3.0.39(zod@4.3.6)
+        version: 3.0.39(zod@4.4.3)
       '@ai-sdk/openai':
         specifier: ^3.0.67
-        version: 3.0.67(zod@4.3.6)
+        version: 3.0.67(zod@4.4.3)
       '@ai-sdk/xai':
         specifier: ^3.0.93
-        version: 3.0.93(zod@4.3.6)
+        version: 3.0.93(zod@4.4.3)
       '@soat/postgresdb':
         specifier: workspace:*
         version: link:../postgresdb
@@ -279,14 +279,14 @@ importers:
         specifier: ^0.3.3
         version: 0.3.3(@ttoss/http-server@0.5.17)
       '@ttoss/http-server-mcp':
-        specifier: ^0.13.3
-        version: 0.13.3(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))
+        specifier: ^0.18.1
+        version: 0.18.1(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))
       '@ttoss/postgresdb':
         specifier: ^0.9.6
         version: 0.9.6(@types/node@24.12.2)(@types/validator@13.15.10)(reflect-metadata@0.2.2)
       ai:
         specifier: ^6.0.196
-        version: 6.0.196(zod@4.3.6)
+        version: 6.0.196(zod@4.4.3)
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
@@ -3039,6 +3039,12 @@ packages:
     peerDependencies:
       koa: ^2.0.0 || ^3.0.0
 
+  '@koa/router@15.6.0':
+    resolution: {integrity: sha512-iEOXlvGIBqSNkGXrg0XtMARAOm5zA24oedXxiTGEkrD4JgwVjfRDddCQvW1s4WEcwDYvyecRbf8BikXsuEEj8w==}
+    engines: {node: '>= 20'}
+    peerDependencies:
+      koa: ^2.0.0 || ^3.0.0
+
   '@kwsites/file-exists@1.1.1':
     resolution: {integrity: sha512-m9/5YGR18lIwxSFDwfE3oA7bWuq9kdau6ugN4H2rJeyhFQZcG9AgSHkQtSD15a8WvTgfz9aikZMrKPHvbpqFiw==}
 
@@ -4512,11 +4518,11 @@ packages:
   '@tsconfig/node16@1.0.4':
     resolution: {integrity: sha512-vxhUy4J8lyeyinH7Azl1pdd43GJhZH/tP2weN8TntQblOY+A0XbT8DJk1/oCPuOOyg/Ja757rG0CgHcWC8OfMA==}
 
-  '@ttoss/auth-core@0.4.16':
-    resolution: {integrity: sha512-VRNiHGB3PGMyG/CqlEc1kghuXIRS2/9wbR921JYYMH/Ajy8s71SR9/pEICp+ZKrT8gXVl9p6ge3flO3oiKUx8A==}
-
   '@ttoss/auth-core@0.7.0':
     resolution: {integrity: sha512-RttFzYhLYn6i67yVUTdSqVZQQ6cFSM1EPvAhiVpxmJePijdbCtqHLzaNww9tlMi/BWTdVFhCGqys6Bf1iH7tTA==}
+
+  '@ttoss/auth-core@0.8.0':
+    resolution: {integrity: sha512-OiZoWTmlUuSAhjs41G8ridHk5whwlEi2Whp8o+e90oZBiKsFfZPIq0FylyxnexPC37SxyvUQLOPY4Mn+m8M9Bg==}
 
   '@ttoss/cloudformation@0.13.6':
     resolution: {integrity: sha512-Sg4YXnWAl4PWRc1i/uBtrsXE7VDhqdIvxroeKRXCpvB9ufBs6UESrgu9qViZhZcwfyKPEURx5QnqtLA0cBDzIg==}
@@ -4535,13 +4541,21 @@ packages:
     peerDependencies:
       '@ttoss/http-server': ^0.7.1
 
-  '@ttoss/http-server-mcp@0.13.3':
-    resolution: {integrity: sha512-xg1ASXeuG9V9EWlpRrfQfhKaxZtSm6GscVW73oSiOCNvZIBOZgHA0u43tWAXA0ydikH2WpuG8AOllmfzPhcbgQ==}
+  '@ttoss/http-server-auth@0.3.5':
+    resolution: {integrity: sha512-m5k6c1+Y3xaA02VxOWlianJE/ykcSGNWIProxW58ByjzD2W4ghHkc7bx5da+VGU/SGMlV2LkHQxOEZZaVV4+Xw==}
     peerDependencies:
-      '@modelcontextprotocol/sdk': ^1.0.0
+      '@ttoss/http-server': ^0.7.1
+
+  '@ttoss/http-server-mcp@0.18.1':
+    resolution: {integrity: sha512-sLTnxzCclsxT7HnoTCG2PyeoqPEfKj6gTMsON5wnq+wnIB3Nb0/7iAcNFgoFBCM9FGtDDRx0HByU+X2Ist28Bg==}
+    peerDependencies:
+      '@modelcontextprotocol/sdk': ^1.29.0
 
   '@ttoss/http-server@0.5.17':
     resolution: {integrity: sha512-dZH6hue23Jdr8euD2nh+OqrFDLBkYV9Pn+3X0JZ8CZVlbwOuZP5mcFppF+EDSCULJiv4EzVJaoVWN4721l6Ucw==}
+
+  '@ttoss/http-server@0.7.1':
+    resolution: {integrity: sha512-ibfNZhLictYaqiexAUo/GjGNYPOyBx6PqyDuG6sosUp9GlRa6PqCUqkqsjOxpJz+u19CFz1N+Fhekubb6IVLhw==}
 
   '@ttoss/logger@0.8.16':
     resolution: {integrity: sha512-0aeeaE2JyaKgip5UEO/mtEL+Nzek33T3sA+dcVpfLV9HyxIlRxLyffUkm9yoEBsx6S3fmvQCpQk0flPWliFSjw==}
@@ -8716,6 +8730,10 @@ packages:
     resolution: {integrity: sha512-TrM4/tnNY7uJ1aW55sIIa+dqBvc4V14WRIAlGcWat9wV5pRS9Wr5Zk2ZTjQP1jtfIHDoHiSbPuV08P0fUZo2pg==}
     engines: {node: '>= 18'}
 
+  koa@3.2.1:
+    resolution: {integrity: sha512-e7IpWJrnanNUroVK2taAgMxoEZvHLXdQiNjeExSu/DEIWm83jaKGBgb7tLmu2rMYpA027qFB3iLR/k3AVpFRnA==}
+    engines: {node: '>= 18'}
+
   language-subtag-registry@0.3.23:
     resolution: {integrity: sha512-0K65Lea881pHotoGEa5gDlMxt3pctLi2RplBb7Ezh4rRdLEOtgi7n4EwK9lamnUCkKBqaeKRVebTq6BAxSkpXQ==}
 
@@ -12704,6 +12722,9 @@ packages:
   zod@4.3.6:
     resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
 
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
@@ -12711,29 +12732,29 @@ snapshots:
 
   '@adobe/css-tools@4.4.4': {}
 
-  '@ai-sdk/amazon-bedrock@4.0.112(zod@4.3.6)':
+  '@ai-sdk/amazon-bedrock@4.0.112(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/anthropic': 3.0.81(zod@4.3.6)
-      '@ai-sdk/openai': 3.0.67(zod@4.3.6)
+      '@ai-sdk/anthropic': 3.0.81(zod@4.4.3)
+      '@ai-sdk/openai': 3.0.67(zod@4.4.3)
       '@ai-sdk/provider': 3.0.10
-      '@ai-sdk/provider-utils': 4.0.27(zod@4.3.6)
+      '@ai-sdk/provider-utils': 4.0.27(zod@4.4.3)
       '@smithy/eventstream-codec': 4.2.13
       '@smithy/util-utf8': 4.2.2
       aws4fetch: 1.0.20
-      zod: 4.3.6
+      zod: 4.4.3
 
-  '@ai-sdk/anthropic@3.0.81(zod@4.3.6)':
+  '@ai-sdk/anthropic@3.0.81(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 3.0.10
-      '@ai-sdk/provider-utils': 4.0.27(zod@4.3.6)
-      zod: 4.3.6
+      '@ai-sdk/provider-utils': 4.0.27(zod@4.4.3)
+      zod: 4.4.3
 
-  '@ai-sdk/azure@3.0.69(zod@4.3.6)':
+  '@ai-sdk/azure@3.0.69(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/openai': 3.0.67(zod@4.3.6)
+      '@ai-sdk/openai': 3.0.67(zod@4.4.3)
       '@ai-sdk/provider': 3.0.10
-      '@ai-sdk/provider-utils': 4.0.27(zod@4.3.6)
-      zod: 4.3.6
+      '@ai-sdk/provider-utils': 4.0.27(zod@4.4.3)
+      zod: 4.4.3
 
   '@ai-sdk/gateway@2.0.24(zod@4.3.6)':
     dependencies:
@@ -12742,36 +12763,36 @@ snapshots:
       '@vercel/oidc': 3.0.5
       zod: 4.3.6
 
-  '@ai-sdk/gateway@3.0.124(zod@4.3.6)':
+  '@ai-sdk/gateway@3.0.124(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 3.0.10
-      '@ai-sdk/provider-utils': 4.0.27(zod@4.3.6)
+      '@ai-sdk/provider-utils': 4.0.27(zod@4.4.3)
       '@vercel/oidc': 3.2.0
-      zod: 4.3.6
+      zod: 4.4.3
 
-  '@ai-sdk/google@3.0.80(zod@4.3.6)':
+  '@ai-sdk/google@3.0.80(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 3.0.10
-      '@ai-sdk/provider-utils': 4.0.27(zod@4.3.6)
-      zod: 4.3.6
+      '@ai-sdk/provider-utils': 4.0.27(zod@4.4.3)
+      zod: 4.4.3
 
-  '@ai-sdk/groq@3.0.39(zod@4.3.6)':
+  '@ai-sdk/groq@3.0.39(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 3.0.10
-      '@ai-sdk/provider-utils': 4.0.27(zod@4.3.6)
-      zod: 4.3.6
+      '@ai-sdk/provider-utils': 4.0.27(zod@4.4.3)
+      zod: 4.4.3
 
-  '@ai-sdk/openai-compatible@2.0.48(zod@4.3.6)':
+  '@ai-sdk/openai-compatible@2.0.48(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 3.0.10
-      '@ai-sdk/provider-utils': 4.0.27(zod@4.3.6)
-      zod: 4.3.6
+      '@ai-sdk/provider-utils': 4.0.27(zod@4.4.3)
+      zod: 4.4.3
 
-  '@ai-sdk/openai@3.0.67(zod@4.3.6)':
+  '@ai-sdk/openai@3.0.67(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 3.0.10
-      '@ai-sdk/provider-utils': 4.0.27(zod@4.3.6)
-      zod: 4.3.6
+      '@ai-sdk/provider-utils': 4.0.27(zod@4.4.3)
+      zod: 4.4.3
 
   '@ai-sdk/provider-utils@3.0.20(zod@4.3.6)':
     dependencies:
@@ -12780,12 +12801,12 @@ snapshots:
       eventsource-parser: 3.0.8
       zod: 4.3.6
 
-  '@ai-sdk/provider-utils@4.0.27(zod@4.3.6)':
+  '@ai-sdk/provider-utils@4.0.27(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 3.0.10
       '@standard-schema/spec': 1.1.0
       eventsource-parser: 3.0.8
-      zod: 4.3.6
+      zod: 4.4.3
 
   '@ai-sdk/provider@2.0.1':
     dependencies:
@@ -12805,12 +12826,12 @@ snapshots:
     optionalDependencies:
       zod: 4.3.6
 
-  '@ai-sdk/xai@3.0.93(zod@4.3.6)':
+  '@ai-sdk/xai@3.0.93(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/openai-compatible': 2.0.48(zod@4.3.6)
+      '@ai-sdk/openai-compatible': 2.0.48(zod@4.4.3)
       '@ai-sdk/provider': 3.0.10
-      '@ai-sdk/provider-utils': 4.0.27(zod@4.3.6)
-      zod: 4.3.6
+      '@ai-sdk/provider-utils': 4.0.27(zod@4.4.3)
+      zod: 4.4.3
 
   '@algolia/abtesting@1.12.2':
     dependencies:
@@ -17166,6 +17187,14 @@ snapshots:
       lodash.merge: 4.6.2
       type-is: 2.0.1
 
+  '@koa/bodyparser@6.1.0(koa@3.2.1)':
+    dependencies:
+      '@types/co-body': 6.1.3
+      co-body: 6.2.0
+      koa: 3.2.1
+      lodash.merge: 4.6.2
+      type-is: 2.0.1
+
   '@koa/cors@5.0.0':
     dependencies:
       vary: 1.1.2
@@ -17175,11 +17204,26 @@ snapshots:
       koa: 3.2.0
       multer: 2.1.1
 
+  '@koa/multer@4.0.0(koa@3.2.1)(multer@2.1.1)':
+    dependencies:
+      koa: 3.2.1
+      multer: 2.1.1
+
   '@koa/router@15.4.0(koa@3.2.0)':
     dependencies:
       debug: 4.4.3
       http-errors: 2.0.1
       koa: 3.2.0
+      koa-compose: 4.1.0
+      path-to-regexp: 8.4.2
+    transitivePeerDependencies:
+      - supports-color
+
+  '@koa/router@15.6.0(koa@3.2.1)':
+    dependencies:
+      debug: 4.4.3
+      http-errors: 2.0.1
+      koa: 3.2.1
       koa-compose: 4.1.0
       path-to-regexp: 8.4.2
     transitivePeerDependencies:
@@ -17346,7 +17390,7 @@ snapshots:
       '@types/react': 19.2.16
       react: 19.2.7
 
-  '@modelcontextprotocol/sdk@1.29.0(zod@4.3.6)':
+  '@modelcontextprotocol/sdk@1.29.0(zod@4.4.3)':
     dependencies:
       '@hono/node-server': 1.19.14(hono@4.12.23)
       ajv: 8.20.0
@@ -17363,8 +17407,8 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 4.3.6
-      zod-to-json-schema: 3.25.2(zod@4.3.6)
+      zod: 4.4.3
+      zod-to-json-schema: 3.25.2(zod@4.4.3)
     transitivePeerDependencies:
       - supports-color
 
@@ -18892,11 +18936,11 @@ snapshots:
 
   '@tsconfig/node16@1.0.4': {}
 
-  '@ttoss/auth-core@0.4.16':
+  '@ttoss/auth-core@0.7.0':
     dependencies:
       aws-jwt-verify: 4.0.1
 
-  '@ttoss/auth-core@0.7.0':
+  '@ttoss/auth-core@0.8.0':
     dependencies:
       aws-jwt-verify: 4.0.1
 
@@ -18965,12 +19009,18 @@ snapshots:
       '@ttoss/auth-core': 0.7.0
       '@ttoss/http-server': 0.5.17
 
-  '@ttoss/http-server-mcp@0.13.3(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))':
+  '@ttoss/http-server-auth@0.3.5(@ttoss/http-server@0.7.1)':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.3.6)
-      '@ttoss/auth-core': 0.4.16
-      '@ttoss/http-server': 0.5.17
-      zod: 4.3.6
+      '@ttoss/auth-core': 0.8.0
+      '@ttoss/http-server': 0.7.1
+
+  '@ttoss/http-server-mcp@0.18.1(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))':
+    dependencies:
+      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
+      '@ttoss/auth-core': 0.8.0
+      '@ttoss/http-server': 0.7.1
+      '@ttoss/http-server-auth': 0.3.5(@ttoss/http-server@0.7.1)
+      zod: 4.4.3
     transitivePeerDependencies:
       - supports-color
 
@@ -18981,6 +19031,18 @@ snapshots:
       '@koa/multer': 4.0.0(koa@3.2.0)(multer@2.1.1)
       '@koa/router': 15.4.0(koa@3.2.0)
       koa: 3.2.0
+      koa-static: 5.0.0
+      multer: 2.1.1
+    transitivePeerDependencies:
+      - supports-color
+
+  '@ttoss/http-server@0.7.1':
+    dependencies:
+      '@koa/bodyparser': 6.1.0(koa@3.2.1)
+      '@koa/cors': 5.0.0
+      '@koa/multer': 4.0.0(koa@3.2.1)(multer@2.1.1)
+      '@koa/router': 15.6.0(koa@3.2.1)
+      koa: 3.2.1
       koa-static: 5.0.0
       multer: 2.1.1
     transitivePeerDependencies:
@@ -19785,13 +19847,13 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       zod: 4.3.6
 
-  ai@6.0.196(zod@4.3.6):
+  ai@6.0.196(zod@4.4.3):
     dependencies:
-      '@ai-sdk/gateway': 3.0.124(zod@4.3.6)
+      '@ai-sdk/gateway': 3.0.124(zod@4.4.3)
       '@ai-sdk/provider': 3.0.10
-      '@ai-sdk/provider-utils': 4.0.27(zod@4.3.6)
+      '@ai-sdk/provider-utils': 4.0.27(zod@4.4.3)
       '@opentelemetry/api': 1.9.0
-      zod: 4.3.6
+      zod: 4.4.3
 
   ajv-draft-04@1.0.0(ajv@8.17.1):
     optionalDependencies:
@@ -24247,6 +24309,27 @@ snapshots:
       parseurl: 1.3.3
       statuses: 2.0.2
       type-is: 2.0.1
+      vary: 1.1.2
+
+  koa@3.2.1:
+    dependencies:
+      accepts: 1.3.8
+      content-disposition: 1.0.1
+      content-type: 1.0.5
+      cookies: 0.9.1
+      delegates: 1.0.0
+      destroy: 1.2.0
+      encodeurl: 2.0.0
+      escape-html: 1.0.3
+      fresh: 0.5.2
+      http-assert: 1.5.0
+      http-errors: 2.0.1
+      koa-compose: 4.1.0
+      mime-types: 3.0.2
+      on-finished: 2.4.1
+      parseurl: 1.3.3
+      statuses: 2.0.2
+      type-is: 2.1.0
       vary: 1.1.2
 
   language-subtag-registry@0.3.23: {}
@@ -28953,14 +29036,16 @@ snapshots:
       compress-commons: 6.0.2
       readable-stream: 4.7.0
 
-  zod-to-json-schema@3.25.2(zod@4.3.6):
+  zod-to-json-schema@3.25.2(zod@4.4.3):
     dependencies:
-      zod: 4.3.6
+      zod: 4.4.3
 
   zod-validation-error@4.0.2(zod@4.3.6):
     dependencies:
       zod: 4.3.6
 
   zod@4.3.6: {}
+
+  zod@4.4.3: {}
 
   zwitch@2.0.4: {}

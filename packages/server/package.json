@@ -27,7 +27,7 @@
     "@ttoss/auth-core": "^0.7.0",
     "@ttoss/http-server": "^0.5.17",
     "@ttoss/http-server-auth": "^0.3.3",
-    "@ttoss/http-server-mcp": "^0.13.3",
+    "@ttoss/http-server-mcp": "^0.18.1",
     "@ttoss/postgresdb": "^0.9.6",
     "ai": "^6.0.196",
     "bcryptjs": "^3.0.3",

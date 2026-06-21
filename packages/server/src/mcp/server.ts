@@ -8,6 +8,7 @@ import {
 
 import { version } from '../../package.json' with { type: 'json' };
 import { soatTools } from '../lib/soatTools';
+import { ISSUER, verifyOauthAccessToken } from '../oauth/server';
 import { toMcpText } from './toMcpText';
 
 const mcpServer = new McpServer({
@@ -49,6 +50,15 @@ const mcpRouter = createMcpRouter(mcpServer, {
     return {
       authorization: (ctx.headers.authorization as string) ?? '',
     };
+  },
+  auth: {
+    verifyToken: async (token) => {
+      const payload = verifyOauthAccessToken(token);
+      if (!payload) throw new Error('Invalid token');
+      return payload;
+    },
+    resourceServerUrl: ISSUER,
+    authorizationServerUrl: ISSUER,
   },
 });
 

@@ -903,3 +903,13 @@ describe('MCP tools - happy path', () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe('MCP OAuth discovery (RFC 9728)', () => {
+  test('GET /.well-known/oauth-protected-resource returns protected resource metadata', async () => {
+    const res = await testClient.get('/.well-known/oauth-protected-resource');
+    expect(res.status).toBe(200);
+    expect(typeof res.body.resource).toBe('string');
+    expect(Array.isArray(res.body.authorization_servers)).toBe(true);
+    expect(res.body.authorization_servers.length).toBeGreaterThan(0);
+  });
+});
