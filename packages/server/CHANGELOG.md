@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.12.2](https://127.0.0.1/34481/git/ttoss/compare/v0.12.0...v0.12.2) (2026-06-21)
+
+### Bug Fixes
+
+* **oauth:** include publicId and role in OAuth tokens ([#223](https://127.0.0.1/34481/git/ttoss/issues/223)) ([1f18b2a](https://127.0.0.1/34481/git/ttoss/commits/1f18b2a8287afa0841128fc0eee5cb694d0481e1))
+
+### Features
+
+* **mcp:** enable stateful mode to return Mcp-Session-Id on initialize ([#220](https://127.0.0.1/34481/git/ttoss/issues/220)) ([ae48fb9](https://127.0.0.1/34481/git/ttoss/commits/ae48fb956ccf4d56227d609a4b584f3fb6d16a32))
+
 ## [0.12.1](https://127.0.0.1/34481/git/ttoss/compare/v0.12.0...v0.12.1) (2026-06-21)
 
 ### Features
