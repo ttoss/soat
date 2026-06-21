@@ -7,6 +7,9 @@ export class OauthConsentGrant extends Model {
   declare codeChallenge: string;
 
   @Column({ type: DataType.TEXT, allowNull: false })
+  declare clientId: string;
+
+  @Column({ type: DataType.TEXT, allowNull: false })
   declare subject: string;
 
   @Column({ type: DataType.TEXT, allowNull: false })

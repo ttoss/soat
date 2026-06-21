@@ -7,5 +7,5 @@ export class OauthClient extends Model {
   declare clientId: string;
 
   @Column({ type: DataType.JSONB, allowNull: false })
-  declare clientData: Record<string, unknown>;
+  declare clientData: object;
 }

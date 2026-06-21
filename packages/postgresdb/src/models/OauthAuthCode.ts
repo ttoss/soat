@@ -7,7 +7,7 @@ export class OauthAuthCode extends Model {
   declare code: string;
 
   @Column({ type: DataType.JSONB, allowNull: false })
-  declare codeData: Record<string, unknown>;
+  declare codeData: object;
 
   @Column({ type: DataType.DATE, allowNull: false })
   declare expiresAt: Date;

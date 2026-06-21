@@ -36,11 +36,13 @@ export const PROJECT_SCOPE_PREFIX = 'prj:';
 /** Stores a consent grant keyed by PKCE code_challenge (single-use, 10-min TTL). */
 export const saveConsentGrant = async (args: {
   codeChallenge: string;
+  clientId: string;
   subject: string;
   scopes: string[];
 }): Promise<void> => {
   await db.OauthConsentGrant.upsert({
     codeChallenge: args.codeChallenge,
+    clientId: args.clientId,
     subject: args.subject,
     scopes: args.scopes.join(' '),
     expiresAt: new Date(Date.now() + CONSENT_SESSION_TTL_MS),
@@ -56,7 +58,7 @@ const clientStore: ClientStore = {
   register: async (client: OAuthClient): Promise<void> => {
     await db.OauthClient.upsert({
       clientId: client.client_id,
-      clientData: client as Record<string, unknown>,
+      clientData: client,
     });
   },
 };
@@ -66,7 +68,7 @@ const authCodeStore: AuthCodeStore = {
   save: async (code: StoredAuthorizationCode): Promise<void> => {
     await db.OauthAuthCode.create({
       code: code.code,
-      codeData: code as unknown as Record<string, unknown>,
+      codeData: code,
       expiresAt: new Date(code.expiresAt),
     });
   },
@@ -74,9 +76,7 @@ const authCodeStore: AuthCodeStore = {
     const row = await db.OauthAuthCode.findOne({
       where: { code, expiresAt: { [Op.gt]: new Date() } },
     });
-    return row
-      ? (row.codeData as unknown as StoredAuthorizationCode)
-      : undefined;
+    return row ? (row.codeData as StoredAuthorizationCode) : undefined;
   },
   delete: async (code: string): Promise<void> => {
     await db.OauthAuthCode.destroy({ where: { code } });
@@ -115,18 +115,24 @@ export const oauthAuthorizationServer = oauthServer({
     };
   },
   onAuthorize: async ({ request }) => {
-    const grant = await db.OauthConsentGrant.findOne({
-      where: {
-        codeChallenge: request.codeChallenge,
-        expiresAt: { [Op.gt]: new Date() },
-      },
+    // Atomically consume the consent grant: lock the row, verify it belongs to
+    // this client, then destroy it in the same transaction to prevent double-use.
+    const grant = await db.sequelize.transaction(async (t) => {
+      const row = await db.OauthConsentGrant.findOne({
+        where: {
+          codeChallenge: request.codeChallenge,
+          expiresAt: { [Op.gt]: new Date() },
+        },
+        lock: true,
+        transaction: t,
+      });
+      if (!row || row.clientId !== request.clientId) return null;
+      await row.destroy({ transaction: t });
+      return row;
     });
 
     if (grant) {
       log('onAuthorize: approved subject=%s', grant.subject);
-      await db.OauthConsentGrant.destroy({
-        where: { codeChallenge: request.codeChallenge },
-      });
       return {
         approved: true as const,
         subject: grant.subject,

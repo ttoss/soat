@@ -103,6 +103,41 @@ describe('OAuth authorization server (SPA consent)', () => {
     });
   });
 
+  // ── consent grant is single-use ──────────────────────────────────────────
+  describe('GET /authorize after grant consumed', () => {
+    test('second /authorize call redirects back to consent screen', async () => {
+      const reg = await testClient.post('/register').send({
+        redirect_uris: [REDIRECT_URI],
+        token_endpoint_auth_method: 'none',
+      });
+      const clientId = reg.body.client_id;
+      const { challenge } = pkce();
+      const query = authorizeQuery(clientId, challenge);
+
+      await authenticatedTestClient(adminToken)
+        .post('/api/v1/oauth/consent')
+        .send({
+          project_id: projectId,
+          selection: { kind: 'all' },
+          authorize_query: query,
+        });
+
+      // First /authorize consumes the grant
+      const first = await testClient.get('/authorize').query(
+        Object.fromEntries(new URLSearchParams(query))
+      );
+      expect(first.status).toBe(302);
+      expect(first.headers.location).toContain(REDIRECT_URI);
+
+      // Second /authorize — grant is gone, redirect to consent screen
+      const second = await testClient.get('/authorize').query(
+        Object.fromEntries(new URLSearchParams(query))
+      );
+      expect(second.status).toBe(302);
+      expect(second.headers.location).toContain('/app/oauth/consent');
+    });
+  });
+
   // ── full register → consent → authorize → token flow ───────────────────────
   describe('authorization code flow with PKCE', () => {
     test('issues an access token carrying the consented scope and project', async () => {

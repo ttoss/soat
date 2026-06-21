@@ -147,10 +147,17 @@ oauthRouter.post('/oauth/consent', async (ctx: Context) => {
   if (typeof body.authorizeQuery === 'string' && body.authorizeQuery.length) {
     const params = new URLSearchParams(body.authorizeQuery);
     const codeChallenge = params.get('code_challenge');
+    const clientId = params.get('client_id');
     if (!codeChallenge) {
       throw new DomainError(
         'VALIDATION_FAILED',
         'authorize_query must include code_challenge.'
+      );
+    }
+    if (!clientId) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        'authorize_query must include client_id.'
       );
     }
 
@@ -161,6 +168,7 @@ oauthRouter.post('/oauth/consent', async (ctx: Context) => {
     ];
     await saveConsentGrant({
       codeChallenge,
+      clientId,
       subject: ctx.authUser.publicId,
       scopes,
     });
