@@ -902,6 +902,83 @@ describe('MCP tools - happy path', () => {
 
     expect(res.status).toBe(200);
   });
+
+  // ── Docs ─────────────────────────────────────────────────────────────────
+
+  describe('Docs tools', () => {
+    const MOCK_LLMS_TXT =
+      '# SOAT Documentation\n\n- [Agents](https://soat.ttoss.dev/docs/modules/agents)\n';
+    const MOCK_PAGE = '# Agents\n\nAgents are the core reasoning units.\n';
+
+    let fetchSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      fetchSpy = jest
+        .spyOn(global, 'fetch')
+        .mockImplementation(async (url: RequestInfo | URL) => {
+          const urlStr = url.toString();
+          if (urlStr.endsWith('/llms.txt')) {
+            return new Response(MOCK_LLMS_TXT, { status: 200 });
+          }
+          if (urlStr.includes('soat.ttoss.dev')) {
+            return new Response(MOCK_PAGE, { status: 200 });
+          }
+          return new Response('Not Found', { status: 404 });
+        });
+    });
+
+    afterEach(() => {
+      fetchSpy.mockRestore();
+    });
+
+    test('get-docs returns the documentation index', async () => {
+      const res = await mcpCall('get-docs');
+      expect(res.status).toBe(200);
+      const text = res.body.result?.content?.[0]?.text;
+      expect(typeof text).toBe('string');
+      expect(text).toContain('SOAT Documentation');
+    });
+
+    test('get-doc-page returns page content for a valid docs URL', async () => {
+      const res = await mcpCall('get-doc-page', {
+        url: 'https://soat.ttoss.dev/docs/modules/agents',
+      });
+      expect(res.status).toBe(200);
+      const text = res.body.result?.content?.[0]?.text;
+      expect(typeof text).toBe('string');
+      expect(text).toContain('Agents');
+    });
+
+    test('get-docs returns an error when the fetch fails', async () => {
+      fetchSpy.mockImplementation(async () => new Response('Gone', { status: 503 }));
+      const res = await mcpCall('get-docs');
+      expect(res.status).toBe(200);
+      expect(res.body.result?.isError).toBe(true);
+    });
+
+    test('get-doc-page returns an error for an invalid URL', async () => {
+      const res = await mcpCall('get-doc-page', { url: 'not-a-url' });
+      expect(res.status).toBe(200);
+      expect(res.body.result?.isError).toBe(true);
+    });
+
+    test('get-doc-page returns an error for a URL from a different domain', async () => {
+      const res = await mcpCall('get-doc-page', {
+        url: 'https://evil.example.com/steal',
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.result?.isError).toBe(true);
+    });
+
+    test('get-doc-page returns an error when the page fetch fails', async () => {
+      fetchSpy.mockImplementation(async () => new Response('Not Found', { status: 404 }));
+      const res = await mcpCall('get-doc-page', {
+        url: 'https://soat.ttoss.dev/docs/modules/missing',
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.result?.isError).toBe(true);
+    });
+  });
 });
 
 describe('MCP OAuth discovery (RFC 9728)', () => {
@@ -1008,5 +1085,4 @@ describe('MCP OAuth discovery (RFC 9728)', () => {
       });
     expect(res.status).toBe(401);
   });
-
 });
