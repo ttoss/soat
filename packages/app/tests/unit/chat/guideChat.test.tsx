@@ -105,7 +105,9 @@ describe('GuideChat', () => {
       await screen.findByText('Here are your agents.')
     ).toBeInTheDocument();
     // The view was actually mounted via real navigation.
-    expect(screen.getByTestId('nav-probe')).toHaveTextContent('listAgents');
+    await waitFor(() =>
+      expect(screen.getByTestId('nav-probe')).toHaveTextContent('listAgents')
+    );
     // The transcript offers a re-mount affordance for the shown view.
     expect(
       screen.getByRole('button', { name: /Showing: Agents \(list\)/ })
