@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.13.0](https://github.com/ttoss/soat/compare/v0.12.0...v0.13.0) (2026-06-21)
+
+### Features
+
+* **mcp:** enable stateful mode to return Mcp-Session-Id on initialize ([#220](https://github.com/ttoss/soat/issues/220)) ([ae48fb9](https://github.com/ttoss/soat/commit/ae48fb956ccf4d56227d609a4b584f3fb6d16a32))
+
 # [0.12.0](https://github.com/ttoss/soat/compare/v0.11.0...v0.12.0) (2026-06-21)
 
 ### Features
