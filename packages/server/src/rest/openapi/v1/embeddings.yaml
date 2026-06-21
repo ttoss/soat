@@ -1,0 +1,114 @@
+openapi: 3.0.3
+info:
+  title: SOAT Embeddings API
+  version: 1.0.0
+  description: API for generating text embeddings using the server's configured embedding model
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Embeddings
+    description: Generate text embeddings
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/embeddings:
+    post:
+      tags:
+        - Embeddings
+      summary: Create embeddings
+      description: |
+        Generates embedding vectors for one or more text inputs using the server's configured embedding model.
+        Provide `input` for a single text or `inputs` for a batch. At least one is required.
+        Returns `embedding` when `input` is used, and `embeddings` when `inputs` is used.
+      operationId: createEmbeddings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                input:
+                  type: string
+                  description: Single text to embed.
+                  example: 'The quick brown fox jumps over the lazy dog.'
+                inputs:
+                  type: array
+                  description: Batch of texts to embed.
+                  items:
+                    type: string
+                  example:
+                    - 'The quick brown fox.'
+                    - 'Pack my box with five dozen liquor jugs.'
+      responses:
+        '200':
+          description: Embeddings generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingsResponse'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Embedding service not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    EmbeddingsResponse:
+      type: object
+      description: Response containing generated embeddings. Fields present depend on whether `input` or `inputs` was provided.
+      properties:
+        embedding:
+          type: array
+          description: Embedding vector for the single `input` text.
+          items:
+            type: number
+          example: [0.123, -0.456, 0.789]
+        embeddings:
+          type: array
+          description: Embedding vectors for each item in the `inputs` batch.
+          items:
+            type: array
+            items:
+              type: number
+          example:
+            - [0.123, -0.456, 0.789]
+            - [0.321, -0.654, 0.987]
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          oneOf:
+            - type: string
+            - type: object
+              properties:
+                code:
+                  type: string
+                message:
+                  type: string

@@ -1,0 +1,11 @@
+{
+  "module": "embeddings",
+  "operations": [
+    {
+      "operationId": "createEmbeddings",
+      "action": "embeddings:CreateEmbeddings",
+      "description": "Generate text embeddings using the server's embedding model"
+    }
+  ],
+  "srnPatterns": []
+}
