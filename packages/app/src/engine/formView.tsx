@@ -7,11 +7,14 @@ import { Button } from '@/components/ui/button';
 import { FieldEditor } from './fieldEditor';
 import {
   buildRequestBody,
+  extractRevealedSecrets,
   getOpRequestSchema,
   initFormData,
+  type RevealedSecret,
 } from './formHelpers';
 import { MethodBadge } from './methodBadge';
 import { useNavigation } from './navigationContext';
+import { SecretReveal } from './secretReveal';
 import { buildUrl } from './specUtils';
 import type {
   JsonObject,
@@ -32,6 +35,10 @@ const getRequestSchema = (
   );
 };
 
+type SubmitResult =
+  | { ok: true; data: JsonObject }
+  | { ok: false; error: string };
+
 const submitForm = async (args: {
   op: ModuleOp;
   formData: Record<string, string>;
@@ -39,10 +46,10 @@ const submitForm = async (args: {
   pathParams: Record<string, string>;
   mode: 'create' | 'edit';
   token: string;
-}): Promise<string | null> => {
+}): Promise<SubmitResult> => {
   const { op, formData, schema, pathParams, mode, token } = args;
   const bodyResult = buildRequestBody(formData, schema);
-  if (!bodyResult.ok) return bodyResult.error;
+  if (!bodyResult.ok) return { ok: false, error: bodyResult.error };
   const url = buildUrl(op.pathTemplate, pathParams);
   const method = mode === 'create' ? 'POST' : 'PUT';
   const result = await apiFetch<JsonObject>({
@@ -51,8 +58,8 @@ const submitForm = async (args: {
     body: bodyResult.body,
     token,
   });
-  if (!result.ok) return result.error.message;
-  return null;
+  if (!result.ok) return { ok: false, error: result.error.message };
+  return { ok: true, data: result.data };
 };
 
 type FormActionsProps = {
@@ -111,7 +118,7 @@ const useFormSubmit = (args: {
   mode: 'create' | 'edit';
   token: string;
   formData: Record<string, string>;
-  onSuccess: () => void;
+  onSuccess: (data: JsonObject) => void;
 }) => {
   const { op, schema, pathParams, mode, token, formData, onSuccess } = args;
   const [submitting, setSubmitting] = React.useState(false);
@@ -122,7 +129,7 @@ const useFormSubmit = (args: {
     if (!op || !token) return;
     setSubmitting(true);
     setError(null);
-    const err = await submitForm({
+    const result = await submitForm({
       op,
       formData,
       schema,
@@ -131,11 +138,11 @@ const useFormSubmit = (args: {
       token,
     });
     setSubmitting(false);
-    if (err) {
-      setError(err);
+    if (!result.ok) {
+      setError(result.error);
       return;
     }
-    onSuccess();
+    onSuccess(result.data);
   };
 
   return { submitting, error, handleSubmit };
@@ -243,6 +250,7 @@ export const FormView = ({
   const [formData, setFormData] = React.useState<Record<string, string>>(() => {
     return initFormData(schema, resolvedPrefill);
   });
+  const [secrets, setSecrets] = React.useState<RevealedSecret[]>([]);
 
   const token = state.status === 'authenticated' ? state.token : '';
   const { op, title, httpMethod } = getFormModeValues(mode, module);
@@ -253,10 +261,28 @@ export const FormView = ({
     mode,
     token,
     formData,
-    onSuccess: () => {
-      navigate(null);
+    onSuccess: (data) => {
+      // Only a create can surface a write-once secret; on edit just go back.
+      const revealed = mode === 'create' ? extractRevealedSecrets(data) : [];
+      if (revealed.length > 0) {
+        setSecrets(revealed);
+      } else {
+        navigate(null);
+      }
     },
   });
+
+  if (secrets.length > 0) {
+    return (
+      <SecretReveal
+        title={`${module.label} created`}
+        secrets={secrets}
+        onDone={() => {
+          navigate(null);
+        }}
+      />
+    );
+  }
 
   if (!schema?.properties) {
     return (

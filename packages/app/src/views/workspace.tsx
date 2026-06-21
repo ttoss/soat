@@ -17,8 +17,6 @@ import { useNavigation } from '@/engine/navigationContext';
 import { useSpec } from '@/engine/specContext';
 import type { JsonObject, ModuleInfo } from '@/engine/types';
 
-import { ApiKeysScreen } from './apiKeysScreen';
-import { IamScreen } from './iamScreen';
 import type { Project } from './navComponents';
 import {
   buildGroups,
@@ -26,16 +24,6 @@ import {
   NavItem,
   ProjectPicker,
 } from './navComponents';
-import { ProjectsScreen } from './projectsScreen';
-
-const API_KEY_TAGS = new Set(['Api Keys', 'API Keys']);
-const IAM_TAGS = new Set([
-  'Users',
-  'Policies',
-  'Ai Providers',
-  'AiProviders',
-  'AI Providers',
-]);
 
 const ADMIN_TAGS = new Set([
   'Users',
@@ -252,58 +240,6 @@ const LeftNav = ({
 
 // ─── MainArea ─────────────────────────────────────────────────────────────────
 
-type ViewDescriptor = NonNullable<ReturnType<typeof useNavigation>['view']>;
-type SpecType = NonNullable<ReturnType<typeof useSpec>['spec']>;
-
-const renderView = (
-  view: ViewDescriptor,
-  modules: ModuleInfo[],
-  spec: SpecType
-): React.ReactElement => {
-  if (view.tag === 'Projects' && view.mode === 'list') {
-    const projectsModule = modules.find((m) => {
-      return m.tag === 'Projects';
-    });
-    if (projectsModule) {
-      return (
-        <ProjectsScreen
-          module={projectsModule}
-          spec={spec}
-          pathParams={view.pathParams}
-        />
-      );
-    }
-  }
-
-  if (API_KEY_TAGS.has(view.tag) && view.mode === 'list') {
-    const keysModule = modules.find((m) => {
-      return API_KEY_TAGS.has(m.tag);
-    });
-    if (keysModule) {
-      return (
-        <ApiKeysScreen
-          module={keysModule}
-          spec={spec}
-          pathParams={view.pathParams}
-        />
-      );
-    }
-  }
-
-  if (IAM_TAGS.has(view.tag) && view.mode === 'list') {
-    return (
-      <IamScreen
-        key={view.tag}
-        modules={modules}
-        spec={spec}
-        initialTag={view.tag}
-      />
-    );
-  }
-
-  return <EngineView descriptor={view} modules={modules} spec={spec} />;
-};
-
 const MainArea = () => {
   const { view, activeProjectId } = useNavigation();
   const { modules, spec, loading, error } = useSpec();
@@ -325,7 +261,7 @@ const MainArea = () => {
   }
 
   if (view && spec) {
-    return renderView(view, modules, spec);
+    return <EngineView descriptor={view} modules={modules} spec={spec} />;
   }
 
   if (activeProjectId) {
