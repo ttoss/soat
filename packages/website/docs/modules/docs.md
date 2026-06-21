@@ -3,84 +3,63 @@ import TabItem from '@theme/TabItem';
 
 # Docs
 
-The Docs module gives authenticated users and agents direct access to SOAT platform documentation.
+MCP-only tools that give agents direct access to SOAT platform documentation.
 
 ## Overview
 
-The Docs module exposes the SOAT Markdown documentation through the REST API and MCP. Agents can call `list-docs` to discover available pages and `get-doc-content` to fetch the full Markdown content of any page — without needing external internet access or a web fetch tool.
+The Docs module exposes two MCP tools — `get-docs` and `get-doc-page` — that allow agents to discover and read SOAT documentation without needing a separate web fetch tool. The tools fetch content directly from the published documentation site (`soat.ttoss.dev/llms.txt` and individual pages).
 
-Documentation pages are read from the directory configured by the `DOCS_PATH` environment variable (default: `packages/website/docs` from the workspace root).
+These tools are registered directly in the MCP server and are not backed by REST API endpoints. They are available to any authenticated MCP client.
 
-See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
+The documentation base URL defaults to `https://soat.ttoss.dev` and can be overridden via the `SOAT_DOCS_BASE_URL` environment variable for self-hosted deployments.
 
 ## Configuration
 
 | Environment Variable | Required | Description |
 | --- | --- | --- |
-| `DOCS_PATH` | No | Absolute path to the directory containing Markdown documentation files. Defaults to `packages/website/docs` relative to the workspace root. |
+| `SOAT_DOCS_BASE_URL` | No | Base URL of the SOAT documentation site. Defaults to `https://soat.ttoss.dev`. |
 
-## Data Model
+## MCP Tools
 
-### DocPage
+### `get-docs`
 
-Returned by `GET /api/v1/docs` (list endpoint).
+Returns the SOAT documentation index in `llms.txt` format — a Markdown document listing all available documentation pages with their URLs. Use this first to discover what topics are available.
 
-| Field | Type | Description |
-| --- | --- | --- |
-| `path` | `string` | Relative path of the page without the `.md` extension (e.g. `modules/agents`) |
-| `title` | `string` | Title extracted from the first `#` heading in the file |
-| `description` | `string` | Short description extracted from the first paragraph after the title (max 300 chars) |
+### `get-doc-page`
 
-### DocContent
+Fetches the full content of a specific documentation page by URL. The URL must be from the SOAT documentation site (as returned by `get-docs`).
 
-Returned by `GET /api/v1/docs/content`.
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `path` | `string` | Relative path of the page |
-| `title` | `string` | Title extracted from the first `#` heading |
-| `content` | `string` | Full raw Markdown content of the page |
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `url` | `string` | Yes | Full URL of the documentation page |
 
 ## Examples
 
 <Tabs groupId="client">
-<TabItem value="cli" label="CLI">
+<TabItem value="mcp" label="MCP (JSON-RPC)">
 
-```bash
-# List all documentation pages
-soat list-docs
+```json
+// Get the documentation index
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "get-docs",
+    "arguments": {}
+  }
+}
 
-# Get the content of the Agents module doc
-soat get-doc-content --path modules/agents
-```
-
-</TabItem>
-<TabItem value="sdk" label="SDK">
-
-```typescript
-import { createClient } from '@soat/sdk';
-
-const client = createClient({ baseUrl: 'http://localhost:5047' });
-
-// List all docs
-const pages = await client.GET('/api/v1/docs');
-
-// Get content of a specific page
-const doc = await client.GET('/api/v1/docs/content', {
-  params: { query: { path: 'modules/agents' } },
-});
-```
-
-</TabItem>
-<TabItem value="curl" label="curl">
-
-```bash
-# List all docs
-curl -H "Authorization: Bearer $TOKEN" http://localhost:5047/api/v1/docs
-
-# Get content of a specific page
-curl -H "Authorization: Bearer $TOKEN" \
-  "http://localhost:5047/api/v1/docs/content?path=modules/agents"
+// Get a specific page
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "get-doc-page",
+    "arguments": {
+      "url": "https://soat.ttoss.dev/docs/modules/agents"
+    }
+  }
+}
 ```
 
 </TabItem>

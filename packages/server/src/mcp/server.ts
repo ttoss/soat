@@ -7,6 +7,7 @@ import {
 } from '@ttoss/http-server-mcp';
 
 import { version } from '../../package.json' with { type: 'json' };
+import { getDocPage, getDocsIndex } from '../lib/docs';
 import { soatTools } from '../lib/soatTools';
 import { ISSUER, verifyOauthAccessToken } from '../oauth/server';
 import { toMcpText } from './toMcpText';
@@ -43,6 +44,40 @@ for (const tool of soatTools) {
     },
   });
 }
+
+// ── Docs tools (MCP-only, not backed by REST) ─────────────────────────────
+
+registerToolFromSchema(mcpServer, {
+  name: 'get-docs',
+  description:
+    'Returns the SOAT documentation index in llms.txt format. The response lists all available documentation pages with their URLs. Use get-doc-page with a URL from this index to read a specific page.',
+  inputSchema: { type: 'object' as const, properties: {} },
+  handler: async () => {
+    const content = await getDocsIndex();
+    return { content: [{ type: 'text' as const, text: content }] };
+  },
+});
+
+registerToolFromSchema(mcpServer, {
+  name: 'get-doc-page',
+  description:
+    'Fetches the full content of a SOAT documentation page by URL. Use get-docs first to obtain the list of valid page URLs.',
+  inputSchema: {
+    type: 'object' as const,
+    properties: {
+      url: {
+        type: 'string',
+        description:
+          'Full URL of the documentation page (must be from the SOAT documentation site)',
+      },
+    },
+    required: ['url'],
+  },
+  handler: async (args: Record<string, unknown>) => {
+    const content = await getDocPage({ url: args.url as string });
+    return { content: [{ type: 'text' as const, text: content }] };
+  },
+});
 
 const mcpRouter = createMcpRouter(mcpServer, {
   aliases: ['/'],
