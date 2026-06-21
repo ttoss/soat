@@ -130,8 +130,20 @@
   min-height: 132px;
   padding: 1rem;
   border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 8px;
+  border-radius: 1rem;
   background: var(--ifm-card-background-color);
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 300ms ease, border-color 300ms ease;
+}
+
+.platformPillar:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(26, 31, 44, 0.1);
+  border-color: var(--ifm-color-primary);
+}
+
+html[data-theme='dark'] .platformPillar:hover {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 229, 255, 0.15);
+  border-color: rgba(0, 229, 255, 0.4);
 }
 
 .platformPillar h3 {
@@ -248,12 +260,19 @@ html[data-theme='dark'] .architectureVisual {
 
 .formationStep {
   min-height: 220px;
-  padding: 1.25rem;
+  padding: 1.4rem;
   border: 1px solid rgba(0, 229, 255, 0.12);
-  border-radius: 8px;
+  border-radius: 0.75rem;
   background: rgba(22, 27, 34, 0.68);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 300ms ease, border-color 300ms ease;
+}
+
+.formationStep:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 24px rgba(0, 229, 255, 0.12);
+  border-color: rgba(0, 229, 255, 0.28);
 }
 
 .formationStepNumber {
@@ -314,11 +333,25 @@ html[data-theme='dark'] .architectureVisual {
 }
 
 .checkList li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.35em;
+  width: 14px;
+  height: 14px;
+  background-color: var(--ifm-color-primary);
+  border-radius: 50%;
+  opacity: 0.18;
+}
+
+.checkList li::after {
   content: '✓';
   position: absolute;
   left: 0;
   color: var(--ifm-color-primary);
-  font-weight: bold;
+  font-weight: 700;
+  font-size: 0.85em;
+  line-height: 1.6;
 }
 
 @property --border-angle {

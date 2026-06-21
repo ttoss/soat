@@ -72,15 +72,17 @@
      =================================================================== */
 
   /* Navbar */
-  --ifm-navbar-background-color: rgba(255, 255, 255, 0.9);
+  --ifm-navbar-background-color: rgba(255, 255, 255, 0.82);
   --ifm-navbar-height: 4rem;
   --ifm-navbar-shadow: 0 1px 0 var(--ifm-border-color);
   --ifm-navbar-item-padding-horizontal: 1rem;
 
-  /* Footer */
-  --ifm-footer-background-color: var(--ifm-background-color);
-  --ifm-footer-link-color: var(--ifm-font-color-base);
-  --ifm-footer-title-color: var(--ifm-font-color-base);
+  /* Footer — always dark, cosmic */
+  --ifm-footer-background-color: #080c14;
+  --ifm-footer-color: rgba(240, 248, 255, 0.7);
+  --ifm-footer-link-color: rgba(240, 248, 255, 0.7);
+  --ifm-footer-link-hover-color: #f0f8ff;
+  --ifm-footer-title-color: #f0f8ff;
 
   /* Buttons */
   --ifm-button-font-weight: 600;
@@ -155,6 +157,10 @@ html[data-theme='dark'] {
   --ifm-navbar-shadow: 0 1px 0 var(--ifm-border-color);
 
   --ifm-footer-background-color: #080c14;
+  --ifm-footer-color: rgba(240, 248, 255, 0.7);
+  --ifm-footer-link-color: rgba(240, 248, 255, 0.7);
+  --ifm-footer-link-hover-color: #f0f8ff;
+  --ifm-footer-title-color: #f0f8ff;
 
   --ifm-menu-color-background-active: rgba(0, 229, 255, 0.1);
 
@@ -194,10 +200,18 @@ body {
   overflow-x: clip;
 }
 
+body {
+  background-image: radial-gradient(
+    circle at 75% 35%,
+    rgba(0, 229, 255, 0.06) 0%,
+    transparent 36%
+  );
+}
+
 html[data-theme='dark'] body {
   background-image: radial-gradient(
     circle at 50% 0%,
-    rgba(142, 68, 173, 0.15) 0%,
+    rgba(142, 68, 173, 0.18) 0%,
     rgba(8, 12, 20, 0) 60%
   );
 }
@@ -321,8 +335,8 @@ html[data-theme='dark'] .hero.hero--primary .hero__title {
 
 /* Glassmorphism navbar */
 .navbar {
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 /* Dark Mode Glow Effects */
@@ -369,11 +383,13 @@ html[data-theme='dark']
 .button--primary {
   background: linear-gradient(
     135deg,
-    var(--ifm-color-primary) 0%,
-    var(--soat-violet) 100%
+    var(--soat-violet) 0%,
+    var(--ifm-color-primary) 100%
   );
   border: none;
+  color: #ffffff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms ease;
 }
 
 html[data-theme='dark'] .button--primary {
@@ -382,10 +398,40 @@ html[data-theme='dark'] .button--primary {
 
 .button--primary:hover {
   transform: translateY(-2px);
+  color: #ffffff;
 }
 
 html[data-theme='dark'] .button--primary:hover {
   box-shadow: 0 0 30px rgba(0, 229, 255, 0.5);
+}
+
+/* ===================================================================
+   FOOTER — always dark (cosmic black), both themes
+   =================================================================== */
+.footer {
+  background: #080c14 !important;
+  border-top: 1px solid rgba(0, 229, 255, 0.1);
+}
+
+.footer__title {
+  color: #f0f8ff !important;
+}
+
+.footer__link-item {
+  color: rgba(240, 248, 255, 0.7) !important;
+  transition: color 150ms ease;
+}
+
+.footer__link-item:hover {
+  color: #f0f8ff !important;
+  text-decoration: none;
+}
+
+.footer__copyright {
+  color: rgba(240, 248, 255, 0.4) !important;
+  border-top: 1px solid rgba(0, 229, 255, 0.08);
+  margin-top: 2rem;
+  padding-top: 1.5rem;
 }
 
 /* ===================================================================

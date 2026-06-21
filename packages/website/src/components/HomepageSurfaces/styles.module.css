@@ -18,26 +18,36 @@
   text-align: center;
   padding: 1.5rem;
   background: var(--ifm-background-color);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 8px;
+  border-radius: 1rem;
+  box-shadow: 0 2px 8px rgba(26, 31, 44, 0.06);
   transition:
-    border-color 0.25s ease,
-    box-shadow 0.25s ease;
+    transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 300ms ease,
+    box-shadow 300ms ease;
 }
 
 html[data-theme='dark'] .surfaceCard {
-  /* Cosmic glass on the dark surface band */
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(0, 229, 255, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
 .surfaceCard:hover {
-  border-color: rgba(0, 229, 255, 0.35);
+  transform: translateY(-4px);
+  border-color: var(--ifm-color-primary);
   box-shadow:
-    0 0 24px rgba(0, 229, 255, 0.12),
-    0 0 48px rgba(142, 68, 173, 0.08);
+    0 12px 32px rgba(26, 31, 44, 0.1),
+    0 0 0 1px rgba(26, 115, 232, 0.12);
+}
+
+html[data-theme='dark'] .surfaceCard:hover {
+  border-color: rgba(0, 229, 255, 0.4);
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.5),
+    0 0 24px rgba(0, 229, 255, 0.15);
 }
 
 .surfaceCard h3 {
@@ -59,11 +69,9 @@ html[data-theme='dark'] .surfaceCard {
   display: block;
   text-decoration: none;
   color: inherit;
-  transition: transform 0.15s ease;
 }
 
 .surfaceLink:hover {
   text-decoration: none;
   color: inherit;
-  transform: translateY(-2px);
 }
