@@ -59,6 +59,7 @@ const mcpRouter = createMcpRouter(mcpServer, {
     },
     resourceServerUrl: ISSUER,
     authorizationServerUrl: ISSUER,
+    resourceMetadataUrl: `${ISSUER}/.well-known/oauth-protected-resource`,
   },
 });
 
