@@ -188,6 +188,10 @@ describe('OAuth authorization server (SPA consent)', () => {
       // 5. The issued token carries the subject, granted scope, and project.
       const payload = verifyOauthAccessToken(token.body.access_token);
       expect(payload).not.toBeNull();
+      expect(payload?.sub).toBeTruthy();
+      expect(payload?.publicId).toBeTruthy();
+      expect(payload?.publicId).toBe(payload?.sub);
+      expect(payload?.role).toBe('admin');
       expect(payload?.prj).toBe(projectId);
       expect(String(payload?.scope)).toContain('agents:CreateAgent');
     });
