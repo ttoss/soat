@@ -9,14 +9,18 @@
  * itself lives in the app (SPA) at /app/oauth/consent. /authorize redirects
  * there; the app records the decision via POST /api/v1/oauth/consent.
  */
-import {
-  createMemoryAuthCodeStore,
-  createMemoryClientStore,
-  signJwt,
-  verifyJwt,
+import type {
+  AuthCodeStore,
+  ClientStore,
+  OAuthClient,
+  StoredAuthorizationCode,
 } from '@ttoss/auth-core';
+import { signJwt, verifyJwt } from '@ttoss/auth-core';
 import { oauthServer } from '@ttoss/http-server-auth';
+import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
+
+import { db } from '../db';
 
 const log = createDebug('soat:oauth');
 
@@ -26,74 +30,57 @@ const ISSUER = process.env.SOAT_PUBLIC_URL ?? `http://localhost:${PORT}`;
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60; // 1h
 const CONSENT_SESSION_TTL_MS = 10 * 60 * 1000; // 10min
 
-export const CONSENT_COOKIE = 'soat_consent';
 /** Synthetic scope prefix used to carry the granted project through the flow. */
 export const PROJECT_SCOPE_PREFIX = 'prj:';
 
-const clientStore = createMemoryClientStore();
-const authCodeStore = createMemoryAuthCodeStore();
-
-type ConsentGrant = {
-  subject: string;
-  scopes: string[];
-  expiresAt: number;
-};
-
-const consentSessions = new Map<string, ConsentGrant>();
-
-/** Stores an approved consent grant and returns its opaque session id. */
-export const putConsentSession = (args: {
-  id: string;
-  subject: string;
-  scopes: string[];
-}): void => {
-  consentSessions.set(args.id, {
-    subject: args.subject,
-    scopes: args.scopes,
-    expiresAt: Date.now() + CONSENT_SESSION_TTL_MS,
-  });
-};
-
-/** Reads an unexpired consent grant, deleting it on read (single use). */
-export const takeConsentSession = (id: string): ConsentGrant | undefined => {
-  const grant = consentSessions.get(id);
-  if (!grant) return undefined;
-  consentSessions.delete(id);
-  if (grant.expiresAt < Date.now()) return undefined;
-  return grant;
-};
-
-const buildConsentRedirect = (request: {
-  clientId: string;
-  redirectUri: string;
-  scopes: string[];
-  state?: string;
+/** Stores a consent grant keyed by PKCE code_challenge (single-use, 10-min TTL). */
+export const saveConsentGrant = async (args: {
   codeChallenge: string;
-  codeChallengeMethod: string;
-}): string => {
-  const params = new URLSearchParams({
-    client_id: request.clientId,
-    redirect_uri: request.redirectUri,
-    response_type: 'code',
-    code_challenge: request.codeChallenge,
-    code_challenge_method: request.codeChallengeMethod,
-    scope: request.scopes.join(' '),
+  clientId: string;
+  subject: string;
+  scopes: string[];
+}): Promise<void> => {
+  await db.OauthConsentGrant.upsert({
+    codeChallenge: args.codeChallenge,
+    clientId: args.clientId,
+    subject: args.subject,
+    scopes: args.scopes.join(' '),
+    expiresAt: new Date(Date.now() + CONSENT_SESSION_TTL_MS),
   });
-  if (request.state) params.set('state', request.state);
-  // The consent UI lives in the app (SPA), served under /app.
-  return `/app/oauth/consent?${params.toString()}`;
 };
 
-const parseCookie = (
-  header: string | undefined,
-  name: string
-): string | undefined => {
-  if (!header) return undefined;
-  for (const part of header.split(';')) {
-    const [k, ...v] = part.trim().split('=');
-    if (k === name) return decodeURIComponent(v.join('='));
-  }
-  return undefined;
+// Postgres-backed client store (replaces createMemoryClientStore)
+const clientStore: ClientStore = {
+  get: async (clientId: string): Promise<OAuthClient | undefined> => {
+    const row = await db.OauthClient.findOne({ where: { clientId } });
+    return row ? (row.clientData as OAuthClient) : undefined;
+  },
+  register: async (client: OAuthClient): Promise<void> => {
+    await db.OauthClient.upsert({
+      clientId: client.client_id,
+      clientData: client,
+    });
+  },
+};
+
+// Postgres-backed auth code store (replaces createMemoryAuthCodeStore)
+const authCodeStore: AuthCodeStore = {
+  save: async (code: StoredAuthorizationCode): Promise<void> => {
+    await db.OauthAuthCode.create({
+      code: code.code,
+      codeData: code,
+      expiresAt: new Date(code.expiresAt),
+    });
+  },
+  get: async (code: string): Promise<StoredAuthorizationCode | undefined> => {
+    const row = await db.OauthAuthCode.findOne({
+      where: { code, expiresAt: { [Op.gt]: new Date() } },
+    });
+    return row ? (row.codeData as StoredAuthorizationCode) : undefined;
+  },
+  delete: async (code: string): Promise<void> => {
+    await db.OauthAuthCode.destroy({ where: { code } });
+  },
 };
 
 /**
@@ -127,17 +114,46 @@ export const oauthAuthorizationServer = oauthServer({
       expiresIn: ACCESS_TOKEN_TTL_SECONDS,
     };
   },
-  onAuthorize: ({ request, headers }) => {
-    const consentId = parseCookie(headers.cookie, CONSENT_COOKIE);
-    const grant = consentId ? takeConsentSession(consentId) : undefined;
+  onAuthorize: async ({ request }) => {
+    // Atomically consume the consent grant: lock the row, verify it belongs to
+    // this client, then destroy it in the same transaction to prevent double-use.
+    const grant = await db.sequelize.transaction(async (t) => {
+      const row = await db.OauthConsentGrant.findOne({
+        where: {
+          codeChallenge: request.codeChallenge,
+          expiresAt: { [Op.gt]: new Date() },
+        },
+        lock: true,
+        transaction: t,
+      });
+      if (!row || row.clientId !== request.clientId) return null;
+      await row.destroy({ transaction: t });
+      return row;
+    });
 
     if (grant) {
       log('onAuthorize: approved subject=%s', grant.subject);
-      return { approved: true, subject: grant.subject, scopes: grant.scopes };
+      return {
+        approved: true as const,
+        subject: grant.subject,
+        scopes: grant.scopes.split(' ').filter(Boolean),
+      };
     }
 
     log('onAuthorize: no consent — redirecting to consent screen');
-    return { approved: false, redirect: buildConsentRedirect(request) };
+    const params = new URLSearchParams({
+      client_id: request.clientId,
+      redirect_uri: request.redirectUri,
+      response_type: 'code',
+      code_challenge: request.codeChallenge,
+      code_challenge_method: request.codeChallengeMethod,
+      scope: request.scopes.join(' '),
+    });
+    if (request.state) params.set('state', request.state);
+    return {
+      approved: false as const,
+      redirect: `/app/oauth/consent?${params.toString()}`,
+    };
   },
 });
 

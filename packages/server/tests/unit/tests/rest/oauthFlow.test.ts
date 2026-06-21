@@ -1,10 +1,6 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
-import {
-  putConsentSession,
-  takeConsentSession,
-  verifyOauthAccessToken,
-} from '../../../../src/oauth/server';
+import { verifyOauthAccessToken } from '../../../../src/oauth/server';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 const REDIRECT_URI = 'https://client.example.com/cb';
@@ -13,19 +9,6 @@ const pkce = () => {
   const verifier = randomBytes(32).toString('hex');
   const challenge = createHash('sha256').update(verifier).digest('base64url');
   return { verifier, challenge };
-};
-
-const getConsentCookie = (setCookie: string | string[] | undefined): string => {
-  const cookies = Array.isArray(setCookie)
-    ? setCookie
-    : setCookie
-      ? [setCookie]
-      : [];
-  const header = cookies.find((c) => {
-    return c.startsWith('soat_consent=');
-  });
-  if (!header) throw new Error('soat_consent cookie not set');
-  return header.split(';')[0];
 };
 
 const authorizeQuery = (clientId: string, challenge: string): string => {
@@ -56,30 +39,15 @@ describe('OAuth authorization server (SPA consent)', () => {
     projectId = project.body.id;
   });
 
-  // ── consent session helpers (src/oauth/server.ts) ──────────────────────────
-  describe('consent session store', () => {
-    test('a stored grant can be taken exactly once', () => {
-      const id = randomUUID();
-      putConsentSession({ id, subject: 'usr_1', scopes: ['*'] });
-      const first = takeConsentSession(id);
-      expect(first?.subject).toBe('usr_1');
-      expect(takeConsentSession(id)).toBeUndefined();
-    });
-
-    test('an unknown id yields undefined', () => {
-      expect(takeConsentSession('nope')).toBeUndefined();
-    });
-  });
-
   describe('verifyOauthAccessToken', () => {
     test('rejects a malformed token', () => {
       expect(verifyOauthAccessToken('not-a-jwt')).toBeNull();
     });
   });
 
-  // ── consent decision sets a cookie and returns the authorize URL ───────────
+  // ── consent decision stores grant by code_challenge and returns authorize URL
   describe('POST /api/v1/oauth/consent with authorize_query', () => {
-    test('sets the consent cookie and returns authorize_url', async () => {
+    test('stores the consent grant by code_challenge and returns authorize_url', async () => {
       const { challenge } = pkce();
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/oauth/consent')
@@ -90,13 +58,30 @@ describe('OAuth authorization server (SPA consent)', () => {
         });
       expect(res.status).toBe(200);
       expect(res.body.authorize_url).toContain('/authorize?');
-      expect(getConsentCookie(res.headers['set-cookie'])).toMatch(
-        /^soat_consent=/
-      );
+      // No cookie in the new PKCE-based flow
+      const cookies = res.headers['set-cookie'];
+      const consentCookie = Array.isArray(cookies)
+        ? cookies.find((c: string) => {
+            return c.startsWith('soat_consent=');
+          })
+        : undefined;
+      expect(consentCookie).toBeUndefined();
+    });
+
+    test('400 when authorize_query is missing code_challenge', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/oauth/consent')
+        .send({
+          project_id: projectId,
+          selection: { kind: 'all' },
+          authorize_query: 'client_id=abc&redirect_uri=https://example.com/cb',
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
   });
 
-  // ── /authorize redirects to the app consent screen when not yet consented ──
+  // ── /authorize redirects to the app consent screen when no grant stored ────
   describe('GET /authorize without consent', () => {
     test('redirects to the app consent screen', async () => {
       const reg = await testClient.post('/register').send({
@@ -118,6 +103,41 @@ describe('OAuth authorization server (SPA consent)', () => {
     });
   });
 
+  // ── consent grant is single-use ──────────────────────────────────────────
+  describe('GET /authorize after grant consumed', () => {
+    test('second /authorize call redirects back to consent screen', async () => {
+      const reg = await testClient.post('/register').send({
+        redirect_uris: [REDIRECT_URI],
+        token_endpoint_auth_method: 'none',
+      });
+      const clientId = reg.body.client_id;
+      const { challenge } = pkce();
+      const query = authorizeQuery(clientId, challenge);
+
+      await authenticatedTestClient(adminToken)
+        .post('/api/v1/oauth/consent')
+        .send({
+          project_id: projectId,
+          selection: { kind: 'all' },
+          authorize_query: query,
+        });
+
+      // First /authorize consumes the grant
+      const first = await testClient.get('/authorize').query(
+        Object.fromEntries(new URLSearchParams(query))
+      );
+      expect(first.status).toBe(302);
+      expect(first.headers.location).toContain(REDIRECT_URI);
+
+      // Second /authorize — grant is gone, redirect to consent screen
+      const second = await testClient.get('/authorize').query(
+        Object.fromEntries(new URLSearchParams(query))
+      );
+      expect(second.status).toBe(302);
+      expect(second.headers.location).toContain('/app/oauth/consent');
+    });
+  });
+
   // ── full register → consent → authorize → token flow ───────────────────────
   describe('authorization code flow with PKCE', () => {
     test('issues an access token carrying the consented scope and project', async () => {
@@ -134,7 +154,7 @@ describe('OAuth authorization server (SPA consent)', () => {
       const { verifier, challenge } = pkce();
       const query = authorizeQuery(clientId, challenge);
 
-      // 2. App records the consent decision (bearer auth) → cookie + authorize_url.
+      // 2. App records the consent decision (bearer auth) → authorize_url (no cookie).
       const decision = await authenticatedTestClient(adminToken)
         .post('/api/v1/oauth/consent')
         .send({
@@ -144,12 +164,10 @@ describe('OAuth authorization server (SPA consent)', () => {
         });
       expect(decision.status).toBe(200);
       expect(decision.body.authorize_url).toBe(`/authorize?${query}`);
-      const cookie = getConsentCookie(decision.headers['set-cookie']);
 
-      // 3. App navigates back to /authorize with the cookie → code.
-      const authorize = await testClient
-        .get(decision.body.authorize_url)
-        .set('Cookie', cookie);
+      // 3. App navigates back to /authorize — server finds the consent grant by
+      //    code_challenge and approves without a cookie.
+      const authorize = await testClient.get(decision.body.authorize_url);
       expect(authorize.status).toBe(302);
       const location = authorize.headers.location as string;
       expect(location.startsWith(REDIRECT_URI)).toBe(true);
