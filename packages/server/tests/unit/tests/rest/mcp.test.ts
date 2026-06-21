@@ -903,3 +903,43 @@ describe('MCP tools - happy path', () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe('MCP OAuth discovery (RFC 9728)', () => {
+  test('GET /.well-known/oauth-protected-resource returns protected resource metadata', async () => {
+    const res = await testClient.get('/.well-known/oauth-protected-resource');
+    expect(res.status).toBe(200);
+    expect(typeof res.body.resource).toBe('string');
+    expect(Array.isArray(res.body.authorization_servers)).toBe(true);
+    expect(res.body.authorization_servers.length).toBeGreaterThan(0);
+  });
+
+  test('tools/call without a token returns 401 with WWW-Authenticate header', async () => {
+    const res = await testClient
+      .post('/mcp')
+      .set('Content-Type', 'application/json')
+      .set('Accept', 'application/json, text/event-stream')
+      .send({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'list-agents', arguments: {} },
+      });
+    expect(res.status).toBe(401);
+    expect(res.headers['www-authenticate']).toBeDefined();
+  });
+
+  test('tools/call with an invalid token returns 401', async () => {
+    const res = await testClient
+      .post('/mcp')
+      .set('Content-Type', 'application/json')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('Authorization', 'Bearer invalid.token.here')
+      .send({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: { name: 'list-agents', arguments: {} },
+      });
+    expect(res.status).toBe(401);
+  });
+});

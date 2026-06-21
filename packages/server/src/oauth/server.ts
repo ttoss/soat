@@ -26,7 +26,7 @@ const log = createDebug('soat:oauth');
 
 const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-secret';
 const PORT = process.env.PORT ?? '5047';
-const ISSUER = process.env.SOAT_PUBLIC_URL ?? `http://localhost:${PORT}`;
+export const ISSUER = process.env.SOAT_PUBLIC_URL ?? `http://localhost:${PORT}`;
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60; // 1h
 const CONSENT_SESSION_TTL_MS = 10 * 60 * 1000; // 10min
 
