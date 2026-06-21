@@ -1,43 +1,40 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import { findDoc, listDocs } from 'src/lib/docs';
+import { getDocPage, getDocsIndex } from 'src/lib/docs';
 
 const docsRouter = new Router<Context>();
 
 /**
  * @openapi GET /api/v1/docs
  */
-docsRouter.get('/docs', (ctx: Context) => {
+docsRouter.get('/docs', async (ctx: Context) => {
   if (!ctx.authUser) {
     throw new DomainError('UNAUTHORIZED', 'Unauthorized');
   }
 
-  ctx.body = listDocs();
+  const content = await getDocsIndex();
+  ctx.body = { content };
   ctx.status = 200;
 });
 
 /**
- * @openapi GET /api/v1/docs/content
+ * @openapi GET /api/v1/docs/page
  */
-docsRouter.get('/docs/content', (ctx: Context) => {
+docsRouter.get('/docs/page', async (ctx: Context) => {
   if (!ctx.authUser) {
     throw new DomainError('UNAUTHORIZED', 'Unauthorized');
   }
 
-  const docPath = ctx.query.path as string | undefined;
-  if (!docPath) {
+  const url = ctx.query.url as string | undefined;
+  if (!url) {
     ctx.status = 400;
-    ctx.body = { error: 'path query parameter is required' };
+    ctx.body = { error: 'url query parameter is required' };
     return;
   }
 
-  const doc = findDoc({ path: docPath });
-  if (!doc) {
-    throw new DomainError('RESOURCE_NOT_FOUND', `Doc '${docPath}' not found`);
-  }
-
-  ctx.body = doc;
+  const content = await getDocPage({ url });
+  ctx.body = { url, content };
   ctx.status = 200;
 });
 

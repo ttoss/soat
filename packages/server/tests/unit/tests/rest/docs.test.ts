@@ -1,7 +1,21 @@
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
+const MOCK_LLMS_TXT = `# SOAT Documentation
+
+## Modules
+
+- [Agents](https://soat.ttoss.dev/docs/modules/agents): Core reasoning units
+- [Actors](https://soat.ttoss.dev/docs/modules/actors): User-facing identities
+`;
+
+const MOCK_PAGE_CONTENT = `# Agents
+
+Agents are the core reasoning units that run LLM inference loops.
+`;
+
 describe('Docs', () => {
   let adminToken: string;
+  let fetchSpy: jest.SpyInstance;
 
   beforeAll(async () => {
     await testClient
@@ -11,82 +25,83 @@ describe('Docs', () => {
     adminToken = await loginAs('admin', 'supersecret');
   });
 
-  describe('GET /api/v1/docs', () => {
-    test('returns list of doc pages for authenticated user', async () => {
-      const res = await authenticatedTestClient(adminToken).get('/api/v1/docs');
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBeGreaterThan(0);
-      const page = res.body[0];
-      expect(typeof page.path).toBe('string');
-      expect(typeof page.title).toBe('string');
-      expect(typeof page.description).toBe('string');
-    });
+  beforeEach(() => {
+    fetchSpy = jest
+      .spyOn(global, 'fetch')
+      .mockImplementation(async (url: RequestInfo | URL) => {
+        const urlStr = url.toString();
+        if (urlStr.endsWith('/llms.txt')) {
+          return new Response(MOCK_LLMS_TXT, { status: 200 });
+        }
+        if (urlStr.includes('/docs/modules/agents')) {
+          return new Response(MOCK_PAGE_CONTENT, { status: 200 });
+        }
+        return new Response('Not Found', { status: 404 });
+      });
+  });
 
-    test('returns pages with correct titles parsed from markdown', async () => {
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
+  describe('GET /api/v1/docs', () => {
+    test('returns documentation index for authenticated user', async () => {
       const res = await authenticatedTestClient(adminToken).get('/api/v1/docs');
       expect(res.status).toBe(200);
-      const agentsPage = res.body.find(
-        (p: { path: string }) => p.path === 'modules/agents'
-      );
-      expect(agentsPage).toBeDefined();
-      expect(agentsPage.title).toBe('Agents');
+      expect(typeof res.body.content).toBe('string');
+      expect(res.body.content).toContain('SOAT Documentation');
     });
 
     test('returns 401 for unauthenticated request', async () => {
       const res = await testClient.get('/api/v1/docs');
       expect(res.status).toBe(401);
     });
+
+    test('returns 404 when upstream is unavailable', async () => {
+      fetchSpy.mockResolvedValueOnce(new Response('error', { status: 503 }));
+      const res = await authenticatedTestClient(adminToken).get('/api/v1/docs');
+      expect(res.status).toBe(404);
+    });
   });
 
-  describe('GET /api/v1/docs/content', () => {
-    test('returns content for a valid doc path', async () => {
+  describe('GET /api/v1/docs/page', () => {
+    test('returns page content for a valid docs URL', async () => {
       const res = await authenticatedTestClient(adminToken).get(
-        '/api/v1/docs/content?path=introduction'
+        '/api/v1/docs/page?url=https://soat.ttoss.dev/docs/modules/agents'
       );
       expect(res.status).toBe(200);
-      expect(res.body.path).toBe('introduction');
-      expect(res.body.title).toBe('Introduction');
-      expect(typeof res.body.content).toBe('string');
-      expect(res.body.content).toContain('# Introduction');
-    });
-
-    test('returns content for a nested doc path', async () => {
-      const res = await authenticatedTestClient(adminToken).get(
-        '/api/v1/docs/content?path=modules/agents'
+      expect(res.body.url).toBe(
+        'https://soat.ttoss.dev/docs/modules/agents'
       );
-      expect(res.status).toBe(200);
-      expect(res.body.path).toBe('modules/agents');
-      expect(res.body.title).toBe('Agents');
+      expect(res.body.content).toContain('Agents');
     });
 
-    test('returns 404 for unknown path', async () => {
+    test('returns 404 for URL from a disallowed domain', async () => {
       const res = await authenticatedTestClient(adminToken).get(
-        '/api/v1/docs/content?path=nonexistent/page'
+        '/api/v1/docs/page?url=https://evil.com/secret'
       );
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
     });
 
-    test('returns 400 when path parameter is missing', async () => {
+    test('returns 404 for unknown page on the docs domain', async () => {
       const res = await authenticatedTestClient(adminToken).get(
-        '/api/v1/docs/content'
+        '/api/v1/docs/page?url=https://soat.ttoss.dev/docs/nonexistent'
       );
+      expect(res.status).toBe(404);
+    });
+
+    test('returns 400 when url parameter is missing', async () => {
+      const res =
+        await authenticatedTestClient(adminToken).get('/api/v1/docs/page');
       expect(res.status).toBe(400);
     });
 
     test('returns 401 for unauthenticated request', async () => {
       const res = await testClient.get(
-        '/api/v1/docs/content?path=introduction'
+        '/api/v1/docs/page?url=https://soat.ttoss.dev/docs/modules/agents'
       );
       expect(res.status).toBe(401);
-    });
-
-    test('rejects path traversal attempts', async () => {
-      const res = await authenticatedTestClient(adminToken).get(
-        '/api/v1/docs/content?path=../../etc/passwd'
-      );
-      expect(res.status).toBe(404);
     });
   });
 });

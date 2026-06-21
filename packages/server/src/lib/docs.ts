@@ -1,119 +1,50 @@
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-
 import createDebug from 'debug';
+
+import { DomainError } from '../errors';
 
 const log = createDebug('soat:docs');
 
-export type DocPage = {
-  path: string;
-  title: string;
-  description: string;
+const getDocsBaseUrl = () => {
+  return process.env.SOAT_DOCS_BASE_URL ?? 'https://soat.ttoss.dev';
 };
 
-export type DocContent = {
-  path: string;
-  title: string;
-  content: string;
+export const getDocsIndex = async (): Promise<string> => {
+  const url = `${getDocsBaseUrl()}/llms.txt`;
+  log('getDocsIndex: url=%s', url);
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      'Documentation index unavailable'
+    );
+  }
+  return res.text();
 };
 
-const getDocsPath = () => {
-  return (
-    process.env.DOCS_PATH ??
-    path.resolve(process.cwd(), 'packages/website/docs')
-  );
-};
+export const getDocPage = async (args: { url: string }): Promise<string> => {
+  log('getDocPage: url=%s', args.url);
 
-const parseTitle = (content: string): string => {
-  const match = content.match(/^#\s+(.+)$/m);
-  return match ? match[1].trim() : 'Untitled';
-};
-
-const parseDescription = (content: string): string => {
-  const lines = content.split('\n');
-  let foundTitle = false;
-  const paragraphLines: string[] = [];
-
-  for (const line of lines) {
-    if (!foundTitle) {
-      if (line.startsWith('# ')) foundTitle = true;
-      continue;
-    }
-    if (line.trim() === '') {
-      if (paragraphLines.length > 0) break;
-      continue;
-    }
-    if (
-      line.startsWith('import ') ||
-      line.startsWith('#') ||
-      line.startsWith('<!--') ||
-      line.startsWith('---')
-    )
-      continue;
-    paragraphLines.push(line.trim());
+  const baseHostname = new URL(getDocsBaseUrl()).hostname;
+  let requestedUrl: URL;
+  try {
+    requestedUrl = new URL(args.url);
+  } catch {
+    throw new DomainError('RESOURCE_NOT_FOUND', `Invalid URL: ${args.url}`);
   }
 
-  return paragraphLines.join(' ').slice(0, 300);
-};
-
-const walkDocs = (dir: string, baseDir: string): DocPage[] => {
-  const results: DocPage[] = [];
-
-  if (!fs.existsSync(dir)) {
-    log('docs directory not found: %s', dir);
-    return results;
+  if (requestedUrl.hostname !== baseHostname) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `URL must be from ${baseHostname}`
+    );
   }
 
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      results.push(...walkDocs(fullPath, baseDir));
-    } else if (entry.name.endsWith('.md')) {
-      const relativePath = path
-        .relative(baseDir, fullPath)
-        .replace(/\.md$/, '');
-      const content = fs.readFileSync(fullPath, 'utf-8');
-      results.push({
-        path: relativePath,
-        title: parseTitle(content),
-        description: parseDescription(content),
-      });
-    }
+  const res = await fetch(args.url);
+  if (!res.ok) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Documentation page not found: ${args.url}`
+    );
   }
-
-  return results.sort((a, b) => {
-    return a.path.localeCompare(b.path);
-  });
-};
-
-export const listDocs = (): DocPage[] => {
-  const docsPath = getDocsPath();
-  log('listDocs: docsPath=%s', docsPath);
-  return walkDocs(docsPath, docsPath);
-};
-
-export const findDoc = (args: { path: string }): DocContent | null => {
-  const docsPath = getDocsPath();
-  log('findDoc: path=%s', args.path);
-
-  const safePath = path.normalize(args.path).replace(/^(\.\.(\/|\\|$))+/, '');
-  const fullPath = path.join(docsPath, `${safePath}.md`);
-  const resolvedDocsPath = path.resolve(docsPath);
-
-  if (!path.resolve(fullPath).startsWith(resolvedDocsPath + path.sep)) {
-    log('findDoc: path traversal attempt: %s', args.path);
-    return null;
-  }
-
-  if (!fs.existsSync(fullPath)) {
-    log('findDoc: file not found: %s', fullPath);
-    return null;
-  }
-
-  const content = fs.readFileSync(fullPath, 'utf-8');
-  return {
-    path: safePath,
-    title: parseTitle(content),
-    content,
-  };
+  return res.text();
 };

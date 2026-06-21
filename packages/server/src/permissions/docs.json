@@ -2,14 +2,14 @@
   "module": "docs",
   "operations": [
     {
-      "operationId": "listDocs",
-      "action": "docs:ListDocs",
-      "description": "List all available documentation pages"
+      "operationId": "getDocs",
+      "action": "docs:GetDocs",
+      "description": "Get the SOAT documentation index (llms.txt)"
     },
     {
-      "operationId": "getDocContent",
-      "action": "docs:GetDocContent",
-      "description": "Get the content of a documentation page"
+      "operationId": "getDocPage",
+      "action": "docs:GetDocPage",
+      "description": "Fetch the content of a specific documentation page by URL"
     }
   ]
 }

@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: SOAT Docs API
   version: 1.0.0
-  description: Access SOAT platform documentation
+  description: Access SOAT platform documentation via llms.txt
   contact:
     name: SOAT Team
     url: https://github.com/ttoss/soat
@@ -23,89 +23,73 @@ paths:
     get:
       tags:
         - Docs
-      summary: List documentation pages
-      description: Returns a list of all available SOAT documentation pages with their paths, titles, and descriptions. Use this to discover what topics are documented before fetching specific content.
-      operationId: listDocs
-      x-iam-action: docs:ListDocs
+      summary: Get documentation index
+      description: Returns the SOAT documentation index in llms.txt format. The response contains a Markdown document listing all available documentation pages with their URLs. Use the URLs from this index with `get-doc-page` to fetch individual page content.
+      operationId: getDocs
+      x-iam-action: docs:GetDocs
       responses:
         '200':
-          description: List of documentation pages
+          description: Documentation index content
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/DocPage'
+                $ref: '#/components/schemas/DocsIndex'
         '401':
           description: Unauthorized
-  /api/v1/docs/content:
+        '404':
+          description: Documentation index unavailable
+  /api/v1/docs/page:
     get:
       tags:
         - Docs
-      summary: Get documentation page content
-      description: Returns the full Markdown content of a documentation page by its path. Use `list-docs` first to discover available paths.
-      operationId: getDocContent
-      x-iam-action: docs:GetDocContent
+      summary: Get documentation page
+      description: Fetches the content of a specific SOAT documentation page by URL. Use `get-docs` first to discover available page URLs from the documentation index.
+      operationId: getDocPage
+      x-iam-action: docs:GetDocPage
       parameters:
-        - name: path
+        - name: url
           in: query
           required: true
-          description: Path of the documentation page (e.g. `modules/agents`, `tutorials/permissions`, `introduction`)
+          description: Full URL of the documentation page (must be from the SOAT documentation site, as listed in the index returned by `get-docs`)
           schema:
             type: string
-            example: modules/agents
+            example: https://soat.ttoss.dev/docs/modules/agents
       responses:
         '200':
           description: Documentation page content
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DocContent'
+                $ref: '#/components/schemas/DocPage'
         '400':
-          description: Missing path parameter
+          description: Missing or invalid url parameter
         '401':
           description: Unauthorized
         '404':
-          description: Documentation page not found
+          description: Documentation page not found or URL not from allowed domain
 components:
   schemas:
+    DocsIndex:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+          description: Documentation index in llms.txt Markdown format, listing all available pages and their URLs
     DocPage:
       type: object
       required:
-        - path
-        - title
-        - description
-      properties:
-        path:
-          type: string
-          description: Relative path of the documentation page (without .md extension)
-          example: modules/agents
-        title:
-          type: string
-          description: Title of the documentation page
-          example: Agents
-        description:
-          type: string
-          description: Short description extracted from the page content
-          example: Agents are the core reasoning units that run LLM inference loops.
-    DocContent:
-      type: object
-      required:
-        - path
-        - title
+        - url
         - content
       properties:
-        path:
+        url:
           type: string
-          description: Relative path of the documentation page
-          example: modules/agents
-        title:
-          type: string
-          description: Title of the documentation page
-          example: Agents
+          description: URL of the documentation page that was fetched
+          example: https://soat.ttoss.dev/docs/modules/agents
         content:
           type: string
-          description: Full Markdown content of the documentation page
+          description: Full content of the documentation page
   securitySchemes:
     bearerAuth:
       type: http
