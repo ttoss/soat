@@ -33,4 +33,16 @@ export const defaultHandlers = [
   http.get('*/api/v1/projects', () => {
     return HttpResponse.json([]);
   }),
+  http.get('*/api/v1/users', () => {
+    return HttpResponse.json([]);
+  }),
+  http.get('*/api/v1/policies', () => {
+    return HttpResponse.json([]);
+  }),
+  http.get('*/api/v1/ai-providers', () => {
+    return HttpResponse.json([]);
+  }),
+  http.get('*/api/v1/projects/:project_id/api-keys', () => {
+    return HttpResponse.json([]);
+  }),
 ];

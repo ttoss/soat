@@ -113,6 +113,114 @@ export const testSpec: OpenApiSpec = {
         summary: 'List agent sessions',
       },
     },
+    '/api/v1/users': {
+      get: { operationId: 'listUsers', tags: ['Users'], summary: 'List users' },
+      post: {
+        operationId: 'createUser',
+        tags: ['Users'],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['username', 'password'],
+                properties: {
+                  username: { type: 'string' },
+                  password: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/users/{user_id}': {
+      get: { operationId: 'getUser', tags: ['Users'] },
+      put: {
+        operationId: 'updateUser',
+        tags: ['Users'],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: { username: { type: 'string' } },
+              },
+            },
+          },
+        },
+      },
+      delete: { operationId: 'deleteUser', tags: ['Users'] },
+    },
+    '/api/v1/policies': {
+      get: {
+        operationId: 'listPolicies',
+        tags: ['Policies'],
+        summary: 'List policies',
+      },
+      post: {
+        operationId: 'createPolicy',
+        tags: ['Policies'],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name'],
+                properties: { name: { type: 'string' } },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/ai-providers': {
+      get: {
+        operationId: 'listAiProviders',
+        tags: ['Ai Providers'],
+        summary: 'List AI providers',
+      },
+      post: {
+        operationId: 'createAiProvider',
+        tags: ['Ai Providers'],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name'],
+                properties: { name: { type: 'string' } },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/projects/{project_id}/api-keys': {
+      get: {
+        operationId: 'listApiKeys',
+        tags: ['Api Keys'],
+        summary: 'List API keys',
+      },
+      post: {
+        operationId: 'createApiKey',
+        tags: ['Api Keys'],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name'],
+                properties: { name: { type: 'string' } },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/projects/{project_id}/api-keys/{key_id}': {
+      delete: { operationId: 'deleteApiKey', tags: ['Api Keys'] },
+    },
   },
   components: {
     schemas: {
