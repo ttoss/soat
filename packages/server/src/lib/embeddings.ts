@@ -18,7 +18,9 @@ export const createEmbeddings = async (args: {
   }
 
   const embeddings = await Promise.all(
-    args.inputs.map((text) => getEmbedding({ text }))
+    args.inputs.map((text) => {
+      return getEmbedding({ text });
+    })
   );
 
   log('createEmbeddings: done count=%d', embeddings.length);
