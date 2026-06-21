@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.12.0](https://127.0.0.1/37599/git/ttoss/compare/v0.11.0...v0.12.0) (2026-06-21)
+
+### Features
+
+* **server:** replace in-memory OAuth stores with Postgres (A1+A2) ([#216](https://127.0.0.1/37599/git/ttoss/issues/216)) ([73544ea](https://127.0.0.1/37599/git/ttoss/commits/73544ea1a0f72d3361d33266f01211e36ebac2c5))
+
 # [0.11.0](https://127.0.0.1/45259/git/ttoss/compare/v0.9.1...v0.11.0) (2026-06-13)
 
 ### Features
