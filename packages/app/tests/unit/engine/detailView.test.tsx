@@ -17,13 +17,14 @@ const agentsModule = (): ModuleInfo => {
   return m;
 };
 
-const renderDetail = () =>
+const renderDetail = (modules?: ModuleInfo[]) =>
   renderWithAuth(
     <>
       <DetailView
         module={agentsModule()}
         spec={testSpec}
         pathParams={{ agent_id: 'agt_1' }}
+        modules={modules}
       />
       <NavProbe />
     </>
@@ -47,6 +48,23 @@ describe('DetailView', () => {
     expect(await screen.findByText('Alpha')).toBeInTheDocument();
     expect(screen.getByText('[hidden]')).toBeInTheDocument();
     expect(screen.queryByText('sk_secret')).not.toBeInTheDocument();
+  });
+
+  test('renders an x-soat-ref field as a link to the referenced resource', async () => {
+    server.use(
+      http.get('*/api/v1/agents/:agent_id', () =>
+        HttpResponse.json({ id: 'agt_1', name: 'Alpha', project_id: 'proj_42' })
+      )
+    );
+    renderDetail(parseModules(testSpec));
+
+    const link = await screen.findByRole('button', { name: 'proj_42' });
+    await userEvent.click(link);
+
+    const probe = screen.getByTestId('nav-probe');
+    expect(probe).toHaveTextContent('"tag":"Projects"');
+    expect(probe).toHaveTextContent('"mode":"detail"');
+    expect(probe).toHaveTextContent('"project_id":"proj_42"');
   });
 
   test('surfaces an error when the fetch fails', async () => {

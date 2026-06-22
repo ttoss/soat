@@ -6,6 +6,7 @@ import type {
   OpenApiOperation,
   OpenApiSchema,
   OpenApiSpec,
+  ViewDescriptor,
 } from './types';
 
 type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
@@ -190,6 +191,103 @@ export const resolveSchema = (
   if (!schema) return undefined;
   if (schema.$ref) return resolveRef(schema.$ref, spec);
   return schema;
+};
+
+// ─── Cross-resource references (x-soat-ref) ─────────────────────────────────
+
+// The trailing non-parameter segment of a path identifies the resource it
+// addresses: /api/v1/projects/{project_id} → "projects".
+const resourceSegment = (pathTemplate: string): string => {
+  const segments = pathTemplate.split('/').filter(Boolean);
+  for (let i = segments.length - 1; i >= 0; i -= 1) {
+    if (!segments[i].startsWith('{')) return segments[i];
+  }
+  return '';
+};
+
+// Resolves the item schema described by an operation's 2xx JSON response.
+// Array responses are unwrapped to their `items` schema so list and detail
+// operations both yield the per-record schema.
+export const getResponseItemSchema = (
+  op: ModuleOp | undefined,
+  spec: OpenApiSpec
+): OpenApiSchema | undefined => {
+  if (!op) return undefined;
+  const responses = op.operation.responses ?? {};
+  const okKey = Object.keys(responses).find((code) => {
+    return code.startsWith('2');
+  });
+  if (!okKey) return undefined;
+  const schema = responses[okKey].content?.['application/json']?.schema;
+  const resolved = resolveSchema(schema, spec);
+  if (resolved?.type === 'array') {
+    return resolveSchema(resolved.items, spec);
+  }
+  return resolved;
+};
+
+// Maps each property carrying an `x-soat-ref` annotation to the resource it
+// references, e.g. { project_id: 'projects', ai_provider_id: 'ai-providers' }.
+export const extractRefFields = (
+  schema: OpenApiSchema | undefined,
+  spec: OpenApiSpec
+): Record<string, string> => {
+  const resolved = resolveSchema(schema, spec);
+  const properties = resolved?.properties ?? {};
+  const refs: Record<string, string> = {};
+  for (const [name, fieldSchema] of Object.entries(properties)) {
+    const ref = fieldSchema['x-soat-ref'];
+    if (typeof ref === 'string' && ref) refs[name] = ref;
+  }
+  return refs;
+};
+
+// Finds the module that owns a given resource (matched by the trailing path
+// segment of its list or detail operation).
+export const findModuleByResource = (
+  modules: ModuleInfo[],
+  resource: string
+): ModuleInfo | undefined => {
+  return modules.find((module) => {
+    const path = module.listOp?.pathTemplate ?? module.getOp?.pathTemplate;
+    return path ? resourceSegment(path) === resource : false;
+  });
+};
+
+// Builds a detail-view descriptor that opens `id` in the target module. Only
+// top-level resources (a single path parameter) are linkable; nested targets
+// would need parent ids we do not have at the link site.
+export const buildRefDescriptor = (
+  targetModule: ModuleInfo,
+  id: string
+): ViewDescriptor | null => {
+  if (!targetModule.getOp || !id) return null;
+  const params = extractPathParams(targetModule.getOp.pathTemplate);
+  if (params.length !== 1) return null;
+  return {
+    tag: targetModule.tag,
+    operationId: targetModule.getOp.operation.operationId,
+    pathParams: { [params[0]]: id },
+    mode: 'detail',
+  };
+};
+
+// Narrows a field→resource map to only the references that actually resolve to
+// a navigable target (a known module with a single-parameter detail route).
+// References to skipped, nested, or unknown resources are dropped so they never
+// render as dead links.
+export const resolvableRefFields = (
+  refFields: Record<string, string>,
+  modules: ModuleInfo[]
+): Record<string, string> => {
+  const resolvable: Record<string, string> = {};
+  for (const [field, resource] of Object.entries(refFields)) {
+    const target = findModuleByResource(modules, resource);
+    if (target && buildRefDescriptor(target, 'probe')) {
+      resolvable[field] = resource;
+    }
+  }
+  return resolvable;
 };
 
 const isJsonObject = (v: unknown): v is JsonObject => {

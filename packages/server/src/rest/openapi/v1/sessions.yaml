@@ -540,10 +540,12 @@ components:
           description: Session public ID
           example: sess_V1StGXR8Z5jdHi6B
         agent_id:
+          x-soat-ref: agents
           type: string
           description: Agent public ID
           example: agt_V1StGXR8Z5jdHi6B
         conversation_id:
+          x-soat-ref: conversations
           type: string
           description: Underlying conversation public ID
           example: conv_V1StGXR8Z5jdHi6B
@@ -556,6 +558,7 @@ components:
           nullable: true
           example: Support chat
         actor_id:
+          x-soat-ref: actors
           type: string
           nullable: true
           description: Public ID of the user actor
@@ -613,6 +616,7 @@ components:
         content:
           type: string
         document_id:
+          x-soat-ref: documents
           type: string
           nullable: true
         position:
@@ -629,6 +633,7 @@ components:
           description: Optional session name
           example: Support chat
         actor_id:
+          x-soat-ref: actors
           type: string
           description: Optional public ID of an existing actor to use as the user actor
           example: actr_V1StGXR8Z5jdHi6B
@@ -722,6 +727,7 @@ components:
             - document_id
           properties:
             document_id:
+              x-soat-ref: documents
               type: string
               description: Public ID of a document used as the user message content.
             tool_context:
@@ -749,6 +755,7 @@ components:
         content:
           type: string
         document_id:
+          x-soat-ref: documents
           type: string
           nullable: true
     AddSessionMessageResponse:
@@ -786,8 +793,10 @@ components:
             model:
               type: string
         generation_id:
+          x-soat-ref: generations
           type: string
         trace_id:
+          x-soat-ref: traces
           type: string
         required_action:
           type: object
@@ -821,8 +830,10 @@ components:
             model:
               type: string
         generation_id:
+          x-soat-ref: generations
           type: string
         trace_id:
+          x-soat-ref: traces
           type: string
         required_action:
           type: object
@@ -847,6 +858,7 @@ components:
         - tool_outputs
       properties:
         generation_id:
+          x-soat-ref: generations
           type: string
           description: The generation ID from the requires_action response
         tool_outputs:

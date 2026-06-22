@@ -15,6 +15,18 @@ export const testSpec: OpenApiSpec = {
         operationId: 'listAgents',
         tags: ['Agents'],
         summary: 'List agents',
+        responses: {
+          '200': {
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'array',
+                  items: { $ref: '#/components/schemas/Agent' },
+                },
+              },
+            },
+          },
+        },
       },
       post: {
         operationId: 'createAgent',
@@ -31,7 +43,19 @@ export const testSpec: OpenApiSpec = {
       },
     },
     '/api/v1/agents/{agent_id}': {
-      get: { operationId: 'getAgent', tags: ['Agents'] },
+      get: {
+        operationId: 'getAgent',
+        tags: ['Agents'],
+        responses: {
+          '200': {
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Agent' },
+              },
+            },
+          },
+        },
+      },
       put: {
         operationId: 'updateAgent',
         tags: ['Agents'],
@@ -113,9 +137,140 @@ export const testSpec: OpenApiSpec = {
         summary: 'List agent sessions',
       },
     },
+    '/api/v1/users': {
+      get: { operationId: 'listUsers', tags: ['Users'], summary: 'List users' },
+      post: {
+        operationId: 'createUser',
+        tags: ['Users'],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['username', 'password'],
+                properties: {
+                  username: { type: 'string' },
+                  password: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/users/{user_id}': {
+      get: { operationId: 'getUser', tags: ['Users'] },
+      put: {
+        operationId: 'updateUser',
+        tags: ['Users'],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: { username: { type: 'string' } },
+              },
+            },
+          },
+        },
+      },
+      delete: { operationId: 'deleteUser', tags: ['Users'] },
+    },
+    '/api/v1/policies': {
+      get: {
+        operationId: 'listPolicies',
+        tags: ['Policies'],
+        summary: 'List policies',
+      },
+      post: {
+        operationId: 'createPolicy',
+        tags: ['Policies'],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name'],
+                properties: { name: { type: 'string' } },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/ai-providers': {
+      get: {
+        operationId: 'listAiProviders',
+        tags: ['Ai Providers'],
+        summary: 'List AI providers',
+      },
+      post: {
+        operationId: 'createAiProvider',
+        tags: ['Ai Providers'],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name'],
+                properties: { name: { type: 'string' } },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/tools': {
+      get: { operationId: 'listTools', tags: ['Tools'], summary: 'List tools' },
+    },
+    '/api/v1/tools/{tool_id}': {
+      get: { operationId: 'getTool', tags: ['Tools'] },
+    },
+    '/api/v1/projects/{project_id}/api-keys': {
+      get: {
+        operationId: 'listApiKeys',
+        tags: ['Api Keys'],
+        summary: 'List API keys',
+      },
+      post: {
+        operationId: 'createApiKey',
+        tags: ['Api Keys'],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name'],
+                properties: { name: { type: 'string' } },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/projects/{project_id}/api-keys/{key_id}': {
+      delete: { operationId: 'deleteApiKey', tags: ['Api Keys'] },
+    },
   },
   components: {
     schemas: {
+      Agent: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          model: { type: 'string' },
+          project_id: { type: 'string', 'x-soat-ref': 'projects' },
+          tool_ids: {
+            type: 'array',
+            items: { type: 'string' },
+            'x-soat-ref': 'tools',
+          },
+          // References a nested resource (sessions has no top-level detail
+          // route), so it must NOT render as a link.
+          session_id: { type: 'string', 'x-soat-ref': 'sessions' },
+        },
+      },
       CreateAgent: {
         type: 'object',
         required: ['name'],
@@ -123,6 +278,7 @@ export const testSpec: OpenApiSpec = {
           name: { type: 'string', description: 'Agent name' },
           model: { type: 'string', enum: ['gpt-4o', 'gpt-4o-mini'] },
           enabled: { type: 'boolean' },
+          project_id: { type: 'string', 'x-soat-ref': 'projects' },
         },
       },
     },

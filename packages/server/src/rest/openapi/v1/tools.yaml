@@ -352,6 +352,7 @@ components:
           description: Public ID of the tool
           example: tool_V1StGXR8Z5jdHi6B
         project_id:
+          x-soat-ref: projects
           type: string
           description: Public ID of the owning project
           example: proj_V1StGXR8Z5jdHi6B
@@ -416,6 +417,7 @@ components:
         - name
       properties:
         project_id:
+          x-soat-ref: projects
           type: string
           description: Public ID of the project
         name:

@@ -7,11 +7,14 @@ import { Button } from '@/components/ui/button';
 import { FieldEditor } from './fieldEditor';
 import {
   buildRequestBody,
+  extractRevealedSecrets,
   getOpRequestSchema,
   initFormData,
+  type RevealedSecret,
 } from './formHelpers';
 import { MethodBadge } from './methodBadge';
 import { useNavigation } from './navigationContext';
+import { SecretReveal } from './secretReveal';
 import { buildUrl } from './specUtils';
 import type {
   JsonObject,
@@ -20,6 +23,8 @@ import type {
   OpenApiSchema,
   OpenApiSpec,
 } from './types';
+
+type RefOption = { value: string; label: string };
 
 const getRequestSchema = (
   module: ModuleInfo,
@@ -32,6 +37,10 @@ const getRequestSchema = (
   );
 };
 
+type SubmitResult =
+  | { ok: true; data: JsonObject }
+  | { ok: false; error: string };
+
 const submitForm = async (args: {
   op: ModuleOp;
   formData: Record<string, string>;
@@ -39,10 +48,10 @@ const submitForm = async (args: {
   pathParams: Record<string, string>;
   mode: 'create' | 'edit';
   token: string;
-}): Promise<string | null> => {
+}): Promise<SubmitResult> => {
   const { op, formData, schema, pathParams, mode, token } = args;
   const bodyResult = buildRequestBody(formData, schema);
-  if (!bodyResult.ok) return bodyResult.error;
+  if (!bodyResult.ok) return { ok: false, error: bodyResult.error };
   const url = buildUrl(op.pathTemplate, pathParams);
   const method = mode === 'create' ? 'POST' : 'PUT';
   const result = await apiFetch<JsonObject>({
@@ -51,8 +60,8 @@ const submitForm = async (args: {
     body: bodyResult.body,
     token,
   });
-  if (!result.ok) return result.error.message;
-  return null;
+  if (!result.ok) return { ok: false, error: result.error.message };
+  return { ok: true, data: result.data };
 };
 
 type FormActionsProps = {
@@ -111,7 +120,7 @@ const useFormSubmit = (args: {
   mode: 'create' | 'edit';
   token: string;
   formData: Record<string, string>;
-  onSuccess: () => void;
+  onSuccess: (data: JsonObject) => void;
 }) => {
   const { op, schema, pathParams, mode, token, formData, onSuccess } = args;
   const [submitting, setSubmitting] = React.useState(false);
@@ -122,7 +131,7 @@ const useFormSubmit = (args: {
     if (!op || !token) return;
     setSubmitting(true);
     setError(null);
-    const err = await submitForm({
+    const result = await submitForm({
       op,
       formData,
       schema,
@@ -131,14 +140,68 @@ const useFormSubmit = (args: {
       token,
     });
     setSubmitting(false);
-    if (err) {
-      setError(err);
+    if (!result.ok) {
+      setError(result.error);
       return;
     }
-    onSuccess();
+    onSuccess(result.data);
   };
 
   return { submitting, error, handleSubmit };
+};
+
+const useRefFieldOptions = ({
+  schema,
+  token,
+}: {
+  schema: OpenApiSchema | undefined;
+  token: string;
+}): Record<string, RefOption[]> => {
+  const [refOptions, setRefOptions] = React.useState<
+    Record<string, RefOption[]>
+  >({});
+
+  React.useEffect(() => {
+    if (!schema?.properties || !token) return;
+
+    const refFields = Object.entries(schema.properties).filter(
+      ([, fieldSchema]) => {
+        // Only scalar refs become a single-select picker; array refs stay as
+        // a free-form editor since the picker selects one value at a time.
+        return fieldSchema['x-soat-ref'] && fieldSchema.type !== 'array';
+      }
+    );
+    if (refFields.length === 0) return;
+
+    Promise.all(
+      refFields.map(async ([name, fieldSchema]) => {
+        const ref = fieldSchema['x-soat-ref']!;
+        const result = await apiFetch<unknown>({
+          url: `/api/v1/${ref}`,
+          token,
+        });
+        if (!result.ok) return [name, []] as const;
+        const list = Array.isArray(result.data) ? result.data : [];
+        const options: RefOption[] = list
+          .filter((item): item is JsonObject => {
+            return (
+              typeof item === 'object' && item !== null && !Array.isArray(item)
+            );
+          })
+          .map((item) => {
+            return {
+              value: String(item.id ?? ''),
+              label: String(item.name ?? item.id ?? ''),
+            };
+          });
+        return [name, options] as const;
+      })
+    ).then((entries) => {
+      setRefOptions(Object.fromEntries(entries));
+    });
+  }, [schema, token]);
+
+  return refOptions;
 };
 
 type FormBodyProps = {
@@ -154,6 +217,7 @@ type FormBodyProps = {
   mode: 'create' | 'edit';
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
+  refOptions: Record<string, RefOption[]>;
 };
 
 const FormBody = ({
@@ -169,6 +233,7 @@ const FormBody = ({
   mode,
   onSubmit,
   onCancel,
+  refOptions,
 }: FormBodyProps) => {
   return (
     <div className="flex flex-col gap-6 max-w-lg">
@@ -199,6 +264,7 @@ const FormBody = ({
                 });
               }}
               required={required.has(name)}
+              refOptions={refOptions[name]}
             />
           );
         })}
@@ -243,9 +309,11 @@ export const FormView = ({
   const [formData, setFormData] = React.useState<Record<string, string>>(() => {
     return initFormData(schema, resolvedPrefill);
   });
+  const [secrets, setSecrets] = React.useState<RevealedSecret[]>([]);
 
   const token = state.status === 'authenticated' ? state.token : '';
   const { op, title, httpMethod } = getFormModeValues(mode, module);
+  const refOptions = useRefFieldOptions({ schema, token });
   const { submitting, error, handleSubmit } = useFormSubmit({
     op,
     schema,
@@ -253,10 +321,28 @@ export const FormView = ({
     mode,
     token,
     formData,
-    onSuccess: () => {
-      navigate(null);
+    onSuccess: (data) => {
+      // Only a create can surface a write-once secret; on edit just go back.
+      const revealed = mode === 'create' ? extractRevealedSecrets(data) : [];
+      if (revealed.length > 0) {
+        setSecrets(revealed);
+      } else {
+        navigate(null);
+      }
     },
   });
+
+  if (secrets.length > 0) {
+    return (
+      <SecretReveal
+        title={`${module.label} created`}
+        secrets={secrets}
+        onDone={() => {
+          navigate(null);
+        }}
+      />
+    );
+  }
 
   if (!schema?.properties) {
     return (
@@ -278,6 +364,7 @@ export const FormView = ({
       setFormData={setFormData}
       submitting={submitting}
       mode={mode}
+      refOptions={refOptions}
       onSubmit={handleSubmit}
       onCancel={() => {
         navigate(null);

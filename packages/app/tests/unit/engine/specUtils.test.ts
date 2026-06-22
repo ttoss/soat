@@ -2,14 +2,19 @@ import { describe, expect, test } from 'vitest';
 
 import {
   actionLabel,
+  buildRefDescriptor,
   buildUrl,
   extractItems,
   extractPathParams,
+  extractRefFields,
+  findModuleByResource,
   formatValue,
   getIdParamName,
+  getResponseItemSchema,
   humanizeKey,
   isSensitiveKey,
   parseModules,
+  resolvableRefFields,
   resolveSchema,
 } from '@/engine/specUtils';
 import type { ModuleInfo, ModuleOp, OpenApiSpec } from '@/engine/types';
@@ -241,5 +246,63 @@ describe('formatValue', () => {
 
   test('stringifies plain values', () => {
     expect(formatValue('count', 42)).toBe('42');
+  });
+});
+
+describe('x-soat-ref cross-references', () => {
+  const agents = (): ModuleInfo => byTag(parseModules(testSpec), 'Agents');
+  const projects = (): ModuleInfo => byTag(parseModules(testSpec), 'Projects');
+
+  test('getResponseItemSchema unwraps an array response to its item schema', () => {
+    const schema = getResponseItemSchema(agents().listOp, testSpec);
+    expect(schema?.properties?.project_id).toBeDefined();
+  });
+
+  test('getResponseItemSchema resolves a single-object response', () => {
+    const schema = getResponseItemSchema(agents().getOp, testSpec);
+    expect(schema?.properties?.project_id?.['x-soat-ref']).toBe('projects');
+  });
+
+  test('extractRefFields maps annotated properties to their resource', () => {
+    const schema = getResponseItemSchema(agents().listOp, testSpec);
+    expect(extractRefFields(schema, testSpec)).toEqual({
+      project_id: 'projects',
+      tool_ids: 'tools',
+      session_id: 'sessions',
+    });
+  });
+
+  test('findModuleByResource locates the owning module by resource segment', () => {
+    const modules = parseModules(testSpec);
+    expect(findModuleByResource(modules, 'projects')?.tag).toBe('Projects');
+    expect(findModuleByResource(modules, 'nope')).toBeUndefined();
+  });
+
+  test('buildRefDescriptor targets the resource detail view', () => {
+    expect(buildRefDescriptor(projects(), 'proj_1')).toEqual({
+      tag: 'Projects',
+      operationId: 'getProject',
+      pathParams: { project_id: 'proj_1' },
+      mode: 'detail',
+    });
+  });
+
+  test('buildRefDescriptor returns null without an id or a single-param detail op', () => {
+    expect(buildRefDescriptor(projects(), '')).toBeNull();
+    expect(buildRefDescriptor({ ...projects(), getOp: undefined }, 'x')).toBeNull();
+  });
+
+  test('resolvableRefFields keeps navigable refs and drops the rest', () => {
+    const modules = parseModules(testSpec);
+    const refs = {
+      project_id: 'projects',
+      tool_ids: 'tools',
+      session_id: 'sessions', // nested, no top-level detail route
+      widget_id: 'widgets', // unknown resource
+    };
+    expect(resolvableRefFields(refs, modules)).toEqual({
+      project_id: 'projects',
+      tool_ids: 'tools',
+    });
   });
 });

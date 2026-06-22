@@ -70,7 +70,9 @@ paths:
                   type: string
                   description: Optional project ID to scope this key to a specific project
                   example: proj_V1StGXR8Z5jdHi6B
+                  x-soat-ref: projects
                 policy_ids:
+                  x-soat-ref: policies
                   type: array
                   items:
                     type: string
@@ -144,11 +146,13 @@ paths:
                   type: string
                   example: Updated Key Name
                 project_id:
+                  x-soat-ref: projects
                   type: string
                   nullable: true
                   description: Set to null to remove project scope
                   example: proj_V1StGXR8Z5jdHi6B
                 policy_ids:
+                  x-soat-ref: policies
                   type: array
                   items:
                     type: string
@@ -218,15 +222,18 @@ components:
           description: First 8 characters of the raw key for identification
           example: sk_a1b2c3
         user_id:
+          x-soat-ref: users
           type: string
           description: Owner user public ID
           example: usr_V1StGXR8Z5jdHi6B
         project_id:
+          x-soat-ref: projects
           type: string
           nullable: true
           description: Optional project scope
           example: proj_V1StGXR8Z5jdHi6B
         policy_ids:
+          x-soat-ref: policies
           type: array
           items:
             type: string

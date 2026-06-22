@@ -99,6 +99,7 @@ paths:
               type: object
               properties:
                 project_id:
+                  x-soat-ref: projects
                   type: string
                   description: Project ID. Required for JWT auth; omit when using an project key.
                   example: 'proj_V1StGXR8Z5jdHi6B'
@@ -112,6 +113,7 @@ paths:
                   nullable: true
                   description: Optional name for the conversation
                 actor_id:
+                  x-soat-ref: actors
                   type: string
                   nullable: true
                   description: Actor ID to associate with this conversation
@@ -373,6 +375,7 @@ paths:
                   description: Role of the message sender
                   example: 'user'
                 actor_id:
+                  x-soat-ref: actors
                   type: string
                   nullable: true
                   description: Optional actor ID to associate with this message (user identity)
@@ -447,6 +450,7 @@ paths:
                 - agent_id
               properties:
                 agent_id:
+                  x-soat-ref: agents
                   type: string
                   description: ID of the agent that will produce the next message.
                 model:
@@ -738,6 +742,7 @@ components:
           description: Conversation ID
           example: 'conv_V1StGXR8Z5jdHi6B'
         project_id:
+          x-soat-ref: projects
           type: string
           description: Project ID
           example: 'proj_V1StGXR8Z5jdHi6B'
@@ -759,6 +764,7 @@ components:
           format: date-time
           description: Last update timestamp
         actor_id:
+          x-soat-ref: actors
           type: string
           nullable: true
           description: Actor ID associated with this conversation
@@ -767,6 +773,7 @@ components:
       type: object
       properties:
         document_id:
+          x-soat-ref: documents
           type: string
           description: Document ID
           example: 'doc_V1StGXR8Z5jdHi6B'
@@ -776,11 +783,13 @@ components:
           description: Role of the message sender
           example: 'user'
         actor_id:
+          x-soat-ref: actors
           type: string
           nullable: true
           description: Optional actor ID associated with this message
           example: 'act_V1StGXR8Z5jdHi6B'
         agent_id:
+          x-soat-ref: agents
           type: string
           nullable: true
           description: Optional agent ID that generated this message (set for assistant messages produced by generate)
@@ -809,6 +818,7 @@ components:
           description: Actor ID
           example: 'act_V1StGXR8Z5jdHi6B'
         project_id:
+          x-soat-ref: projects
           type: string
           description: Project ID
           example: 'proj_V1StGXR8Z5jdHi6B'
@@ -849,10 +859,12 @@ components:
         message:
           $ref: '#/components/schemas/ConversationMessageRecord'
         generation_id:
+          x-soat-ref: generations
           type: string
           description: ID of the underlying generation record.
           example: 'gen_V1StGXR8Z5jdHi6B'
         trace_id:
+          x-soat-ref: traces
           type: string
           description: Trace ID for observability.
           example: 'trc_V1StGXR8Z5jdHi6B'
@@ -871,10 +883,12 @@ components:
             Indicates the agent requires tool-call outputs before it can
             produce a reply. No message is persisted yet.
         generation_id:
+          x-soat-ref: generations
           type: string
           description: ID of the paused generation. Pass to the tool-outputs endpoint.
           example: 'gen_V1StGXR8Z5jdHi6B'
         trace_id:
+          x-soat-ref: traces
           type: string
           description: Trace ID for observability.
           example: 'trc_V1StGXR8Z5jdHi6B'

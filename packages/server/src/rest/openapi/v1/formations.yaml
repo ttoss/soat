@@ -73,10 +73,12 @@ paths:
                 - template
               properties:
                 project_id:
+                  x-soat-ref: projects
                   type: string
                   description: Project ID
                   example: proj_V1StGXR8Z5jdHi6B
                 formation_id:
+                  x-soat-ref: formations
                   type: string
                   description: >-
                     Existing formation ID to compare against. Omit for new
@@ -154,6 +156,7 @@ paths:
                 - template
               properties:
                 project_id:
+                  x-soat-ref: projects
                   type: string
                   description: Project ID
                   example: proj_V1StGXR8Z5jdHi6B
@@ -424,6 +427,7 @@ components:
         - ai_provider_id
       properties:
         ai_provider_id:
+          x-soat-ref: ai-providers
           type: string
           description: Public ID of the AI provider
         name:
@@ -439,6 +443,7 @@ components:
           nullable: true
           description: Model identifier (overrides provider default)
         tool_ids:
+          x-soat-ref: tools
           type: array
           nullable: true
           items:
@@ -466,6 +471,7 @@ components:
                 nullable: true
                 description: Tool name to match when type is `hasToolCall`
         active_tool_ids:
+          x-soat-ref: tools
           type: array
           nullable: true
           items:
@@ -486,6 +492,7 @@ components:
                 nullable: true
                 description: 'Tool choice override for this step, e.g. `auto`, `required`, or `{ type: tool, tool_name: search }`'
               active_tool_ids:
+                x-soat-ref: tools
                 type: array
                 nullable: true
                 items:
@@ -534,6 +541,7 @@ components:
           description: Knowledge retrieval configuration. When set, relevant documents and memory entries are injected into every generation.
           properties:
             memory_ids:
+              x-soat-ref: memories
               type: array
               items:
                 type: string
@@ -544,6 +552,7 @@ components:
                 type: string
               description: Retrieve from all memories matching these tags
             document_ids:
+              x-soat-ref: documents
               type: array
               items:
                 type: string
@@ -560,6 +569,7 @@ components:
               type: integer
               description: Maximum number of chunks to inject
             write_memory_id:
+              x-soat-ref: memories
               type: string
               nullable: true
               description: Public ID of the memory the agent can write to. When set, a `write_memory` tool is automatically available to the agent.
@@ -573,6 +583,7 @@ components:
                       type: boolean
                       description: Defaults to true when the object form is used. Set false to keep the configuration but disable extraction.
                     ai_provider_id:
+                      x-soat-ref: ai-providers
                       type: string
                       description: AI provider override for extraction calls. Must belong to the agent's project. Its default_model becomes the model fallback.
                     model:
@@ -599,6 +610,7 @@ components:
               description: Reflect only — overrides for the critique pass.
               properties:
                 ai_provider_id:
+                  x-soat-ref: ai-providers
                   type: string
                   description: AI provider override for the critique call. Must belong to the agent's project.
                 model:
@@ -620,6 +632,7 @@ components:
                       prompt:
                         type: string
                       ai_provider_id:
+                        x-soat-ref: ai-providers
                         type: string
                       model:
                         type: string
@@ -631,6 +644,7 @@ components:
               description: Debate only — override triple for the synthesis pass.
               properties:
                 ai_provider_id:
+                  x-soat-ref: ai-providers
                   type: string
                   description: AI provider override for the synthesis call. Must belong to the agent's project.
                 model:
@@ -661,14 +675,17 @@ components:
           nullable: true
           description: Persona-specific instructions
         agent_id:
+          x-soat-ref: agents
           type: string
           nullable: true
           description: Linked agent ID (mutually exclusive with chat_id)
         chat_id:
+          x-soat-ref: chats
           type: string
           nullable: true
           description: Linked chat ID (mutually exclusive with agent_id)
         memory_id:
+          x-soat-ref: memories
           type: string
           nullable: true
           description: Linked memory ID
@@ -697,6 +714,7 @@ components:
           type: string
           description: Default model identifier (e.g. gpt-4o, claude-3-7-sonnet)
         secret_id:
+          x-soat-ref: secrets
           type: string
           nullable: true
           description: Public ID of the secret containing the API key
@@ -837,6 +855,7 @@ components:
         - content
       properties:
         memory_id:
+          x-soat-ref: memories
           type: string
           description: Public ID of the parent memory (or ref expression)
         content:
@@ -887,6 +906,7 @@ components:
           type: string
           description: Human-readable label for the API key
         policy_ids:
+          x-soat-ref: policies
           type: array
           items:
             type: string
@@ -903,6 +923,7 @@ components:
         - ai_provider_id
       properties:
         ai_provider_id:
+          x-soat-ref: ai-providers
           type: string
           description: Public ID of the AI provider to use for this chat
         name:
@@ -932,6 +953,7 @@ components:
           type: string
           description: Initial status of the conversation (open or closed)
         actor_id:
+          x-soat-ref: actors
           type: string
           nullable: true
           description: Public ID of an actor to associate with this conversation
@@ -1019,6 +1041,7 @@ components:
         - agent_id
       properties:
         agent_id:
+          x-soat-ref: agents
           type: string
           description: Public ID of the agent that owns this session
         name:
@@ -1026,6 +1049,7 @@ components:
           nullable: true
           description: Human-readable label for the session
         actor_id:
+          x-soat-ref: actors
           type: string
           nullable: true
           description: Public ID of an actor to associate with this session
@@ -1145,6 +1169,7 @@ components:
           description: Public ID of the formation
           example: af_V1StGXR8Z5jdHi6B
         project_id:
+          x-soat-ref: projects
           type: string
           description: Project public ID
         name:

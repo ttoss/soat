@@ -290,8 +290,10 @@ components:
         id:
           type: string
         project_id:
+          x-soat-ref: projects
           type: string
         policy_id:
+          x-soat-ref: policies
           type: string
           nullable: true
         name:
@@ -331,6 +333,7 @@ components:
         - events
       properties:
         project_id:
+          x-soat-ref: projects
           type: string
         name:
           type: string
@@ -343,6 +346,7 @@ components:
           items:
             type: string
         policy_id:
+          x-soat-ref: policies
           type: string
 
     UpdateWebhookRequest:
@@ -361,6 +365,7 @@ components:
         active:
           type: boolean
         policy_id:
+          x-soat-ref: policies
           type: string
           nullable: true
 

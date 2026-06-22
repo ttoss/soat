@@ -86,15 +86,19 @@ components:
           description: Public ID of the generation
           example: gen_V1StGXR8Z5jdHi6B
         project_id:
+          x-soat-ref: projects
           type: string
           description: Public ID of the project
         agent_id:
+          x-soat-ref: agents
           type: string
           description: Public ID of the agent that ran this generation
         trace_id:
+          x-soat-ref: traces
           type: string
           description: Public ID of the trace this generation belongs to
         initiator_generation_id:
+          x-soat-ref: generations
           type: string
           nullable: true
           description: >

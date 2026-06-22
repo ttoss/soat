@@ -16,6 +16,14 @@ export type OpenApiSchema = {
   required?: string[];
   description?: string;
   $ref?: string;
+  /**
+   * Vendor extension marking a field as a reference to another REST resource,
+   * named by its path segment (e.g. `projects`, `ai-providers`). The generic
+   * engine uses it two ways: form fields render as a picker populated from
+   * `GET /api/v1/<ref>`, and list/detail cells render the id as a link that
+   * opens that resource's detail view. Ignored by the SDK/CLI generators.
+   */
+  'x-soat-ref'?: string;
 };
 
 export type OpenApiParameter = {

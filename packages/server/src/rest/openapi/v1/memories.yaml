@@ -80,6 +80,7 @@ paths:
                 - name
               properties:
                 project_id:
+                  x-soat-ref: projects
                   type: string
                   description: Project ID (required if not using project key auth)
                   example: proj_V1StGXR8Z5jdHi6B
@@ -227,6 +228,7 @@ components:
           type: string
           example: mem_V1StGXR8Z5jdHi6B
         project_id:
+          x-soat-ref: projects
           type: string
           example: proj_V1StGXR8Z5jdHi6B
         name:

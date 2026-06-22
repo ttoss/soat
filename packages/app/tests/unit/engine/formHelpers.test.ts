@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 
 import {
   buildRequestBody,
+  extractRevealedSecrets,
   getOpRequestSchema,
   initFormData,
 } from '@/engine/formHelpers';
@@ -123,5 +124,32 @@ describe('buildRequestBody', () => {
       ok: true,
       body: { count: null },
     });
+  });
+});
+
+describe('extractRevealedSecrets', () => {
+  test('picks out non-empty string fields whose name marks them sensitive', () => {
+    expect(
+      extractRevealedSecrets({
+        id: 'key_1',
+        name: 'CI key',
+        key: 'sk_live_abc',
+        api_secret: 'shh',
+      })
+    ).toEqual([
+      { key: 'key', value: 'sk_live_abc' },
+      { key: 'api_secret', value: 'shh' },
+    ]);
+  });
+
+  test('ignores empty, masked, or non-string sensitive fields', () => {
+    expect(
+      extractRevealedSecrets({
+        id: 'key_1',
+        key: '',
+        token_count: 42,
+        name: 'plain',
+      })
+    ).toEqual([]);
   });
 });

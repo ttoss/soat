@@ -476,9 +476,11 @@ components:
         project_id:
           type: string
           description: Public ID of the owning project
+          x-soat-ref: projects
         ai_provider_id:
           type: string
           description: Public ID of the AI provider
+          x-soat-ref: ai-providers
         name:
           type: string
           nullable: true
@@ -492,6 +494,7 @@ components:
           nullable: true
           description: Model identifier
         tool_ids:
+          x-soat-ref: tools
           type: array
           nullable: true
           items:
@@ -511,6 +514,7 @@ components:
             type: object
           description: Stop conditions
         active_tool_ids:
+          x-soat-ref: tools
           type: array
           nullable: true
           items:
@@ -536,6 +540,7 @@ components:
           description: Knowledge retrieval config injected before every generation
           properties:
             memory_ids:
+              x-soat-ref: memories
               type: array
               items:
                 type: string
@@ -544,6 +549,7 @@ components:
               items:
                 type: string
             document_ids:
+              x-soat-ref: documents
               type: array
               items:
                 type: string
@@ -556,6 +562,7 @@ components:
             limit:
               type: integer
             write_memory_id:
+              x-soat-ref: memories
               type: string
               nullable: true
               description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
@@ -569,6 +576,7 @@ components:
                       type: boolean
                       description: Defaults to true when the object form is used. Set false to keep the configuration but disable extraction.
                     ai_provider_id:
+                      x-soat-ref: ai-providers
                       type: string
                       description: AI provider override for extraction calls. Must belong to the agent's project. Its default_model becomes the model fallback.
                     model:
@@ -595,6 +603,7 @@ components:
               description: Reflect only — overrides for the critique pass.
               properties:
                 ai_provider_id:
+                  x-soat-ref: ai-providers
                   type: string
                   description: AI provider override for the critique call. Must belong to the agent's project.
                 model:
@@ -616,6 +625,7 @@ components:
                       prompt:
                         type: string
                       ai_provider_id:
+                        x-soat-ref: ai-providers
                         type: string
                       model:
                         type: string
@@ -627,6 +637,7 @@ components:
               description: Debate only — override triple for the synthesis pass.
               properties:
                 ai_provider_id:
+                  x-soat-ref: ai-providers
                   type: string
                   description: AI provider override for the synthesis call. Must belong to the agent's project.
                 model:
@@ -655,9 +666,11 @@ components:
         - ai_provider_id
       properties:
         project_id:
+          x-soat-ref: projects
           type: string
           description: Public ID of the project
         ai_provider_id:
+          x-soat-ref: ai-providers
           type: string
           description: Public ID of the AI provider
         name:
@@ -667,6 +680,7 @@ components:
         model:
           type: string
         tool_ids:
+          x-soat-ref: tools
           type: array
           items:
             type: string
@@ -679,6 +693,7 @@ components:
           items:
             type: object
         active_tool_ids:
+          x-soat-ref: tools
           type: array
           items:
             type: string
@@ -694,6 +709,7 @@ components:
           type: object
           properties:
             memory_ids:
+              x-soat-ref: memories
               type: array
               items:
                 type: string
@@ -702,6 +718,7 @@ components:
               items:
                 type: string
             document_ids:
+              x-soat-ref: documents
               type: array
               items:
                 type: string
@@ -714,6 +731,7 @@ components:
             limit:
               type: integer
             write_memory_id:
+              x-soat-ref: memories
               type: string
               nullable: true
               description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
@@ -727,6 +745,7 @@ components:
                       type: boolean
                       description: Defaults to true when the object form is used. Set false to keep the configuration but disable extraction.
                     ai_provider_id:
+                      x-soat-ref: ai-providers
                       type: string
                       description: AI provider override for extraction calls. Must belong to the agent's project. Its default_model becomes the model fallback.
                     model:
@@ -753,6 +772,7 @@ components:
               description: Reflect only — overrides for the critique pass.
               properties:
                 ai_provider_id:
+                  x-soat-ref: ai-providers
                   type: string
                   description: AI provider override for the critique call. Must belong to the agent's project.
                 model:
@@ -774,6 +794,7 @@ components:
                       prompt:
                         type: string
                       ai_provider_id:
+                        x-soat-ref: ai-providers
                         type: string
                       model:
                         type: string
@@ -785,6 +806,7 @@ components:
               description: Debate only — override triple for the synthesis pass.
               properties:
                 ai_provider_id:
+                  x-soat-ref: ai-providers
                   type: string
                   description: AI provider override for the synthesis call. Must belong to the agent's project.
                 model:
@@ -804,6 +826,7 @@ components:
       type: object
       properties:
         ai_provider_id:
+          x-soat-ref: ai-providers
           type: string
         name:
           type: string
@@ -815,6 +838,7 @@ components:
           type: string
           nullable: true
         tool_ids:
+          x-soat-ref: tools
           type: array
           nullable: true
           items:
@@ -831,6 +855,7 @@ components:
           items:
             type: object
         active_tool_ids:
+          x-soat-ref: tools
           type: array
           nullable: true
           items:
@@ -851,6 +876,7 @@ components:
           nullable: true
           properties:
             memory_ids:
+              x-soat-ref: memories
               type: array
               items:
                 type: string
@@ -859,6 +885,7 @@ components:
               items:
                 type: string
             document_ids:
+              x-soat-ref: documents
               type: array
               items:
                 type: string
@@ -871,6 +898,7 @@ components:
             limit:
               type: integer
             write_memory_id:
+              x-soat-ref: memories
               type: string
               nullable: true
               description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
@@ -884,6 +912,7 @@ components:
                       type: boolean
                       description: Defaults to true when the object form is used. Set false to keep the configuration but disable extraction.
                     ai_provider_id:
+                      x-soat-ref: ai-providers
                       type: string
                       description: AI provider override for extraction calls. Must belong to the agent's project. Its default_model becomes the model fallback.
                     model:
@@ -910,6 +939,7 @@ components:
               description: Reflect only — overrides for the critique pass.
               properties:
                 ai_provider_id:
+                  x-soat-ref: ai-providers
                   type: string
                   description: AI provider override for the critique call. Must belong to the agent's project.
                 model:
@@ -931,6 +961,7 @@ components:
                       prompt:
                         type: string
                       ai_provider_id:
+                        x-soat-ref: ai-providers
                         type: string
                       model:
                         type: string
@@ -942,6 +973,7 @@ components:
               description: Debate only — override triple for the synthesis pass.
               properties:
                 ai_provider_id:
+                  x-soat-ref: ai-providers
                   type: string
                   description: AI provider override for the synthesis call. Must belong to the agent's project.
                 model:
@@ -990,15 +1022,18 @@ components:
           default: false
           description: When true the response is an SSE stream
         trace_id:
+          x-soat-ref: traces
           type: string
           x-soat-server-managed: true
           description: Optional trace ID to group generations
         parent_trace_id:
+          x-soat-ref: traces
           type: string
           nullable: true
           x-soat-server-managed: true
           description: The trace ID of the parent agent generation that triggered this one (for agent-to-agent calls)
         root_trace_id:
+          x-soat-ref: traces
           type: string
           nullable: true
           x-soat-server-managed: true
@@ -1033,6 +1068,7 @@ components:
               description: Reflect only — overrides for the critique pass.
               properties:
                 ai_provider_id:
+                  x-soat-ref: ai-providers
                   type: string
                   description: AI provider override for the critique call. Must belong to the agent's project.
                 model:
@@ -1054,6 +1090,7 @@ components:
                       prompt:
                         type: string
                       ai_provider_id:
+                        x-soat-ref: ai-providers
                         type: string
                       model:
                         type: string
@@ -1065,6 +1102,7 @@ components:
               description: Debate only — override triple for the synthesis pass.
               properties:
                 ai_provider_id:
+                  x-soat-ref: ai-providers
                   type: string
                   description: AI provider override for the synthesis call. Must belong to the agent's project.
                 model:
@@ -1085,6 +1123,7 @@ components:
           enum:
             - tool_output
         tool_id:
+          x-soat-ref: tools
           type: string
           description: Public ID of the tool to execute before generation.
         action:
@@ -1112,6 +1151,7 @@ components:
           enum:
             - document
         document_id:
+          x-soat-ref: documents
           type: string
           description: Public ID of a document to use as the message content.
 

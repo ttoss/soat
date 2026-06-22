@@ -90,6 +90,7 @@ paths:
                 - storage_path
               properties:
                 project_id:
+                  x-soat-ref: projects
                   type: string
                   description: Public ID of the project
                   example: 'proj_V1StGXR8Z5jdHi6B'
@@ -157,6 +158,7 @@ paths:
                   format: binary
                   description: File content
                 project_id:
+                  x-soat-ref: projects
                   type: string
                   description: Project ID to associate the file with
                   example: 'proj_V1StGXR8Z5jdHi6B'
@@ -525,6 +527,7 @@ components:
         - content
       properties:
         project_id:
+          x-soat-ref: projects
           type: string
           description: Public ID of the project
           example: 'proj_V1StGXR8Z5jdHi6B'

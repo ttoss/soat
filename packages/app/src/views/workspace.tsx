@@ -1,4 +1,12 @@
-import { Cpu, Key, LogOut, Settings, Shield, Users } from 'lucide-react';
+import {
+  Cpu,
+  FolderOpen,
+  Key,
+  LogOut,
+  Settings,
+  Shield,
+  Users,
+} from 'lucide-react';
 import * as React from 'react';
 
 import { apiFetch } from '@/api/client';
@@ -151,6 +159,29 @@ const LeftNav = ({
           {'SOAT'}
         </h1>
       </div>
+
+      {(() => {
+        const projectsModule = modules.find((m) => {
+          return m.tag === 'Projects';
+        });
+        if (!projectsModule?.listOp) return null;
+        const isProjectsActive = activeListTag === 'Projects';
+        return (
+          <NavItem
+            label="Projects"
+            Icon={FolderOpen}
+            active={isProjectsActive}
+            onClick={() => {
+              navigate({
+                tag: 'Projects',
+                operationId: projectsModule.listOp!.operation.operationId,
+                pathParams: {},
+                mode: 'list',
+              });
+            }}
+          />
+        );
+      })()}
 
       <ProjectPicker
         projects={projects}

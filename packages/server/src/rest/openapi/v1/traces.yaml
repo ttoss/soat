@@ -226,12 +226,15 @@ components:
           description: Public ID of the trace
           example: agt_trace_V1StGXR8Z5jdHi6B
         project_id:
+          x-soat-ref: projects
           type: string
           description: Public ID of the project
         agent_id:
+          x-soat-ref: agents
           type: string
           description: Public ID of the agent that produced this trace
         file_id:
+          x-soat-ref: files
           type: string
           nullable: true
           description: >
@@ -243,12 +246,14 @@ components:
           description: Number of steps recorded in this trace
           example: 2
         parent_trace_id:
+          x-soat-ref: traces
           type: string
           nullable: true
           description: >
             Public ID of the parent trace. Null if this trace is the root
             (i.e., it was not triggered by a sub-agent call from another trace).
         root_trace_id:
+          x-soat-ref: traces
           type: string
           nullable: true
           description: >
@@ -282,18 +287,23 @@ components:
           type: string
           description: Public ID of the trace
         project_id:
+          x-soat-ref: projects
           type: string
         agent_id:
+          x-soat-ref: agents
           type: string
         file_id:
+          x-soat-ref: files
           type: string
           nullable: true
         step_count:
           type: integer
         parent_trace_id:
+          x-soat-ref: traces
           type: string
           nullable: true
         root_trace_id:
+          x-soat-ref: traces
           type: string
           nullable: true
         error:
@@ -313,10 +323,12 @@ components:
       type: object
       properties:
         trace_id:
+          x-soat-ref: traces
           type: string
           description: Public ID of the trace
           example: agt_trace_V1StGXR8Z5jdHi6B
         generation_ids:
+          x-soat-ref: generations
           type: array
           description: Generation public IDs linked to this trace, ordered by start time
           items:
