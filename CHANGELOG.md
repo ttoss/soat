@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.12.4](https://github.com/ttoss/soat/compare/v0.12.3...v0.12.4) (2026-06-22)
+
+### Bug Fixes
+
+* **server:** document GET /api/v1/projects so the app can create projects ([#229](https://github.com/ttoss/soat/issues/229)) ([47bf1e9](https://github.com/ttoss/soat/commit/47bf1e92e67ceb118f7cd7c30d3c77fb6b0cfa10))
+
+### Features
+
+* **app:** display app version in sidebar footer ([#231](https://github.com/ttoss/soat/issues/231)) ([99ed16a](https://github.com/ttoss/soat/commit/99ed16ac0ce4dafd15cf2c906d4710b21c75f75e))
+* **app:** flatten the sidebar modules into a single list ([#230](https://github.com/ttoss/soat/issues/230)) ([040664d](https://github.com/ttoss/soat/commit/040664d45c34e247dba792566c20534c4c7969cb))
+* **app:** spec-driven cross-ref links, sidebar nav & project picker ([#233](https://github.com/ttoss/soat/issues/233)) ([aabe9a3](https://github.com/ttoss/soat/commit/aabe9a3b34fe616b10122b28fb58253a907069c5))
+
 ## [0.12.3](https://github.com/ttoss/soat/compare/v0.12.2...v0.12.3) (2026-06-22)
 
 ### Features

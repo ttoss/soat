@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.12.4](https://127.0.0.1/42309/git/ttoss/compare/v0.12.3...v0.12.4) (2026-06-22)
+
+### Features
+
+* **app:** display app version in sidebar footer ([#231](https://127.0.0.1/42309/git/ttoss/issues/231)) ([99ed16a](https://127.0.0.1/42309/git/ttoss/commits/99ed16ac0ce4dafd15cf2c906d4710b21c75f75e))
+* **app:** flatten the sidebar modules into a single list ([#230](https://127.0.0.1/42309/git/ttoss/issues/230)) ([040664d](https://127.0.0.1/42309/git/ttoss/commits/040664d45c34e247dba792566c20534c4c7969cb))
+* **app:** spec-driven cross-ref links, sidebar nav & project picker ([#233](https://127.0.0.1/42309/git/ttoss/issues/233)) ([aabe9a3](https://127.0.0.1/42309/git/ttoss/commits/aabe9a3b34fe616b10122b28fb58253a907069c5))
+
 ## [0.12.3](https://127.0.0.1/38839/git/ttoss/compare/v0.12.2...v0.12.3) (2026-06-22)
 
 ### Features
