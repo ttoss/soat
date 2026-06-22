@@ -67,6 +67,21 @@ describe('Projects', () => {
       expect(Array.isArray(response.body)).toBe(true);
     });
 
+    test('the list operation is documented in the OpenAPI spec', async () => {
+      const response = await authenticatedTestClient(adminToken).get(
+        '/api/v1/openapi.json'
+      );
+
+      expect(response.status).toBe(200);
+      const get = response.body.paths?.['/api/v1/projects']?.get;
+      expect(get).toBeDefined();
+      expect(get.operationId).toBe('listProjects');
+      const itemsRef =
+        get.responses?.['200']?.content?.['application/json']?.schema?.items
+          ?.$ref;
+      expect(itemsRef).toBe('#/components/schemas/ProjectRecord');
+    });
+
     test('unauthenticated request cannot list projects', async () => {
       const response = await testClient.get('/api/v1/projects');
 
