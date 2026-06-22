@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.12.3](https://127.0.0.1/38839/git/ttoss/compare/v0.12.2...v0.12.3) (2026-06-22)
+
+### Features
+
+* **docs:** add docs module exposing platform documentation via REST and MCP ([#226](https://127.0.0.1/38839/git/ttoss/issues/226)) ([7cba13a](https://127.0.0.1/38839/git/ttoss/commits/7cba13a239a124e4e61e9a56a17d6753e6b5869e)), closes [#214](https://127.0.0.1/38839/git/ttoss/issues/214)
+* **embeddings:** add POST /api/v1/embeddings endpoint ([#224](https://127.0.0.1/38839/git/ttoss/issues/224)) ([789e3b6](https://127.0.0.1/38839/git/ttoss/commits/789e3b68253b1681c047f7e7790d5fbe920667d0))
+* **website:** apply SOAT design system visual polish ([#227](https://127.0.0.1/38839/git/ttoss/issues/227)) ([de0db47](https://127.0.0.1/38839/git/ttoss/commits/de0db47f6287de26eee3c158f0e2e3b983dc8c3d)), closes [#080c14](https://127.0.0.1/38839/git/ttoss/issues/080c14)
+
 ## [0.12.2](https://127.0.0.1/34481/git/ttoss/compare/v0.12.0...v0.12.2) (2026-06-21)
 
 ### Features
