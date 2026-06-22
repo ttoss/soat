@@ -4,13 +4,16 @@ import { apiFetch } from '@/api/client';
 import { useAuth } from '@/auth/authContext';
 import { Button } from '@/components/ui/button';
 
+import { renderRefLink, useRefNavigation } from './crossRef';
 import { ALL_STATUSES, EmptyState, ListToolbar } from './listToolbar';
 import { useNavigation } from './navigationContext';
 import {
   buildUrl,
   deriveColumns,
   extractItems,
+  extractRefFields,
   formatValue,
+  getResponseItemSchema,
   humanizeKey,
   isSensitiveKey,
 } from './specUtils';
@@ -19,10 +22,22 @@ import type { JsonObject, JsonValue, ModuleInfo, OpenApiSpec } from './types';
 
 const PER_PAGE = 15;
 
-const CellValue = ({ colKey, value }: { colKey: string; value: JsonValue }) => {
+const CellValue = ({
+  colKey,
+  value,
+  refResource,
+  onRefClick,
+}: {
+  colKey: string;
+  value: JsonValue;
+  refResource?: string;
+  onRefClick?: (resource: string, id: string) => void;
+}) => {
   if (isSensitiveKey(colKey)) {
     return <span className="text-muted-foreground italic">{'[hidden]'}</span>;
   }
+  const refLink = renderRefLink({ refResource, value, onRefClick });
+  if (refLink) return refLink;
   if (colKey === 'status' && typeof value === 'string' && value) {
     return <StatusBadge status={value} />;
   }
@@ -105,11 +120,15 @@ const ItemTable = ({
   columns,
   hasDetail,
   onRowClick,
+  refFields,
+  onRefClick,
 }: {
   items: JsonObject[];
   columns: string[];
   hasDetail: boolean;
   onRowClick: (item: JsonObject) => void;
+  refFields: Record<string, string>;
+  onRefClick?: (resource: string, id: string) => void;
 }) => {
   return (
     <div className="overflow-x-auto rounded-md border">
@@ -142,6 +161,8 @@ const ItemTable = ({
                       <CellValue
                         colKey={col}
                         value={item[col] ?? (null as JsonValue)}
+                        refResource={refFields[col]}
+                        onRefClick={onRefClick}
                       />
                     </td>
                   );
@@ -172,6 +193,7 @@ type ListViewProps = {
   module: ModuleInfo;
   spec: OpenApiSpec;
   pathParams: Record<string, string>;
+  modules?: ModuleInfo[];
 };
 
 type ViewState =
@@ -184,6 +206,8 @@ type LoadedListProps = {
   items: JsonObject[];
   onRowClick: (item: JsonObject) => void;
   onCreate: () => void;
+  refFields: Record<string, string>;
+  onRefClick?: (resource: string, id: string) => void;
 };
 
 const LoadedList = ({
@@ -191,6 +215,8 @@ const LoadedList = ({
   items,
   onRowClick,
   onCreate,
+  refFields,
+  onRefClick,
 }: LoadedListProps) => {
   const [page, setPage] = React.useState(0);
   const [search, setSearch] = React.useState('');
@@ -240,6 +266,8 @@ const LoadedList = ({
             columns={columns}
             hasDetail={Boolean(module.getOp)}
             onRowClick={onRowClick}
+            refFields={refFields}
+            onRefClick={onRefClick}
           />
           {filtered.length > PER_PAGE && (
             <PaginationFooter
@@ -265,8 +293,9 @@ const LoadedList = ({
 
 export const ListView = ({
   module,
-  spec: _spec,
+  spec,
   pathParams,
+  modules = [],
 }: ListViewProps) => {
   const { state } = useAuth();
   const { navigate } = useNavigation();
@@ -275,6 +304,12 @@ export const ListView = ({
   });
 
   const token = state.status === 'authenticated' ? state.token : '';
+
+  const refFields = React.useMemo(() => {
+    return extractRefFields(getResponseItemSchema(module.listOp, spec), spec);
+  }, [module.listOp, spec]);
+
+  const handleRefClick = useRefNavigation(modules);
 
   const fetchData = React.useCallback(() => {
     if (!module.listOp || !token) return;
@@ -366,6 +401,8 @@ export const ListView = ({
         items={items}
         onRowClick={handleRowClick}
         onCreate={handleCreate}
+        refFields={refFields}
+        onRefClick={modules.length > 0 ? handleRefClick : undefined}
       />
     </div>
   );

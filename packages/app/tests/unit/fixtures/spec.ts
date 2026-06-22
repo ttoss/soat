@@ -15,6 +15,18 @@ export const testSpec: OpenApiSpec = {
         operationId: 'listAgents',
         tags: ['Agents'],
         summary: 'List agents',
+        responses: {
+          '200': {
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'array',
+                  items: { $ref: '#/components/schemas/Agent' },
+                },
+              },
+            },
+          },
+        },
       },
       post: {
         operationId: 'createAgent',
@@ -31,7 +43,19 @@ export const testSpec: OpenApiSpec = {
       },
     },
     '/api/v1/agents/{agent_id}': {
-      get: { operationId: 'getAgent', tags: ['Agents'] },
+      get: {
+        operationId: 'getAgent',
+        tags: ['Agents'],
+        responses: {
+          '200': {
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Agent' },
+              },
+            },
+          },
+        },
+      },
       put: {
         operationId: 'updateAgent',
         tags: ['Agents'],
@@ -224,6 +248,15 @@ export const testSpec: OpenApiSpec = {
   },
   components: {
     schemas: {
+      Agent: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          model: { type: 'string' },
+          project_id: { type: 'string', 'x-soat-ref': 'projects' },
+        },
+      },
       CreateAgent: {
         type: 'object',
         required: ['name'],

@@ -1,5 +1,6 @@
 import type * as React from 'react';
 
+import { renderRefLink } from './crossRef';
 import { formatValue, humanizeKey, isSensitiveKey } from './specUtils';
 import { StatusBadge } from './statusBadge';
 import type { JsonObject, JsonValue } from './types';
@@ -13,9 +14,13 @@ const isMultiline = (value: JsonValue): boolean => {
 const FieldValue = ({
   fieldKey,
   value,
+  refResource,
+  onRefClick,
 }: {
   fieldKey: string;
   value: JsonValue;
+  refResource?: string;
+  onRefClick?: (resource: string, id: string) => void;
 }) => {
   if (isSensitiveKey(fieldKey)) {
     return (
@@ -28,6 +33,14 @@ const FieldValue = ({
   if (fieldKey === 'error' && value) {
     return <StatusBadge error />;
   }
+  const refLink = renderRefLink({
+    refResource,
+    value,
+    onRefClick,
+    className:
+      'self-start font-mono text-sm text-primary underline-offset-4 hover:underline',
+  });
+  if (refLink) return refLink;
   const display = formatValue(fieldKey, value);
   return (
     <span className="text-sm">
@@ -77,6 +90,8 @@ const MonoCard = ({
 type DetailSectionsProps = {
   item: JsonObject;
   fields: string[];
+  refFields?: Record<string, string>;
+  onRefClick?: (resource: string, id: string) => void;
 };
 
 /**
@@ -84,7 +99,12 @@ type DetailSectionsProps = {
  * scalar fields, and a dedicated mono/`<pre>` card per long or multiline string
  * field (e.g. `instructions`, `description`).
  */
-export const DetailSections = ({ item, fields }: DetailSectionsProps) => {
+export const DetailSections = ({
+  item,
+  fields,
+  refFields = {},
+  onRefClick,
+}: DetailSectionsProps) => {
   const overviewKeys = fields.filter((k) => {
     return !isMultiline(item[k]);
   });
@@ -103,7 +123,12 @@ export const DetailSections = ({ item, fields }: DetailSectionsProps) => {
                   <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     {humanizeKey(key)}
                   </span>
-                  <FieldValue fieldKey={key} value={item[key]} />
+                  <FieldValue
+                    fieldKey={key}
+                    value={item[key]}
+                    refResource={refFields[key]}
+                    onRefClick={onRefClick}
+                  />
                 </div>
               );
             })}

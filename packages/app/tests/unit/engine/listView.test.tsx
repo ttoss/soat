@@ -17,10 +17,17 @@ const agentsModule = (): ModuleInfo => {
   return m;
 };
 
-const renderList = () =>
+const allModules = (): ModuleInfo[] => parseModules(testSpec);
+
+const renderList = (modules?: ModuleInfo[]) =>
   renderWithAuth(
     <>
-      <ListView module={agentsModule()} spec={testSpec} pathParams={{}} />
+      <ListView
+        module={agentsModule()}
+        spec={testSpec}
+        pathParams={{}}
+        modules={modules}
+      />
       <NavProbe />
     </>
   );
@@ -76,6 +83,41 @@ describe('ListView', () => {
     const probe = screen.getByTestId('nav-probe');
     expect(probe).toHaveTextContent('"mode":"detail"');
     expect(probe).toHaveTextContent('"agent_id":"agt_1"');
+  });
+
+  test('renders an x-soat-ref field as a link that opens the referenced resource', async () => {
+    server.use(
+      http.get('*/api/v1/agents', () =>
+        HttpResponse.json([
+          { id: 'agt_1', name: 'Alpha', project_id: 'proj_42' },
+        ])
+      )
+    );
+    renderList(allModules());
+
+    const link = await screen.findByRole('button', { name: 'proj_42' });
+    await userEvent.click(link);
+
+    const probe = screen.getByTestId('nav-probe');
+    expect(probe).toHaveTextContent('"tag":"Projects"');
+    expect(probe).toHaveTextContent('"mode":"detail"');
+    expect(probe).toHaveTextContent('"project_id":"proj_42"');
+  });
+
+  test('renders a ref field as plain text when no modules are provided', async () => {
+    server.use(
+      http.get('*/api/v1/agents', () =>
+        HttpResponse.json([
+          { id: 'agt_1', name: 'Alpha', project_id: 'proj_42' },
+        ])
+      )
+    );
+    renderList();
+
+    expect(await screen.findByText('proj_42')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'proj_42' })
+    ).not.toBeInTheDocument();
   });
 
   test('clicking Create navigates to the create form', async () => {

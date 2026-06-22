@@ -4,10 +4,16 @@ import { apiFetch } from '@/api/client';
 import { useAuth } from '@/auth/authContext';
 import { Button } from '@/components/ui/button';
 
+import { useRefNavigation } from './crossRef';
 import { DetailSections } from './detailSections';
 import { findSubResources, SubResourceTabs } from './detailSubResources';
 import { useNavigation } from './navigationContext';
-import { actionLabel, buildUrl } from './specUtils';
+import {
+  actionLabel,
+  buildUrl,
+  extractRefFields,
+  getResponseItemSchema,
+} from './specUtils';
 import { StatusBadge } from './statusBadge';
 import type { JsonObject, ModuleInfo, OpenApiSpec } from './types';
 
@@ -156,12 +162,18 @@ type DetailViewProps = {
 
 export const DetailView = ({
   module,
-  spec: _spec,
+  spec,
   pathParams,
   modules = [],
 }: DetailViewProps) => {
   const { state } = useAuth();
   const { navigate } = useNavigation();
+
+  const refFields = React.useMemo(() => {
+    return extractRefFields(getResponseItemSchema(module.getOp, spec), spec);
+  }, [module.getOp, spec]);
+
+  const handleRefClick = useRefNavigation(modules);
   const [viewState, setViewState] = React.useState<DetailState>({
     status: 'loading',
   });
@@ -274,7 +286,12 @@ export const DetailView = ({
         />
       </div>
 
-      <DetailSections item={item} fields={fields} />
+      <DetailSections
+        item={item}
+        fields={fields}
+        refFields={refFields}
+        onRefClick={modules.length > 0 ? handleRefClick : undefined}
+      />
 
       <SubResourceTabs
         subResources={subResources}

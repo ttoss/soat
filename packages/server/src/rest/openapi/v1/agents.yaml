@@ -476,9 +476,11 @@ components:
         project_id:
           type: string
           description: Public ID of the owning project
+          x-soat-ref: projects
         ai_provider_id:
           type: string
           description: Public ID of the AI provider
+          x-soat-ref: ai-providers
         name:
           type: string
           nullable: true
