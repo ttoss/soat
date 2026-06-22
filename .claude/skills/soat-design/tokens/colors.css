@@ -1,0 +1,140 @@
+/* ===================================================================
+   SOAT — COLOR TOKENS
+   Source of truth: SOAT Brand System v1.1 (BRANDBOOK.md) + website theme.
+   Dual-theme by design: light mode uses Electric Blue as the functional
+   primary; dark mode (the native environment) uses Core Cyan.
+   We do not invert — we shift the functional hue to keep contrast high.
+   =================================================================== */
+
+:root {
+  /* ---- Core brand DNA (constant across themes, used in logo & imagery) ---- */
+  --soat-violet: #8e44ad; /* Deep Violet — complexity, depth, gradients */
+  --soat-violet-dark: #7d3c9d;
+  --soat-violet-light: #a855c7;
+  --soat-cyan: #00e5ff; /* Core Cyan — the glow; decorative in light mode */
+  --soat-blue: #1a73e8; /* Electric Blue — functional primary (light) */
+
+  /* ---- Raw neutral ramp (Deep Space Grey family) ---- */
+  --space-black: #080c14; /* dark-mode page background */
+  --nebula-navy: #161b22; /* dark-mode surface / code blocks */
+  --deep-space-grey: #1a1f2c; /* light-mode heading text */
+  --pale-cosmos: #f5f7fa; /* light-mode secondary surface */
+  --pure-white: #ffffff;
+  --starlight-white: #f0f8ff; /* dark-mode primary text */
+
+  /* ---- Neutral emphasis ramp (light) ---- */
+  --neutral-50: #f5f7fa;
+  --neutral-100: #ebeef3;
+  --neutral-200: #dde1e8;
+  --neutral-300: #c4c9d4;
+  --neutral-400: #8f9bb3;
+
+  /* =================================================================
+     LIGHT THEME — semantic aliases (default)
+     ================================================================= */
+
+  /* Brand / interactive primary */
+  --color-primary: #1a73e8; /* Electric Blue */
+  --color-primary-hover: #1567d3;
+  --color-primary-active: #1050a4;
+  --color-primary-contrast: #ffffff;
+  --color-accent: #8e44ad; /* Deep Violet */
+  --color-glow: #00e5ff; /* decorative only in light mode */
+
+  /* Surfaces */
+  --surface-page: #ffffff; /* Pure White */
+  --surface-raised: #f5f7fa; /* Pale Cosmos — cards, sidebars, code */
+  --surface-sunken: #ebeef3;
+  --surface-overlay: rgba(255, 255, 255, 0.72); /* glass panels */
+  --surface-code: #f8fafc;
+
+  /* Text */
+  --text-strong: #1a1f2c; /* Deep Space Grey — headings */
+  --text-body: #2a2f3c;
+  --text-muted: #515766;
+  --text-faint: #8f9bb3;
+  --text-on-primary: #ffffff;
+  --text-link: #1a73e8;
+
+  /* Borders & lines */
+  --border-subtle: rgba(26, 31, 44, 0.08);
+  --border-default: #dde1e8;
+  --border-strong: #c4c9d4;
+  --border-focus: #1a73e8;
+
+  /* Semantic status */
+  --color-success: #10a37f;
+  --color-danger: #ef4444;
+  --color-info: #3b82f6;
+  --color-warning: #f97316;
+
+  /* HTTP method badge palette (from docs API reference) */
+  --method-get: #1a73e8;
+  --method-post: #10a37f;
+  --method-delete: #ef4444;
+  --method-put: #3b82f6;
+  --method-patch: #f97316;
+  --method-fg: #ffffff; /* method-badge text — backgrounds are dark enough for white */
+  --method-border: rgba(255, 255, 255, 0.22);
+
+  /* Brand gradient (light): Deep Violet -> Electric Blue */
+  --gradient-brand: linear-gradient(135deg, #8e44ad 0%, #1a73e8 100%); /* @kind color */
+  /* Cosmic depth wash for page backgrounds */
+  --gradient-cosmos: radial-gradient(
+    circle at 75% 35%,
+    rgba(0, 229, 255, 0.1) 0%,
+    transparent 36%
+  ); /* @kind color */
+}
+
+/* =================================================================
+   DARK THEME — the native environment. Glow + contrast.
+   ================================================================= */
+:root[data-theme='dark'],
+.theme-dark {
+  --color-primary: #00e5ff; /* Core Cyan */
+  --color-primary-hover: #1ae8ff;
+  --color-primary-active: #00a0b3;
+  --color-primary-contrast: #080c14;
+  --color-accent: #8e44ad;
+  --color-glow: #00e5ff;
+
+  --surface-page: #080c14; /* Space Black */
+  --surface-raised: #161b22; /* Nebula Navy */
+  --surface-sunken: #0d1117;
+  --surface-overlay: rgba(22, 27, 34, 0.68); /* glass HUD panels */
+  --surface-code: #0d1117;
+
+  --text-strong: #f0f8ff; /* Starlight White */
+  --text-body: #f0f8ff;
+  --text-muted: #8f9bb3;
+  --text-faint: #5b6678;
+  --text-on-primary: #080c14;
+  --text-link: #00e5ff;
+
+  --border-subtle: rgba(0, 229, 255, 0.08);
+  --border-default: rgba(0, 229, 255, 0.12);
+  --border-strong: #2a3340;
+  --border-focus: #00e5ff;
+
+  --color-success: #22c55e;
+  --color-danger: #f87171;
+  --color-info: #60a5fa;
+  --color-warning: #fb923c;
+
+  --method-get: #00e5ff;
+  --method-post: #22c55e;
+  --method-delete: #f87171;
+  --method-put: #60a5fa;
+  --method-patch: #fb923c;
+  --method-fg: #080c14; /* dark text — dark-mode method colors are bright (cyan/green) and need dark fg for contrast */
+  --method-border: rgba(8, 12, 20, 0.2);
+
+  /* Brand gradient (dark): Deep Violet -> Core Cyan */
+  --gradient-brand: linear-gradient(135deg, #8e44ad 0%, #00e5ff 100%); /* @kind color */
+  --gradient-cosmos: radial-gradient(
+    circle at 50% 0%,
+    rgba(142, 68, 173, 0.18) 0%,
+    rgba(8, 12, 20, 0) 60%
+  ); /* @kind color */
+}

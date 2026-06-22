@@ -1,0 +1,57 @@
+<!-- @dsCard group="Components" viewport="700x340" name="Buttons, Badges & Tags" subtitle="Core interactive primitives and status tokens" -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="../../styles.css" />
+<script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+  body { padding: 24px; }
+  .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  .lbl { font: 600 11px/1 var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); width: 100%; margin-bottom: 2px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { Button, Badge, MethodBadge, Tag } = window.SOATDesignSystem_de1198;
+  function Demo() {
+    return (
+      <div>
+        <div className="row">
+          <span className="lbl">Button — variants & sizes</span>
+          <Button variant="primary" size="lg">Get Started</Button>
+          <Button variant="secondary">Read the docs</Button>
+          <Button variant="ghost">Cancel</Button>
+          <Button variant="primary" size="sm">Run it</Button>
+          <Button variant="secondary" disabled>Disabled</Button>
+        </div>
+        <div className="row">
+          <span className="lbl">Badge</span>
+          <Badge tone="success" dot>healthy</Badge>
+          <Badge tone="primary" dot>running</Badge>
+          <Badge tone="glow">MCP native</Badge>
+          <Badge tone="warning">degraded</Badge>
+          <Badge tone="danger" dot>failed</Badge>
+          <Badge tone="neutral">v1.1</Badge>
+        </div>
+        <div className="row">
+          <span className="lbl">MethodBadge & Tag</span>
+          <MethodBadge method="GET" />
+          <MethodBadge method="POST" />
+          <MethodBadge method="PUT" />
+          <MethodBadge method="DELETE" />
+          <Tag>TypeScript</Tag>
+          <Tag mono>qwen2.5:0.5b</Tag>
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Semantic status" subtitle="Success, danger, warning, info — light values" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { padding: 20px; }
+  .row { display: flex; gap: 12px; }
+  .sw { flex: 1; }
+  .chip { height: 54px; border-radius: var(--radius-md); }
+  .name { font: 600 12px/1.4 var(--font-display); color: var(--text-strong); margin-top: 7px; letter-spacing: 0.02em; }
+  .hex { font: 500 11px/1.4 var(--font-mono); color: var(--text-muted); text-transform: uppercase; }
+</style>
+</head>
+<body>
+<div class="row">
+  <div class="sw"><div class="chip" style="background:#10a37f"></div><div class="name">Success</div><div class="hex">#10A37F</div></div>
+  <div class="sw"><div class="chip" style="background:#ef4444"></div><div class="name">Danger</div><div class="hex">#EF4444</div></div>
+  <div class="sw"><div class="chip" style="background:#f97316"></div><div class="name">Warning</div><div class="hex">#F97316</div></div>
+  <div class="sw"><div class="chip" style="background:#3b82f6"></div><div class="name">Info</div><div class="hex">#3B82F6</div></div>
+</div>
+</body>
+</html>

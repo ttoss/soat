@@ -1,0 +1,25 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Dark surfaces & text" subtitle="Space Black / Nebula Navy surfaces, Starlight White text" -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { padding: 20px; }
+  .row { display: flex; gap: 12px; }
+  .sw { flex: 1; }
+  .chip { height: 54px; border-radius: var(--radius-md); border: 1px solid var(--border-default); }
+  .name { font: 600 12px/1.4 var(--font-display); color: var(--text-strong); margin-top: 7px; letter-spacing: 0.02em; }
+  .hex { font: 500 11px/1.4 var(--font-mono); color: var(--text-muted); text-transform: uppercase; }
+</style>
+</head>
+<body>
+<div class="row">
+  <div class="sw"><div class="chip" style="background:#080c14"></div><div class="name">Space Black</div><div class="hex">#080C14 · page</div></div>
+  <div class="sw"><div class="chip" style="background:#161b22"></div><div class="name">Nebula Navy</div><div class="hex">#161B22 · raised</div></div>
+  <div class="sw"><div class="chip" style="background:#0d1117"></div><div class="name">Sunken / code</div><div class="hex">#0D1117</div></div>
+  <div class="sw"><div class="chip" style="background:#f0f8ff"></div><div class="name">Starlight White</div><div class="hex">#F0F8FF · text</div></div>
+  <div class="sw"><div class="chip" style="background:#8f9bb3"></div><div class="name">Muted text</div><div class="hex">#8F9BB3</div></div>
+</div>
+</body>
+</html>
