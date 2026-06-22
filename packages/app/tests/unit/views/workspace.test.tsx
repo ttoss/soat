@@ -81,6 +81,15 @@ describe('Workspace', () => {
     expect(await screen.findByText('Proj One')).toBeInTheDocument();
   });
 
+  test('displays the app version in the sidebar footer', async () => {
+    renderWorkspace();
+
+    // The footer should show a semver version string (e.g. "v0.12.3")
+    expect(
+      await screen.findByText(/^v\d+\.\d+\.\d+$/)
+    ).toBeInTheDocument();
+  });
+
   test('selecting a module renders its list in the main area', async () => {
     server.use(
       http.get('*/api/v1/agents', () =>

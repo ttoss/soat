@@ -215,6 +215,9 @@ const LeftNav = ({
           <LogOut className="h-3.5 w-3.5 shrink-0" />
           {'Sign out'}
         </button>
+        <p className="mt-1.5 px-1 text-[0.67rem] text-muted-foreground/40">
+          {`v${__APP_VERSION__}`}
+        </p>
       </div>
     </nav>
   );
