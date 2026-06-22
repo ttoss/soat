@@ -150,6 +150,33 @@ describe('FormView (create)', () => {
     expect(await screen.findByText('name taken')).toBeInTheDocument();
   });
 
+  test('renders a project selector populated from the API for x-soat-ref fields', async () => {
+    server.use(
+      http.get('*/api/v1/projects', () =>
+        HttpResponse.json([
+          { id: 'proj_1', name: 'Alpha Project' },
+          { id: 'proj_2', name: 'Beta Project' },
+        ])
+      )
+    );
+
+    renderWithAuth(
+      <FormView
+        module={agentsModule()}
+        spec={testSpec}
+        pathParams={{}}
+        mode="create"
+      />
+    );
+
+    expect(
+      await screen.findByRole('option', { name: 'Alpha Project' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: 'Beta Project' })
+    ).toBeInTheDocument();
+  });
+
   test('shows the HTTP method badge and endpoint path', () => {
     renderWithAuth(
       <FormView

@@ -16,6 +16,7 @@ export type OpenApiSchema = {
   required?: string[];
   description?: string;
   $ref?: string;
+  'x-soat-ref'?: string;
 };
 
 export type OpenApiParameter = {

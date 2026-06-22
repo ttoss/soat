@@ -6,12 +6,15 @@ import { Label } from '@/components/ui/label';
 import { humanizeKey } from './specUtils';
 import type { OpenApiSchema } from './types';
 
+type RefOption = { value: string; label: string };
+
 type FieldEditorProps = {
   name: string;
   schema: OpenApiSchema;
   value: string;
   onChange: (value: string) => void;
   required?: boolean;
+  refOptions?: RefOption[];
 };
 
 const TextareaField = ({
@@ -85,11 +88,44 @@ const getInputType = (schema: OpenApiSchema): 'number' | 'text' => {
     : 'text';
 };
 
+const RefSelectField = ({
+  id,
+  value,
+  onChange,
+  options,
+}: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: RefOption[];
+}) => {
+  return (
+    <select
+      id={id}
+      value={value}
+      onChange={(e) => {
+        return onChange(e.target.value);
+      }}
+      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    >
+      <option value={''}>{'— select —'}</option>
+      {options.map((opt) => {
+        return (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        );
+      })}
+    </select>
+  );
+};
+
 type FieldInputProps = {
   id: string;
   schema: OpenApiSchema;
   value: string;
   onChange: (v: string) => void;
+  refOptions?: RefOption[];
 };
 
 const FieldInput = ({
@@ -97,7 +133,18 @@ const FieldInput = ({
   schema,
   value,
   onChange,
+  refOptions,
 }: FieldInputProps): React.ReactElement => {
+  if (refOptions) {
+    return (
+      <RefSelectField
+        id={id}
+        value={value}
+        onChange={onChange}
+        options={refOptions}
+      />
+    );
+  }
   if (schema.enum) {
     return (
       <SelectField
@@ -152,6 +199,7 @@ export const FieldEditor = ({
   value,
   onChange,
   required,
+  refOptions,
 }: FieldEditorProps): React.ReactElement => {
   const id = `field-${name}`;
   const label = humanizeKey(name);
@@ -162,7 +210,13 @@ export const FieldEditor = ({
         {label}
         {required && <span className="ml-1 text-destructive">{'*'}</span>}
       </Label>
-      <FieldInput id={id} schema={schema} value={value} onChange={onChange} />
+      <FieldInput
+        id={id}
+        schema={schema}
+        value={value}
+        onChange={onChange}
+        refOptions={refOptions}
+      />
     </div>
   );
 };

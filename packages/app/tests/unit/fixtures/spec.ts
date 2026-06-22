@@ -231,6 +231,7 @@ export const testSpec: OpenApiSpec = {
           name: { type: 'string', description: 'Agent name' },
           model: { type: 'string', enum: ['gpt-4o', 'gpt-4o-mini'] },
           enabled: { type: 'boolean' },
+          project_id: { type: 'string', 'x-soat-ref': 'projects' },
         },
       },
     },

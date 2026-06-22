@@ -70,6 +70,7 @@ paths:
                   type: string
                   description: Optional project ID to scope this key to a specific project
                   example: proj_V1StGXR8Z5jdHi6B
+                  x-soat-ref: projects
                 policy_ids:
                   type: array
                   items:

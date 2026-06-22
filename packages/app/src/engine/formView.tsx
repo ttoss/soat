@@ -24,6 +24,8 @@ import type {
   OpenApiSpec,
 } from './types';
 
+type RefOption = { value: string; label: string };
+
 const getRequestSchema = (
   module: ModuleInfo,
   mode: 'create' | 'edit',
@@ -148,6 +150,58 @@ const useFormSubmit = (args: {
   return { submitting, error, handleSubmit };
 };
 
+const useRefFieldOptions = ({
+  schema,
+  token,
+}: {
+  schema: OpenApiSchema | undefined;
+  token: string;
+}): Record<string, RefOption[]> => {
+  const [refOptions, setRefOptions] = React.useState<
+    Record<string, RefOption[]>
+  >({});
+
+  React.useEffect(() => {
+    if (!schema?.properties || !token) return;
+
+    const refFields = Object.entries(schema.properties).filter(
+      ([, fieldSchema]) => {
+        return fieldSchema['x-soat-ref'];
+      }
+    );
+    if (refFields.length === 0) return;
+
+    Promise.all(
+      refFields.map(async ([name, fieldSchema]) => {
+        const ref = fieldSchema['x-soat-ref']!;
+        const result = await apiFetch<unknown>({
+          url: `/api/v1/${ref}`,
+          token,
+        });
+        if (!result.ok) return [name, []] as const;
+        const list = Array.isArray(result.data) ? result.data : [];
+        const options: RefOption[] = list
+          .filter((item): item is JsonObject => {
+            return (
+              typeof item === 'object' && item !== null && !Array.isArray(item)
+            );
+          })
+          .map((item) => {
+            return {
+              value: String(item.id ?? ''),
+              label: String(item.name ?? item.id ?? ''),
+            };
+          });
+        return [name, options] as const;
+      })
+    ).then((entries) => {
+      setRefOptions(Object.fromEntries(entries));
+    });
+  }, [schema, token]);
+
+  return refOptions;
+};
+
 type FormBodyProps = {
   title: string;
   httpMethod: string;
@@ -161,6 +215,7 @@ type FormBodyProps = {
   mode: 'create' | 'edit';
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
+  refOptions: Record<string, RefOption[]>;
 };
 
 const FormBody = ({
@@ -176,6 +231,7 @@ const FormBody = ({
   mode,
   onSubmit,
   onCancel,
+  refOptions,
 }: FormBodyProps) => {
   return (
     <div className="flex flex-col gap-6 max-w-lg">
@@ -206,6 +262,7 @@ const FormBody = ({
                 });
               }}
               required={required.has(name)}
+              refOptions={refOptions[name]}
             />
           );
         })}
@@ -254,6 +311,7 @@ export const FormView = ({
 
   const token = state.status === 'authenticated' ? state.token : '';
   const { op, title, httpMethod } = getFormModeValues(mode, module);
+  const refOptions = useRefFieldOptions({ schema, token });
   const { submitting, error, handleSubmit } = useFormSubmit({
     op,
     schema,
@@ -304,6 +362,7 @@ export const FormView = ({
       setFormData={setFormData}
       submitting={submitting}
       mode={mode}
+      refOptions={refOptions}
       onSubmit={handleSubmit}
       onCancel={() => {
         navigate(null);
