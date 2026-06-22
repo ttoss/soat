@@ -1,0 +1,55 @@
+/* ===================================================================
+   SOAT — EFFECTS TOKENS
+   Radii, shadows, neon glows, glassmorphism, motion.
+   Dark mode is luminous: active elements emit light (Core Cyan glow).
+   Light mode uses restrained, soft shadows.
+   =================================================================== */
+
+:root {
+  /* Corner radii — soft, engineered (not pill-round unless intentional) */
+  --radius-xs: 0.25rem; /* 4 — badges, method tags */
+  --radius-sm: 0.4rem; /* code copy buttons */
+  --radius-md: 0.5rem; /* 8 — buttons, cards, inputs (the workhorse) */
+  --radius-lg: 0.75rem; /* 12 — code blocks, admonitions */
+  --radius-xl: 1rem; /* 16 — feature cards, blog cards */
+  --radius-full: 999px; /* avatars, status dots, pills */
+
+  /* Elevation — light mode (soft, low) */
+  --shadow-xs: 0 1px 2px rgba(26, 31, 44, 0.06);
+  --shadow-sm: 0 2px 8px rgba(26, 31, 44, 0.08);
+  --shadow-md: 0 4px 16px rgba(26, 31, 44, 0.1);
+  --shadow-lg: 0 12px 32px rgba(26, 31, 44, 0.12);
+
+  /* Borders */
+  --border-width: 1px;
+  --border-width-accent: 4px; /* admonition left rail */
+
+  /* Glassmorphism (HUD feel) */
+  --blur-glass: 16px;
+
+  /* Focus ring */
+  --ring-focus: 0 0 0 3px rgba(26, 115, 232, 0.35);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); /* @kind other */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1); /* @kind other */
+  --duration-fast: 150ms; /* @kind other */
+  --duration-base: 200ms; /* @kind other */
+  --duration-slow: 300ms; /* @kind other */
+
+  /* Neon glow (decorative in light, functional in dark) */
+  --glow-cyan-sm: 0 0 8px rgba(0, 229, 255, 0.3);
+  --glow-cyan-md: 0 0 20px rgba(0, 229, 255, 0.3);
+  --glow-cyan-lg: 0 0 30px rgba(0, 229, 255, 0.5);
+  --glow-violet-md: 0 0 24px rgba(142, 68, 173, 0.3);
+}
+
+:root[data-theme='dark'],
+.theme-dark {
+  /* In dark mode shadows give way to glow + depth */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 4px 20px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.6);
+  --ring-focus: 0 0 0 3px rgba(0, 229, 255, 0.35);
+}

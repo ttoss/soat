@@ -1,0 +1,5 @@
+/* SOAT typefaces — loaded from Google Fonts CDN.
+   Space Grotesk (headings), Inter (body/UI), JetBrains Mono (code).
+   These are the canonical SOAT typefaces per the brandbook v1.1.
+   If self-hosting, replace this @import with @font-face rules pointing at local binaries. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');

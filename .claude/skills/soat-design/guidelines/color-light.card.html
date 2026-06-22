@@ -1,0 +1,25 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Light surfaces & text" subtitle="Pure White / Pale Cosmos surfaces, Deep Space Grey text" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { padding: 20px; }
+  .row { display: flex; gap: 12px; }
+  .sw { flex: 1; }
+  .chip { height: 54px; border-radius: var(--radius-md); border: 1px solid var(--border-default); }
+  .name { font: 600 12px/1.4 var(--font-display); color: var(--text-strong); margin-top: 7px; letter-spacing: 0.02em; }
+  .hex { font: 500 11px/1.4 var(--font-mono); color: var(--text-muted); text-transform: uppercase; }
+</style>
+</head>
+<body>
+<div class="row">
+  <div class="sw"><div class="chip" style="background:#ffffff"></div><div class="name">Pure White</div><div class="hex">#FFFFFF · page</div></div>
+  <div class="sw"><div class="chip" style="background:#f5f7fa"></div><div class="name">Pale Cosmos</div><div class="hex">#F5F7FA · raised</div></div>
+  <div class="sw"><div class="chip" style="background:#dde1e8"></div><div class="name">Border</div><div class="hex">#DDE1E8</div></div>
+  <div class="sw"><div class="chip" style="background:#1a1f2c"></div><div class="name">Deep Space Grey</div><div class="hex">#1A1F2C · text</div></div>
+  <div class="sw"><div class="chip" style="background:#515766"></div><div class="name">Muted text</div><div class="hex">#515766</div></div>
+</div>
+</body>
+</html>

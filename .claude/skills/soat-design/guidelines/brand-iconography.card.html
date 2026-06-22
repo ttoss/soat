@@ -1,0 +1,32 @@
+<!-- @dsCard group="Brand" viewport="700x180" name="Iconography — Lucide" subtitle="Clean stroke icons (~2px), currentColor, no fills" -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  body { padding: 24px; }
+  .row { display: flex; gap: 26px; align-items: center; flex-wrap: wrap; }
+  .item { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--color-primary); }
+  .item svg { width: 30px; height: 30px; stroke-width: 2; }
+  .lbl { font: 500 11px/1.3 var(--font-mono); color: var(--text-muted); }
+  .note { margin-top: 18px; font: 400 12px/1.5 var(--font-body); color: var(--text-faint); }
+</style>
+</head>
+<body>
+<div class="row">
+  <div class="item"><i data-lucide="server"></i><div class="lbl">server</div></div>
+  <div class="item"><i data-lucide="key-round"></i><div class="lbl">iam</div></div>
+  <div class="item"><i data-lucide="database"></i><div class="lbl">storage</div></div>
+  <div class="item"><i data-lucide="git-branch"></i><div class="lbl">orchestrate</div></div>
+  <div class="item"><i data-lucide="search"></i><div class="lbl">search</div></div>
+  <div class="item"><i data-lucide="brain-circuit"></i><div class="lbl">memory</div></div>
+  <div class="item"><i data-lucide="terminal"></i><div class="lbl">cli</div></div>
+  <div class="item"><i data-lucide="webhook"></i><div class="lbl">webhooks</div></div>
+  <div class="item"><i data-lucide="activity"></i><div class="lbl">traces</div></div>
+</div>
+<p class="note">Lucide — thin, geometric, stroke-based. Matches SOAT's custom surface icons (stroke ~2–2.5, no fills).</p>
+<script>lucide.createIcons();</script>
+</body>
+</html>

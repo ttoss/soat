@@ -1,0 +1,23 @@
+<!-- @dsCard group="Brand" viewport="700x240" name="Vector Galaxy logo" subtitle="Dark-mode first — the mark emits its own light" -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { padding: 0; }
+  .stage { display: grid; grid-template-columns: 1.4fr 1fr; min-height: 240px; }
+  .dark { background: radial-gradient(circle at 50% 40%, rgba(142,68,173,0.22), #080c14 60%); display: grid; place-items: center; }
+  .light { background: #ffffff; display: grid; place-items: center; }
+  .dark img, .light img { width: 200px; height: auto; }
+  .light img { width: 150px; }
+  .cap { position: absolute; margin-top: 88px; font: 500 11px/1.4 var(--font-mono); color: var(--text-faint); }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="dark"><img src="../assets/soat-logo.png" alt="SOAT logo on dark" /></div>
+  <div class="light"><img src="../assets/soat-logo.png" alt="SOAT logo on light" /></div>
+</div>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<!-- @dsCard group="Colors" viewport="700x180" name="Brand gradients & glow" subtitle="Vector Galaxy flow gradients and the cyan neon glow" -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { padding: 20px; }
+  .row { display: flex; gap: 14px; align-items: stretch; }
+  .sw { flex: 1; display: flex; flex-direction: column; }
+  .chip { height: 72px; border-radius: var(--radius-md); }
+  .name { font: 600 12px/1.4 var(--font-display); color: var(--text-strong); margin-top: 8px; letter-spacing: 0.02em; }
+  .hex { font: 500 11px/1.45 var(--font-mono); color: var(--text-muted); }
+  .glow { display: grid; place-items: center; }
+  .orb { width: 48px; height: 48px; border-radius: 50%; background: #00e5ff; box-shadow: 0 0 30px rgba(0,229,255,0.6); }
+</style>
+</head>
+<body>
+<div class="row">
+  <div class="sw"><div class="chip" style="background:linear-gradient(135deg,#8e44ad 0%,#1a73e8 100%)"></div><div class="name">Gradient · Light</div><div class="hex">Violet &rarr; Electric Blue</div></div>
+  <div class="sw"><div class="chip" style="background:linear-gradient(135deg,#8e44ad 0%,#00e5ff 100%)"></div><div class="name">Gradient · Dark</div><div class="hex">Violet &rarr; Core Cyan</div></div>
+  <div class="sw"><div class="chip glow" style="background:#080c14;border:1px solid var(--border-default)"><div class="orb"></div></div><div class="name">Neon glow</div><div class="hex">box-shadow 0 0 30px cyan</div></div>
+</div>
+</body>
+</html>

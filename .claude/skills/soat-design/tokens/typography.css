@@ -1,0 +1,45 @@
+/* ===================================================================
+   SOAT — TYPOGRAPHY TOKENS
+   Headings: Space Grotesk (engineered precision).
+   Body/UI: Inter (interface density, long-form docs).
+   Code: JetBrains Mono.
+   Headings carry slight positive tracking (0.02em–0.03em).
+   =================================================================== */
+
+:root {
+  /* Families */
+  --font-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'SFMono-Regular', Consolas, monospace;
+
+  /* Weights */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Type scale (desktop) — matches brandbook hierarchy */
+  --text-h1: 2.5rem; /* 40px — page titles, hero */
+  --text-h2: 2rem; /* 32px — section headings */
+  --text-h3: 1.5rem; /* 24px — subsection */
+  --text-h4: 1.25rem; /* 20px — card titles, minor headings */
+  --text-lg: 1.125rem; /* 18px — lead paragraphs */
+  --text-base: 1rem; /* 16px — body */
+  --text-sm: 0.875rem; /* 14px — UI labels, nav */
+  --text-xs: 0.75rem; /* 12px — eyebrows, captions */
+  --text-code: 0.92em; /* inline & block code */
+
+  /* Line heights */
+  --leading-tight: 1.15; /* display headings */
+  --leading-snug: 1.35; /* subheads */
+  --leading-base: 1.7; /* body / docs (generous for reading) */
+  --leading-code: 1.7;
+
+  /* Letter spacing */
+  --tracking-heading: 0.02em;
+  --tracking-heading-tight: 0.03em; /* H4 / small caps headings */
+  --tracking-body: 0.01em;
+  --tracking-ui: 0.02em; /* buttons, labels */
+  --tracking-eyebrow: 0.08em; /* uppercase eyebrows */
+  --tracking-label: 0.04em; /* uppercase mono labels — method badges, code-block title bars */
+}
