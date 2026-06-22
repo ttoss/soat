@@ -337,6 +337,14 @@ export const extractItems = (data: unknown): JsonObject[] => {
   return [];
 };
 
+// The human label for a record, mirroring the detail view's heading choice:
+// prefer `name`, then `title`, falling back to the id. Used wherever a resource
+// must be shown as a single line (e.g. the project picker).
+export const itemLabel = (item: JsonObject): string => {
+  const label = item.name ?? item.title ?? item.id;
+  return label === undefined || label === null ? '' : String(label);
+};
+
 const SENSITIVE_KEYS = /secret|password|key|token/i;
 
 export const isSensitiveKey = (key: string): boolean => {

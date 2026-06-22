@@ -63,6 +63,21 @@ describe('Workspace', () => {
     ).not.toBeInTheDocument();
   });
 
+  test('lists modules in the spec (parseModules) order, not a static grouping', async () => {
+    renderWorkspace();
+
+    // In the OpenAPI spec, the Webhooks path is declared before the Tools
+    // path, so a spec-derived nav lists Webhooks before Tools. The old static
+    // MODULE_GROUPS grouping put Tools (Orchestration) ahead of Webhooks (API).
+    const webhooks = await screen.findByRole('button', { name: 'Webhooks' });
+    const tools = await screen.findByRole('button', { name: 'Tools' });
+
+    expect(
+      webhooks.compareDocumentPosition(tools) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
   test('project picker opens and shows available projects', async () => {
     server.use(
       http.get('*/api/v1/projects', () =>
@@ -79,6 +94,24 @@ describe('Workspace', () => {
 
     // Project name appears in the dropdown
     expect(await screen.findByText('Proj One')).toBeInTheDocument();
+  });
+
+  test('project picker derives its label via the shared spec helper', async () => {
+    // A project with no name falls back to its id — proving the picker uses
+    // the engine's extractItems + itemLabel rather than a hardcoded `name`.
+    server.use(
+      http.get('*/api/v1/projects', () =>
+        HttpResponse.json([{ id: 'prj_42' }])
+      )
+    );
+    renderWorkspace();
+
+    const pickerBtn = await screen.findByRole('button', {
+      name: /select project/i,
+    });
+    await userEvent.click(pickerBtn);
+
+    expect(await screen.findByText('prj_42')).toBeInTheDocument();
   });
 
   test('displays the app version in the sidebar footer', async () => {
