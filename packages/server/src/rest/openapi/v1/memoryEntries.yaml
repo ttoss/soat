@@ -245,6 +245,7 @@ components:
           type: string
           example: me_V1StGXR8Z5jdHi6B
         memory_id:
+          x-soat-ref: memories
           type: string
           example: mem_V1StGXR8Z5jdHi6B
         content:

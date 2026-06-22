@@ -14,6 +14,7 @@ import {
   humanizeKey,
   isSensitiveKey,
   parseModules,
+  resolvableRefFields,
   resolveSchema,
 } from '@/engine/specUtils';
 import type { ModuleInfo, ModuleOp, OpenApiSpec } from '@/engine/types';
@@ -266,6 +267,8 @@ describe('x-soat-ref cross-references', () => {
     const schema = getResponseItemSchema(agents().listOp, testSpec);
     expect(extractRefFields(schema, testSpec)).toEqual({
       project_id: 'projects',
+      tool_ids: 'tools',
+      session_id: 'sessions',
     });
   });
 
@@ -287,5 +290,19 @@ describe('x-soat-ref cross-references', () => {
   test('buildRefDescriptor returns null without an id or a single-param detail op', () => {
     expect(buildRefDescriptor(projects(), '')).toBeNull();
     expect(buildRefDescriptor({ ...projects(), getOp: undefined }, 'x')).toBeNull();
+  });
+
+  test('resolvableRefFields keeps navigable refs and drops the rest', () => {
+    const modules = parseModules(testSpec);
+    const refs = {
+      project_id: 'projects',
+      tool_ids: 'tools',
+      session_id: 'sessions', // nested, no top-level detail route
+      widget_id: 'widgets', // unknown resource
+    };
+    expect(resolvableRefFields(refs, modules)).toEqual({
+      project_id: 'projects',
+      tool_ids: 'tools',
+    });
   });
 });

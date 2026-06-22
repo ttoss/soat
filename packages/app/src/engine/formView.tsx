@@ -166,7 +166,9 @@ const useRefFieldOptions = ({
 
     const refFields = Object.entries(schema.properties).filter(
       ([, fieldSchema]) => {
-        return fieldSchema['x-soat-ref'];
+        // Only scalar refs become a single-select picker; array refs stay as
+        // a free-form editor since the picker selects one value at a time.
+        return fieldSchema['x-soat-ref'] && fieldSchema.type !== 'array';
       }
     );
     if (refFields.length === 0) return;

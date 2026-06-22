@@ -65,6 +65,7 @@ paths:
                     default_model:
                       type: string
                     project_id:
+                      x-soat-ref: projects
                       type: string
                     created_at:
                       type: string
@@ -93,6 +94,7 @@ paths:
                 - default_model
               properties:
                 project_id:
+                  x-soat-ref: projects
                   type: string
                   description: Project ID (required if not using project key auth)
                   example: proj_V1StGXR8Z5jdHi6B
@@ -110,6 +112,7 @@ paths:
                   description: Default model to use
                   example: gpt-4
                 secret_id:
+                  x-soat-ref: secrets
                   type: string
                   description: Secret ID containing API credentials
                   example: secret_V1StGXR8Z5jdHi6B
@@ -136,6 +139,7 @@ paths:
                   default_model:
                     type: string
                   project_id:
+                    x-soat-ref: projects
                     type: string
                   created_at:
                     type: string
@@ -180,8 +184,10 @@ paths:
                   default_model:
                     type: string
                   project_id:
+                    x-soat-ref: projects
                     type: string
                   secret_id:
+                    x-soat-ref: secrets
                     type: string
                   base_url:
                     type: string
@@ -221,6 +227,7 @@ paths:
                 default_model:
                   type: string
                 secret_id:
+                  x-soat-ref: secrets
                   type: string
                 base_url:
                   type: string

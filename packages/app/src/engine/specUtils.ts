@@ -272,6 +272,24 @@ export const buildRefDescriptor = (
   };
 };
 
+// Narrows a field→resource map to only the references that actually resolve to
+// a navigable target (a known module with a single-parameter detail route).
+// References to skipped, nested, or unknown resources are dropped so they never
+// render as dead links.
+export const resolvableRefFields = (
+  refFields: Record<string, string>,
+  modules: ModuleInfo[]
+): Record<string, string> => {
+  const resolvable: Record<string, string> = {};
+  for (const [field, resource] of Object.entries(refFields)) {
+    const target = findModuleByResource(modules, resource);
+    if (target && buildRefDescriptor(target, 'probe')) {
+      resolvable[field] = resource;
+    }
+  }
+  return resolvable;
+};
+
 const isJsonObject = (v: unknown): v is JsonObject => {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 };

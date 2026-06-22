@@ -104,6 +104,42 @@ describe('ListView', () => {
     expect(probe).toHaveTextContent('"project_id":"proj_42"');
   });
 
+  test('renders an array ref field as one link per id', async () => {
+    server.use(
+      http.get('*/api/v1/agents', () =>
+        HttpResponse.json([
+          { id: 'agt_1', name: 'Alpha', tool_ids: ['tool_a', 'tool_b'] },
+        ])
+      )
+    );
+    renderList(allModules());
+
+    await screen.findByText('Alpha');
+    const toolA = screen.getByRole('button', { name: 'tool_a' });
+    expect(screen.getByRole('button', { name: 'tool_b' })).toBeInTheDocument();
+
+    await userEvent.click(toolA);
+    const probe = screen.getByTestId('nav-probe');
+    expect(probe).toHaveTextContent('"tag":"Tools"');
+    expect(probe).toHaveTextContent('"tool_id":"tool_a"');
+  });
+
+  test('does not link a ref whose resource has no top-level detail route', async () => {
+    server.use(
+      http.get('*/api/v1/agents', () =>
+        HttpResponse.json([
+          { id: 'agt_1', name: 'Alpha', session_id: 'ses_1' },
+        ])
+      )
+    );
+    renderList(allModules());
+
+    expect(await screen.findByText('ses_1')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'ses_1' })
+    ).not.toBeInTheDocument();
+  });
+
   test('renders a ref field as plain text when no modules are provided', async () => {
     server.use(
       http.get('*/api/v1/agents', () =>

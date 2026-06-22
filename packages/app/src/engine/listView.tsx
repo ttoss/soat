@@ -16,6 +16,7 @@ import {
   getResponseItemSchema,
   humanizeKey,
   isSensitiveKey,
+  resolvableRefFields,
 } from './specUtils';
 import { StatusBadge } from './statusBadge';
 import type { JsonObject, JsonValue, ModuleInfo, OpenApiSpec } from './types';
@@ -306,8 +307,12 @@ export const ListView = ({
   const token = state.status === 'authenticated' ? state.token : '';
 
   const refFields = React.useMemo(() => {
-    return extractRefFields(getResponseItemSchema(module.listOp, spec), spec);
-  }, [module.listOp, spec]);
+    const all = extractRefFields(
+      getResponseItemSchema(module.listOp, spec),
+      spec
+    );
+    return resolvableRefFields(all, modules);
+  }, [module.listOp, spec, modules]);
 
   const handleRefClick = useRefNavigation(modules);
 

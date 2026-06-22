@@ -101,6 +101,7 @@ paths:
                 - name
               properties:
                 project_id:
+                  x-soat-ref: projects
                   type: string
                   description: Project ID. Required for JWT auth; omit when using an project key.
                   example: 'proj_V1StGXR8Z5jdHi6B'
@@ -112,6 +113,7 @@ paths:
                   description: Optional external identifier (e.g. WhatsApp phone number). If provided and an actor with this externalId already exists in the project, the existing actor is returned (idempotent — 200 OK).
                   example: '+15551234567'
                 memory_id:
+                  x-soat-ref: memories
                   type: string
                   nullable: true
                   description: Memory ID to link to this actor. Mutually exclusive with auto_create_memory.
@@ -254,6 +256,7 @@ paths:
                   type: string
                   description: Persona-specific instructions
                 memory_id:
+                  x-soat-ref: memories
                   type: string
                   nullable: true
                   description: Memory ID to link to this actor. Set to null to unlink.
@@ -447,6 +450,7 @@ components:
           description: Actor ID
           example: 'act_V1StGXR8Z5jdHi6B'
         project_id:
+          x-soat-ref: projects
           type: string
           description: Project ID
           example: 'proj_V1StGXR8Z5jdHi6B'
@@ -463,14 +467,17 @@ components:
           nullable: true
           description: Persona-specific instructions composed into the effective system prompt during conversation generation.
         agent_id:
+          x-soat-ref: agents
           type: string
           nullable: true
           description: Agent this actor is linked to (mutually exclusive with chatId).
         chat_id:
+          x-soat-ref: chats
           type: string
           nullable: true
           description: Chat this actor is linked to (mutually exclusive with agentId).
         memory_id:
+          x-soat-ref: memories
           type: string
           nullable: true
           description: Memory container linked to this actor.

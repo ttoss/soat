@@ -365,9 +365,11 @@ components:
             ]
           description: Node execution type.
         agent_id:
+          x-soat-ref: agents
           type: string
           description: For agent nodes — public ID of the agent to invoke.
         tool_id:
+          x-soat-ref: tools
           type: string
           description: For tool nodes — public ID of the tool to call.
         operation_id:
@@ -385,6 +387,7 @@ components:
             type: string
           description: For human nodes — constrained choices.
         memory_id:
+          x-soat-ref: memories
           type: string
           description: For memory_write nodes — public ID of the target memory.
         input_mapping:
@@ -423,6 +426,7 @@ components:
           type: string
           description: For webhook emit nodes — URL to POST to.
         orchestration_id:
+          x-soat-ref: orchestrations
           type: string
           description: For sub_orchestration nodes — public ID of the child orchestration.
         max_iterations:
@@ -468,6 +472,7 @@ components:
           type: string
           description: Public ID (orch_...).
         project_id:
+          x-soat-ref: projects
           type: string
           description: Public ID of the owning project.
         name:
@@ -509,6 +514,7 @@ components:
         - edges
       properties:
         project_id:
+          x-soat-ref: projects
           type: string
           description: Public ID of the project.
         name:
@@ -572,9 +578,11 @@ components:
           type: string
           description: Public ID (run_...).
         orchestration_id:
+          x-soat-ref: orchestrations
           type: string
           description: Public ID of the parent orchestration.
         project_id:
+          x-soat-ref: projects
           type: string
           description: Public ID of the owning project.
         status:
@@ -596,6 +604,7 @@ components:
           nullable: true
           description: Error details when status is failed.
         trace_id:
+          x-soat-ref: traces
           type: string
           nullable: true
         input:

@@ -13,6 +13,7 @@ import {
   buildUrl,
   extractRefFields,
   getResponseItemSchema,
+  resolvableRefFields,
 } from './specUtils';
 import { StatusBadge } from './statusBadge';
 import type { JsonObject, ModuleInfo, OpenApiSpec } from './types';
@@ -170,8 +171,12 @@ export const DetailView = ({
   const { navigate } = useNavigation();
 
   const refFields = React.useMemo(() => {
-    return extractRefFields(getResponseItemSchema(module.getOp, spec), spec);
-  }, [module.getOp, spec]);
+    const all = extractRefFields(
+      getResponseItemSchema(module.getOp, spec),
+      spec
+    );
+    return resolvableRefFields(all, modules);
+  }, [module.getOp, spec, modules]);
 
   const handleRefClick = useRefNavigation(modules);
   const [viewState, setViewState] = React.useState<DetailState>({

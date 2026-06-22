@@ -21,9 +21,46 @@ export const useRefNavigation = (
   );
 };
 
-// Renders a cross-resource id as a link, or null when the value is not a
-// linkable ref (no annotation, no handler, or a non-string value). Returning
-// null lets callers fall through to their default rendering with one branch.
+const RefButton = ({
+  resource,
+  id,
+  onRefClick,
+  className,
+}: {
+  resource: string;
+  id: string;
+  onRefClick: (resource: string, id: string) => void;
+  className?: string;
+}) => {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onRefClick(resource, id);
+      }}
+      className={
+        className ?? 'font-mono text-primary underline-offset-4 hover:underline'
+      }
+    >
+      {id}
+    </button>
+  );
+};
+
+const stringIds = (value: JsonValue): string[] => {
+  if (typeof value === 'string') return value ? [value] : [];
+  if (Array.isArray(value)) {
+    return value.filter((v): v is string => {
+      return typeof v === 'string' && v !== '';
+    });
+  }
+  return [];
+};
+
+// Renders a cross-resource id (or array of ids) as link(s), or null when the
+// value is not a linkable ref. Returning null lets callers fall through to
+// their default rendering with a single branch.
 export const renderRefLink = (args: {
   refResource?: string;
   value: JsonValue;
@@ -31,21 +68,32 @@ export const renderRefLink = (args: {
   className?: string;
 }): React.ReactElement | null => {
   const { refResource, value, onRefClick, className } = args;
-  if (!refResource || !onRefClick || typeof value !== 'string' || !value) {
-    return null;
+  if (!refResource || !onRefClick) return null;
+  const ids = stringIds(value);
+  if (ids.length === 0) return null;
+  if (ids.length === 1) {
+    return (
+      <RefButton
+        resource={refResource}
+        id={ids[0]}
+        onRefClick={onRefClick}
+        className={className}
+      />
+    );
   }
   return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onRefClick(refResource, value);
-      }}
-      className={
-        className ?? 'font-mono text-primary underline-offset-4 hover:underline'
-      }
-    >
-      {value}
-    </button>
+    <span className="flex flex-wrap gap-x-3 gap-y-1">
+      {ids.map((id) => {
+        return (
+          <RefButton
+            key={id}
+            resource={refResource}
+            id={id}
+            onRefClick={onRefClick}
+            className={className}
+          />
+        );
+      })}
+    </span>
   );
 };

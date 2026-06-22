@@ -71,6 +71,7 @@ paths:
                 - content
               properties:
                 project_id:
+                  x-soat-ref: projects
                   type: string
                   description: Project ID. Required for JWT auth; omit when using an project key.
                   example: 'proj_V1StGXR8Z5jdHi6B'
@@ -409,10 +410,12 @@ components:
           description: Document ID
           example: 'doc_V1StGXR8Z5jdHi6B'
         file_id:
+          x-soat-ref: files
           type: string
           description: Underlying file ID
           example: 'file_V1StGXR8Z5jdHi6B'
         project_id:
+          x-soat-ref: projects
           type: string
           description: Project ID
           example: 'proj_V1StGXR8Z5jdHi6B'

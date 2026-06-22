@@ -316,6 +316,7 @@ paths:
                 - policy_ids
               properties:
                 policy_ids:
+                  x-soat-ref: policies
                   type: array
                   items:
                     type: string

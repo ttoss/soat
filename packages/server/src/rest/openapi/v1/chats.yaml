@@ -406,10 +406,12 @@ components:
           description: Public ID of the chat
           example: cht_V1StGXR8Z5jdHi6B
         project_id:
+          x-soat-ref: projects
           type: string
           description: Public ID of the owning project
           example: proj_V1StGXR8Z5jdHi6B
         ai_provider_id:
+          x-soat-ref: ai-providers
           type: string
           description: Public ID of the AI provider
           example: aip_V1StGXR8Z5jdHi6B
@@ -441,10 +443,12 @@ components:
         - ai_provider_id
       properties:
         ai_provider_id:
+          x-soat-ref: ai-providers
           type: string
           description: Public ID of the AI provider
           example: aip_V1StGXR8Z5jdHi6B
         project_id:
+          x-soat-ref: projects
           type: string
           description: >
             Public ID of the project. Required when the user belongs to multiple
@@ -480,6 +484,7 @@ components:
           description: Text content of the message (mutually exclusive with documentId)
           example: What can you help me with?
         document_id:
+          x-soat-ref: documents
           type: string
           description: >
             Public ID of a document whose content is used as the message body
@@ -531,6 +536,7 @@ components:
         - messages
       properties:
         ai_provider_id:
+          x-soat-ref: ai-providers
           type: string
           description: Public ID of the AI provider to use.
           example: aip_V1StGXR8Z5jdHi6B

@@ -220,6 +220,12 @@ export const testSpec: OpenApiSpec = {
         },
       },
     },
+    '/api/v1/tools': {
+      get: { operationId: 'listTools', tags: ['Tools'], summary: 'List tools' },
+    },
+    '/api/v1/tools/{tool_id}': {
+      get: { operationId: 'getTool', tags: ['Tools'] },
+    },
     '/api/v1/projects/{project_id}/api-keys': {
       get: {
         operationId: 'listApiKeys',
@@ -255,6 +261,14 @@ export const testSpec: OpenApiSpec = {
           name: { type: 'string' },
           model: { type: 'string' },
           project_id: { type: 'string', 'x-soat-ref': 'projects' },
+          tool_ids: {
+            type: 'array',
+            items: { type: 'string' },
+            'x-soat-ref': 'tools',
+          },
+          // References a nested resource (sessions has no top-level detail
+          // route), so it must NOT render as a link.
+          session_id: { type: 'string', 'x-soat-ref': 'sessions' },
         },
       },
       CreateAgent: {
