@@ -65,6 +65,7 @@ The entire system descends from the **Vector Galaxy** logo: a swirling nebula of
 - **Press / active.** Color deepens (primary-active token); no aggressive shrink.
 - **Animation.** Restrained and purposeful — fades and short translate-lifts (150–300ms), eased with `cubic-bezier(0.16,1,0.3,1)`. No bounces, no infinite decorative loops on content. Motion suggests *data flow and retrieval*.
 - **Cards.** Surface fill + 1px border + soft shadow (light) / glow-on-hover (dark), `xl` radius. Glass variant for HUD panels. **No** colored left-border-accent cards.
+- **App sidebar navigation — flat modules.** Modules render as a single **flat list** in the app sidebar — one row per module with its own stroke icon, no collapsible groups, no indentation. The active row carries a left accent border in `--color-primary` plus a low-opacity primary tint; hover applies a fainter tint. Do **not** nest modules under collapsible category headers or chevrons. (Project picker and the `Admin` section remain distinct blocks above/below the flat module list.)
 - **Imagery — use:** node-and-connection constellations, light trails, dark clean space, abstract geometry (hexagons, spheres, spirals of light). **Avoid:** literal brain icons, classic database cylinders, bright sunny stock photography, and bluish-purple "AI slop" gradients that aren't the brand's violet→cyan flow.
 
 ---
