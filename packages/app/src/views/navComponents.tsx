@@ -1,7 +1,6 @@
 import {
   Activity,
   ChevronDown,
-  ChevronRight,
   Cpu,
   Database,
   FolderOpen,
@@ -91,6 +90,15 @@ export const buildGroups = (navModules: ModuleInfo[]): GroupDef[] => {
   return result;
 };
 
+// Flattens the grouped modules into a single ordered list, preserving the
+// MODULE_GROUPS order (then "other") so related modules stay adjacent without
+// any collapsible group headers.
+export const orderModules = (navModules: ModuleInfo[]): ModuleInfo[] => {
+  return buildGroups(navModules).flatMap((group) => {
+    return group.modules;
+  });
+};
+
 export const NavItem = ({
   label,
   Icon,
@@ -121,33 +129,6 @@ export const NavItem = ({
         />
       )}
       <span>{label}</span>
-    </button>
-  );
-};
-
-export const GroupHeader = ({
-  label,
-  Icon,
-  open,
-  onClick,
-}: {
-  label: string;
-  Icon: React.ElementType;
-  open: boolean;
-  onClick: () => void;
-}) => {
-  return (
-    <button
-      onClick={onClick}
-      className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-    >
-      <Icon className="h-3.5 w-3.5 shrink-0 opacity-60" />
-      <span className="flex-1">{label}</span>
-      {open ? (
-        <ChevronDown className="h-3 w-3 opacity-45" />
-      ) : (
-        <ChevronRight className="h-3 w-3 opacity-45" />
-      )}
     </button>
   );
 };
@@ -255,17 +236,13 @@ export const ProjectPicker = ({
   );
 };
 
-export const ModuleGroups = ({
-  groups,
-  openGroups,
+export const ModuleList = ({
+  modules,
   activeListTag,
-  onToggle,
   onSelect,
 }: {
-  groups: GroupDef[];
-  openGroups: Set<string>;
+  modules: ModuleInfo[];
   activeListTag: string | null;
-  onToggle: (key: string) => void;
   onSelect: (m: ModuleInfo) => void;
 }) => {
   return (
@@ -273,38 +250,21 @@ export const ModuleGroups = ({
       <p className="mb-1 px-2.5 text-[0.67rem] font-bold uppercase tracking-widest text-muted-foreground/60">
         {'Modules'}
       </p>
-      {groups.length === 0 && (
+      {modules.length === 0 && (
         <p className="px-3 py-2 text-xs text-muted-foreground">
           {'No modules available.'}
         </p>
       )}
-      {groups.map((group) => {
-        const isOpen = openGroups.has(group.key);
+      {modules.map((m) => {
         return (
-          <div key={group.key}>
-            <GroupHeader
-              label={group.label}
-              Icon={group.Icon}
-              open={isOpen}
-              onClick={() => {
-                return onToggle(group.key);
-              }}
-            />
-            {isOpen &&
-              group.modules.map((m) => {
-                return (
-                  <NavItem
-                    key={m.tag}
-                    label={m.label}
-                    active={activeListTag === m.tag}
-                    indent
-                    onClick={() => {
-                      return onSelect(m);
-                    }}
-                  />
-                );
-              })}
-          </div>
+          <NavItem
+            key={m.tag}
+            label={m.label}
+            active={activeListTag === m.tag}
+            onClick={() => {
+              return onSelect(m);
+            }}
+          />
         );
       })}
     </div>
