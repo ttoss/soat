@@ -42,6 +42,27 @@ describe('Workspace', () => {
     expect(screen.getByText('Welcome to SOAT')).toBeInTheDocument();
   });
 
+  test('lists modules as a flat list without collapsible groups', async () => {
+    renderWorkspace();
+
+    // Modules that previously lived in collapsed groups are visible
+    // immediately, with no group header to expand first.
+    expect(
+      await screen.findByRole('button', { name: 'Webhooks' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Api Keys' })
+    ).toBeInTheDocument();
+
+    // Group header toggles no longer exist.
+    expect(
+      screen.queryByRole('button', { name: 'Orchestration' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'API' })
+    ).not.toBeInTheDocument();
+  });
+
   test('project picker opens and shows available projects', async () => {
     server.use(
       http.get('*/api/v1/projects', () =>

@@ -19,9 +19,9 @@ import type { JsonObject, ModuleInfo } from '@/engine/types';
 
 import type { Project } from './navComponents';
 import {
-  buildGroups,
-  ModuleGroups,
+  ModuleList,
   NavItem,
+  orderModules,
   ProjectPicker,
 } from './navComponents';
 
@@ -99,23 +99,7 @@ const LeftNav = ({
   const { view, activeProjectId, navigate, setProject } = useNavigation();
   const user = state.status === 'authenticated' ? state.user : null;
 
-  const [openGroups, setOpenGroups] = React.useState<Set<string>>(() => {
-    return new Set(['orchestration']);
-  });
-
   const activeListTag = view?.mode === 'list' ? view.tag : null;
-
-  const toggleGroup = (key: string) => {
-    setOpenGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
-  };
 
   const adminOnlyModules = React.useMemo(() => {
     return user?.role === 'admin'
@@ -135,8 +119,8 @@ const LeftNav = ({
     });
   }, [modules]);
 
-  const groups = React.useMemo(() => {
-    return buildGroups(navModules);
+  const orderedModules = React.useMemo(() => {
+    return orderModules(navModules);
   }, [navModules]);
 
   const navigateToModule = React.useCallback(
@@ -190,11 +174,9 @@ const LeftNav = ({
         onSelect={setProject}
       />
 
-      <ModuleGroups
-        groups={groups}
-        openGroups={openGroups}
+      <ModuleList
+        modules={orderedModules}
         activeListTag={activeListTag}
-        onToggle={toggleGroup}
         onSelect={navigateToModule}
       />
 
