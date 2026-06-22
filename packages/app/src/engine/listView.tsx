@@ -4,61 +4,24 @@ import { apiFetch } from '@/api/client';
 import { useAuth } from '@/auth/authContext';
 import { Button } from '@/components/ui/button';
 
+import { CellValue } from './cellValue';
 import type { RefResolver } from './crossRef';
-import { renderRefLink, useRefResolver } from './crossRef';
+import { useRefResolver } from './crossRef';
 import { ALL_STATUSES, EmptyState, ListToolbar } from './listToolbar';
 import { useNavigation } from './navigationContext';
 import {
-  buildUrl,
+  buildListRequestUrl,
   deriveColumns,
   extractItems,
   extractRefFields,
-  formatValue,
-  getResponseItemSchema,
+  getListItemSchema,
   humanizeKey,
-  isSensitiveKey,
   refLinkContext,
   resolvableRefFields,
 } from './specUtils';
-import { StatusBadge } from './statusBadge';
 import type { JsonObject, JsonValue, ModuleInfo, OpenApiSpec } from './types';
 
 const PER_PAGE = 15;
-
-const CellValue = ({
-  colKey,
-  value,
-  refResource,
-  context,
-  resolveRef,
-}: {
-  colKey: string;
-  value: JsonValue;
-  refResource?: string;
-  context: Record<string, string>;
-  resolveRef?: RefResolver;
-}) => {
-  if (isSensitiveKey(colKey)) {
-    return <span className="text-muted-foreground italic">{'[hidden]'}</span>;
-  }
-  const refLink = renderRefLink({ refResource, value, context, resolveRef });
-  if (refLink) return refLink;
-  if (colKey === 'status' && typeof value === 'string' && value) {
-    return <StatusBadge status={value} />;
-  }
-  if (colKey === 'error') {
-    return value ? (
-      <StatusBadge error />
-    ) : (
-      <span className="text-muted-foreground">{'—'}</span>
-    );
-  }
-  const formatted = formatValue(colKey, value);
-  if (formatted.length > 60) {
-    return <span title={formatted}>{`${formatted.slice(0, 57)}…`}</span>;
-  }
-  return <span>{formatted}</span>;
-};
 
 const distinctStatuses = (items: JsonObject[]): string[] => {
   const set = new Set<string>();
@@ -172,6 +135,13 @@ const ItemTable = ({
                         refResource={refFields[col]}
                         context={context}
                         resolveRef={resolveRef}
+                        onOpen={
+                          col === 'id' && hasDetail
+                            ? () => {
+                                return onRowClick(item);
+                              }
+                            : undefined
+                        }
                       />
                     </td>
                   );
@@ -310,7 +280,7 @@ export const ListView = ({
   modules = [],
 }: ListViewProps) => {
   const { state } = useAuth();
-  const { navigate } = useNavigation();
+  const { navigate, activeProjectId } = useNavigation();
   const [viewState, setViewState] = React.useState<ViewState>({
     status: 'loading',
   });
@@ -318,10 +288,7 @@ export const ListView = ({
   const token = state.status === 'authenticated' ? state.token : '';
 
   const refFields = React.useMemo(() => {
-    const all = extractRefFields(
-      getResponseItemSchema(module.listOp, spec),
-      spec
-    );
+    const all = extractRefFields(getListItemSchema(module.listOp, spec), spec);
     return resolvableRefFields(all, modules);
   }, [module.listOp, spec, modules]);
 
@@ -329,7 +296,8 @@ export const ListView = ({
 
   const fetchData = React.useCallback(() => {
     if (!module.listOp || !token) return;
-    const url = buildUrl(module.listOp.pathTemplate, pathParams);
+    // Scope the collection to the active project (when the op supports it).
+    const url = buildListRequestUrl(module.listOp, pathParams, activeProjectId);
     apiFetch<unknown>({ url, token })
       .then((result) => {
         if (!result.ok) {
@@ -341,7 +309,7 @@ export const ListView = ({
       .catch((error: unknown) => {
         setViewState({ status: 'error', message: String(error) });
       });
-  }, [module.listOp, pathParams, token]);
+  }, [module.listOp, pathParams, token, activeProjectId]);
 
   const load = React.useCallback(() => {
     setViewState({ status: 'loading' });

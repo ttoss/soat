@@ -52,8 +52,27 @@ describe('ListView', () => {
     expect(
       screen.getByRole('columnheader', { name: 'Name' })
     ).toBeInTheDocument();
-    // id is hidden from the table
-    expect(screen.queryByText('agt_1')).not.toBeInTheDocument();
+    // id is shown, as a link to the item's detail
+    expect(
+      screen.getByRole('columnheader', { name: 'Id' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'agt_1' })).toBeInTheDocument();
+  });
+
+  test('clicking an item id navigates to its detail view', async () => {
+    server.use(
+      http.get('*/api/v1/agents', () =>
+        HttpResponse.json([{ id: 'agt_1', name: 'Alpha' }])
+      )
+    );
+    renderList();
+
+    await screen.findByText('Alpha');
+    await userEvent.click(screen.getByRole('button', { name: 'agt_1' }));
+
+    const probe = screen.getByTestId('nav-probe');
+    expect(probe).toHaveTextContent('"mode":"detail"');
+    expect(probe).toHaveTextContent('"agent_id":"agt_1"');
   });
 
   test('shows an empty state when there are no items', async () => {

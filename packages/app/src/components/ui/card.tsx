@@ -4,13 +4,16 @@ import { cn } from '@/lib/utils';
 
 export const Card = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => {
+  React.HTMLAttributes<HTMLDivElement> & { interactive?: boolean }
+>(({ className, interactive, ...props }, ref) => {
   return (
     <div
       ref={ref}
       className={cn(
         'rounded-xl border bg-card text-card-foreground shadow',
+        // Clickable cards lift and gain a cyan-edged glow on hover (soat-design).
+        interactive &&
+          'cursor-pointer transition-all hover:-translate-y-1 hover:border-primary/40 hover:shadow-md dark:hover:shadow-glow-cyan-md',
         className
       )}
       {...props}

@@ -18,7 +18,7 @@
   --weight-semibold: 600;
   --weight-bold: 700;
 
-  /* Type scale (desktop) — matches brandbook hierarchy */
+  /* Type scale (desktop) — matches the SOAT type hierarchy */
   --text-h1: 2.5rem; /* 40px — page titles, hero */
   --text-h2: 2rem; /* 32px — section headings */
   --text-h3: 1.5rem; /* 24px — subsection */

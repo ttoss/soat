@@ -193,7 +193,7 @@ export const ActionView = ({
         role="dialog"
         aria-modal="true"
         aria-label={actionLabel(actionOp)}
-        className="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col gap-6 overflow-y-auto rounded-lg border bg-background p-6 shadow-glow-violet-md"
+        className="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col gap-6 overflow-y-auto rounded-lg border bg-background/80 p-6 shadow-glow-violet-md backdrop-blur-lg"
       >
         <div className="flex items-center justify-between">
           <div className="flex flex-col gap-1">

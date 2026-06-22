@@ -20,7 +20,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:5047',
+      '/api': 'https://soat.lets.rocks',
     },
   },
   resolve: {

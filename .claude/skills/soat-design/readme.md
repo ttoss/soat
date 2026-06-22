@@ -13,7 +13,6 @@ This design system translates SOAT's identity — *robust, precise infrastructur
 This system was built from the official SOAT repository. Explore these to extend or verify the work:
 
 - **GitHub:** [`ttoss/soat`](https://github.com/ttoss/soat) — the monorepo. Key inputs:
-  - `BRANDBOOK.md` — SOAT Brand System v1.1 (the canonical color, type, voice, and imagery spec).
   - `packages/website/src/css/custom.css` — the live Docusaurus theme (Infima variable overrides, dual-theme).
   - `packages/website/src/pages/index.tsx` + `index.module.css` — the marketing homepage.
   - `packages/website/docusaurus.config.ts` — navbar, footer, color mode config.
