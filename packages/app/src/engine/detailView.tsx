@@ -4,7 +4,7 @@ import { apiFetch } from '@/api/client';
 import { useAuth } from '@/auth/authContext';
 import { Button } from '@/components/ui/button';
 
-import { useRefNavigation } from './crossRef';
+import { useRefResolver } from './crossRef';
 import { DetailSections } from './detailSections';
 import { findSubResources, SubResourceTabs } from './detailSubResources';
 import { useNavigation } from './navigationContext';
@@ -178,7 +178,7 @@ export const DetailView = ({
     return resolvableRefFields(all, modules);
   }, [module.getOp, spec, modules]);
 
-  const handleRefClick = useRefNavigation(modules);
+  const resolveRef = useRefResolver(modules);
   const [viewState, setViewState] = React.useState<DetailState>({
     status: 'loading',
   });
@@ -295,7 +295,8 @@ export const DetailView = ({
         item={item}
         fields={fields}
         refFields={refFields}
-        onRefClick={modules.length > 0 ? handleRefClick : undefined}
+        pathParams={pathParams}
+        resolveRef={modules.length > 0 ? resolveRef : undefined}
       />
 
       <SubResourceTabs

@@ -254,28 +254,46 @@ export const findModuleByResource = (
   });
 };
 
-// Builds a detail-view descriptor that opens `id` in the target module. Only
-// top-level resources (a single path parameter) are linkable; nested targets
-// would need parent ids we do not have at the link site.
+// True when the target module has a detail route we could navigate to. Nested
+// targets (more than one path parameter) qualify too; whether a given link can
+// actually be built depends on the runtime context (see buildRefDescriptor).
+const hasDetailRoute = (targetModule: ModuleInfo): boolean => {
+  if (!targetModule.getOp) return false;
+  return extractPathParams(targetModule.getOp.pathTemplate).length >= 1;
+};
+
+// Builds a detail-view descriptor that opens `id` in the target module. The
+// trailing path parameter receives `id`; any preceding (parent) parameters are
+// filled from `context` — the current path params plus the row's own fields.
+// Returns null when a required parent id is absent, so callers can fall back to
+// plain text instead of rendering a dead link.
 export const buildRefDescriptor = (
   targetModule: ModuleInfo,
-  id: string
+  id: string,
+  context: Record<string, string> = {}
 ): ViewDescriptor | null => {
   if (!targetModule.getOp || !id) return null;
   const params = extractPathParams(targetModule.getOp.pathTemplate);
-  if (params.length !== 1) return null;
+  if (params.length === 0) return null;
+  const targetParam = params[params.length - 1];
+  const pathParams: Record<string, string> = { [targetParam]: id };
+  for (const parent of params.slice(0, -1)) {
+    const value = context[parent];
+    if (!value) return null;
+    pathParams[parent] = value;
+  }
   return {
     tag: targetModule.tag,
     operationId: targetModule.getOp.operation.operationId,
-    pathParams: { [params[0]]: id },
+    pathParams,
     mode: 'detail',
   };
 };
 
-// Narrows a field→resource map to only the references that actually resolve to
-// a navigable target (a known module with a single-parameter detail route).
-// References to skipped, nested, or unknown resources are dropped so they never
-// render as dead links.
+// Narrows a field→resource map to the references whose target is a known module
+// exposing a detail route. References to skipped or unknown resources are
+// dropped. Nested targets are kept as candidates here; per-row resolution then
+// decides whether the parent ids are available to form a live link.
 export const resolvableRefFields = (
   refFields: Record<string, string>,
   modules: ModuleInfo[]
@@ -283,11 +301,26 @@ export const resolvableRefFields = (
   const resolvable: Record<string, string> = {};
   for (const [field, resource] of Object.entries(refFields)) {
     const target = findModuleByResource(modules, resource);
-    if (target && buildRefDescriptor(target, 'probe')) {
+    if (target && hasDetailRoute(target)) {
       resolvable[field] = resource;
     }
   }
   return resolvable;
+};
+
+// Builds the link context for a record: the current path params merged with the
+// record's own string fields. A nested cross-ref (e.g. a session under an
+// agent) recovers its parent id from either the surrounding scope or a
+// foreign-key field on the record itself.
+export const refLinkContext = (
+  item: JsonObject,
+  pathParams: Record<string, string>
+): Record<string, string> => {
+  const context: Record<string, string> = { ...pathParams };
+  for (const [key, value] of Object.entries(item)) {
+    if (typeof value === 'string') context[key] = value;
+  }
+  return context;
 };
 
 const isJsonObject = (v: unknown): v is JsonObject => {

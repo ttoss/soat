@@ -19,13 +19,16 @@ const agentsModule = (): ModuleInfo => {
 
 const allModules = (): ModuleInfo[] => parseModules(testSpec);
 
-const renderList = (modules?: ModuleInfo[]) =>
+const renderList = (
+  modules?: ModuleInfo[],
+  pathParams: Record<string, string> = {}
+) =>
   renderWithAuth(
     <>
       <ListView
         module={agentsModule()}
         spec={testSpec}
-        pathParams={{}}
+        pathParams={pathParams}
         modules={modules}
       />
       <NavProbe />
@@ -124,7 +127,7 @@ describe('ListView', () => {
     expect(probe).toHaveTextContent('"tool_id":"tool_a"');
   });
 
-  test('does not link a ref whose resource has no top-level detail route', async () => {
+  test('does not link a nested ref when the parent id is unavailable', async () => {
     server.use(
       http.get('*/api/v1/agents', () =>
         HttpResponse.json([
@@ -138,6 +141,45 @@ describe('ListView', () => {
     expect(
       screen.queryByRole('button', { name: 'ses_1' })
     ).not.toBeInTheDocument();
+  });
+
+  test('links a nested ref when the row carries the parent id', async () => {
+    server.use(
+      http.get('*/api/v1/agents', () =>
+        HttpResponse.json([
+          { id: 'agt_1', name: 'Alpha', agent_id: 'agt_7', session_id: 'ses_9' },
+        ])
+      )
+    );
+    renderList(allModules());
+
+    const link = await screen.findByRole('button', { name: 'ses_9' });
+    await userEvent.click(link);
+
+    const probe = screen.getByTestId('nav-probe');
+    expect(probe).toHaveTextContent('"tag":"Sessions"');
+    expect(probe).toHaveTextContent('"mode":"detail"');
+    expect(probe).toHaveTextContent('"agent_id":"agt_7"');
+    expect(probe).toHaveTextContent('"session_id":"ses_9"');
+  });
+
+  test('links a nested ref using a parent id from the current path params', async () => {
+    server.use(
+      http.get('*/api/v1/agents', () =>
+        HttpResponse.json([
+          { id: 'agt_1', name: 'Alpha', session_id: 'ses_3' },
+        ])
+      )
+    );
+    renderList(allModules(), { agent_id: 'agt_5' });
+
+    const link = await screen.findByRole('button', { name: 'ses_3' });
+    await userEvent.click(link);
+
+    const probe = screen.getByTestId('nav-probe');
+    expect(probe).toHaveTextContent('"tag":"Sessions"');
+    expect(probe).toHaveTextContent('"agent_id":"agt_5"');
+    expect(probe).toHaveTextContent('"session_id":"ses_3"');
   });
 
   test('renders a ref field as plain text when no modules are provided', async () => {
