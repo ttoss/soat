@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.12.4](https://127.0.0.1/42309/git/ttoss/compare/v0.12.3...v0.12.4) (2026-06-22)
+
+### Bug Fixes
+
+* **server:** document GET /api/v1/projects so the app can create projects ([#229](https://127.0.0.1/42309/git/ttoss/issues/229)) ([47bf1e9](https://127.0.0.1/42309/git/ttoss/commits/47bf1e92e67ceb118f7cd7c30d3c77fb6b0cfa10))
+
 ## [0.12.3](https://127.0.0.1/38839/git/ttoss/compare/v0.12.2...v0.12.3) (2026-06-22)
 
 ### Features
