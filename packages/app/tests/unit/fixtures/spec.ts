@@ -137,6 +137,13 @@ export const testSpec: OpenApiSpec = {
         summary: 'List agent sessions',
       },
     },
+    '/api/v1/agents/{agent_id}/sessions/{session_id}': {
+      get: {
+        operationId: 'getAgentSession',
+        tags: ['Sessions'],
+        summary: 'Get an agent session',
+      },
+    },
     '/api/v1/users': {
       get: { operationId: 'listUsers', tags: ['Users'], summary: 'List users' },
       post: {
@@ -266,8 +273,9 @@ export const testSpec: OpenApiSpec = {
             items: { type: 'string' },
             'x-soat-ref': 'tools',
           },
-          // References a nested resource (sessions has no top-level detail
-          // route), so it must NOT render as a link.
+          // References a nested resource (sessions live under an agent). It
+          // links only when the parent agent_id can be resolved from the row
+          // or the current path params; otherwise it renders as plain text.
           session_id: { type: 'string', 'x-soat-ref': 'sessions' },
         },
       },

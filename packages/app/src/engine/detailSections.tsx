@@ -1,7 +1,13 @@
 import type * as React from 'react';
 
+import type { RefResolver } from './crossRef';
 import { renderRefLink } from './crossRef';
-import { formatValue, humanizeKey, isSensitiveKey } from './specUtils';
+import {
+  formatValue,
+  humanizeKey,
+  isSensitiveKey,
+  refLinkContext,
+} from './specUtils';
 import { StatusBadge } from './statusBadge';
 import type { JsonObject, JsonValue } from './types';
 
@@ -15,12 +21,14 @@ const FieldValue = ({
   fieldKey,
   value,
   refResource,
-  onRefClick,
+  context,
+  resolveRef,
 }: {
   fieldKey: string;
   value: JsonValue;
   refResource?: string;
-  onRefClick?: (resource: string, id: string) => void;
+  context: Record<string, string>;
+  resolveRef?: RefResolver;
 }) => {
   if (isSensitiveKey(fieldKey)) {
     return (
@@ -36,7 +44,8 @@ const FieldValue = ({
   const refLink = renderRefLink({
     refResource,
     value,
-    onRefClick,
+    context,
+    resolveRef,
     className:
       'self-start font-mono text-sm text-primary underline-offset-4 hover:underline',
   });
@@ -91,7 +100,8 @@ type DetailSectionsProps = {
   item: JsonObject;
   fields: string[];
   refFields?: Record<string, string>;
-  onRefClick?: (resource: string, id: string) => void;
+  pathParams?: Record<string, string>;
+  resolveRef?: RefResolver;
 };
 
 /**
@@ -103,8 +113,10 @@ export const DetailSections = ({
   item,
   fields,
   refFields = {},
-  onRefClick,
+  pathParams = {},
+  resolveRef,
 }: DetailSectionsProps) => {
+  const context = refLinkContext(item, pathParams);
   const overviewKeys = fields.filter((k) => {
     return !isMultiline(item[k]);
   });
@@ -127,7 +139,8 @@ export const DetailSections = ({
                     fieldKey={key}
                     value={item[key]}
                     refResource={refFields[key]}
-                    onRefClick={onRefClick}
+                    context={context}
+                    resolveRef={resolveRef}
                   />
                 </div>
               );

@@ -4,7 +4,8 @@ import { apiFetch } from '@/api/client';
 import { useAuth } from '@/auth/authContext';
 import { Button } from '@/components/ui/button';
 
-import { renderRefLink, useRefNavigation } from './crossRef';
+import type { RefResolver } from './crossRef';
+import { renderRefLink, useRefResolver } from './crossRef';
 import { ALL_STATUSES, EmptyState, ListToolbar } from './listToolbar';
 import { useNavigation } from './navigationContext';
 import {
@@ -16,6 +17,7 @@ import {
   getResponseItemSchema,
   humanizeKey,
   isSensitiveKey,
+  refLinkContext,
   resolvableRefFields,
 } from './specUtils';
 import { StatusBadge } from './statusBadge';
@@ -27,17 +29,19 @@ const CellValue = ({
   colKey,
   value,
   refResource,
-  onRefClick,
+  context,
+  resolveRef,
 }: {
   colKey: string;
   value: JsonValue;
   refResource?: string;
-  onRefClick?: (resource: string, id: string) => void;
+  context: Record<string, string>;
+  resolveRef?: RefResolver;
 }) => {
   if (isSensitiveKey(colKey)) {
     return <span className="text-muted-foreground italic">{'[hidden]'}</span>;
   }
-  const refLink = renderRefLink({ refResource, value, onRefClick });
+  const refLink = renderRefLink({ refResource, value, context, resolveRef });
   if (refLink) return refLink;
   if (colKey === 'status' && typeof value === 'string' && value) {
     return <StatusBadge status={value} />;
@@ -122,14 +126,16 @@ const ItemTable = ({
   hasDetail,
   onRowClick,
   refFields,
-  onRefClick,
+  pathParams,
+  resolveRef,
 }: {
   items: JsonObject[];
   columns: string[];
   hasDetail: boolean;
   onRowClick: (item: JsonObject) => void;
   refFields: Record<string, string>;
-  onRefClick?: (resource: string, id: string) => void;
+  pathParams: Record<string, string>;
+  resolveRef?: RefResolver;
 }) => {
   return (
     <div className="overflow-x-auto rounded-md border">
@@ -151,6 +157,7 @@ const ItemTable = ({
         </thead>
         <tbody>
           {items.map((item, idx) => {
+            const context = refLinkContext(item, pathParams);
             return (
               <tr
                 key={String(item.id ?? idx)}
@@ -163,7 +170,8 @@ const ItemTable = ({
                         colKey={col}
                         value={item[col] ?? (null as JsonValue)}
                         refResource={refFields[col]}
-                        onRefClick={onRefClick}
+                        context={context}
+                        resolveRef={resolveRef}
                       />
                     </td>
                   );
@@ -208,7 +216,8 @@ type LoadedListProps = {
   onRowClick: (item: JsonObject) => void;
   onCreate: () => void;
   refFields: Record<string, string>;
-  onRefClick?: (resource: string, id: string) => void;
+  pathParams: Record<string, string>;
+  resolveRef?: RefResolver;
 };
 
 const LoadedList = ({
@@ -217,7 +226,8 @@ const LoadedList = ({
   onRowClick,
   onCreate,
   refFields,
-  onRefClick,
+  pathParams,
+  resolveRef,
 }: LoadedListProps) => {
   const [page, setPage] = React.useState(0);
   const [search, setSearch] = React.useState('');
@@ -268,7 +278,8 @@ const LoadedList = ({
             hasDetail={Boolean(module.getOp)}
             onRowClick={onRowClick}
             refFields={refFields}
-            onRefClick={onRefClick}
+            pathParams={pathParams}
+            resolveRef={resolveRef}
           />
           {filtered.length > PER_PAGE && (
             <PaginationFooter
@@ -314,7 +325,7 @@ export const ListView = ({
     return resolvableRefFields(all, modules);
   }, [module.listOp, spec, modules]);
 
-  const handleRefClick = useRefNavigation(modules);
+  const resolveRef = useRefResolver(modules);
 
   const fetchData = React.useCallback(() => {
     if (!module.listOp || !token) return;
@@ -407,7 +418,8 @@ export const ListView = ({
         onRowClick={handleRowClick}
         onCreate={handleCreate}
         refFields={refFields}
-        onRefClick={modules.length > 0 ? handleRefClick : undefined}
+        pathParams={pathParams}
+        resolveRef={modules.length > 0 ? resolveRef : undefined}
       />
     </div>
   );

@@ -252,6 +252,7 @@ describe('formatValue', () => {
 describe('x-soat-ref cross-references', () => {
   const agents = (): ModuleInfo => byTag(parseModules(testSpec), 'Agents');
   const projects = (): ModuleInfo => byTag(parseModules(testSpec), 'Projects');
+  const sessions = (): ModuleInfo => byTag(parseModules(testSpec), 'Sessions');
 
   test('getResponseItemSchema unwraps an array response to its item schema', () => {
     const schema = getResponseItemSchema(agents().listOp, testSpec);
@@ -287,22 +288,37 @@ describe('x-soat-ref cross-references', () => {
     });
   });
 
-  test('buildRefDescriptor returns null without an id or a single-param detail op', () => {
+  test('buildRefDescriptor returns null without an id or a detail op', () => {
     expect(buildRefDescriptor(projects(), '')).toBeNull();
     expect(buildRefDescriptor({ ...projects(), getOp: undefined }, 'x')).toBeNull();
   });
 
-  test('resolvableRefFields keeps navigable refs and drops the rest', () => {
+  test('buildRefDescriptor fills parent params for a nested target from context', () => {
+    expect(buildRefDescriptor(sessions(), 'ses_1', { agent_id: 'agt_1' })).toEqual({
+      tag: 'Sessions',
+      operationId: 'getAgentSession',
+      pathParams: { agent_id: 'agt_1', session_id: 'ses_1' },
+      mode: 'detail',
+    });
+  });
+
+  test('buildRefDescriptor returns null when a nested parent param is missing', () => {
+    expect(buildRefDescriptor(sessions(), 'ses_1')).toBeNull();
+    expect(buildRefDescriptor(sessions(), 'ses_1', { other: 'x' })).toBeNull();
+  });
+
+  test('resolvableRefFields keeps refs with a detail route and drops the rest', () => {
     const modules = parseModules(testSpec);
     const refs = {
       project_id: 'projects',
       tool_ids: 'tools',
-      session_id: 'sessions', // nested, no top-level detail route
-      widget_id: 'widgets', // unknown resource
+      session_id: 'sessions', // nested, but has a detail route → kept as a candidate
+      widget_id: 'widgets', // unknown resource → dropped
     };
     expect(resolvableRefFields(refs, modules)).toEqual({
       project_id: 'projects',
       tool_ids: 'tools',
+      session_id: 'sessions',
     });
   });
 });

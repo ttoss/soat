@@ -15,15 +15,11 @@ import { GuideChat } from '@/chat/guideChat';
 import { EngineView } from '@/engine/engineView';
 import { useNavigation } from '@/engine/navigationContext';
 import { useSpec } from '@/engine/specContext';
-import type { JsonObject, ModuleInfo } from '@/engine/types';
+import { buildUrl, extractItems, itemLabel } from '@/engine/specUtils';
+import type { ModuleInfo } from '@/engine/types';
 
 import type { Project } from './navComponents';
-import {
-  ModuleList,
-  NavItem,
-  orderModules,
-  ProjectPicker,
-} from './navComponents';
+import { ModuleList, NavItem, ProjectPicker } from './navComponents';
 
 const ADMIN_TAGS = new Set([
   'Users',
@@ -53,34 +49,32 @@ const buildPathParams = (
   return {};
 };
 
-const extractProjects = (data: unknown): Project[] => {
-  const list = Array.isArray(data) ? data : [];
-  return list
-    .filter((item): item is JsonObject => {
-      return typeof item === 'object' && item !== null && !Array.isArray(item);
-    })
-    .map((item) => {
-      return {
-        id: String(item.id ?? ''),
-        name: String(item.name ?? item.id ?? ''),
-      };
-    });
+// Maps a projects list response to picker options using the same engine
+// helpers the generic views use: extractItems for the list shape and itemLabel
+// for the display name. No hardcoded field names.
+const toProjectOptions = (data: unknown): Project[] => {
+  return extractItems(data).map((item) => {
+    return { id: String(item.id ?? ''), name: itemLabel(item) };
+  });
 };
 
-const useProjects = (token: string) => {
+// Fetches projects from the spec-derived list path (the Projects module's
+// listOp), rather than a hardcoded URL. Stays in the loading state until a
+// path is available so the picker does not flash an empty state.
+const useProjects = (token: string, listPath: string | undefined) => {
   const [projects, setProjects] = React.useState<Project[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    if (!token) return;
-    apiFetch<unknown>({ url: '/api/v1/projects', token })
+    if (!token || !listPath) return;
+    apiFetch<unknown>({ url: buildUrl(listPath, {}), token })
       .then((result) => {
-        if (result.ok) setProjects(extractProjects(result.data));
+        if (result.ok) setProjects(toProjectOptions(result.data));
       })
       .finally(() => {
         setLoading(false);
       });
-  }, [token]);
+  }, [token, listPath]);
 
   return { projects, loading };
 };
@@ -113,15 +107,14 @@ const LeftNav = ({
       : [];
   }, [modules, user]);
 
+  // Navigation modules in the spec's natural order (the order parseModules
+  // yields from the OpenAPI paths) — no hand-curated grouping. Projects and
+  // admin-only modules render in their own sections.
   const navModules = React.useMemo(() => {
     return modules.filter((m) => {
       return m.tag !== 'Projects' && !ADMIN_TAGS.has(m.label);
     });
   }, [modules]);
-
-  const orderedModules = React.useMemo(() => {
-    return orderModules(navModules);
-  }, [navModules]);
 
   const navigateToModule = React.useCallback(
     (m: ModuleInfo) => {
@@ -175,7 +168,7 @@ const LeftNav = ({
       />
 
       <ModuleList
-        modules={orderedModules}
+        modules={navModules}
         activeListTag={activeListTag}
         onSelect={navigateToModule}
       />
@@ -282,11 +275,21 @@ const MainArea = () => {
 export const Workspace = () => {
   const { state } = useAuth();
   const token = state.status === 'authenticated' ? state.token : '';
-  const { projects, loading: projectsLoading } = useProjects(token);
+  const { modules, loading: specLoading } = useSpec();
+  const projectsPath = modules.find((m) => {
+    return m.tag === 'Projects';
+  })?.listOp?.pathTemplate;
+  const { projects, loading: projectsLoading } = useProjects(
+    token,
+    projectsPath
+  );
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <LeftNav projects={projects} projectsLoading={projectsLoading} />
+      <LeftNav
+        projects={projects}
+        projectsLoading={specLoading || projectsLoading}
+      />
       <main className="flex-1 overflow-y-auto p-6">
         <MainArea />
       </main>
