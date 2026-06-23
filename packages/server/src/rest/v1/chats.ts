@@ -272,7 +272,7 @@ const handleStatelessStreamingCompletion = async (args: {
   }
 };
 
-chatsRouter.post('/chats/completions', async (ctx: Context) => {
+chatsRouter.post('/chat/completions', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const { aiProviderId, model, messages, stream } = ctx.request.body as {

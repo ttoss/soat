@@ -9,7 +9,7 @@ LLM completions with optional persistent configuration, supporting both stateles
 
 Chats provide two ways to call the completions API:
 
-- **Stateless** (`POST /chats/completions`) — pass the full provider configuration on every request. No setup required.
+- **Stateless** (`POST /chat/completions`) — OpenAI-compatible; pass the full provider configuration on every request. No setup required.
 - **Per-chat** (`POST /chats/{chat_id}/completions`) — create a Chat resource once to store the AI provider, default system message, and model; then pass only the `messages` array per request.
 
 Both endpoints support SSE streaming via `stream: true`.
@@ -145,7 +145,7 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X POST https://api.example.com/api/v1/chats/completions \
+curl -X POST https://api.example.com/api/v1/chat/completions \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{

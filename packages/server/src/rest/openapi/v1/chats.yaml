@@ -250,16 +250,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/v1/chats/completions:
+  /api/v1/chat/completions:
     post:
       tags:
         - Chats
       summary: Create a chat completion (stateless)
       description: >
-        OpenAI Chat Completions-compatible endpoint. Resolves the AI provider
-        from `ai_provider_id`, decrypts its secret, and calls the appropriate
-        Vercel AI SDK provider. `ai_provider_id` is required — there is no
-        server-side model fallback.
+        OpenAI Chat Completions-compatible endpoint. Mirrors OpenAI's
+        `POST /v1/chat/completions` path so an OpenAI SDK can target it by base
+        URL alone. Resolves the AI provider from `ai_provider_id`, decrypts its
+        secret, and calls the appropriate Vercel AI SDK provider. `ai_provider_id`
+        is required — there is no server-side model fallback.
       operationId: createChatCompletion
       requestBody:
         required: true

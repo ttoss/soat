@@ -287,10 +287,10 @@ describe('Chats', () => {
     });
   });
 
-  describe('POST /api/v1/chats/completions', () => {
+  describe('POST /api/v1/chat/completions', () => {
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
-        .post('/api/v1/chats/completions')
+        .post('/api/v1/chat/completions')
         .send({ messages: [{ role: 'user', content: 'Hello' }] });
 
       expect(response.status).toBe(401);
@@ -299,7 +299,7 @@ describe('Chats', () => {
 
     test('missing messages returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/chats/completions')
+        .post('/api/v1/chat/completions')
         .send({});
 
       expect(response.status).toBe(400);
@@ -308,7 +308,7 @@ describe('Chats', () => {
 
     test('empty messages array returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/chats/completions')
+        .post('/api/v1/chat/completions')
         .send({ messages: [] });
 
       expect(response.status).toBe(400);
@@ -317,7 +317,7 @@ describe('Chats', () => {
 
     test('non-array messages returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/chats/completions')
+        .post('/api/v1/chat/completions')
         .send({ messages: 'hello' });
 
       expect(response.status).toBe(400);
@@ -326,7 +326,7 @@ describe('Chats', () => {
 
     test('unknown aiProviderId returns 404', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/chats/completions')
+        .post('/api/v1/chat/completions')
         .send({
           ai_provider_id: 'aip_doesnotexist000000',
           messages: [{ role: 'user', content: 'Hello' }],
@@ -338,7 +338,7 @@ describe('Chats', () => {
 
     test('missing ai_provider_id returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/chats/completions')
+        .post('/api/v1/chat/completions')
         .send({
           messages: [{ role: 'user', content: 'Hello' }],
         });
@@ -380,7 +380,7 @@ describe('Chats', () => {
     });
   });
 
-  describe('POST /api/v1/chats/completions - with mocked AI', () => {
+  describe('POST /api/v1/chat/completions - with mocked AI', () => {
     afterEach(() => {
       jest.restoreAllMocks();
     });
@@ -393,7 +393,7 @@ describe('Chats', () => {
       });
 
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/chats/completions')
+        .post('/api/v1/chat/completions')
         .send({
           ai_provider_id: aiProviderId,
           messages: [{ role: 'user', content: 'Hello' }],
@@ -483,11 +483,11 @@ describe('Chats', () => {
     });
   });
 
-  // ── Streaming /chats/completions ────────────────────────────────────────
+  // ── Streaming /chat/completions ─────────────────────────────────────────
 
-  describe('POST /api/v1/chats/completions - streaming (real lib)', () => {
+  describe('POST /api/v1/chat/completions - streaming (real lib)', () => {
     test('unauthenticated request returns 401', async () => {
-      const response = await testClient.post('/api/v1/chats/completions').send({
+      const response = await testClient.post('/api/v1/chat/completions').send({
         ai_provider_id: aiProviderId,
         messages: [{ role: 'user', content: 'Hello' }],
         stream: true,
@@ -500,7 +500,7 @@ describe('Chats', () => {
       // resolveModel + buildModel + getProviderFactory are exercised for the Ollama provider.
       // The stream iteration fails (Ollama not running), caught by the error handler.
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/chats/completions')
+        .post('/api/v1/chat/completions')
         .send({
           ai_provider_id: aiProviderId,
           messages: [{ role: 'user', content: 'Hello' }],
@@ -514,7 +514,7 @@ describe('Chats', () => {
 
     test('missing ai_provider_id returns 400 (streaming)', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/chats/completions')
+        .post('/api/v1/chat/completions')
         .send({
           messages: [{ role: 'user', content: 'Hello' }],
           stream: true,
@@ -571,7 +571,7 @@ describe('Chats', () => {
       // isOpenAILikeProvider('openai') = true → factory is non-null → buildModel uses factory.
       // OpenAI API fails (no valid key) → error written to SSE stream.
       const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/chats/completions')
+        .post('/api/v1/chat/completions')
         .send({
           ai_provider_id: openAiProviderId,
           messages: [{ role: 'user', content: 'Hi' }],
