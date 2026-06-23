@@ -6,7 +6,10 @@ import {
   executeConditionNode,
   executeDelayNode,
   executeHumanNode,
+  executeLoopNode,
   executeMemoryWriteNode,
+  executeSubOrchestrationNode,
+  executeToolNode,
   executeTransformNode,
   executeWebhookNode,
 } from 'src/lib/orchestrationNodeExecutors';
@@ -321,6 +324,44 @@ describe('executeWebhookNode', () => {
 });
 
 // ── executeDelayNode ───────────────────────────────────────────────────────
+
+describe('executeToolNode', () => {
+  test('throws DomainError when toolId is missing', async () => {
+    await expect(
+      executeToolNode({
+        node: makeNode({ type: 'tool' }),
+        state: {},
+        projectIds: [1],
+      })
+    ).rejects.toThrow(DomainError);
+  });
+});
+
+describe('executeLoopNode', () => {
+  test('throws DomainError when subGraph is missing', async () => {
+    await expect(
+      executeLoopNode({
+        node: makeNode({ type: 'loop' }),
+        state: {},
+        projectIds: [1],
+        traceId: null,
+      })
+    ).rejects.toThrow(DomainError);
+  });
+});
+
+describe('executeSubOrchestrationNode', () => {
+  test('throws DomainError when orchestrationId is missing', async () => {
+    await expect(
+      executeSubOrchestrationNode({
+        node: makeNode({ type: 'sub_orchestration' }),
+        state: {},
+        projectIds: [1],
+        traceId: null,
+      })
+    ).rejects.toThrow(DomainError);
+  });
+});
 
 describe('executeDelayNode', () => {
   test('throws DomainError when duration is missing', async () => {

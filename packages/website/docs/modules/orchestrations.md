@@ -138,7 +138,37 @@ Edges without an `activation_group` always pass through unconditionally.
 
 ### Cycle Detection
 
-Before execution begins, the engine performs a DFS-based cycle check. If a cycle is detected the run is created, set to `failed`, and the `error` field contains `code: "ORCHESTRATION_CYCLE_DETECTED"`.
+A DFS-based cycle check runs both at create/update time (see [Static Validation](#static-validation)) and again before a run begins. Orchestrations that contain a `loop` node are exempt — loops introduce intentional cycles. If a cycle reaches execution anyway, the run is created, set to `failed`, and the `error` field contains `code: "ORCHESTRATION_CYCLE_DETECTED"`.
+
+### Static Validation
+
+Orchestration graphs are validated **before** they are persisted. `create-orchestration` and `update-orchestration` reject an invalid graph with HTTP `400` (`code: "ORCHESTRATION_VALIDATION_FAILED"`); the `error.meta` field carries the full `errors` and `warnings` arrays. The same checks are available without persisting through `validate-orchestration`, which returns a `{ valid, errors, warnings }` result.
+
+**Errors (block create/update):**
+
+| Check | Example |
+| ----- | ------- |
+| Node missing its required field | an `agent` node without `agent_id`, a `transform`/`condition` node without `expression` |
+| Duplicate node id | two nodes share `id: "a"` |
+| Dangling edge | an edge whose `from`/`to` references a node that does not exist |
+| Cycle (no `loop` node present) | `a → b → a` |
+| Unsatisfiable `input_mapping` reference | a `{"var": "x"}` whose `state.x` is never written by an upstream node **and** `input_schema` is declared but does not list `x` |
+
+**Warnings (never block):**
+
+| Check | Example |
+| ----- | ------- |
+| Conditional-branch state read | a node reads `{"var": "branch"}` that an upstream node writes only on one side of a `condition`, so it may be undefined when the node runs |
+
+The `input_mapping` reachability check only treats an unwritten reference as an **error** when an `input_schema` is declared (a closed input contract). Without an `input_schema`, the run input is an open contract — the key may be supplied at run time — so the reference is allowed. The check walks the graph's edges to determine which nodes are upstream, and uses dominator analysis to distinguish a key that is guaranteed-written from one written only on a conditional branch.
+
+```bash
+soat validate-orchestration \
+  --nodes '[{"id":"a","type":"transform","expression":1,"output_mapping":{"result":"state.step1"}},
+            {"id":"b","type":"transform","expression":1,"input_mapping":{"val":{"var":"step1"}}}]' \
+  --edges '[{"from":"a","to":"b"}]'
+# → { "valid": true, "errors": [], "warnings": [] }
+```
 
 ### Node Executions
 

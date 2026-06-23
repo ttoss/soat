@@ -7,6 +7,11 @@
       "description": "Create an orchestration"
     },
     {
+      "operationId": "validateOrchestration",
+      "action": "orchestrations:ValidateOrchestration",
+      "description": "Statically validate an orchestration graph"
+    },
+    {
       "operationId": "listOrchestrations",
       "action": "orchestrations:ListOrchestrations",
       "description": "List orchestrations in a project"

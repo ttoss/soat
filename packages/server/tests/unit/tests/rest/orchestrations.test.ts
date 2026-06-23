@@ -189,6 +189,113 @@ describe('Orchestrations', () => {
         .send({ ...withoutEdges, project_id: projectId });
       expect(response.status).toBe(400);
     });
+
+    test('invalid graph (dangling edge) returns 400 with validation error', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          project_id: projectId,
+          name: 'Dangling Edge Pipeline',
+          nodes: [{ id: 'a', type: 'transform', expression: 1 }],
+          edges: [{ from: 'a', to: 'ghost' }],
+        });
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('ORCHESTRATION_VALIDATION_FAILED');
+      expect(response.body.error.meta.errors).toContainEqual(
+        expect.objectContaining({ path: 'edges[0].to' })
+      );
+    });
+
+    test('agent node missing agent_id returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          project_id: projectId,
+          name: 'Bad Agent Pipeline',
+          nodes: [{ id: 'a', type: 'agent' }],
+          edges: [],
+        });
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('ORCHESTRATION_VALIDATION_FAILED');
+    });
+  });
+
+  describe('POST /api/v1/orchestrations/validate', () => {
+    test('returns valid=true for a sound graph', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations/validate')
+        .send({
+          nodes: [
+            {
+              id: 'a',
+              type: 'transform',
+              expression: 1,
+              output_mapping: { result: 'state.step1' },
+            },
+            {
+              id: 'b',
+              type: 'transform',
+              expression: 1,
+              input_mapping: { val: { var: 'step1' } },
+            },
+          ],
+          edges: [{ from: 'a', to: 'b' }],
+        });
+      expect(response.status).toBe(200);
+      expect(response.body.valid).toBe(true);
+      expect(response.body.errors).toEqual([]);
+    });
+
+    test('reports errors for an invalid graph without persisting', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations/validate')
+        .send({
+          nodes: [{ id: 'a', type: 'agent' }],
+          edges: [{ from: 'a', to: 'ghost' }],
+        });
+      expect(response.status).toBe(200);
+      expect(response.body.valid).toBe(false);
+      expect(response.body.errors.length).toBeGreaterThan(0);
+    });
+
+    test('reports a warning for a conditional-branch reference', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations/validate')
+        .send({
+          nodes: [
+            { id: 'cond', type: 'condition', expression: 'yes' },
+            {
+              id: 'yes_node',
+              type: 'transform',
+              expression: 1,
+              output_mapping: { result: 'state.branch' },
+            },
+            { id: 'no_node', type: 'transform', expression: 2 },
+            {
+              id: 'join',
+              type: 'transform',
+              expression: 1,
+              input_mapping: { val: { var: 'branch' } },
+            },
+          ],
+          edges: [
+            { from: 'cond', to: 'yes_node', condition: 'yes' },
+            { from: 'cond', to: 'no_node', condition: 'no' },
+            { from: 'yes_node', to: 'join' },
+            { from: 'no_node', to: 'join' },
+          ],
+        });
+      expect(response.status).toBe(200);
+      expect(response.body.valid).toBe(true);
+      expect(response.body.warnings.length).toBeGreaterThan(0);
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient
+        .post('/api/v1/orchestrations/validate')
+        .send({ nodes: [], edges: [] });
+      expect(response.status).toBe(401);
+    });
   });
 
   describe('GET /api/v1/orchestrations', () => {
@@ -411,7 +518,7 @@ describe('Orchestrations', () => {
       expect(getRes.body.status).toBe('paused');
     });
 
-    test('transform node without expression causes run to fail', async () => {
+    test('transform node without expression is rejected at create', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
@@ -420,18 +527,11 @@ describe('Orchestrations', () => {
           edges: [],
           project_id: projectId,
         });
-      expect(createRes.status).toBe(201);
-      const badId = createRes.body.id;
-
-      const runRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/orchestration-runs')
-        .send({ orchestration_id: badId, input: {} });
-      expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('failed');
-      expect(runRes.body.error).toBeDefined();
+      expect(createRes.status).toBe(400);
+      expect(createRes.body.error.code).toBe('ORCHESTRATION_VALIDATION_FAILED');
     });
 
-    test('condition node without expression causes run to fail', async () => {
+    test('condition node without expression is rejected at create', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
@@ -440,14 +540,8 @@ describe('Orchestrations', () => {
           edges: [],
           project_id: projectId,
         });
-      expect(createRes.status).toBe(201);
-      const badId = createRes.body.id;
-
-      const runRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/orchestration-runs')
-        .send({ orchestration_id: badId, input: {} });
-      expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('failed');
+      expect(createRes.status).toBe(400);
+      expect(createRes.body.error.code).toBe('ORCHESTRATION_VALIDATION_FAILED');
     });
 
     test('input_mapping resolves literals, run-input {var} refs, and expressions', async () => {
@@ -710,9 +804,11 @@ describe('Orchestrations', () => {
           nodes: [
             {
               id: 'boom',
-              type: 'transform',
+              type: 'tool',
+              // structurally valid (passes create-time validation) but the
+              // tool does not exist, so callTool throws at run time.
+              tool_id: 'tool_doesnotexist',
               input_mapping: { name: 'widget' },
-              // missing expression → executor throws
             },
           ],
           edges: [],
@@ -876,7 +972,7 @@ describe('Orchestrations', () => {
       expect(runRes.body.state.final).toBe('c');
     });
 
-    test('cycle in graph causes run to fail with cycle error', async () => {
+    test('cycle in graph is rejected at create', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
@@ -891,18 +987,16 @@ describe('Orchestrations', () => {
           ],
           project_id: projectId,
         });
-      expect(createRes.status).toBe(201);
-
-      const runRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/orchestration-runs')
-        .send({ orchestration_id: createRes.body.id, input: {} });
-      expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('failed');
-      expect(runRes.body.error).toBeDefined();
-      expect(runRes.body.error.code).toBe('ORCHESTRATION_CYCLE_DETECTED');
+      expect(createRes.status).toBe(400);
+      expect(createRes.body.error.code).toBe('ORCHESTRATION_VALIDATION_FAILED');
+      expect(createRes.body.error.meta.errors).toContainEqual(
+        expect.objectContaining({
+          message: expect.stringContaining('Cycle detected'),
+        })
+      );
     });
 
-    test('self-loop in graph causes run to fail', async () => {
+    test('self-loop in graph is rejected at create', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
@@ -911,14 +1005,8 @@ describe('Orchestrations', () => {
           edges: [{ from: 'A', to: 'A' }],
           project_id: projectId,
         });
-      expect(createRes.status).toBe(201);
-
-      const runRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/orchestration-runs')
-        .send({ orchestration_id: createRes.body.id, input: {} });
-      expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('failed');
-      expect(runRes.body.error.code).toBe('ORCHESTRATION_CYCLE_DETECTED');
+      expect(createRes.status).toBe(400);
+      expect(createRes.body.error.code).toBe('ORCHESTRATION_VALIDATION_FAILED');
     });
 
     describe('GET /api/v1/orchestration-runs/:run_id', () => {
@@ -1248,7 +1336,7 @@ describe('Orchestrations', () => {
       subOrchId = res.body.id;
     });
 
-    test('tool node without tool_id causes run to fail', async () => {
+    test('tool node without tool_id is rejected at create', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
@@ -1257,16 +1345,11 @@ describe('Orchestrations', () => {
           edges: [],
           project_id: projectId,
         });
-      expect(createRes.status).toBe(201);
-
-      const runRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/orchestration-runs')
-        .send({ orchestration_id: createRes.body.id, input: {} });
-      expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('failed');
+      expect(createRes.status).toBe(400);
+      expect(createRes.body.error.code).toBe('ORCHESTRATION_VALIDATION_FAILED');
     });
 
-    test('delay node without duration causes run to fail', async () => {
+    test('delay node without duration is rejected at create', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
@@ -1275,13 +1358,8 @@ describe('Orchestrations', () => {
           edges: [],
           project_id: projectId,
         });
-      expect(createRes.status).toBe(201);
-
-      const runRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/orchestration-runs')
-        .send({ orchestration_id: createRes.body.id, input: {} });
-      expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('failed');
+      expect(createRes.status).toBe(400);
+      expect(createRes.body.error.code).toBe('ORCHESTRATION_VALIDATION_FAILED');
     });
 
     test('delay node with PT0S completes successfully', async () => {
@@ -1354,7 +1432,7 @@ describe('Orchestrations', () => {
       expect(runRes.body.status).toBe('paused');
     });
 
-    test('loop node without sub_graph causes run to fail', async () => {
+    test('loop node without sub_graph is rejected at create', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
@@ -1363,13 +1441,8 @@ describe('Orchestrations', () => {
           edges: [],
           project_id: projectId,
         });
-      expect(createRes.status).toBe(201);
-
-      const runRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/orchestration-runs')
-        .send({ orchestration_id: createRes.body.id, input: {} });
-      expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('failed');
+      expect(createRes.status).toBe(400);
+      expect(createRes.body.error.code).toBe('ORCHESTRATION_VALIDATION_FAILED');
     });
 
     test('loop node with empty collection completes', async () => {
@@ -1458,7 +1531,7 @@ describe('Orchestrations', () => {
       expect(runRes.body.status).toBe('completed');
     });
 
-    test('sub_orchestration node without orchestration_id causes run to fail', async () => {
+    test('sub_orchestration node without orchestration_id is rejected at create', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
@@ -1467,13 +1540,8 @@ describe('Orchestrations', () => {
           edges: [],
           project_id: projectId,
         });
-      expect(createRes.status).toBe(201);
-
-      const runRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/orchestration-runs')
-        .send({ orchestration_id: createRes.body.id, input: {} });
-      expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('failed');
+      expect(createRes.status).toBe(400);
+      expect(createRes.body.error.code).toBe('ORCHESTRATION_VALIDATION_FAILED');
     });
 
     test('sub_orchestration node with valid orchestration completes', async () => {
@@ -1510,12 +1578,14 @@ describe('Orchestrations', () => {
 
   describe('Cancel run terminal-status edge cases', () => {
     test('cancelling a failed run returns 409', async () => {
-      // Create an orchestration that immediately fails
+      // Create an orchestration that immediately fails at run time. The graph
+      // is structurally valid (so it passes create-time validation) but the
+      // referenced tool does not exist, so the node throws during the run.
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
           name: 'Fail For Cancel Test',
-          nodes: [{ id: 'bad', type: 'transform' }], // no expression → fails
+          nodes: [{ id: 'bad', type: 'tool', tool_id: 'tool_doesnotexist' }],
           edges: [],
           project_id: projectId,
         });

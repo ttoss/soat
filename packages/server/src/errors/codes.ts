@@ -117,6 +117,11 @@ export const ERROR_CODES = {
     httpStatus: 422,
     description: 'A node in the orchestration run failed to execute.',
   },
+  ORCHESTRATION_VALIDATION_FAILED: {
+    httpStatus: 400,
+    description:
+      'The orchestration graph is invalid (e.g. a dangling edge, a node missing a required field, a cycle, or an input_mapping that references a state key no upstream node writes).',
+  },
   ORCHESTRATION_CYCLE_DETECTED: {
     httpStatus: 422,
     description:

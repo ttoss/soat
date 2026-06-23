@@ -970,6 +970,44 @@ describe('MCP tools - happy path', () => {
       expect(res.body.result?.isError).toBe(true);
     });
   });
+
+  // ── Orchestrations ───────────────────────────────────────────────────────
+
+  describe('Orchestration tools', () => {
+    test('validate-orchestration returns valid=true for a sound graph', async () => {
+      const res = await mcpCall('validate-orchestration', {
+        nodes: [
+          {
+            id: 'a',
+            type: 'transform',
+            expression: 1,
+            outputMapping: { result: 'state.step1' },
+          },
+          {
+            id: 'b',
+            type: 'transform',
+            expression: 1,
+            inputMapping: { val: { var: 'step1' } },
+          },
+        ],
+        edges: [{ from: 'a', to: 'b' }],
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.valid).toBe(true);
+    });
+
+    test('validate-orchestration reports errors for an invalid graph', async () => {
+      const res = await mcpCall('validate-orchestration', {
+        nodes: [{ id: 'a', type: 'agent' }],
+        edges: [{ from: 'a', to: 'ghost' }],
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.valid).toBe(false);
+      expect(result.errors.length).toBeGreaterThan(0);
+    });
+  });
 });
 
 describe('MCP OAuth discovery (RFC 9728)', () => {
