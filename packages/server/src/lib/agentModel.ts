@@ -16,25 +16,34 @@ type BuildModelArgs = {
   config?: Record<string, unknown>;
 };
 
-const buildBedrockModel = (args: BuildModelArgs): LanguageModel => {
-  const apiKey = args.secretValue ?? '';
-  let parsedCredentials:
-    | { accessKeyId?: string; secretAccessKey?: string; sessionToken?: string }
-    | undefined;
-  if (apiKey) {
-    try {
-      parsedCredentials = JSON.parse(apiKey);
-    } catch {
-      // fall back to default AWS credential chain
-    }
+type BedrockSecret = {
+  apiKey?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+  sessionToken?: string;
+};
+
+const parseBedrockSecret = (secretValue: string | null): BedrockSecret => {
+  if (!secretValue) return {};
+  try {
+    return JSON.parse(secretValue) as BedrockSecret;
+  } catch {
+    return {};
   }
+};
+
+const buildBedrockModel = (args: BuildModelArgs): LanguageModel => {
+  const secret = parseBedrockSecret(args.secretValue);
   const region = (args.config?.region as string | undefined) ?? 'us-east-1';
-  return createAmazonBedrock({
-    region,
-    accessKeyId: parsedCredentials?.accessKeyId,
-    secretAccessKey: parsedCredentials?.secretAccessKey,
-    sessionToken: parsedCredentials?.sessionToken,
-  })(args.model);
+  const options = secret.apiKey
+    ? { region, apiKey: secret.apiKey }
+    : {
+        region,
+        accessKeyId: secret.accessKeyId,
+        secretAccessKey: secret.secretAccessKey,
+        sessionToken: secret.sessionToken,
+      };
+  return createAmazonBedrock(options)(args.model);
 };
 
 const buildOllamaModel = (args: BuildModelArgs): LanguageModel => {
