@@ -308,27 +308,30 @@ describe('Orchestrations', () => {
     });
   });
 
-  describe('POST /api/v1/orchestrations/:orchestration_id/runs', () => {
+  describe('POST /api/v1/orchestration-runs', () => {
     let runId: string;
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
-        .post(`/api/v1/orchestrations/${orchestrationId}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: orchestrationId, input: {} });
       expect(response.status).toBe(401);
     });
 
     test('user without permission returns 403 or 400', async () => {
       const response = await authenticatedTestClient(noPermToken)
-        .post(`/api/v1/orchestrations/${orchestrationId}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: orchestrationId, input: {} });
       expect([400, 403, 404]).toContain(response.status);
     });
 
     test('authenticated user can start a run and it completes', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${orchestrationId}/runs`)
-        .send({ input: { greeting: 'hello' } });
+        .post('/api/v1/orchestration-runs')
+        .send({
+          orchestration_id: orchestrationId,
+          input: { greeting: 'hello' },
+        });
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
       expect(response.body.status).toBe('completed');
@@ -337,8 +340,11 @@ describe('Orchestrations', () => {
 
     test('admin can start a run without explicit project context', async () => {
       const response = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/orchestrations/${orchestrationId}/runs`)
-        .send({ input: { greeting: 'hello from admin' } });
+        .post('/api/v1/orchestration-runs')
+        .send({
+          orchestration_id: orchestrationId,
+          input: { greeting: 'hello from admin' },
+        });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
@@ -347,8 +353,8 @@ describe('Orchestrations', () => {
 
     test('run on non-existent orchestration returns 500 or 404', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/orchestrations/nonexistent-id/runs')
-        .send({});
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: 'nonexistent-id' });
       expect([404, 500]).toContain(response.status);
     });
 
@@ -360,8 +366,8 @@ describe('Orchestrations', () => {
       const twoNodeId = createRes.body.id;
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${twoNodeId}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: twoNodeId, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
       expect(runRes.body.state.step1).toBe(42);
@@ -376,8 +382,8 @@ describe('Orchestrations', () => {
       const condOrcId = createRes.body.id;
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${condOrcId}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: condOrcId, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
       // expression returns 'yes', so yes_node should run
@@ -392,14 +398,14 @@ describe('Orchestrations', () => {
       const humanOrcId = createRes.body.id;
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${humanOrcId}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: humanOrcId, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('paused');
 
       // Check GET /runs/:run_id returns paused run
       const getRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/orchestrations/${humanOrcId}/runs/${runRes.body.id}`
+        `/api/v1/orchestration-runs/${runRes.body.id}`
       );
       expect(getRes.status).toBe(200);
       expect(getRes.body.status).toBe('paused');
@@ -418,8 +424,8 @@ describe('Orchestrations', () => {
       const badId = createRes.body.id;
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${badId}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: badId, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('failed');
       expect(runRes.body.error).toBeDefined();
@@ -438,8 +444,8 @@ describe('Orchestrations', () => {
       const badId = createRes.body.id;
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${badId}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: badId, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('failed');
     });
@@ -464,8 +470,8 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
     });
@@ -490,8 +496,8 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: { x: null } });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: { x: null } });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
     });
@@ -530,8 +536,8 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
       expect(runRes.body.state.final).toBe('c');
@@ -549,8 +555,8 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
     });
@@ -584,8 +590,11 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: { question: 'hello', x: null } });
+        .post('/api/v1/orchestration-runs')
+        .send({
+          orchestration_id: createRes.body.id,
+          input: { question: 'hello', x: null },
+        });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
     });
@@ -609,8 +618,11 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: { text: 'hello world' } });
+        .post('/api/v1/orchestration-runs')
+        .send({
+          orchestration_id: createRes.body.id,
+          input: { text: 'hello world' },
+        });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('failed');
     });
@@ -634,8 +646,11 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: { question: 'hello' } });
+        .post('/api/v1/orchestration-runs')
+        .send({
+          orchestration_id: createRes.body.id,
+          input: { question: 'hello' },
+        });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('failed');
     });
@@ -652,8 +667,8 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('failed');
     });
@@ -689,8 +704,8 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
       expect(runRes.body.state.a).toBe('a');
@@ -744,8 +759,8 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
       expect(runRes.body.state.joined).toBe('ab');
@@ -785,8 +800,8 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
       // C runs exactly once
@@ -811,8 +826,8 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('failed');
       expect(runRes.body.error).toBeDefined();
@@ -831,17 +846,17 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('failed');
       expect(runRes.body.error.code).toBe('ORCHESTRATION_CYCLE_DETECTED');
     });
 
-    describe('GET /api/v1/orchestrations/:orchestration_id/runs/:run_id', () => {
+    describe('GET /api/v1/orchestration-runs/:run_id', () => {
       test('authenticated user can get a specific run', async () => {
         const response = await authenticatedTestClient(userToken).get(
-          `/api/v1/orchestrations/${orchestrationId}/runs/${runId}`
+          `/api/v1/orchestration-runs/${runId}`
         );
         expect(response.status).toBe(200);
         expect(response.body.id).toBe(runId);
@@ -851,31 +866,31 @@ describe('Orchestrations', () => {
 
       test('unauthenticated request returns 401', async () => {
         const response = await testClient.get(
-          `/api/v1/orchestrations/${orchestrationId}/runs/${runId}`
+          `/api/v1/orchestration-runs/${runId}`
         );
         expect(response.status).toBe(401);
       });
 
       test('non-existent run returns 404', async () => {
         const response = await authenticatedTestClient(userToken).get(
-          `/api/v1/orchestrations/${orchestrationId}/runs/nonexistent-run-id`
+          `/api/v1/orchestration-runs/nonexistent-run-id`
         );
         expect(response.status).toBe(404);
       });
 
       test('user without permission returns 403 or 404', async () => {
         const response = await authenticatedTestClient(noPermToken).get(
-          `/api/v1/orchestrations/${orchestrationId}/runs/${runId}`
+          `/api/v1/orchestration-runs/${runId}`
         );
         expect([403, 404]).toContain(response.status);
       });
     });
   });
 
-  describe('GET /api/v1/orchestrations/:orchestration_id/runs', () => {
+  describe('GET /api/v1/orchestration-runs', () => {
     test('authenticated user with permission can list runs', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/orchestrations/${orchestrationId}/runs`
+        `/api/v1/orchestration-runs?orchestration_id=${orchestrationId}`
       );
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
@@ -885,14 +900,14 @@ describe('Orchestrations', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.get(
-        `/api/v1/orchestrations/${orchestrationId}/runs`
+        `/api/v1/orchestration-runs?orchestration_id=${orchestrationId}`
       );
       expect(response.status).toBe(401);
     });
 
     test('user without permission returns 403 or 404', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
-        `/api/v1/orchestrations/${orchestrationId}/runs`
+        `/api/v1/orchestration-runs?orchestration_id=${orchestrationId}`
       );
       expect([403, 404]).toContain(response.status);
     });
@@ -949,8 +964,8 @@ describe('Orchestrations', () => {
       const toDeleteId = createRes.body.id;
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${toDeleteId}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: toDeleteId, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('paused');
 
@@ -980,7 +995,7 @@ describe('Orchestrations', () => {
     });
   });
 
-  describe('POST /api/v1/orchestrations/:orchestration_id/runs/:run_id/cancel', () => {
+  describe('POST /api/v1/orchestration-runs/:run_id/cancel', () => {
     let cancelOrchId: string;
     let cancelRunId: string;
 
@@ -996,35 +1011,35 @@ describe('Orchestrations', () => {
       cancelOrchId = createRes.body.id;
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${cancelOrchId}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: cancelOrchId, input: {} });
       expect(runRes.status).toBe(201);
       cancelRunId = runRes.body.id;
     });
 
     test('cannot cancel a completed run — returns 409', async () => {
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/orchestrations/${cancelOrchId}/runs/${cancelRunId}/cancel`
+        `/api/v1/orchestration-runs/${cancelRunId}/cancel`
       );
       expect(response.status).toBe(409);
     });
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.post(
-        `/api/v1/orchestrations/${cancelOrchId}/runs/${cancelRunId}/cancel`
+        `/api/v1/orchestration-runs/${cancelRunId}/cancel`
       );
       expect(response.status).toBe(401);
     });
 
     test('user without permission returns 403 or 400', async () => {
       const response = await authenticatedTestClient(noPermToken).post(
-        `/api/v1/orchestrations/${cancelOrchId}/runs/${cancelRunId}/cancel`
+        `/api/v1/orchestration-runs/${cancelRunId}/cancel`
       );
       expect([403, 400]).toContain(response.status);
     });
   });
 
-  describe('POST /api/v1/orchestrations/:orchestration_id/runs/:run_id/human-input', () => {
+  describe('POST /api/v1/orchestration-runs/:run_id/human-input', () => {
     let humanOrchId: string;
     let humanRunId: string;
 
@@ -1036,15 +1051,15 @@ describe('Orchestrations', () => {
       humanOrchId = createRes.body.id;
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${humanOrchId}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: humanOrchId, input: {} });
       expect(runRes.status).toBe(201);
       humanRunId = runRes.body.id;
     });
 
     test('run is paused waiting for human input', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/orchestrations/${humanOrchId}/runs/${humanRunId}`
+        `/api/v1/orchestration-runs/${humanRunId}`
       );
       expect(response.status).toBe(200);
       expect(response.body.status).toBe('paused');
@@ -1054,9 +1069,7 @@ describe('Orchestrations', () => {
 
     test('submitting human input resumes the run', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(
-          `/api/v1/orchestrations/${humanOrchId}/runs/${humanRunId}/human-input`
-        )
+        .post(`/api/v1/orchestration-runs/${humanRunId}/human-input`)
         .send({ node_id: 'approval', output: { choice: 'approve' } });
       expect(response.status).toBe(200);
       expect(['completed', 'running', 'paused']).toContain(
@@ -1066,36 +1079,30 @@ describe('Orchestrations', () => {
 
     test('missing node_id returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(
-          `/api/v1/orchestrations/${humanOrchId}/runs/${humanRunId}/human-input`
-        )
+        .post(`/api/v1/orchestration-runs/${humanRunId}/human-input`)
         .send({ output: { choice: 'approve' } });
       expect(response.status).toBe(400);
     });
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
-        .post(
-          `/api/v1/orchestrations/${humanOrchId}/runs/${humanRunId}/human-input`
-        )
+        .post(`/api/v1/orchestration-runs/${humanRunId}/human-input`)
         .send({ node_id: 'approval', output: {} });
       expect(response.status).toBe(401);
     });
 
     test('user without permission returns 403 or 400', async () => {
       const response = await authenticatedTestClient(noPermToken)
-        .post(
-          `/api/v1/orchestrations/${humanOrchId}/runs/${humanRunId}/human-input`
-        )
+        .post(`/api/v1/orchestration-runs/${humanRunId}/human-input`)
         .send({ node_id: 'approval', output: {} });
       expect([403, 400]).toContain(response.status);
     });
   });
 
-  describe('POST /api/v1/orchestrations/:orchestration_id/runs/:run_id/resume', () => {
+  describe('POST /api/v1/orchestration-runs/:run_id/resume', () => {
     test('resuming a completed run returns 409', async () => {
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/orchestrations/${orchestrationId}/runs/${orchestrationId}/resume`
+        `/api/v1/orchestration-runs/${orchestrationId}/resume`
       );
       // run_id here is invalid — 404 or 409
       expect([404, 409]).toContain(response.status);
@@ -1103,14 +1110,14 @@ describe('Orchestrations', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.post(
-        `/api/v1/orchestrations/${orchestrationId}/runs/someid/resume`
+        `/api/v1/orchestration-runs/someid/resume`
       );
       expect(response.status).toBe(401);
     });
 
     test('user without permission returns 403 or 400', async () => {
       const response = await authenticatedTestClient(noPermToken).post(
-        `/api/v1/orchestrations/${orchestrationId}/runs/someid/resume`
+        `/api/v1/orchestration-runs/someid/resume`
       );
       expect([403, 400]).toContain(response.status);
     });
@@ -1135,13 +1142,13 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
 
       const resumeRes = await authenticatedTestClient(userToken).post(
-        `/api/v1/orchestrations/${createRes.body.id}/runs/${runRes.body.id}/resume`
+        `/api/v1/orchestration-runs/${runRes.body.id}/resume`
       );
       expect(resumeRes.status).toBe(409);
     });
@@ -1185,8 +1192,8 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('failed');
     });
@@ -1203,8 +1210,8 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('failed');
     });
@@ -1228,8 +1235,8 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
       expect(runRes.body.state.waited).toBe('PT0S');
@@ -1254,8 +1261,8 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
       expect(runRes.body.state.emitted).toBe(true);
@@ -1273,8 +1280,8 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('paused');
     });
@@ -1291,8 +1298,8 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('failed');
     });
@@ -1318,8 +1325,8 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: { items: [] } });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: { items: [] } });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
       expect(runRes.body.state.results).toEqual([]);
@@ -1346,8 +1353,11 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: { items: ['hello'] } });
+        .post('/api/v1/orchestration-runs')
+        .send({
+          orchestration_id: createRes.body.id,
+          input: { items: ['hello'] },
+        });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
       expect(Array.isArray(runRes.body.state.results)).toBe(true);
@@ -1374,8 +1384,8 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: { items: [] } });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: { items: [] } });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
     });
@@ -1392,8 +1402,8 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('failed');
     });
@@ -1418,8 +1428,11 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: { value: 'test' } });
+        .post('/api/v1/orchestration-runs')
+        .send({
+          orchestration_id: createRes.body.id,
+          input: { value: 'test' },
+        });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
     });
@@ -1442,14 +1455,14 @@ describe('Orchestrations', () => {
       const failOrchId = createRes.body.id;
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${failOrchId}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: failOrchId, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('failed');
       const failedRunId = runRes.body.id;
 
       const cancelRes = await authenticatedTestClient(userToken).post(
-        `/api/v1/orchestrations/${failOrchId}/runs/${failedRunId}/cancel`
+        `/api/v1/orchestration-runs/${failedRunId}/cancel`
       );
       expect(cancelRes.status).toBe(409);
     });
@@ -1474,21 +1487,21 @@ describe('Orchestrations', () => {
       const pauseOrchId = createRes.body.id;
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${pauseOrchId}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: pauseOrchId, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('paused');
       const pausedRunId = runRes.body.id;
 
       // First cancel succeeds
       const firstCancel = await authenticatedTestClient(userToken).post(
-        `/api/v1/orchestrations/${pauseOrchId}/runs/${pausedRunId}/cancel`
+        `/api/v1/orchestration-runs/${pausedRunId}/cancel`
       );
       expect(firstCancel.status).toBe(200);
 
       // Second cancel hits the 'cancelled' terminal-state branch
       const secondCancel = await authenticatedTestClient(userToken).post(
-        `/api/v1/orchestrations/${pauseOrchId}/runs/${pausedRunId}/cancel`
+        `/api/v1/orchestration-runs/${pausedRunId}/cancel`
       );
       expect(secondCancel.status).toBe(409);
     });
@@ -1520,17 +1533,15 @@ describe('Orchestrations', () => {
       edgeOrchId = createRes.body.id;
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${edgeOrchId}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: edgeOrchId, input: {} });
       expect(runRes.status).toBe(201);
       edgeRunId = runRes.body.id;
     });
 
     test('submitting human input with wrong nodeId returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(
-          `/api/v1/orchestrations/${edgeOrchId}/runs/${edgeRunId}/human-input`
-        )
+        .post(`/api/v1/orchestration-runs/${edgeRunId}/human-input`)
         .send({ node_id: 'wrong_node_id', output: { choice: 'a' } });
       expect(response.status).toBe(400);
     });
@@ -1548,15 +1559,13 @@ describe('Orchestrations', () => {
       expect(createRes.status).toBe(201);
 
       const runRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestrations/${createRes.body.id}/runs`)
-        .send({ input: {} });
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
 
       const submitRes = await authenticatedTestClient(userToken)
-        .post(
-          `/api/v1/orchestrations/${createRes.body.id}/runs/${runRes.body.id}/human-input`
-        )
+        .post(`/api/v1/orchestration-runs/${runRes.body.id}/human-input`)
         .send({ node_id: 'A', output: { val: 1 } });
       expect(submitRes.status).toBe(409);
     });

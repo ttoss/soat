@@ -295,82 +295,86 @@ orchestrationsRouter.delete(
 );
 /**
  * @openapi
- * /api/v1/orchestrations/{orchestration_id}/runs:
+ * /api/v1/orchestration-runs:
  *   post:
- *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestrations~1{orchestration_id}~1runs/post'
+ *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestration-runs/post'
  */
-orchestrationsRouter.post(
-  '/orchestrations/:orchestration_id/runs',
-  async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
-
-    const orchestrationId = ctx.params['orchestration_id'] as string;
-    const scope = await resolveStartRunScope(ctx);
-    if (!scope) return;
-
-    const body = (ctx.request.body ?? {}) as { input?: unknown };
-    const input = parseRunInput(body.input);
-    const authHeader = ctx.headers['authorization'] as string | undefined;
-
-    const result = await startOrchestrationRun({
-      orchestrationPublicId: orchestrationId,
-      projectId: scope.primaryId,
-      projectIds: scope.projectIds,
-      input,
-      authHeader,
-    });
-
-    ctx.status = 201;
-    ctx.body = result;
+orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
   }
-);
+
+  const body = (ctx.request.body ?? {}) as {
+    orchestrationId?: unknown;
+    input?: unknown;
+  };
+  const orchestrationId =
+    typeof body.orchestrationId === 'string' ? body.orchestrationId : undefined;
+  if (!orchestrationId) {
+    ctx.status = 400;
+    ctx.body = { error: 'orchestration_id is required' };
+    return;
+  }
+
+  const scope = await resolveStartRunScope(ctx);
+  if (!scope) return;
+
+  const input = parseRunInput(body.input);
+  const authHeader = ctx.headers['authorization'] as string | undefined;
+
+  const result = await startOrchestrationRun({
+    orchestrationPublicId: orchestrationId,
+    projectId: scope.primaryId,
+    projectIds: scope.projectIds,
+    input,
+    authHeader,
+  });
+
+  ctx.status = 201;
+  ctx.body = result;
+});
 /**
  * @openapi
- * /api/v1/orchestrations/{orchestration_id}/runs:
+ * /api/v1/orchestration-runs:
  *   get:
- *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestrations~1{orchestration_id}~1runs/get'
+ *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestration-runs/get'
  */
-orchestrationsRouter.get(
-  '/orchestrations/:orchestration_id/runs',
-  async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
-
-    const orchestrationId = ctx.params['orchestration_id'] as string;
-
-    const projectIds = await ctx.authUser.resolveProjectIds({
-      action: 'orchestrations:ListRuns',
-    });
-
-    if (projectIds === null) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
-
-    const result = await listOrchestrationRuns({
-      orchestrationPublicId: orchestrationId,
-      projectIds: projectIds ?? undefined,
-    });
-
-    ctx.body = result;
+orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
   }
-);
+
+  const orchestrationId = ctx.query['orchestrationId'] as string | undefined;
+
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    action: 'orchestrations:ListRuns',
+  });
+
+  if (projectIds === null) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const result = await listOrchestrationRuns({
+    orchestrationPublicId: orchestrationId,
+    projectIds: projectIds ?? undefined,
+  });
+
+  ctx.body = result;
+});
 /**
  * @openapi
- * /api/v1/orchestrations/{orchestration_id}/runs/{run_id}:
+ * /api/v1/orchestration-runs/{run_id}:
  *   get:
- *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestrations~1{orchestration_id}~1runs~1{run_id}/get'
+ *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestration-runs~1{run_id}/get'
  */
 orchestrationsRouter.get(
-  '/orchestrations/:orchestration_id/runs/:run_id',
+  '/orchestration-runs/:run_id',
   async (ctx: Context) => {
     if (!ctx.authUser) {
       ctx.status = 401;
@@ -378,7 +382,6 @@ orchestrationsRouter.get(
       return;
     }
 
-    const orchestrationId = ctx.params['orchestration_id'] as string;
     const runId = ctx.params['run_id'] as string;
 
     const projectIds = await ctx.authUser.resolveProjectIds({
@@ -393,7 +396,6 @@ orchestrationsRouter.get(
 
     const result = await findOrchestrationRun({
       id: runId,
-      orchestrationId,
       projectIds: projectIds ?? undefined,
     });
 
@@ -408,21 +410,19 @@ orchestrationsRouter.get(
 );
 /**
  * @openapi
- * /api/v1/orchestrations/{orchestration_id}/runs/{run_id}/cancel:
+ * /api/v1/orchestration-runs/{run_id}/cancel:
  *   post:
- *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestrations~1{orchestration_id}~1runs~1{run_id}~1cancel/post'
+ *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestration-runs~1{run_id}~1cancel/post'
  */
 orchestrationsRouter.post(
-  '/orchestrations/:orchestration_id/runs/:run_id/cancel',
+  '/orchestration-runs/:run_id/cancel',
   async (ctx: Context) => {
-    const orchestrationId = ctx.params['orchestration_id'] as string;
     const runId = ctx.params['run_id'] as string;
     const auth = await resolveAuth(ctx, 'orchestrations:CancelRun');
     if (!auth) return;
 
     const result = await cancelOrchestrationRun({
       runPublicId: runId,
-      orchestrationPublicId: orchestrationId,
       projectIds: auth.projectIds,
     });
 
@@ -431,14 +431,13 @@ orchestrationsRouter.post(
 );
 /**
  * @openapi
- * /api/v1/orchestrations/{orchestration_id}/runs/{run_id}/human-input:
+ * /api/v1/orchestration-runs/{run_id}/human-input:
  *   post:
- *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestrations~1{orchestration_id}~1runs~1{run_id}~1human-input/post'
+ *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestration-runs~1{run_id}~1human-input/post'
  */
 orchestrationsRouter.post(
-  '/orchestrations/:orchestration_id/runs/:run_id/human-input',
+  '/orchestration-runs/:run_id/human-input',
   async (ctx: Context) => {
-    const orchestrationId = ctx.params['orchestration_id'] as string;
     const runId = ctx.params['run_id'] as string;
     const auth = await resolveAuth(ctx, 'orchestrations:SubmitHumanInput');
     if (!auth) return;
@@ -462,7 +461,6 @@ orchestrationsRouter.post(
 
     const result = await submitHumanInput({
       runPublicId: runId,
-      orchestrationPublicId: orchestrationId,
       projectIds: auth.projectIds,
       nodeId,
       output,
@@ -473,21 +471,19 @@ orchestrationsRouter.post(
 );
 /**
  * @openapi
- * /api/v1/orchestrations/{orchestration_id}/runs/{run_id}/resume:
+ * /api/v1/orchestration-runs/{run_id}/resume:
  *   post:
- *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestrations~1{orchestration_id}~1runs~1{run_id}~1resume/post'
+ *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestration-runs~1{run_id}~1resume/post'
  */
 orchestrationsRouter.post(
-  '/orchestrations/:orchestration_id/runs/:run_id/resume',
+  '/orchestration-runs/:run_id/resume',
   async (ctx: Context) => {
-    const orchestrationId = ctx.params['orchestration_id'] as string;
     const runId = ctx.params['run_id'] as string;
     const auth = await resolveAuth(ctx, 'orchestrations:ResumeRun');
     if (!auth) return;
 
     const result = await resumeOrchestrationRun({
       runPublicId: runId,
-      orchestrationPublicId: orchestrationId,
       projectIds: auth.projectIds,
     });
 

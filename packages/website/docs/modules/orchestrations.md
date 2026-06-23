@@ -196,7 +196,7 @@ curl -X POST https://api.example.com/api/v1/orchestrations \
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-orchestration-run \
+soat start-orchestration-run \
   --orchestration-id orch_01 \
   --input '{"query": "summarize Q1 revenue"}'
 ```
@@ -205,9 +205,8 @@ soat create-orchestration-run \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data, error } = await soat.orchestrations.createOrchestrationRun({
-  path: { orchestration_id: 'orch_01' },
-  body: { input: { query: 'summarize Q1 revenue' } },
+const { data, error } = await soat.orchestrations.startOrchestrationRun({
+  body: { orchestration_id: 'orch_01', input: { query: 'summarize Q1 revenue' } },
 });
 if (error) throw new Error(JSON.stringify(error));
 ```
@@ -216,10 +215,10 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X POST https://api.example.com/api/v1/orchestrations/orch_01/runs \
+curl -X POST https://api.example.com/api/v1/orchestration-runs \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"input": {"query": "summarize Q1 revenue"}}'
+  -d '{"orchestration_id": "orch_01", "input": {"query": "summarize Q1 revenue"}}'
 ```
 
 </TabItem>
