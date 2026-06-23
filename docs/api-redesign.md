@@ -269,7 +269,19 @@ SDK + CLI regenerated once after all spec changes land; everything ships togethe
   module-doc/unit+MCP tests updated. Formation needed no change (it self-resolves
   the agent id). Permission actions kept as `agents:*` (renaming policy actions is
   out of scope for a path redesign).
+- **D2 (orchestration-runs)** — done: `/orchestrations/{id}/runs` →
+  `/orchestration-runs`; run-action libs already accepted optional
+  orchestrationPublicId, only listOrchestrationRuns relaxed. Smoke updated.
+- **D2 (memory-entries)** — done: `/memories/{id}/entries` → `/memory-entries`;
+  list requires `?memory_id=` (no project column on entries). Formations already
+  memory_id-based, no change.
+- **D2 (webhook-deliveries)** — done: `/webhooks/{id}/deliveries` →
+  `/webhook-deliveries`; list requires `?webhook_id=`; delivery responses now
+  carry `webhook_id`.
 - **Deferred to a final batched pass** (tracked): tutorial updates (renamed CLI
   commands / removed endpoints) and the generated reference docs
   (api/mcp/sdk/cli). Tutorials need Docker tutorial CI to validate, so they run
   once at the end rather than per-slice.
+
+Remaining slices: D3 (generations/traces), D3/D4/D11 (policies/users), D9 (chats
+completions), then the batched tutorials/docs pass.
