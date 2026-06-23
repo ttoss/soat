@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, test } from 'vitest';
@@ -14,6 +14,12 @@ import { NavProbe, renderWithAuth } from '../testUtils';
 const agentsModule = (): ModuleInfo => {
   const m = parseModules(testSpec).find((x) => x.tag === 'Agents');
   if (!m) throw new Error('Agents module missing');
+  return m;
+};
+
+const apiKeysModule = (): ModuleInfo => {
+  const m = parseModules(testSpec).find((x) => x.tag === 'Api Keys');
+  if (!m) throw new Error('Api Keys module missing');
   return m;
 };
 
@@ -188,6 +194,100 @@ describe('FormView (create)', () => {
     );
     expect(screen.getByText('POST')).toBeInTheDocument();
     expect(screen.getByText(/\/api\/v1\/agents/)).toBeInTheDocument();
+  });
+});
+
+describe('FormView — array x-soat-ref field (multi-select picker)', () => {
+  const policyHandler = http.get('*/api/v1/policies', () =>
+    HttpResponse.json([
+      { id: 'pol_1', name: 'Read Only' },
+      { id: 'pol_2', name: 'Admin' },
+    ])
+  );
+
+  test('renders policy_ids as a picker populated from the API, not a textarea', async () => {
+    server.use(policyHandler);
+    renderWithAuth(
+      <FormView
+        module={apiKeysModule()}
+        spec={testSpec}
+        pathParams={{ project_id: 'prj_1' }}
+        mode="create"
+      />
+    );
+
+    // Options come from the referenced resource (the policies API).
+    expect(
+      await screen.findByRole('option', { name: 'Read Only' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Admin' })).toBeInTheDocument();
+    // It is a select, not the free-form textarea it used to be.
+    expect(
+      screen.queryByRole('textbox', { name: /policy ids/i })
+    ).not.toBeInTheDocument();
+  });
+
+  test('selecting policies submits them as an array', async () => {
+    let received: JsonObject | undefined;
+    server.use(
+      policyHandler,
+      http.post('*/api/v1/projects/:project_id/api-keys', async ({ request }) => {
+        received = (await request.json()) as JsonObject;
+        return HttpResponse.json({ id: 'key_1', ...received }, { status: 201 });
+      })
+    );
+
+    renderWithAuth(
+      <FormView
+        module={apiKeysModule()}
+        spec={testSpec}
+        pathParams={{ project_id: 'prj_1' }}
+        mode="create"
+      />
+    );
+
+    await userEvent.type(screen.getByLabelText(/name/i), 'CI Key');
+    await userEvent.selectOptions(
+      await screen.findByLabelText(/policy ids/i),
+      'pol_1'
+    );
+    // The chosen policy now shows as a chip (and leaves the add dropdown).
+    expect(screen.getByText('Read Only')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => {
+      expect(received).toEqual({ name: 'CI Key', policy_ids: ['pol_1'] });
+    });
+  });
+
+  test('omits policy_ids entirely when none are selected', async () => {
+    let received: JsonObject | undefined;
+    server.use(
+      policyHandler,
+      http.post('*/api/v1/projects/:project_id/api-keys', async ({ request }) => {
+        received = (await request.json()) as JsonObject;
+        return HttpResponse.json({ id: 'key_1', ...received }, { status: 201 });
+      })
+    );
+
+    renderWithAuth(
+      <FormView
+        module={apiKeysModule()}
+        spec={testSpec}
+        pathParams={{ project_id: 'prj_1' }}
+        mode="create"
+      />
+    );
+
+    await userEvent.type(screen.getByLabelText(/name/i), 'CI Key');
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    // Empty multi-select is omitted (not sent as []), so the key inherits the
+    // user's full permissions rather than an empty intersection.
+    await waitFor(() => {
+      expect(received).toEqual({ name: 'CI Key' });
+    });
   });
 });
 

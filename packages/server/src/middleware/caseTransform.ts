@@ -48,8 +48,15 @@ const transformKeys = (
   return obj;
 };
 
+// The OpenAPI document is served as authored: valid OpenAPI uses camelCase
+// structural keys (operationId, requestBody, …) while the API field names it
+// describes stay snake_case. Running it through caseTransform would rewrite
+// those structural keys to snake_case and produce an invalid spec, so the spec
+// endpoint is excluded from case conversion entirely.
+const OPENAPI_SPEC_PATH = '/api/v1/openapi.json';
+
 export const caseTransformMiddleware = async (ctx: Context, next: Next) => {
-  if (!ctx.path.startsWith('/api/v1')) {
+  if (!ctx.path.startsWith('/api/v1') || ctx.path === OPENAPI_SPEC_PATH) {
     await next();
     return;
   }

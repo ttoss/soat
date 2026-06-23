@@ -33,7 +33,7 @@ export const useRefResolver = (modules: ModuleInfo[]): RefResolver => {
   );
 };
 
-const RefButton = ({
+export const RefButton = ({
   id,
   onClick,
   className,

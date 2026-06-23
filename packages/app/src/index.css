@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /*
- * SOAT theme — derived from BRANDBOOK.md (Vector Galaxy palette).
+ * SOAT theme — derived from the `soat-design` skill (Vector Galaxy palette).
  * Dual-theme by design: light mode uses Electric Blue as the functional
  * primary; dark mode shifts to Core Cyan. Colors are stored as HSL channels
  * so Tailwind can compose them with opacity modifiers.
@@ -54,8 +54,8 @@
     --accent-foreground: 208 100% 97%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 208 100% 97%;
-    --border: 215 21% 18%;
-    --input: 215 21% 18%;
+    --border: 192 32% 22%; /* cyan-tinted hairline — borders carry a faint glow in dark */
+    --input: 192 32% 22%;
     --ring: 186 100% 50%; /* Core Cyan focus ring */
     --brand-violet: 282 44% 47%;
     --brand-cyan: 186 100% 50%;
@@ -97,11 +97,29 @@
     font-feature-settings:
       'rlig' 1,
       'calt' 1;
+    /* Generous reading rhythm per the soat-design type scale. */
+    line-height: 1.625;
+    /* Cosmic depth wash — backgrounds are never flat (soat-design). */
+    background-image: radial-gradient(
+      circle at 75% 35%,
+      hsl(var(--brand-cyan) / 0.05) 0%,
+      transparent 38%
+    );
+    background-attachment: fixed;
+  }
+
+  /* Dark mode is the native environment: a faint violet nebula from the top. */
+  .dark body {
+    background-image: radial-gradient(
+      circle at 50% 0%,
+      hsl(var(--brand-violet) / 0.13) 0%,
+      transparent 55%
+    );
   }
 
   /*
    * Headings use Space Grotesk for engineered precision, with slightly
-   * increased letter-spacing per the brandbook typography hierarchy.
+   * increased letter-spacing per the soat-design type hierarchy.
    */
   h1,
   h2,

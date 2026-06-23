@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { BRAND_ASSETS } from '@/lib/brandAssets';
 
 import { useAuth } from './authContext';
 
@@ -45,9 +46,12 @@ export const LoginForm = () => {
 
       <div className="relative z-10 flex w-full max-w-sm flex-col gap-8">
         <div className="flex items-center justify-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-galaxy-gradient text-lg font-bold text-white shadow-glow-violet-md">
-            {'◇'}
-          </div>
+          <img
+            src={BRAND_ASSETS.logoMark}
+            alt=""
+            aria-hidden="true"
+            className="h-10 w-10 object-contain"
+          />
           <span className="bg-galaxy-gradient bg-clip-text font-heading text-3xl font-bold tracking-heading text-transparent">
             {'SOAT'}
           </span>

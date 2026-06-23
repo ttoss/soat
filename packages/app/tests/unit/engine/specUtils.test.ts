@@ -2,14 +2,17 @@ import { describe, expect, test } from 'vitest';
 
 import {
   actionLabel,
+  buildListRequestUrl,
   buildRefDescriptor,
   buildUrl,
+  opAcceptsProjectIdQuery,
   extractItems,
   extractPathParams,
   extractRefFields,
   findModuleByResource,
   formatValue,
   getIdParamName,
+  getListItemSchema,
   getResponseItemSchema,
   humanizeKey,
   isSensitiveKey,
@@ -18,6 +21,7 @@ import {
   resolveSchema,
 } from '@/engine/specUtils';
 import type { ModuleInfo, ModuleOp, OpenApiSpec } from '@/engine/types';
+import { getOpRequestSchema } from '@/engine/formHelpers';
 
 import { testSpec } from '../fixtures/spec';
 
@@ -320,5 +324,192 @@ describe('x-soat-ref cross-references', () => {
       tool_ids: 'tools',
       session_id: 'sessions',
     });
+  });
+});
+
+describe('parseModules — snake_cased served spec', () => {
+  // The server's caseTransform middleware snake_cases the entire served
+  // openapi.json, so structural OpenAPI keys arrive as operation_id and
+  // request_body. parseModules must normalise these back to camelCase, or
+  // form views report "No form schema available for this operation."
+  // Built through JSON.parse to mirror how the spec actually arrives (parsed
+  // from the wire) and to carry the off-spec snake_case keys without a cast.
+  const snakeSpec: OpenApiSpec = JSON.parse(
+    JSON.stringify({
+      paths: {
+        '/api/v1/projects': {
+          get: { operation_id: 'listProjects', tags: ['Projects'] },
+          post: {
+            operation_id: 'createProject',
+            tags: ['Projects'],
+            request_body: {
+              required: true,
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['name'],
+                    properties: { name: { type: 'string' } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+  );
+
+  test('normalises operation_id and request_body so the create schema resolves', () => {
+    const projects = parseModules(snakeSpec).find((m) => m.tag === 'Projects')!;
+
+    expect(projects.createOp?.operation.operationId).toBe('createProject');
+    const schema = getOpRequestSchema(projects.createOp, snakeSpec);
+    expect(schema?.properties && Object.keys(schema.properties)).toEqual([
+      'name',
+    ]);
+  });
+});
+
+describe('project scoping via query param', () => {
+  const agents = (): ModuleInfo => byTag(parseModules(testSpec), 'Agents');
+  const tools = (): ModuleInfo => byTag(parseModules(testSpec), 'Tools');
+
+  test('opAcceptsProjectIdQuery detects the project_id query parameter', () => {
+    expect(opAcceptsProjectIdQuery(agents().listOp)).toBe(true);
+    // Tools' list op declares no project_id query param.
+    expect(opAcceptsProjectIdQuery(tools().listOp)).toBe(false);
+  });
+
+  test('buildListRequestUrl scopes to the project when the op supports it', () => {
+    expect(buildListRequestUrl(agents().listOp!, {}, 'prj_1')).toBe(
+      '/api/v1/agents?project_id=prj_1'
+    );
+  });
+
+  test('buildListRequestUrl omits project_id when none is active', () => {
+    expect(buildListRequestUrl(agents().listOp!, {}, null)).toBe(
+      '/api/v1/agents'
+    );
+  });
+
+  test('buildListRequestUrl never scopes an op that lacks the query param', () => {
+    expect(buildListRequestUrl(tools().listOp!, {}, 'prj_1')).toBe(
+      '/api/v1/tools'
+    );
+  });
+});
+
+describe('getListItemSchema — record from list responses', () => {
+  test('unwraps a paginated wrapper object to the record (so refs link)', () => {
+    const spec: OpenApiSpec = JSON.parse(
+      JSON.stringify({
+        paths: {
+          '/api/v1/actors': {
+            get: {
+              operationId: 'listActors',
+              tags: ['Actors'],
+              responses: {
+                '200': {
+                  content: {
+                    'application/json': {
+                      schema: {
+                        type: 'object',
+                        properties: {
+                          actors: {
+                            type: 'array',
+                            items: { $ref: '#/components/schemas/ActorRecord' },
+                          },
+                          total: { type: 'integer' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        components: {
+          schemas: {
+            ActorRecord: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                project_id: { type: 'string', 'x-soat-ref': 'projects' },
+              },
+            },
+          },
+        },
+      })
+    );
+    const actors = parseModules(spec).find((m) => m.tag === 'Actors')!;
+    const item = getListItemSchema(actors.listOp, spec);
+
+    expect(item?.properties && Object.keys(item.properties)).toEqual([
+      'id',
+      'project_id',
+    ]);
+    // The x-soat-ref is now reachable, so the field becomes linkable.
+    expect(extractRefFields(item, spec)).toEqual({ project_id: 'projects' });
+  });
+
+  test('a bare-array list returns the record, not an inner array field', () => {
+    // testSpec Agents is a bare array of Agent; the record must be returned as
+    // a whole (its own array fields must not be mistaken for the list).
+    const agents = byTag(parseModules(testSpec), 'Agents');
+    const item = getListItemSchema(agents.listOp, testSpec);
+    expect(item?.properties?.name).toBeDefined();
+  });
+});
+
+describe('resolveSchema — snake_cased component keys (served spec)', () => {
+  test('resolves a $ref whose component key was snake_cased by the server', () => {
+    // The caseTransform middleware snake_cases component KEYS (ActorRecord ->
+    // _actor_record) but leaves $ref strings CamelCase. Resolution must still
+    // find the record so its x-soat-ref fields become links.
+    const spec: OpenApiSpec = JSON.parse(
+      JSON.stringify({
+        paths: {
+          '/api/v1/actors': {
+            get: {
+              operationId: 'listActors',
+              tags: ['Actors'],
+              responses: {
+                '200': {
+                  content: {
+                    'application/json': {
+                      schema: {
+                        type: 'object',
+                        properties: {
+                          data: {
+                            type: 'array',
+                            items: { $ref: '#/components/schemas/ActorRecord' },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        components: {
+          schemas: {
+            _actor_record: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                project_id: { type: 'string', 'x-soat-ref': 'projects' },
+              },
+            },
+          },
+        },
+      })
+    );
+    const actors = parseModules(spec).find((m) => m.tag === 'Actors')!;
+    const item = getListItemSchema(actors.listOp, spec);
+    expect(extractRefFields(item, spec)).toEqual({ project_id: 'projects' });
   });
 });

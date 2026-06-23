@@ -26,7 +26,7 @@ export const NavItem = ({
         indent ? 'pl-6 pr-3' : 'pl-2.5 pr-3',
         active
           ? 'border-primary bg-primary/10 font-semibold text-primary dark:shadow-glow'
-          : 'border-transparent text-muted-foreground hover:bg-primary/5 hover:text-foreground',
+          : 'border-transparent text-muted-foreground hover:bg-primary/5 hover:text-foreground dark:hover:shadow-glow-cyan-sm',
       ].join(' ')}
     >
       {Icon && (
@@ -110,7 +110,7 @@ export const ProjectPicker = ({
       )}
 
       {open && (
-        <div className="absolute left-2.5 right-2.5 top-full z-30 mt-1 overflow-hidden rounded-md border border-border bg-card shadow-md">
+        <div className="absolute left-2.5 right-2.5 top-full z-30 mt-1 overflow-hidden rounded-md border border-border bg-card/80 shadow-md backdrop-blur-lg dark:shadow-glow-cyan-sm">
           {projects.length === 0 && (
             <p className="px-3 py-2 text-xs text-muted-foreground">
               {'No projects yet.'}

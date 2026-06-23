@@ -120,6 +120,104 @@ const RefSelectField = ({
   );
 };
 
+const parseRefList = (value: string): string[] => {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.map((v) => {
+          return String(v);
+        })
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+// Dynamic multi-select for an array of cross-references (e.g. policy_ids).
+// Selected values render as removable chips; a dropdown adds more from the
+// referenced resource. Stored as a JSON array string so buildRequestBody's
+// array handling parses it directly; an empty selection serialises to '' so an
+// optional field is omitted from the request.
+const MultiRefField = ({
+  id,
+  value,
+  onChange,
+  options,
+}: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: RefOption[];
+}) => {
+  const selected = parseRefList(value);
+  const setSelected = (next: string[]) => {
+    onChange(next.length > 0 ? JSON.stringify(next) : '');
+  };
+  const labelFor = (v: string) => {
+    return (
+      options.find((o) => {
+        return o.value === v;
+      })?.label ?? v
+    );
+  };
+  const available = options.filter((o) => {
+    return !selected.includes(o.value);
+  });
+
+  return (
+    <div className="flex flex-col gap-2">
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selected.map((v) => {
+            return (
+              <span
+                key={v}
+                className="inline-flex items-center gap-1 rounded-full bg-primary/15 py-0.5 pl-2.5 pr-1 text-xs font-medium text-primary"
+              >
+                {labelFor(v)}
+                <button
+                  type="button"
+                  aria-label={`Remove ${labelFor(v)}`}
+                  onClick={() => {
+                    return setSelected(
+                      selected.filter((x) => {
+                        return x !== v;
+                      })
+                    );
+                  }}
+                  className="flex h-4 w-4 items-center justify-center rounded-full leading-none hover:bg-primary/25"
+                >
+                  {'×'}
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+      <select
+        id={id}
+        value={''}
+        onChange={(e) => {
+          if (e.target.value) setSelected([...selected, e.target.value]);
+        }}
+        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        <option value={''}>
+          {available.length > 0 ? '— add —' : 'All options selected'}
+        </option>
+        {available.map((opt) => {
+          return (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          );
+        })}
+      </select>
+    </div>
+  );
+};
+
 type FieldInputProps = {
   id: string;
   schema: OpenApiSchema;
@@ -136,6 +234,16 @@ const FieldInput = ({
   refOptions,
 }: FieldInputProps): React.ReactElement => {
   if (refOptions) {
+    if (schema.type === 'array') {
+      return (
+        <MultiRefField
+          id={id}
+          value={value}
+          onChange={onChange}
+          options={refOptions}
+        />
+      );
+    }
     return (
       <RefSelectField
         id={id}

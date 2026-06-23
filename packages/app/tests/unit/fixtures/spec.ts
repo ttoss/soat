@@ -15,6 +15,14 @@ export const testSpec: OpenApiSpec = {
         operationId: 'listAgents',
         tags: ['Agents'],
         summary: 'List agents',
+        parameters: [
+          {
+            name: 'project_id',
+            in: 'query',
+            required: false,
+            schema: { type: 'string' },
+          },
+        ],
         responses: {
           '200': {
             content: {
@@ -248,7 +256,14 @@ export const testSpec: OpenApiSpec = {
               schema: {
                 type: 'object',
                 required: ['name'],
-                properties: { name: { type: 'string' } },
+                properties: {
+                  name: { type: 'string' },
+                  policy_ids: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    'x-soat-ref': 'policies',
+                  },
+                },
               },
             },
           },

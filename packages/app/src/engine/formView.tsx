@@ -166,9 +166,9 @@ const useRefFieldOptions = ({
 
     const refFields = Object.entries(schema.properties).filter(
       ([, fieldSchema]) => {
-        // Only scalar refs become a single-select picker; array refs stay as
-        // a free-form editor since the picker selects one value at a time.
-        return fieldSchema['x-soat-ref'] && fieldSchema.type !== 'array';
+        // Both scalar refs (single-select) and array refs (multi-select chips)
+        // need their referenced resource's options fetched.
+        return Boolean(fieldSchema['x-soat-ref']);
       }
     );
     if (refFields.length === 0) return;
@@ -303,9 +303,22 @@ export const FormView = ({
   prefill,
 }: FormViewProps) => {
   const { state } = useAuth();
-  const { navigate } = useNavigation();
+  const { navigate, activeProjectId } = useNavigation();
   const schema = getRequestSchema(module, mode, spec);
-  const resolvedPrefill = prefill ?? {};
+  // On create, default a project_id field to the active project so new
+  // resources are created in the selected project rather than unscoped.
+  const resolvedPrefill = React.useMemo(() => {
+    const base = prefill ?? {};
+    if (
+      mode === 'create' &&
+      activeProjectId &&
+      schema?.properties?.['project_id'] &&
+      base['project_id'] == null
+    ) {
+      return { ...base, project_id: activeProjectId };
+    }
+    return base;
+  }, [prefill, mode, activeProjectId, schema]);
   const [formData, setFormData] = React.useState<Record<string, string>>(() => {
     return initFormData(schema, resolvedPrefill);
   });

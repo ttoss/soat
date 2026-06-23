@@ -34,6 +34,43 @@ export const buildUrl = (
   return url;
 };
 
+// Appends query parameters to a URL, skipping empty/null/undefined values.
+export const withQuery = (
+  url: string,
+  params: Record<string, string | null | undefined>
+): string => {
+  const search = Object.entries(params)
+    .filter(([, value]) => {
+      return value != null && value !== '';
+    })
+    .map(([key, value]) => {
+      return `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`;
+    })
+    .join('&');
+  if (!search) return url;
+  return url.includes('?') ? `${url}&${search}` : `${url}?${search}`;
+};
+
+// True when an operation accepts a `project_id` query parameter — the API's
+// mechanism for scoping a collection to a project.
+export const opAcceptsProjectIdQuery = (op: ModuleOp | undefined): boolean => {
+  return (op?.operation.parameters ?? []).some((param) => {
+    return param.name === 'project_id' && param.in === 'query';
+  });
+};
+
+// Builds a list request URL, scoping it to the active project when the
+// operation supports the project_id query parameter.
+export const buildListRequestUrl = (
+  op: ModuleOp,
+  pathParams: Record<string, string>,
+  activeProjectId: string | null
+): string => {
+  return withQuery(buildUrl(op.pathTemplate, pathParams), {
+    project_id: opAcceptsProjectIdQuery(op) ? activeProjectId : undefined,
+  });
+};
+
 export const humanizeKey = (key: string): string => {
   return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => {
     return c.toUpperCase();
@@ -119,7 +156,10 @@ const buildModule = (tag: string, ops: ModuleOp[]): ModuleInfo => {
   return module;
 };
 
-type RawOp = OpenApiOperation & { operation_id?: string };
+type RawOp = OpenApiOperation & {
+  operation_id?: string;
+  request_body?: OpenApiOperation['requestBody'];
+};
 
 const collectTagOps = (
   pathTemplate: string,
@@ -129,11 +169,15 @@ const collectTagOps = (
 ): void => {
   const raw = pathItem[method] as RawOp | undefined;
   if (!raw) return;
-  // The server's caseTransform middleware converts operationId → operation_id;
-  // normalise back so the rest of the engine can rely on operationId.
-  const operation: OpenApiOperation = raw.operationId
-    ? raw
-    : { ...raw, operationId: raw.operation_id ?? '' };
+  // The server's caseTransform middleware snake_cases the whole served spec
+  // (operationId → operation_id, requestBody → request_body). Normalise the
+  // camelCase OpenAPI keys back so the rest of the engine can rely on them —
+  // without this, form views can't find the create/edit body schema.
+  const operation: OpenApiOperation = {
+    ...raw,
+    operationId: raw.operationId ?? raw.operation_id ?? '',
+    requestBody: raw.requestBody ?? raw.request_body,
+  };
   if (!operation.operationId) return;
   for (const tag of operation.tags ?? ['Other']) {
     if (SKIP_TAGS.has(tag)) continue;
@@ -171,6 +215,18 @@ export const getIdParamName = (getPath: string, listPath: string): string => {
   return extra ? extra.slice(1, -1) : 'id';
 };
 
+// Picks the right object key for a $ref segment. The server's caseTransform
+// middleware snake_cases the served spec's component KEYS (ActorRecord →
+// _actor_record) while leaving $ref strings pointing at the original name, so
+// we fall back to the snake_cased key when the exact one is absent.
+const lookupRefKey = (obj: Record<string, unknown>, part: string): string => {
+  if (part in obj) return part;
+  const snake = part.replace(/[A-Z]/g, (char) => {
+    return `_${char.toLowerCase()}`;
+  });
+  return snake in obj ? snake : part;
+};
+
 const resolveRef = (
   ref: string,
   spec: OpenApiSpec
@@ -178,7 +234,8 @@ const resolveRef = (
   const parts = ref.replace(/^#\//, '').split('/');
   let current: Record<string, unknown> = spec as Record<string, unknown>;
   for (const part of parts) {
-    current = current[part] as Record<string, unknown>;
+    if (typeof current !== 'object') return undefined;
+    current = current[lookupRefKey(current, part)] as Record<string, unknown>;
     if (!current) return undefined;
   }
   return current as OpenApiSchema;
@@ -205,10 +262,8 @@ const resourceSegment = (pathTemplate: string): string => {
   return '';
 };
 
-// Resolves the item schema described by an operation's 2xx JSON response.
-// Array responses are unwrapped to their `items` schema so list and detail
-// operations both yield the per-record schema.
-export const getResponseItemSchema = (
+// The resolved schema of an operation's 2xx JSON response body.
+const resolveOkResponseSchema = (
   op: ModuleOp | undefined,
   spec: OpenApiSpec
 ): OpenApiSchema | undefined => {
@@ -218,10 +273,58 @@ export const getResponseItemSchema = (
     return code.startsWith('2');
   });
   if (!okKey) return undefined;
-  const schema = responses[okKey].content?.['application/json']?.schema;
-  const resolved = resolveSchema(schema, spec);
+  return resolveSchema(
+    responses[okKey].content?.['application/json']?.schema,
+    spec
+  );
+};
+
+// Resolves the item schema described by an operation's 2xx JSON response.
+// Array responses are unwrapped to their `items` schema; an object response is
+// the record itself (a detail GET).
+export const getResponseItemSchema = (
+  op: ModuleOp | undefined,
+  spec: OpenApiSpec
+): OpenApiSchema | undefined => {
+  const resolved = resolveOkResponseSchema(op, spec);
   if (resolved?.type === 'array') {
     return resolveSchema(resolved.items, spec);
+  }
+  return resolved;
+};
+
+// Unwraps a paginated wrapper object (`{ items: [...], total, ... }`) to the
+// record schema held by its first array-typed property, or undefined.
+const unwrapPaginatedItems = (
+  schema: OpenApiSchema,
+  spec: OpenApiSpec
+): OpenApiSchema | undefined => {
+  if (schema.type !== 'object' || !schema.properties) return undefined;
+  const arrayProp = Object.values(schema.properties)
+    .map((p) => {
+      return resolveSchema(p, spec);
+    })
+    .find((p) => {
+      return p?.type === 'array';
+    });
+  return arrayProp?.items ? resolveSchema(arrayProp.items, spec) : undefined;
+};
+
+// Resolves the per-record schema of a list/collection operation from its OUTER
+// 2xx response. Handles both a bare `array` response and a paginated wrapper
+// object — without this, refs on paginated lists (e.g. actors' project_id)
+// never get their x-soat-ref annotation and so never link. (Operating on the
+// outer schema avoids mistaking a record's own array field for the list.)
+export const getListItemSchema = (
+  op: ModuleOp | undefined,
+  spec: OpenApiSpec
+): OpenApiSchema | undefined => {
+  const resolved = resolveOkResponseSchema(op, spec);
+  if (resolved?.type === 'array') {
+    return resolveSchema(resolved.items, spec);
+  }
+  if (resolved?.type === 'object') {
+    return unwrapPaginatedItems(resolved, spec) ?? resolved;
   }
   return resolved;
 };
@@ -351,7 +454,9 @@ export const isSensitiveKey = (key: string): boolean => {
   return SENSITIVE_KEYS.test(key);
 };
 
-const HIDDEN_COLUMNS = new Set(['id']);
+// `id` is shown (as a link to the item's detail). Nothing is hidden by name;
+// sensitive fields are still filtered out separately in deriveColumns.
+const HIDDEN_COLUMNS = new Set<string>();
 const MAX_COLUMNS = 6;
 
 export const deriveColumns = (items: JsonObject[]): string[] => {

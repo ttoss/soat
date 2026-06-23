@@ -68,9 +68,15 @@ const config: Config = {
           'linear-gradient(135deg, hsl(var(--brand-violet)), hsl(var(--primary)))',
       },
       borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        // SOAT radius scale — soft, engineered (not pill-round).
+        sm: '0.4rem',
+        md: '0.5rem' /* 8px — buttons, inputs (the workhorse) */,
+        lg: '0.75rem' /* 12px — code blocks, modals, admonitions */,
+        xl: '1rem' /* 16px — cards, feature surfaces */,
+      },
+      transitionTimingFunction: {
+        // SOAT motion: restrained, eased — suggests data flow and retrieval.
+        DEFAULT: 'cubic-bezier(0.16, 1, 0.3, 1)',
       },
     },
   },

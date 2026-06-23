@@ -9,7 +9,7 @@ Agents working on the website package must adhere to the following guidelines to
 
 ## Branding Compliance
 
-- **Always follow the BRANDBOOK.md**: All content, design, and visual elements must strictly adhere to the SOAT brand system defined in the BRANDBOOK.md file. This includes color palettes, typography, visual language, and tone of voice.
+- **Always follow the `soat-design` skill**: All content, design, and visual elements must strictly adhere to the SOAT brand system defined in the `.claude/skills/soat-design/` skill (see its `readme.md`, `guidelines/`, and `tokens/`). This includes color palettes, typography, visual language, and tone of voice.
 - **Brand Consistency**: Ensure all new content, pages, and components align with the infrastructure-for-AI-apps positioning and the Vector Galaxy logo concept.
 
 ## Documentation Structure
@@ -19,7 +19,7 @@ Agents working on the website package must adhere to the following guidelines to
 
 ## Content Guidelines
 
-- **Tone and Voice**: Write in a technical, confident, and concise manner as specified in the BRANDBOOK.md. Avoid unnecessary jargon while maintaining technical accuracy.
+- **Tone and Voice**: Write in a technical, confident, and concise manner as specified in the `soat-design` skill. Avoid unnecessary jargon while maintaining technical accuracy.
 - **Navigation**: Ensure all new pages and sections are properly integrated into the navigation system and sidebars.
 
 ## Module Documentation
