@@ -75,9 +75,9 @@ describe('Projects', () => {
       expect(response.status).toBe(200);
       const get = response.body.paths?.['/api/v1/projects']?.get;
       expect(get).toBeDefined();
-      // The /api/v1 response passes through the caseTransform middleware, so
-      // operationId is served as operation_id.
-      expect(get.operation_id).toBe('listProjects');
+      // The OpenAPI spec endpoint bypasses caseTransform, so structural keys
+      // like operationId stay camelCase.
+      expect(get.operationId).toBe('listProjects');
       const itemsRef =
         get.responses?.['200']?.content?.['application/json']?.schema?.items
           ?.$ref;
