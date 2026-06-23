@@ -58,7 +58,7 @@ describe('Sessions', () => {
                 'agents:DeleteSession',
                 'agents:SendSessionMessage',
                 'agents:SubmitSessionToolOutputs',
-                'agents:ListSessionMessages',
+                'conversations:GetConversation',
                 'documents:GetDocument',
               ],
             },

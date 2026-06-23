@@ -9,7 +9,7 @@ A simplified 1 user ↔ 1 agent conversational interface, owned by an agent.
 
 Sessions hide the underlying [Conversation](./conversations.md), [Actor](./actors.md), and generation plumbing. By default, interacting with an agent requires three API calls: create a session, save a user message, and trigger generation. When `auto_generate` is enabled, the message and generation collapse into a single call.
 
-Sessions are a top-level resource at `/sessions`. Each session belongs to an [Agent](./agents.md) — set `agent_id` on create, and filter by it with `GET /sessions?agent_id=`. Each session exposes its `conversation_id` as an escape hatch to the full [Conversations](./conversations.md) API; list a session's messages via `GET /conversations/:conversation_id/messages`.
+Sessions are a top-level resource at `/sessions`. Each session belongs to an [Agent](./agents.md) — set `agent_id` on create, and filter by it with `GET /sessions?agent_id=`. Each session exposes its `conversation_id` as an escape hatch to the full [Conversations](./conversations.md) API; list a session's messages via `GET /conversations/:conversation_id/messages` (this is governed by `conversations:GetConversation`, not the `agents:*` session actions).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
