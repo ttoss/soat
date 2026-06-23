@@ -372,7 +372,7 @@ Create a [session](/docs/modules/sessions#examples) and send a message through t
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-SESSION_ID=$(soat create-agent-session --agent-id "$AGENT_ID" | jq -r '.id')
+SESSION_ID=$(soat create-session --agent-id "$AGENT_ID" | jq -r '.id')
 
 soat add-session-message \
   --agent-id "$AGENT_ID" \
@@ -384,13 +384,12 @@ soat add-session-message \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: session2 } = await adminSoat.sessions.createAgentSession({
-  path: { agent_id: agent.id },
-  body: {},
+const { data: session2 } = await adminSoat.sessions.createSession({
+  body: { agent_id: agent.id },
 });
 
 await adminSoat.sessions.addSessionMessage({
-  path: { agent_id: agent.id, session_id: session2.id },
+  path: { session_id: session2.id },
   body: { message: 'Summarize why model routing matters in one paragraph.' },
 });
 ```
@@ -399,12 +398,12 @@ await adminSoat.sessions.addSessionMessage({
 <TabItem value="curl" label="curl">
 
 ```bash
-SESSION_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions" \
+SESSION_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{}' | jq -r '.id')
+  -d "{\"agent_id\":\"$AGENT_ID\"}" | jq -r '.id')
 
-curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"message":"Summarize why model routing matters in one paragraph."}'

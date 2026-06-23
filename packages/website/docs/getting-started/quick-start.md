@@ -161,7 +161,7 @@ echo "AI Provider: $AI_PROVIDER_ID"
 Then send a stateless completion — no chat resource required:
 
 ```bash
-curl -s -X POST http://localhost:5047/api/v1/chats/completions \
+curl -s -X POST http://localhost:5047/api/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
