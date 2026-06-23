@@ -16,6 +16,7 @@ export { MemoryEntry } from './MemoryEntry';
 export { OauthAuthCode } from './OauthAuthCode';
 export { OauthClient } from './OauthClient';
 export { OauthConsentGrant } from './OauthConsentGrant';
+export { OauthRefreshToken } from './OauthRefreshToken';
 export { Orchestration } from './Orchestration';
 export { OrchestrationCheckpoint } from './OrchestrationCheckpoint';
 export { OrchestrationRun } from './OrchestrationRun';
