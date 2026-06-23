@@ -338,7 +338,7 @@ describe('Webhooks', () => {
     });
   });
 
-  describe('GET /api/v1/webhooks/:webhookId/deliveries', () => {
+  describe('GET /api/v1/webhook-deliveries', () => {
     let webhookId: string;
 
     beforeAll(async () => {
@@ -355,7 +355,7 @@ describe('Webhooks', () => {
 
     test('authenticated user can list deliveries', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/webhooks/${webhookId}/deliveries`
+        `/api/v1/webhook-deliveries?webhook_id=${webhookId}`
       );
 
       expect(response.status).toBe(200);
@@ -366,31 +366,17 @@ describe('Webhooks', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.get(
-        `/api/v1/webhooks/${webhookId}/deliveries`
+        `/api/v1/webhook-deliveries?webhook_id=${webhookId}`
       );
 
       expect(response.status).toBe(401);
     });
   });
 
-  describe('GET /api/v1/webhooks/:webhookId/deliveries/:deliveryId', () => {
-    let webhookId: string;
-
-    beforeAll(async () => {
-      const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/webhooks')
-        .send({
-          project_id: projectId,
-          name: 'Delivery detail test',
-          url: 'https://example.com/delivery-detail',
-          events: ['*'],
-        });
-      webhookId = res.body.id;
-    });
-
+  describe('GET /api/v1/webhook-deliveries/:deliveryId', () => {
     test('returns 404 for non-existent delivery', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/webhooks/${webhookId}/deliveries/wdh_nonexistent`
+        `/api/v1/webhook-deliveries/wdh_nonexistent`
       );
 
       expect(response.status).toBe(404);
@@ -398,7 +384,7 @@ describe('Webhooks', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.get(
-        `/api/v1/webhooks/${webhookId}/deliveries/wdh_nonexistent`
+        `/api/v1/webhook-deliveries/wdh_nonexistent`
       );
 
       expect(response.status).toBe(401);

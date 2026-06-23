@@ -159,6 +159,7 @@ export const listWebhookDeliveries = async (args: {
 
   const { count, rows } = await db.WebhookDelivery.findAndCountAll({
     where: { webhookId: args.webhookId },
+    include: [{ model: db.Webhook, as: 'webhook' }],
     limit,
     offset,
     order: [['createdAt', 'DESC']],
@@ -168,6 +169,8 @@ export const listWebhookDeliveries = async (args: {
     data: rows.map((d) => {
       return {
         id: d.publicId,
+        webhookId: (d as typeof d & { webhook?: { publicId: string } }).webhook
+          ?.publicId,
         eventType: d.eventType,
         payload: d.payload,
         status: d.status,
@@ -188,10 +191,14 @@ export const listWebhookDeliveries = async (args: {
 export const getWebhookDelivery = async (args: { id: string }) => {
   const delivery = await db.WebhookDelivery.findOne({
     where: { publicId: args.id },
+    include: [{ model: db.Webhook, as: 'webhook' }],
   });
   if (!delivery) return null;
   return {
     id: delivery.publicId,
+    webhookId: (
+      delivery as typeof delivery & { webhook?: { publicId: string } }
+    ).webhook?.publicId,
     eventType: delivery.eventType,
     payload: delivery.payload,
     status: delivery.status,
