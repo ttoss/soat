@@ -201,9 +201,6 @@ describe('OAuth authorization server (SPA consent)', () => {
 
   // ── refresh_token grant ──────────────────────────────────────────────────
   describe('refresh_token grant', () => {
-    let clientId: string;
-    let refreshToken: string;
-
     const completeAuthFlow = async () => {
       const reg = await testClient.post('/register').send({
         redirect_uris: [REDIRECT_URI],
@@ -237,13 +234,9 @@ describe('OAuth authorization server (SPA consent)', () => {
       return { clientId: id, refreshToken: token.body.refresh_token as string };
     };
 
-    beforeAll(async () => {
-      const result = await completeAuthFlow();
-      clientId = result.clientId;
-      refreshToken = result.refreshToken;
-    });
-
     test('exchanges a refresh token for a new access token and rotated refresh token', async () => {
+      const { clientId, refreshToken } = await completeAuthFlow();
+
       const res = await testClient.post('/token').type('form').send({
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
@@ -260,6 +253,8 @@ describe('OAuth authorization server (SPA consent)', () => {
     });
 
     test('replayed refresh token is rejected (reuse detection)', async () => {
+      const { clientId, refreshToken } = await completeAuthFlow();
+
       // Use the refresh token once to rotate it.
       const first = await testClient.post('/token').type('form').send({
         grant_type: 'refresh_token',
