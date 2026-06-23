@@ -46,6 +46,9 @@ actorsRouter.get('/actors', async (ctx: Context) => {
   const projectPublicId = ctx.query.projectId as string | undefined;
   const externalId = ctx.query.externalId as string | undefined;
   const name = ctx.query.name as string | undefined;
+  const agentId = ctx.query.agentId as string | undefined;
+  const chatId = ctx.query.chatId as string | undefined;
+  const conversationId = ctx.query.conversationId as string | undefined;
   const limit = ctx.query.limit
     ? parseInt(ctx.query.limit as string, 10)
     : undefined;
@@ -89,6 +92,9 @@ actorsRouter.get('/actors', async (ctx: Context) => {
     projectIds,
     externalId,
     name,
+    agentId,
+    chatId,
+    conversationId,
     policyWhere,
     limit,
     offset,

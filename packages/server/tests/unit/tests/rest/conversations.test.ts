@@ -556,7 +556,9 @@ describe('Conversations', () => {
     });
   });
 
-  describe('GET /api/v1/conversations/:id/actors', () => {
+  // Actors in a conversation are now derived via GET /actors?conversation_id=
+  // (the former GET /conversations/:id/actors was removed).
+  describe('GET /api/v1/actors?conversation_id=', () => {
     let conversationId: string;
     let secondActorIdForActorsTest: string;
 
@@ -596,13 +598,12 @@ describe('Conversations', () => {
 
     test('returns distinct actors who sent messages', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/conversations/${conversationId}/actors`
+        `/api/v1/actors?project_id=${projectId}&conversation_id=${conversationId}`
       );
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBe(2);
-      const ids = response.body.map((a: { id: string }) => {
+      expect(response.body.total).toBe(2);
+      const ids = response.body.data.map((a: { id: string }) => {
         return a.id;
       });
       expect(ids).toContain(actorId);
@@ -611,18 +612,20 @@ describe('Conversations', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.get(
-        `/api/v1/conversations/${conversationId}/actors`
+        `/api/v1/actors?conversation_id=${conversationId}`
       );
 
       expect(response.status).toBe(401);
     });
 
-    test('returns 404 for non-existent conversation', async () => {
+    test('unknown conversation_id returns an empty page, not 404', async () => {
       const response = await authenticatedTestClient(adminToken).get(
-        '/api/v1/conversations/conv_nonexistent/actors'
+        `/api/v1/actors?project_id=${projectId}&conversation_id=conv_nonexistent`
       );
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual([]);
+      expect(response.body.total).toBe(0);
     });
   });
 

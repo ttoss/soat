@@ -583,9 +583,12 @@ describe('Chats', () => {
     });
   });
 
-  // ── POST /chats/:chatId/actors ──────────────────────────────────────────
+  // ── Actor linked to a chat (via POST /actors + chat_id) ─────────────────
+  // The former POST /chats/:id/actors was removed; an actor is now linked to a
+  // chat by passing chat_id to the top-level /actors collection, and listed
+  // back with the ?chat_id= filter.
 
-  describe('POST /api/v1/chats/:chatId/actors', () => {
+  describe('actor ↔ chat link via /actors', () => {
     let chatId: string;
 
     beforeAll(async () => {
@@ -595,48 +598,33 @@ describe('Chats', () => {
       chatId = res.body.id;
     });
 
-    test('unauthenticated request returns 401', async () => {
-      const response = await testClient
-        .post(`/api/v1/chats/${chatId}/actors`)
-        .send({ name: 'Test Actor' });
-
-      expect(response.status).toBe(401);
-    });
-
-    test('non-existent chatId returns 404', async () => {
-      const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/chats/cht_doesnotexist0000/actors')
-        .send({ name: 'Test Actor' });
-
-      expect(response.status).toBe(404);
-    });
-
-    test('missing name returns 400', async () => {
+    test('admin can create an actor linked to a chat', async () => {
       const response = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/chats/${chatId}/actors`)
-        .send({});
-
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBeDefined();
-    });
-
-    test('user without actors:CreateActor permission returns 403', async () => {
-      // userToken only has chat permissions, not actors:CreateActor
-      const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/chats/${chatId}/actors`)
-        .send({ name: 'Test Actor' });
-
-      expect(response.status).toBe(403);
-    });
-
-    test('admin can create an actor for a chat', async () => {
-      const response = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/chats/${chatId}/actors`)
-        .send({ name: 'Chat Test Actor' });
+        .post('/api/v1/actors')
+        .send({
+          project_id: projectId,
+          name: 'Chat Test Actor',
+          chat_id: chatId,
+        });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
       expect(response.body.name).toBe('Chat Test Actor');
+      expect(response.body.chat_id).toBe(chatId);
+    });
+
+    test('lists actors filtered by chat_id', async () => {
+      const response = await authenticatedTestClient(adminToken).get(
+        `/api/v1/actors?project_id=${projectId}&chat_id=${chatId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.length).toBeGreaterThanOrEqual(1);
+      expect(
+        response.body.data.every((a: { chat_id: string }) => {
+          return a.chat_id === chatId;
+        })
+      ).toBe(true);
     });
   });
 });

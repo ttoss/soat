@@ -244,11 +244,13 @@ describe('MCP tools - happy path', () => {
     expect(Array.isArray(result.data)).toBe(true);
   });
 
-  test('list-conversation-actors returns results', async () => {
-    const res = await mcpCall('list-conversation-actors', {
+  test('list-actors filtered by conversationId returns results', async () => {
+    const res = await mcpCall('list-actors', {
       conversationId,
     });
     expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(Array.isArray(result.data)).toBe(true);
   });
 
   test('get-conversation returns the conversation', async () => {
@@ -950,7 +952,9 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-docs returns an error when the fetch fails', async () => {
-      fetchSpy.mockImplementation(async () => new Response('Gone', { status: 503 }));
+      fetchSpy.mockImplementation(async () => {
+        return new Response('Gone', { status: 503 });
+      });
       const res = await mcpCall('get-docs');
       expect(res.status).toBe(200);
       expect(res.body.result?.isError).toBe(true);
@@ -971,7 +975,9 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-doc-page returns an error when the page fetch fails', async () => {
-      fetchSpy.mockImplementation(async () => new Response('Not Found', { status: 404 }));
+      fetchSpy.mockImplementation(async () => {
+        return new Response('Not Found', { status: 404 });
+      });
       const res = await mcpCall('get-doc-page', {
         url: 'https://soat.ttoss.dev/docs/modules/missing',
       });

@@ -1,7 +1,5 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { db } from 'src/db';
-import { createActor } from 'src/lib/actors';
 import type { ChatMessage, ChatMessageInput } from 'src/lib/chats';
 import {
   createChat,
@@ -334,69 +332,4 @@ chatsRouter.post('/chats/completions', async (ctx: Context) => {
 
     throw error;
   }
-});
-
-chatsRouter.post('/chats/:chat_id/actors', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  const chat = await db.Chat.findOne({
-    where: { publicId: ctx.params.chat_id },
-    include: [{ model: db.Project, as: 'project' }],
-  });
-
-  if (!chat) {
-    ctx.status = 404;
-    ctx.body = { error: 'Chat not found' };
-    return;
-  }
-
-  const project = (
-    chat as unknown as {
-      project?: InstanceType<(typeof db)['Project']>;
-    }
-  ).project;
-
-  if (!project?.publicId) {
-    ctx.status = 404;
-    ctx.body = { error: 'Chat project not found' };
-    return;
-  }
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: project.publicId,
-    action: 'actors:CreateActor',
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const body = ctx.request.body as {
-    name: string;
-    type?: string;
-    externalId?: string;
-    instructions?: string | null;
-  };
-
-  if (!body.name) {
-    ctx.status = 400;
-    ctx.body = { error: 'name is required' };
-    return;
-  }
-
-  const actor = await createActor({
-    projectId: chat.projectId,
-    name: body.name,
-    externalId: body.externalId,
-    instructions: body.instructions ?? null,
-    chatId: chat.id as number,
-  });
-
-  ctx.status = 201;
-  ctx.body = actor;
 });

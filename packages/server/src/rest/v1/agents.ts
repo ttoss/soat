@@ -1,7 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
-import { createActor } from 'src/lib/actors';
 import {
   createAgent,
   deleteAgent,
@@ -288,68 +287,3 @@ agentsRouter.delete('/agents/:agent_id', async (ctx: Context) => {
 
 agentsRouter.use(agentGenerationRouter.routes());
 agentsRouter.use(agentGenerationRouter.allowedMethods());
-
-agentsRouter.post('/agents/:agent_id/actors', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  const agent = await db.Agent.findOne({
-    where: { publicId: ctx.params.agent_id },
-    include: [{ model: db.Project, as: 'project' }],
-  });
-
-  if (!agent) {
-    ctx.status = 404;
-    ctx.body = { error: 'Agent not found' };
-    return;
-  }
-
-  const project = (
-    agent as unknown as {
-      project?: InstanceType<(typeof db)['Project']>;
-    }
-  ).project;
-
-  if (!project?.publicId) {
-    ctx.status = 404;
-    ctx.body = { error: 'Agent project not found' };
-    return;
-  }
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: project.publicId,
-    action: 'actors:CreateActor',
-  });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const body = ctx.request.body as {
-    name: string;
-    type?: string;
-    externalId?: string;
-    instructions?: string | null;
-  };
-
-  if (!body.name) {
-    ctx.status = 400;
-    ctx.body = { error: 'name is required' };
-    return;
-  }
-
-  const actor = await createActor({
-    projectId: agent.projectId,
-    name: body.name,
-    externalId: body.externalId,
-    instructions: body.instructions ?? null,
-    agentId: agent.id as number,
-  });
-
-  ctx.status = 201;
-  ctx.body = actor;
-});

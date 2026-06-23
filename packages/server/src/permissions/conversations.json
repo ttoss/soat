@@ -45,11 +45,6 @@
       "operationId": "generateConversationMessage",
       "action": "conversations:GenerateConversationMessage",
       "description": "Generate the next message in a conversation"
-    },
-    {
-      "operationId": "listConversationActors",
-      "action": "conversations:GetConversation",
-      "description": "List actors in a conversation"
     }
   ]
 }
