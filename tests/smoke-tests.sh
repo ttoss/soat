@@ -1220,14 +1220,14 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
   fi
   echo "Trace tree endpoint: OK"
 
-  TRACE_GENS_RESP=$($SOAT_CLI get-trace-generations --trace-id "$CLIENT_TRACE_ID")
-  FIRST_GENERATION_ID=$(printf '%s\n' "$TRACE_GENS_RESP" | jq -r '.generation_ids[0] // empty')
+  TRACE_GENS_RESP=$($SOAT_CLI list-generations --trace-id "$CLIENT_TRACE_ID")
+  FIRST_GENERATION_ID=$(printf '%s\n' "$TRACE_GENS_RESP" | jq -r '.data[0].id // empty')
   if [ -z "$FIRST_GENERATION_ID" ]; then
-    echo "ERROR: get-trace-generations returned no generation IDs for '$CLIENT_TRACE_ID'" >&2
+    echo "ERROR: list-generations returned no generations for trace '$CLIENT_TRACE_ID'" >&2
     echo "$TRACE_GENS_RESP" >&2
     exit 1
   fi
-  echo "Trace generations endpoint: OK"
+  echo "List generations (by trace) endpoint: OK"
 
   GENERATION_GET_RESP=$($SOAT_CLI get-generation --generation-id "$FIRST_GENERATION_ID")
   GENERATION_RETURNED_ID=$(printf '%s\n' "$GENERATION_GET_RESP" | jq -r '.id // empty')

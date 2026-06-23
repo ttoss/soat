@@ -63,7 +63,7 @@ What you can resolve directly today:
 
 - From generation responses (`/sessions/.../generate` and auto-generate message responses): `generation_id` + `trace_id`
 - From trace APIs: trace metadata (`id`, `agent_id`, `file_id`, `parent_trace_id`, `root_trace_id`)
-- From `GET /traces/{trace_id}/generations`: all generation IDs linked to a trace
+- From `GET /generations?trace_id=`: all generations linked to a trace
 
 Important limitation:
 
@@ -72,8 +72,8 @@ Important limitation:
 Recommended correlation strategy:
 
 1. Capture (`session_id`, `generation_id`, `trace_id`) when generation responses are returned.
-2. Use `trace_id` to inspect trace metadata (`GET /traces/{trace_id}`), structure (`GET /traces/{trace_id}/tree`), and linked generation IDs (`GET /traces/{trace_id}/generations`).
-3. Use `session_id` to retrieve the full message timeline (`GET /agents/{agent_id}/sessions/{session_id}/messages`).
+2. Use `trace_id` to inspect trace metadata (`GET /traces/{trace_id}`), structure (`GET /traces/{trace_id}/tree`), and linked generations (`GET /generations?trace_id=`).
+3. Use the session's `conversation_id` to retrieve the full message timeline (`GET /conversations/{conversation_id}/messages`).
 
 This makes both directions deterministic in your own debug records:
 
