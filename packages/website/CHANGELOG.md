@@ -3,6 +3,239 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.13.0](https://github.com/ttoss/soat/compare/v0.12.5...v0.13.0) (2026-06-23)
+
+* refactor(api)!: redesign REST surface to eliminate duplicate paths & MCP tools (D1–D11) (#237) ([3821c1d](https://github.com/ttoss/soat/commit/3821c1de45b7e1b6d401b44bd646a285701f58ca)), closes [#237](https://github.com/ttoss/soat/issues/237)
+
+### BREAKING CHANGES
+
+* the nested actor endpoints are removed; use /actors with the
+agent_id/chat_id/conversation_id fields and filters instead.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+* refactor(api)!: flatten agent sessions to top-level /sessions (D2/D8/D10)
+
+Sessions become a top-level resource keyed by their globally-unique id:
+
+- /agents/{agent_id}/sessions[/{session_id}][/...]  →  /sessions[/{session_id}][/...]
+- create takes agent_id in the body; list filters with ?agent_id=
+- session sub-routes (messages, generate, tool-outputs, tags) move under
+  /sessions/{session_id}/...
+- drop GET /sessions/{session_id}/messages (listAgentSessionMessages): it was a
+  pure projection of the conversation's messages — read history via the session's
+  conversation_id and GET /conversations/{id}/messages (D8/D10)
+
+Route access control now resolves the session → agent + project (findSessionAccess)
+instead of reading agent_id from the path; lib signatures are unchanged so the
+sessions formation module (which self-resolves the agent id) needs no change.
+operationIds renamed (createAgentSession→createSession, etc.); permission actions
+kept as agents:* (policy-action renaming is out of scope for a path redesign).
+
+Updates spec, routes, lib, permissions manifest, sessions module doc, and REST +
+MCP + fk-on-delete tests. Tutorials are updated in a later batched pass (validated
+via the Docker tutorial CI).
+* agent session endpoints move from /agents/{agent_id}/sessions to
+/sessions; the session message-list endpoint is removed (use the conversation).
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+* refactor(api)!: flatten orchestration runs to top-level /orchestration-runs (D2)
+
+- /orchestrations/{id}/runs[/{run_id}][/...]  →  /orchestration-runs[/{run_id}][/...]
+- start takes orchestration_id in the body; list filters with ?orchestration_id=
+- get/cancel/resume/human-input key off the globally-unique run_id alone
+
+The run-action lib functions already accepted orchestrationPublicId as optional,
+so only listOrchestrationRuns needed it relaxed to an optional filter (lists all
+accessible runs when absent). Routes, OpenAPI spec, orchestrations module doc,
+REST tests, and smoke tests updated; SDK/CLI regenerated.
+* orchestration run endpoints move from
+/orchestrations/{id}/runs to /orchestration-runs.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+* refactor(api)!: flatten memory entries to top-level /memory-entries (D2)
+
+- /memories/{memory_id}/entries[/{entry_id}]  →  /memory-entries[/{entry_id}]
+- create takes memory_id in the body; list requires ?memory_id= (entries have no
+  independent project scope, so the owning memory is required for access control)
+- get/update/delete key off the globally-unique entry_id; access is resolved via
+  the entry's owning memory's project
+
+Lib signatures unchanged, so the memory-entries formation module and its
+formations.yaml schema (already memory_id-based) need no change. Router moves
+from under memoriesRouter to top-level. Routes, spec, memories module doc, and
+REST tests (memories/knowledge/memoryExtraction/fkOnDelete) updated; smoke test
+needs no change (--memory-id flag maps to body/query automatically). SDK/CLI
+regenerated.
+* memory entry endpoints move from /memories/{id}/entries to
+/memory-entries.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+* refactor(api)!: flatten webhook deliveries to top-level /webhook-deliveries (D2)
+
+- /webhooks/{webhook_id}/deliveries[/{delivery_id}]  →  /webhook-deliveries[/{delivery_id}]
+- list requires ?webhook_id= (deliveries have no independent project scope)
+- get keys off the globally-unique delivery_id; access resolved via the
+  delivery's owning webhook's project
+
+The delivery responses now include webhook_id (added to the lib mappers, the
+Delivery schema, and the module data model) so a delivery is self-describing as a
+top-level resource. Routes stay in webhooksRouter (already top-level). Spec,
+module doc, and REST tests updated; smoke needs no change (--webhook-id maps to
+the query flag). SDK/CLI regenerated.
+* webhook delivery endpoints move from /webhooks/{id}/deliveries
+to /webhook-deliveries.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+* docs: update api-redesign progress log (D2 flatten slices done)
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+* refactor(api)!: list generations top-level, drop /traces/{id}/generations (D3)
+
+- add GET /api/v1/generations (listGenerations) with agent_id/trace_id/status
+  filters — wires up the previously-unused listGenerations lib and adds a
+  trace_id filter; new permission action generations:ListGenerations
+- remove GET /traces/{trace_id}/generations (getTraceGenerations) + its lib
+  function, TraceGenerations schema, and traces:GetTraceGenerations permission
+
+The replacement returns full paginated generation records (not just IDs), and an
+unknown trace_id filter yields an empty page rather than 404. Routes, specs,
+permissions, traces/generations module docs, REST tests, and smoke updated;
+SDK/CLI regenerated.
+* GET /traces/{trace_id}/generations is removed; use
+GET /generations?trace_id= instead (now returns full records, not ID lists).
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+* refactor(api)!: list user policies via /policies?user_id=, drop nested read (D3/D4/D11)
+
+- add user_id filter to listPolicies; GET /policies?user_id= returns the policies
+  attached to a user (unknown user → empty list)
+- remove GET /users/{user_id}/policies (getUserPolicies) + its lib function and
+  the users:GetUserPolicies permission
+- keep PUT /users/{user_id}/policies (attachUserPolicies) — the relationship
+  WRITE stays a dedicated, privileged verb per D4/D11 (reads dedup to a filter,
+  writes stay side-specific)
+
+Routes, specs, permissions, policies module doc, and policies tests updated;
+SDK/CLI regenerated (147 routes).
+* GET /users/{user_id}/policies is removed; use
+GET /policies?user_id= instead.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+* refactor(api)!: relocate stateless completions to POST /chat/completions (D9)
+
+The OpenAI-compatible stateless completions endpoint has nothing to do with the
+chats resource, so it moves out from under it:
+
+- POST /chats/completions  →  POST /chat/completions (createChatCompletion)
+- POST /chats/{chat_id}/completions (chat-scoped) unchanged
+
+The singular /chat/completions path mirrors OpenAI's, so an OpenAI SDK can target
+it by base URL alone; it also removes the latent /chats/completions vs
+/chats/{chat_id}/completions route ambiguity. operationId and permission action
+are unchanged (so the CLI command create-chat-completion and smoke tests need no
+change). Route, spec, chats module doc, and REST tests updated; SDK/CLI
+regenerated.
+* the stateless chat completions endpoint moves from
+/chats/completions to /chat/completions.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+* docs: update api-redesign progress log (D1-D11 implementation complete)
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+* test(cli)!: update orchestration-run command tests for flattened paths (D2)
+
+The CLI package has its own route tests; update them for the /orchestration-runs
+flattening — start/list hit the top-level collection, get/cancel/resume key off
+--run-id only (the --orchestration-id path flag is gone).
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+* docs(tutorials)!: update tutorials & getting-started for the redesigned API
+
+Fix all tutorial CLI/SDK/curl tabs (and getting-started) for the flattened
+surface — the CI tutorial runner failed chat-with-llm and
+debug-session-generation-trace-history on the removed/renamed session commands:
+
+- create-agent-session → create-session (agent_id now a body field)
+- add-session-message / generate-session-response: drop --agent-id
+- list-agent-session-messages (removed) → list-conversation-messages via the
+  session's conversation_id (captured at creation)
+- get-trace-generations / GET /traces/{id}/generations → GET /generations?trace_id=
+- session/run/entry/delivery/policy/chat-completions paths flattened in curl/SDK
+  tabs across chat-with-llm, debug-session-generation-trace-history,
+  connect-third-party-llms, orchestrate-a-sonnet, memories-agent
+
+Generated reference docs (api/cli/mcp/sdk) are gitignored and rebuilt in CI.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+* fix(api): MDX-safe descriptions + smoke commands for redesigned routes
+
+CI surfaced two real failures (server + CLI unit tests now pass):
+
+1. Docusaurus build of /docs/mcp/tools failed with "ReferenceError: trace_id is
+   not defined" — the generated MCP tools doc is MDX, and two operation
+   descriptions I added contained literal {trace_id}/{user_id}, which MDX parses
+   as JS expressions. Reworded to drop the braces.
+2. Smoke tests hit removed/renamed CLI commands missed in earlier slices:
+   get-user-policies → list-policies --user-id; create-agent-actor →
+   create-actor --agent-id; list-conversation-actors → list-actors
+   --conversation-id; create-agent-session → create-session; add-session-message
+   no longer takes --agent_id.
+
+Tutorials pass. Generated MCP/SDK/CLI docs are gitignored and rebuilt in CI from
+the corrected specs.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+* fix(api): server test fallout from the redesign (CI-surfaced)
+
+First CI run of the server suite (couldn't run locally — no babel-jest) surfaced
+12 failures, all addressed:
+
+- sessions: 4 tests read the removed GET /sessions/:id/messages (405). Add a
+  listSessionMessages helper that resolves the session's conversation_id and
+  reads GET /conversations/:id/messages.
+- policies: drop the leftover GET /users/:userId/policies describe block (that
+  endpoint was removed; per-user listing is covered by GET /policies?user_id=).
+- generations & orchestration-runs list routes: return 403 (not an empty 200)
+  when the caller has access to zero projects, matching the modules' existing
+  read-permission behavior and the "403/404" test expectations.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+* fix(test): session message reads need conversations:GetConversation (D8)
+
+The 4 session tests that read message history go through
+GET /conversations/:id/messages (the session message-list endpoint was removed,
+D8). That endpoint is governed by conversations:GetConversation, which the
+session test user lacked → 403. Grant it (and drop the now-dead
+agents:ListSessionMessages action). Document the permission requirement on the
+sessions module page.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+* test(server): cover sessionTags not-found guard to restore coverage
+
+All 1582 server tests pass; the build now fails only on a coverage threshold:
+sessionTags.ts branch coverage fell to 60% (needs 65%). The session-tags routes
+now resolve+404 the session (checkSessionAccess) before calling the lib, so the
+lib's own "session not found" guard is no longer hit via REST. Add a direct lib
+test exercising that guard for getSessionTags/updateSessionTags. The defensive
+check is kept (guards against a delete race between access check and lib call).
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
 ## [0.12.5](https://127.0.0.1/44727/git/ttoss/compare/v0.12.4...v0.12.5) (2026-06-23)
 
 ### Bug Fixes

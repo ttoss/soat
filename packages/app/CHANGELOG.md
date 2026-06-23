@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.13.0](https://github.com/ttoss/soat/compare/v0.12.5...v0.13.0) (2026-06-23)
+
+### Features
+
+* **app:** apply soat-design brand and engine view polish ([#235](https://github.com/ttoss/soat/issues/235)) ([3b0f072](https://github.com/ttoss/soat/commit/3b0f072934fc3e42471f6b8e3b8ec98337d6d1ef))
+
 ## [0.12.5](https://127.0.0.1/44727/git/ttoss/compare/v0.12.4...v0.12.5) (2026-06-23)
 
 **Note:** Version bump only for package @soat/app

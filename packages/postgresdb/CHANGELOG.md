@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.13.0](https://github.com/ttoss/soat/compare/v0.12.5...v0.13.0) (2026-06-23)
+
+### Features
+
+* **oauth:** issue and rotate refresh tokens for MCP sessions ([#239](https://github.com/ttoss/soat/issues/239)) ([5f9d69d](https://github.com/ttoss/soat/commit/5f9d69d472ceb9c7a54db87d718c1e41a8254be7))
+
 ## [0.12.5](https://127.0.0.1/44727/git/ttoss/compare/v0.12.4...v0.12.5) (2026-06-23)
 
 **Note:** Version bump only for package @soat/postgresdb
