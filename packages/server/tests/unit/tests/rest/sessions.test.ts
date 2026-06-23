@@ -2,6 +2,18 @@ import * as agentsModule from '../../../../src/lib/agents';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
+// Session messages are read through the session's underlying conversation
+// (the session-scoped message-list endpoint was removed). Resolve the
+// conversation_id from the session, then list the conversation's messages.
+const listSessionMessages = async (token: string, sessionId: string) => {
+  const sessionRes = await authenticatedTestClient(token).get(
+    `/api/v1/sessions/${sessionId}`
+  );
+  return authenticatedTestClient(token).get(
+    `/api/v1/conversations/${sessionRes.body.conversation_id}/messages`
+  );
+};
+
 describe('Sessions', () => {
   let adminToken: string;
   let userToken: string;
@@ -702,9 +714,7 @@ describe('Sessions', () => {
       expect(newSessionRes.status).toBe(201);
       const newSessionId = newSessionRes.body.id;
 
-      const messagesRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/sessions/${newSessionId}/messages`
-      );
+      const messagesRes = await listSessionMessages(userToken, newSessionId);
 
       expect(messagesRes.status).toBe(200);
       expect(messagesRes.body.data).toHaveLength(0);
@@ -855,9 +865,8 @@ describe('Sessions', () => {
       });
 
       // 7. Fetch messages ordered by position ASC
-      const msgsRes = await authenticatedTestClient(userToken)
-        .get(`/api/v1/sessions/${orderingSessionId}/messages`)
-        .expect(200);
+      const msgsRes = await listSessionMessages(userToken, orderingSessionId);
+      expect(msgsRes.status).toBe(200);
 
       const messages: Array<{
         role: string;
@@ -1413,9 +1422,7 @@ describe('Sessions', () => {
       expect(response.body.generation_id).toBe('gen_submit_done_01');
       expect(response.body.message.content).toBe('Weather in Paris: 18C');
 
-      const messagesResponse = await authenticatedTestClient(userToken).get(
-        `/api/v1/sessions/${sessionId}/messages`
-      );
+      const messagesResponse = await listSessionMessages(userToken, sessionId);
 
       expect(messagesResponse.status).toBe(200);
       expect(messagesResponse.body.data).toEqual(
@@ -1472,9 +1479,7 @@ describe('Sessions', () => {
           toolOutputs: [{ toolCallId: 'tc_meta_01', output: '18C' }],
         });
 
-      const messagesResponse = await authenticatedTestClient(userToken).get(
-        `/api/v1/sessions/${sessionId}/messages`
-      );
+      const messagesResponse = await listSessionMessages(userToken, sessionId);
 
       expect(messagesResponse.status).toBe(200);
       const assistantMsg = messagesResponse.body.data.find(

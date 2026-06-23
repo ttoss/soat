@@ -23,7 +23,10 @@ generationsRouter.get('/generations', async (ctx: Context) => {
     action: 'generations:ListGenerations',
   });
 
-  if (projectIds === null) {
+  if (
+    projectIds === null ||
+    (Array.isArray(projectIds) && projectIds.length === 0)
+  ) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
     return;

@@ -354,7 +354,10 @@ orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
     action: 'orchestrations:ListRuns',
   });
 
-  if (projectIds === null) {
+  if (
+    projectIds === null ||
+    (Array.isArray(projectIds) && projectIds.length === 0)
+  ) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
     return;
