@@ -63,7 +63,7 @@ describe('Memory Extraction', () => {
 
   const listEntries = async (memoryId: string) => {
     const res = await authenticatedTestClient(adminToken).get(
-      `/api/v1/memories/${memoryId}/entries`
+      `/api/v1/memory-entries?memory_id=${memoryId}`
     );
     expect(res.status).toBe(200);
     return res.body as Array<{ id: string; content: string; source: string }>;

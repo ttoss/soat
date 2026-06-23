@@ -113,14 +113,14 @@ describe('FK onDelete rules', () => {
       const memId = await createMemory();
 
       const entryRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/memories/${memId}/entries`)
-        .send({ content: 'test entry for cascade' });
+        .post('/api/v1/memory-entries')
+        .send({ memory_id: memId, content: 'test entry for cascade' });
       expect(entryRes.status).toBe(201);
       const entryId = entryRes.body.id;
 
       // Confirm entry exists
       const beforeGet = await authenticatedTestClient(userToken).get(
-        `/api/v1/memories/${memId}/entries/${entryId}`
+        `/api/v1/memory-entries/${entryId}`
       );
       expect(beforeGet.status).toBe(200);
 

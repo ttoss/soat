@@ -336,12 +336,15 @@ describe('Memories', () => {
       memoryId = await createTestMemory();
     });
 
-    describe('POST /api/v1/memories/:memory_id/entries', () => {
+    describe('POST /api/v1/memory-entries', () => {
       test('authenticated user can create a memory entry', async () => {
         const freshMemoryId = await createTestMemory();
         const response = await authenticatedTestClient(userToken)
-          .post(`/api/v1/memories/${freshMemoryId}/entries`)
-          .send({ content: 'Customer prefers email over phone' });
+          .post('/api/v1/memory-entries')
+          .send({
+            memory_id: freshMemoryId,
+            content: 'Customer prefers email over phone',
+          });
 
         expect(response.status).toBe(201);
         expect(response.body.id).toBeDefined();
@@ -356,8 +359,12 @@ describe('Memories', () => {
       test('can create entry with explicit source', async () => {
         const freshMemoryId = await createTestMemory();
         const response = await authenticatedTestClient(userToken)
-          .post(`/api/v1/memories/${freshMemoryId}/entries`)
-          .send({ content: 'Agent created note', source: 'agent' });
+          .post('/api/v1/memory-entries')
+          .send({
+            memory_id: freshMemoryId,
+            content: 'Agent created note',
+            source: 'agent',
+          });
 
         expect(response.status).toBe(201);
         expect(response.body.source).toBe('agent');
@@ -366,32 +373,32 @@ describe('Memories', () => {
 
       test('returns 400 when content is missing', async () => {
         const response = await authenticatedTestClient(userToken)
-          .post(`/api/v1/memories/${memoryId}/entries`)
-          .send({});
+          .post('/api/v1/memory-entries')
+          .send({ memory_id: memoryId });
 
         expect(response.status).toBe(400);
       });
 
       test('returns 404 for non-existent memory', async () => {
         const response = await authenticatedTestClient(userToken)
-          .post('/api/v1/memories/mem_nonexistent0000/entries')
-          .send({ content: 'test' });
+          .post('/api/v1/memory-entries')
+          .send({ memory_id: 'mem_nonexistent0000', content: 'test' });
 
         expect(response.status).toBe(404);
       });
 
       test('unauthenticated request returns 401', async () => {
         const response = await testClient
-          .post(`/api/v1/memories/${memoryId}/entries`)
-          .send({ content: 'test' });
+          .post('/api/v1/memory-entries')
+          .send({ memory_id: memoryId, content: 'test' });
 
         expect(response.status).toBe(401);
       });
 
       test('user without permission returns 403', async () => {
         const response = await authenticatedTestClient(noPermToken)
-          .post(`/api/v1/memories/${memoryId}/entries`)
-          .send({ content: 'test' });
+          .post('/api/v1/memory-entries')
+          .send({ memory_id: memoryId, content: 'test' });
 
         expect(response.status).toBe(403);
       });
@@ -399,12 +406,15 @@ describe('Memories', () => {
       test('second write to same memory is skipped (duplicate)', async () => {
         const freshMemoryId = await createTestMemory();
         await authenticatedTestClient(userToken)
-          .post(`/api/v1/memories/${freshMemoryId}/entries`)
-          .send({ content: 'First entry' });
+          .post('/api/v1/memory-entries')
+          .send({ memory_id: freshMemoryId, content: 'First entry' });
 
         const response = await authenticatedTestClient(userToken)
-          .post(`/api/v1/memories/${freshMemoryId}/entries`)
-          .send({ content: 'Second entry same memory' });
+          .post('/api/v1/memory-entries')
+          .send({
+            memory_id: freshMemoryId,
+            content: 'Second entry same memory',
+          });
 
         expect(response.status).toBe(200);
         expect(response.body.action).toBe('skipped');
@@ -414,12 +424,13 @@ describe('Memories', () => {
       test('write with duplicate_threshold > 1 forces merge path', async () => {
         const freshMemoryId = await createTestMemory();
         await authenticatedTestClient(userToken)
-          .post(`/api/v1/memories/${freshMemoryId}/entries`)
-          .send({ content: 'First entry for merge' });
+          .post('/api/v1/memory-entries')
+          .send({ memory_id: freshMemoryId, content: 'First entry for merge' });
 
         const response = await authenticatedTestClient(userToken)
-          .post(`/api/v1/memories/${freshMemoryId}/entries`)
+          .post('/api/v1/memory-entries')
           .send({
+            memory_id: freshMemoryId,
             content: 'Second entry for merge',
             duplicate_threshold: 1.1,
             update_threshold: 0.0,
@@ -431,10 +442,10 @@ describe('Memories', () => {
       });
     });
 
-    describe('GET /api/v1/memories/:memory_id/entries', () => {
+    describe('GET /api/v1/memory-entries', () => {
       test('authenticated user can list entries', async () => {
         const response = await authenticatedTestClient(userToken).get(
-          `/api/v1/memories/${memoryId}/entries`
+          `/api/v1/memory-entries?memory_id=${memoryId}`
         );
 
         expect(response.status).toBe(200);
@@ -443,7 +454,7 @@ describe('Memories', () => {
 
       test('unauthenticated request returns 401', async () => {
         const response = await testClient.get(
-          `/api/v1/memories/${memoryId}/entries`
+          `/api/v1/memory-entries?memory_id=${memoryId}`
         );
 
         expect(response.status).toBe(401);
@@ -451,28 +462,28 @@ describe('Memories', () => {
 
       test('user without permission returns 403', async () => {
         const response = await authenticatedTestClient(noPermToken).get(
-          `/api/v1/memories/${memoryId}/entries`
+          `/api/v1/memory-entries?memory_id=${memoryId}`
         );
 
         expect(response.status).toBe(403);
       });
     });
 
-    describe('GET /api/v1/memories/:memory_id/entries/:entry_id', () => {
+    describe('GET /api/v1/memory-entries/:entry_id', () => {
       let entryId: string;
       let getEntryMemoryId: string;
 
       beforeAll(async () => {
         getEntryMemoryId = await createTestMemory();
         const res = await authenticatedTestClient(userToken)
-          .post(`/api/v1/memories/${getEntryMemoryId}/entries`)
-          .send({ content: 'Entry to get' });
+          .post('/api/v1/memory-entries')
+          .send({ memory_id: getEntryMemoryId, content: 'Entry to get' });
         entryId = res.body.id;
       });
 
       test('authenticated user can get an entry', async () => {
         const response = await authenticatedTestClient(userToken).get(
-          `/api/v1/memories/${getEntryMemoryId}/entries/${entryId}`
+          `/api/v1/memory-entries/${entryId}`
         );
 
         expect(response.status).toBe(200);
@@ -482,7 +493,7 @@ describe('Memories', () => {
 
       test('returns 404 for non-existent entry', async () => {
         const response = await authenticatedTestClient(userToken).get(
-          `/api/v1/memories/${getEntryMemoryId}/entries/me_nonexistent00000`
+          `/api/v1/memory-entries/me_nonexistent00000`
         );
 
         expect(response.status).toBe(404);
@@ -490,7 +501,7 @@ describe('Memories', () => {
 
       test('unauthenticated request returns 401', async () => {
         const response = await testClient.get(
-          `/api/v1/memories/${getEntryMemoryId}/entries/${entryId}`
+          `/api/v1/memory-entries/${entryId}`
         );
 
         expect(response.status).toBe(401);
@@ -498,28 +509,28 @@ describe('Memories', () => {
 
       test('user without permission returns 403', async () => {
         const response = await authenticatedTestClient(noPermToken).get(
-          `/api/v1/memories/${getEntryMemoryId}/entries/${entryId}`
+          `/api/v1/memory-entries/${entryId}`
         );
 
         expect(response.status).toBe(403);
       });
     });
 
-    describe('PUT /api/v1/memories/:memory_id/entries/:entry_id', () => {
+    describe('PUT /api/v1/memory-entries/:entry_id', () => {
       let entryId: string;
       let putEntryMemoryId: string;
 
       beforeAll(async () => {
         putEntryMemoryId = await createTestMemory();
         const res = await authenticatedTestClient(userToken)
-          .post(`/api/v1/memories/${putEntryMemoryId}/entries`)
-          .send({ content: 'Entry to update' });
+          .post('/api/v1/memory-entries')
+          .send({ memory_id: putEntryMemoryId, content: 'Entry to update' });
         entryId = res.body.id;
       });
 
       test('authenticated user can update an entry', async () => {
         const response = await authenticatedTestClient(userToken)
-          .put(`/api/v1/memories/${putEntryMemoryId}/entries/${entryId}`)
+          .put(`/api/v1/memory-entries/${entryId}`)
           .send({ content: 'Updated content' });
 
         expect(response.status).toBe(200);
@@ -528,9 +539,7 @@ describe('Memories', () => {
 
       test('returns 404 for non-existent entry', async () => {
         const response = await authenticatedTestClient(userToken)
-          .put(
-            `/api/v1/memories/${putEntryMemoryId}/entries/me_nonexistent00000`
-          )
+          .put(`/api/v1/memory-entries/me_nonexistent00000`)
           .send({ content: 'x' });
 
         expect(response.status).toBe(404);
@@ -538,7 +547,7 @@ describe('Memories', () => {
 
       test('unauthenticated request returns 401', async () => {
         const response = await testClient
-          .put(`/api/v1/memories/${putEntryMemoryId}/entries/${entryId}`)
+          .put(`/api/v1/memory-entries/${entryId}`)
           .send({ content: 'x' });
 
         expect(response.status).toBe(401);
@@ -546,36 +555,36 @@ describe('Memories', () => {
 
       test('user without permission returns 403', async () => {
         const response = await authenticatedTestClient(noPermToken)
-          .put(`/api/v1/memories/${putEntryMemoryId}/entries/${entryId}`)
+          .put(`/api/v1/memory-entries/${entryId}`)
           .send({ content: 'x' });
 
         expect(response.status).toBe(403);
       });
     });
 
-    describe('DELETE /api/v1/memories/:memory_id/entries/:entry_id', () => {
+    describe('DELETE /api/v1/memory-entries/:entry_id', () => {
       test('authenticated user can delete an entry', async () => {
         const deleteMemoryId = await createTestMemory();
         const createRes = await authenticatedTestClient(userToken)
-          .post(`/api/v1/memories/${deleteMemoryId}/entries`)
-          .send({ content: 'Entry to delete' });
+          .post('/api/v1/memory-entries')
+          .send({ memory_id: deleteMemoryId, content: 'Entry to delete' });
         const entryId = createRes.body.id;
 
         const response = await authenticatedTestClient(userToken).delete(
-          `/api/v1/memories/${deleteMemoryId}/entries/${entryId}`
+          `/api/v1/memory-entries/${entryId}`
         );
 
         expect(response.status).toBe(204);
 
         const getRes = await authenticatedTestClient(userToken).get(
-          `/api/v1/memories/${deleteMemoryId}/entries/${entryId}`
+          `/api/v1/memory-entries/${entryId}`
         );
         expect(getRes.status).toBe(404);
       });
 
       test('returns 404 for non-existent entry', async () => {
         const response = await authenticatedTestClient(userToken).delete(
-          `/api/v1/memories/${memoryId}/entries/me_nonexistent00000`
+          `/api/v1/memory-entries/me_nonexistent00000`
         );
 
         expect(response.status).toBe(404);
@@ -584,12 +593,15 @@ describe('Memories', () => {
       test('unauthenticated request returns 401', async () => {
         const deleteMemoryId = await createTestMemory();
         const createRes = await authenticatedTestClient(userToken)
-          .post(`/api/v1/memories/${deleteMemoryId}/entries`)
-          .send({ content: 'Auth Delete Test Entry' });
+          .post('/api/v1/memory-entries')
+          .send({
+            memory_id: deleteMemoryId,
+            content: 'Auth Delete Test Entry',
+          });
         const entryId = createRes.body.id;
 
         const response = await testClient.delete(
-          `/api/v1/memories/${deleteMemoryId}/entries/${entryId}`
+          `/api/v1/memory-entries/${entryId}`
         );
 
         expect(response.status).toBe(401);
@@ -598,12 +610,15 @@ describe('Memories', () => {
       test('user without permission returns 403', async () => {
         const deleteMemoryId = await createTestMemory();
         const createRes = await authenticatedTestClient(userToken)
-          .post(`/api/v1/memories/${deleteMemoryId}/entries`)
-          .send({ content: 'Perm Delete Test Entry' });
+          .post('/api/v1/memory-entries')
+          .send({
+            memory_id: deleteMemoryId,
+            content: 'Perm Delete Test Entry',
+          });
         const entryId = createRes.body.id;
 
         const response = await authenticatedTestClient(noPermToken).delete(
-          `/api/v1/memories/${deleteMemoryId}/entries/${entryId}`
+          `/api/v1/memory-entries/${entryId}`
         );
 
         expect(response.status).toBe(403);
