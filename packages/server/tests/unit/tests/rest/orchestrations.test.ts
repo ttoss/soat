@@ -38,7 +38,7 @@ describe('Orchestrations', () => {
         id: 'nodeB',
         type: 'transform',
         expression: { '+': [{ var: 'step1' }, 1] },
-        input_mapping: { val: 'state.step1' },
+        input_mapping: { val: { var: 'step1' } },
         output_mapping: { result: 'state.step2' },
       },
     ],
@@ -450,18 +450,26 @@ describe('Orchestrations', () => {
       expect(runRes.body.status).toBe('failed');
     });
 
-    test('non-state input_mapping path resolves to undefined', async () => {
+    test('input_mapping resolves literals, run-input {var} refs, and expressions', async () => {
+      // End-to-end proof of JSON Logic input_mapping: a human node surfaces its
+      // resolved inputs as required_action.context. The {var} ref reads a value
+      // passed at run time (the original start-orchestration-run bug scenario).
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
-          name: 'Non-State Mapping',
+          name: 'JSON Logic Mapping',
           nodes: [
             {
-              id: 'A',
-              type: 'transform',
-              expression: 'ok',
-              input_mapping: { val: 'notstate.x' },
-              output_mapping: { result: 'state.result' },
+              id: 'review',
+              type: 'human',
+              prompt: 'Review?',
+              input_mapping: {
+                language: 'pt-BR',
+                threshold: 0.8,
+                documentId: { var: 'temaDocumentId' },
+                label: { cat: ['Tema: ', { var: 'titulo' }] },
+                isLong: { '>': [{ var: 'wordCount' }, 500] },
+              },
             },
           ],
           edges: [],
@@ -471,35 +479,20 @@ describe('Orchestrations', () => {
 
       const runRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestration-runs')
-        .send({ orchestration_id: createRes.body.id, input: {} });
-      expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('completed');
-    });
-
-    test('deep null path in input_mapping resolves to undefined', async () => {
-      const createRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/orchestrations')
         .send({
-          name: 'Deep Null Path',
-          nodes: [
-            {
-              id: 'A',
-              type: 'transform',
-              expression: 'ok',
-              input_mapping: { val: 'state.x.y' },
-              output_mapping: { result: 'state.result' },
-            },
-          ],
-          edges: [],
-          project_id: projectId,
+          orchestration_id: createRes.body.id,
+          input: { temaDocumentId: 'ood_123', titulo: 'Verão', wordCount: 750 },
         });
-      expect(createRes.status).toBe(201);
-
-      const runRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/orchestration-runs')
-        .send({ orchestration_id: createRes.body.id, input: { x: null } });
       expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('completed');
+      expect(runRes.body.status).toBe('paused');
+      // Response keys are snake_cased by the outbound caseTransform middleware.
+      expect(runRes.body.required_action.context).toEqual({
+        language: 'pt-BR',
+        threshold: 0.8,
+        document_id: 'ood_123',
+        label: 'Tema: Verão',
+        is_long: true,
+      });
     });
 
     test('activation group convergence waits for all incoming nodes', async () => {
@@ -561,7 +554,7 @@ describe('Orchestrations', () => {
       expect(runRes.body.status).toBe('completed');
     });
 
-    test('knowledge node covers applyInputMapping and resolveFromState branches', async () => {
+    test('knowledge node covers applyInputMapping branches', async () => {
       // Using knowledge node (no external service mock needed — searchKnowledge queries DB)
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
@@ -572,14 +565,14 @@ describe('Orchestrations', () => {
               id: 'search',
               type: 'knowledge',
               input_mapping: {
-                // state path that resolves to a value
-                query: 'state.question',
-                // deep path through null — covers cursor===null branch
-                nullPath: 'state.x.y',
-                // deep path through undefined — covers typeof cursor !== 'object' branch
-                missingPath: 'state.nonexistent.deep',
-                // non-state path — covers !path.startsWith('state.') branch
-                other: 'notstate.z',
+                // {var} ref that resolves to a value
+                query: { var: 'question' },
+                // {var} ref into a null value
+                nullVar: { var: 'x.y' },
+                // {var} ref to a missing key resolves to null
+                missingVar: { var: 'nonexistent.deep' },
+                // a literal string is passed through as-is
+                other: 'literal-value',
               },
               output_mapping: { results: 'state.knowledgeResults' },
             },
@@ -609,7 +602,7 @@ describe('Orchestrations', () => {
               id: 'write',
               type: 'memory_write',
               memory_id: 'mem_nonexistent12345',
-              input_mapping: { content: 'state.text' },
+              input_mapping: { content: { var: 'text' } },
             },
           ],
           edges: [],
@@ -637,7 +630,7 @@ describe('Orchestrations', () => {
               id: 'agent_node',
               type: 'agent',
               agent_id: 'agt_nonexistent12345',
-              input_mapping: { prompt: 'state.question' },
+              input_mapping: { prompt: { var: 'question' } },
             },
           ],
           edges: [],
@@ -1418,7 +1411,7 @@ describe('Orchestrations', () => {
               id: 'sub',
               type: 'sub_orchestration',
               orchestration_id: subOrchId,
-              input_mapping: { item: 'state.value' },
+              input_mapping: { item: { var: 'value' } },
               output_mapping: { result: 'state.subResult' },
             },
           ],

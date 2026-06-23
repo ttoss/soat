@@ -27,42 +27,79 @@ describe('applyInputMapping', () => {
     expect(applyInputMapping(undefined, {})).toEqual({});
   });
 
-  test('resolves a state path to its value', () => {
-    const state = { name: 'Alice' };
-    expect(applyInputMapping({ key: 'state.name' }, state)).toEqual({
-      key: 'Alice',
+  test('passes literal values (string, number, boolean, array) as-is', () => {
+    expect(
+      applyInputMapping(
+        {
+          language: 'pt-BR',
+          threshold: 0.8,
+          enabled: true,
+          tags: ['reel', 'video'],
+        },
+        {}
+      )
+    ).toEqual({
+      language: 'pt-BR',
+      threshold: 0.8,
+      enabled: true,
+      tags: ['reel', 'video'],
     });
   });
 
-  test('non-state path returns undefined', () => {
-    expect(applyInputMapping({ key: 'env.name' }, { name: 'Alice' })).toEqual({
-      key: undefined,
-    });
+  test('resolves {var: "key"} from state', () => {
+    const state = { temaDocumentId: 'ood_123' };
+    expect(
+      applyInputMapping({ documentId: { var: 'temaDocumentId' } }, state)
+    ).toEqual({ documentId: 'ood_123' });
   });
 
-  test('deep state path traversal', () => {
+  test('resolves a nested {var: "a.b"} path from state', () => {
     const state = { user: { age: 30 } };
-    expect(applyInputMapping({ age: 'state.user.age' }, state)).toEqual({
+    expect(applyInputMapping({ age: { var: 'user.age' } }, state)).toEqual({
       age: 30,
     });
   });
 
-  test('deep path through null cursor returns undefined', () => {
-    expect(applyInputMapping({ val: 'state.x.y' }, { x: null })).toEqual({
-      val: undefined,
+  test('a missing {var} resolves to null', () => {
+    expect(applyInputMapping({ key: { var: 'missing' } }, {})).toEqual({
+      key: null,
     });
   });
 
-  test('deep path through a non-object (string) returns undefined', () => {
-    expect(applyInputMapping({ val: 'state.x.y' }, { x: 'string' })).toEqual({
-      val: undefined,
+  test('evaluates a {cat} expression against state', () => {
+    const state = { titulo: 'My Theme' };
+    expect(
+      applyInputMapping(
+        { label: { cat: ['Tema: ', { var: 'titulo' }] } },
+        state
+      )
+    ).toEqual({ label: 'Tema: My Theme' });
+  });
+
+  test('evaluates a comparison expression to a boolean', () => {
+    expect(
+      applyInputMapping(
+        { isLong: { '>': [{ var: 'wordCount' }, 500] } },
+        { wordCount: 750 }
+      )
+    ).toEqual({ isLong: true });
+  });
+
+  test('passes a multi-key object through as a literal (not a JSON Logic rule)', () => {
+    const literal = { a: 1, b: 2 };
+    expect(applyInputMapping({ config: literal }, {})).toEqual({
+      config: literal,
     });
   });
 
-  test('missing intermediate key returns undefined', () => {
-    expect(applyInputMapping({ val: 'state.missing.deep' }, {})).toEqual({
-      val: undefined,
-    });
+  test('a plain string is a literal, not a state path', () => {
+    // Breaking change from the legacy 'state.X' path syntax: bare strings are
+    // now literals; state references must use {var: 'X'}.
+    expect(applyInputMapping({ key: 'state.name' }, { name: 'Alice' })).toEqual(
+      {
+        key: 'state.name',
+      }
+    );
   });
 });
 
@@ -195,7 +232,7 @@ describe('executeHumanNode', () => {
       node: makeNode({
         type: 'human',
         prompt: 'Review?',
-        inputMapping: { data: 'state.item' },
+        inputMapping: { data: { var: 'item' } },
       }),
       state: { item: 'hello' },
     });
@@ -242,7 +279,7 @@ describe('executeWebhookNode', () => {
       node: makeNode({
         type: 'webhook',
         mode: 'receive',
-        inputMapping: { token: 'state.tok' },
+        inputMapping: { token: { var: 'tok' } },
       }),
       state: { tok: 'abc' },
     });

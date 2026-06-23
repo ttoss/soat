@@ -389,9 +389,15 @@ components:
           description: For memory_write nodes — public ID of the target memory.
         input_mapping:
           type: object
-          additionalProperties:
-            type: string
-          description: Maps state paths to node input keys.
+          additionalProperties: true
+          description: >
+            Maps node input keys to values. Each value is JSON Logic
+            (https://jsonlogic.com), the same evaluator used by transform and
+            condition nodes. A single-key object is evaluated against the run
+            state — `{"var": "key"}` reads `state.key`, `{"cat": [...]}` and
+            `{">": [...]}` compute derived values. Any other value (string,
+            number, boolean, array, multi-key object) is passed through as a
+            literal.
         output_mapping:
           type: object
           additionalProperties:

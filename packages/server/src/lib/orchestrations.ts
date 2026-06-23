@@ -50,8 +50,8 @@ export type OrchestrationNode = {
   orchestrationId?: string;
   // Shared: max iterations for cycles
   maxIterations?: number;
-  // Shared mappings
-  inputMapping?: Record<string, string>;
+  // Shared mappings — inputMapping values are JSON Logic (literal or expression)
+  inputMapping?: Record<string, unknown>;
   outputMapping?: Record<string, string>;
   outputSchema?: object;
 };

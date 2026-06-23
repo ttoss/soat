@@ -658,7 +658,7 @@ echo "--- Creating human-review orchestration ---"
 HUMAN_ORCH_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name "smoke-human-orchestration" \
-  --nodes '[{"id":"approval","type":"human","prompt":"Approve the poem?","options":["approve","reject"],"output_mapping":{"choice":"state.review"}},{"id":"finalize","type":"transform","expression":{"var":"review"},"output_mapping":{"result":"state.finalReview"}}]' \
+  --nodes '[{"id":"approval","type":"human","prompt":"Approve the poem?","options":["approve","reject"],"input_mapping":{"language":"pt-BR","documentId":{"var":"temaDocumentId"},"label":{"cat":["Tema: ",{"var":"titulo"}]}},"output_mapping":{"choice":"state.review"}},{"id":"finalize","type":"transform","expression":{"var":"review"},"output_mapping":{"result":"state.finalReview"}}]' \
   --edges '[{"from":"approval","to":"finalize"}]')
 HUMAN_ORCH_ID=$(printf '%s\n' "$HUMAN_ORCH_RESP" | jq -r '.id')
 if [ -z "$HUMAN_ORCH_ID" ] || [ "$HUMAN_ORCH_ID" = "null" ]; then
@@ -671,12 +671,18 @@ echo "Human orchestration id: $HUMAN_ORCH_ID"
 echo "--- Starting paused run ---"
 HUMAN_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$HUMAN_ORCH_ID" \
-  --input '{}')
+  --input '{"temaDocumentId":"ood_123","titulo":"Verao"}')
 HUMAN_RUN_ID=$(printf '%s\n' "$HUMAN_RUN_RESP" | jq -r '.id')
 HUMAN_RUN_STATUS=$(printf '%s\n' "$HUMAN_RUN_RESP" | jq -r '.status')
 HUMAN_NODE_ID=$(printf '%s\n' "$HUMAN_RUN_RESP" | jq -r '.required_action.node_id')
 if [ "$HUMAN_RUN_STATUS" != "paused" ] || [ "$HUMAN_NODE_ID" != "approval" ]; then
   echo "Human orchestration did not pause as expected"
+  printf '%s\n' "$HUMAN_RUN_RESP"
+  exit 1
+fi
+# JSON Logic input_mapping: literal passthrough, {var} from run input, computed expression.
+if ! printf '%s\n' "$HUMAN_RUN_RESP" | jq -e '.required_action.context.language == "pt-BR" and .required_action.context.document_id == "ood_123" and .required_action.context.label == "Tema: Verao"' >/dev/null 2>&1; then
+  echo "Human node input_mapping did not resolve JSON Logic as expected"
   printf '%s\n' "$HUMAN_RUN_RESP"
   exit 1
 fi
