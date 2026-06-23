@@ -124,6 +124,7 @@ export const getJsonSchemaType = (
   if (schemaType === 'integer' || schemaType === 'number') return 'number';
   if (schemaType === 'boolean') return 'boolean';
   if (schemaType === 'array') return 'array';
+  if (schemaType === 'object') return 'object';
   return 'string';
 };
 

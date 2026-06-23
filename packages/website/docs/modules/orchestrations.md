@@ -70,10 +70,34 @@ Use orchestrations when you know the exact steps in advance and want determinist
 
 Each node can define:
 
-- **`inputMapping`** — Maps state paths (JSONPath-like `$.key`) to node inputs before execution.
+- **`inputMapping`** — Maps node input keys to values resolved against the run state before execution. Each value is [JSON Logic](https://jsonlogic.com) (see [Input Mapping](#input-mapping-json-logic)).
 - **`outputMapping`** — Maps node outputs back to state paths after execution.
 
 The root state is available to every node. Transforms and conditions receive the full state object.
+
+#### Input Mapping (JSON Logic)
+
+Each `inputMapping` value is evaluated as [JSON Logic](https://jsonlogic.com) against the run state — the same evaluator used by `transform` and `condition` nodes. This gives one expression language across the whole platform: pass literals, read state, or compute derived values inline, without a dedicated `transform` node.
+
+| Value | Behaviour |
+| ----- | --------- |
+| String, number, boolean, array, multi-key object | Passed through as a literal |
+| `{"var": "key"}` | Resolved from state — `state.key` (a missing key yields `null`) |
+| Any other single-key JSON Logic object | Evaluated against state (`cat`, `>`, `if`, arithmetic, …) |
+
+```json
+"input_mapping": {
+  "language": "pt-BR",
+  "threshold": 0.8,
+  "documentId": { "var": "temaDocumentId" },
+  "label": { "cat": ["Tema: ", { "var": "titulo" }] },
+  "isLong": { ">": [{ "var": "wordCount" }, 500] }
+}
+```
+
+Values passed to [`start-orchestration-run`](#examples) via `input` become the initial state, so a node can reference them directly with `{"var": "key"}`.
+
+> **Breaking change:** `inputMapping` values are no longer `state.<key>` path strings. A bare string is now a literal; use `{"var": "key"}` to read from state.
 
 ### Parallel Execution
 
@@ -121,7 +145,7 @@ soat create-orchestration \
   --name "fetch-and-summarize" \
   --nodes '[
     {"id":"fetch","type":"tool","tool_id":"tool_abc","output_mapping":{"result":"state.raw"}},
-    {"id":"summarise","type":"agent","agent_id":"agt_xyz","input_mapping":{"prompt":"state.raw"},"output_mapping":{"content":"state.summary"}}
+    {"id":"summarise","type":"agent","agent_id":"agt_xyz","input_mapping":{"prompt":{"var":"raw"}},"output_mapping":{"content":"state.summary"}}
   ]' \
   --edges '[{"from":"fetch","to":"summarise"}]'
 ```
@@ -148,7 +172,7 @@ const { data, error } = await soat.orchestrations.createOrchestration({
         id: 'summarise',
         type: 'agent',
         agent_id: 'agt_xyz',
-        input_mapping: { prompt: 'state.raw' },
+        input_mapping: { prompt: { var: 'raw' } },
         output_mapping: { content: 'state.summary' },
       },
     ],
@@ -179,7 +203,7 @@ curl -X POST https://api.example.com/api/v1/orchestrations \
         "id": "summarise",
         "type": "agent",
         "agent_id": "agt_xyz",
-        "input_mapping": {"prompt": "state.raw"},
+        "input_mapping": {"prompt": {"var": "raw"}},
         "output_mapping": {"content": "state.summary"}
       }
     ],
