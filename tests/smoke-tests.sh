@@ -1856,4 +1856,18 @@ echo "Duplicate call with idempotency_key returns original message: OK"
 echo "add-session-message idempotency_key: OK"
 
 echo ""
+echo "--- Smoke: GET /app returns HTML ---"
+APP_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/app")
+if [ "$APP_HTTP_CODE" != "200" ]; then
+  echo "ERROR: GET /app expected 200, got $APP_HTTP_CODE" >&2
+  exit 1
+fi
+APP_CONTENT_TYPE=$(curl -s -D - -o /dev/null "$BASE_URL/app" | grep -i "^content-type:" | head -1)
+case "$APP_CONTENT_TYPE" in
+  *text/html*) ;;
+  *) echo "ERROR: GET /app expected text/html content-type, got: $APP_CONTENT_TYPE" >&2; exit 1 ;;
+esac
+echo "GET /app: OK"
+
+echo ""
 echo "=== All smoke tests passed! ==="
