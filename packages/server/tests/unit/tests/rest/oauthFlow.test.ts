@@ -140,7 +140,7 @@ describe('OAuth authorization server (SPA consent)', () => {
 
   // ── full register → consent → authorize → token flow ───────────────────────
   describe('authorization code flow with PKCE', () => {
-    test('issues an access token carrying the consented scope and project', async () => {
+    test('issues an access token and refresh token carrying the consented scope and project', async () => {
       // 1. Dynamic client registration (public client).
       const reg = await testClient.post('/register').send({
         redirect_uris: [REDIRECT_URI],
@@ -184,6 +184,8 @@ describe('OAuth authorization server (SPA consent)', () => {
       });
       expect(token.status).toBe(200);
       expect(token.body.access_token).toBeTruthy();
+      // A refresh token must be issued alongside the access token.
+      expect(token.body.refresh_token).toBeTruthy();
 
       // 5. The issued token carries the subject, granted scope, and project.
       const payload = verifyOauthAccessToken(token.body.access_token);
@@ -194,6 +196,85 @@ describe('OAuth authorization server (SPA consent)', () => {
       expect(payload?.role).toBe('admin');
       expect(payload?.prj).toBe(projectId);
       expect(String(payload?.scope)).toContain('agents:CreateAgent');
+    });
+  });
+
+  // ── refresh_token grant ──────────────────────────────────────────────────
+  describe('refresh_token grant', () => {
+    let clientId: string;
+    let refreshToken: string;
+
+    const completeAuthFlow = async () => {
+      const reg = await testClient.post('/register').send({
+        redirect_uris: [REDIRECT_URI],
+        token_endpoint_auth_method: 'none',
+        client_name: 'Refresh Token Test Client',
+      });
+      const id = reg.body.client_id as string;
+
+      const { verifier, challenge } = pkce();
+      const query = authorizeQuery(id, challenge);
+
+      await authenticatedTestClient(adminToken)
+        .post('/api/v1/oauth/consent')
+        .send({
+          project_id: projectId,
+          selection: { kind: 'all' },
+          authorize_query: query,
+        });
+
+      const authorize = await testClient.get(`/authorize?${query}`);
+      const code = new URL(authorize.headers.location as string).searchParams.get('code');
+
+      const token = await testClient.post('/token').type('form').send({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: REDIRECT_URI,
+        client_id: id,
+        code_verifier: verifier,
+      });
+
+      return { clientId: id, refreshToken: token.body.refresh_token as string };
+    };
+
+    beforeAll(async () => {
+      const result = await completeAuthFlow();
+      clientId = result.clientId;
+      refreshToken = result.refreshToken;
+    });
+
+    test('exchanges a refresh token for a new access token and rotated refresh token', async () => {
+      const res = await testClient.post('/token').type('form').send({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: clientId,
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.access_token).toBeTruthy();
+      // Rotation: a new refresh token is issued.
+      expect(res.body.refresh_token).toBeTruthy();
+      expect(res.body.refresh_token).not.toBe(refreshToken);
+
+      const payload = verifyOauthAccessToken(res.body.access_token);
+      expect(payload?.sub).toBeTruthy();
+    });
+
+    test('replayed refresh token is rejected (reuse detection)', async () => {
+      // Use the refresh token once to rotate it.
+      const first = await testClient.post('/token').type('form').send({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: clientId,
+      });
+      expect(first.status).toBe(200);
+
+      // Presenting the same (now-consumed) token again must be rejected.
+      const second = await testClient.post('/token').type('form').send({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: clientId,
+      });
+      expect([400, 401]).toContain(second.status);
     });
   });
 });

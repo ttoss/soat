@@ -13,9 +13,11 @@ import type {
   AuthCodeStore,
   ClientStore,
   OAuthClient,
+  RefreshTokenStore,
   StoredAuthorizationCode,
+  StoredRefreshToken,
 } from '@ttoss/auth-core';
-import { signJwt, verifyJwt } from '@ttoss/auth-core';
+import { createRefreshRotation, signJwt, verifyJwt } from '@ttoss/auth-core';
 import { oauthServer } from '@ttoss/http-server-auth';
 import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
@@ -29,6 +31,7 @@ const PORT = process.env.PORT ?? '5047';
 export const ISSUER = process.env.SOAT_PUBLIC_URL ?? `http://localhost:${PORT}`;
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60; // 1h
 const CONSENT_SESSION_TTL_MS = 10 * 60 * 1000; // 10min
+const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
 /** Synthetic scope prefix used to carry the granted project through the flow. */
 export const PROJECT_SCOPE_PREFIX = 'prj:';
@@ -83,6 +86,49 @@ const authCodeStore: AuthCodeStore = {
   },
 };
 
+// Postgres-backed refresh token store
+const refreshTokenStore: RefreshTokenStore = {
+  save: async (token: StoredRefreshToken): Promise<void> => {
+    await db.OauthRefreshToken.upsert({
+      tokenHash: token.tokenHash,
+      clientId: token.clientId,
+      subject: token.subject,
+      scopes: token.scopes.join(' '),
+      expiresAt: new Date(token.expiresAt),
+      consumedAt: token.consumedAt != null ? new Date(token.consumedAt) : null,
+    });
+  },
+  get: async (tokenHash: string): Promise<StoredRefreshToken | undefined> => {
+    const row = await db.OauthRefreshToken.findOne({ where: { tokenHash } });
+    if (!row) return undefined;
+    return {
+      tokenHash: row.tokenHash,
+      clientId: row.clientId,
+      subject: row.subject,
+      scopes: row.scopes.split(' ').filter(Boolean),
+      expiresAt: row.expiresAt.getTime(),
+      consumedAt: row.consumedAt != null ? row.consumedAt.getTime() : undefined,
+    };
+  },
+  delete: async (tokenHash: string): Promise<void> => {
+    await db.OauthRefreshToken.destroy({ where: { tokenHash } });
+  },
+  deleteByOwner: async ({
+    clientId,
+    subject,
+  }: {
+    clientId: string;
+    subject: string;
+  }): Promise<void> => {
+    await db.OauthRefreshToken.destroy({ where: { clientId, subject } });
+  },
+};
+
+const refreshRotation = createRefreshRotation({
+  store: refreshTokenStore,
+  refreshTokenTtl: REFRESH_TOKEN_TTL_SECONDS,
+});
+
 /**
  * The OAuth authorization server router. Mount its routes on the app:
  * `app.use(oauthAuthorizationServer.routes())`.
@@ -93,7 +139,7 @@ export const oauthAuthorizationServer = oauthServer({
   clientStore,
   authCodeStore,
   scopesSupported: ['mcp:access'],
-  issueTokens: async ({ subject, scopes }) => {
+  issueTokens: async ({ subject, scopes, client }) => {
     const project = scopes
       .find((s) => {
         return s.startsWith(PROJECT_SCOPE_PREFIX);
@@ -110,6 +156,13 @@ export const oauthAuthorizationServer = oauthServer({
       scopes.length,
       role
     );
+
+    const refreshToken = await refreshRotation.issue({
+      client,
+      subject,
+      scopes,
+    });
+
     return {
       accessToken: signJwt({
         payload: {
@@ -123,8 +176,10 @@ export const oauthAuthorizationServer = oauthServer({
         expiresInSeconds: ACCESS_TOKEN_TTL_SECONDS,
       }),
       expiresIn: ACCESS_TOKEN_TTL_SECONDS,
+      refreshToken,
     };
   },
+  onRefreshToken: refreshRotation.onRefreshToken,
   onAuthorize: async ({ request }) => {
     // Atomically consume the consent grant: lock the row, verify it belongs to
     // this client, then destroy it in the same transaction to prevent double-use.
