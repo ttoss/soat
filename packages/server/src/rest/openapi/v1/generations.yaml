@@ -34,8 +34,8 @@ paths:
       summary: List generations
       description: >
         Returns generations the caller can access, optionally filtered by agent,
-        trace, and status. Replaces the former
-        GET /api/v1/traces/{trace_id}/generations.
+        trace, and status. Replaces the former per-trace generations endpoint
+        (use the trace_id query filter).
       operationId: listGenerations
       parameters:
         - name: agent_id

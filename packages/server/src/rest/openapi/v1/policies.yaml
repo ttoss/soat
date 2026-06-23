@@ -26,8 +26,8 @@ paths:
       summary: List all policies
       description: >
         Returns global policies. Requires admin role. Pass user_id to list only
-        the policies attached to that user (replaces the former
-        GET /users/{user_id}/policies).
+        the policies attached to that user (replaces the former per-user
+        policies endpoint).
       operationId: listPolicies
       parameters:
         - name: user_id
