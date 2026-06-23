@@ -67,7 +67,7 @@ The `bedrock` provider supports two authentication modes, determined by the shap
 }
 ```
 
-**Bedrock API key** — pass `apiKey` only (format `ABSK…`). The client uses Bearer token authentication via `AWS_BEARER_TOKEN_BEDROCK`. This is the new authentication mechanism introduced for Amazon Bedrock in 2025.
+**Bedrock API key** — pass `apiKey` only (format `ABSK…`). The client uses Bearer token authentication via `AWS_BEARER_TOKEN_BEDROCK`. This is the [new authentication mechanism introduced for Amazon Bedrock in 2025](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html).
 
 ```json
 { "apiKey": "ABSK..." }
