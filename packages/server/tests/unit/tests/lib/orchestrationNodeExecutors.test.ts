@@ -2,9 +2,11 @@ import { DomainError } from 'src/errors';
 import {
   applyInputMapping,
   applyOutputMapping,
+  executeAgentNode,
   executeConditionNode,
   executeDelayNode,
   executeHumanNode,
+  executeMemoryWriteNode,
   executeTransformNode,
   executeWebhookNode,
 } from 'src/lib/orchestrationNodeExecutors';
@@ -157,6 +159,34 @@ describe('executeTransformNode', () => {
     expect(() => {
       return executeTransformNode({ node: makeNode({}), state: {} });
     }).toThrow(DomainError);
+  });
+});
+
+// ── executeAgentNode ───────────────────────────────────────────────────────
+
+describe('executeAgentNode', () => {
+  test('throws DomainError when agentId is missing', async () => {
+    await expect(
+      executeAgentNode({
+        node: makeNode({ type: 'agent' }),
+        state: {},
+        projectIds: [1],
+        traceId: null,
+      })
+    ).rejects.toThrow(DomainError);
+  });
+});
+
+// ── executeMemoryWriteNode ─────────────────────────────────────────────────
+
+describe('executeMemoryWriteNode', () => {
+  test('throws DomainError when memoryId is missing', async () => {
+    await expect(
+      executeMemoryWriteNode({
+        node: makeNode({ type: 'memory_write' }),
+        state: {},
+      })
+    ).rejects.toThrow(DomainError);
   });
 });
 
