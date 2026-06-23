@@ -283,5 +283,16 @@ SDK + CLI regenerated once after all spec changes land; everything ships togethe
   (api/mcp/sdk/cli). Tutorials need Docker tutorial CI to validate, so they run
   once at the end rather than per-slice.
 
-Remaining slices: D3 (generations/traces), D3/D4/D11 (policies/users), D9 (chats
-completions), then the batched tutorials/docs pass.
+- **D3 (generations/traces)** — done: added top-level `GET /generations`
+  (`agent_id`/`trace_id`/`status` filters, new `generations:ListGenerations`
+  action); removed `GET /traces/{id}/generations`. Replacement returns full
+  paginated records, not ID lists.
+- **D3/D4/D11 (policies/users)** — done: `GET /policies?user_id=` replaces the
+  removed `GET /users/{id}/policies`; the `PUT` write stays (D4/D11 carve-out).
+- **D9 (chats)** — done: stateless completions moved `/chats/completions` →
+  `/chat/completions` (OpenAI drop-in); chat-scoped completions unchanged.
+
+**All implementation slices (D1–D11) complete.** Only the batched final pass
+remains: update tutorials (renamed CLI commands / removed endpoints) and
+regenerate the generated reference docs (api/mcp/sdk/cli) — validated via the
+Docker tutorial CI, which is not runnable in this sandbox.
