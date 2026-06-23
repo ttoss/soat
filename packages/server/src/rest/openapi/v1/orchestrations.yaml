@@ -618,6 +618,14 @@ components:
           type: object
           nullable: true
           description: Terminal node artifact(s) when completed.
+        node_executions:
+          type: array
+          description: >-
+            Per-node execution records in chronological order. Each entry
+            captures the resolved input, output, status, and error for a single
+            node execution — the orchestration analogue of an LLM trace.
+          items:
+            $ref: '#/components/schemas/NodeExecution'
         required_action:
           allOf:
             - $ref: '#/components/schemas/RequiredAction'
@@ -634,6 +642,50 @@ components:
           type: string
           format: date-time
         updated_at:
+          type: string
+          format: date-time
+
+    NodeExecution:
+      type: object
+      description: >-
+        Record of a single node execution within a run, used to debug which
+        node failed, what input it received, and what it produced.
+      required:
+        - node_id
+        - status
+        - created_at
+      properties:
+        node_id:
+          type: string
+          description: ID of the executed node.
+        node_type:
+          type: string
+          nullable: true
+          description: Type of the executed node (e.g. agent, transform).
+        status:
+          type: string
+          enum: [completed, failed, requires_action]
+        input:
+          type: object
+          nullable: true
+          description: Resolved input_mapping the node received.
+        output:
+          type: object
+          nullable: true
+          description: Output artifact the node produced (null when failed).
+        error:
+          type: object
+          nullable: true
+          description: Error details when status is failed.
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
           type: string
           format: date-time
 

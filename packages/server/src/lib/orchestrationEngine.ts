@@ -5,10 +5,13 @@ import { DomainError } from '../errors';
 import type { RequiredAction } from './orchestrationExecutors';
 import {
   detectCycle,
-  executeNodeById,
   findStartNodes,
   processNodeResultBatch,
 } from './orchestrationExecutors';
+import {
+  buildRunError,
+  executeAndRecordNode,
+} from './orchestrationNodeRecorder';
 import {
   applyHumanInputToState,
   getTerminalOutput,
@@ -104,8 +107,9 @@ const executeRunBatch = async (args: {
 
   const nodeResults = await Promise.all(
     activeNodeIds.map((nodeId) => {
-      return executeNodeById({
+      return executeAndRecordNode({
         nodeId,
+        runRecord,
         nodes,
         state,
         projectIds,
@@ -173,13 +177,6 @@ const initRunLoopState = (args: {
     activatedNodes,
     iterationCount,
     activeNodeIds,
-  };
-};
-
-const buildRunError = (error: unknown): object => {
-  return {
-    message: error instanceof Error ? error.message : String(error),
-    code: error instanceof DomainError ? error.code : 'UNKNOWN',
   };
 };
 

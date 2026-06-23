@@ -666,6 +666,81 @@ describe('Orchestrations', () => {
       expect(runRes.body.status).toBe('failed');
     });
 
+    test('records per-node executions for a completed run', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({ ...twoNodeOrchestration, project_id: projectId });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('completed');
+
+      const execs = runRes.body.node_executions;
+      expect(Array.isArray(execs)).toBe(true);
+      expect(execs).toHaveLength(2);
+
+      const nodeA = execs.find((e: { node_id: string }) => {
+        return e.node_id === 'nodeA';
+      });
+      const nodeB = execs.find((e: { node_id: string }) => {
+        return e.node_id === 'nodeB';
+      });
+      expect(nodeA.status).toBe('completed');
+      expect(nodeA.node_type).toBe('transform');
+      expect(nodeA.output).toEqual({ result: 42 });
+      expect(nodeA.error).toBeNull();
+      expect(nodeA.started_at).toBeDefined();
+      expect(nodeA.completed_at).toBeDefined();
+
+      // nodeB's input_mapping { val: { var: 'step1' } } resolves against state
+      // written by nodeA's output_mapping (state.step1 = 42).
+      expect(nodeB.status).toBe('completed');
+      expect(nodeB.input).toEqual({ val: 42 });
+      expect(nodeB.output).toEqual({ result: 43 });
+    });
+
+    test('records the failing node with its input and error', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Failing Node Trace',
+          nodes: [
+            {
+              id: 'boom',
+              type: 'transform',
+              input_mapping: { name: 'widget' },
+              // missing expression → executor throws
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('failed');
+
+      // get-orchestration-run exposes the per-node trace
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${runRes.body.id}`
+      );
+      expect(getRes.status).toBe(200);
+      const execs = getRes.body.node_executions;
+      expect(execs).toHaveLength(1);
+      expect(execs[0].node_id).toBe('boom');
+      expect(execs[0].status).toBe('failed');
+      expect(execs[0].input).toEqual({ name: 'widget' });
+      expect(execs[0].output).toBeNull();
+      expect(execs[0].error).toBeDefined();
+      expect(execs[0].error.message).toBeDefined();
+    });
+
     // ── Phase 2: Parallel & Conditional ─────────────────────────────────
 
     test('fan-out executes multiple branches and all state updates land', async () => {
