@@ -2,6 +2,10 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import {
+  assertOrchestrationUpdateValid,
+  assertOrchestrationValid,
+} from './orchestrationValidation';
 
 const log = createDebug('soat:orchestrations');
 
@@ -200,6 +204,12 @@ export const createOrchestration = async (args: {
 }): Promise<MappedOrchestration> => {
   log('createOrchestration %o', { projectId: args.projectId, name: args.name });
 
+  assertOrchestrationValid({
+    nodes: args.nodes,
+    edges: args.edges,
+    inputSchema: args.inputSchema,
+  });
+
   const orch = await db.Orchestration.create({
     projectId: args.projectId,
     name: args.name,
@@ -286,6 +296,19 @@ export const updateOrchestration = async (args: {
       'ORCHESTRATION_NOT_FOUND',
       `Orchestration '${args.id}' not found.`
     );
+
+  assertOrchestrationUpdateValid({
+    update: {
+      nodes: args.nodes,
+      edges: args.edges,
+      inputSchema: args.inputSchema,
+    },
+    persisted: {
+      nodes: orch.nodes as OrchestrationNode[],
+      edges: orch.edges as OrchestrationEdge[],
+      inputSchema: orch.inputSchema as object | null,
+    },
+  });
 
   const updates: Record<string, unknown> = {};
   if (args.name !== undefined) updates['name'] = args.name;
@@ -448,3 +471,4 @@ export {
   resumeOrchestrationRun,
   submitHumanInput,
 } from './orchestrationRunActions';
+export { validateOrchestrationGraph } from './orchestrationValidation';

@@ -557,7 +557,7 @@ echo "=== Orchestrations ==="
 echo "--- Creating orchestration-scoped auth ---"
 ORCH_POLICY_RESP=$($SOAT_CLI create-policy \
   --name smoke-orchestration-policy \
-  --document '{"statement":[{"effect":"Allow","action":["orchestrations:CreateOrchestration","orchestrations:ListOrchestrations","orchestrations:GetOrchestration","orchestrations:UpdateOrchestration","orchestrations:DeleteOrchestration","orchestrations:StartRun","orchestrations:ListRuns","orchestrations:GetRun","orchestrations:CancelRun","orchestrations:SubmitHumanInput","orchestrations:ResumeRun"]}]}' )
+  --document '{"statement":[{"effect":"Allow","action":["orchestrations:CreateOrchestration","orchestrations:ValidateOrchestration","orchestrations:ListOrchestrations","orchestrations:GetOrchestration","orchestrations:UpdateOrchestration","orchestrations:DeleteOrchestration","orchestrations:StartRun","orchestrations:ListRuns","orchestrations:GetRun","orchestrations:CancelRun","orchestrations:SubmitHumanInput","orchestrations:ResumeRun"]}]}' )
 ORCH_POLICY_ID=$(printf '%s\n' "$ORCH_POLICY_RESP" | jq -r '.id')
 if [ -z "$ORCH_POLICY_ID" ] || [ "$ORCH_POLICY_ID" = "null" ]; then
   echo "Failed to create orchestration policy"
@@ -577,6 +577,41 @@ if [ -z "$ORCH_API_KEY_ID" ] || [ "$ORCH_API_KEY_ID" = "null" ] || [ -z "$ORCH_A
   exit 1
 fi
 echo "Orchestration-scoped auth: OK"
+
+echo "--- Validating orchestration graph (valid) ---"
+ORCH_VALID_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI validate-orchestration \
+  --nodes '[{"id":"seed","type":"transform","expression":{"var":"theme"},"output_mapping":{"result":"state.theme"}},{"id":"decorate","type":"transform","expression":{"cat":[{"var":"theme"}," sonnet"]},"input_mapping":{"t":{"var":"theme"}},"output_mapping":{"result":"state.title"}}]' \
+  --edges '[{"from":"seed","to":"decorate"}]')
+if ! printf '%s\n' "$ORCH_VALID_RESP" | jq -e '.valid == true' >/dev/null 2>&1; then
+  echo "validate-orchestration did not report a valid graph as valid"
+  printf '%s\n' "$ORCH_VALID_RESP"
+  exit 1
+fi
+echo "Validate orchestration (valid): OK"
+
+echo "--- Validating orchestration graph (invalid) ---"
+ORCH_INVALID_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI validate-orchestration \
+  --nodes '[{"id":"a","type":"agent"}]' \
+  --edges '[{"from":"a","to":"ghost"}]')
+if ! printf '%s\n' "$ORCH_INVALID_RESP" | jq -e '.valid == false and (.errors | length) > 0' >/dev/null 2>&1; then
+  echo "validate-orchestration did not report an invalid graph as invalid"
+  printf '%s\n' "$ORCH_INVALID_RESP"
+  exit 1
+fi
+echo "Validate orchestration (invalid): OK"
+
+echo "--- Rejecting invalid orchestration at create ---"
+ORCH_REJECT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-orchestration-invalid" \
+  --nodes '[{"id":"a","type":"transform","expression":1},{"id":"b","type":"transform","expression":1}]' \
+  --edges '[{"from":"a","to":"b"},{"from":"b","to":"a"}]' || true)
+if ! printf '%s\n' "$ORCH_REJECT_RESP" | jq -e '.error.code == "ORCHESTRATION_VALIDATION_FAILED"' >/dev/null 2>&1; then
+  echo "create-orchestration did not reject a cyclic graph"
+  printf '%s\n' "$ORCH_REJECT_RESP"
+  exit 1
+fi
+echo "Reject invalid orchestration at create: OK"
 
 echo "--- Creating orchestration ---"
 ORCH_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \

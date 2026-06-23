@@ -77,6 +77,38 @@ paths:
         '403':
           description: Forbidden
 
+  /api/v1/orchestrations/validate:
+    post:
+      tags:
+        - Orchestrations
+      summary: Validate an orchestration graph
+      description: >
+        Statically validates an orchestration graph without persisting
+        anything. Checks that every node has its required field, node ids are
+        unique, edges reference existing nodes, the graph is acyclic (unless it
+        contains a loop node), and every `input_mapping` `{"var": "..."}`
+        reference resolves to a state key written by an upstream node or seeded
+        by `input_schema`. Returns blocking `errors` and non-blocking
+        `warnings` (e.g. a state key only written on a conditional branch). The
+        same `errors` checks are enforced on create and update, which fail with
+        `400` when any error is present.
+      operationId: validateOrchestration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateOrchestrationRequest'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+        '401':
+          description: Unauthorized
+
   /api/v1/orchestrations/{orchestration_id}:
     get:
       tags:
@@ -734,3 +766,51 @@ components:
         input:
           type: object
           description: Initial state for the run (merged with orchestration defaults).
+
+    ValidateOrchestrationRequest:
+      type: object
+      required:
+        - nodes
+        - edges
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrchestrationNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrchestrationEdge'
+        input_schema:
+          type: object
+          nullable: true
+          description: Optional JSON Schema for run inputs; its top-level properties seed state.
+
+    ValidationError:
+      type: object
+      properties:
+        path:
+          type: string
+          description: Location of the issue (e.g. nodes[1].input_mapping.val).
+        message:
+          type: string
+          description: Human-readable description of the issue.
+
+    ValidationResult:
+      type: object
+      required:
+        - valid
+        - errors
+        - warnings
+      properties:
+        valid:
+          type: boolean
+          description: True when there are no blocking errors.
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationError'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationError'
