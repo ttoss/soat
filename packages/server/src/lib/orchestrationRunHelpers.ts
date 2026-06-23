@@ -6,6 +6,7 @@ import type {
   OrchestrationEdge,
   OrchestrationNode,
 } from './orchestrations';
+import { mapOrchestrationRun, nodeExecutionsInclude } from './orchestrations';
 
 export const mapRunWithIncludes = async (
   runId: number
@@ -15,32 +16,17 @@ export const mapRunWithIncludes = async (
     include: [
       { model: db.Project, as: 'project' },
       { model: db.Orchestration, as: 'orchestration' },
+      nodeExecutionsInclude(),
     ],
   });
 
   const run = finalRun as InstanceType<typeof db.OrchestrationRun> & {
     orchestration: InstanceType<typeof db.Orchestration>;
     project: InstanceType<typeof db.Project>;
+    nodeExecutions?: InstanceType<typeof db.OrchestrationNodeExecution>[];
   };
 
-  return {
-    id: run.publicId,
-    orchestrationId: run.orchestration.publicId,
-    projectId: run.project.publicId,
-    status: run.status,
-    state: run.state as Record<string, unknown>,
-    activeNodes: run.activeNodes as string[],
-    artifacts: run.artifacts as Record<string, unknown>,
-    error: run.error,
-    requiredAction: run.requiredAction as object | null,
-    traceId: run.traceId,
-    input: run.input as Record<string, unknown> | null,
-    output: run.output as Record<string, unknown> | null,
-    startedAt: run.startedAt,
-    completedAt: run.completedAt,
-    createdAt: run.createdAt,
-    updatedAt: run.updatedAt,
-  };
+  return mapOrchestrationRun(run);
 };
 
 export const getTerminalOutput = (args: {

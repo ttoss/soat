@@ -77,6 +77,18 @@ export type MappedOrchestration = {
   updatedAt: Date;
 };
 
+export type MappedNodeExecution = {
+  nodeId: string;
+  nodeType: string | null;
+  status: 'completed' | 'failed' | 'requires_action';
+  input: Record<string, unknown> | null;
+  output: Record<string, unknown> | null;
+  error: object | null;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  createdAt: Date;
+};
+
 export type MappedOrchestrationRun = {
   id: string;
   orchestrationId: string;
@@ -90,6 +102,7 @@ export type MappedOrchestrationRun = {
   traceId: string | null;
   input: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
+  nodeExecutions: MappedNodeExecution[];
   startedAt: Date | null;
   completedAt: Date | null;
   createdAt: Date;
@@ -117,10 +130,27 @@ const mapOrchestration = (
   };
 };
 
+export const mapNodeExecution = (
+  exec: InstanceType<typeof db.OrchestrationNodeExecution>
+): MappedNodeExecution => {
+  return {
+    nodeId: exec.nodeId,
+    nodeType: exec.nodeType,
+    status: exec.status,
+    input: exec.input as Record<string, unknown> | null,
+    output: exec.output as Record<string, unknown> | null,
+    error: exec.error,
+    startedAt: exec.startedAt,
+    completedAt: exec.completedAt,
+    createdAt: exec.createdAt,
+  };
+};
+
 export const mapOrchestrationRun = (
   run: InstanceType<typeof db.OrchestrationRun> & {
     orchestration: InstanceType<typeof db.Orchestration>;
     project: InstanceType<typeof db.Project>;
+    nodeExecutions?: InstanceType<typeof db.OrchestrationNodeExecution>[];
   }
 ): MappedOrchestrationRun => {
   return {
@@ -136,10 +166,24 @@ export const mapOrchestrationRun = (
     traceId: run.traceId,
     input: run.input as Record<string, unknown> | null,
     output: run.output as Record<string, unknown> | null,
+    nodeExecutions: (run.nodeExecutions ?? []).map(mapNodeExecution),
     startedAt: run.startedAt,
     completedAt: run.completedAt,
     createdAt: run.createdAt,
     updatedAt: run.updatedAt,
+  };
+};
+
+/**
+ * Sequelize include for the per-node execution records of a run, ordered
+ * oldest-first. Returned as a function because `db` is populated at runtime.
+ */
+export const nodeExecutionsInclude = (): object => {
+  return {
+    model: db.OrchestrationNodeExecution,
+    as: 'nodeExecutions',
+    separate: true,
+    order: [['createdAt', 'ASC']],
   };
 };
 
@@ -302,6 +346,11 @@ export const deleteOrchestration = async (args: {
         transaction: t,
       });
 
+      await db.OrchestrationNodeExecution.destroy({
+        where: { runId: runIds },
+        transaction: t,
+      });
+
       await db.OrchestrationRun.destroy({
         where: { id: runIds },
         transaction: t,
@@ -327,6 +376,7 @@ export const findOrchestrationRun = async (args: {
   const include: object[] = [
     { model: db.Project, as: 'project' },
     { model: db.Orchestration, as: 'orchestration' },
+    nodeExecutionsInclude(),
   ];
 
   if (args.orchestrationId) {
@@ -376,6 +426,7 @@ export const listOrchestrationRuns = async (args: {
     include: [
       { model: db.Project, as: 'project' },
       { model: db.Orchestration, as: 'orchestration' },
+      nodeExecutionsInclude(),
     ],
     order: [['createdAt', 'DESC']],
   });

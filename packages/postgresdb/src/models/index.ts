@@ -19,6 +19,7 @@ export { OauthConsentGrant } from './OauthConsentGrant';
 export { OauthRefreshToken } from './OauthRefreshToken';
 export { Orchestration } from './Orchestration';
 export { OrchestrationCheckpoint } from './OrchestrationCheckpoint';
+export { OrchestrationNodeExecution } from './OrchestrationNodeExecution';
 export { OrchestrationRun } from './OrchestrationRun';
 export { Policy } from './Policy';
 export { Project } from './Project';

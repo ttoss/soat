@@ -4,7 +4,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { resumeOrchestrationRunExecution } from './orchestrationEngine';
 import type { MappedOrchestrationRun } from './orchestrations';
-import { mapOrchestrationRun } from './orchestrations';
+import { mapOrchestrationRun, nodeExecutionsInclude } from './orchestrations';
 
 const log = createDebug('soat:orchestrations');
 
@@ -29,6 +29,7 @@ export const cancelOrchestrationRun = async (args: {
   const include: object[] = [
     { model: db.Project, as: 'project' },
     { model: db.Orchestration, as: 'orchestration' },
+    nodeExecutionsInclude(),
   ];
 
   if (args.orchestrationPublicId) {

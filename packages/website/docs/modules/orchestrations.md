@@ -38,19 +38,41 @@ Use orchestrations when you know the exact steps in advance and want determinist
 
 ### OrchestrationRun
 
-| Field              | Type           | Description                                                     |
-| ------------------ | -------------- | --------------------------------------------------------------- |
-| `id`               | string         | Public ID (`run_` prefix)                                       |
-| `orchestration_id` | string         | Parent orchestration                                            |
-| `status`           | string         | `running` \| `paused` \| `completed` \| `failed` \| `cancelled` |
-| `state`            | object         | Current mutable execution state                                 |
-| `active_nodes`     | array          | Node IDs awaiting input (populated when status is `paused`)     |
-| `artifacts`        | object         | Outputs keyed by node ID                                        |
-| `error`            | object \| null | Error details if failed                                         |
-| `current_node_id`  | string \| null | Most recently executed node ID                                  |
+| Field              | Type           | Description                                                       |
+| ------------------ | -------------- | ----------------------------------------------------------------- |
+| `id`               | string         | Public ID (`run_` prefix)                                         |
+| `orchestration_id` | string         | Parent orchestration                                              |
+| `project_id`       | string         | Owning project                                                    |
+| `status`           | string         | `running` \| `paused` \| `completed` \| `failed` \| `cancelled`   |
+| `state`            | object         | Current mutable execution state                                   |
+| `active_nodes`     | array          | Node IDs awaiting input (populated when status is `paused`)       |
+| `artifacts`        | object         | Outputs keyed by node ID                                          |
+| `error`            | object \| null | Error details if failed                                           |
+| `node_executions`  | array          | Per-node execution records (see [Node Executions](#node-executions)) |
 | `required_action`  | object \| null | Present when status is `paused` (see [Human Nodes](#human-nodes)) |
-| `created_at`       | string         | ISO 8601 creation timestamp                                     |
-| `updated_at`       | string         | ISO 8601 last-updated timestamp                                 |
+| `trace_id`         | string \| null | Linked observability trace, if any                                |
+| `input`            | object \| null | Initial input provided at run creation                            |
+| `output`           | object \| null | Terminal node artifact(s) when completed                          |
+| `started_at`       | string \| null | ISO 8601 execution start timestamp                                |
+| `completed_at`     | string \| null | ISO 8601 terminal timestamp (`completed`/`failed`/`cancelled`)    |
+| `created_at`       | string         | ISO 8601 creation timestamp                                       |
+| `updated_at`       | string         | ISO 8601 last-updated timestamp                                   |
+
+### NodeExecution
+
+Each entry in a run's `node_executions` array records a single node execution, in chronological order. Together they form the execution trace of a run — the orchestration analogue of an LLM trace.
+
+| Field          | Type           | Description                                              |
+| -------------- | -------------- | -------------------------------------------------------- |
+| `node_id`      | string         | ID of the executed node                                  |
+| `node_type`    | string \| null | Node type (`agent`, `transform`, …)                      |
+| `status`       | string         | `completed` \| `failed` \| `requires_action`             |
+| `input`        | object \| null | Resolved `input_mapping` the node received               |
+| `output`       | object \| null | Output artifact the node produced (`null` when failed)   |
+| `error`        | object \| null | `{ code, message }` when `status` is `failed`            |
+| `started_at`   | string \| null | ISO 8601 timestamp when the node began executing         |
+| `completed_at` | string \| null | ISO 8601 timestamp when the record was written           |
+| `created_at`   | string         | ISO 8601 creation timestamp                              |
 
 ## Key Concepts
 
@@ -117,6 +139,36 @@ Edges without an `activation_group` always pass through unconditionally.
 ### Cycle Detection
 
 Before execution begins, the engine performs a DFS-based cycle check. If a cycle is detected the run is created, set to `failed`, and the `error` field contains `code: "ORCHESTRATION_CYCLE_DETECTED"`.
+
+### Node Executions
+
+Every time a node runs, the engine persists an entry in the run's `node_executions` array capturing the resolved `input_mapping` it received, the `output` artifact it produced, its `status`, and — on failure — the structured `error`. The record is written even when a node throws, so a failed run is fully debuggable: `get-orchestration-run` shows **which** node failed, **what** input it received, and **why**, instead of only the final state plus a single error message.
+
+```json
+{
+  "status": "failed",
+  "error": { "code": "ORCHESTRATION_NODE_FAILED", "message": "Agent 'agt_x' not found." },
+  "node_executions": [
+    {
+      "node_id": "fetch",
+      "node_type": "tool",
+      "status": "completed",
+      "input": { "url": "https://example.com" },
+      "output": { "result": "..." }
+    },
+    {
+      "node_id": "summarise",
+      "node_type": "agent",
+      "status": "failed",
+      "input": { "prompt": "..." },
+      "output": null,
+      "error": { "code": "ORCHESTRATION_NODE_FAILED", "message": "Agent 'agt_x' not found." }
+    }
+  ]
+}
+```
+
+Records are returned by both `get-orchestration-run` and `list-orchestration-runs`, ordered oldest-first. A node that pauses the run for human input is recorded with `status: "requires_action"`.
 
 ### Human Nodes
 
