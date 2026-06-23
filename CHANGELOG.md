@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.12.5](https://github.com/ttoss/soat/compare/v0.12.4...v0.12.5) (2026-06-23)
+
+### Bug Fixes
+
+* **bedrock:** support apiKey-based auth for AWS Bedrock API keys ([#236](https://github.com/ttoss/soat/issues/236)) ([e807539](https://github.com/ttoss/soat/commit/e8075393a4fc1dfe35aab401417528e5cc145a59))
+
 ## [0.12.4](https://github.com/ttoss/soat/compare/v0.12.3...v0.12.4) (2026-06-22)
 
 ### Bug Fixes
