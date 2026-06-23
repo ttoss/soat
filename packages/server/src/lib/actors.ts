@@ -1,8 +1,11 @@
-import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError, type ErrorCode } from '../errors';
+import {
+  applyActorRelationshipFilters,
+  buildActorListWhere,
+} from './actorFilters';
 import { createMemory } from './memories';
 import {
   type CompiledPolicy,
@@ -55,24 +58,6 @@ const actorIncludes = () => {
     { model: db.Chat, as: 'chat' },
     { model: db.Memory, as: 'memory' },
   ];
-};
-
-const buildActorListWhere = (args: {
-  projectIds?: number[];
-  externalId?: string;
-  name?: string;
-}): Record<string, unknown> => {
-  const where: Record<string, unknown> = {};
-  if (args.projectIds !== undefined) {
-    where.projectId = args.projectIds;
-  }
-  if (args.externalId !== undefined) {
-    where.externalId = args.externalId;
-  }
-  if (args.name !== undefined) {
-    where.name = { [Op.iLike]: `%${args.name}%` };
-  }
-  return where;
 };
 
 export const validateActorExclusivity = (args: {
@@ -166,6 +151,9 @@ export const listActors = async (args: {
   projectIds?: number[];
   externalId?: string;
   name?: string;
+  agentId?: string;
+  chatId?: string;
+  conversationId?: string;
   policyWhere?: Record<string, unknown>;
   limit?: number;
   offset?: number;
@@ -185,6 +173,17 @@ export const listActors = async (args: {
 
   if (args.policyWhere) {
     Object.assign(where, args.policyWhere);
+  }
+
+  // Relationship filters; an unresolvable filter yields an empty page.
+  const resolved = await applyActorRelationshipFilters({
+    where,
+    agentId: args.agentId,
+    chatId: args.chatId,
+    conversationId: args.conversationId,
+  });
+  if (!resolved) {
+    return { data: [], total: 0, limit, offset };
   }
 
   const { count, rows } = await db.Actor.findAndCountAll({

@@ -41,6 +41,42 @@ describe('Policies', () => {
 
       expect(response.status).toBe(403);
     });
+
+    test('admin can list policies filtered by user_id', async () => {
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          name: 'user-filter-policy',
+          document: {
+            statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+          },
+        });
+      const policyId = policyRes.body.id;
+
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${userId}/policies`)
+        .send({ policy_ids: [policyId] });
+
+      const response = await authenticatedTestClient(adminToken).get(
+        `/api/v1/policies?user_id=${userId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(
+        response.body.map((p: { id: string }) => {
+          return p.id;
+        })
+      ).toEqual([policyId]);
+    });
+
+    test('listing by an unknown user_id returns an empty array', async () => {
+      const response = await authenticatedTestClient(adminToken).get(
+        '/api/v1/policies?user_id=user_doesnotexist0'
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual([]);
+    });
   });
 
   describe('POST /api/v1/policies', () => {
@@ -338,86 +374,6 @@ describe('Policies', () => {
       const response = await authenticatedTestClient(adminToken)
         .put('/api/v1/users/usr_nonexistent12345/policies')
         .send({ policy_ids: [policyId] });
-
-      expect(response.status).toBe(404);
-    });
-  });
-
-  describe('GET /api/v1/users/:userId/policies', () => {
-    let policyId: string;
-    let targetUserId: string;
-
-    beforeAll(async () => {
-      const userRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/users')
-        .send({ username: 'policytarget', password: 'policytargetpass' });
-
-      targetUserId = userRes.body.id;
-
-      const policyRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/policies')
-        .send({
-          name: 'Target Policy',
-          document: {
-            statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
-          },
-        });
-
-      policyId = policyRes.body.id;
-
-      await authenticatedTestClient(adminToken)
-        .put(`/api/v1/users/${targetUserId}/policies`)
-        .send({ policy_ids: [policyId] });
-    });
-
-    test('admin can list user policies', async () => {
-      const response = await authenticatedTestClient(adminToken).get(
-        `/api/v1/users/${targetUserId}/policies`
-      );
-
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(
-        response.body.some((p: { id: string }) => {
-          return p.id === policyId;
-        })
-      ).toBe(true);
-    });
-
-    test('returned policy has expected shape', async () => {
-      const response = await authenticatedTestClient(adminToken).get(
-        `/api/v1/users/${targetUserId}/policies`
-      );
-
-      const policy = response.body.find((p: { id: string }) => {
-        return p.id === policyId;
-      });
-      expect(policy.id).toMatch(/^pol_/);
-      expect(policy.name).toBe('Target Policy');
-      expect(policy.document).toBeDefined();
-      expect(policy.created_at).toBeDefined();
-    });
-
-    test('unauthenticated request returns 401', async () => {
-      const response = await testClient.get(
-        `/api/v1/users/${targetUserId}/policies`
-      );
-
-      expect(response.status).toBe(401);
-    });
-
-    test('non-admin user returns 403', async () => {
-      const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/users/${targetUserId}/policies`
-      );
-
-      expect(response.status).toBe(403);
-    });
-
-    test('returns 404 for non-existent user', async () => {
-      const response = await authenticatedTestClient(adminToken).get(
-        '/api/v1/users/usr_nonexistent12345/policies'
-      );
 
       expect(response.status).toBe(404);
     });

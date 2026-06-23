@@ -207,9 +207,59 @@ export const updateGenerationRecord = async (args: {
   return mapGeneration(fullGeneration);
 };
 
+// Resolves a project-scoped parent (agent/trace) publicId to its internal id
+// for use as a generation list filter. Returns null when it does not exist in
+// scope (caller yields an empty page).
+const resolveScopedId = async (
+  find: (where: {
+    publicId: string;
+    projectId?: number[];
+  }) => Promise<{ id?: number } | null>,
+  publicId: string,
+  projectIds?: number[]
+): Promise<number | null> => {
+  const where: { publicId: string; projectId?: number[] } = { publicId };
+  if (projectIds !== undefined) where.projectId = projectIds;
+  const row = await find(where);
+  return row?.id ?? null;
+};
+
+// Resolves agent/trace publicId filters into `where` (mutating it). Returns
+// false when a referenced agent/trace does not exist in scope.
+const applyGenerationScopeFilters = async (
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  where: Record<string, any>,
+  args: { agentId?: string; traceId?: string; projectIds?: number[] }
+): Promise<boolean> => {
+  if (args.agentId !== undefined) {
+    const agentId = await resolveScopedId(
+      (w) => {
+        return db.Agent.findOne({ where: w });
+      },
+      args.agentId,
+      args.projectIds
+    );
+    if (agentId === null) return false;
+    where.agentId = agentId;
+  }
+  if (args.traceId !== undefined) {
+    const traceId = await resolveScopedId(
+      (w) => {
+        return db.Trace.findOne({ where: w });
+      },
+      args.traceId,
+      args.projectIds
+    );
+    if (traceId === null) return false;
+    where.traceId = traceId;
+  }
+  return true;
+};
+
 export const listGenerations = async (args: {
   projectIds?: number[];
   agentId?: string;
+  traceId?: string;
   status?: string;
   limit?: number;
   offset?: number;
@@ -219,23 +269,20 @@ export const listGenerations = async (args: {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: Record<string, any> = {};
+  const empty = { data: [], total: 0, limit, offset };
+
   if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0)
-      return { data: [], total: 0, limit, offset };
+    if (args.projectIds.length === 0) return empty;
     where.projectId = args.projectIds;
   }
-  if (args.agentId !== undefined) {
-    const agentWhere: { publicId: string; projectId?: number[] } = {
-      publicId: args.agentId,
-    };
-    if (args.projectIds !== undefined) {
-      agentWhere.projectId = args.projectIds;
-    }
 
-    const agent = await db.Agent.findOne({ where: agentWhere });
-    if (!agent) return { data: [], total: 0, limit, offset };
-    where.agentId = agent.id;
-  }
+  const resolved = await applyGenerationScopeFilters(where, {
+    agentId: args.agentId,
+    traceId: args.traceId,
+    projectIds: args.projectIds,
+  });
+  if (!resolved) return empty;
+
   if (args.status !== undefined) where.status = args.status;
 
   const { count, rows } = await db.Generation.findAndCountAll({

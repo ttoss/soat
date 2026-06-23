@@ -53,7 +53,7 @@ Memory entries are the individual knowledge items stored inside a memory. When a
 
 Every write to a memory — via REST, agent tool, or extraction — goes through the same deduplication algorithm.
 
-When you call `POST /api/v1/memories/:memoryId/entries`, the server:
+When you call `POST /api/v1/memory-entries` (with `memory_id` in the body), the server:
 
 1. **Embeds** the incoming content.
 2. **Finds** the most similar existing entry in that memory (cosine similarity via pgvector).
@@ -242,8 +242,7 @@ soat create-memory-entry \
 
 ```ts
 const { data, error } = await soat.memories.createMemoryEntry({
-  path: { memory_id: 'mem_01' },
-  body: { content: 'Customer prefers email over phone calls' },
+  body: { memory_id: 'mem_01', content: 'Customer prefers email over phone calls' },
 });
 if (error) throw new Error(JSON.stringify(error));
 // data.action is "created", "updated", or "skipped"
@@ -253,10 +252,10 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X POST https://api.example.com/api/v1/memories/mem_01/entries \
+curl -X POST https://api.example.com/api/v1/memory-entries \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"content": "Customer prefers email over phone calls"}'
+  -d '{"memory_id": "mem_01", "content": "Customer prefers email over phone calls"}'
 ```
 
 </TabItem>

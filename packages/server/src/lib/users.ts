@@ -5,7 +5,6 @@ import {
   hashPassword,
   signUserToken,
 } from '../middleware/auth';
-import { mapPolicy } from './policies';
 
 const mapUser = (user: InstanceType<(typeof db)['User']>) => {
   return {
@@ -138,28 +137,5 @@ export const attachUserPolicies = async (args: {
     policyIds: policies.map((p: InstanceType<(typeof db)['Policy']>) => {
       return p.id as number;
     }),
-  });
-};
-
-export const getUserPolicies = async (args: { userId: string }) => {
-  const user = await db.User.findOne({ where: { publicId: args.userId } });
-
-  if (!user) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `User '${args.userId}' not found.`
-    );
-  }
-
-  const policyIds = (user.policyIds as number[]) ?? [];
-
-  if (policyIds.length === 0) {
-    return [];
-  }
-
-  const policies = await db.Policy.findAll({ where: { id: policyIds } });
-
-  return policies.map((p: InstanceType<(typeof db)['Policy']>) => {
-    return mapPolicy(p);
   });
 };

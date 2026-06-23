@@ -16,7 +16,21 @@ export const mapPolicy = (policy: InstanceType<(typeof db)['Policy']>) => {
   };
 };
 
-export const listPolicies = async () => {
+export const listPolicies = async (args?: { userId?: string }) => {
+  // Optional user filter: return only the policies attached to that user.
+  // An unknown user (or one with no policies) yields an empty list.
+  if (args?.userId !== undefined) {
+    const user = await db.User.findOne({ where: { publicId: args.userId } });
+    const policyIds = (user?.policyIds as number[] | undefined) ?? [];
+    if (policyIds.length === 0) {
+      return [];
+    }
+    const userPolicies = await db.Policy.findAll({ where: { id: policyIds } });
+    return userPolicies.map((p: InstanceType<(typeof db)['Policy']>) => {
+      return mapPolicy(p);
+    });
+  }
+
   const policies = await db.Policy.findAll();
   return policies.map((p: InstanceType<(typeof db)['Policy']>) => {
     return mapPolicy(p);

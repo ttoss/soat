@@ -6,8 +6,8 @@ info:
     Generation records track individual LLM generation runs started by agents.
     Each record carries the lifecycle status ('in_progress', 'requires_action',
     'completed', or 'failed'), the stop reason, and — when the generation
-    failed — a structured error payload for post-mortem debugging. Generation
-    IDs for a trace can be listed via GET /api/v1/traces/{trace_id}/generations.
+    failed — a structured error payload for post-mortem debugging. Generations
+    for a trace can be listed via GET /api/v1/generations?trace_id=.
   contact:
     name: SOAT API Support
 
@@ -27,6 +27,79 @@ security:
   - bearerAuth: []
 
 paths:
+  /api/v1/generations:
+    get:
+      tags:
+        - Generations
+      summary: List generations
+      description: >
+        Returns generations the caller can access, optionally filtered by agent,
+        trace, and status. Replaces the former per-trace generations endpoint
+        (use the trace_id query filter).
+      operationId: listGenerations
+      parameters:
+        - name: agent_id
+          in: query
+          required: false
+          description: Filter by agent public ID
+          schema:
+            type: string
+        - name: trace_id
+          in: query
+          required: false
+          description: Filter by trace public ID
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          description: Filter by lifecycle status
+          schema:
+            type: string
+            enum: [in_progress, requires_action, completed, failed]
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Paginated list of generations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Generation'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/generations/{generation_id}:
     get:
       tags:

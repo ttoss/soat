@@ -148,17 +148,15 @@ paths:
         '404':
           description: Not found
 
-  /api/v1/orchestrations/{orchestration_id}/runs:
+  /api/v1/orchestration-runs:
     post:
       tags:
         - Orchestrations
       summary: Start an orchestration run
-      description: Creates and immediately executes a new run for the orchestration.
+      description: Creates and immediately executes a new run for the orchestration named by orchestration_id.
       operationId: startOrchestrationRun
-      parameters:
-        - $ref: '#/components/parameters/orchestration_id'
       requestBody:
-        required: false
+        required: true
         content:
           application/json:
             schema:
@@ -183,10 +181,15 @@ paths:
       tags:
         - Orchestrations
       summary: List orchestration runs
-      description: Returns all runs for an orchestration.
+      description: Returns orchestration runs the caller can access, optionally filtered by orchestration.
       operationId: listOrchestrationRuns
       parameters:
-        - $ref: '#/components/parameters/orchestration_id'
+        - name: orchestration_id
+          in: query
+          required: false
+          description: Filter by orchestration public ID (orch_...)
+          schema:
+            type: string
       responses:
         '200':
           description: List of runs
@@ -200,10 +203,8 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
-        '404':
-          description: Orchestration not found
 
-  /api/v1/orchestrations/{orchestration_id}/runs/{run_id}/cancel:
+  /api/v1/orchestration-runs/{run_id}/cancel:
     post:
       tags:
         - Orchestrations
@@ -211,7 +212,6 @@ paths:
       description: Cancels a running or paused orchestration run.
       operationId: cancelOrchestrationRun
       parameters:
-        - $ref: '#/components/parameters/orchestration_id'
         - $ref: '#/components/parameters/run_id'
       responses:
         '200':
@@ -229,7 +229,7 @@ paths:
         '409':
           description: Run is already in a terminal state
 
-  /api/v1/orchestrations/{orchestration_id}/runs/{run_id}/human-input:
+  /api/v1/orchestration-runs/{run_id}/human-input:
     post:
       tags:
         - Orchestrations
@@ -237,7 +237,6 @@ paths:
       description: Provides human input to a paused orchestration run waiting at a human node.
       operationId: submitHumanInput
       parameters:
-        - $ref: '#/components/parameters/orchestration_id'
         - $ref: '#/components/parameters/run_id'
       requestBody:
         required: true
@@ -263,7 +262,7 @@ paths:
         '409':
           description: Run is not paused
 
-  /api/v1/orchestrations/{orchestration_id}/runs/{run_id}/resume:
+  /api/v1/orchestration-runs/{run_id}/resume:
     post:
       tags:
         - Orchestrations
@@ -271,7 +270,6 @@ paths:
       description: Resumes a paused orchestration run from its last checkpoint.
       operationId: resumeOrchestrationRun
       parameters:
-        - $ref: '#/components/parameters/orchestration_id'
         - $ref: '#/components/parameters/run_id'
       responses:
         '200':
@@ -289,7 +287,7 @@ paths:
         '409':
           description: Run is not paused
 
-  /api/v1/orchestrations/{orchestration_id}/runs/{run_id}:
+  /api/v1/orchestration-runs/{run_id}:
     get:
       tags:
         - Orchestrations
@@ -297,7 +295,6 @@ paths:
       description: Returns the status, state, and artifacts of a specific run.
       operationId: getOrchestrationRun
       parameters:
-        - $ref: '#/components/parameters/orchestration_id'
         - $ref: '#/components/parameters/run_id'
       responses:
         '200':
@@ -668,7 +665,14 @@ components:
 
     StartRunRequest:
       type: object
+      required:
+        - orchestration_id
       properties:
+        orchestration_id:
+          x-soat-ref: orchestrations
+          type: string
+          description: Orchestration to run (orch_...).
+          example: orch_V1StGXR8Z5jdHi6B
         input:
           type: object
           description: Initial state for the run (merged with orchestration defaults).

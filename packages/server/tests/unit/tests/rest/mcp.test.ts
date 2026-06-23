@@ -244,11 +244,13 @@ describe('MCP tools - happy path', () => {
     expect(Array.isArray(result.data)).toBe(true);
   });
 
-  test('list-conversation-actors returns results', async () => {
-    const res = await mcpCall('list-conversation-actors', {
+  test('list-actors filtered by conversationId returns results', async () => {
+    const res = await mcpCall('list-actors', {
       conversationId,
     });
     expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(Array.isArray(result.data)).toBe(true);
   });
 
   test('get-conversation returns the conversation', async () => {
@@ -648,11 +650,10 @@ describe('MCP tools - happy path', () => {
     sessionAgentId = result.id;
   });
 
-  test('create-agent-session creates a session', async () => {
-    const res = await mcpCall('create-agent-session', {
+  test('create-session creates a session', async () => {
+    const res = await mcpCall('create-session', {
       agentId: sessionAgentId,
       name: 'MCP Test Session',
-      userExternalId: 'mcp-user-1',
     });
     expect(res.status).toBe(200);
     const result = parseResult(res);
@@ -662,19 +663,18 @@ describe('MCP tools - happy path', () => {
     sessionId = result.id;
   });
 
-  test('create-agent-session accepts toolContext', async () => {
-    const res = await mcpCall('create-agent-session', {
+  test('create-session accepts toolContext', async () => {
+    const res = await mcpCall('create-session', {
       agentId: sessionAgentId,
       toolContext: { userId: 'u1' },
-      userExternalId: 'mcp-user-toolctx',
     });
     expect(res.status).toBe(200);
     const result = parseResult(res);
     expect(result.toolContext).toEqual({ userId: 'u1' });
   });
 
-  test('list-agent-sessions returns sessions', async () => {
-    const res = await mcpCall('list-agent-sessions', {
+  test('list-sessions filtered by agentId returns sessions', async () => {
+    const res = await mcpCall('list-sessions', {
       agentId: sessionAgentId,
     });
     expect(res.status).toBe(200);
@@ -683,9 +683,8 @@ describe('MCP tools - happy path', () => {
     expect(result.data.length).toBeGreaterThan(0);
   });
 
-  test('get-agent-session returns session details', async () => {
-    const res = await mcpCall('get-agent-session', {
-      agentId: sessionAgentId,
+  test('get-session returns session details', async () => {
+    const res = await mcpCall('get-session', {
       sessionId,
     });
     expect(res.status).toBe(200);
@@ -694,19 +693,8 @@ describe('MCP tools - happy path', () => {
     expect(result.name).toBe('MCP Test Session');
   });
 
-  test('list-agent-session-messages returns messages', async () => {
-    const res = await mcpCall('list-agent-session-messages', {
-      agentId: sessionAgentId,
-      sessionId,
-    });
-    expect(res.status).toBe(200);
-    const result = parseResult(res);
-    expect(Array.isArray(result.data)).toBe(true);
-  });
-
   test('add-session-message adds a user message and returns 201 body', async () => {
     const res = await mcpCall('add-session-message', {
-      agentId: sessionAgentId,
       sessionId,
       message: 'hello from mcp session',
     });
@@ -716,9 +704,8 @@ describe('MCP tools - happy path', () => {
     expect(result.content).toBe('hello from mcp session');
   });
 
-  test('delete-agent-session deletes the session', async () => {
-    const res = await mcpCall('delete-agent-session', {
-      agentId: sessionAgentId,
+  test('delete-session deletes the session', async () => {
+    const res = await mcpCall('delete-session', {
       sessionId,
     });
     expect(res.status).toBe(200);
@@ -950,7 +937,9 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-docs returns an error when the fetch fails', async () => {
-      fetchSpy.mockImplementation(async () => new Response('Gone', { status: 503 }));
+      fetchSpy.mockImplementation(async () => {
+        return new Response('Gone', { status: 503 });
+      });
       const res = await mcpCall('get-docs');
       expect(res.status).toBe(200);
       expect(res.body.result?.isError).toBe(true);
@@ -971,7 +960,9 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-doc-page returns an error when the page fetch fails', async () => {
-      fetchSpy.mockImplementation(async () => new Response('Not Found', { status: 404 }));
+      fetchSpy.mockImplementation(async () => {
+        return new Response('Not Found', { status: 404 });
+      });
       const res = await mcpCall('get-doc-page', {
         url: 'https://soat.ttoss.dev/docs/modules/missing',
       });

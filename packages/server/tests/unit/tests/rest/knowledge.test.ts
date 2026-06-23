@@ -72,8 +72,11 @@ describe('Knowledge', () => {
       });
     memoryId = memoryRes.body.id;
     await authenticatedTestClient(adminToken)
-      .post(`/api/v1/memories/${memoryId}/entries`)
-      .send({ content: 'The sky is blue on a clear day.' });
+      .post('/api/v1/memory-entries')
+      .send({
+        memory_id: memoryId,
+        content: 'The sky is blue on a clear day.',
+      });
   });
 
   afterAll(() => {

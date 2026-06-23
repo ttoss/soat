@@ -41,6 +41,29 @@ paths:
           schema:
             type: string
             example: '+15551234567'
+        - name: agent_id
+          in: query
+          required: false
+          description: Return only actors linked to this agent
+          schema:
+            type: string
+            example: 'agent_V1StGXR8Z5jdHi6B'
+        - name: chat_id
+          in: query
+          required: false
+          description: Return only actors linked to this chat
+          schema:
+            type: string
+            example: 'chat_V1StGXR8Z5jdHi6B'
+        - name: conversation_id
+          in: query
+          required: false
+          description: >
+            Return only actors that participate in this conversation (derived
+            from the conversation's messages).
+          schema:
+            type: string
+            example: 'conv_V1StGXR8Z5jdHi6B'
         - name: limit
           in: query
           required: false
@@ -112,6 +135,16 @@ paths:
                   type: string
                   description: Optional external identifier (e.g. WhatsApp phone number). If provided and an actor with this externalId already exists in the project, the existing actor is returned (idempotent — 200 OK).
                   example: '+15551234567'
+                agent_id:
+                  x-soat-ref: agents
+                  type: string
+                  description: Agent to link this actor to. Mutually exclusive with chat_id.
+                  example: 'agent_V1StGXR8Z5jdHi6B'
+                chat_id:
+                  x-soat-ref: chats
+                  type: string
+                  description: Chat to link this actor to. Mutually exclusive with agent_id.
+                  example: 'chat_V1StGXR8Z5jdHi6B'
                 memory_id:
                   x-soat-ref: memories
                   type: string

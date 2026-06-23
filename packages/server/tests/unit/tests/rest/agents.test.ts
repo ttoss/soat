@@ -860,9 +860,12 @@ describe('Agents', () => {
     });
   });
 
-  // ── Create Actor for Agent ─────────────────────────────────────────────
+  // ── Actor linked to an agent (via POST /actors + agent_id) ─────────────
+  // The former POST /agents/:id/actors was removed; an actor is now linked to
+  // an agent by passing agent_id to the top-level /actors collection, and
+  // listed back with the ?agent_id= filter.
 
-  describe('POST /api/v1/agents/:agentId/actors', () => {
+  describe('actor ↔ agent link via /actors', () => {
     let agentId: string;
 
     beforeAll(async () => {
@@ -876,42 +879,40 @@ describe('Agents', () => {
       agentId = res.body.id;
     });
 
-    test('unauthenticated request returns 401', async () => {
-      const response = await testClient
-        .post(`/api/v1/agents/${agentId}/actors`)
-        .send({ name: 'Actor 1' });
-      expect(response.status).toBe(401);
-    });
-
-    test('agent not found returns 404', async () => {
+    test('creates an actor linked to the agent', async () => {
       const response = await authenticatedTestClient(adminToken)
-        .post('/api/v1/agents/agt_doesnotexist0000/actors')
-        .send({ name: 'Actor 1' });
-      expect(response.status).toBe(404);
-    });
-
-    test('user without actors:CreateActor permission returns 403', async () => {
-      const response = await authenticatedTestClient(noPermToken)
-        .post(`/api/v1/agents/${agentId}/actors`)
-        .send({ name: 'Actor 1' });
-      expect(response.status).toBe(403);
-    });
-
-    test('missing name returns 400', async () => {
-      const response = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/agents/${agentId}/actors`)
-        .send({});
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBeDefined();
-    });
-
-    test('creates actor and returns 201', async () => {
-      const response = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/agents/${agentId}/actors`)
-        .send({ name: 'Test Actor for Agent' });
+        .post('/api/v1/actors')
+        .send({
+          project_id: projectId,
+          name: 'Test Actor for Agent',
+          agent_id: agentId,
+        });
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
       expect(response.body.name).toBe('Test Actor for Agent');
+      expect(response.body.agent_id).toBe(agentId);
+    });
+
+    test('lists actors filtered by agent_id', async () => {
+      const response = await authenticatedTestClient(adminToken).get(
+        `/api/v1/actors?project_id=${projectId}&agent_id=${agentId}`
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.data.length).toBeGreaterThanOrEqual(1);
+      expect(
+        response.body.data.every((a: { agent_id: string }) => {
+          return a.agent_id === agentId;
+        })
+      ).toBe(true);
+    });
+
+    test('unknown agent_id filter returns an empty page, not 404', async () => {
+      const response = await authenticatedTestClient(adminToken).get(
+        `/api/v1/actors?project_id=${projectId}&agent_id=agent_doesnotexist0`
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual([]);
+      expect(response.body.total).toBe(0);
     });
   });
 });

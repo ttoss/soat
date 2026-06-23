@@ -3,13 +3,13 @@ import TabItem from '@theme/TabItem';
 
 # Sessions
 
-A simplified 1 user ↔ 1 agent conversational interface, nested under agents.
+A simplified 1 user ↔ 1 agent conversational interface, owned by an agent.
 
 ## Overview
 
 Sessions hide the underlying [Conversation](./conversations.md), [Actor](./actors.md), and generation plumbing. By default, interacting with an agent requires three API calls: create a session, save a user message, and trigger generation. When `auto_generate` is enabled, the message and generation collapse into a single call.
 
-Sessions are a sub-resource of [Agents](./agents.md), nested under `/agents/:agent_id/sessions`. Each session exposes its `conversation_id` as an escape hatch to the full [Conversations](./conversations.md) API.
+Sessions are a top-level resource at `/sessions`. Each session belongs to an [Agent](./agents.md) — set `agent_id` on create, and filter by it with `GET /sessions?agent_id=`. Each session exposes its `conversation_id` as an escape hatch to the full [Conversations](./conversations.md) API; list a session's messages via `GET /conversations/:conversation_id/messages` (this is governed by `conversations:GetConversation`, not the `agents:*` session actions).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -62,7 +62,7 @@ An optional `idempotency_key` string can be included with either variant — see
 | Concept           | Relationship                                                                        |
 | ----------------- | ----------------------------------------------------------------------------------- |
 | **Chats**         | Raw LLM completions — no agents, no tools, caller manages history                   |
-| **Sessions**      | 1 user ↔ 1 agent — full tool support, automatic history, nested under agents        |
+| **Sessions**      | 1 user ↔ 1 agent — full tool support, automatic history, owned by an agent          |
 | **Conversations** | Multi-party dialogue engine — powers sessions internally, available as escape hatch |
 
 ### Lifecycle
@@ -78,7 +78,7 @@ This collapses the three-call flow into two calls: create a session, then send m
 `auto_generate` defaults to `false`. It can be set at session creation or toggled at any time:
 
 ```http
-PATCH /agents/:agent_id/sessions/:session_id
+PATCH /sessions/:session_id
 Content-Type: application/json
 
 { "auto_generate": false }
@@ -91,10 +91,10 @@ The explicit `POST .../generate` endpoint continues to work regardless of this s
 When `message_delay_seconds` is set, `POST .../messages` does **not** trigger LLM generation immediately. A timer starts and resets with each new message. The LLM is only called after the configured delay elapses with no new messages.
 
 ```http
-POST /agents/:agent_id/sessions
+POST /sessions
 Content-Type: application/json
 
-{ "auto_generate": true, "message_delay_seconds": 3 }
+{ "agent_id": "agt_01", "auto_generate": true, "message_delay_seconds": 3 }
 ```
 
 With the above:
@@ -204,7 +204,7 @@ The following events are dispatched to project webhooks as sessions change state
 | `sessions.generation.requires_action` | LLM returned a client-tool call requiring tool outputs |
 | `sessions.generation.started`         | LLM generation has started for a session               |
 
-All events include `session_id`. Generation events additionally include `generation_id` and `trace_id`. Permissions are namespaced under `agents:` since sessions are an agent sub-resource.
+All events include `session_id`. Generation events additionally include `generation_id` and `trace_id`. Permissions are namespaced under `agents:` since each session belongs to an agent.
 
 ## Examples
 
@@ -214,9 +214,9 @@ All events include `session_id`. Generation events additionally include `generat
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-agent-session --agent-id agt_01 --name "My Session"
-soat add-session-message --agent-id agt_01 --session-id sess_01 --message "Hello!"
-soat generate-session-response --agent-id agt_01 --session-id sess_01
+soat create-session --agent-id agt_01 --name "My Session"
+soat add-session-message --session-id sess_01 --message "Hello!"
+soat generate-session-response --session-id sess_01
 ```
 
 </TabItem>
@@ -226,18 +226,17 @@ soat generate-session-response --agent-id agt_01 --session-id sess_01
 import { SoatClient } from '@soat/sdk';
 const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
 
-const { data: session } = await soat.sessions.createAgentSession({
-  path: { agent_id: 'agt_01' },
-  body: { name: 'My Session' },
+const { data: session } = await soat.sessions.createSession({
+  body: { agent_id: 'agt_01', name: 'My Session' },
 });
 
 await soat.sessions.addSessionMessage({
-  path: { agent_id: 'agt_01', session_id: session.id },
+  path: { session_id: session.id },
   body: { message: 'Hello!' },
 });
 
 const { data: reply } = await soat.sessions.generateSessionResponse({
-  path: { agent_id: 'agt_01', session_id: session.id },
+  path: { session_id: session.id },
 });
 ```
 
@@ -245,17 +244,17 @@ const { data: reply } = await soat.sessions.generateSessionResponse({
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X POST https://api.example.com/api/v1/agents/agt_01/sessions \
+curl -X POST https://api.example.com/api/v1/sessions \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"name": "My Session"}'
+  -d '{"agent_id": "agt_01", "name": "My Session"}'
 
-curl -X POST https://api.example.com/api/v1/agents/agt_01/sessions/sess_01/messages \
+curl -X POST https://api.example.com/api/v1/sessions/sess_01/messages \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"message": "Hello!"}'
 
-curl -X POST https://api.example.com/api/v1/agents/agt_01/sessions/sess_01/generate \
+curl -X POST https://api.example.com/api/v1/sessions/sess_01/generate \
   -H "Authorization: Bearer <token>"
 ```
 

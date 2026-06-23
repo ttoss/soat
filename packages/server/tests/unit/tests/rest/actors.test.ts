@@ -141,6 +141,19 @@ describe('Actors', () => {
 
       expect(response.status).toBe(400);
     });
+
+    test('supplying both agent_id and chat_id returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({
+          project_id: projectId,
+          name: 'Conflicted',
+          agent_id: 'agent_someagent000',
+          chat_id: 'chat_somechat0000',
+        });
+
+      expect(response.status).toBe(400);
+    });
   });
 
   describe('GET /api/v1/actors', () => {

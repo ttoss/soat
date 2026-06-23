@@ -23,11 +23,6 @@ export type TraceTreeNode = Trace & {
   children: TraceTreeNode[];
 };
 
-export type TraceGenerationIds = {
-  traceId: string;
-  generationIds: string[];
-};
-
 /**
  * Serializes trace steps so that Error objects (which serialize to `{}` by
  * default) are converted to plain objects with `message`, `name`, and any
@@ -421,50 +416,4 @@ export const getTraceTree = async (args: {
       `Trace tree for '${args.traceId}' not found.`
     );
   return tree;
-};
-
-export const getTraceGenerationIds = async (args: {
-  projectIds?: number[];
-  traceId: string;
-}): Promise<TraceGenerationIds> => {
-  log(
-    'getTraceGenerationIds: traceId=%s projectIds=%o',
-    args.traceId,
-    args.projectIds
-  );
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const traceWhere: Record<string, any> = { publicId: args.traceId };
-  if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0) {
-      throw new DomainError(
-        'RESOURCE_NOT_FOUND',
-        `Trace '${args.traceId}' not found.`
-      );
-    }
-    traceWhere.projectId = args.projectIds;
-  }
-
-  const trace = await db.Trace.findOne({ where: traceWhere });
-  if (!trace) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Trace '${args.traceId}' not found.`
-    );
-  }
-
-  const generations = await db.Generation.findAll({
-    where: { traceId: trace.id },
-    order: [
-      ['startedAt', 'ASC'],
-      ['createdAt', 'ASC'],
-    ],
-  });
-
-  return {
-    traceId: trace.publicId,
-    generationIds: generations.map((generation) => {
-      return generation.publicId;
-    }),
-  };
 };

@@ -9,12 +9,7 @@ import {
   updateMemory,
 } from 'src/lib/memories';
 
-import { memoryEntriesRouter } from './memoryEntries';
-
 const memoriesRouter = new Router<Context>();
-
-memoriesRouter.use(memoryEntriesRouter.routes());
-memoriesRouter.use(memoryEntriesRouter.allowedMethods());
 
 const resolveProjectPublicId = (
   body: { projectId?: string },

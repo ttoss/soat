@@ -502,48 +502,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /api/v1/conversations/{conversation_id}/actors:
-    get:
-      tags:
-        - Conversations
-      summary: List actors in a conversation
-      description: Returns all distinct actors who have sent at least one message in the conversation
-      operationId: listConversationActors
-      parameters:
-        - name: conversation_id
-          in: path
-          required: true
-          description: Conversation ID
-          schema:
-            type: string
-            example: 'conv_V1StGXR8Z5jdHi6B'
-      responses:
-        '200':
-          description: List of actors
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ConversationActorRecord'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Conversation not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/conversations/{conversation_id}/messages/{document_id}:
     delete:
       tags:

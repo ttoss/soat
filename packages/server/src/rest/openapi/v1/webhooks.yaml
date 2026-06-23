@@ -152,17 +152,18 @@ paths:
         '404':
           description: Webhook not found
 
-  /api/v1/webhooks/{webhook_id}/deliveries:
+  /api/v1/webhook-deliveries:
     get:
-      description: Lists all event deliveries for a specific webhook
+      description: Lists event deliveries for a webhook (webhook_id is required).
       tags:
         - Webhooks
-      summary: List deliveries for a webhook
+      summary: List webhook deliveries
       operationId: listWebhookDeliveries
       parameters:
         - name: webhook_id
-          in: path
+          in: query
           required: true
+          description: Webhook to list deliveries for (wh_...)
           schema:
             type: string
         - name: limit
@@ -191,7 +192,7 @@ paths:
         '404':
           description: Webhook not found
 
-  /api/v1/webhooks/{webhook_id}/deliveries/{delivery_id}:
+  /api/v1/webhook-deliveries/{delivery_id}:
     get:
       description: Retrieves the details of a specific webhook delivery
       tags:
@@ -199,11 +200,6 @@ paths:
       summary: Get a delivery
       operationId: getWebhookDelivery
       parameters:
-        - name: webhook_id
-          in: path
-          required: true
-          schema:
-            type: string
         - name: delivery_id
           in: path
           required: true
@@ -380,6 +376,10 @@ components:
       properties:
         id:
           type: string
+        webhook_id:
+          x-soat-ref: webhooks
+          type: string
+          description: Public ID of the webhook this delivery belongs to
         event_type:
           type: string
         payload:

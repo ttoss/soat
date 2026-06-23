@@ -40,6 +40,7 @@ A webhook is scoped to a project. When you create a webhook you specify a URL an
 | Field             | Type                               | Description                                |
 | ----------------- | ---------------------------------- | ------------------------------------------ |
 | `id`              | string                             | Public identifier                          |
+| `webhook_id`      | string                             | Public ID of the webhook this delivery belongs to |
 | `event_type`      | string                             | The event type that triggered the delivery |
 | `payload`         | object                             | The event payload that was sent            |
 | `status`          | `pending` \| `success` \| `failed` | Delivery outcome                           |

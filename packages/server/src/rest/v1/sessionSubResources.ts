@@ -1,72 +1,17 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import {
   addSessionMessage,
   generateSessionResponse,
   getSessionTags,
-  listSessionMessages,
   submitSessionToolOutputs,
   updateSessionTags,
 } from 'src/lib/sessions';
 
-const resolveAgent = async (agentPublicId: string) => {
-  return db.Agent.findOne({ where: { publicId: agentPublicId } });
-};
-
-type AgentModel = Awaited<ReturnType<typeof resolveAgent>>;
-
-/**
- * Resolves the agent for the current request and verifies the authenticated
- * user has access to it.
- *
- * Throws `DomainError` with codes:
- *  - `UNAUTHORIZED`       – no authenticated user
- *  - `FORBIDDEN`          – user has no project access or agent belongs to a
- *                           project the user cannot access
- *  - `RESOURCE_NOT_FOUND` – agent does not exist
- */
-const checkAgentAccess = async (
-  ctx: Context,
-  action: string
-): Promise<{ agent: NonNullable<AgentModel> }> => {
-  if (!ctx.authUser) {
-    throw new DomainError('UNAUTHORIZED', 'Unauthorized');
-  }
-  const projectIds = await ctx.authUser.resolveProjectIds({ action });
-  if (
-    projectIds === null ||
-    (Array.isArray(projectIds) && projectIds.length === 0)
-  ) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
-  const agent = await resolveAgent(ctx.params.agent_id);
-  if (!agent) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Agent not found');
-  }
-  if (projectIds && !projectIds.includes(agent.projectId)) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
-  return { agent };
-};
+import { checkSessionAccess } from './sessions';
 
 const sessionSubResourcesRouter = new Router<Context>();
-
-sessionSubResourcesRouter.get('/:session_id/messages', async (ctx: Context) => {
-  const { agent } = await checkAgentAccess(ctx, 'agents:GetSession');
-
-  const { limit, offset } = ctx.query as Record<string, string | undefined>;
-
-  const result = await listSessionMessages({
-    agentId: agent.id as number,
-    sessionId: ctx.params.session_id,
-    limit: limit ? Number(limit) : undefined,
-    offset: offset ? Number(offset) : undefined,
-  });
-
-  ctx.body = result;
-});
 
 // ── Add Message ──────────────────────────────────────────────────────────
 
@@ -95,9 +40,12 @@ const validateAddMessageBody = (body: {
 };
 
 sessionSubResourcesRouter.post(
-  '/:session_id/messages',
+  '/sessions/:session_id/messages',
   async (ctx: Context) => {
-    const { agent } = await checkAgentAccess(ctx, 'agents:SendSessionMessage');
+    const { agentId } = await checkSessionAccess(
+      ctx,
+      'agents:SendSessionMessage'
+    );
 
     const body = ctx.request.body as {
       message?: string;
@@ -109,7 +57,7 @@ sessionSubResourcesRouter.post(
     validateAddMessageBody(body);
 
     const result = await addSessionMessage({
-      agentId: agent.id as number,
+      agentId,
       sessionId: ctx.params.session_id,
       message: body.message,
       documentId: body.documentId,
@@ -131,9 +79,12 @@ sessionSubResourcesRouter.post(
 // ── Generate Response ────────────────────────────────────────────────────
 
 sessionSubResourcesRouter.post(
-  '/:session_id/generate',
+  '/sessions/:session_id/generate',
   async (ctx: Context) => {
-    const { agent } = await checkAgentAccess(ctx, 'agents:SendSessionMessage');
+    const { agentId } = await checkSessionAccess(
+      ctx,
+      'agents:SendSessionMessage'
+    );
 
     const body =
       (ctx.request.body as {
@@ -144,7 +95,7 @@ sessionSubResourcesRouter.post(
 
     if (isAsync) {
       generateSessionResponse({
-        agentId: agent.id as number,
+        agentId,
         sessionId: ctx.params.session_id,
         model: body.model,
         toolContext: body.toolContext,
@@ -157,7 +108,7 @@ sessionSubResourcesRouter.post(
     }
 
     const result = await generateSessionResponse({
-      agentId: agent.id as number,
+      agentId,
       sessionId: ctx.params.session_id,
       model: body.model,
       toolContext: body.toolContext,
@@ -170,9 +121,9 @@ sessionSubResourcesRouter.post(
 // ── Submit Tool Outputs ──────────────────────────────────────────────────
 
 sessionSubResourcesRouter.post(
-  '/:session_id/tool-outputs',
+  '/sessions/:session_id/tool-outputs',
   async (ctx: Context) => {
-    const { agent } = await checkAgentAccess(
+    const { agentId, agentPublicId } = await checkSessionAccess(
       ctx,
       'agents:SubmitSessionToolOutputs'
     );
@@ -194,8 +145,8 @@ sessionSubResourcesRouter.post(
     }
 
     const result = await submitSessionToolOutputs({
-      agentId: agent.id as number,
-      agentPublicId: ctx.params.agent_id,
+      agentId,
+      agentPublicId,
       sessionId: ctx.params.session_id,
       generationId: body.generationId,
       toolOutputs: body.toolOutputs,
@@ -207,45 +158,48 @@ sessionSubResourcesRouter.post(
 
 // ── Tags ─────────────────────────────────────────────────────────────────
 
-sessionSubResourcesRouter.get('/:session_id/tags', async (ctx: Context) => {
-  const { agent } = await checkAgentAccess(ctx, 'agents:GetSession');
+sessionSubResourcesRouter.get(
+  '/sessions/:session_id/tags',
+  async (ctx: Context) => {
+    const { agentId } = await checkSessionAccess(ctx, 'agents:GetSession');
 
-  const result = await getSessionTags({
-    agentId: agent.id as number,
-    sessionId: ctx.params.session_id,
-  });
+    ctx.body = await getSessionTags({
+      agentId,
+      sessionId: ctx.params.session_id,
+    });
+  }
+);
 
-  ctx.body = result;
-});
+sessionSubResourcesRouter.put(
+  '/sessions/:session_id/tags',
+  async (ctx: Context) => {
+    const { agentId } = await checkSessionAccess(ctx, 'agents:UpdateSession');
 
-sessionSubResourcesRouter.put('/:session_id/tags', async (ctx: Context) => {
-  const { agent } = await checkAgentAccess(ctx, 'agents:UpdateSession');
+    const tags = ctx.request.body as Record<string, string>;
 
-  const tags = ctx.request.body as Record<string, string>;
+    ctx.body = await updateSessionTags({
+      agentId,
+      sessionId: ctx.params.session_id,
+      tags,
+      merge: false,
+    });
+  }
+);
 
-  const result = await updateSessionTags({
-    agentId: agent.id as number,
-    sessionId: ctx.params.session_id,
-    tags,
-    merge: false,
-  });
+sessionSubResourcesRouter.patch(
+  '/sessions/:session_id/tags',
+  async (ctx: Context) => {
+    const { agentId } = await checkSessionAccess(ctx, 'agents:UpdateSession');
 
-  ctx.body = result;
-});
+    const tags = ctx.request.body as Record<string, string>;
 
-sessionSubResourcesRouter.patch('/:session_id/tags', async (ctx: Context) => {
-  const { agent } = await checkAgentAccess(ctx, 'agents:UpdateSession');
-
-  const tags = ctx.request.body as Record<string, string>;
-
-  const result = await updateSessionTags({
-    agentId: agent.id as number,
-    sessionId: ctx.params.session_id,
-    tags,
-    merge: true,
-  });
-
-  ctx.body = result;
-});
+    ctx.body = await updateSessionTags({
+      agentId,
+      sessionId: ctx.params.session_id,
+      tags,
+      merge: true,
+    });
+  }
+);
 
 export { sessionSubResourcesRouter };

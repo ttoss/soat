@@ -194,9 +194,41 @@ export const createSession = async (args: {
   return mapped;
 };
 
+// Resolves the agent/actor/status filters into `where`, mutating it. Returns
+// false when a referenced agent/actor does not exist (caller yields an empty
+// page), true otherwise.
+const resolveSessionListFilters = async (args: {
+  where: Record<string, unknown>;
+  agentId?: string;
+  actorId?: string;
+  status?: string;
+}): Promise<boolean> => {
+  if (args.agentId !== undefined) {
+    const agent = await db.Agent.findOne({
+      where: { publicId: args.agentId },
+    });
+    if (!agent) return false;
+    args.where.agentId = agent.id;
+  }
+
+  if (args.actorId !== undefined) {
+    const actor = await db.Actor.findOne({
+      where: { publicId: args.actorId },
+    });
+    if (!actor) return false;
+    args.where.actorId = actor.id;
+  }
+
+  if (args.status !== undefined) {
+    args.where.status = args.status;
+  }
+
+  return true;
+};
+
 export const listSessions = async (args: {
   projectIds?: number[];
-  agentId: number;
+  agentId?: string;
   actorId?: string;
   status?: string;
   limit?: number;
@@ -209,26 +241,20 @@ export const listSessions = async (args: {
     return { data: [], total: 0, limit, offset };
   }
 
-  const where: Record<string, unknown> = {
-    agentId: args.agentId,
-  };
+  const where: Record<string, unknown> = {};
 
   if (args.projectIds !== undefined) {
     where.projectId = args.projectIds;
   }
 
-  if (args.actorId !== undefined) {
-    const actor = await db.Actor.findOne({
-      where: { publicId: args.actorId },
-    });
-    if (!actor) {
-      return { data: [], total: 0, limit, offset };
-    }
-    where.actorId = actor.id;
-  }
-
-  if (args.status !== undefined) {
-    where.status = args.status;
+  const resolved = await resolveSessionListFilters({
+    where,
+    agentId: args.agentId,
+    actorId: args.actorId,
+    status: args.status,
+  });
+  if (!resolved) {
+    return { data: [], total: 0, limit, offset };
   }
 
   const { count, rows } = await db.Session.findAndCountAll({
@@ -242,6 +268,37 @@ export const listSessions = async (args: {
   await Promise.all(rows.map(checkAndExpireSession));
 
   return { data: rows.map(mapSession), total: count, limit, offset };
+};
+
+/**
+ * Resolve the agent and project a session belongs to, for top-level route
+ * access control (the session id alone is globally unique). Returns null when
+ * the session does not exist.
+ */
+export const findSessionAccess = async (args: {
+  sessionId: string;
+}): Promise<{
+  agentId: number;
+  agentPublicId: string;
+  projectId: number;
+} | null> => {
+  const session = await db.Session.findOne({
+    where: { publicId: args.sessionId },
+    include: [{ model: db.Agent, as: 'agent' }],
+  });
+  if (!session) {
+    return null;
+  }
+  const agent = (
+    session as InstanceType<(typeof db)['Session']> & {
+      agent?: InstanceType<(typeof db)['Agent']>;
+    }
+  ).agent;
+  return {
+    agentId: session.agentId as number,
+    agentPublicId: agent?.publicId as string,
+    projectId: session.projectId as number,
+  };
 };
 
 export const getSession = async (args: {
@@ -391,7 +448,6 @@ export {
   addSessionMessage,
   generateSessionResponse,
   getSessionTags,
-  listSessionMessages,
   sendSessionMessage,
   submitSessionToolOutputs,
   updateSessionTags,

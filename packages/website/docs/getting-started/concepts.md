@@ -58,7 +58,7 @@ SOAT exposes three layers, from lowest to highest level:
 | **Agent**   | Reasoning-and-acting loop with tools, step rules, and policies. | Tool-calling, multi-step tasks, MCP-backed assistants    |
 | **Session** | 1 user ↔ 1 agent. Conversation, actors, and history hidden.     | Default user-facing flow — two API calls and you're done |
 
-Sessions are nested under agents (`/agents/:agent_id/sessions`) and use [conversations](/docs/modules/conversations) under the hood. Drop into the conversation API directly when you need multi-party dialogue or full control.
+Sessions are a top-level resource (`/sessions`, each tied to an agent via `agent_id`) and use [conversations](/docs/modules/conversations) under the hood. Drop into the conversation API directly when you need multi-party dialogue or full control.
 
 See [Chats](/docs/modules/chats), [Agents](/docs/modules/agents), [Sessions](/docs/modules/sessions), and [Conversations](/docs/modules/conversations).
 
