@@ -51,6 +51,30 @@ Valid values for the `provider` field:
 | `gateway`   | Generic API gateway        |
 | `custom`    | Custom / self-hosted model |
 
+## Key Concepts
+
+### Bedrock authentication
+
+The `bedrock` provider supports two authentication modes, determined by the shape of the linked secret's JSON value:
+
+**IAM credentials** — pass `accessKeyId`, `secretAccessKey`, and optionally `sessionToken`. The client signs requests with AWS SigV4.
+
+```json
+{
+  "accessKeyId": "<aws-access-key-id>",
+  "secretAccessKey": "<aws-secret-access-key>",
+  "sessionToken": "<optional-session-token>"
+}
+```
+
+**Bedrock API key** — pass `apiKey` only (format `ABSK…`). The client uses Bearer token authentication via `AWS_BEARER_TOKEN_BEDROCK`. This is the new authentication mechanism introduced for Amazon Bedrock in 2025.
+
+```json
+{ "apiKey": "ABSK..." }
+```
+
+If neither field is present the default AWS credential chain (environment variables, instance profile, etc.) is used. The `region` field in the provider's `config` object defaults to `us-east-1`.
+
 ## Examples
 
 ### Create an AI provider
