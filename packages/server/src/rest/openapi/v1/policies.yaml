@@ -24,8 +24,18 @@ paths:
       tags:
         - Policies
       summary: List all policies
-      description: Returns a list of all global policies. Requires admin role.
+      description: >
+        Returns global policies. Requires admin role. Pass user_id to list only
+        the policies attached to that user (replaces the former
+        GET /users/{user_id}/policies).
       operationId: listPolicies
+      parameters:
+        - name: user_id
+          in: query
+          required: false
+          description: Return only policies attached to this user (user_...)
+          schema:
+            type: string
       responses:
         '200':
           description: List of policies

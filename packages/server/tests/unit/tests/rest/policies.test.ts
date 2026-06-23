@@ -41,6 +41,42 @@ describe('Policies', () => {
 
       expect(response.status).toBe(403);
     });
+
+    test('admin can list policies filtered by user_id', async () => {
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          name: 'user-filter-policy',
+          document: {
+            statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+          },
+        });
+      const policyId = policyRes.body.id;
+
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${userId}/policies`)
+        .send({ policy_ids: [policyId] });
+
+      const response = await authenticatedTestClient(adminToken).get(
+        `/api/v1/policies?user_id=${userId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(
+        response.body.map((p: { id: string }) => {
+          return p.id;
+        })
+      ).toEqual([policyId]);
+    });
+
+    test('listing by an unknown user_id returns an empty array', async () => {
+      const response = await authenticatedTestClient(adminToken).get(
+        '/api/v1/policies?user_id=user_doesnotexist0'
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual([]);
+    });
   });
 
   describe('POST /api/v1/policies', () => {

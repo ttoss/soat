@@ -6,7 +6,6 @@ import {
   createUser,
   deleteUser,
   getUser,
-  getUserPolicies,
   listUsers,
   loginUser,
 } from 'src/lib/users';
@@ -177,24 +176,6 @@ usersRouter.put('/users/:user_id/policies', async (ctx: Context) => {
   });
 
   ctx.status = 204;
-});
-
-usersRouter.get('/users/:user_id/policies', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  if (ctx.authUser.role !== 'admin') {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const policies = await getUserPolicies({ userId: ctx.params.user_id });
-
-  ctx.body = policies;
 });
 
 export { usersRouter };
