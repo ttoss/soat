@@ -280,8 +280,8 @@ soat create-memory-entry \
 ```ts
 const { data: e1 } = await MemoryEntries.createMemoryEntry({
   client: authClient,
-  path: { memory_id: MEMORY_ID },
   body: {
+    memory_id: MEMORY_ID,
     content:
       'Alice prefers email over phone calls for all support communication',
   },
@@ -293,10 +293,10 @@ console.log(e1.action); // "created"
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/memories/$MEMORY_ID/entries" \
+curl -s -X POST "$SOAT_URL/api/v1/memory-entries" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"content":"Alice prefers email over phone calls for all support communication"}' | jq .
+  -d '{"memory_id":"'"$MEMORY_ID"'","content":"Alice prefers email over phone calls for all support communication"}' | jq .
 # → { "action": "created", ... }
 ```
 
@@ -323,8 +323,8 @@ soat create-memory-entry \
 ```ts
 const { data: e2 } = await MemoryEntries.createMemoryEntry({
   client: authClient,
-  path: { memory_id: MEMORY_ID },
-  body: { content: 'Alice prefers email over phone calls' },
+  body: {
+    memory_id: MEMORY_ID, content: 'Alice prefers email over phone calls' },
 });
 console.log(e2.action); // "skipped"
 ```
@@ -333,10 +333,10 @@ console.log(e2.action); // "skipped"
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/memories/$MEMORY_ID/entries" \
+curl -s -X POST "$SOAT_URL/api/v1/memory-entries" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"content":"Alice prefers email over phone calls"}' | jq .
+  -d '{"memory_id":"'"$MEMORY_ID"'","content":"Alice prefers email over phone calls"}' | jq .
 # → { "action": "skipped", ... }
 ```
 
@@ -363,8 +363,8 @@ soat create-memory-entry \
 ```ts
 const { data: e3 } = await MemoryEntries.createMemoryEntry({
   client: authClient,
-  path: { memory_id: MEMORY_ID },
   body: {
+    memory_id: MEMORY_ID,
     content:
       'Alice prefers email, especially for billing inquiries; she checks it twice a day',
   },
@@ -376,10 +376,10 @@ console.log(e3.action); // "updated"
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/memories/$MEMORY_ID/entries" \
+curl -s -X POST "$SOAT_URL/api/v1/memory-entries" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"content":"Alice prefers email, especially for billing inquiries; she checks it twice a day"}' | jq .
+  -d '{"memory_id":"'"$MEMORY_ID"'","content":"Alice prefers email, especially for billing inquiries; she checks it twice a day"}' | jq .
 # → { "action": "updated", ... }
 ```
 
@@ -406,8 +406,8 @@ soat create-memory-entry \
 ```ts
 const { data: e4 } = await MemoryEntries.createMemoryEntry({
   client: authClient,
-  path: { memory_id: MEMORY_ID },
   body: {
+    memory_id: MEMORY_ID,
     content:
       "Alice's fiscal year ends in March; she starts renewal discussions in January",
   },
@@ -419,10 +419,10 @@ console.log(e4.action); // "created"
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/memories/$MEMORY_ID/entries" \
+curl -s -X POST "$SOAT_URL/api/v1/memory-entries" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"content":"Alice'\''s fiscal year ends in March; she starts renewal discussions in January"}' | jq .
+  -d '{"memory_id":"'"$MEMORY_ID"'","content":"Alice'\''s fiscal year ends in March; she starts renewal discussions in January"}' | jq .
 # → { "action": "created", ... }
 ```
 
@@ -452,7 +452,7 @@ soat list-memory-entries --memory-id "$MEMORY_ID" | jq '[.[] | .content]'
 ```ts
 const { data: entries } = await MemoryEntries.listMemoryEntries({
   client: authClient,
-  path: { memory_id: MEMORY_ID },
+  query: { memory_id: MEMORY_ID },
 });
 console.log(entries.map((e) => e.content));
 ```
@@ -461,7 +461,7 @@ console.log(entries.map((e) => e.content));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_URL/api/v1/memories/$MEMORY_ID/entries" \
+curl -s "$SOAT_URL/api/v1/memory-entries?memory_id=$MEMORY_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '[.[] | .content]'
 ```
 
@@ -724,7 +724,7 @@ soat list-memory-entries --memory-id "$MEMORY_ID" \
 ```ts
 const { data: entries } = await MemoryEntries.listMemoryEntries({
   client: authClient,
-  path: { memory_id: MEMORY_ID },
+  query: { memory_id: MEMORY_ID },
 });
 const agentEntries = entries.filter((e) => e.source === 'agent');
 console.log(agentEntries.map((e) => e.content));
@@ -734,7 +734,7 @@ console.log(agentEntries.map((e) => e.content));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_URL/api/v1/memories/$MEMORY_ID/entries" \
+curl -s "$SOAT_URL/api/v1/memory-entries?memory_id=$MEMORY_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   | jq '[.[] | select(.source == "agent") | {content: .content, source: .source}]'
 ```
@@ -846,7 +846,7 @@ await new Promise((resolve) => setTimeout(resolve, 5000));
 
 const { data: entries } = await MemoryEntries.listMemoryEntries({
   client: authClient,
-  path: { memory_id: MEMORY_ID },
+  query: { memory_id: MEMORY_ID },
 });
 const extracted = entries.filter((e) => e.source === 'extraction');
 console.log(extracted.map((e) => e.content));
@@ -863,7 +863,7 @@ curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate" \
   | jq '{status: .status}'
 
 sleep 5
-curl -s "$SOAT_URL/api/v1/memories/$MEMORY_ID/entries" \
+curl -s "$SOAT_URL/api/v1/memory-entries?memory_id=$MEMORY_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   | jq '[.[] | select(.source == "extraction") | {content: .content, source: .source}]'
 ```

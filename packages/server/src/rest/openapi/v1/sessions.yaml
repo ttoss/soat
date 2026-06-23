@@ -4,8 +4,8 @@ info:
   version: 1.0.0
   description: >
     Agent Sessions provide a simplified 1-user ↔ 1-agent conversational
-    abstraction. Sessions are nested under agents and manage the underlying
-    conversation, actors, and generation plumbing automatically.
+    abstraction. Each session belongs to an agent (set via agent_id) and manages
+    the underlying conversation, actors, and generation plumbing automatically.
   contact:
     name: SOAT Team
     url: https://github.com/ttoss/soat
@@ -22,7 +22,7 @@ tags:
 security:
   - bearerAuth: []
 paths:
-  /api/v1/agents/{agent_id}/sessions:
+  /api/v1/sessions:
     post:
       tags:
         - Sessions
@@ -31,9 +31,7 @@ paths:
         Creates a new session for the specified agent. Internally creates a
         conversation and two actors (agent + user) so the caller only needs
         this single call to start interacting with the agent.
-      operationId: createAgentSession
-      parameters:
-        - $ref: '#/components/parameters/AgentId'
+      operationId: createSession
       requestBody:
         content:
           application/json:
@@ -68,10 +66,16 @@ paths:
       tags:
         - Sessions
       summary: List sessions
-      description: Returns sessions for the specified agent, optionally filtered by actorId and status.
-      operationId: listAgentSessions
+      description: Returns sessions the caller can access, optionally filtered by agent, actor and status.
+      operationId: listSessions
       parameters:
-        - $ref: '#/components/parameters/AgentId'
+        - name: agent_id
+          in: query
+          required: false
+          description: Filter by agent public ID
+          schema:
+            type: string
+            example: agt_V1StGXR8Z5jdHi6B
         - name: actor_id
           in: query
           required: false
@@ -122,15 +126,14 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/agents/{agent_id}/sessions/{session_id}:
+  /api/v1/sessions/{session_id}:
     get:
       tags:
         - Sessions
       summary: Get a session
       description: Returns details of a single session.
-      operationId: getAgentSession
+      operationId: getSession
       parameters:
-        - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'
       responses:
         '200':
@@ -152,7 +155,6 @@ paths:
       description: Updates the session name and/or status.
       operationId: updateSession
       parameters:
-        - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'
       requestBody:
         content:
@@ -177,9 +179,8 @@ paths:
         - Sessions
       summary: Delete a session
       description: Deletes the session and its underlying conversation and actors.
-      operationId: deleteAgentSession
+      operationId: deleteSession
       parameters:
-        - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'
       responses:
         '204':
@@ -191,54 +192,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/agents/{agent_id}/sessions/{session_id}/messages:
-    get:
-      tags:
-        - Sessions
-      summary: List session messages
-      description: >
-        Returns messages in the session with simplified roles (user/assistant)
-        instead of raw actor IDs.
-      operationId: listAgentSessionMessages
-      parameters:
-        - $ref: '#/components/parameters/AgentId'
-        - $ref: '#/components/parameters/SessionId'
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 50
-        - name: offset
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 0
-      responses:
-        '200':
-          description: Paginated list of messages
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/SessionMessage'
-                  total:
-                    type: integer
-                  limit:
-                    type: integer
-                  offset:
-                    type: integer
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+  /api/v1/sessions/{session_id}/messages:
     post:
       tags:
         - Sessions
@@ -250,7 +204,6 @@ paths:
         returns the saved user message.
       operationId: addSessionMessage
       parameters:
-        - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'
       requestBody:
         required: true
@@ -278,7 +231,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/agents/{agent_id}/sessions/{session_id}/generate:
+  /api/v1/sessions/{session_id}/generate:
     post:
       tags:
         - Sessions
@@ -290,7 +243,6 @@ paths:
         202 accepted response when you do not need to wait for the result.
       operationId: generateSessionResponse
       parameters:
-        - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'
         - name: async
           in: query
@@ -351,7 +303,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/v1/agents/{agent_id}/sessions/{session_id}/tool-outputs:
+  /api/v1/sessions/{session_id}/tool-outputs:
     post:
       tags:
         - Sessions
@@ -362,7 +314,6 @@ paths:
         final or next requires_action result.
       operationId: submitSessionToolOutputs
       parameters:
-        - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'
       requestBody:
         required: true
@@ -384,7 +335,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/agents/{agent_id}/sessions/{session_id}/tags:
+  /api/v1/sessions/{session_id}/tags:
     get:
       tags:
         - Sessions
@@ -392,7 +343,6 @@ paths:
       description: Returns the session's tags object.
       operationId: getSessionTags
       parameters:
-        - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'
       responses:
         '200':
@@ -416,7 +366,6 @@ paths:
       description: Replaces all tags on the session.
       operationId: replaceSessionTags
       parameters:
-        - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'
       requestBody:
         required: true
@@ -448,7 +397,6 @@ paths:
       description: Merges the provided tags into the session's existing tags.
       operationId: mergeSessionTags
       parameters:
-        - $ref: '#/components/parameters/AgentId'
         - $ref: '#/components/parameters/SessionId'
       requestBody:
         required: true
@@ -607,27 +555,16 @@ components:
           nullable: true
           description: Timestamp of the last activity on the session (message added or response generated).
 
-    SessionMessage:
-      type: object
-      properties:
-        role:
-          type: string
-          enum: [user, assistant, unknown]
-        content:
-          type: string
-        document_id:
-          x-soat-ref: documents
-          type: string
-          nullable: true
-        position:
-          type: integer
-        metadata:
-          type: object
-          nullable: true
-
     CreateSessionRequest:
       type: object
+      required:
+        - agent_id
       properties:
+        agent_id:
+          x-soat-ref: agents
+          type: string
+          description: Agent this session belongs to
+          example: agt_V1StGXR8Z5jdHi6B
         name:
           type: string
           description: Optional session name

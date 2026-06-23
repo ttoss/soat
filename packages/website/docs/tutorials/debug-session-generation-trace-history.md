@@ -123,10 +123,12 @@ AGENT_ID=$(soat create-agent \
   --name "Debug Assistant" \
   --instructions "You are a concise debugging assistant." | jq -r '.id')
 
-SESSION_ID=$(soat create-agent-session \
+SESSION_RESP=$(soat create-session \
   --agent-id "$AGENT_ID" \
   --name "Debug Session" \
-  --auto-generate false | jq -r '.id')
+  --auto-generate false)
+SESSION_ID=$(printf '%s' "$SESSION_RESP" | jq -r '.id')
+CONV_ID=$(printf '%s' "$SESSION_RESP" | jq -r '.conversation_id')
 
 echo "PROJECT_ID=$PROJECT_ID"
 echo "AGENT_ID=$AGENT_ID"
@@ -159,9 +161,8 @@ const { data: agent } = await adminSoat.agents.createAgent({
   },
 });
 
-const { data: session } = await adminSoat.sessions.createAgentSession({
-  path: { agent_id: agent.id },
-  body: { name: 'Debug Session', auto_generate: false },
+const { data: session } = await adminSoat.sessions.createSession({
+  body: { agent_id: agent.id, name: 'Debug Session', auto_generate: false },
 });
 ```
 
@@ -184,10 +185,12 @@ AGENT_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Debug Assistant\",\"instructions\":\"You are a concise debugging assistant.\"}" | jq -r '.id')
 
-SESSION_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/sessions" \
+SESSION_RESP=$(curl -s -X POST "$SOAT_URL/api/v1/sessions" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name":"Debug Session","auto_generate":false}' | jq -r '.id')
+  -d "{\"agent_id\":\"$AGENT_ID\",\"name\":\"Debug Session\",\"auto_generate\":false}")
+SESSION_ID=$(printf '%s' "$SESSION_RESP" | jq -r '.id')
+CONV_ID=$(printf '%s' "$SESSION_RESP" | jq -r '.conversation_id')
 ```
 
 </TabItem>
@@ -204,24 +207,20 @@ Use [Sessions debugging links](/docs/modules/sessions#debugging-session-generati
 
 ```bash
 soat add-session-message \
-  --agent-id "$AGENT_ID" \
   --session-id "$SESSION_ID" \
   --message "Explain what a generation is in one sentence." > /dev/null
 
 GEN_1=$(soat generate-session-response \
-  --agent-id "$AGENT_ID" \
   --session-id "$SESSION_ID")
 
 GEN_1_ID=$(printf '%s\n' "$GEN_1" | jq -r '.generation_id')
 TRACE_1_ID=$(printf '%s\n' "$GEN_1" | jq -r '.trace_id')
 
 soat add-session-message \
-  --agent-id "$AGENT_ID" \
   --session-id "$SESSION_ID" \
   --message "Now explain what a trace is in one sentence." > /dev/null
 
 GEN_2=$(soat generate-session-response \
-  --agent-id "$AGENT_ID" \
   --session-id "$SESSION_ID")
 
 GEN_2_ID=$(printf '%s\n' "$GEN_2" | jq -r '.generation_id')
@@ -271,22 +270,22 @@ const debugLinks = [
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
+curl -s -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"message":"Explain what a generation is in one sentence."}' > /dev/null
 
-GEN_1=$(curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/generate" \
+GEN_1=$(curl -s -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/generate" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{}')
 
-curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
+curl -s -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"message":"Now explain what a trace is in one sentence."}' > /dev/null
 
-GEN_2=$(curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/generate" \
+GEN_2=$(curl -s -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/generate" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{}')
@@ -308,21 +307,19 @@ Use [Sessions key concepts](/docs/modules/sessions#key-concepts) and [Sessions e
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat list-agent-session-messages \
-  --agent-id "$AGENT_ID" \
-  --session-id "$SESSION_ID" | jq '.data[] | {position, role, content}'
+soat list-conversation-messages \
+  --conversation-id "$CONV_ID" | jq '.data[] | {position, role, content}'
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: messagePage } = await adminSoat.sessions.listAgentSessionMessages(
-  {
-    path: { agent_id: agent.id, session_id: session.id },
+const { data: messagePage } =
+  await adminSoat.conversations.listConversationMessages({
+    path: { conversation_id: session.conversation_id },
     query: { limit: 50, offset: 0 },
-  }
-);
+  });
 
 const timeline = messagePage.data.map((m) => ({
   position: m.position,
@@ -335,7 +332,7 @@ const timeline = messagePage.data.map((m) => ({
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages?limit=50&offset=0" \
+curl -s "$SOAT_URL/api/v1/conversations/$CONV_ID/messages?limit=50&offset=0" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data[] | {position, role, content}'
 ```
 
@@ -437,8 +434,8 @@ Use [Trace debugging joins](/docs/modules/traces#debugging-joins-trace-generatio
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-curl -s "$SOAT_URL/api/v1/traces/$TRACE_1_ID/generations" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{trace_id, generation_ids}'
+curl -s "$SOAT_URL/api/v1/generations?trace_id=$TRACE_1_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '[.data[].id]'
 
 cat > /tmp/debug-links.json <<EOF
 [
@@ -455,11 +452,11 @@ jq -r '.[] | select(.trace_id == "'"$TRACE_1_ID"'")' /tmp/debug-links.json
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: traceGenerations } = await adminSoat.traces.getTraceGenerations({
-  path: { trace_id: gen1.trace_id },
+const { data: traceGenerations } = await adminSoat.generations.listGenerations({
+  query: { trace_id: gen1.trace_id },
 });
 
-// traceGenerations.generation_ids => ['gen_...', 'gen_...']
+// traceGenerations.data.map((g) => g.id) => ['gen_...', 'gen_...']
 
 const linksByTraceId = new Map(debugLinks.map((row) => [row.traceId, row]));
 const reverse = linksByTraceId.get(gen1.trace_id);
@@ -470,8 +467,8 @@ const reverse = linksByTraceId.get(gen1.trace_id);
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_URL/api/v1/traces/$TRACE_1_ID/generations" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{trace_id, generation_ids}'
+curl -s "$SOAT_URL/api/v1/generations?trace_id=$TRACE_1_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '[.data[].id]'
 
 cat > /tmp/debug-links.json <<EOF
 [

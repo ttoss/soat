@@ -688,8 +688,8 @@ Expected status output:
 
 ```ts
 const { data: run } = await adminSoat.orchestrations.startOrchestrationRun({
-  path: { orchestration_id: ORCHESTRATION_ID },
   body: {
+    orchestration_id: ORCHESTRATION_ID,
     input: { theme: 'artificial intelligence' },
   },
 });
@@ -704,10 +704,10 @@ const RUN_ID = run.id;
 <TabItem value="curl" label="curl">
 
 ```bash
-RUN=$(curl -s -X POST "$SOAT_URL/api/v1/orchestrations/$ORCHESTRATION_ID/runs" \
+RUN=$(curl -s -X POST "$SOAT_URL/api/v1/orchestration-runs" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"input":{"theme":"artificial intelligence"}}')
+  -d "{\"orchestration_id\":\"$ORCHESTRATION_ID\",\"input\":{\"theme\":\"artificial intelligence\"}}")
 
 printf '%s\n' "$RUN" | jq '{status, trace_id, output}'
 RUN_ID=$(printf '%s\n' "$RUN" | jq -r '.id')
@@ -779,7 +779,7 @@ Key fields to look for:
 
 ```ts
 const { data: runState } = await adminSoat.orchestrations.getOrchestrationRun({
-  path: { orchestration_id: ORCHESTRATION_ID, run_id: RUN_ID },
+  path: { run_id: RUN_ID },
 });
 console.log(JSON.stringify(runState.state, null, 2));
 console.log(runState.output?.['return-poem']?.result);
@@ -789,7 +789,7 @@ console.log(runState.output?.['return-poem']?.result);
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_URL/api/v1/orchestrations/$ORCHESTRATION_ID/runs/$RUN_ID" \
+curl -s "$SOAT_URL/api/v1/orchestration-runs/$RUN_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{status, state, output}'
 ```
 

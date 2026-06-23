@@ -6,7 +6,7 @@ Generation records track individual LLM generation runs started by agents, inclu
 
 Every agent generation (`POST /agents/:id/generate`, session generation, sub-agent calls) creates a generation record before the model is called. The record tracks the run through its lifecycle and — when the run fails — stores a structured error payload so failed generations are distinguishable from pending ones and can be debugged post-mortem.
 
-Generation IDs for a trace can be listed via `GET /traces/:trace_id/generations`, and each record can be retrieved via `GET /generations/:generation_id`.
+Generations can be listed via `GET /generations` (filter by `agent_id`, `trace_id`, or `status`), and each record can be retrieved via `GET /generations/:generation_id`.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 

@@ -52,6 +52,7 @@ describe('Generations', () => {
                 'agents:CreateAgent',
                 'agents:CreateAgentGeneration',
                 'generations:GetGeneration',
+                'generations:ListGenerations',
                 'traces:GetTrace',
               ],
             },
@@ -127,6 +128,41 @@ describe('Generations', () => {
       expect(response.status).toBe(200);
       expect(response.body.error).toBeDefined();
       expect(response.body.error.message).toBeDefined();
+    });
+  });
+
+  describe('GET /api/v1/generations', () => {
+    test('returns 401 when unauthenticated', async () => {
+      const response = await testClient.get('/api/v1/generations');
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 403 when user lacks permission', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        '/api/v1/generations'
+      );
+      expect(response.status).toBe(403);
+    });
+
+    test('lists generations filtered by agent_id', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations?agent_id=${agentId}`
+      );
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.total).toBeGreaterThanOrEqual(1);
+      for (const gen of response.body.data) {
+        expect(gen.agent_id).toBe(agentId);
+      }
+    });
+
+    test('unknown agent_id filter returns an empty page', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        '/api/v1/generations?agent_id=agent_doesnotexist0'
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual([]);
+      expect(response.body.total).toBe(0);
     });
   });
 

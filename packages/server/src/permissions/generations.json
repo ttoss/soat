@@ -2,6 +2,11 @@
   "module": "generations",
   "operations": [
     {
+      "operationId": "listGenerations",
+      "action": "generations:ListGenerations",
+      "description": "List generations, optionally filtered by agent, trace, or status"
+    },
+    {
       "operationId": "getGeneration",
       "action": "generations:GetGeneration",
       "description": "Get a generation record by ID"

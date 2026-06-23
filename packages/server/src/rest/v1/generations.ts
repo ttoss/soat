@@ -1,9 +1,51 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import { getGeneration } from 'src/lib/generations';
+import { getGeneration, listGenerations } from 'src/lib/generations';
 
 export const generationsRouter = new Router<Context>();
+
+/**
+ * @openapi
+ * GET /api/v1/generations
+ * operationId: listGenerations
+ * Lists generations the caller can access, optionally filtered by agent_id,
+ * trace_id, and status. Replaces the former GET /traces/{trace_id}/generations.
+ */
+generationsRouter.get('/generations', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    action: 'generations:ListGenerations',
+  });
+
+  if (
+    projectIds === null ||
+    (Array.isArray(projectIds) && projectIds.length === 0)
+  ) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const { agentId, traceId, status, limit, offset } = ctx.query as Record<
+    string,
+    string | undefined
+  >;
+
+  ctx.body = await listGenerations({
+    projectIds: projectIds ?? undefined,
+    agentId,
+    traceId,
+    status,
+    limit: limit ? Number(limit) : undefined,
+    offset: offset ? Number(offset) : undefined,
+  });
+});
 
 /**
  * @openapi

@@ -15,11 +15,6 @@
       "operationId": "getTraceTree",
       "action": "traces:GetTraceTree",
       "description": "Get the full execution tree for a trace"
-    },
-    {
-      "operationId": "getTraceGenerations",
-      "action": "traces:GetTraceGenerations",
-      "description": "Get generation IDs associated with a trace"
     }
   ]
 }

@@ -53,7 +53,7 @@ describe('Traces REST API', () => {
                 'traces:ListTraces',
                 'traces:GetTrace',
                 'traces:GetTraceTree',
-                'traces:GetTraceGenerations',
+                'generations:ListGenerations',
               ],
             },
           ],
@@ -270,31 +270,42 @@ describe('Traces REST API', () => {
     });
   });
 
-  describe('GET /api/v1/traces/:trace_id/generations', () => {
+  // Generations for a trace are now listed via GET /api/v1/generations?trace_id=
+  // (the former GET /traces/:trace_id/generations was removed).
+  describe('GET /api/v1/generations?trace_id=', () => {
     test('unauthenticated request returns 401', async () => {
-      const res = await testClient.get(`/api/v1/traces/${traceId}/generations`);
+      const res = await testClient.get(
+        `/api/v1/generations?trace_id=${traceId}`
+      );
       expect(res.status).toBe(401);
     });
 
-    test('authenticated user can get generation IDs for a trace', async () => {
+    test('authenticated user can list generations for a trace', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/traces/${traceId}/generations`
+        `/api/v1/generations?trace_id=${traceId}`
       );
       expect(res.status).toBe(200);
-      expect(res.body.trace_id).toBe(traceId);
-      expect(res.body.generation_ids).toEqual(traceGenerationIds);
+      const ids = res.body.data.map((g: { id: string }) => {
+        return g.id;
+      });
+      expect(ids.sort()).toEqual([...traceGenerationIds].sort());
+      for (const gen of res.body.data) {
+        expect(gen.trace_id).toBe(traceId);
+      }
     });
 
-    test('returns 404 for non-existent trace', async () => {
+    test('non-existent trace returns an empty page, not 404', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        '/api/v1/traces/trc_nonexistent_000000/generations'
+        '/api/v1/generations?trace_id=trc_nonexistent_000000'
       );
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([]);
+      expect(res.body.total).toBe(0);
     });
 
-    test('user without permission cannot get generation IDs', async () => {
+    test('user without permission cannot list generations', async () => {
       const res = await authenticatedTestClient(noPermToken).get(
-        `/api/v1/traces/${traceId}/generations`
+        `/api/v1/generations?trace_id=${traceId}`
       );
       expect(res.status).toBe(403);
     });

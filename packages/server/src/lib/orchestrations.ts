@@ -349,27 +349,30 @@ export const findOrchestrationRun = async (args: {
 };
 
 export const listOrchestrationRuns = async (args: {
-  orchestrationPublicId: string;
+  orchestrationPublicId?: string;
   projectIds?: number[];
 }): Promise<MappedOrchestrationRun[]> => {
   log('listOrchestrationRuns %o', {
     orchestrationPublicId: args.orchestrationPublicId,
   });
 
-  const orchWhere: Record<string, unknown> = {
-    publicId: args.orchestrationPublicId,
-  };
-  if (args.projectIds) orchWhere['projectId'] = args.projectIds;
+  const where: Record<string, unknown> = {};
+  if (args.projectIds) where['projectId'] = args.projectIds;
 
-  const orch = await db.Orchestration.findOne({ where: orchWhere });
-  if (!orch)
-    throw new DomainError(
-      'ORCHESTRATION_NOT_FOUND',
-      `Orchestration '${args.orchestrationPublicId}' not found.`
-    );
+  // Optional orchestration filter: resolve the orchestration id when provided,
+  // returning an empty list if it does not exist within the caller's scope.
+  if (args.orchestrationPublicId !== undefined) {
+    const orchWhere: Record<string, unknown> = {
+      publicId: args.orchestrationPublicId,
+    };
+    if (args.projectIds) orchWhere['projectId'] = args.projectIds;
+    const orch = await db.Orchestration.findOne({ where: orchWhere });
+    if (!orch) return [];
+    where['orchestrationId'] = orch.id as number;
+  }
 
   const rows = await db.OrchestrationRun.findAll({
-    where: { orchestrationId: orch.id as number },
+    where,
     include: [
       { model: db.Project, as: 'project' },
       { model: db.Orchestration, as: 'orchestration' },

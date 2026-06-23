@@ -242,14 +242,24 @@ webhooksRouter.delete('/webhooks/:webhook_id', async (ctx: Context) => {
   ctx.status = 204;
 });
 
-webhooksRouter.get('/webhooks/:webhook_id/deliveries', async (ctx: Context) => {
+// Webhook deliveries are a top-level resource (/webhook-deliveries) but every
+// delivery belongs to a webhook; access is governed by the owning webhook's
+// project. Listing requires webhook_id (deliveries have no project of their own).
+webhooksRouter.get('/webhook-deliveries', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
     return;
   }
 
-  const webhook = await getWebhook({ id: ctx.params.webhook_id });
+  const webhookPublicId = ctx.query.webhookId as string | undefined;
+  if (!webhookPublicId) {
+    ctx.status = 400;
+    ctx.body = { error: 'webhook_id is required' };
+    return;
+  }
+
+  const webhook = await getWebhook({ id: webhookPublicId });
   if (!webhook) {
     ctx.status = 404;
     ctx.body = { error: 'Webhook not found' };
@@ -267,7 +277,7 @@ webhooksRouter.get('/webhooks/:webhook_id/deliveries', async (ctx: Context) => {
   }
 
   const webhookRecord = await db.Webhook.findOne({
-    where: { publicId: ctx.params.webhook_id },
+    where: { publicId: webhookPublicId },
   });
 
   const limit = ctx.query.limit ? parseInt(ctx.query.limit as string, 10) : 50;
@@ -282,44 +292,39 @@ webhooksRouter.get('/webhooks/:webhook_id/deliveries', async (ctx: Context) => {
   });
 });
 
-webhooksRouter.get(
-  '/webhooks/:webhook_id/deliveries/:delivery_id',
-  async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
-
-    const webhook = await getWebhook({ id: ctx.params.webhook_id });
-    if (!webhook) {
-      ctx.status = 404;
-      ctx.body = { error: 'Webhook not found' };
-      return;
-    }
-
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: webhook.projectId!,
-      action: 'webhooks:GetWebhookDelivery',
-    });
-    if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
-
-    const delivery = await getWebhookDelivery({
-      id: ctx.params.delivery_id,
-    });
-    if (!delivery) {
-      ctx.status = 404;
-      ctx.body = { error: 'Delivery not found' };
-      return;
-    }
-
-    ctx.body = delivery;
+webhooksRouter.get('/webhook-deliveries/:delivery_id', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
   }
-);
+
+  const delivery = await getWebhookDelivery({ id: ctx.params.delivery_id });
+  if (!delivery) {
+    ctx.status = 404;
+    ctx.body = { error: 'Delivery not found' };
+    return;
+  }
+
+  const webhook = await getWebhook({ id: delivery.webhookId! });
+  if (!webhook) {
+    ctx.status = 404;
+    ctx.body = { error: 'Delivery not found' };
+    return;
+  }
+
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: webhook.projectId!,
+    action: 'webhooks:GetWebhookDelivery',
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  ctx.body = delivery;
+});
 
 webhooksRouter.get('/webhooks/:webhook_id/secret', async (ctx: Context) => {
   if (!ctx.authUser) {

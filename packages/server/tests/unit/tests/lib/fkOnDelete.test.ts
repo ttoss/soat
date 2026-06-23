@@ -113,14 +113,14 @@ describe('FK onDelete rules', () => {
       const memId = await createMemory();
 
       const entryRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/memories/${memId}/entries`)
-        .send({ content: 'test entry for cascade' });
+        .post('/api/v1/memory-entries')
+        .send({ memory_id: memId, content: 'test entry for cascade' });
       expect(entryRes.status).toBe(201);
       const entryId = entryRes.body.id;
 
       // Confirm entry exists
       const beforeGet = await authenticatedTestClient(userToken).get(
-        `/api/v1/memories/${memId}/entries/${entryId}`
+        `/api/v1/memory-entries/${entryId}`
       );
       expect(beforeGet.status).toBe(200);
 
@@ -151,8 +151,8 @@ describe('FK onDelete rules', () => {
       const agentDbId = agentRow!.id as number;
 
       const sessionRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentPublicId}/sessions`)
-        .send({});
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentPublicId });
       expect(sessionRes.status).toBe(201);
       const sessionPublicId = sessionRes.body.id as string;
 
@@ -316,8 +316,8 @@ describe('FK onDelete rules', () => {
       const actorPublicId = actorRes.body.id as string;
 
       const sessionRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentPublicId}/sessions`)
-        .send({ actor_id: actorPublicId });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentPublicId, actor_id: actorPublicId });
       expect(sessionRes.status).toBe(201);
       const sessionPublicId = sessionRes.body.id as string;
       expect(sessionRes.body.actor_id).toBe(actorPublicId);

@@ -99,6 +99,15 @@ describe('buildModel', () => {
     expect(model).toBeDefined();
   });
 
+  test('builds bedrock model with apiKey JSON without throwing', () => {
+    const model = buildModel({
+      provider: 'bedrock',
+      secretValue: JSON.stringify({ apiKey: 'ABSK-test-key' }),
+      model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+    });
+    expect(model).toBeDefined();
+  });
+
   test('builds ollama model without throwing', () => {
     const model = buildModel({
       provider: 'ollama',

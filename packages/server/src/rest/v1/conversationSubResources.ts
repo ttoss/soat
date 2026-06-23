@@ -8,7 +8,6 @@ import {
 import {
   getConversation,
   getConversationTags,
-  listConversationActors,
   listConversationMessages,
   updateConversationTags,
 } from 'src/lib/conversations';
@@ -179,44 +178,6 @@ conversationSubResourcesRouter.delete(
     }
 
     ctx.status = 204;
-  }
-);
-
-conversationSubResourcesRouter.get(
-  '/conversations/:conversation_id/actors',
-  async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
-
-    const conversation = await getConversation({
-      id: ctx.params.conversation_id,
-    });
-
-    if (!conversation) {
-      ctx.status = 404;
-      ctx.body = { error: 'Conversation not found' };
-      return;
-    }
-
-    if (
-      !(await checkConversationAccess(
-        ctx.authUser!,
-        conversation,
-        'conversations:GetConversation'
-      ))
-    ) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
-
-    const actors = await listConversationActors({
-      conversationId: ctx.params.conversation_id,
-    });
-    ctx.body = actors;
   }
 );
 

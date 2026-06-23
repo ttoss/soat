@@ -7,7 +7,7 @@ The Policies module provides global, reusable IAM policy documents that can be a
 
 ## Overview
 
-A Policy is a named, reusable [policy document](./iam.md#policy-documents) stored globally — not scoped to any project. Policies are attached to **users** (via `PUT /users/:userId/policies`) and **API keys** (at creation or update time) to grant or restrict access.
+A Policy is a named, reusable [policy document](./iam.md#policy-documents) stored globally — not scoped to any project. Policies are attached to **users** (via `PUT /users/:userId/policies`) and **API keys** (at creation or update time) to grant or restrict access. To list the policies attached to a user, use `GET /policies?user_id=`.
 
 Policies are identified by an `id` prefixed with `pol_`.
 

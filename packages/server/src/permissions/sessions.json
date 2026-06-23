@@ -2,19 +2,19 @@
   "module": "sessions",
   "operations": [
     {
-      "operationId": "createAgentSession",
+      "operationId": "createSession",
       "action": "agents:CreateSession",
       "description": "Create a new session for an agent"
     },
     {
-      "operationId": "listAgentSessions",
+      "operationId": "listSessions",
       "action": "agents:ListSessions",
-      "description": "List sessions for an agent"
+      "description": "List sessions"
     },
     {
-      "operationId": "getAgentSession",
+      "operationId": "getSession",
       "action": "agents:GetSession",
-      "description": "Get a session and its messages"
+      "description": "Get a session"
     },
     {
       "operationId": "updateSession",
@@ -22,7 +22,7 @@
       "description": "Update session name, status, or tags"
     },
     {
-      "operationId": "deleteAgentSession",
+      "operationId": "deleteSession",
       "action": "agents:DeleteSession",
       "description": "Delete a session"
     },
@@ -40,11 +40,6 @@
       "operationId": "submitSessionToolOutputs",
       "action": "agents:SubmitSessionToolOutputs",
       "description": "Submit tool outputs for client tools in a session"
-    },
-    {
-      "operationId": "listAgentSessionMessages",
-      "action": "agents:ListSessionMessages",
-      "description": "List messages in a session"
     }
   ]
 }

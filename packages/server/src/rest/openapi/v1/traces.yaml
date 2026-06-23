@@ -170,46 +170,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/v1/traces/{trace_id}/generations:
-    get:
-      tags:
-        - Traces
-      summary: Get generation IDs for a trace
-      description: Returns all generation IDs associated with the trace.
-      operationId: getTraceGenerations
-      parameters:
-        - name: trace_id
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Public ID of the trace
-      responses:
-        '200':
-          description: Generation IDs linked to the trace
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TraceGenerations'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Trace not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
 components:
   securitySchemes:
     bearerAuth:
@@ -318,22 +278,6 @@ components:
           description: Child traces triggered by sub-agent calls from this trace
           items:
             $ref: '#/components/schemas/TraceTreeNode'
-
-    TraceGenerations:
-      type: object
-      properties:
-        trace_id:
-          x-soat-ref: traces
-          type: string
-          description: Public ID of the trace
-          example: agt_trace_V1StGXR8Z5jdHi6B
-        generation_ids:
-          x-soat-ref: generations
-          type: array
-          description: Generation public IDs linked to this trace, ordered by start time
-          items:
-            type: string
-            example: gen_abc123
 
     ErrorResponse:
       type: object

@@ -267,10 +267,12 @@ A [session](/docs/modules/sessions#examples) is a single conversation thread tie
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-SESSION_ID=$(soat create-agent-session \
+SESSION_RESP=$(soat create-session \
   --agent-id "$AGENT_ID" \
   --name "My first chat" \
-  --auto-generate true | jq -r '.id')
+  --auto-generate true)
+SESSION_ID=$(printf '%s' "$SESSION_RESP" | jq -r '.id')
+CONV_ID=$(printf '%s' "$SESSION_RESP" | jq -r '.conversation_id')
 echo "SESSION_ID: $SESSION_ID"
 # SESSION_ID: sess_N0oEzsx3ayvgKwy3
 ```
@@ -279,24 +281,26 @@ echo "SESSION_ID: $SESSION_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: session2, error } = await adminSoat.sessions.createAgentSession({
-  path: { agent_id: AGENT_ID },
-  body: { name: 'My first chat', auto_generate: true },
+const { data: session2, error } = await adminSoat.sessions.createSession({
+  body: { agent_id: AGENT_ID, name: 'My first chat', auto_generate: true },
 });
 
 if (error) throw new Error(JSON.stringify(error));
 
 const SESSION_ID = session2.id; // sess_…
+const CONV_ID = session2.conversation_id; // conv_…
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-SESSION_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions" \
+SESSION_RESP=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name":"My first chat","auto_generate":true}' | jq -r '.id')
+  -d "{\"agent_id\":\"$AGENT_ID\",\"name\":\"My first chat\",\"auto_generate\":true}")
+SESSION_ID=$(printf '%s' "$SESSION_RESP" | jq -r '.id')
+CONV_ID=$(printf '%s' "$SESSION_RESP" | jq -r '.conversation_id')
 echo "SESSION_ID: $SESSION_ID"
 ```
 
@@ -316,7 +320,6 @@ Because `auto_generate` is enabled, every call to `add-session-message` triggers
 
 ```bash
 soat add-session-message \
-  --agent-id "$AGENT_ID" \
   --session-id "$SESSION_ID" \
   --message "What is the capital of France?"
 ```
@@ -342,7 +345,7 @@ Example output:
 ```ts
 const { data: reply1, error: err1 } =
   await adminSoat.sessions.addSessionMessage({
-    path: { agent_id: AGENT_ID, session_id: SESSION_ID },
+    path: { session_id: SESSION_ID },
     body: { message: 'What is the capital of France?' },
   });
 
@@ -356,7 +359,7 @@ console.log(reply1.message?.content);
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"message":"What is the capital of France?"}'
@@ -379,7 +382,6 @@ soat update-session \
   --auto-generate false
 
 soat add-session-message \
-  --agent-id "$AGENT_ID" \
   --session-id "$SESSION_ID" \
   --message "In one short sentence, what is the population of Paris?"
 ```
@@ -390,7 +392,7 @@ soat add-session-message \
 ```ts
 const { data: reply2, error: err2 } =
   await adminSoat.sessions.addSessionMessage({
-    path: { agent_id: AGENT_ID, session_id: SESSION_ID },
+    path: { session_id: SESSION_ID },
     body: {
       message: 'In one short sentence, what is the population of Paris?',
     },
@@ -405,12 +407,12 @@ console.log(reply2.status);
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X PATCH "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID" \
+curl -s -X PATCH "$SOAT_BASE_URL/api/v1/sessions/$SESSION_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"auto_generate":false}'
 
-curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"message":"In one short sentence, what is the population of Paris?"}'
@@ -429,9 +431,8 @@ Fetch all messages in the session to review the full exchange. Messages are pers
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat list-agent-session-messages \
-  --agent-id "$AGENT_ID" \
-  --session-id "$SESSION_ID" | jq '.data[] | {role, content}'
+soat list-conversation-messages \
+  --conversation-id "$CONV_ID" | jq '.data[] | {role, content}'
 ```
 
 Example output:
@@ -448,8 +449,8 @@ Example output:
 
 ```ts
 const { data: messages, error } =
-  await adminSoat.sessions.listAgentSessionMessages({
-    path: { agent_id: AGENT_ID, session_id: SESSION_ID },
+  await adminSoat.conversations.listConversationMessages({
+    path: { conversation_id: CONV_ID },
   });
 
 if (error) throw new Error(JSON.stringify(error));
@@ -463,7 +464,7 @@ for (const msg of messages.data ?? []) {
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
+curl -s "$SOAT_BASE_URL/api/v1/conversations/$CONV_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data[] | {role, content}'
 ```
 
@@ -577,12 +578,10 @@ soat update-session \
   --auto-generate false
 
 soat add-session-message \
-  --agent-id "$AGENT_ID" \
   --session-id "$SESSION_ID" \
   --message "Give me 1 concise fact about Sao Paulo."
 
 soat generate-session-response \
-  --agent-id "$AGENT_ID" \
   --session-id "$SESSION_ID" \
   --async true
 ```
@@ -601,14 +600,14 @@ Expected immediate response (accepted):
 
 ```ts
 const { error: updateErr } = await adminSoat.sessions.updateSession({
-  path: { agent_id: AGENT_ID, session_id: SESSION_ID },
+  path: { session_id: SESSION_ID },
   body: { auto_generate: false },
 });
 
 if (updateErr) throw new Error(JSON.stringify(updateErr));
 
 const { error: addErr } = await adminSoat.sessions.addSessionMessage({
-  path: { agent_id: AGENT_ID, session_id: SESSION_ID },
+  path: { session_id: SESSION_ID },
   body: { message: 'Give me 1 concise fact about Sao Paulo.' },
 });
 
@@ -616,7 +615,7 @@ if (addErr) throw new Error(JSON.stringify(addErr));
 
 const { data: accepted, error: generateErr } =
   await adminSoat.sessions.generateSessionResponse({
-    path: { agent_id: AGENT_ID, session_id: SESSION_ID },
+    path: { session_id: SESSION_ID },
     query: { async: true },
   });
 
@@ -629,17 +628,17 @@ console.log(accepted.status); // "accepted"
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X PATCH "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID" \
+curl -s -X PATCH "$SOAT_BASE_URL/api/v1/sessions/$SESSION_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"auto_generate":false}'
 
-curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"message":"Give me 1 concise fact about Sao Paulo."}'
 
-curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/generate?async=true" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$SESSION_ID/generate?async=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json"
 ```
@@ -669,9 +668,8 @@ soat list-webhook-deliveries \
 
 cat session-webhooks.log
 
-soat list-agent-session-messages \
-  --agent-id "$AGENT_ID" \
-  --session-id "$SESSION_ID" | jq '.data[] | {role, content}'
+soat list-conversation-messages \
+  --conversation-id "$CONV_ID" | jq '.data[] | {role, content}'
 
 kill "$LISTENER_PID"
 wait "$LISTENER_PID" 2>/dev/null || true
@@ -683,7 +681,7 @@ wait "$LISTENER_PID" 2>/dev/null || true
 ```ts
 const { data: deliveries, error: deliveriesErr } =
   await adminSoat.webhooks.listWebhookDeliveries({
-    path: { webhook_id: WEBHOOK_ID },
+    query: { webhook_id: WEBHOOK_ID },
   });
 
 if (deliveriesErr) throw new Error(JSON.stringify(deliveriesErr));
@@ -693,8 +691,8 @@ for (const d of deliveries.data ?? []) {
 }
 
 const { data: messages2, error: messagesErr } =
-  await adminSoat.sessions.listAgentSessionMessages({
-    path: { agent_id: AGENT_ID, session_id: SESSION_ID },
+  await adminSoat.conversations.listConversationMessages({
+    path: { conversation_id: CONV_ID },
   });
 
 if (messagesErr) throw new Error(JSON.stringify(messagesErr));
@@ -708,11 +706,11 @@ for (const msg of messages2.data ?? []) {
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_BASE_URL/api/v1/webhooks/$WEBHOOK_ID/deliveries" \
+curl -s "$SOAT_BASE_URL/api/v1/webhook-deliveries?webhook_id=$WEBHOOK_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   | jq '.data[] | {event_type, status, status_code}'
 
-curl -s "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
+curl -s "$SOAT_BASE_URL/api/v1/conversations/$CONV_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   | jq '.data[] | {role, content}'
 ```
@@ -724,6 +722,6 @@ curl -s "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/sessions/$SESSION_ID/messages" \
 
 ## What's next
 
-- **Manual generation**: Create a session without `auto_generate` and call `generate-session-response` (`soat generate-session-response --agent-id … --session-id …`) explicitly for full control over when the model responds.
+- **Manual generation**: Create a session without `auto_generate` and call `generate-session-response` (`soat generate-session-response --session-id …`) explicitly for full control over when the model responds.
 - **Session tags**: Use `replace-session-tags` / `merge-session-tags` to attach metadata (e.g. user ID, conversation topic) to a session for filtering.
 - **Agents with tools**: Attach SOAT tools or HTTP tools to the agent so the model can take actions. See the [Agents module](/docs/modules/agents#examples).

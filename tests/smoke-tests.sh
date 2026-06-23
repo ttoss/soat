@@ -130,10 +130,10 @@ fi
 # Attach policy to admin user
 $SOAT_CLI attach-user-policies --user-id "$ADMIN_USER_ID" --policy_ids "[\"$POLICY_READ_ID\",\"$POLICY_WRITE_ID\"]"
 
-# Get user policies
-USER_POLICIES_RESP=$($SOAT_CLI get-user-policies --user-id "$ADMIN_USER_ID")
+# List the policies attached to the user (replaces removed get-user-policies)
+USER_POLICIES_RESP=$($SOAT_CLI list-policies --user-id "$ADMIN_USER_ID")
 if ! printf '%s\n' "$USER_POLICIES_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
-  echo "ERROR: GET user policies did not return an array" >&2
+  echo "ERROR: list-policies --user-id did not return an array" >&2
   echo "$USER_POLICIES_RESP" >&2
   exit 1
 fi
@@ -637,7 +637,6 @@ echo "Completed run: OK"
 
 echo "--- Getting run ---"
 ORCH_RUN_GET_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run \
-  --orchestration-id "$ORCH_ID" \
   --run-id "$ORCH_RUN_ID")
 if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e --arg id "$ORCH_RUN_ID" '.id == $id and .status == "completed"' >/dev/null 2>&1; then
   echo "get-orchestration-run returned unexpected response"
@@ -685,7 +684,6 @@ echo "Paused run: OK"
 
 echo "--- Submitting human input ---"
 HUMAN_INPUT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI submit-human-input \
-  --orchestration-id "$HUMAN_ORCH_ID" \
   --run-id "$HUMAN_RUN_ID" \
   --node-id "$HUMAN_NODE_ID" \
   --output '{"choice":"approve"}')
@@ -707,7 +705,6 @@ if ! printf '%s\n' "$RESUME_CANDIDATE_RESP" | jq -e '.status == "paused" and .re
   exit 1
 fi
 HUMAN_RESUME_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI resume-orchestration-run \
-  --orchestration-id "$HUMAN_ORCH_ID" \
   --run-id "$RESUME_RUN_ID")
 if ! printf '%s\n' "$HUMAN_RESUME_RESP" | jq -e '.status == "paused" and .required_action.node_id == "approval"' >/dev/null 2>&1; then
   echo "resume-orchestration-run did not complete human orchestration as expected"
@@ -727,7 +724,6 @@ if ! printf '%s\n' "$CANCEL_CANDIDATE_RESP" | jq -e '.status == "paused"' >/dev/
   exit 1
 fi
 CANCEL_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI cancel-orchestration-run \
-  --orchestration-id "$HUMAN_ORCH_ID" \
   --run-id "$CANCEL_RUN_ID")
 if ! printf '%s\n' "$CANCEL_RUN_RESP" | jq -e '.status == "cancelled"' >/dev/null 2>&1; then
   echo "cancel-orchestration-run did not return cancelled status"
@@ -1224,14 +1220,14 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
   fi
   echo "Trace tree endpoint: OK"
 
-  TRACE_GENS_RESP=$($SOAT_CLI get-trace-generations --trace-id "$CLIENT_TRACE_ID")
-  FIRST_GENERATION_ID=$(printf '%s\n' "$TRACE_GENS_RESP" | jq -r '.generation_ids[0] // empty')
+  TRACE_GENS_RESP=$($SOAT_CLI list-generations --trace-id "$CLIENT_TRACE_ID")
+  FIRST_GENERATION_ID=$(printf '%s\n' "$TRACE_GENS_RESP" | jq -r '.data[0].id // empty')
   if [ -z "$FIRST_GENERATION_ID" ]; then
-    echo "ERROR: get-trace-generations returned no generation IDs for '$CLIENT_TRACE_ID'" >&2
+    echo "ERROR: list-generations returned no generations for trace '$CLIENT_TRACE_ID'" >&2
     echo "$TRACE_GENS_RESP" >&2
     exit 1
   fi
-  echo "Trace generations endpoint: OK"
+  echo "List generations (by trace) endpoint: OK"
 
   GENERATION_GET_RESP=$($SOAT_CLI get-generation --generation-id "$FIRST_GENERATION_ID")
   GENERATION_RETURNED_ID=$(printf '%s\n' "$GENERATION_GET_RESP" | jq -r '.id // empty')
@@ -1369,9 +1365,9 @@ if [ "$NAME_PATCH_NAME" != "smoke-renamed-conversation" ]; then
 fi
 echo "Conversation rename: OK"
 
-# 45. Create an agent-backed actor using the convenience endpoint POST /agents/:id/actors
-echo "--- Creating agent-backed actor via convenience endpoint ---"
-AGENT_ACTOR_RESP=$($SOAT_CLI create-agent-actor --agent-id "$CONVO_GEN_AGENT_ID" \
+# 45. Create an agent-backed actor via POST /actors with agent_id
+echo "--- Creating agent-backed actor via /actors (agent_id) ---"
+AGENT_ACTOR_RESP=$($SOAT_CLI create-actor --agent-id "$CONVO_GEN_AGENT_ID" \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name convo-agent-actor \
   --instructions "Reply as a friendly assistant.")
@@ -1476,9 +1472,9 @@ if [ "$MSG_COUNT" -lt "2" ]; then
 fi
 echo "Conversation messages count: $MSG_COUNT (OK)"
 
-# 49. Verify GET /conversations/:id/actors lists the user actor
-echo "--- Verifying GET /conversations/:id/actors ---"
-CONVO_ACTORS_RESP=$($SOAT_CLI list-conversation-actors --conversation-id "$NAMED_CONVO_ID")
+# 49. Verify GET /actors?conversation_id= lists the user actor
+echo "--- Verifying GET /actors?conversation_id= ---"
+CONVO_ACTORS_RESP=$($SOAT_CLI list-actors --conversation-id "$NAMED_CONVO_ID")
 CONVO_ACTORS_COUNT=$(echo "$CONVO_ACTORS_RESP" | jq 'if type=="array" then length else (.data | length) end')
 if [ "$CONVO_ACTORS_COUNT" -lt "1" ]; then
   echo "ERROR: Expected at least 1 actor in conversation, got $CONVO_ACTORS_COUNT" >&2
@@ -1800,7 +1796,7 @@ if [ -z "$SSA_AGENT_ID" ] || [ "$SSA_AGENT_ID" = "null" ]; then
 fi
 echo "SSA agent created: $SSA_AGENT_ID"
 
-SSA_SESSION_RESP=$($SOAT_CLI create-agent-session \
+SSA_SESSION_RESP=$($SOAT_CLI create-session \
   --agent_id "$SSA_AGENT_ID" \
   --actor_id "$SSA_ACTOR_ID")
 SSA_SESSION_ID=$(printf '%s\n' "$SSA_SESSION_RESP" | jq -r '.id')
@@ -1811,7 +1807,7 @@ if [ -z "$SSA_SESSION_ID" ] || [ "$SSA_SESSION_ID" = "null" ]; then
 fi
 echo "First session created: $SSA_SESSION_ID"
 
-expect_cli_error_status 409 create-agent-session \
+expect_cli_error_status 409 create-session \
   --agent_id "$SSA_AGENT_ID" \
   --actor_id "$SSA_ACTOR_ID"
 echo "Duplicate session correctly rejected with 409."
@@ -1822,7 +1818,7 @@ echo "single_session_per_actor: OK"
 
 # idempotency_key on add-session-message
 echo "--- add-session-message idempotency_key deduplication ---"
-IDEM_SESSION_RESP=$($SOAT_CLI create-agent-session \
+IDEM_SESSION_RESP=$($SOAT_CLI create-session \
   --agent_id "$AGENT_ID")
 IDEM_SESSION_ID=$(printf '%s\n' "$IDEM_SESSION_RESP" | jq -r '.id')
 if [ -z "$IDEM_SESSION_ID" ] || [ "$IDEM_SESSION_ID" = "null" ]; then
@@ -1834,7 +1830,6 @@ fi
 IDEM_KEY="smoke-idem-key-$$"
 
 IDEM_FIRST_RESP=$($SOAT_CLI add-session-message \
-  --agent_id "$AGENT_ID" \
   --session_id "$IDEM_SESSION_ID" \
   --message "first message" \
   --idempotency_key "$IDEM_KEY")
@@ -1847,7 +1842,6 @@ fi
 echo "First call with idempotency_key: OK"
 
 IDEM_SECOND_RESP=$($SOAT_CLI add-session-message \
-  --agent_id "$AGENT_ID" \
   --session_id "$IDEM_SESSION_ID" \
   --message "different message" \
   --idempotency_key "$IDEM_KEY")

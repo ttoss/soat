@@ -24,7 +24,8 @@ policiesRouter.get('/policies', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listPolicies();
+  const userId = ctx.query.userId as string | undefined;
+  ctx.body = await listPolicies({ userId });
 });
 
 policiesRouter.post('/policies', async (ctx: Context) => {
