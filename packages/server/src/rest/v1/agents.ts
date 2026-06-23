@@ -10,17 +10,8 @@ import {
 } from 'src/lib/agents';
 
 import { agentGenerationRouter } from './agentGeneration';
-import { sessionsRouter } from './sessions';
 
 export const agentsRouter = new Router<Context>();
-
-// ── Sessions (sub-resource) ──────────────────────────────────────────────
-
-agentsRouter.use(
-  '/agents/:agent_id/sessions',
-  sessionsRouter.routes(),
-  sessionsRouter.allowedMethods()
-);
 
 // ── Agents CRUD ──────────────────────────────────────────────────────────
 

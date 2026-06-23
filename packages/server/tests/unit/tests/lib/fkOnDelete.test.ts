@@ -151,8 +151,8 @@ describe('FK onDelete rules', () => {
       const agentDbId = agentRow!.id as number;
 
       const sessionRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentPublicId}/sessions`)
-        .send({});
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentPublicId });
       expect(sessionRes.status).toBe(201);
       const sessionPublicId = sessionRes.body.id as string;
 
@@ -316,8 +316,8 @@ describe('FK onDelete rules', () => {
       const actorPublicId = actorRes.body.id as string;
 
       const sessionRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentPublicId}/sessions`)
-        .send({ actor_id: actorPublicId });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentPublicId, actor_id: actorPublicId });
       expect(sessionRes.status).toBe(201);
       const sessionPublicId = sessionRes.body.id as string;
       expect(sessionRes.body.actor_id).toBe(actorPublicId);

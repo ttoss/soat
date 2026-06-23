@@ -5,6 +5,7 @@ import { DomainError } from 'src/errors';
 import {
   createSession,
   deleteSession,
+  findSessionAccess,
   getSession,
   listSessions,
   updateSession,
@@ -15,31 +16,19 @@ import { sessionSubResourcesRouter } from './sessionSubResources';
 export const sessionsRouter = new Router<Context>();
 
 /**
- * Resolve the internal agent from the `agentId` URL parameter.
- * Returns the Agent model instance or null if not found.
- */
-const resolveAgent = async (agentPublicId: string) => {
-  return db.Agent.findOne({
-    where: { publicId: agentPublicId },
-  });
-};
-
-type AgentModel = Awaited<ReturnType<typeof resolveAgent>>;
-
-/**
- * Resolves the agent for the current request and verifies the authenticated
- * user has access to it.
+ * Resolves a session by its (globally unique) id and verifies the authenticated
+ * user can access the project it belongs to.
  *
  * Throws `DomainError` with codes:
  *  - `UNAUTHORIZED`       – no authenticated user
- *  - `FORBIDDEN`          – user has no project access or agent belongs to a
- *                           project the user cannot access
- *  - `RESOURCE_NOT_FOUND` – agent does not exist
+ *  - `FORBIDDEN`          – user has no project access or the session belongs to
+ *                           a project the user cannot access
+ *  - `RESOURCE_NOT_FOUND` – session does not exist
  */
-const checkAgentAccess = async (
+export const checkSessionAccess = async (
   ctx: Context,
   action: string
-): Promise<{ agent: NonNullable<AgentModel> }> => {
+): Promise<{ agentId: number; agentPublicId: string; projectId: number }> => {
   if (!ctx.authUser) {
     throw new DomainError('UNAUTHORIZED', 'Unauthorized');
   }
@@ -50,24 +39,36 @@ const checkAgentAccess = async (
   ) {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
-  const agent = await resolveAgent(ctx.params.agent_id);
-  if (!agent) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Agent not found');
+  const access = await findSessionAccess({ sessionId: ctx.params.session_id });
+  if (!access) {
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
   }
-  if (projectIds && !projectIds.includes(agent.projectId)) {
+  if (projectIds && !projectIds.includes(access.projectId)) {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
-  return { agent };
+  return access;
 };
 
 // ── Create Session ───────────────────────────────────────────────────────
 
-sessionsRouter.post('/', async (ctx: Context) => {
+sessionsRouter.post('/sessions', async (ctx: Context) => {
   if (!ctx.authUser) {
     throw new DomainError('UNAUTHORIZED', 'Unauthorized');
   }
 
-  const agentPublicId = ctx.params.agent_id;
+  const body = ctx.request.body as {
+    agentId?: string;
+    name?: string;
+    actorId?: string;
+    autoGenerate?: boolean;
+    toolContext?: Record<string, string> | null;
+    inactivityTtlSeconds?: number;
+    messageDelaySeconds?: number | null;
+  };
+
+  if (!body.agentId) {
+    throw new DomainError('VALIDATION_FAILED', 'agent_id is required');
+  }
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'agents:CreateSession',
@@ -80,7 +81,7 @@ sessionsRouter.post('/', async (ctx: Context) => {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
-  const agent = await resolveAgent(agentPublicId);
+  const agent = await db.Agent.findOne({ where: { publicId: body.agentId } });
   if (!agent) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Agent not found');
   }
@@ -89,15 +90,6 @@ sessionsRouter.post('/', async (ctx: Context) => {
   if (projectIds && !projectIds.includes(agent.projectId)) {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
-
-  const body = ctx.request.body as {
-    name?: string;
-    actorId?: string;
-    autoGenerate?: boolean;
-    toolContext?: Record<string, string> | null;
-    inactivityTtlSeconds?: number;
-    messageDelaySeconds?: number | null;
-  };
 
   const result = await createSession({
     projectId: agent.projectId,
@@ -116,12 +108,10 @@ sessionsRouter.post('/', async (ctx: Context) => {
 
 // ── List Sessions ────────────────────────────────────────────────────────
 
-sessionsRouter.get('/', async (ctx: Context) => {
+sessionsRouter.get('/sessions', async (ctx: Context) => {
   if (!ctx.authUser) {
     throw new DomainError('UNAUTHORIZED', 'Unauthorized');
   }
-
-  const agentPublicId = ctx.params.agent_id;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'agents:ListSessions',
@@ -134,23 +124,14 @@ sessionsRouter.get('/', async (ctx: Context) => {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
-  const agent = await resolveAgent(agentPublicId);
-  if (!agent) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Agent not found');
-  }
-
-  if (projectIds && !projectIds.includes(agent.projectId)) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
-
-  const { actorId, status, limit, offset } = ctx.query as Record<
+  const { agentId, actorId, status, limit, offset } = ctx.query as Record<
     string,
     string | undefined
   >;
 
   ctx.body = await listSessions({
     projectIds,
-    agentId: agent.id as number,
+    agentId,
     actorId,
     status,
     limit: limit ? Number(limit) : undefined,
@@ -160,21 +141,19 @@ sessionsRouter.get('/', async (ctx: Context) => {
 
 // ── Get Session ──────────────────────────────────────────────────────────
 
-sessionsRouter.get('/:session_id', async (ctx: Context) => {
-  const { agent } = await checkAgentAccess(ctx, 'agents:GetSession');
+sessionsRouter.get('/sessions/:session_id', async (ctx: Context) => {
+  const { agentId } = await checkSessionAccess(ctx, 'agents:GetSession');
 
-  const result = await getSession({
-    agentId: agent.id as number,
+  ctx.body = await getSession({
+    agentId,
     sessionId: ctx.params.session_id,
   });
-
-  ctx.body = result;
 });
 
 // ── Update Session ───────────────────────────────────────────────────────
 
-sessionsRouter.patch('/:session_id', async (ctx: Context) => {
-  const { agent } = await checkAgentAccess(ctx, 'agents:UpdateSession');
+sessionsRouter.patch('/sessions/:session_id', async (ctx: Context) => {
+  const { agentId } = await checkSessionAccess(ctx, 'agents:UpdateSession');
 
   const body = ctx.request.body as {
     name?: string | null;
@@ -185,8 +164,8 @@ sessionsRouter.patch('/:session_id', async (ctx: Context) => {
     messageDelaySeconds?: number | null;
   };
 
-  const result = await updateSession({
-    agentId: agent.id as number,
+  ctx.body = await updateSession({
+    agentId,
     sessionId: ctx.params.session_id,
     name: body.name,
     status: body.status,
@@ -195,26 +174,22 @@ sessionsRouter.patch('/:session_id', async (ctx: Context) => {
     inactivityTtlSeconds: body.inactivityTtlSeconds,
     messageDelaySeconds: body.messageDelaySeconds,
   });
-
-  ctx.body = result;
 });
 
 // ── Delete Session ───────────────────────────────────────────────────────
 
-sessionsRouter.delete('/:session_id', async (ctx: Context) => {
-  const { agent } = await checkAgentAccess(ctx, 'agents:DeleteSession');
+sessionsRouter.delete('/sessions/:session_id', async (ctx: Context) => {
+  const { agentId } = await checkSessionAccess(ctx, 'agents:DeleteSession');
 
   await deleteSession({
-    agentId: agent.id as number,
+    agentId,
     sessionId: ctx.params.session_id,
   });
 
   ctx.status = 204;
 });
 
-// ── List Messages ────────────────────────────────────────────────────────
+// ── Sub-resources (messages, generate, tool-outputs, tags) ─────────────────
 
 sessionsRouter.use(sessionSubResourcesRouter.routes());
 sessionsRouter.use(sessionSubResourcesRouter.allowedMethods());
-
-export {};

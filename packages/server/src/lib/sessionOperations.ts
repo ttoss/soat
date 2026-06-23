@@ -3,7 +3,6 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { submitToolOutputs } from './agents';
 import { generateConversationMessage } from './conversationGeneration';
-import { listConversationMessages } from './conversations';
 import { triggerOrScheduleGeneration } from './sessionDelayHelpers';
 import {
   emitGenerationCompleted,
@@ -235,49 +234,6 @@ export const generateSessionResponse = async (args: {
   }
 
   return buildGenerationResult(session, result);
-};
-
-export const listSessionMessages = async (args: {
-  agentId: number;
-  sessionId: string;
-  limit?: number;
-  offset?: number;
-}) => {
-  const session = await findSessionRecord({
-    agentId: args.agentId,
-    sessionId: args.sessionId,
-  });
-
-  if (!session) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
-  }
-
-  const conversation = session.conversation as InstanceType<
-    (typeof db)['Conversation']
-  >;
-
-  const result = await listConversationMessages({
-    conversationId: conversation.publicId,
-    limit: args.limit,
-    offset: args.offset,
-  });
-
-  const mappedData = result?.data.map((msg) => {
-    return {
-      role: msg.role,
-      content: msg.content,
-      documentId: msg.documentId,
-      position: msg.position,
-      metadata: msg.metadata,
-    };
-  });
-
-  return {
-    data: mappedData,
-    total: result?.total,
-    limit: result?.limit,
-    offset: result?.offset,
-  };
 };
 
 export const addSessionMessage = async (args: {

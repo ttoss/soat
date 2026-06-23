@@ -81,11 +81,11 @@ describe('Sessions', () => {
 
   // ── Create Session ─────────────────────────────────────────────────────
 
-  describe('POST /api/v1/agents/:agentId/sessions', () => {
+  describe('POST /api/v1/sessions', () => {
     test('authenticated user can create a session', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({});
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toMatch(/^sess_/);
@@ -96,8 +96,8 @@ describe('Sessions', () => {
 
     test('can create a session with optional fields', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'Test Session' });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'Test Session' });
 
       expect(response.status).toBe(201);
       expect(response.body.name).toBe('Test Session');
@@ -106,24 +106,35 @@ describe('Sessions', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({});
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId });
 
       expect(response.status).toBe(401);
     });
 
+    test('missing agent_id returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({});
+
+      expect(response.status).toBe(400);
+    });
+
     test('invalid agentId returns 404', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/agents/agt_nonexistent/sessions')
-        .send({});
+        .post('/api/v1/sessions')
+        .send({ agent_id: 'agt_nonexistent' });
 
       expect(response.status).toBe(404);
     });
 
     test('can create a session with toolContext', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ tool_context: { user_id: 'u1', env: 'test' } });
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: agentId,
+          tool_context: { user_id: 'u1', env: 'test' },
+        });
 
       expect(response.status).toBe(201);
       expect(response.body.tool_context).toEqual({
@@ -135,10 +146,10 @@ describe('Sessions', () => {
 
   // ── List Sessions ──────────────────────────────────────────────────────
 
-  describe('GET /api/v1/agents/:agentId/sessions', () => {
+  describe('GET /api/v1/sessions', () => {
     test('authenticated user can list sessions', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions`
+        `/api/v1/sessions?agent_id=${agentId}`
       );
 
       expect(response.status).toBe(200);
@@ -148,7 +159,7 @@ describe('Sessions', () => {
 
     test('can filter by status', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions?status=open`
+        `/api/v1/sessions?agent_id=${agentId}&status=open`
       );
 
       expect(response.status).toBe(200);
@@ -170,17 +181,19 @@ describe('Sessions', () => {
       expect(actorId).toMatch(/^actor_/);
 
       // Create two sessions using that actor
-      await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'actorId filter seed', actor_id: actorId });
+      await authenticatedTestClient(userToken).post('/api/v1/sessions').send({
+        agent_id: agentId,
+        name: 'actorId filter seed',
+        actor_id: actorId,
+      });
 
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ actor_id: actorId });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, actor_id: actorId });
 
       // Filter by actorId — all returned sessions must share the same actorId
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions?actor_id=${actorId}`
+        `/api/v1/sessions?agent_id=${agentId}&actor_id=${actorId}`
       );
 
       expect(response.status).toBe(200);
@@ -192,7 +205,7 @@ describe('Sessions', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.get(
-        `/api/v1/agents/${agentId}/sessions`
+        `/api/v1/sessions?agent_id=${agentId}`
       );
 
       expect(response.status).toBe(401);
@@ -201,19 +214,19 @@ describe('Sessions', () => {
 
   // ── Get Session ────────────────────────────────────────────────────────
 
-  describe('GET /api/v1/agents/:agentId/sessions/:sessionId', () => {
+  describe('GET /api/v1/sessions/:sessionId', () => {
     let sessionId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'Get Test Session' });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'Get Test Session' });
       sessionId = res.body.id;
     });
 
     test('authenticated user can get a session', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions/${sessionId}`
+        `/api/v1/sessions/${sessionId}`
       );
 
       expect(response.status).toBe(200);
@@ -223,16 +236,14 @@ describe('Sessions', () => {
 
     test('non-existent session returns 404', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions/sess_nonexistent`
+        `/api/v1/sessions/sess_nonexistent`
       );
 
       expect(response.status).toBe(404);
     });
 
     test('unauthenticated request returns 401', async () => {
-      const response = await testClient.get(
-        `/api/v1/agents/${agentId}/sessions/${sessionId}`
-      );
+      const response = await testClient.get(`/api/v1/sessions/${sessionId}`);
 
       expect(response.status).toBe(401);
     });
@@ -240,19 +251,19 @@ describe('Sessions', () => {
 
   // ── Update Session ─────────────────────────────────────────────────────
 
-  describe('PATCH /api/v1/agents/:agentId/sessions/:sessionId', () => {
+  describe('PATCH /api/v1/sessions/:sessionId', () => {
     let sessionId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'Update Test' });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'Update Test' });
       sessionId = res.body.id;
     });
 
     test('can update session name', async () => {
       const response = await authenticatedTestClient(userToken)
-        .patch(`/api/v1/agents/${agentId}/sessions/${sessionId}`)
+        .patch(`/api/v1/sessions/${sessionId}`)
         .send({ name: 'Updated Name' });
 
       expect(response.status).toBe(200);
@@ -261,7 +272,7 @@ describe('Sessions', () => {
 
     test('can close a session', async () => {
       const response = await authenticatedTestClient(userToken)
-        .patch(`/api/v1/agents/${agentId}/sessions/${sessionId}`)
+        .patch(`/api/v1/sessions/${sessionId}`)
         .send({ status: 'closed' });
 
       expect(response.status).toBe(200);
@@ -270,7 +281,7 @@ describe('Sessions', () => {
 
     test('can update session toolContext', async () => {
       const response = await authenticatedTestClient(userToken)
-        .patch(`/api/v1/agents/${agentId}/sessions/${sessionId}`)
+        .patch(`/api/v1/sessions/${sessionId}`)
         .send({ tool_context: { env: 'prod' } });
 
       expect(response.status).toBe(200);
@@ -279,7 +290,7 @@ describe('Sessions', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
-        .patch(`/api/v1/agents/${agentId}/sessions/${sessionId}`)
+        .patch(`/api/v1/sessions/${sessionId}`)
         .send({ name: 'Nope' });
 
       expect(response.status).toBe(401);
@@ -288,19 +299,19 @@ describe('Sessions', () => {
 
   // ── Delete Session ─────────────────────────────────────────────────────
 
-  describe('DELETE /api/v1/agents/:agentId/sessions/:sessionId', () => {
+  describe('DELETE /api/v1/sessions/:sessionId', () => {
     let sessionId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'Delete Test' });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'Delete Test' });
       sessionId = res.body.id;
     });
 
     test('can delete a session', async () => {
       const response = await authenticatedTestClient(userToken).delete(
-        `/api/v1/agents/${agentId}/sessions/${sessionId}`
+        `/api/v1/sessions/${sessionId}`
       );
 
       expect(response.status).toBe(204);
@@ -308,7 +319,7 @@ describe('Sessions', () => {
 
     test('deleted session returns 404', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions/${sessionId}`
+        `/api/v1/sessions/${sessionId}`
       );
 
       expect(response.status).toBe(404);
@@ -316,96 +327,28 @@ describe('Sessions', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.delete(
-        `/api/v1/agents/${agentId}/sessions/sess_doesnotmatter`
+        `/api/v1/sessions/sess_doesnotmatter`
       );
 
       expect(response.status).toBe(401);
-    });
-  });
-
-  // ── List Messages ──────────────────────────────────────────────────────
-
-  describe('GET /api/v1/agents/:agentId/sessions/:sessionId/messages', () => {
-    let sessionId: string;
-
-    beforeAll(async () => {
-      const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'Messages Test' });
-      sessionId = res.body.id;
-    });
-
-    test('returns empty messages for new session', async () => {
-      const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions/${sessionId}/messages`
-      );
-
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body.data)).toBe(true);
-      expect(response.body.data.length).toBe(0);
-    });
-
-    test('unauthenticated request returns 401', async () => {
-      const response = await testClient.get(
-        `/api/v1/agents/${agentId}/sessions/${sessionId}/messages`
-      );
-
-      expect(response.status).toBe(401);
-    });
-
-    test('non-existent session returns 404', async () => {
-      const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions/sess_doesnotexist/messages`
-      );
-
-      expect(response.status).toBe(404);
-    });
-
-    test('regression: RESOURCE_NOT_FOUND when session_id belongs to a different agent (no nested error.error)', async () => {
-      // Create a second agent in the same project
-      const agent2Res = await authenticatedTestClient(userToken)
-        .post('/api/v1/agents')
-        .send({
-          project_id: projectId,
-          ai_provider_id: aiProviderId,
-          name: 'Sessions Test Agent 2',
-        });
-      const agent2Id = agent2Res.body.id;
-
-      // Create a session for the FIRST agent
-      const sessRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'Cross-Agent Session' });
-      const crossSessionId = sessRes.body.id;
-
-      // Access the first agent's session through the SECOND agent's route
-      const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agent2Id}/sessions/${crossSessionId}/messages`
-      );
-
-      expect(response.status).toBe(404);
-      // The error must be a structured object — not a nested error.error payload
-      expect(typeof response.body.error).toBe('object');
-      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
-      expect(typeof response.body.error.message).toBe('string');
     });
   });
 
   // ── Add Session Message ────────────────────────────────────────────────
 
-  describe('POST /api/v1/agents/:agentId/sessions/:sessionId/messages', () => {
+  describe('POST /api/v1/sessions/:sessionId/messages', () => {
     let sessionId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'Add Message Test' });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'Add Message Test' });
       sessionId = res.body.id;
     });
 
     test('saves user message and returns 201', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .post(`/api/v1/sessions/${sessionId}/messages`)
         .send({ message: 'Hello from test' });
 
       expect(response.status).toBe(201);
@@ -415,7 +358,7 @@ describe('Sessions', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .post(`/api/v1/sessions/${sessionId}/messages`)
         .send({ message: 'Hello' });
 
       expect(response.status).toBe(401);
@@ -423,7 +366,7 @@ describe('Sessions', () => {
 
     test('unknown session returns 404', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/sess_doesnotexist/messages`)
+        .post(`/api/v1/sessions/sess_doesnotexist/messages`)
         .send({ message: 'Hello' });
 
       expect(response.status).toBe(404);
@@ -431,7 +374,7 @@ describe('Sessions', () => {
 
     test('accepts per-request toolContext', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .post(`/api/v1/sessions/${sessionId}/messages`)
         .send({ message: 'Hi', tool_context: { req_key: 'val' } });
 
       expect(response.status).toBe(201);
@@ -449,7 +392,7 @@ describe('Sessions', () => {
       expect(createDocumentRes.status).toBe(201);
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .post(`/api/v1/sessions/${sessionId}/messages`)
         .send({ document_id: createDocumentRes.body.id });
 
       expect(response.status).toBe(201);
@@ -460,7 +403,7 @@ describe('Sessions', () => {
 
     test('missing message body returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .post(`/api/v1/sessions/${sessionId}/messages`)
         .send({});
 
       expect(response.status).toBe(400);
@@ -471,7 +414,7 @@ describe('Sessions', () => {
     describe('idempotency_key', () => {
       test('first call with idempotency_key returns 201', async () => {
         const response = await authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+          .post(`/api/v1/sessions/${sessionId}/messages`)
           .send({
             message: 'Idempotent message',
             idempotency_key: 'idem-key-1',
@@ -486,13 +429,13 @@ describe('Sessions', () => {
         const key = 'idem-key-dup-' + Date.now();
 
         const first = await authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+          .post(`/api/v1/sessions/${sessionId}/messages`)
           .send({ message: 'Original message', idempotency_key: key });
 
         expect(first.status).toBe(201);
 
         const second = await authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+          .post(`/api/v1/sessions/${sessionId}/messages`)
           .send({ message: 'Different message', idempotency_key: key });
 
         expect(second.status).toBe(200);
@@ -504,20 +447,21 @@ describe('Sessions', () => {
         const key = 'idem-key-cross-session-' + Date.now();
 
         const sessionRes = await authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${agentId}/sessions`)
-          .send({ name: 'Second session for idempotency test' });
+          .post('/api/v1/sessions')
+          .send({
+            agent_id: agentId,
+            name: 'Second session for idempotency test',
+          });
         const secondSessionId = sessionRes.body.id;
 
         const first = await authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+          .post(`/api/v1/sessions/${sessionId}/messages`)
           .send({ message: 'Session 1 message', idempotency_key: key });
 
         expect(first.status).toBe(201);
 
         const second = await authenticatedTestClient(userToken)
-          .post(
-            `/api/v1/agents/${agentId}/sessions/${secondSessionId}/messages`
-          )
+          .post(`/api/v1/sessions/${secondSessionId}/messages`)
           .send({ message: 'Session 2 message', idempotency_key: key });
 
         expect(second.status).toBe(201);
@@ -528,19 +472,19 @@ describe('Sessions', () => {
 
   // ── Generate Session Response ──────────────────────────────────────────
 
-  describe('POST /api/v1/agents/:agentId/sessions/:sessionId/generate', () => {
+  describe('POST /api/v1/sessions/:sessionId/generate', () => {
     let sessionId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'Generate Test' });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'Generate Test' });
       sessionId = res.body.id;
     });
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.post(
-        `/api/v1/agents/${agentId}/sessions/${sessionId}/generate`
+        `/api/v1/sessions/${sessionId}/generate`
       );
 
       expect(response.status).toBe(401);
@@ -548,7 +492,7 @@ describe('Sessions', () => {
 
     test('unknown session returns 404', async () => {
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/agents/${agentId}/sessions/sess_doesnotexist/generate`
+        `/api/v1/sessions/sess_doesnotexist/generate`
       );
 
       expect(response.status).toBe(404);
@@ -557,11 +501,11 @@ describe('Sessions', () => {
     test('async mode returns 202 accepted', async () => {
       // Add a message first so there is something to generate from
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .post(`/api/v1/sessions/${sessionId}/messages`)
         .send({ message: 'Tell me about deployment' });
 
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/agents/${agentId}/sessions/${sessionId}/generate?async=true`
+        `/api/v1/sessions/${sessionId}/generate?async=true`
       );
 
       expect(response.status).toBe(202);
@@ -571,13 +515,11 @@ describe('Sessions', () => {
 
     test('accepts per-request toolContext in async mode', async () => {
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .post(`/api/v1/sessions/${sessionId}/messages`)
         .send({ message: 'Another message' });
 
       const response = await authenticatedTestClient(userToken)
-        .post(
-          `/api/v1/agents/${agentId}/sessions/${sessionId}/generate?async=true`
-        )
+        .post(`/api/v1/sessions/${sessionId}/generate?async=true`)
         .send({ tool_context: { req_key: 'val' } });
 
       expect(response.status).toBe(202);
@@ -591,14 +533,14 @@ describe('Sessions', () => {
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'Tags Test' });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'Tags Test' });
       sessionId = res.body.id;
     });
 
     test('GET tags returns empty object for new session', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions/${sessionId}/tags`
+        `/api/v1/sessions/${sessionId}/tags`
       );
 
       expect(response.status).toBe(200);
@@ -607,7 +549,7 @@ describe('Sessions', () => {
 
     test('PUT replaces all tags', async () => {
       const response = await authenticatedTestClient(userToken)
-        .put(`/api/v1/agents/${agentId}/sessions/${sessionId}/tags`)
+        .put(`/api/v1/sessions/${sessionId}/tags`)
         .send({ env: 'production', priority: 'high' });
 
       expect(response.status).toBe(200);
@@ -617,7 +559,7 @@ describe('Sessions', () => {
 
     test('PATCH merges tags', async () => {
       const response = await authenticatedTestClient(userToken)
-        .patch(`/api/v1/agents/${agentId}/sessions/${sessionId}/tags`)
+        .patch(`/api/v1/sessions/${sessionId}/tags`)
         .send({ team: 'support' });
 
       expect(response.status).toBe(200);
@@ -627,7 +569,7 @@ describe('Sessions', () => {
 
     test('GET tags returns 404 for non-existent session', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions/sess_nonexistent/tags`
+        `/api/v1/sessions/sess_nonexistent/tags`
       );
 
       expect(response.status).toBe(404);
@@ -635,7 +577,7 @@ describe('Sessions', () => {
 
     test('PUT tags returns 404 for non-existent session', async () => {
       const response = await authenticatedTestClient(userToken)
-        .put(`/api/v1/agents/${agentId}/sessions/sess_nonexistent/tags`)
+        .put(`/api/v1/sessions/sess_nonexistent/tags`)
         .send({ env: 'test' });
 
       expect(response.status).toBe(404);
@@ -643,7 +585,7 @@ describe('Sessions', () => {
 
     test('PATCH tags returns 404 for non-existent session', async () => {
       const response = await authenticatedTestClient(userToken)
-        .patch(`/api/v1/agents/${agentId}/sessions/sess_nonexistent/tags`)
+        .patch(`/api/v1/sessions/sess_nonexistent/tags`)
         .send({ env: 'test' });
 
       expect(response.status).toBe(404);
@@ -668,15 +610,13 @@ describe('Sessions', () => {
       contextAgentId = agentRes.body.id;
 
       const sessionRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${contextAgentId}/sessions`)
-        .send({ name: 'Context Limit Test' });
+        .post('/api/v1/sessions')
+        .send({ agent_id: contextAgentId, name: 'Context Limit Test' });
       contextSessionId = sessionRes.body.id;
 
       for (let i = 1; i <= 4; i++) {
         await authenticatedTestClient(userToken)
-          .post(
-            `/api/v1/agents/${contextAgentId}/sessions/${contextSessionId}/messages`
-          )
+          .post(`/api/v1/sessions/${contextSessionId}/messages`)
           .send({ message: `Message ${i}` });
       }
     });
@@ -694,7 +634,7 @@ describe('Sessions', () => {
       });
 
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/agents/${contextAgentId}/sessions/${contextSessionId}/generate`
+        `/api/v1/sessions/${contextSessionId}/generate`
       );
 
       expect(response.status).toBe(200);
@@ -719,18 +659,18 @@ describe('Sessions', () => {
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'Close Guard Test' });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'Close Guard Test' });
       closedSessionId = res.body.id;
 
       // Add a message so the session has history
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${closedSessionId}/messages`)
+        .post(`/api/v1/sessions/${closedSessionId}/messages`)
         .send({ message: 'Message before close' });
 
       // Close the session
       const closeRes = await authenticatedTestClient(userToken)
-        .patch(`/api/v1/agents/${agentId}/sessions/${closedSessionId}`)
+        .patch(`/api/v1/sessions/${closedSessionId}`)
         .send({ status: 'closed' });
       expect(closeRes.status).toBe(200);
       expect(closeRes.body.status).toBe('closed');
@@ -738,7 +678,7 @@ describe('Sessions', () => {
 
     test('adding a message to a closed session returns 409 SESSION_CLOSED', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${closedSessionId}/messages`)
+        .post(`/api/v1/sessions/${closedSessionId}/messages`)
         .send({ message: 'Should not be added' });
 
       expect(response.status).toBe(409);
@@ -747,7 +687,7 @@ describe('Sessions', () => {
 
     test('generating for a closed session returns 409 SESSION_CLOSED', async () => {
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/agents/${agentId}/sessions/${closedSessionId}/generate`
+        `/api/v1/sessions/${closedSessionId}/generate`
       );
 
       expect(response.status).toBe(409);
@@ -756,14 +696,14 @@ describe('Sessions', () => {
 
     test('a new session created after close starts with zero messages', async () => {
       const newSessionRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'Fresh Session After Close' });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'Fresh Session After Close' });
 
       expect(newSessionRes.status).toBe(201);
       const newSessionId = newSessionRes.body.id;
 
       const messagesRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions/${newSessionId}/messages`
+        `/api/v1/sessions/${newSessionId}/messages`
       );
 
       expect(messagesRes.status).toBe(200);
@@ -772,12 +712,12 @@ describe('Sessions', () => {
 
     test('a new session accepts messages independently of the closed session', async () => {
       const newSessionRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'Independent Session' });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'Independent Session' });
       const newSessionId = newSessionRes.body.id;
 
       const addRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${newSessionId}/messages`)
+        .post(`/api/v1/sessions/${newSessionId}/messages`)
         .send({ message: 'Fresh start' });
 
       expect(addRes.status).toBe(201);
@@ -785,7 +725,7 @@ describe('Sessions', () => {
 
       // Confirm old closed session still rejects
       const rejectRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${closedSessionId}/messages`)
+        .post(`/api/v1/sessions/${closedSessionId}/messages`)
         .send({ message: 'Still rejected' });
 
       expect(rejectRes.status).toBe(409);
@@ -809,15 +749,15 @@ describe('Sessions', () => {
 
     test('user without CreateSession permission returns 403', async () => {
       const response = await authenticatedTestClient(unprivilegedToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({});
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId });
 
       expect(response.status).toBe(403);
     });
 
     test('user without ListSessions permission returns 403', async () => {
       const response = await authenticatedTestClient(unprivilegedToken).get(
-        `/api/v1/agents/${agentId}/sessions`
+        `/api/v1/sessions?agent_id=${agentId}`
       );
 
       expect(response.status).toBe(403);
@@ -835,8 +775,8 @@ describe('Sessions', () => {
       resolveGeneration = undefined;
 
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'ordering-test' });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'ordering-test' });
       orderingSessionId = res.body.id;
 
       mockCreateGeneration.mockImplementationOnce(() => {
@@ -865,17 +805,13 @@ describe('Sessions', () => {
     test('assistant reply is inserted at snapshotPosition+1, not after concurrent user message', async () => {
       // 1. Add initial user message → position 0
       await authenticatedTestClient(userToken)
-        .post(
-          `/api/v1/agents/${agentId}/sessions/${orderingSessionId}/messages`
-        )
+        .post(`/api/v1/sessions/${orderingSessionId}/messages`)
         .send({ message: 'Hello' })
         .expect(201);
 
       // 2. Trigger async generation (returns 202, background task starts)
       await authenticatedTestClient(userToken)
-        .post(
-          `/api/v1/agents/${agentId}/sessions/${orderingSessionId}/generate?async=true`
-        )
+        .post(`/api/v1/sessions/${orderingSessionId}/generate?async=true`)
         .expect(202);
 
       // 3. Poll until the mock has been entered (resolveGeneration is assigned)
@@ -894,9 +830,7 @@ describe('Sessions', () => {
 
       // 4. Insert concurrent user message while LLM is paused
       await authenticatedTestClient(userToken)
-        .post(
-          `/api/v1/agents/${agentId}/sessions/${orderingSessionId}/messages`
-        )
+        .post(`/api/v1/sessions/${orderingSessionId}/messages`)
         .send({ message: 'Follow-up?' })
         .expect(201);
 
@@ -912,7 +846,7 @@ describe('Sessions', () => {
               new Error('Timeout waiting for generation to complete')
             );
           const s = await authenticatedTestClient(userToken).get(
-            `/api/v1/agents/${agentId}/sessions/${orderingSessionId}`
+            `/api/v1/sessions/${orderingSessionId}`
           );
           if (!s.body.generating_at) return resolve();
           setTimeout(poll, 50);
@@ -922,7 +856,7 @@ describe('Sessions', () => {
 
       // 7. Fetch messages ordered by position ASC
       const msgsRes = await authenticatedTestClient(userToken)
-        .get(`/api/v1/agents/${agentId}/sessions/${orderingSessionId}/messages`)
+        .get(`/api/v1/sessions/${orderingSessionId}/messages`)
         .expect(200);
 
       const messages: Array<{
@@ -961,13 +895,13 @@ describe('Sessions', () => {
       jest.useRealTimers();
 
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'cancel-previous-test' });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'cancel-previous-test' });
       cancelSessionId = res.body.id;
 
       // Add a message so there's something to generate from
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${cancelSessionId}/messages`)
+        .post(`/api/v1/sessions/${cancelSessionId}/messages`)
         .send({ message: 'Initial message' });
     });
 
@@ -1013,9 +947,7 @@ describe('Sessions', () => {
 
       // Start first generation (async, fire-and-forget)
       await authenticatedTestClient(userToken)
-        .post(
-          `/api/v1/agents/${agentId}/sessions/${cancelSessionId}/generate?async=true`
-        )
+        .post(`/api/v1/sessions/${cancelSessionId}/generate?async=true`)
         .expect(202);
 
       // Wait until the first mock has started (generatingAt is set in DB)
@@ -1023,7 +955,7 @@ describe('Sessions', () => {
 
       // Trigger second generation — should cancel the first and start fresh
       const secondRes = await authenticatedTestClient(userToken).post(
-        `/api/v1/agents/${agentId}/sessions/${cancelSessionId}/generate?async=true`
+        `/api/v1/sessions/${cancelSessionId}/generate?async=true`
       );
       expect(secondRes.status).toBe(202);
 
@@ -1054,13 +986,13 @@ describe('Sessions', () => {
 
       // Sync generate — waits for completion
       const res = await authenticatedTestClient(userToken).post(
-        `/api/v1/agents/${agentId}/sessions/${cancelSessionId}/generate`
+        `/api/v1/sessions/${cancelSessionId}/generate`
       );
       expect(res.status).toBe(200);
 
       // generating_at should be cleared, meaning the controller was removed
       const sessionRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions/${cancelSessionId}`
+        `/api/v1/sessions/${cancelSessionId}`
       );
       expect(sessionRes.body.generating_at).toBeNull();
 
@@ -1077,7 +1009,7 @@ describe('Sessions', () => {
       });
 
       const secondRes = await authenticatedTestClient(userToken).post(
-        `/api/v1/agents/${agentId}/sessions/${cancelSessionId}/generate`
+        `/api/v1/sessions/${cancelSessionId}/generate`
       );
       expect(secondRes.status).toBe(200);
     });
@@ -1089,14 +1021,14 @@ describe('Sessions', () => {
       );
 
       const res = await authenticatedTestClient(userToken).post(
-        `/api/v1/agents/${agentId}/sessions/${cancelSessionId}/generate`
+        `/api/v1/sessions/${cancelSessionId}/generate`
       );
       // The error propagates as a 500
       expect(res.status).toBe(500);
 
       // generating_at should be cleared even after an error
       const sessionRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions/${cancelSessionId}`
+        `/api/v1/sessions/${cancelSessionId}`
       );
       expect(sessionRes.body.generating_at).toBeNull();
 
@@ -1113,7 +1045,7 @@ describe('Sessions', () => {
       });
 
       const recoveryRes = await authenticatedTestClient(userToken).post(
-        `/api/v1/agents/${agentId}/sessions/${cancelSessionId}/generate`
+        `/api/v1/sessions/${cancelSessionId}/generate`
       );
       expect(recoveryRes.status).toBe(200);
     });
@@ -1124,8 +1056,8 @@ describe('Sessions', () => {
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ auto_generate: true });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, auto_generate: true });
       autoSessionId = res.body.id;
     });
 
@@ -1135,7 +1067,7 @@ describe('Sessions', () => {
 
     test('create session with autoGenerate returns autoGenerate: true', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions/${autoSessionId}`
+        `/api/v1/sessions/${autoSessionId}`
       );
       expect(res.status).toBe(200);
       expect(res.body.auto_generate).toBe(true);
@@ -1143,14 +1075,14 @@ describe('Sessions', () => {
 
     test('PATCH session toggles autoGenerate', async () => {
       const res = await authenticatedTestClient(userToken)
-        .patch(`/api/v1/agents/${agentId}/sessions/${autoSessionId}`)
+        .patch(`/api/v1/sessions/${autoSessionId}`)
         .send({ auto_generate: false });
       expect(res.status).toBe(200);
       expect(res.body.auto_generate).toBe(false);
 
       // restore
       await authenticatedTestClient(userToken)
-        .patch(`/api/v1/agents/${agentId}/sessions/${autoSessionId}`)
+        .patch(`/api/v1/sessions/${autoSessionId}`)
         .send({ auto_generate: true });
     });
 
@@ -1189,7 +1121,7 @@ describe('Sessions', () => {
       test('triggers generation and returns generation result', async () => {
         // Ensure session is idle (no generatingAt)
         const sessionRes = await authenticatedTestClient(userToken).get(
-          `/api/v1/agents/${agentId}/sessions/${autoSessionId}`
+          `/api/v1/sessions/${autoSessionId}`
         );
         expect(sessionRes.body.generating_at).toBeNull();
 
@@ -1197,7 +1129,7 @@ describe('Sessions', () => {
         // the response, so the server begins processing and eventually calls
         // createGeneration — necessary before we can await generationStarted.
         const messagePromise = authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${agentId}/sessions/${autoSessionId}/messages`)
+          .post(`/api/v1/sessions/${autoSessionId}/messages`)
           .send({ message: 'Trigger auto-gen' })
           .then((r) => {
             return r;
@@ -1220,8 +1152,8 @@ describe('Sessions', () => {
 
       beforeAll(async () => {
         const res = await authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${agentId}/sessions`)
-          .send({ auto_generate: true });
+          .post('/api/v1/sessions')
+          .send({ agent_id: agentId, auto_generate: true });
         busySessionId = res.body.id;
       });
 
@@ -1245,9 +1177,7 @@ describe('Sessions', () => {
 
         // Trigger async generation to set generatingAt in the background
         await authenticatedTestClient(userToken)
-          .post(
-            `/api/v1/agents/${agentId}/sessions/${busySessionId}/generate?async=true`
-          )
+          .post(`/api/v1/sessions/${busySessionId}/generate?async=true`)
           .expect(202);
 
         // Wait for createGeneration to be called via Promise signaling (timer-independent).
@@ -1256,7 +1186,7 @@ describe('Sessions', () => {
 
         // Now add a message while generation is in progress
         const res = await authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${agentId}/sessions/${busySessionId}/messages`)
+          .post(`/api/v1/sessions/${busySessionId}/messages`)
           .send({ message: 'Message while busy' });
 
         expect(res.status).toBe(201);
@@ -1268,19 +1198,19 @@ describe('Sessions', () => {
 
   // ── Tool Outputs ─────────────────────────────────────────────────────────
 
-  describe('POST /api/v1/agents/:agentId/sessions/:sessionId/tool-outputs', () => {
+  describe('POST /api/v1/sessions/:sessionId/tool-outputs', () => {
     let sessionId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'Tool Outputs Test' });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'Tool Outputs Test' });
       sessionId = res.body.id;
     });
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/tool-outputs`)
+        .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
         .send({
           generationId: 'gen_1',
           toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }],
@@ -1291,7 +1221,7 @@ describe('Sessions', () => {
 
     test('missing generationId returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/tool-outputs`)
+        .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
         .send({ toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }] });
 
       expect(response.status).toBe(400);
@@ -1300,7 +1230,7 @@ describe('Sessions', () => {
 
     test('missing toolOutputs returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/tool-outputs`)
+        .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
         .send({ generationId: 'gen_test_001' });
 
       expect(response.status).toBe(400);
@@ -1309,7 +1239,7 @@ describe('Sessions', () => {
 
     test('empty toolOutputs array returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/tool-outputs`)
+        .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
         .send({ generationId: 'gen_test_001', toolOutputs: [] });
 
       expect(response.status).toBe(400);
@@ -1319,17 +1249,17 @@ describe('Sessions', () => {
 
   // ── Sync Generate ─────────────────────────────────────────────────────────
 
-  describe('POST /api/v1/agents/:agentId/sessions/:sessionId/generate - sync', () => {
+  describe('POST /api/v1/sessions/:sessionId/generate - sync', () => {
     let syncSessionId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'Sync Generate Test' });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'Sync Generate Test' });
       syncSessionId = res.body.id;
 
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${syncSessionId}/messages`)
+        .post(`/api/v1/sessions/${syncSessionId}/messages`)
         .send({ message: 'Hello sync' });
     });
 
@@ -1350,7 +1280,7 @@ describe('Sessions', () => {
       });
 
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/agents/${agentId}/sessions/${syncSessionId}/generate`
+        `/api/v1/sessions/${syncSessionId}/generate`
       );
 
       expect(response.status).toBe(200);
@@ -1360,17 +1290,17 @@ describe('Sessions', () => {
 
   // ── Generate - requires_action ────────────────────────────────────────────
 
-  describe('POST /api/v1/agents/:agentId/sessions/:sessionId/generate - requires_action', () => {
+  describe('POST /api/v1/sessions/:sessionId/generate - requires_action', () => {
     let sessionId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'Requires Action Test' });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'Requires Action Test' });
       sessionId = res.body.id;
 
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .post(`/api/v1/sessions/${sessionId}/messages`)
         .send({ message: 'Use a tool' });
     });
 
@@ -1396,7 +1326,7 @@ describe('Sessions', () => {
       });
 
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/agents/${agentId}/sessions/${sessionId}/generate`
+        `/api/v1/sessions/${sessionId}/generate`
       );
 
       expect(response.status).toBe(200);
@@ -1408,7 +1338,7 @@ describe('Sessions', () => {
 
   // ── Tool Outputs - execution paths ────────────────────────────────────────
 
-  describe('POST /api/v1/agents/:agentId/sessions/:sessionId/tool-outputs - execution', () => {
+  describe('POST /api/v1/sessions/:sessionId/tool-outputs - execution', () => {
     let sessionId: string;
     let submitToolOutputsSpy: jest.SpiedFunction<
       typeof agentsModule.submitToolOutputs
@@ -1416,8 +1346,8 @@ describe('Sessions', () => {
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'Tool Outputs Exec Test' });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'Tool Outputs Exec Test' });
       sessionId = res.body.id;
     });
 
@@ -1435,7 +1365,7 @@ describe('Sessions', () => {
       // returns 'generation_not_found', exercising submitSessionToolOutputs and
       // fetchSessionAndConversationActors.
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/tool-outputs`)
+        .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
         .send({
           generationId: 'gen_nonexistent_tooltest_001',
           toolOutputs: [{ toolCallId: 'tc_1', output: 'some result' }],
@@ -1447,9 +1377,7 @@ describe('Sessions', () => {
 
     test('returns 404 when session does not exist', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(
-          `/api/v1/agents/${agentId}/sessions/sess_doesnotexist000/tool-outputs`
-        )
+        .post(`/api/v1/sessions/sess_doesnotexist000/tool-outputs`)
         .send({
           generationId: 'gen_any_001',
           toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }],
@@ -1472,7 +1400,7 @@ describe('Sessions', () => {
       });
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/tool-outputs`)
+        .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
         .send({
           generationId: 'gen_submit_done_01',
           toolOutputs: [
@@ -1486,7 +1414,7 @@ describe('Sessions', () => {
       expect(response.body.message.content).toBe('Weather in Paris: 18C');
 
       const messagesResponse = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions/${sessionId}/messages`
+        `/api/v1/sessions/${sessionId}/messages`
       );
 
       expect(messagesResponse.status).toBe(200);
@@ -1538,14 +1466,14 @@ describe('Sessions', () => {
       });
 
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/tool-outputs`)
+        .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
         .send({
           generationId: 'gen_meta_done_01',
           toolOutputs: [{ toolCallId: 'tc_meta_01', output: '18C' }],
         });
 
       const messagesResponse = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions/${sessionId}/messages`
+        `/api/v1/sessions/${sessionId}/messages`
       );
 
       expect(messagesResponse.status).toBe(200);
@@ -1581,7 +1509,7 @@ describe('Sessions', () => {
       });
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/tool-outputs`)
+        .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
         .send({
           generationId: 'gen_submit_req_01',
           toolOutputs: [{ toolCallId: 'tc_req_01', output: 'partial result' }],
@@ -1614,8 +1542,12 @@ describe('Sessions', () => {
 
       // Create a session using the pre-existing actor
       const sessionRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ actor_id: preExistingActorId, auto_generate: false });
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: agentId,
+          actor_id: preExistingActorId,
+          auto_generate: false,
+        });
       expect(sessionRes.status).toBe(201);
       sessionWithActorId = sessionRes.body.id;
       expect(sessionRes.body.actor_id).toBe(preExistingActorId);
@@ -1623,9 +1555,7 @@ describe('Sessions', () => {
 
     test('adding a message to a session with pre-existing actor returns 201', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(
-          `/api/v1/agents/${agentId}/sessions/${sessionWithActorId}/messages`
-        )
+        .post(`/api/v1/sessions/${sessionWithActorId}/messages`)
         .send({ message: 'olá, tudo bem?' });
 
       expect(response.status).toBe(201);
@@ -1637,27 +1567,27 @@ describe('Sessions', () => {
       // Create a second session reusing the same actor to verify it is not
       // deleted when the first session is deleted.
       const secondSessionRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ actor_id: preExistingActorId });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, actor_id: preExistingActorId });
       expect(secondSessionRes.status).toBe(201);
       const secondSessionId = secondSessionRes.body.id;
 
       // Deleting the first session must not delete the pre-existing actor
       // (which is still referenced by the second session).
       const deleteRes = await authenticatedTestClient(userToken).delete(
-        `/api/v1/agents/${agentId}/sessions/${sessionWithActorId}`
+        `/api/v1/sessions/${sessionWithActorId}`
       );
       expect(deleteRes.status).toBe(204);
 
       // Second session must still be usable — the actor was not deleted.
       const msgRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${secondSessionId}/messages`)
+        .post(`/api/v1/sessions/${secondSessionId}/messages`)
         .send({ message: 'still works?' });
       expect(msgRes.status).toBe(201);
 
       // Clean up the second session
       await authenticatedTestClient(userToken).delete(
-        `/api/v1/agents/${agentId}/sessions/${secondSessionId}`
+        `/api/v1/sessions/${secondSessionId}`
       );
     });
   });
@@ -1673,12 +1603,12 @@ describe('Sessions', () => {
     beforeAll(async () => {
       // Session without an actor
       const noActorRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'No Actor Context Test' });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'No Actor Context Test' });
       noActorSessionId = noActorRes.body.id;
 
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${noActorSessionId}/messages`)
+        .post(`/api/v1/sessions/${noActorSessionId}/messages`)
         .send({ message: 'test message' });
 
       // Create an actor with an external ID, then a session using it
@@ -1694,14 +1624,16 @@ describe('Sessions', () => {
       testActorId = actorRes.body.id;
 
       const withActorRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ name: 'With Actor Context Test', actor_id: testActorId });
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: agentId,
+          name: 'With Actor Context Test',
+          actor_id: testActorId,
+        });
       withActorSessionId = withActorRes.body.id;
 
       await authenticatedTestClient(userToken)
-        .post(
-          `/api/v1/agents/${agentId}/sessions/${withActorSessionId}/messages`
-        )
+        .post(`/api/v1/sessions/${withActorSessionId}/messages`)
         .send({ message: 'test message with actor' });
     });
 
@@ -1722,7 +1654,7 @@ describe('Sessions', () => {
       });
 
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/agents/${agentId}/sessions/${noActorSessionId}/generate`
+        `/api/v1/sessions/${noActorSessionId}/generate`
       );
 
       expect(response.status).toBe(200);
@@ -1752,7 +1684,7 @@ describe('Sessions', () => {
       });
 
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/agents/${agentId}/sessions/${withActorSessionId}/generate`
+        `/api/v1/sessions/${withActorSessionId}/generate`
       );
 
       expect(response.status).toBe(200);
@@ -1776,8 +1708,8 @@ describe('Sessions', () => {
   describe('inactivity TTL', () => {
     test('can create a session with inactivity_ttl_seconds', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ inactivity_ttl_seconds: 300 });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, inactivity_ttl_seconds: 300 });
 
       expect(response.status).toBe(201);
       expect(response.body.inactivity_ttl_seconds).toBe(300);
@@ -1785,8 +1717,8 @@ describe('Sessions', () => {
 
     test('inactivity_ttl_seconds defaults to 0 (never expires)', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({});
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId });
 
       expect(response.status).toBe(201);
       expect(response.body.inactivity_ttl_seconds).toBe(0);
@@ -1795,14 +1727,14 @@ describe('Sessions', () => {
     test('generate returns SESSION_EXPIRED when TTL has elapsed', async () => {
       // Create a session with a very short TTL (1 second)
       const sessionRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ inactivity_ttl_seconds: 1 });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, inactivity_ttl_seconds: 1 });
       expect(sessionRes.status).toBe(201);
       const sessionId = sessionRes.body.id;
 
       // Add a message to start the inactivity clock
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .post(`/api/v1/sessions/${sessionId}/messages`)
         .send({ message: 'hello' });
 
       // Wait for TTL to elapse
@@ -1812,7 +1744,7 @@ describe('Sessions', () => {
 
       // Generate should fail with SESSION_EXPIRED
       const genRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/generate`)
+        .post(`/api/v1/sessions/${sessionId}/generate`)
         .send({});
 
       expect(genRes.status).toBe(410);
@@ -1832,17 +1764,17 @@ describe('Sessions', () => {
       });
 
       const sessionRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ inactivity_ttl_seconds: 60 });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, inactivity_ttl_seconds: 60 });
       expect(sessionRes.status).toBe(201);
       const sessionId = sessionRes.body.id;
 
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .post(`/api/v1/sessions/${sessionId}/messages`)
         .send({ message: 'hello' });
 
       const genRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/generate`)
+        .post(`/api/v1/sessions/${sessionId}/generate`)
         .send({});
 
       expect(genRes.status).toBe(200);
@@ -1850,8 +1782,8 @@ describe('Sessions', () => {
 
     test('expired session is excluded from ?status=open', async () => {
       const sessionRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ inactivity_ttl_seconds: 1 });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, inactivity_ttl_seconds: 1 });
       expect(sessionRes.status).toBe(201);
       const expiredId = sessionRes.body.id;
 
@@ -1861,14 +1793,14 @@ describe('Sessions', () => {
 
       // Trigger lazy expiry via GET
       const getRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions/${expiredId}`
+        `/api/v1/sessions/${expiredId}`
       );
       expect(getRes.status).toBe(200);
       expect(getRes.body.status).toBe('expired');
 
       // Must not appear in ?status=open
       const listOpen = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions?status=open`
+        `/api/v1/sessions?agent_id=${agentId}&status=open`
       );
       expect(listOpen.status).toBe(200);
       const openIds = listOpen.body.data.map((s: { id: string }) => {
@@ -1878,7 +1810,7 @@ describe('Sessions', () => {
 
       // Must appear in ?status=expired
       const listExpired = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions?status=expired`
+        `/api/v1/sessions?agent_id=${agentId}&status=expired`
       );
       expect(listExpired.status).toBe(200);
       const expiredIds = listExpired.body.data.map((s: { id: string }) => {
@@ -1889,8 +1821,8 @@ describe('Sessions', () => {
 
     test('listSessions lazily expires rows before returning', async () => {
       const sessionRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ inactivity_ttl_seconds: 1 });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, inactivity_ttl_seconds: 1 });
       expect(sessionRes.status).toBe(201);
       const lazyId = sessionRes.body.id;
 
@@ -1900,7 +1832,7 @@ describe('Sessions', () => {
 
       // Trigger expiry via list (no single GET)
       const listRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions`
+        `/api/v1/sessions?agent_id=${agentId}`
       );
       expect(listRes.status).toBe(200);
       const found = listRes.body.data.find((s: { id: string }) => {
@@ -1912,13 +1844,13 @@ describe('Sessions', () => {
 
     test('generate on expired session updates status to expired before returning 410', async () => {
       const sessionRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ inactivity_ttl_seconds: 1 });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, inactivity_ttl_seconds: 1 });
       expect(sessionRes.status).toBe(201);
       const sessionId = sessionRes.body.id;
 
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .post(`/api/v1/sessions/${sessionId}/messages`)
         .send({ message: 'hello' });
 
       await new Promise((resolve) => {
@@ -1926,14 +1858,14 @@ describe('Sessions', () => {
       });
 
       const genRes = await authenticatedTestClient(userToken).post(
-        `/api/v1/agents/${agentId}/sessions/${sessionId}/generate`
+        `/api/v1/sessions/${sessionId}/generate`
       );
       expect(genRes.status).toBe(410);
       expect(genRes.body.error.code).toBe('SESSION_EXPIRED');
 
       // DB must now reflect expired status
       const getRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions/${sessionId}`
+        `/api/v1/sessions/${sessionId}`
       );
       expect(getRes.status).toBe(200);
       expect(getRes.body.status).toBe('expired');
@@ -1952,17 +1884,17 @@ describe('Sessions', () => {
       });
 
       const sessionRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ inactivity_ttl_seconds: 0 });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, inactivity_ttl_seconds: 0 });
       expect(sessionRes.status).toBe(201);
       const sessionId = sessionRes.body.id;
 
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/messages`)
+        .post(`/api/v1/sessions/${sessionId}/messages`)
         .send({ message: 'hello' });
 
       const genRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions/${sessionId}/generate`)
+        .post(`/api/v1/sessions/${sessionId}/generate`)
         .send({});
 
       expect(genRes.status).toBe(200);
@@ -1970,13 +1902,13 @@ describe('Sessions', () => {
 
     test('GET session returns persisted inactivity_ttl_seconds', async () => {
       const createRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ inactivity_ttl_seconds: 450 });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, inactivity_ttl_seconds: 450 });
       expect(createRes.status).toBe(201);
       const sessionId = createRes.body.id;
 
       const getRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions/${sessionId}`
+        `/api/v1/sessions/${sessionId}`
       );
       expect(getRes.status).toBe(200);
       expect(getRes.body.inactivity_ttl_seconds).toBe(450);
@@ -1984,32 +1916,32 @@ describe('Sessions', () => {
 
     test('PATCH session can update inactivity_ttl_seconds', async () => {
       const createRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ inactivity_ttl_seconds: 300 });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, inactivity_ttl_seconds: 300 });
       expect(createRes.status).toBe(201);
       const sessionId = createRes.body.id;
 
       const patchRes = await authenticatedTestClient(userToken)
-        .patch(`/api/v1/agents/${agentId}/sessions/${sessionId}`)
+        .patch(`/api/v1/sessions/${sessionId}`)
         .send({ inactivity_ttl_seconds: 900 });
       expect(patchRes.status).toBe(200);
       expect(patchRes.body.inactivity_ttl_seconds).toBe(900);
 
       const getRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions/${sessionId}`
+        `/api/v1/sessions/${sessionId}`
       );
       expect(getRes.body.inactivity_ttl_seconds).toBe(900);
     });
 
     test('updating inactivity_ttl_seconds to 0 disables expiry', async () => {
       const createRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ inactivity_ttl_seconds: 1 });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, inactivity_ttl_seconds: 1 });
       expect(createRes.status).toBe(201);
       const sessionId = createRes.body.id;
 
       await authenticatedTestClient(userToken)
-        .patch(`/api/v1/agents/${agentId}/sessions/${sessionId}`)
+        .patch(`/api/v1/sessions/${sessionId}`)
         .send({ inactivity_ttl_seconds: 0 });
 
       await new Promise((resolve) => {
@@ -2017,7 +1949,7 @@ describe('Sessions', () => {
       });
 
       const getRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${agentId}/sessions/${sessionId}`
+        `/api/v1/sessions/${sessionId}`
       );
       expect(getRes.status).toBe(200);
       expect(getRes.body.status).toBe('open');
@@ -2057,8 +1989,11 @@ describe('Sessions', () => {
 
     test('first session with actor_id succeeds', async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
-        .send({ actor_id: singleSessionActorId });
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: singleSessionAgentId,
+          actor_id: singleSessionActorId,
+        });
       expect(res.status).toBe(201);
       expect(res.body.id).toMatch(/^sess_/);
     });
@@ -2066,8 +2001,11 @@ describe('Sessions', () => {
     test('second session with same actor_id returns 409 with session_id in meta', async () => {
       // ensure first session exists
       const first = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
-        .send({ actor_id: singleSessionActorId });
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: singleSessionAgentId,
+          actor_id: singleSessionActorId,
+        });
       // might be 409 if previous test created it, or 201
       const existingId =
         first.status === 201
@@ -2075,8 +2013,11 @@ describe('Sessions', () => {
           : first.body.error?.meta?.session_id;
 
       const second = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
-        .send({ actor_id: singleSessionActorId });
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: singleSessionAgentId,
+          actor_id: singleSessionActorId,
+        });
       expect(second.status).toBe(409);
       expect(second.body.error.code).toBe('SINGLE_SESSION_CONFLICT');
       expect(second.body.error.meta.session_id).toMatch(/^sess_/);
@@ -2093,8 +2034,12 @@ describe('Sessions', () => {
 
       // Create a session with very short TTL
       const sess1 = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
-        .send({ actor_id: expiredActorId, inactivity_ttl_seconds: 1 });
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: singleSessionAgentId,
+          actor_id: expiredActorId,
+          inactivity_ttl_seconds: 1,
+        });
       expect(sess1.status).toBe(201);
       const expiredSessId = sess1.body.id;
 
@@ -2103,14 +2048,14 @@ describe('Sessions', () => {
         return setTimeout(resolve, 1500);
       });
       const getRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${singleSessionAgentId}/sessions/${expiredSessId}`
+        `/api/v1/sessions/${expiredSessId}`
       );
       expect(getRes.body.status).toBe('expired');
 
       // New session for same actor should now succeed (expired != open)
       const sess2 = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
-        .send({ actor_id: expiredActorId });
+        .post('/api/v1/sessions')
+        .send({ agent_id: singleSessionAgentId, actor_id: expiredActorId });
       expect(sess2.status).toBe(201);
     });
 
@@ -2122,8 +2067,12 @@ describe('Sessions', () => {
 
       // Create a session with very short TTL
       const sess1 = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
-        .send({ actor_id: lazyActorId, inactivity_ttl_seconds: 1 });
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: singleSessionAgentId,
+          actor_id: lazyActorId,
+          inactivity_ttl_seconds: 1,
+        });
       expect(sess1.status).toBe(201);
 
       // Wait for TTL to elapse — do NOT call GET to trigger lazy expiry
@@ -2133,21 +2082,21 @@ describe('Sessions', () => {
 
       // createSession itself must expire the stale open session and succeed
       const sess2 = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
-        .send({ actor_id: lazyActorId });
+        .post('/api/v1/sessions')
+        .send({ agent_id: singleSessionAgentId, actor_id: lazyActorId });
       expect(sess2.status).toBe(201);
       expect(sess2.body.id).not.toBe(sess1.body.id);
     });
 
     test('no enforcement when actor_id is absent', async () => {
       const res1 = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
-        .send({});
+        .post('/api/v1/sessions')
+        .send({ agent_id: singleSessionAgentId });
       expect(res1.status).toBe(201);
 
       const res2 = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
-        .send({});
+        .post('/api/v1/sessions')
+        .send({ agent_id: singleSessionAgentId });
       expect(res2.status).toBe(201);
     });
 
@@ -2168,13 +2117,13 @@ describe('Sessions', () => {
       const normalActorId = actorRes.body.id;
 
       const res1 = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${normalAgentId}/sessions`)
-        .send({ actor_id: normalActorId });
+        .post('/api/v1/sessions')
+        .send({ agent_id: normalAgentId, actor_id: normalActorId });
       expect(res1.status).toBe(201);
 
       const res2 = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${normalAgentId}/sessions`)
-        .send({ actor_id: normalActorId });
+        .post('/api/v1/sessions')
+        .send({ agent_id: normalAgentId, actor_id: normalActorId });
       expect(res2.status).toBe(201);
     });
 
@@ -2185,18 +2134,18 @@ describe('Sessions', () => {
       const actorId = actorRes.body.id;
 
       const sess1 = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
-        .send({ actor_id: actorId });
+        .post('/api/v1/sessions')
+        .send({ agent_id: singleSessionAgentId, actor_id: actorId });
       expect(sess1.status).toBe(201);
       const sessId = sess1.body.id;
 
       await authenticatedTestClient(userToken)
-        .patch(`/api/v1/agents/${singleSessionAgentId}/sessions/${sessId}`)
+        .patch(`/api/v1/sessions/${sessId}`)
         .send({ status: 'closed' });
 
       const sess2 = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
-        .send({ actor_id: actorId });
+        .post('/api/v1/sessions')
+        .send({ agent_id: singleSessionAgentId, actor_id: actorId });
       expect(sess2.status).toBe(201);
     });
 
@@ -2207,12 +2156,14 @@ describe('Sessions', () => {
       const concurrentActorId = actorRes.body.id;
 
       const [res1, res2] = await Promise.all([
-        authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
-          .send({ actor_id: concurrentActorId }),
-        authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${singleSessionAgentId}/sessions`)
-          .send({ actor_id: concurrentActorId }),
+        authenticatedTestClient(userToken).post('/api/v1/sessions').send({
+          agent_id: singleSessionAgentId,
+          actor_id: concurrentActorId,
+        }),
+        authenticatedTestClient(userToken).post('/api/v1/sessions').send({
+          agent_id: singleSessionAgentId,
+          actor_id: concurrentActorId,
+        }),
       ]);
 
       const statuses = [res1.status, res2.status].sort();
@@ -2229,35 +2180,35 @@ describe('Sessions', () => {
   describe('message delay', () => {
     test('can create a session with message_delay_seconds', async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({ message_delay_seconds: 5 });
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, message_delay_seconds: 5 });
       expect(res.status).toBe(201);
       expect(res.body.message_delay_seconds).toBe(5);
     });
 
     test('message_delay_seconds defaults to null', async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({});
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId });
       expect(res.status).toBe(201);
       expect(res.body.message_delay_seconds).toBeNull();
     });
 
     test('PATCH can set and clear message_delay_seconds', async () => {
       const createRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/sessions`)
-        .send({});
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId });
       expect(createRes.status).toBe(201);
       const sessionId = createRes.body.id;
 
       const setRes = await authenticatedTestClient(userToken)
-        .patch(`/api/v1/agents/${agentId}/sessions/${sessionId}`)
+        .patch(`/api/v1/sessions/${sessionId}`)
         .send({ message_delay_seconds: 10 });
       expect(setRes.status).toBe(200);
       expect(setRes.body.message_delay_seconds).toBe(10);
 
       const clearRes = await authenticatedTestClient(userToken)
-        .patch(`/api/v1/agents/${agentId}/sessions/${sessionId}`)
+        .patch(`/api/v1/sessions/${sessionId}`)
         .send({ message_delay_seconds: null });
       expect(clearRes.status).toBe(200);
       expect(clearRes.body.message_delay_seconds).toBeNull();
@@ -2268,8 +2219,12 @@ describe('Sessions', () => {
 
       beforeAll(async () => {
         const res = await authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${agentId}/sessions`)
-          .send({ auto_generate: true, message_delay_seconds: 1 });
+          .post('/api/v1/sessions')
+          .send({
+            agent_id: agentId,
+            auto_generate: true,
+            message_delay_seconds: 1,
+          });
         expect(res.status).toBe(201);
         delaySessionId = res.body.id;
       });
@@ -2280,7 +2235,7 @@ describe('Sessions', () => {
 
       test('returns user message immediately instead of triggering generation synchronously', async () => {
         const res = await authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${agentId}/sessions/${delaySessionId}/messages`)
+          .post(`/api/v1/sessions/${delaySessionId}/messages`)
           .send({ message: 'hello with delay' });
         expect(res.status).toBe(201);
         expect(res.body.role).toBe('user');
@@ -2311,7 +2266,7 @@ describe('Sessions', () => {
         });
 
         await authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${agentId}/sessions/${delaySessionId}/messages`)
+          .post(`/api/v1/sessions/${delaySessionId}/messages`)
           .send({ message: 'trigger delayed gen' });
 
         await generationStarted;
@@ -2342,11 +2297,11 @@ describe('Sessions', () => {
 
         // Send two messages in quick succession (well within the 1-second delay)
         await authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${agentId}/sessions/${delaySessionId}/messages`)
+          .post(`/api/v1/sessions/${delaySessionId}/messages`)
           .send({ message: 'first message' });
 
         await authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${agentId}/sessions/${delaySessionId}/messages`)
+          .post(`/api/v1/sessions/${delaySessionId}/messages`)
           .send({ message: 'second message within delay' });
 
         // Wait for the delay to elapse and exactly one generation to fire

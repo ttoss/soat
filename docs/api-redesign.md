@@ -260,3 +260,16 @@ SDK + CLI regenerated once after all spec changes land; everything ships togethe
   use a fixture spec, so they won't break automatically — manual check needed.
 - Pagination/filter consistency pass across all top-level list endpoints
   (`limit`/`offset`/`total` shape) once flattening lands.
+
+## Implementation Progress
+
+- **D1 (actors)** — done.
+- **D2/D8/D10 (sessions)** — done: flattened to top-level `/sessions`, sub-routes
+  relocated, `listAgentSessionMessages` dropped, lib/routes/spec/permissions/
+  module-doc/unit+MCP tests updated. Formation needed no change (it self-resolves
+  the agent id). Permission actions kept as `agents:*` (renaming policy actions is
+  out of scope for a path redesign).
+- **Deferred to a final batched pass** (tracked): tutorial updates (renamed CLI
+  commands / removed endpoints) and the generated reference docs
+  (api/mcp/sdk/cli). Tutorials need Docker tutorial CI to validate, so they run
+  once at the end rather than per-slice.
