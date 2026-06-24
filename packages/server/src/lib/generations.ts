@@ -229,7 +229,12 @@ const resolveScopedId = async (
 const applyGenerationScopeFilters = async (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   where: Record<string, any>,
-  args: { agentId?: string; traceId?: string; projectIds?: number[] }
+  args: {
+    agentId?: string;
+    traceId?: string;
+    initiatorGenerationId?: string;
+    projectIds?: number[];
+  }
 ): Promise<boolean> => {
   if (args.agentId !== undefined) {
     const agentId = await resolveScopedId(
@@ -253,6 +258,17 @@ const applyGenerationScopeFilters = async (
     if (traceId === null) return false;
     where.traceId = traceId;
   }
+  if (args.initiatorGenerationId !== undefined) {
+    const initiatorId = await resolveScopedId(
+      (w) => {
+        return db.Generation.findOne({ where: w });
+      },
+      args.initiatorGenerationId,
+      args.projectIds
+    );
+    if (initiatorId === null) return false;
+    where.initiatorGenerationId = initiatorId;
+  }
   return true;
 };
 
@@ -260,6 +276,7 @@ export const listGenerations = async (args: {
   projectIds?: number[];
   agentId?: string;
   traceId?: string;
+  initiatorGenerationId?: string;
   status?: string;
   limit?: number;
   offset?: number;
@@ -279,6 +296,7 @@ export const listGenerations = async (args: {
   const resolved = await applyGenerationScopeFilters(where, {
     agentId: args.agentId,
     traceId: args.traceId,
+    initiatorGenerationId: args.initiatorGenerationId,
     projectIds: args.projectIds,
   });
   if (!resolved) return empty;
@@ -298,6 +316,40 @@ export const listGenerations = async (args: {
     offset,
   });
   return { data: rows.map(mapGeneration), total: count, limit, offset };
+};
+
+export const listGenerationsByTraceIds = async (args: {
+  tracePublicIds: string[];
+  projectIds?: number[];
+}): Promise<PersistedGeneration[]> => {
+  if (args.tracePublicIds.length === 0) return [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const traceWhere: Record<string, any> = { publicId: args.tracePublicIds };
+  if (args.projectIds !== undefined) traceWhere.projectId = args.projectIds;
+
+  const traces = await db.Trace.findAll({ where: traceWhere });
+  const traceInternalIds = traces.map((t) => {
+    return t.id as number;
+  });
+  if (traceInternalIds.length === 0) return [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const genWhere: Record<string, any> = { traceId: traceInternalIds };
+  if (args.projectIds !== undefined) genWhere.projectId = args.projectIds;
+
+  const rows = await db.Generation.findAll({
+    where: genWhere,
+    include: [
+      { model: db.Project, as: 'project' },
+      { model: db.Agent, as: 'agent' },
+      { model: db.Trace, as: 'trace' },
+      { model: db.Generation, as: 'initiatorGeneration' },
+    ],
+    order: [['startedAt', 'ASC']],
+  });
+
+  return rows.map(mapGeneration);
 };
 
 export const getGeneration = async (args: {

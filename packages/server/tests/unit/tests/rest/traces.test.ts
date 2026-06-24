@@ -12,6 +12,7 @@ describe('Traces REST API', () => {
   let traceId: string;
   let childTraceId: string;
   let traceGenerationIds: string[];
+  let childGenerationId: string;
   let tracesAgentDbId: number;
 
   beforeAll(async () => {
@@ -162,6 +163,28 @@ describe('Traces REST API', () => {
     });
 
     traceGenerationIds = [firstGenerationId, secondGenerationId];
+
+    // Create a child generation linked to the first generation (simulates debate child)
+    const firstGen = await db.Generation.findOne({
+      where: { publicId: firstGenerationId },
+    });
+    childGenerationId = `gen_rest_child_${Date.now()}`;
+    await db.Generation.create({
+      publicId: childGenerationId,
+      projectId: internalProjectId,
+      agentId: tracesAgentDbId,
+      traceId: rootTrace!.id,
+      initiatorGenerationId: firstGen!.id,
+      startedByActorId: null,
+      startedByPrincipalType: null,
+      startedByPrincipalId: null,
+      status: 'completed',
+      startedAt: new Date(Date.now() - 400),
+      completedAt: new Date(Date.now() - 200),
+      lastActivityAt: new Date(Date.now() - 200),
+      stopReason: 'stop',
+      metadata: { reasoning: { perspective: 'Advocate', round: 0, output: 'advocate text' } },
+    });
   });
 
   describe('GET /api/v1/traces', () => {
@@ -288,7 +311,10 @@ describe('Traces REST API', () => {
       const ids = res.body.data.map((g: { id: string }) => {
         return g.id;
       });
-      expect(ids.sort()).toEqual([...traceGenerationIds].sort());
+      // traceGenerationIds are the top-level ones; childGenerationId is also in this trace
+      expect(ids).toEqual(
+        expect.arrayContaining([...traceGenerationIds, childGenerationId])
+      );
       for (const gen of res.body.data) {
         expect(gen.trace_id).toBe(traceId);
       }
@@ -308,6 +334,70 @@ describe('Traces REST API', () => {
         `/api/v1/generations?trace_id=${traceId}`
       );
       expect(res.status).toBe(403);
+    });
+  });
+
+  describe('GET /api/v1/generations?initiator_generation_id=', () => {
+    test('returns child generations linked to a parent generation', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations?initiator_generation_id=${traceGenerationIds[0]}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.data[0].id).toBe(childGenerationId);
+      expect(res.body.data[0].initiator_generation_id).toBe(traceGenerationIds[0]);
+    });
+
+    test('non-existent initiator_generation_id returns an empty page', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/generations?initiator_generation_id=gen_doesnotexist000'
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([]);
+      expect(res.body.total).toBe(0);
+    });
+
+    test('can combine initiator_generation_id with trace_id', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations?trace_id=${traceId}&initiator_generation_id=${traceGenerationIds[0]}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.data[0].id).toBe(childGenerationId);
+    });
+  });
+
+  describe('GET /api/v1/traces/:trace_id/tree?include=generations', () => {
+    test('embeds generations on each trace node when include=generations', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/traces/${traceId}/tree?include=generations`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(traceId);
+      expect(Array.isArray(res.body.generations)).toBe(true);
+      // root trace has 2 top-level + 1 child generation seeded in beforeAll
+      expect(res.body.generations.length).toBeGreaterThanOrEqual(3);
+      for (const gen of res.body.generations) {
+        expect(gen.trace_id).toBe(traceId);
+      }
+    });
+
+    test('generations field is absent without include=generations', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/traces/${traceId}/tree`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.generations).toBeUndefined();
+    });
+
+    test('child trace node also gets its generations', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/traces/${traceId}/tree?include=generations`
+      );
+      expect(res.status).toBe(200);
+      const childNode = res.body.children[0];
+      expect(childNode.id).toBe(childTraceId);
+      expect(Array.isArray(childNode.generations)).toBe(true);
     });
   });
 });

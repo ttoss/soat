@@ -101,7 +101,16 @@ const main = async () => {
       }
     }
   }
-  fs.writeFileSync(MERGED_SPEC_FILE, JSON.stringify(merged, null, 2));
+  // Rewrite cross-file schema refs to local refs — all schemas from all spec
+  // files are collected into merged.components.schemas, so relative file refs
+  // (e.g. "./foo.yaml#/components/schemas/Bar") are no longer resolvable once
+  // the spec is written as a single flat JSON file.
+  let specJson = JSON.stringify(merged, null, 2);
+  specJson = specJson.replace(
+    /"(\$ref)":\s*"[^"]*\.yaml#\/components\/schemas\/(\w+)"/g,
+    '"$1": "#/components/schemas/$2"'
+  );
+  fs.writeFileSync(MERGED_SPEC_FILE, specJson);
 
   // eslint-disable-next-line no-console
   console.log(`Merged spec written to: ${MERGED_SPEC_FILE}`);

@@ -144,6 +144,17 @@ paths:
           schema:
             type: string
           description: Public ID of any trace in the tree (root or child)
+        - name: include
+          in: query
+          required: false
+          description: >
+            Comma-separated list of related resources to embed on each node.
+            Supported value: `generations` — attaches all generations that belong
+            to each trace node (including debate perspective/synthesis children
+            linked via `initiator_generation_id`).
+          schema:
+            type: string
+            example: generations
       responses:
         '200':
           description: Trace tree rooted at the resolved root trace
@@ -278,6 +289,15 @@ components:
           description: Child traces triggered by sub-agent calls from this trace
           items:
             $ref: '#/components/schemas/TraceTreeNode'
+        generations:
+          type: array
+          description: >
+            Generations that belong to this trace node. Only present when
+            `include=generations` is requested. Includes top-level generations
+            and debate child generations (perspective turns and synthesis steps)
+            linked via `initiator_generation_id`.
+          items:
+            $ref: './generations.yaml#/components/schemas/Generation'
 
     ErrorResponse:
       type: object
