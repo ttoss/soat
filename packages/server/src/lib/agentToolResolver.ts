@@ -401,6 +401,7 @@ const resolveClientTool = (typedTool: {
 // ── Tool Resolution ───────────────────────────────────────────────────────
 
 type AgentToolRow = {
+  publicId: string;
   type: string;
   name: string;
   description: string | null;
@@ -418,9 +419,43 @@ type AgentToolRow = {
   presetParameters: Record<string, unknown> | null;
 };
 
+const resolvePipelineTool = (
+  typedTool: AgentToolRow,
+  args: {
+    projectIds?: number[];
+    authHeader?: string;
+    remainingDepth?: number;
+  }
+): Tool => {
+  const parameters =
+    typeof typedTool.parameters === 'string'
+      ? (JSON.parse(typedTool.parameters) as Record<string, unknown>)
+      : typedTool.parameters;
+  return tool({
+    description: typedTool.description ?? undefined,
+    inputSchema: jsonSchema(parameters ?? { type: 'object', properties: {} }),
+    execute: async (toolArgs: unknown) => {
+      const input =
+        toolArgs && typeof toolArgs === 'object' && !Array.isArray(toolArgs)
+          ? (toolArgs as Record<string, unknown>)
+          : {};
+      // Imported lazily to avoid a static import cycle with tools.ts.
+      const { callTool } = await import('./tools');
+      return callTool({
+        projectIds: args.projectIds,
+        id: typedTool.publicId,
+        input,
+        authHeader: args.authHeader,
+        remainingDepth: args.remainingDepth,
+      });
+    },
+  });
+};
+
 const resolveToolByType = async (
   typedTool: AgentToolRow,
   args: {
+    projectIds?: number[];
     boundaryPolicy?: unknown;
     authHeader?: string;
     toolContext?: Record<string, string>;
@@ -435,6 +470,14 @@ const resolveToolByType = async (
       return { [typedTool.name]: resolveHttpTool(typedTool, args.toolContext) };
     case 'client':
       return { [typedTool.name]: resolveClientTool(typedTool) };
+    case 'pipeline':
+      return {
+        [typedTool.name]: resolvePipelineTool(typedTool, {
+          projectIds: args.projectIds,
+          authHeader: args.authHeader,
+          remainingDepth: args.remainingDepth,
+        }),
+      };
     case 'mcp': {
       if (!typedTool.mcp?.url) return {};
       try {

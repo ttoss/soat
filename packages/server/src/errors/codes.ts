@@ -169,6 +169,20 @@ export const ERROR_CODES = {
     description:
       'The referenced file has a content type that cannot be ingested. Supported types: application/pdf, text/plain, text/markdown.',
   },
+  PIPELINE_INVALID_STEP: {
+    httpStatus: 400,
+    description:
+      'The pipeline tool configuration is invalid (e.g. no steps, a duplicate or malformed step id, a missing tool reference, a forward reference to a later step, or a step that targets a client tool).',
+  },
+  PIPELINE_STEP_FAILED: {
+    httpStatus: 422,
+    description: 'A step in the pipeline tool failed to execute.',
+  },
+  PIPELINE_DEPTH_EXCEEDED: {
+    httpStatus: 422,
+    description:
+      'The pipeline tool exceeded the maximum nested execution depth (pipelines calling pipelines).',
+  },
 } as const satisfies Record<
   string,
   { httpStatus: number; description: string }

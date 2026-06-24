@@ -1,8 +1,7 @@
-import jsonLogic from 'json-logic-js';
-
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { createGeneration } from './agentGeneration';
+import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
 import { searchKnowledge } from './knowledge';
 import { writeMemoryEntry } from './memoryEntries';
 import { startOrchestrationRun } from './orchestrationEngine';
@@ -30,29 +29,10 @@ const writeToState = (
   state[fieldName] = value;
 };
 
-/**
- * Resolves each inputMapping value against the run state.
- *
- * Every value is interpreted as JSON Logic (https://jsonlogic.com), the same
- * evaluator used by transform and condition nodes. Single-key objects are
- * treated as expressions and evaluated against state — `{ var: 'key' }` reads
- * `state.key`, `{ cat: [...] }`, `{ '>': [...] }`, etc. compute derived values.
- * Every other value (string, number, boolean, array, multi-key object) is a
- * literal and is passed through as-is.
- */
-export const applyInputMapping = (
-  inputMapping: Record<string, unknown> | undefined,
-  state: Record<string, unknown>
-): Record<string, unknown> => {
-  if (!inputMapping) return {};
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(inputMapping)) {
-    result[key] = jsonLogic.is_logic(value)
-      ? jsonLogic.apply(value, state)
-      : value;
-  }
-  return result;
-};
+// `applyInputMapping` and the JSON Logic evaluator now live in
+// `./jsonLogicMapping` so orchestration nodes and pipeline tools share a single
+// evaluator. Re-exported here to preserve the existing import surface.
+export { applyInputMapping };
 
 export const applyOutputMapping = (
   outputMapping: Record<string, string> | undefined,
@@ -167,10 +147,7 @@ export const executeTransformNode = (args: {
       `Transform node '${node.id}' missing expression.`
     );
 
-  const result: unknown = jsonLogic.apply(
-    node.expression as Parameters<typeof jsonLogic.apply>[0],
-    state
-  );
+  const result = evaluateLogic(node.expression, state);
   return { kind: 'artifact', artifact: { result } };
 };
 
@@ -241,12 +218,7 @@ export const executeConditionNode = (args: {
       `Condition node '${node.id}' missing expression.`
     );
 
-  const label = String(
-    jsonLogic.apply(
-      node.expression as Parameters<typeof jsonLogic.apply>[0],
-      state
-    )
-  );
+  const label = String(evaluateLogic(node.expression, state));
   return { kind: 'condition', label };
 };
 

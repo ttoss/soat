@@ -9,7 +9,7 @@ Standalone, reusable tool definitions that agents call during generation.
 
 The Tools module lets you define callable tools that agents use during a generation loop. A tool encapsulates its type, input schema, and execution configuration in one project-scoped record. Tools can be shared across multiple agents and invoked directly via the API independently of any agent.
 
-Four tool types are supported: `http` (calls an external HTTP endpoint), `client` (signals the calling application to execute locally), `mcp` (proxies an MCP server), and `soat` (invokes a SOAT platform action).
+Five tool types are supported: `http` (calls an external HTTP endpoint), `client` (signals the calling application to execute locally), `mcp` (proxies an MCP server), `soat` (invokes a SOAT platform action), and `pipeline` (runs a deterministic sequence of other tools as a single call).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -26,7 +26,7 @@ Four tool types are supported: `http` (calls an external HTTP endpoint), `client
 | `id`                | `string`                                        | Public ID (`tool_` prefix)                                                                                        |
 | `project_id`        | `string`                                        | ID of the owning project                                                                                          |
 | `name`              | `string`                                        | Machine-readable tool name sent to the model (or namespace prefix for `mcp`/`soat`)                               |
-| `type`              | `"http"` \| `"client"` \| `"mcp"` \| `"soat"`  | Tool type — determines execution behaviour                                                                        |
+| `type`              | `"http"` \| `"client"` \| `"mcp"` \| `"soat"` \| `"pipeline"` | Tool type — determines execution behaviour                                                          |
 | `description`       | `string \| null`                                | Human-readable description sent to the model for tool selection                                                   |
 | `parameters`        | `object \| null`                                | JSON Schema describing the tool's input. Required for `http` and `client` types.                                  |
 | `execute`           | `object \| null`                                | HTTP execution config (`url`, `method`, `headers`). Required for `http` type.                                     |
@@ -38,6 +38,7 @@ Four tool types are supported: `http` (calls an external HTTP endpoint), `client
 | `mcp.headers`       | `object`                                        | Additional headers sent when connecting to the MCP server.                                                        |
 | `actions`           | `string[] \| null`                              | SOAT platform actions to expose (e.g. `["search-documents"]`). Required for `soat` type.                         |
 | `preset_parameters` | `object \| null`                                | Fixed parameter values merged into every call. Keys are hidden from the model and injected automatically.         |
+| `pipeline`          | `object \| null`                                | Pipeline definition (`steps`, optional `output`). Required for `pipeline` type. See [pipeline](#pipeline).         |
 | `created_at`        | `string`                                        | ISO 8601 creation timestamp                                                                                       |
 | `updated_at`        | `string`                                        | ISO 8601 last-updated timestamp                                                                                   |
 
@@ -190,6 +191,24 @@ The SOAT server acts as a proxy: it receives the model's tool call, forwards it 
 
 A `soat` tool exposes actions from the SOAT platform itself (documents, conversations, files, secrets, etc.). Instead of pointing to an external endpoint, you list the platform actions the agent is allowed to use via the `actions` array. Each action name corresponds to an MCP tool registered on the platform (e.g., `get-document`, `search-documents`, `create-file`). The server executes these actions in-process, applying the same permission checks as the REST API. For a worked example of a fixed `soat` write tool, see [Orchestrate a Sonnet - Step 4 (Create the fixed write tool)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool).
 
+### pipeline
+
+A `pipeline` tool runs a **fixed, ordered sequence of other tools as a single call**, so an agent makes one tool call and the whole `compute → persist` sequence executes deterministically server-side — with no model reasoning between steps. The same pipeline is callable by orchestration `tool` nodes and directly via the API, so it is reusable wherever a tool is.
+
+The `pipeline` config has a `steps` array and an optional `output`:
+
+- **`steps[]`** — each step calls an existing tool by **`tool_id`** (with an optional **`action`** for `soat`/`mcp` step tools). The step's **`input`** is a mapping object whose values are [JSON Logic](https://jsonlogic.com) expressions evaluated against a `{ input, steps }` context:
+  - `{ "var": "input.<field>" }` reads the pipeline tool's own input.
+  - `{ "var": "steps.<id>.<path>" }` reads an earlier step's output.
+  - Literals pass through; transforms (`cat`, `+`, `if`, `map`, `filter`, `reduce`, …) are supported.
+- **`output`** (optional) — a mapping object that builds the return value. When omitted, the last step's raw output is returned.
+
+Each step's full output is captured under `steps.<id>`. A step may reference only **earlier** steps — forward references are rejected at create time — which keeps the sequence linear and deterministic. Execution is **fail-fast**: the first failing step aborts the pipeline with `PIPELINE_STEP_FAILED`. A step that targets another `pipeline` tool is bounded by a maximum nesting depth (`PIPELINE_DEPTH_EXCEEDED`). Steps cannot target `client` tools, which cannot run server-side.
+
+> **Case convention.** Structural keys are snake_case (`tool_id`, `steps`, `input`, `output`). Step `input` keys and `var` paths use **camelCase** — the runtime form (e.g. `{ "var": "input.documentId" }`), matching the input shape `callTool` passes to the underlying tools.
+
+For LLM-decided (rather than fixed) multi-step flows, see [Orchestrations](./orchestrations.md), which share the same JSON Logic mapping model.
+
 ### Preset Parameters
 
 `preset_parameters` lets you bake fixed values into a `soat` (or any) tool definition. When a key in `preset_parameters` matches a field in the action's input schema:
@@ -223,7 +242,7 @@ The model calls `public_doc_update-document` with only the fields it needs to su
 
 ### Calling a Tool Directly
 
-Tools can be invoked independently of an agent via `POST /api/v1/tools/{tool_id}/call`. The request body accepts `action` (required for `soat` and `mcp` types) and `input` (key-value arguments).
+Tools can be invoked independently of an agent via `POST /api/v1/tools/{tool_id}/call`. The request body accepts `action` (required for `soat` and `mcp` types) and `input` (key-value arguments). For `pipeline` tools, `input` is the pipeline input, `action` is ignored, and the response is the mapped `output`.
 
 ## Examples
 
@@ -339,6 +358,84 @@ curl -X POST https://api.example.com/api/v1/tools \
     "type": "soat",
     "description": "Searches the project knowledge base",
     "actions": ["search-documents"]
+  }'
+```
+
+</TabItem>
+</Tabs>
+
+### Create a pipeline tool
+
+A `pipeline` tool chains existing tools. This example computes a value with one tool, then persists it with another, mapping the first step's output into the second step's input (`$CALC_TOOL_ID` and `$SAVE_TOOL_ID` are IDs of previously created tools).
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-tool \
+  --project-id "$PROJECT_ID" \
+  --name "compute-and-save" \
+  --type pipeline \
+  --description "Computes a sum and persists the result" \
+  --parameters '{"type":"object","properties":{"x":{"type":"number"},"y":{"type":"number"}},"required":["x","y"]}' \
+  --pipeline '{"steps":[{"id":"compute","tool_id":"'"$CALC_TOOL_ID"'","action":"add","input":{"a":{"var":"input.x"},"b":{"var":"input.y"}}},{"id":"persist","tool_id":"'"$SAVE_TOOL_ID"'","input":{"value":{"var":"steps.compute.sum"}}}],"output":{"saved_id":{"var":"steps.persist.id"}}}'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.tools.createTool({
+  body: {
+    project_id: 'proj_ABC',
+    name: 'compute-and-save',
+    type: 'pipeline',
+    description: 'Computes a sum and persists the result',
+    parameters: {
+      type: 'object',
+      properties: { x: { type: 'number' }, y: { type: 'number' } },
+      required: ['x', 'y'],
+    },
+    pipeline: {
+      steps: [
+        {
+          id: 'compute',
+          tool_id: 'tool_calc',
+          action: 'add',
+          input: { a: { var: 'input.x' }, b: { var: 'input.y' } },
+        },
+        {
+          id: 'persist',
+          tool_id: 'tool_save_record',
+          input: { value: { var: 'steps.compute.sum' } },
+        },
+      ],
+      output: { saved_id: { var: 'steps.persist.id' } },
+    },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/tools \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "name": "compute-and-save",
+    "type": "pipeline",
+    "parameters": {"type":"object","properties":{"x":{"type":"number"},"y":{"type":"number"}},"required":["x","y"]},
+    "pipeline": {
+      "steps": [
+        {"id":"compute","tool_id":"tool_calc","action":"add","input":{"a":{"var":"input.x"},"b":{"var":"input.y"}}},
+        {"id":"persist","tool_id":"tool_save_record","input":{"value":{"var":"steps.compute.sum"}}}
+      ],
+      "output": {"saved_id":{"var":"steps.persist.id"}}
+    }
   }'
 ```
 

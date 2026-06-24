@@ -8,6 +8,11 @@ import {
   buildMcpToolExecute,
   executeSoatTool,
 } from './agentToolResolverExternalTools';
+import {
+  assertPipelineStepToolsValid,
+  runPipeline,
+  validatePipelineConfig,
+} from './pipelineTools';
 import { soatTools } from './soatTools';
 
 // ── Mapped Types ─────────────────────────────────────────────────────────
@@ -23,6 +28,7 @@ export type MappedTool = {
   mcp: object | null;
   actions: string[] | null;
   presetParameters: object | null;
+  pipeline: object | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -49,6 +55,7 @@ const mapTool = (
     mcp: tool.mcp,
     actions: tool.actions,
     presetParameters: tool.presetParameters,
+    pipeline: tool.pipeline,
     createdAt: tool.createdAt,
     updatedAt: tool.updatedAt,
   };
@@ -66,7 +73,16 @@ export const createTool = async (args: {
   mcp?: object;
   actions?: string[];
   presetParameters?: object;
+  pipeline?: object;
 }): Promise<MappedTool> => {
+  if (args.type === 'pipeline') {
+    const config = validatePipelineConfig(args.pipeline);
+    await assertPipelineStepToolsValid({
+      steps: config.steps,
+      projectIds: [args.projectId],
+    });
+  }
+
   const tool = await db.Tool.create({
     projectId: args.projectId,
     type: args.type ?? 'http',
@@ -77,6 +93,7 @@ export const createTool = async (args: {
     mcp: args.mcp ?? null,
     actions: args.actions ?? null,
     presetParameters: args.presetParameters ?? null,
+    pipeline: args.pipeline ?? null,
   });
 
   const created = await db.Tool.findOne({
@@ -135,6 +152,7 @@ const buildToolUpdates = (args: {
   mcp?: object | null;
   actions?: string[] | null;
   presetParameters?: object | null;
+  pipeline?: object | null;
 }): Record<string, unknown> => {
   const updates: Record<string, unknown> = {};
   const fields = [
@@ -146,6 +164,7 @@ const buildToolUpdates = (args: {
     'mcp',
     'actions',
     'presetParameters',
+    'pipeline',
   ] as const;
   for (const field of fields) {
     if (args[field] !== undefined) updates[field] = args[field];
@@ -164,7 +183,16 @@ export const updateTool = async (args: {
   mcp?: object | null;
   actions?: string[] | null;
   presetParameters?: object | null;
+  pipeline?: object | null;
 }): Promise<MappedTool> => {
+  if (args.pipeline !== undefined && args.pipeline !== null) {
+    const config = validatePipelineConfig(args.pipeline);
+    await assertPipelineStepToolsValid({
+      steps: config.steps,
+      projectIds: args.projectIds,
+    });
+  }
+
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) {
     where.projectId = args.projectIds;
@@ -318,8 +346,29 @@ export const callTool = async (args: {
   action?: string;
   input?: Record<string, unknown>;
   authHeader?: string;
+  remainingDepth?: number;
 }): Promise<unknown> => {
   const foundTool = await getTool({ projectIds: args.projectIds, id: args.id });
+
+  if (foundTool.type === 'pipeline') {
+    return runPipeline({
+      pipeline: foundTool.pipeline,
+      presetParameters: foundTool.presetParameters,
+      input: args.input,
+      remainingDepth: args.remainingDepth,
+      callStep: (step) => {
+        return callTool({
+          projectIds: args.projectIds,
+          id: step.toolId,
+          action: step.action,
+          input: step.input,
+          authHeader: args.authHeader,
+          remainingDepth: step.remainingDepth,
+        });
+      },
+    });
+  }
+
   const mergedInput = {
     ...(foundTool.presetParameters ?? {}),
     ...(args.input ?? {}),

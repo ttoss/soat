@@ -72,6 +72,40 @@ paths:
                   actions:
                     - files:ListFiles
                     - files:GetFile
+              pipeline:
+                summary: Pipeline tool (compute → persist)
+                value:
+                  name: compute-and-save
+                  type: pipeline
+                  description: Computes a sum and persists the result
+                  parameters:
+                    type: object
+                    properties:
+                      x:
+                        type: number
+                      y:
+                        type: number
+                    required:
+                      - x
+                      - y
+                  pipeline:
+                    steps:
+                      - id: compute
+                        tool_id: tool_calc
+                        action: add
+                        input:
+                          a:
+                            var: input.x
+                          b:
+                            var: input.y
+                      - id: persist
+                        tool_id: tool_save_record
+                        input:
+                          value:
+                            var: steps.compute.sum
+                    output:
+                      saved_id:
+                        var: steps.persist.id
       responses:
         '201':
           description: Tool created
@@ -257,8 +291,10 @@ paths:
       summary: Call a tool
       description: >
         Directly invokes a tool and returns its output. Supported for `http`,
-        `soat`, and `mcp` tools. `client` tools cannot be invoked server-side
-        and will return 422.
+        `soat`, `mcp`, and `pipeline` tools. `client` tools cannot be invoked
+        server-side and will return 422. A `pipeline` tool runs its declared
+        steps in order and returns the mapped `output` (or the last step's
+        output); `action` is ignored and `input` is the pipeline input.
 
         For `soat` and `mcp` tools the `action` field is required and identifies
         which action (SOAT) or tool name (MCP) to invoke. For `http` tools
@@ -367,6 +403,7 @@ components:
             - client
             - mcp
             - soat
+            - pipeline
           description: Tool type
           example: http
         description:
@@ -404,6 +441,14 @@ components:
             Fixed parameters merged into every soat tool call. Keys matching
             fields in the action's input schema are removed from the schema
             shown to the model and injected automatically at execution time.
+        pipeline:
+          type: object
+          nullable: true
+          description: >-
+            Pipeline definition for `pipeline` tools: an ordered `steps` array,
+            each step invoking another tool by `tool_id` (optional `action`) and
+            building its `input` from earlier results via JSON Logic evaluated
+            over `{ input, steps }`. An optional `output` maps the final result.
         created_at:
           type: string
           format: date-time
@@ -430,6 +475,7 @@ components:
             - client
             - mcp
             - soat
+            - pipeline
           description: Tool type (default http)
         description:
           type: string
@@ -460,6 +506,11 @@ components:
             Fixed parameters merged into every soat tool call. Keys matching
             fields in the action's input schema are removed from the schema
             shown to the model and injected automatically at execution time.
+        pipeline:
+          type: object
+          description: >-
+            Pipeline definition for `pipeline` tools. See the `pipeline` field
+            on the Tool schema for the full structure.
 
     UpdateToolRequest:
       type: object
@@ -473,6 +524,7 @@ components:
             - client
             - mcp
             - soat
+            - pipeline
         description:
           type: string
           nullable: true
@@ -504,6 +556,12 @@ components:
             Fixed parameters merged into every soat tool call. Keys matching
             fields in the action's input schema are removed from the schema
             shown to the model and injected automatically at execution time.
+        pipeline:
+          type: object
+          nullable: true
+          description: >-
+            Pipeline definition for `pipeline` tools. See the `pipeline` field
+            on the Tool schema for the full structure.
 
     CallToolRequest:
       type: object
