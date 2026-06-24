@@ -1708,4 +1708,67 @@ describe('Orchestrations', () => {
       expect(submitRes.status).toBe(409);
     });
   });
+
+  describe('Skipped node executions', () => {
+    test('records unreached branch nodes with status "skipped"', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          project_id: projectId,
+          name: 'cond-skip-test',
+          nodes: [
+            {
+              id: 'check',
+              type: 'condition',
+              expression: {
+                if: [{ '>': [{ var: 'score' }, 0.8] }, 'high', 'low'],
+              },
+            },
+            {
+              id: 'high_path',
+              type: 'transform',
+              expression: 'high-ran',
+              output_mapping: { result: 'state.high' },
+            },
+            {
+              id: 'low_path',
+              type: 'transform',
+              expression: 'low-ran',
+              output_mapping: { result: 'state.low' },
+            },
+          ],
+          edges: [
+            { from: 'check', to: 'high_path', condition: 'high' },
+            { from: 'check', to: 'low_path', condition: 'low' },
+          ],
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: createRes.body.id, input: { score: 0.9 } });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('completed');
+
+      const execs: Array<{
+        node_id: string;
+        status: string;
+        output: unknown;
+        started_at: unknown;
+      }> = runRes.body.node_executions;
+
+      const highExec = execs.find((e) => {
+        return e.node_id === 'high_path';
+      });
+      expect(highExec?.status).toBe('completed');
+
+      const lowExec = execs.find((e) => {
+        return e.node_id === 'low_path';
+      });
+      expect(lowExec).toBeDefined();
+      expect(lowExec?.status).toBe('skipped');
+      expect(lowExec?.output).toBeNull();
+      expect(lowExec?.started_at).toBeNull();
+    });
+  });
 });

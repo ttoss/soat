@@ -66,7 +66,7 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | -------------- | -------------- | -------------------------------------------------------- |
 | `node_id`      | string         | ID of the executed node                                  |
 | `node_type`    | string \| null | Node type (`agent`, `transform`, …)                      |
-| `status`       | string         | `completed` \| `failed` \| `requires_action`             |
+| `status`       | string         | `completed` \| `failed` \| `requires_action` \| `skipped` |
 | `input`        | object \| null | Resolved `input_mapping` the node received               |
 | `output`       | object \| null | Output artifact the node produced (`null` when failed)   |
 | `error`        | object \| null | `{ code, message }` when `status` is `failed`            |
@@ -174,6 +174,8 @@ soat validate-orchestration \
 
 Every time a node runs, the engine persists an entry in the run's `node_executions` array capturing the resolved `input_mapping` it received, the `output` artifact it produced, its `status`, and — on failure — the structured `error`. The record is written even when a node throws, so a failed run is fully debuggable: `get-orchestration-run` shows **which** node failed, **what** input it received, and **why**, instead of only the final state plus a single error message.
 
+When a run completes, nodes that were never reached (because they were on an un-traversed condition branch or an activation group that never fired) are recorded with `status: "skipped"`. Their `input`, `output`, `started_at`, and `completed_at` fields are all `null`. This makes every declared node visible in the execution trace regardless of which branches ran.
+
 ```json
 {
   "status": "failed",
@@ -198,7 +200,7 @@ Every time a node runs, the engine persists an entry in the run's `node_executio
 }
 ```
 
-Records are returned by both `get-orchestration-run` and `list-orchestration-runs`, ordered oldest-first. A node that pauses the run for human input is recorded with `status: "requires_action"`.
+Records are returned by both `get-orchestration-run` and `list-orchestration-runs`, ordered oldest-first. A node that pauses the run for human input is recorded with `status: "requires_action"`. A node that was never reached is recorded with `status: "skipped"` once the run completes.
 
 ### Human Nodes
 

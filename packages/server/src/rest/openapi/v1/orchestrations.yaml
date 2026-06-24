@@ -696,7 +696,7 @@ components:
           description: Type of the executed node (e.g. agent, transform).
         status:
           type: string
-          enum: [completed, failed, requires_action]
+          enum: [completed, failed, requires_action, skipped]
         input:
           type: object
           nullable: true
