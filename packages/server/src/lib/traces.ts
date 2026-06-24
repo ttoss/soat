@@ -4,6 +4,8 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { upsertFileByPath } from './files';
+import type { PersistedGeneration } from './generations';
+import { listGenerationsByTraceIds } from './generations';
 
 const log = createDebug('soat:traces');
 
@@ -21,6 +23,7 @@ export type Trace = {
 
 export type TraceTreeNode = Trace & {
   children: TraceTreeNode[];
+  generations?: PersistedGeneration[];
 };
 
 /**
@@ -339,6 +342,38 @@ const buildTraceTree = (traces: Trace[]): TraceTreeNode | undefined => {
   return root;
 };
 
+const attachNodeGenerations = (
+  node: TraceTreeNode,
+  byTraceId: Map<string, PersistedGeneration[]>
+): void => {
+  node.generations = byTraceId.get(node.id) ?? [];
+  for (const child of node.children) {
+    attachNodeGenerations(child, byTraceId);
+  }
+};
+
+const attachGenerationsToTree = async (
+  tree: TraceTreeNode,
+  allTraces: Trace[],
+  projectIds: number[] | undefined
+): Promise<void> => {
+  const allGens = await listGenerationsByTraceIds({
+    tracePublicIds: allTraces.map((t) => {
+      return t.id;
+    }),
+    projectIds,
+  });
+
+  const byTraceId = new Map<string, PersistedGeneration[]>();
+  for (const gen of allGens) {
+    const list = byTraceId.get(gen.traceId) ?? [];
+    list.push(gen);
+    byTraceId.set(gen.traceId, list);
+  }
+
+  attachNodeGenerations(tree, byTraceId);
+};
+
 /**
  * Returns the full trace tree rooted at the given trace.
  *
@@ -353,6 +388,7 @@ const buildTraceTree = (traces: Trace[]): TraceTreeNode | undefined => {
 export const getTraceTree = async (args: {
   projectIds?: number[];
   traceId: string;
+  include?: string[];
 }): Promise<TraceTreeNode> => {
   log('getTraceTree: traceId=%s projectIds=%o', args.traceId, args.projectIds);
 
@@ -415,5 +451,10 @@ export const getTraceTree = async (args: {
       'RESOURCE_NOT_FOUND',
       `Trace tree for '${args.traceId}' not found.`
     );
+
+  if (args.include?.includes('generations')) {
+    await attachGenerationsToTree(tree, allTraces, args.projectIds);
+  }
+
   return tree;
 };

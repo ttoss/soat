@@ -178,7 +178,7 @@ const runPerspectiveTurns = async (
             status: 'completed',
             completedAt: new Date(),
             stopReason: 'stop',
-            metadata: { reasoning: { perspective: name, output: text } },
+            metadata: { reasoning: { perspective: name, round, output: text } },
           });
         }
       } catch (error) {

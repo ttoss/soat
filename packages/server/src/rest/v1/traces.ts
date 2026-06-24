@@ -72,9 +72,17 @@ tracesRouter.get('/traces/:trace_id/tree', async (ctx: Context) => {
     return;
   }
 
+  const includeParam = ctx.query.include as string | undefined;
+  const include = includeParam
+    ? includeParam.split(',').map((s) => {
+        return s.trim();
+      })
+    : undefined;
+
   const result = await getTraceTree({
     projectIds,
     traceId: ctx.params.trace_id,
+    include,
   });
 
   ctx.body = result;

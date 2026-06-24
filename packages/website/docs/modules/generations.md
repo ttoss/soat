@@ -18,7 +18,7 @@ Generations can be listed via `GET /generations` (filter by `agent_id`, `trace_i
 | `project_id`                | string         | Project the generation belongs to                                                                    |
 | `agent_id`                  | string         | Agent that ran the generation                                                                        |
 | `trace_id`                  | string         | Trace this generation belongs to                                                                     |
-| `initiator_generation_id`   | string \| null | Generation that triggered this one via a sub-agent call; `null` for top-level generations            |
+| `initiator_generation_id`   | string \| null | Generation that triggered this one. Set for debate perspective/synthesis children and sub-agent invocations alike; `null` for top-level generations |
 | `started_by_principal_type` | string \| null | Type of the principal that started the generation                                                    |
 | `started_by_principal_id`   | string \| null | ID of the principal that started the generation                                                      |
 | `status`                    | string         | Lifecycle status: `in_progress`, `requires_action`, `completed`, or `failed`                         |
@@ -123,6 +123,18 @@ When debate mode runs, each perspective turn and the synthesis step creates a **
 | Field | Description |
 |-------|-------------|
 | `perspective` | Persona name (e.g. `"Advocate"`, `"Skeptic"`) or `"synthesis"` for the final pass |
+| `round` | Zero-based round index. Present on perspective turns only (not on the synthesis step). Useful when `maxRounds > 1` to distinguish the same persona's first and second contributions |
 | `output` | The text produced by this step |
 
-Use `GET /generations?trace_id=<trace_id>` to retrieve the full tree. Child records with `status: "failed"` indicate a perspective that errored; the parent generation is unaffected.
+:::info Debate rounds vs sub-agent traces
+
+Debate rounds are **not** sub-traces — they live in the **same trace** as the parent generation. `GET /traces/:id/tree` only shows sub-agent hierarchy (child traces); debate rounds will not appear there as children.
+
+To retrieve debate rounds for a parent generation, use either:
+
+- `GET /generations?trace_id=X&initiator_generation_id=<parent_gen_id>` — returns only the debate children of that specific generation.
+- `GET /traces/:id/tree?include=generations` — returns the full trace tree with all generations (including debate children) embedded on each node.
+
+:::
+
+Child records with `status: "failed"` indicate a perspective that errored; the parent generation is unaffected.

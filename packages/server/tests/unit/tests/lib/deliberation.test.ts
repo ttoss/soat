@@ -141,6 +141,44 @@ describe('deliberation lib', () => {
       });
     });
 
+    test('perspective metadata includes round number', async () => {
+      mockRunReasoningCompletion
+        .mockResolvedValueOnce('advocate r1')
+        .mockResolvedValueOnce('skeptic r1')
+        .mockResolvedValueOnce('advocate r2')
+        .mockResolvedValueOnce('skeptic r2')
+        .mockResolvedValueOnce('synthesis');
+
+      await runDebate({
+        agentId: 'agent_debate01',
+        projectIds: [1],
+        messages: [{ role: 'user', content: 'question' }],
+        temperature: null,
+        reasoning: { mode: 'debate', perspectives: 2, maxRounds: 2 },
+        traceId: 'trc_01',
+        projectId: 1,
+        initiatorGenerationId: 'gen_parent01',
+      });
+
+      const r0AdvocateUpdate = mockUpdateGenerationRecord.mock.calls.find(
+        ([args]) =>
+          (args.metadata?.reasoning as Record<string, unknown> | undefined)
+            ?.perspective === 'Advocate' &&
+          (args.metadata?.reasoning as Record<string, unknown> | undefined)
+            ?.round === 0
+      );
+      expect(r0AdvocateUpdate).toBeDefined();
+
+      const r1AdvocateUpdate = mockUpdateGenerationRecord.mock.calls.find(
+        ([args]) =>
+          (args.metadata?.reasoning as Record<string, unknown> | undefined)
+            ?.perspective === 'Advocate' &&
+          (args.metadata?.reasoning as Record<string, unknown> | undefined)
+            ?.round === 1
+      );
+      expect(r1AdvocateUpdate).toBeDefined();
+    });
+
     test('marks perspective child generation failed when perspective call throws', async () => {
       mockRunReasoningCompletion
         .mockRejectedValueOnce(new Error('provider down'))

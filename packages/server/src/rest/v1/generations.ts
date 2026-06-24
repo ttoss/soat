@@ -32,15 +32,14 @@ generationsRouter.get('/generations', async (ctx: Context) => {
     return;
   }
 
-  const { agentId, traceId, status, limit, offset } = ctx.query as Record<
-    string,
-    string | undefined
-  >;
+  const { agentId, traceId, initiatorGenerationId, status, limit, offset } =
+    ctx.query as Record<string, string | undefined>;
 
   ctx.body = await listGenerations({
     projectIds: projectIds ?? undefined,
     agentId,
     traceId,
+    initiatorGenerationId,
     status,
     limit: limit ? Number(limit) : undefined,
     offset: offset ? Number(offset) : undefined,
