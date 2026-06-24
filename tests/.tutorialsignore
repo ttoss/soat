@@ -8,7 +8,3 @@
 
 index
 connect-third-party-llms
-
-# Requires native file ingestion (POST /documents/ingest, DocumentChunk model) from #245.
-# Remove this line once #245 is merged so the tutorial runs end-to-end in CI.
-agent-with-pdfs
