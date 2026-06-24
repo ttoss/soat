@@ -752,5 +752,43 @@ describe('Documents', () => {
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('UNSUPPORTED_FILE_TYPE');
     });
+
+    test('wait=true returns 201 with status ready synchronously', async () => {
+      const fileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'sync-ingest.pdf',
+        contentType: 'application/pdf',
+      });
+
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest')
+        .send({ file_id: fileId, project_id: projectId, wait: true });
+
+      expect(ingestRes.status).toBe(201);
+      expect(ingestRes.body.status).toBe('ready');
+      expect(
+        (ingestRes.body.metadata as Record<string, unknown>).chunk_count
+      ).toBeGreaterThan(0);
+    });
+
+    test('wait=true sets failure reason on unparseable file', async () => {
+      extractPdfPagesSpy.mockResolvedValueOnce([]);
+
+      const fileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'sync-empty.pdf',
+        contentType: 'application/pdf',
+      });
+
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest')
+        .send({ file_id: fileId, project_id: projectId, wait: true });
+
+      expect(ingestRes.status).toBe(201);
+      expect(ingestRes.body.status).toBe('failed');
+      expect(
+        (ingestRes.body.metadata as Record<string, unknown>).failure_reason
+      ).toBe('FILE_PARSE_FAILED');
+    });
   });
 });

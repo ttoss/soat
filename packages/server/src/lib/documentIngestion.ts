@@ -209,9 +209,11 @@ const processDocumentIngestion = async (args: {
 };
 
 /**
- * Validate the file and create a Document record in `pending` state, then
- * schedule background processing. Returns the document immediately so the
- * caller can respond with 202 Accepted.
+ * Validate the file and create a Document record. When `wait` is true the
+ * pipeline runs synchronously and the document is returned with `status=ready`
+ * (HTTP 201). When `wait` is false (default) processing is deferred to the
+ * next event loop tick and the document is returned with `status=pending`
+ * (HTTP 202).
  */
 export const enqueueDocumentIngestion = async (args: {
   fileId: string;
@@ -221,12 +223,14 @@ export const enqueueDocumentIngestion = async (args: {
   chunkStrategy?: ChunkStrategy;
   chunkSize?: number;
   chunkOverlap?: number;
+  wait?: boolean;
 }) => {
   log(
-    'enqueueDocumentIngestion: fileId=%s projectId=%d strategy=%s',
+    'enqueueDocumentIngestion: fileId=%s projectId=%d strategy=%s wait=%s',
     args.fileId,
     args.projectId,
-    args.chunkStrategy ?? 'page'
+    args.chunkStrategy ?? 'page',
+    args.wait ?? false
   );
 
   const file = await loadIngestibleFile(args.fileId);
@@ -245,17 +249,22 @@ export const enqueueDocumentIngestion = async (args: {
   });
 
   const docId = doc.id as number;
+  const pipelineArgs = {
+    docId,
+    fileId: args.fileId,
+    docPath,
+    chunkStrategy: args.chunkStrategy,
+    chunkSize: args.chunkSize,
+    chunkOverlap: args.chunkOverlap,
+  };
 
-  setImmediate(() => {
-    void processDocumentIngestion({
-      docId,
-      fileId: args.fileId,
-      docPath,
-      chunkStrategy: args.chunkStrategy,
-      chunkSize: args.chunkSize,
-      chunkOverlap: args.chunkOverlap,
+  if (args.wait) {
+    await processDocumentIngestion(pipelineArgs);
+  } else {
+    setImmediate(() => {
+      void processDocumentIngestion(pipelineArgs);
     });
-  });
+  }
 
   const fetched = await fetchIngestedDocById(docId);
   return mapDocument(fetched!);

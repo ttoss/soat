@@ -177,7 +177,17 @@ paths:
                   type: integer
                   description: Overlap in characters between consecutive windows when `chunk_strategy=size`. Defaults to 200.
                   example: 200
+                wait:
+                  type: boolean
+                  description: When `true`, processing runs synchronously and the response is `201 Created` with `status=ready`. When omitted or `false` (default), returns `202 Accepted` with `status=pending` and processing runs in the background.
+                  default: false
       responses:
+        '201':
+          description: Ingestion completed synchronously (only when `wait=true`). The document is fully indexed and ready for search.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestedDocumentRecord'
         '202':
           description: Ingestion accepted. The document record has been created with `status=pending` and processing runs in the background. Poll `GET /api/v1/documents/{document_id}` until `status` is `ready` or `failed`.
           content:

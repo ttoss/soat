@@ -387,6 +387,7 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     chunkStrategy?: 'page' | 'whole' | 'size';
     chunkSize?: number;
     chunkOverlap?: number;
+    wait?: boolean;
   };
 
   if (!body.fileId) {
@@ -433,9 +434,10 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     chunkStrategy: body.chunkStrategy,
     chunkSize: body.chunkSize,
     chunkOverlap: body.chunkOverlap,
+    wait: body.wait,
   });
 
-  ctx.status = 202;
+  ctx.status = body.wait ? 201 : 202;
   ctx.body = result;
 });
 
