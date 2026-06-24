@@ -1,5 +1,7 @@
+import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import createDebug from 'debug';
 
+import { createGenerationRecord, updateGenerationRecord } from './generations';
 import type {
   PerspectiveConfig,
   ReasoningConfig,
@@ -114,8 +116,34 @@ export type DebateResult = {
 type DebateContext = {
   agentId: string;
   projectIds?: number[];
+  projectId?: number;
+  traceId?: string;
+  initiatorGenerationId?: string;
   question: string;
   temperature?: number | null;
+};
+
+const createChildGenerationRecord = async (
+  ctx: DebateContext
+): Promise<string | undefined> => {
+  if (!ctx.traceId || ctx.projectId === undefined) return undefined;
+  const childGenId = generatePublicId(PUBLIC_ID_PREFIXES.generation);
+  try {
+    await createGenerationRecord({
+      publicId: childGenId,
+      projectId: ctx.projectId,
+      agentId: ctx.agentId,
+      traceId: ctx.traceId,
+      initiatorGenerationId: ctx.initiatorGenerationId,
+    });
+    return childGenId;
+  } catch (error) {
+    log(
+      'deliberation: failed to create child generation record error=%s',
+      error instanceof Error ? error.message : String(error)
+    );
+    return undefined;
+  }
 };
 
 const runPerspectiveTurns = async (
@@ -126,6 +154,8 @@ const runPerspectiveTurns = async (
   const transcript: TranscriptEntry[] = [];
   for (let round = 0; round < maxRounds; round++) {
     for (const perspective of perspectives) {
+      const name = perspective.name ?? 'Perspective';
+      const childGenId = await createChildGenerationRecord(ctx);
       try {
         const text = await reasoningCompletion.runReasoningCompletion({
           agentId: ctx.agentId,
@@ -133,23 +163,38 @@ const runPerspectiveTurns = async (
           aiProviderId: perspective.aiProviderId,
           model: perspective.model,
           prompt: buildPerspectivePrompt({
-            name: perspective.name ?? 'Perspective',
+            name,
             customPrompt: perspective.prompt,
             question: ctx.question,
             transcript,
           }),
           temperature: ctx.temperature ?? undefined,
         });
-        const name = perspective.name ?? 'Perspective';
         transcript.push({ name, text });
         log('runDebate: perspective=%s round=%d ok', name, round);
+        if (childGenId) {
+          void updateGenerationRecord({
+            publicId: childGenId,
+            status: 'completed',
+            completedAt: new Date(),
+            stopReason: 'stop',
+            metadata: { reasoning: { perspective: name, output: text } },
+          });
+        }
       } catch (error) {
         log(
           'runDebate: perspective=%s round=%d failed error=%s',
-          perspective.name,
+          name,
           round,
           error instanceof Error ? error.message : String(error)
         );
+        if (childGenId) {
+          void updateGenerationRecord({
+            publicId: childGenId,
+            status: 'failed',
+            completedAt: new Date(),
+          });
+        }
       }
     }
   }
@@ -161,6 +206,7 @@ const runSynthesis = async (
   synthesis: ReasoningOverrideTriple,
   transcript: TranscriptEntry[]
 ): Promise<DebateResult> => {
+  const childGenId = await createChildGenerationRecord(ctx);
   try {
     const synthesized = await reasoningCompletion.runReasoningCompletion({
       agentId: ctx.agentId,
@@ -175,9 +221,27 @@ const runSynthesis = async (
       temperature: ctx.temperature ?? undefined,
     });
     if (!synthesized.trim()) {
+      if (childGenId) {
+        void updateGenerationRecord({
+          publicId: childGenId,
+          status: 'failed',
+          completedAt: new Date(),
+        });
+      }
       return { text: '', applied: false, reason: 'synthesis_failed' };
     }
     log('runDebate: synthesis complete agentId=%s', ctx.agentId);
+    if (childGenId) {
+      void updateGenerationRecord({
+        publicId: childGenId,
+        status: 'completed',
+        completedAt: new Date(),
+        stopReason: 'stop',
+        metadata: {
+          reasoning: { perspective: 'synthesis', output: synthesized },
+        },
+      });
+    }
     return { text: synthesized, applied: true, reason: 'synthesized' };
   } catch (error) {
     log(
@@ -185,6 +249,13 @@ const runSynthesis = async (
       ctx.agentId,
       error instanceof Error ? error.message : String(error)
     );
+    if (childGenId) {
+      void updateGenerationRecord({
+        publicId: childGenId,
+        status: 'failed',
+        completedAt: new Date(),
+      });
+    }
     return { text: '', applied: false, reason: 'synthesis_failed' };
   }
 };
@@ -192,6 +263,9 @@ const runSynthesis = async (
 export const runDebate = async (args: {
   agentId: string;
   projectIds?: number[];
+  projectId?: number;
+  traceId?: string;
+  initiatorGenerationId?: string;
   reasoning: ReasoningConfig;
   messages: ReasoningMessage[];
   temperature?: number | null;
@@ -206,6 +280,9 @@ export const runDebate = async (args: {
   const ctx: DebateContext = {
     agentId: args.agentId,
     projectIds: args.projectIds,
+    projectId: args.projectId,
+    traceId: args.traceId,
+    initiatorGenerationId: args.initiatorGenerationId,
     question,
     temperature: args.temperature,
   };
@@ -245,6 +322,8 @@ export const maybeApplyDebateToResult = async (args: {
   reasoningConfig?: ReasoningConfig | null;
   agentId: string;
   generationId: string;
+  traceId?: string;
+  projectId?: number;
   messages: ReasoningMessage[];
   result: DebatableResult;
   temperature?: number | null;
@@ -256,6 +335,9 @@ export const maybeApplyDebateToResult = async (args: {
     reasoning: args.reasoningConfig,
     messages: args.messages,
     temperature: args.temperature,
+    traceId: args.traceId,
+    projectId: args.projectId,
+    initiatorGenerationId: args.generationId,
   });
 
   if (debate.applied) {
@@ -279,6 +361,8 @@ type OrchestrationArgs = {
   reasoningConfig?: ReasoningConfig | null;
   agentId: string;
   generationId: string;
+  traceId?: string;
+  projectId?: number;
   messages: ReasoningMessage[];
   result: DebatableResult;
   temperature?: number | null;

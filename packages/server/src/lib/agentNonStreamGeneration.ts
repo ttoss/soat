@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import type { LanguageModel, ModelMessage, Tool, ToolChoice } from 'ai';
 import { generateText, stepCountIs } from 'ai';
 import createDebug from 'debug';
@@ -173,12 +174,7 @@ const resolveGenerationResult = async (args: {
     });
   }
 
-  // Deep thinking: apply orchestrated reasoning BEFORE the completion result
-  // is built, so the trace, event, and API response all carry the final text.
-  //
-  // The AI SDK's DefaultGenerateTextResult exposes `text` as a getter-only
-  // property. Wrapping it in a plain object lets orchestration freely mutate
-  // text/response without hitting the read-only descriptor.
+  // Wrap in plain object: AI SDK exposes `text` as getter-only; orchestration needs to mutate it.
   const mutableResult = {
     text: args.result.text,
     response: args.result.response,
@@ -188,6 +184,8 @@ const resolveGenerationResult = async (args: {
     reasoningConfig: args.reasoningConfig,
     agentId: args.agentId,
     generationId: args.generationId,
+    traceId: args.traceId,
+    projectId: args.typedAgent.project.id as number,
     messages: args.allMessages,
     result: mutableResult,
     temperature: args.typedAgent.temperature as number | null,
