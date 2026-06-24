@@ -7,7 +7,7 @@ Human identities within the SOAT instance, authenticated via username and passwo
 
 ## Overview
 
-Users are global to the SOAT instance — not scoped to any project. The first user is created via the bootstrap endpoint. After that, only authenticated admin users may create additional users.
+Users are global to the SOAT instance — not scoped to any project. The first user is created via the bootstrap endpoint. After that, only authenticated admin users may create additional users. See it end to end in [Permissions in Practice — Step 2 (Create regular users)](/docs/tutorials/permissions#step-2--create-regular-users).
 
 Users can have [Policies](./policies.md) attached to them, which control what resources and operations they are permitted to access. See [IAM](./iam.md) for the full authorization model.
 
@@ -55,7 +55,7 @@ When both variables are present and no users exist, the server creates the admin
 
 ### Authentication
 
-Users authenticate via `POST /api/v1/users/login` with username and password. On success, the server returns a signed JWT containing the user's public ID and role. The token is passed as `Authorization: Bearer <token>` on subsequent requests. See [IAM — Authentication](./iam.md#authentication).
+Users authenticate via `POST /api/v1/users/login` with username and password. On success, the server returns a signed JWT containing the user's public ID and role. The token is passed as `Authorization: Bearer <token>` on subsequent requests. See [IAM — Authentication](./iam.md#authentication), or [Chat with an LLM — Step 1 (Log in as admin)](/docs/tutorials/chat-with-llm#step-1--log-in-as-admin) for a worked login example.
 
 ### Policy Attachment
 

@@ -12,7 +12,7 @@ Chats provide two ways to call the completions API:
 - **Stateless** (`POST /chat/completions`) — OpenAI-compatible; pass the full provider configuration on every request. No setup required.
 - **Per-chat** (`POST /chats/{chat_id}/completions`) — create a Chat resource once to store the AI provider, default system message, and model; then pass only the `messages` array per request.
 
-Both endpoints support SSE streaming via `stream: true`.
+Both endpoints support SSE streaming via `stream: true`. To see a completion driven end to end through a provider-backed flow, follow [Connect Third-Party LLMs - Step 6 (Start a conversation)](/docs/tutorials/connect-third-party-llms#step-6--start-a-conversation).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -54,7 +54,7 @@ When running `POST /chats/{chat_id}/completions`, if a message with `role: syste
 
 ### AI Provider Resolution
 
-For per-chat completions the AI provider is taken from the Chat record. For stateless completions it is passed directly in the request body. See [AI Providers](./ai-providers.md) for the full list of supported providers and how secrets are resolved.
+For per-chat completions the AI provider is taken from the Chat record. For stateless completions it is passed directly in the request body. See [AI Providers](./ai-providers.md) for the full list of supported providers and how secrets are resolved. For a worked example of creating a provider the Chat can reference, see [Chat with an LLM - Step 3 (Create a local AI provider)](/docs/tutorials/chat-with-llm#step-3--create-a-local-ai-provider).
 
 ### Streaming
 

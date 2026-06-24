@@ -11,7 +11,7 @@ A Document is backed by a [File](./files.md) and associated with a project. When
 
 Documents can be created in two ways:
 
-- **Plain text** (`POST /documents`) — content is supplied inline. By default it is stored as a single chunk; pass `chunk_strategy` to split it. The response is `201 Created`.
+- **Plain text** (`POST /documents`) — content is supplied inline. By default it is stored as a single chunk; pass `chunk_strategy` to split it. The response is `201 Created`. See it end to end in [Orchestrate a Sonnet — Step 4 (Create the poem document)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool).
 - **File ingestion** (`POST /documents/ingest`) — an already-uploaded file is parsed and chunked **asynchronously**. The endpoint returns `202 Accepted` immediately with the new document in `status: pending`. Chunk extraction and embedding run in the background; poll `GET /documents/:id` until `status` is `ready` or `failed`. The source format is detected from the file's content type: PDFs are parsed page by page (`application/pdf`); `text/plain` and `text/markdown` files are read as a single source. How the source is chunked is controlled by `chunk_strategy`.
 
 Documents are identified by an `id` prefixed with `doc_`. The internal database primary key is never returned.
@@ -115,7 +115,7 @@ After ingestion completes, `metadata.chunk_count` records the number of chunks c
 
 ### Path-Based SRNs
 
-Policies can target documents by their logical path rather than their `id`. When a document has a `path` set, the server evaluates **both** the id-based SRN and the path-based SRN:
+Policies can target documents by their logical path rather than their `id`. When a document has a `path` set, the server evaluates **both** the id-based SRN and the path-based SRN. For a worked example that scopes an agent to a public document path while denying a private one, see [Agent SOAT Tools and Preset Parameters — Step 4 (Create documents)](/docs/tutorials/agent-soat-tools#step-4--create-documents):
 
 | SRN form                                 | Matches                                      |
 | ---------------------------------------- | -------------------------------------------- |

@@ -9,7 +9,7 @@ Encrypted storage for sensitive values such as API keys and credentials.
 
 Secrets are associated with a project. Values are encrypted at rest using AES-256-GCM and are **never returned** by any API response. Once stored, a secret's value can only be replaced. All operations return a `has_value` boolean to indicate whether an encrypted value is on file.
 
-Secrets can be linked to [AI Providers](./ai-providers.md) to supply credentials at inference time.
+Secrets can be linked to [AI Providers](./ai-providers.md) to supply credentials at inference time. See it end to end in [Connect Third-Party LLMs - Step 3 (Store provider credentials as secrets)](/docs/tutorials/connect-third-party-llms#step-3--store-provider-credentials-as-secrets) and [Step 4 (Create provider records)](/docs/tutorials/connect-third-party-llms#step-4--create-provider-records).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 

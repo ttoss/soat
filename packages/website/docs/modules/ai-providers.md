@@ -9,7 +9,7 @@ The AI Providers module lets you register and manage LLM provider configurations
 
 An AI provider is a named configuration that tells the system how to reach a specific LLM endpoint. A project can have multiple providers — for example, one for GPT-4o and another for Claude 3.5.
 
-When a provider is linked to a secret the secret's encrypted value is retrieved and passed as the API key when calling the LLM. The key is never exposed through the API.
+When a provider is linked to a secret the secret's encrypted value is retrieved and passed as the API key when calling the LLM. The key is never exposed through the API. See it end to end in [Connect Third-Party LLMs - Step 4 (Create provider records)](/docs/tutorials/connect-third-party-llms#step-4--create-provider-records).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -50,6 +50,8 @@ Valid values for the `provider` field:
 | `bedrock`   | Amazon Bedrock             |
 | `gateway`   | Generic API gateway        |
 | `custom`    | Custom / self-hosted model |
+
+A local `ollama` provider needs no linked secret — it uses the server's `OLLAMA_BASE_URL` instead. See it end to end in [Chat with an LLM - Step 3 (Create a local AI provider)](/docs/tutorials/chat-with-llm#step-3--create-a-local-ai-provider).
 
 ## Key Concepts
 

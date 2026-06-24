@@ -89,7 +89,7 @@ When `status` is `completed`, `stop_reason` indicates why:
 
 ### Tools
 
-Agents reference [Tools](./tools.md) by their IDs via the `tool_ids` field. A single tool can be attached to many agents. For tool types (`http`, `client`, `mcp`, `soat`), execution behavior, preset parameters, and tool name resolution, see the [Tools module](./tools.md).
+Agents reference [Tools](./tools.md) by their IDs via the `tool_ids` field. A single tool can be attached to many agents. For tool types (`http`, `client`, `mcp`, `soat`), execution behavior, preset parameters, and tool name resolution, see the [Tools module](./tools.md). See it end to end in [Agent SOAT Tools and Preset Parameters — Step 7 (Create the agent)](/docs/tutorials/agent-soat-tools#step-7--create-the-agent), which attaches `soat` document tools (with a preset document ID) to an agent.
 
 `tool_choice` and `stop_conditions` reference tools by their **resolved name** (e.g., `github_create_issue`), not by ID. See [Tool Name Resolution](./tools.md#tool-name-resolution) in the Tools module.
 
@@ -397,6 +397,8 @@ Example — agent restricted to reading and searching documents regardless of ca
 An agent can invoke another agent through a `soat` tool action (`create-agent-generation`). The server enforces a **maximum call depth** controlled by `max_call_depth` on the generate request (default: **10**). Each nested generation receives `remaining_depth - 1`. When `remaining_depth` reaches `0`, the call returns an error instead of spawning the child generation.
 
 For observability, every generation creates its own **trace** linked to the parent via `parent_trace_id` and the shared `root_trace_id`. The child's `trace_id` appears in the parent's step data, making the full call graph reconstructable. See [Traces](./traces.md#trace-ancestry-model) for the ancestry model, invariants, and tree traversal.
+
+See it end to end in [Multi-Agent Sonnet with Nested Agent Calls — Step 6 (Create stanza agents)](/docs/tutorials/multi-agent-orchestration#step-6--create-the-four-stanza-agents), which wires an orchestrator to four worker agents via `create-agent-generation` tools.
 
 ### Generation Endpoints
 

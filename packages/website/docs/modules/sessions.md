@@ -7,7 +7,7 @@ A simplified 1 user ↔ 1 agent conversational interface, owned by an agent.
 
 ## Overview
 
-Sessions hide the underlying [Conversation](./conversations.md), [Actor](./actors.md), and generation plumbing. By default, interacting with an agent requires three API calls: create a session, save a user message, and trigger generation. When `auto_generate` is enabled, the message and generation collapse into a single call.
+Sessions hide the underlying [Conversation](./conversations.md), [Actor](./actors.md), and generation plumbing. By default, interacting with an agent requires three API calls: create a session, save a user message, and trigger generation. When `auto_generate` is enabled, the message and generation collapse into a single call. Walk through it end to end in [Chat with an LLM - Step 5 (Create a session)](/docs/tutorials/chat-with-llm#step-5--create-a-session) and [Step 6 (Send messages and receive replies)](/docs/tutorials/chat-with-llm#step-6--send-messages-and-receive-replies).
 
 Sessions are a top-level resource at `/sessions`. Each session belongs to an [Agent](./agents.md) — set `agent_id` on create, and filter by it with `GET /sessions?agent_id=`. Each session exposes its `conversation_id` as an escape hatch to the full [Conversations](./conversations.md) API; list a session's messages via `GET /conversations/:conversation_id/messages` (this is governed by `conversations:GetConversation`, not the `agents:*` session actions).
 
@@ -185,7 +185,7 @@ Each call to `POST .../generate` returns `generation_id` and `trace_id`. Store t
 }
 ```
 
-- `GET .../sessions/{session_id}/messages` returns the conversation timeline.
+- `GET .../sessions/{session_id}/messages` returns the conversation timeline — see [Debug Session, Generation, and Trace History - Step 4 (Retrieve the full session message timeline)](/docs/tutorials/debug-session-generation-trace-history#step-4---retrieve-the-full-session-message-timeline).
 - `GET /api/v1/traces/{trace_id}` returns the execution trace.
 - `GET /api/v1/traces/{trace_id}/tree` returns the full trace tree for nested agent calls.
 

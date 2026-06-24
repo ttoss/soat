@@ -29,7 +29,7 @@ Users authenticate via `POST /api/v1/users/login` with username and password. Th
 
 ### API Keys
 
-API keys are prefixed with `sk_` and identified by a `key_`-prefixed public ID. They can optionally be scoped to a single project and/or have their own policy list. When an API key has policies attached, authorization applies **intersection semantics**: both the owning user's policies _and_ the key's own policies must independently allow the action. This ensures API keys can never exceed the permissions of the user who created them. See [API Keys](./api-keys.md) for details.
+API keys are prefixed with `sk_` and identified by a `key_`-prefixed public ID. They can optionally be scoped to a single project and/or have their own policy list. When an API key has policies attached, authorization applies **intersection semantics**: both the owning user's policies _and_ the key's own policies must independently allow the action. This ensures API keys can never exceed the permissions of the user who created them. See [API Keys](./api-keys.md) for details, or watch intersection semantics block an escalation attempt in [Permissions in Practice - Step 7 (Verify permissions)](/docs/tutorials/permissions#step-7--verify-permissions).
 
 ## Policy Documents
 
@@ -61,7 +61,7 @@ A policy document is a JSON object containing one or more statements. Each state
 | `resource`  | `string[]` | No       | SRNs this statement applies to (default: `["*"]`)       |
 | `condition` | `object`   | No       | Conditions that must be true for the statement to apply |
 
-Policy documents are created and managed globally via the [Policies](./policies.md) module and attached to users or API keys.
+Policy documents are created and managed globally via the [Policies](./policies.md) module and attached to users or API keys. For a worked example building both a full-access and a read-only document, see [Permissions in Practice - Step 4 (Create policies)](/docs/tutorials/permissions#step-4--create-policies).
 
 ## SOAT Resource Names (SRNs)
 

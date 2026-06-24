@@ -7,7 +7,7 @@ The Projects module provides multi-tenant namespaces in SOAT. Every resource ([d
 
 ## Overview
 
-A Project is a top-level container that scopes all resources. Users access projects through policy-based authorization — there is no separate membership table. Whether a user can access a project is determined entirely by the [policies](./policies.md) attached to their account and the SRN patterns those policies contain.
+A Project is a top-level container that scopes all resources. Users access projects through policy-based authorization — there is no separate membership table. Whether a user can access a project is determined entirely by the [policies](./policies.md) attached to their account and the SRN patterns those policies contain. For a project creation walkthrough, see [Chat with an LLM - Step 2 (Create a project)](/docs/tutorials/chat-with-llm#step-2--create-a-project).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -43,6 +43,8 @@ Users no longer need to be explicitly added to a project as members. Access is g
   ]
 }
 ```
+
+For a complete scoped-access walkthrough, see [Permissions in Practice - Step 3 (Create the Analytics project)](/docs/tutorials/permissions#step-3--create-the-analytics-project).
 
 To grant a user access to all projects, use a wildcard project segment:
 

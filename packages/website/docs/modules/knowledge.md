@@ -7,7 +7,7 @@ import TabItem from '@theme/TabItem';
 
 The Knowledge module provides unified semantic search across all knowledge sources in a project — documents and memory entries. A single endpoint searches across these sources simultaneously, ranks results by vector similarity, and returns an interleaved list tagged by source type.
 
-Each result carries a `source_type` discriminant (`"document"` or `"memory"`) so callers know where each piece of knowledge came from.
+Each result carries a `source_type` discriminant (`"document"` or `"memory"`) so callers know where each piece of knowledge came from. This is the same search layer agents use internally for retrieval — see it wired into an agent in [Agent with Persistent Memory — Step 8 (Create an agent with knowledge_config)](/docs/tutorials/memories-agent#step-8--create-an-agent-with-knowledge_config).
 
 See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -68,7 +68,7 @@ The `POST /knowledge/search` endpoint accepts the following filters. At least on
 | `document_paths` | `string[]` | Filter document results to paths starting with these prefixes                              |
 | `document_ids`   | `string[]` | Filter document results to specific document IDs                                           |
 
-When `query` is set, results include a `score` field and are ordered by descending relevance. `min_score` and `limit` apply additional controls.
+When `query` is set, results include a `score` field and are ordered by descending relevance. `min_score` and `limit` apply additional controls. For a walkthrough that passes both `memory_ids` and `document_paths` and inspects the interleaved, scored results, see [Agent with Persistent Memory — Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly).
 
 `memory_ids` and `memory_tags` can be combined — the search includes entries from memories matching **either** (union semantics).
 

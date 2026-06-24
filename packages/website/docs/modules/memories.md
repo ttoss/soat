@@ -65,6 +65,8 @@ When you call `POST /api/v1/memory-entries` (with `memory_id` in the body), the 
 | ≥ `update_threshold`    | **Merge**  | The fact overlaps. The incoming content is appended to the existing entry. |
 | < `update_threshold`    | **Create** | The fact is new. A new entry is created.                                   |
 
+See all three outcomes in action in [Agent with Persistent Memory - Step 5 (Write memory entries)](/docs/tutorials/memories-agent#step-5--write-memory-entries).
+
 #### Request Fields
 
 | Field                 | Type   | Default  | Description                                 |
@@ -177,6 +179,8 @@ Model resolution order: `extraction.model` → the override provider's `default_
 The custom `prompt` controls *what* to extract, not the response format — the server always appends the JSON-array contract line and the conversation transcript, since the extraction parser accepts nothing else.
 
 Extraction is opt-in and requires both fields: `extraction` without `write_memory_id` does nothing. Streaming generations and `requires_action` (client-tool) turns do not trigger extraction; the turn must complete in the same request.
+
+See it end to end in [Agent with Persistent Memory - Step 11 (Enable automatic extraction)](/docs/tutorials/memories-agent#step-11--enable-automatic-extraction).
 
 ## Examples
 

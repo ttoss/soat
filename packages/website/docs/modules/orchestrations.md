@@ -9,7 +9,7 @@ DAG-based workflow definitions for chaining agents, tools, and knowledge lookups
 
 Orchestrations let you describe a directed acyclic graph (DAG) of nodes where each node performs a discrete operation. Nodes in the same execution round run in parallel; edges with activation groups control fan-in convergence.
 
-Use orchestrations when you know the exact steps in advance and want deterministic, auditable execution — not when you need an LLM to decide which steps to take. An agent node inside an orchestration can still use LLM reasoning internally, but the orchestration graph itself is deterministic.
+Use orchestrations when you know the exact steps in advance and want deterministic, auditable execution — not when you need an LLM to decide which steps to take. An agent node inside an orchestration can still use LLM reasoning internally, but the orchestration graph itself is deterministic. See it end to end in [Orchestrate a Sonnet - Step 6 (Create the orchestration graph)](/docs/tutorials/orchestrate-a-sonnet#step-6--create-the-orchestration-graph).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -200,7 +200,7 @@ When a run completes, nodes that were never reached (because they were on an un-
 }
 ```
 
-Records are returned by both `get-orchestration-run` and `list-orchestration-runs`, ordered oldest-first. A node that pauses the run for human input is recorded with `status: "requires_action"`. A node that was never reached is recorded with `status: "skipped"` once the run completes.
+Records are returned by both `get-orchestration-run` and `list-orchestration-runs`, ordered oldest-first. A node that pauses the run for human input is recorded with `status: "requires_action"`. A node that was never reached is recorded with `status: "skipped"` once the run completes. For a worked example of reading back the accumulated state and per-node output of a finished run, see [Orchestrate a Sonnet - Step 9 (Inspect the run state)](/docs/tutorials/orchestrate-a-sonnet#step-9--inspect-the-run-state).
 
 ### Human Nodes
 
