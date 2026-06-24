@@ -45,7 +45,7 @@ Instead of making a dozen separate API calls to create an AI provider, memory, a
 }
 ```
 
-SOAT detects that `MyAgent` depends on `MyProvider` and `MyMemory` through the `ref` expressions, creates them first, then creates the agent with the resolved physical IDs.
+SOAT detects that `MyAgent` depends on `MyProvider` and `MyMemory` through the `ref` expressions, creates them first, then creates the agent with the resolved physical IDs. See a 14-resource stack deployed in one call in [Deploy a Multi-Agent App with Agent Formation — Step 6 (Deploy the formation)](/docs/tutorials/formations#step-6--deploy-the-formation).
 
 ## Related Tutorials
 
@@ -97,7 +97,7 @@ SOAT detects that `MyAgent` depends on `MyProvider` and `MyMemory` through the `
 
 ### Formation Template
 
-A template has four top-level keys:
+A template has four top-level keys. For a complete worked template wiring 14 resources together, see [Deploy a Multi-Agent App with Agent Formation — Step 3 (Write the formation template)](/docs/tutorials/formations#step-3--write-the-formation-template).
 
 | Key          | Required | Description                                                  |
 | ------------ | -------- | ------------------------------------------------------------ |

@@ -61,6 +61,8 @@ If a file has no `path`, the category defaults to `files/`. Examples:
 /data/files/proj_1a123a/files/file_plain123.png
 ```
 
+Traces persist their raw step payloads as files in the `traces/` category; see it end to end in [Debug Session, Generation, and Trace History - Step 6 (Download raw trace steps)](/docs/tutorials/debug-session-generation-trace-history#step-6---download-raw-trace-steps-using-file_id).
+
 ### Path-Based SRNs
 
 Policies can target files by their logical `path` rather than their `id`. When a file has a `path` set, the server evaluates **both** the id-based SRN and the path-based SRN:
@@ -72,7 +74,7 @@ Policies can target files by their logical `path` rather than their `id`. When a
 | `soat:proj_ABC:file:/exports/*`       | All files under `/exports/`               |
 | `soat:proj_ABC:file:*`                | All files in the project (id wildcard)    |
 
-The list endpoint applies policy filters at the SQL level — the database returns only rows the caller is permitted to see. See [IAM](./iam.md) for full SRN syntax and policy authoring guidance.
+The list endpoint applies policy filters at the SQL level — the database returns only rows the caller is permitted to see. See [IAM](./iam.md) for full SRN syntax and policy authoring guidance, or walk through scoping a read-only policy to files in [Permissions in Practice - Step 7 (Verify permissions with file operations)](/docs/tutorials/permissions#step-7--verify-permissions).
 
 ## Configuration
 

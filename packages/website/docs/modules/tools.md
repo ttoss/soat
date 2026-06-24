@@ -188,7 +188,7 @@ The SOAT server acts as a proxy: it receives the model's tool call, forwards it 
 
 ### soat
 
-A `soat` tool exposes actions from the SOAT platform itself (documents, conversations, files, secrets, etc.). Instead of pointing to an external endpoint, you list the platform actions the agent is allowed to use via the `actions` array. Each action name corresponds to an MCP tool registered on the platform (e.g., `get-document`, `search-documents`, `create-file`). The server executes these actions in-process, applying the same permission checks as the REST API.
+A `soat` tool exposes actions from the SOAT platform itself (documents, conversations, files, secrets, etc.). Instead of pointing to an external endpoint, you list the platform actions the agent is allowed to use via the `actions` array. Each action name corresponds to an MCP tool registered on the platform (e.g., `get-document`, `search-documents`, `create-file`). The server executes these actions in-process, applying the same permission checks as the REST API. For a worked example of a fixed `soat` write tool, see [Orchestrate a Sonnet - Step 4 (Create the fixed write tool)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool).
 
 ### Preset Parameters
 
@@ -197,7 +197,7 @@ A `soat` tool exposes actions from the SOAT platform itself (documents, conversa
 1. That field is **removed from the schema shown to the model** — the model never sees or fills it in.
 2. The preset value is **merged into every call** before the request is dispatched.
 
-This eliminates the probabilistic risk of the model choosing a wrong value for parameters that should always be fixed (e.g., the ID of a specific document). It also enables creating multiple tool instances targeting different resources from the same action.
+This eliminates the probabilistic risk of the model choosing a wrong value for parameters that should always be fixed (e.g., the ID of a specific document). It also enables creating multiple tool instances targeting different resources from the same action. See it end to end in [Agent SOAT Tools and Preset Parameters - Step 6 (Create soat tools)](/docs/tutorials/agent-soat-tools#step-6--create-soat-tools).
 
 Example — two tools backed by the same `update-document` action, each locked to a different document:
 

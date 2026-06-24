@@ -75,7 +75,7 @@ Actors are used to track _who_ wrote a message (authorship). Generation is trigg
 
 Messages are ordered references to Documents within a conversation. Each message has a `role` (`user`, `assistant`, or `system`) and an optional `actor_id` for authorship tracking. Each document can appear at most once per conversation — adding the same document twice returns `409 Conflict`.
 
-When listing messages, each entry includes the full text `content` of the underlying document, the message `role`, the optional authoring `actor_id`, and the optional `agent_id` of the Agent that generated it (set for `assistant` messages produced by `POST /conversations/:id/generate`, `null` otherwise).
+When listing messages, each entry includes the full text `content` of the underlying document, the message `role`, the optional authoring `actor_id`, and the optional `agent_id` of the Agent that generated it (set for `assistant` messages produced by `POST /conversations/:id/generate`, `null` otherwise). See it end to end in [Chat with an LLM - Step 7 (View the conversation history)](/docs/tutorials/chat-with-llm#step-7--view-the-conversation-history).
 
 Removing a message from a conversation also deletes its underlying Document and the associated File on disk, preventing orphaned records.
 
@@ -89,7 +89,7 @@ The unique index `(conversation_id, position)` enforces that no two messages sha
 
 ### Generating the Next Message
 
-Any [Agent](./agents.md) can generate the next message from the conversation history:
+Any [Agent](./agents.md) can generate the next message from the conversation history. For a provider-backed agent driving a fresh thread, see [Connect Third-Party LLMs - Step 6 (Start a conversation)](/docs/tutorials/connect-third-party-llms#step-6--start-a-conversation).
 
 ```
 POST /api/v1/conversations/:id/generate

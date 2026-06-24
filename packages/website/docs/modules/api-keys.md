@@ -44,11 +44,11 @@ The effective permissions of an API key depend on what is attached to it:
 | `policy_ids` only                  | Intersection of user policies and key policies, across all projects        |
 | Both `project_id` and `policy_ids` | Intersection of user policies and key policies, restricted to that project |
 
-**Intersection semantics:** when a key has `policy_ids`, both the user's policies **and** the key's own policies must independently allow the requested action. The key can never exceed the permissions of the user who owns it.
+**Intersection semantics:** when a key has `policy_ids`, both the user's policies **and** the key's own policies must independently allow the requested action. The key can never exceed the permissions of the user who owns it. See this ceiling demonstrated end to end in [Permissions in Practice - Step 7 (Verify permissions)](/docs/tutorials/permissions#step-7--verify-permissions), where a key granted a full-access policy is still limited to its owner's read-only permissions.
 
 ### Project Scoping
 
-When `project_id` is set on a key, any request made with that key is hard-locked to that project. Attempts to access resources in any other project are denied regardless of what the policies say.
+When `project_id` is set on a key, any request made with that key is hard-locked to that project. Attempts to access resources in any other project are denied regardless of what the policies say. For a worked example of creating project-scoped keys, see [Permissions in Practice - Step 6 (Create API keys)](/docs/tutorials/permissions#step-6--create-api-keys).
 
 ### Policy Attachment
 

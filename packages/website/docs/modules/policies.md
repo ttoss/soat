@@ -48,11 +48,11 @@ A policy document contains one or more statements. Each statement specifies an `
 }
 ```
 
-See [IAM — Policy Documents](./iam.md#policy-documents) for the full format and evaluation rules.
+See [IAM — Policy Documents](./iam.md#policy-documents) for the full format and evaluation rules. For a worked example of authoring full-access and read-only documents, see [Permissions in Practice - Step 4 (Create policies)](/docs/tutorials/permissions#step-4--create-policies).
 
 ### Attaching Policies to Users
 
-Users accumulate permissions from all policies attached to their account. When a user makes a request, all their policies are loaded and evaluated together.
+Users accumulate permissions from all policies attached to their account. When a user makes a request, all their policies are loaded and evaluated together. See it end to end in [Permissions in Practice - Step 5 (Attach policies to users)](/docs/tutorials/permissions#step-5--attach-policies-to-users).
 
 ```http
 PUT /api/v1/users/usr_abc123/policies

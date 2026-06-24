@@ -63,6 +63,8 @@ Each webhook subscribes to one or more event patterns using dot-separated hierar
 | `file.*`       | Any event starting with `file.`  |
 | `*`            | Every event in the project       |
 
+See it end to end in [Chat with an LLM - Step 9 (Create a session webhook subscription)](/docs/tutorials/chat-with-llm#step-9---create-a-session-webhook-subscription).
+
 ### Delivery
 
 When an event matches a webhook, the server sends an HTTP POST to the webhook URL. The request includes three headers:
@@ -73,7 +75,7 @@ When an event matches a webhook, the server sends an HTTP POST to the webhook UR
 | `X-Soat-Delivery`  | Unique delivery ID                                                         |
 | `X-Soat-Signature` | HMAC-SHA256 hex digest of the request body, signed with the webhook secret |
 
-Deliveries are retried up to three times. Each attempt and its outcome are recorded in a delivery log queryable through the API.
+Deliveries are retried up to three times. Each attempt and its outcome are recorded in a delivery log queryable through the API. To watch a real delivery arrive and inspect its outcome, see [Chat with an LLM - Step 11 (Verify delivery)](/docs/tutorials/chat-with-llm#step-11---verify-delivery-and-final-assistant-message).
 
 ### Secret and Signature Verification
 

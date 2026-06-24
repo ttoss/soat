@@ -37,7 +37,7 @@ Traces support **parent-child relationships**: when an agent spawns a sub-agent 
 
 ### Trace Tree
 
-When agents call other agents (via SOAT tools), each nested generation creates its own trace. All traces in one chain share the same `root_trace_id`. The `GET /traces/:id/tree` endpoint returns the entire tree — the root node with all its descendants nested under `children` — from any trace ID in the chain.
+When agents call other agents (via SOAT tools), each nested generation creates its own trace. All traces in one chain share the same `root_trace_id`. The `GET /traces/:id/tree` endpoint returns the entire tree — the root node with all its descendants nested under `children` — from any trace ID in the chain. See it end to end in [Multi-Agent Sonnet with Nested Agent Calls - Step 12 (Inspect the trace tree)](/docs/tutorials/multi-agent-orchestration#step-12--inspect-the-trace-tree).
 
 ### Generation Failures
 
@@ -72,7 +72,7 @@ Important limitation:
 Recommended correlation strategy:
 
 1. Capture (`session_id`, `generation_id`, `trace_id`) when generation responses are returned.
-2. Use `trace_id` to inspect trace metadata (`GET /traces/{trace_id}`), structure (`GET /traces/{trace_id}/tree`), and linked generations (`GET /generations?trace_id=`).
+2. Use `trace_id` to inspect trace metadata (`GET /traces/{trace_id}`), structure (`GET /traces/{trace_id}/tree`), and linked generations (`GET /generations?trace_id=`). For a worked example, see [Debug Session, Generation, and Trace History - Step 5 (Inspect traces for each generation)](/docs/tutorials/debug-session-generation-trace-history#step-5---inspect-traces-for-each-generation).
 3. Use the session's `conversation_id` to retrieve the full message timeline (`GET /conversations/{conversation_id}/messages`).
 
 This makes both directions deterministic in your own debug records:
