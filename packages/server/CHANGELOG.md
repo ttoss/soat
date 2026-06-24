@@ -3,6 +3,36 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.2](https://127.0.0.1/41729/git/ttoss/compare/v0.13.1...v0.13.2) (2026-06-24)
+
+### Bug Fixes
+
+* **debate:** wrap AI SDK result in plain object before orchestration ([#247](https://127.0.0.1/41729/git/ttoss/issues/247)) ([a7f19c0](https://127.0.0.1/41729/git/ttoss/commits/a7f19c0ba95d5dcd5b57d4450bc4ec18318c2d41))
+
+### Features
+
+* **documents:** native file ingestion with DocumentChunk model ([#245](https://127.0.0.1/41729/git/ttoss/issues/245)) ([5e9776c](https://127.0.0.1/41729/git/ttoss/commits/5e9776c9c01d456a360b6c5ae595098d87bfcb24))
+
+## [0.13.1](https://127.0.0.1/41729/git/ttoss/compare/v0.13.0...v0.13.1) (2026-06-23)
+
+* Make orchestration run input usable: object MCP schema + JSON Logic inputMapping (#240) ([3cadc79](https://127.0.0.1/41729/git/ttoss/commits/3cadc79612d3cecbbe079fdea83f47c0c4de0dab)), closes [#240](https://127.0.0.1/41729/git/ttoss/issues/240)
+
+### Features
+
+* **orchestrations:** static validation for graphs and input_mapping ([#242](https://127.0.0.1/41729/git/ttoss/issues/242)) ([c3a6e10](https://127.0.0.1/41729/git/ttoss/commits/c3a6e109fd8142137cecf96f8e26775dcf28d700))
+* record per-node executions for orchestration runs ([#241](https://127.0.0.1/41729/git/ttoss/issues/241)) ([80cb1d6](https://127.0.0.1/41729/git/ttoss/commits/80cb1d6db9e828f8ff6bea86ae171826ddcfa43a))
+
+### BREAKING CHANGES
+
+* inputMapping values are no longer `state.<key>` path
+strings. A bare string is now a literal; use `{var: 'key'}` to read from
+state. outputMapping is unchanged (still a state path — JSON Logic cannot
+express a write target). Tutorial, module docs, smoke tests, and unit tests
+migrated to the new syntax.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01452qqr3rQwdrBTmGnwtLtc
+
 # [0.13.0](https://github.com/ttoss/soat/compare/v0.12.5...v0.13.0) (2026-06-23)
 
 * refactor(api)!: redesign REST surface to eliminate duplicate paths & MCP tools (D1–D11) (#237) ([3821c1d](https://github.com/ttoss/soat/commit/3821c1de45b7e1b6d401b44bd646a285701f58ca)), closes [#237](https://github.com/ttoss/soat/issues/237)

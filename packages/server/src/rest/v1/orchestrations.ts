@@ -1,5 +1,9 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import type {
+  OrchestrationEdge,
+  OrchestrationNode,
+} from 'src/lib/orchestrations';
 import {
   cancelOrchestrationRun,
   createOrchestration,
@@ -12,6 +16,7 @@ import {
   startOrchestrationRun,
   submitHumanInput,
   updateOrchestration,
+  validateOrchestrationGraph,
 } from 'src/lib/orchestrations';
 
 import { resolveStartRunScope } from './orchestrationAuth';
@@ -147,6 +152,30 @@ orchestrationsRouter.post('/orchestrations', async (ctx: Context) => {
 
   ctx.status = 201;
   ctx.body = result;
+});
+/**
+ * @openapi
+ * /api/v1/orchestrations/validate:
+ *   post:
+ *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestrations~1validate/post'
+ */
+orchestrationsRouter.post('/orchestrations/validate', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+  const body = (ctx.request.body ?? {}) as {
+    nodes?: unknown;
+    edges?: unknown;
+    inputSchema?: unknown;
+  };
+  ctx.body = validateOrchestrationGraph({
+    nodes: Array.isArray(body.nodes) ? (body.nodes as OrchestrationNode[]) : [],
+    edges: Array.isArray(body.edges) ? (body.edges as OrchestrationEdge[]) : [],
+    inputSchema: (body.inputSchema as object | null) ?? null,
+  });
+  ctx.status = 200;
 });
 /**
  * @openapi

@@ -1,5 +1,63 @@
-import { extractBodyProps } from 'src/lib/soatToolsHelpers';
+import {
+  buildInputSchema,
+  extractBodyProps,
+  getJsonSchemaType,
+} from 'src/lib/soatToolsHelpers';
 import { buildQueryFn } from 'src/lib/soatToolsSchemaHelpers';
+
+describe('getJsonSchemaType', () => {
+  test('converts object type to object', () => {
+    expect(getJsonSchemaType('object')).toBe('object');
+  });
+
+  test('converts integer type to number', () => {
+    expect(getJsonSchemaType('integer')).toBe('number');
+  });
+
+  test('converts number type to number', () => {
+    expect(getJsonSchemaType('number')).toBe('number');
+  });
+
+  test('converts boolean type to boolean', () => {
+    expect(getJsonSchemaType('boolean')).toBe('boolean');
+  });
+
+  test('converts array type to array', () => {
+    expect(getJsonSchemaType('array')).toBe('array');
+  });
+
+  test('defaults to string for unknown types', () => {
+    expect(getJsonSchemaType('string')).toBe('string');
+    expect(getJsonSchemaType(undefined)).toBe('string');
+    expect(getJsonSchemaType('unknown')).toBe('string');
+  });
+});
+
+describe('buildInputSchema', () => {
+  test('an object-typed body prop is advertised as type object, not string', () => {
+    // Reproduces the start-orchestration-run bug: the `input` body field is an
+    // object in the OpenAPI spec, but was being declared as `type: string` in
+    // the generated MCP tool schema, so object inputs never reached the server.
+    const schema = buildInputSchema(
+      [],
+      [],
+      [
+        {
+          snakeName: 'input',
+          camelName: 'input',
+          description: 'Initial state for the run.',
+          required: false,
+          type: 'object',
+        },
+      ]
+    );
+
+    expect(schema.properties?.input).toEqual({
+      type: 'object',
+      description: 'Initial state for the run.',
+    });
+  });
+});
 
 describe('buildQueryFn', () => {
   test('returns undefined when there are no query params', () => {

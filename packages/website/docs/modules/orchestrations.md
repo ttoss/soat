@@ -38,19 +38,41 @@ Use orchestrations when you know the exact steps in advance and want determinist
 
 ### OrchestrationRun
 
-| Field              | Type           | Description                                                     |
-| ------------------ | -------------- | --------------------------------------------------------------- |
-| `id`               | string         | Public ID (`run_` prefix)                                       |
-| `orchestration_id` | string         | Parent orchestration                                            |
-| `status`           | string         | `running` \| `paused` \| `completed` \| `failed` \| `cancelled` |
-| `state`            | object         | Current mutable execution state                                 |
-| `active_nodes`     | array          | Node IDs awaiting input (populated when status is `paused`)     |
-| `artifacts`        | object         | Outputs keyed by node ID                                        |
-| `error`            | object \| null | Error details if failed                                         |
-| `current_node_id`  | string \| null | Most recently executed node ID                                  |
+| Field              | Type           | Description                                                       |
+| ------------------ | -------------- | ----------------------------------------------------------------- |
+| `id`               | string         | Public ID (`run_` prefix)                                         |
+| `orchestration_id` | string         | Parent orchestration                                              |
+| `project_id`       | string         | Owning project                                                    |
+| `status`           | string         | `running` \| `paused` \| `completed` \| `failed` \| `cancelled`   |
+| `state`            | object         | Current mutable execution state                                   |
+| `active_nodes`     | array          | Node IDs awaiting input (populated when status is `paused`)       |
+| `artifacts`        | object         | Outputs keyed by node ID                                          |
+| `error`            | object \| null | Error details if failed                                           |
+| `node_executions`  | array          | Per-node execution records (see [Node Executions](#node-executions)) |
 | `required_action`  | object \| null | Present when status is `paused` (see [Human Nodes](#human-nodes)) |
-| `created_at`       | string         | ISO 8601 creation timestamp                                     |
-| `updated_at`       | string         | ISO 8601 last-updated timestamp                                 |
+| `trace_id`         | string \| null | Linked observability trace, if any                                |
+| `input`            | object \| null | Initial input provided at run creation                            |
+| `output`           | object \| null | Terminal node artifact(s) when completed                          |
+| `started_at`       | string \| null | ISO 8601 execution start timestamp                                |
+| `completed_at`     | string \| null | ISO 8601 terminal timestamp (`completed`/`failed`/`cancelled`)    |
+| `created_at`       | string         | ISO 8601 creation timestamp                                       |
+| `updated_at`       | string         | ISO 8601 last-updated timestamp                                   |
+
+### NodeExecution
+
+Each entry in a run's `node_executions` array records a single node execution, in chronological order. Together they form the execution trace of a run — the orchestration analogue of an LLM trace.
+
+| Field          | Type           | Description                                              |
+| -------------- | -------------- | -------------------------------------------------------- |
+| `node_id`      | string         | ID of the executed node                                  |
+| `node_type`    | string \| null | Node type (`agent`, `transform`, …)                      |
+| `status`       | string         | `completed` \| `failed` \| `requires_action`             |
+| `input`        | object \| null | Resolved `input_mapping` the node received               |
+| `output`       | object \| null | Output artifact the node produced (`null` when failed)   |
+| `error`        | object \| null | `{ code, message }` when `status` is `failed`            |
+| `started_at`   | string \| null | ISO 8601 timestamp when the node began executing         |
+| `completed_at` | string \| null | ISO 8601 timestamp when the record was written           |
+| `created_at`   | string         | ISO 8601 creation timestamp                              |
 
 ## Key Concepts
 
@@ -70,10 +92,34 @@ Use orchestrations when you know the exact steps in advance and want determinist
 
 Each node can define:
 
-- **`inputMapping`** — Maps state paths (JSONPath-like `$.key`) to node inputs before execution.
+- **`inputMapping`** — Maps node input keys to values resolved against the run state before execution. Each value is [JSON Logic](https://jsonlogic.com) (see [Input Mapping](#input-mapping-json-logic)).
 - **`outputMapping`** — Maps node outputs back to state paths after execution.
 
 The root state is available to every node. Transforms and conditions receive the full state object.
+
+#### Input Mapping (JSON Logic)
+
+Each `inputMapping` value is evaluated as [JSON Logic](https://jsonlogic.com) against the run state — the same evaluator used by `transform` and `condition` nodes. This gives one expression language across the whole platform: pass literals, read state, or compute derived values inline, without a dedicated `transform` node.
+
+| Value | Behaviour |
+| ----- | --------- |
+| String, number, boolean, array, multi-key object | Passed through as a literal |
+| `{"var": "key"}` | Resolved from state — `state.key` (a missing key yields `null`) |
+| Any other single-key JSON Logic object | Evaluated against state (`cat`, `>`, `if`, arithmetic, …) |
+
+```json
+"input_mapping": {
+  "language": "pt-BR",
+  "threshold": 0.8,
+  "documentId": { "var": "temaDocumentId" },
+  "label": { "cat": ["Tema: ", { "var": "titulo" }] },
+  "isLong": { ">": [{ "var": "wordCount" }, 500] }
+}
+```
+
+Values passed to [`start-orchestration-run`](#examples) via `input` become the initial state, so a node can reference them directly with `{"var": "key"}`.
+
+> **Breaking change:** `inputMapping` values are no longer `state.<key>` path strings. A bare string is now a literal; use `{"var": "key"}` to read from state.
 
 ### Parallel Execution
 
@@ -92,7 +138,67 @@ Edges without an `activation_group` always pass through unconditionally.
 
 ### Cycle Detection
 
-Before execution begins, the engine performs a DFS-based cycle check. If a cycle is detected the run is created, set to `failed`, and the `error` field contains `code: "ORCHESTRATION_CYCLE_DETECTED"`.
+A DFS-based cycle check runs both at create/update time (see [Static Validation](#static-validation)) and again before a run begins. Orchestrations that contain a `loop` node are exempt — loops introduce intentional cycles. If a cycle reaches execution anyway, the run is created, set to `failed`, and the `error` field contains `code: "ORCHESTRATION_CYCLE_DETECTED"`.
+
+### Static Validation
+
+Orchestration graphs are validated **before** they are persisted. `create-orchestration` and `update-orchestration` reject an invalid graph with HTTP `400` (`code: "ORCHESTRATION_VALIDATION_FAILED"`); the `error.meta` field carries the full `errors` and `warnings` arrays. The same checks are available without persisting through `validate-orchestration`, which returns a `{ valid, errors, warnings }` result.
+
+**Errors (block create/update):**
+
+| Check | Example |
+| ----- | ------- |
+| Node missing its required field | an `agent` node without `agent_id`, a `transform`/`condition` node without `expression` |
+| Duplicate node id | two nodes share `id: "a"` |
+| Dangling edge | an edge whose `from`/`to` references a node that does not exist |
+| Cycle (no `loop` node present) | `a → b → a` |
+| Unsatisfiable `input_mapping` reference | a `{"var": "x"}` whose `state.x` is never written by an upstream node **and** `input_schema` is declared but does not list `x` |
+
+**Warnings (never block):**
+
+| Check | Example |
+| ----- | ------- |
+| Conditional-branch state read | a node reads `{"var": "branch"}` that an upstream node writes only on one side of a `condition`, so it may be undefined when the node runs |
+
+The `input_mapping` reachability check only treats an unwritten reference as an **error** when an `input_schema` is declared (a closed input contract). Without an `input_schema`, the run input is an open contract — the key may be supplied at run time — so the reference is allowed. The check walks the graph's edges to determine which nodes are upstream, and uses dominator analysis to distinguish a key that is guaranteed-written from one written only on a conditional branch.
+
+```bash
+soat validate-orchestration \
+  --nodes '[{"id":"a","type":"transform","expression":1,"output_mapping":{"result":"state.step1"}},
+            {"id":"b","type":"transform","expression":1,"input_mapping":{"val":{"var":"step1"}}}]' \
+  --edges '[{"from":"a","to":"b"}]'
+# → { "valid": true, "errors": [], "warnings": [] }
+```
+
+### Node Executions
+
+Every time a node runs, the engine persists an entry in the run's `node_executions` array capturing the resolved `input_mapping` it received, the `output` artifact it produced, its `status`, and — on failure — the structured `error`. The record is written even when a node throws, so a failed run is fully debuggable: `get-orchestration-run` shows **which** node failed, **what** input it received, and **why**, instead of only the final state plus a single error message.
+
+```json
+{
+  "status": "failed",
+  "error": { "code": "ORCHESTRATION_NODE_FAILED", "message": "Agent 'agt_x' not found." },
+  "node_executions": [
+    {
+      "node_id": "fetch",
+      "node_type": "tool",
+      "status": "completed",
+      "input": { "url": "https://example.com" },
+      "output": { "result": "..." }
+    },
+    {
+      "node_id": "summarise",
+      "node_type": "agent",
+      "status": "failed",
+      "input": { "prompt": "..." },
+      "output": null,
+      "error": { "code": "ORCHESTRATION_NODE_FAILED", "message": "Agent 'agt_x' not found." }
+    }
+  ]
+}
+```
+
+Records are returned by both `get-orchestration-run` and `list-orchestration-runs`, ordered oldest-first. A node that pauses the run for human input is recorded with `status: "requires_action"`.
 
 ### Human Nodes
 
@@ -121,7 +227,7 @@ soat create-orchestration \
   --name "fetch-and-summarize" \
   --nodes '[
     {"id":"fetch","type":"tool","tool_id":"tool_abc","output_mapping":{"result":"state.raw"}},
-    {"id":"summarise","type":"agent","agent_id":"agt_xyz","input_mapping":{"prompt":"state.raw"},"output_mapping":{"content":"state.summary"}}
+    {"id":"summarise","type":"agent","agent_id":"agt_xyz","input_mapping":{"prompt":{"var":"raw"}},"output_mapping":{"content":"state.summary"}}
   ]' \
   --edges '[{"from":"fetch","to":"summarise"}]'
 ```
@@ -148,7 +254,7 @@ const { data, error } = await soat.orchestrations.createOrchestration({
         id: 'summarise',
         type: 'agent',
         agent_id: 'agt_xyz',
-        input_mapping: { prompt: 'state.raw' },
+        input_mapping: { prompt: { var: 'raw' } },
         output_mapping: { content: 'state.summary' },
       },
     ],
@@ -179,7 +285,7 @@ curl -X POST https://api.example.com/api/v1/orchestrations \
         "id": "summarise",
         "type": "agent",
         "agent_id": "agt_xyz",
-        "input_mapping": {"prompt": "state.raw"},
+        "input_mapping": {"prompt": {"var": "raw"}},
         "output_mapping": {"content": "state.summary"}
       }
     ],

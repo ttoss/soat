@@ -1,14 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import createDebug from 'debug';
+
 import { db } from '../db';
-import { getEmbedding } from './embedding';
+import { chunkPages, type ChunkStrategy, persistChunks } from './chunking';
 import { emitEvent } from './eventBus';
 import { mapDocument } from './knowledge';
 import { registerResourceFieldMap } from './policyCompiler';
 
+export { createDocumentFromFile } from './documentIngestion';
 export type { DocumentQueryConfig, QueryDocumentResult } from './knowledge';
 export { resolveDocumentSearch } from './knowledge';
+
+const log = createDebug('soat:documents');
 
 registerResourceFieldMap({
   resourceType: 'document',
@@ -19,27 +24,18 @@ registerResourceFieldMap({
 
 const getStorageDir = () => {
   const dir = process.env.FILES_STORAGE_DIR;
-  if (!dir) {
+  if (!dir)
     throw new Error('FILES_STORAGE_DIR environment variable is not set');
-  }
   return dir;
 };
 
-/**
- * Normalize a file path to a consistent format
- */
 const normalizePath = (filePath: string): string => {
   if (!filePath) return '/';
   let normalized = filePath.trim();
-  if (!normalized.startsWith('/')) {
-    normalized = '/' + normalized;
-  }
-  // Collapse multiple slashes
+  if (!normalized.startsWith('/')) normalized = '/' + normalized;
   normalized = normalized.replace(/\/+/g, '/');
-  // Remove trailing slash (except for root)
-  if (normalized !== '/' && normalized.endsWith('/')) {
+  if (normalized !== '/' && normalized.endsWith('/'))
     normalized = normalized.slice(0, -1);
-  }
   return normalized;
 };
 
@@ -49,9 +45,35 @@ type LoadedDoc = InstanceType<(typeof db)['Document']> & {
   };
 };
 
-/**
- * Build the Sequelize options for document queries with policy where clause
- */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fileAndProjectInclude = (): any[] => {
+  return [
+    {
+      model: db.File,
+      as: 'file',
+      include: [{ model: db.Project, as: 'project' }],
+    },
+  ];
+};
+
+const fetchDocumentWithContext = (
+  publicId: string
+): Promise<LoadedDoc | null> => {
+  return db.Document.findOne({
+    where: { publicId },
+    include: fileAndProjectInclude(),
+  }) as Promise<LoadedDoc | null>;
+};
+
+const fetchDocumentByIdWithContext = (
+  id: number
+): Promise<LoadedDoc | null> => {
+  return db.Document.findOne({
+    where: { id },
+    include: fileAndProjectInclude(),
+  }) as Promise<LoadedDoc | null>;
+};
+
 const buildDocumentQueryOptions = (args: {
   projectIds?: number[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -60,20 +82,17 @@ const buildDocumentQueryOptions = (args: {
   offset: number;
 }) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const topLevelWhere: Record<string, any> = {};
-  if (args.policyWhere && Object.keys(args.policyWhere).length > 0) {
-    Object.assign(topLevelWhere, args.policyWhere);
-  }
-
+  const topLevelWhere: Record<string, any> =
+    args.policyWhere && Object.keys(args.policyWhere).length > 0
+      ? { ...args.policyWhere }
+      : {};
   const fileWhere =
     args.projectIds !== undefined ? { projectId: args.projectIds } : undefined;
-
   const needsSubQueryFalse =
     args.policyWhere !== undefined &&
     Object.keys(args.policyWhere).some((k) => {
       return k.startsWith('$');
     });
-
   return {
     topLevelWhere,
     fileWhere,
@@ -138,51 +157,28 @@ export const listDocuments = async (args: {
   return { data: rows.map(mapDocument), total: count, limit, offset };
 };
 
-/**
- * Fetch a document by public ID with full file and project context
- */
-const fetchDocumentWithContext = async (
-  publicId: string
-): Promise<LoadedDoc | null> => {
-  return db.Document.findOne({
-    where: { publicId },
-    include: [
-      {
-        model: db.File,
-        as: 'file',
-        include: [{ model: db.Project, as: 'project' }],
-      },
-    ],
-  });
-};
-
-/**
- * Fetch a document by ID with full file and project context
- */
-const fetchDocumentByIdWithContext = async (
-  id: number
-): Promise<LoadedDoc | null> => {
-  return db.Document.findOne({
-    where: { id },
-    include: [
-      {
-        model: db.File,
-        as: 'file',
-        include: [{ model: db.Project, as: 'project' }],
-      },
-    ],
-  });
-};
-
 export const getDocument = async (args: { id: string }) => {
   const doc = await fetchDocumentWithContext(args.id);
 
-  if (!doc) {
-    return null;
-  }
+  if (!doc) return null;
 
   const mapped = mapDocument(doc);
 
+  const chunks = await db.DocumentChunk.findAll({
+    where: { documentId: doc.id },
+    order: [['chunkIndex', 'ASC']],
+  });
+
+  if (chunks.length > 0) {
+    const content = chunks
+      .map((c) => {
+        return c.content;
+      })
+      .join('\n');
+    return { ...mapped, content };
+  }
+
+  // Fallback: try reading from file for legacy documents without chunks
   if (doc.file?.storagePath && fs.existsSync(doc.file.storagePath)) {
     const content = fs.readFileSync(doc.file.storagePath, 'utf-8');
     return { ...mapped, content };
@@ -192,32 +188,25 @@ export const getDocument = async (args: { id: string }) => {
 };
 
 /**
- * Update document content and file size/embedding
+ * Chunk plain document text and persist the chunks. Treats the content as a
+ * single source "page" and applies the requested strategy (default `whole`,
+ * i.e. one chunk — the historical behavior). Lets any document creation chunk,
+ * not just file ingestion.
  */
-const updateDocumentContent = async (args: {
-  doc: LoadedDoc;
+const chunkDocumentText = async (args: {
+  documentId: number;
   content: string;
+  chunkStrategy?: ChunkStrategy;
+  chunkSize?: number;
+  chunkOverlap?: number;
 }) => {
-  if (args.doc.file?.storagePath) {
-    fs.writeFileSync(args.doc.file.storagePath, args.content, 'utf-8');
-    await args.doc.file.update({
-      size: Buffer.byteLength(args.content, 'utf-8'),
-    });
-    const embedding = await getEmbedding({ text: args.content });
-    await args.doc.update({ embedding });
-  }
-};
-
-/**
- * Update document metadata, title, and tags
- */
-const updateDocumentMetadata = async (args: {
-  doc: LoadedDoc;
-  updates: Record<string, unknown>;
-}) => {
-  if (Object.keys(args.updates).length > 0) {
-    await args.doc.update(args.updates);
-  }
+  const chunks = chunkPages({
+    pages: [{ text: args.content }],
+    strategy: args.chunkStrategy ?? 'whole',
+    chunkSize: args.chunkSize,
+    chunkOverlap: args.chunkOverlap,
+  });
+  await persistChunks({ documentId: args.documentId, chunks });
 };
 
 export const createDocument = async (args: {
@@ -228,7 +217,12 @@ export const createDocument = async (args: {
   title?: string;
   metadata?: Record<string, unknown>;
   tags?: Record<string, string>;
+  chunkStrategy?: ChunkStrategy;
+  chunkSize?: number;
+  chunkOverlap?: number;
 }) => {
+  log('createDocument: projectId=%d', args.projectId);
+
   const storageDir = getStorageDir();
   fs.mkdirSync(storageDir, { recursive: true });
 
@@ -250,18 +244,22 @@ export const createDocument = async (args: {
     size: Buffer.byteLength(args.content, 'utf-8'),
   });
 
-  const embedding = await getEmbedding({ text: args.content });
-
   const doc = await db.Document.create({
     fileId: file.id,
-    embedding,
     title: args.title ?? null,
     metadata: args.metadata ? JSON.stringify(args.metadata) : null,
     tags: args.tags ?? null,
   });
 
-  const created = await fetchDocumentByIdWithContext(doc.id as number);
+  await chunkDocumentText({
+    documentId: doc.id as number,
+    content: args.content,
+    chunkStrategy: args.chunkStrategy,
+    chunkSize: args.chunkSize,
+    chunkOverlap: args.chunkOverlap,
+  });
 
+  const created = await fetchDocumentByIdWithContext(doc.id as number);
   const mapped = mapDocument(created!);
 
   emitDocumentLifecycleEvent({
@@ -276,9 +274,7 @@ export const createDocument = async (args: {
 export const deleteDocument = async (args: { id: string }) => {
   const doc = await fetchDocumentWithContext(args.id);
 
-  if (!doc) {
-    return null;
-  }
+  if (!doc) return null;
 
   const storagePath = doc.file?.storagePath;
   if (storagePath) {
@@ -304,6 +300,26 @@ export const deleteDocument = async (args: { id: string }) => {
   return true;
 };
 
+const updateDocumentContent = async (args: {
+  doc: LoadedDoc;
+  content: string;
+}) => {
+  if (args.doc.file?.storagePath) {
+    fs.writeFileSync(args.doc.file.storagePath, args.content, 'utf-8');
+    await args.doc.file.update({
+      size: Buffer.byteLength(args.content, 'utf-8'),
+    });
+  }
+
+  // Re-chunk: destroy existing chunks and create a single new one
+  await db.DocumentChunk.destroy({ where: { documentId: args.doc.id } });
+
+  await chunkDocumentText({
+    documentId: args.doc.id as number,
+    content: args.content,
+  });
+};
+
 export const updateDocument = async (args: {
   id: string;
   content?: string;
@@ -314,9 +330,7 @@ export const updateDocument = async (args: {
 }) => {
   const doc = await fetchDocumentWithContext(args.id);
 
-  if (!doc) {
-    return null;
-  }
+  if (!doc) return null;
 
   if (args.content !== undefined) {
     await updateDocumentContent({ doc, content: args.content });
@@ -333,10 +347,11 @@ export const updateDocument = async (args: {
     updates.metadata = JSON.stringify(args.metadata);
   if (args.tags !== undefined) updates.tags = args.tags;
 
-  await updateDocumentMetadata({ doc, updates });
+  if (Object.keys(updates).length > 0) {
+    await doc.update(updates);
+  }
 
   const refreshed = await fetchDocumentByIdWithContext(doc.id as number);
-
   const mapped = mapDocument(refreshed!);
 
   emitDocumentLifecycleEvent({
@@ -350,34 +365,8 @@ export const updateDocument = async (args: {
 
 export const getDocumentTags = async (args: { id: string }) => {
   const doc = await db.Document.findOne({ where: { publicId: args.id } });
-
-  if (!doc) {
-    return null;
-  }
-
+  if (!doc) return null;
   return doc.tags ?? {};
-};
-
-/**
- * Merge or replace document tags and emit lifecycle event
- */
-const updateAndEmitTags = async (args: {
-  doc: LoadedDoc;
-  newTags: Record<string, string>;
-}) => {
-  await args.doc.update({ tags: args.newTags });
-
-  const refreshed = await fetchDocumentByIdWithContext(args.doc.id as number);
-
-  const tagsMapped = mapDocument(refreshed!);
-
-  emitDocumentLifecycleEvent({
-    type: 'documents.updated',
-    doc: refreshed!,
-    data: tagsMapped as unknown as Record<string, unknown>,
-  });
-
-  return tagsMapped;
 };
 
 export const updateDocumentTags = async (args: {
@@ -387,13 +376,22 @@ export const updateDocumentTags = async (args: {
 }) => {
   const doc = await fetchDocumentWithContext(args.id);
 
-  if (!doc) {
-    return null;
-  }
+  if (!doc) return null;
 
   const newTags = args.merge
     ? { ...(doc.tags ?? {}), ...args.tags }
     : args.tags;
 
-  return updateAndEmitTags({ doc, newTags });
+  await doc.update({ tags: newTags });
+
+  const refreshed = await fetchDocumentByIdWithContext(doc.id as number);
+  const tagsMapped = mapDocument(refreshed!);
+
+  emitDocumentLifecycleEvent({
+    type: 'documents.updated',
+    doc: refreshed!,
+    data: tagsMapped as unknown as Record<string, unknown>,
+  });
+
+  return tagsMapped;
 };

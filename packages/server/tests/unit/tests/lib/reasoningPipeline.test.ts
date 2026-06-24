@@ -212,6 +212,77 @@ describe('reasoning pipeline wiring', () => {
     expect(result.output?.content).toBe('draft answer');
   });
 
+  test('debate mode does not throw when generateText returns a getter-only text property', async () => {
+    const getterOnlyResult = () => {
+      const obj: {
+        steps: unknown[];
+        response: { messages: unknown[]; modelId: string };
+        finishReason: string;
+        text?: string;
+      } = {
+        steps: [],
+        response: { messages: [], modelId: 'model-a' },
+        finishReason: 'stop',
+      };
+      Object.defineProperty(obj, 'text', {
+        get: () => 'draft answer',
+        enumerable: true,
+        configurable: false,
+      });
+      return obj;
+    };
+
+    jest.doMock('ai', () => {
+      const actual = jest.requireActual('ai');
+      return {
+        ...actual,
+        generateText: jest.fn().mockImplementation(getterOnlyResult),
+      };
+    });
+
+    const { runNonStreamGeneration } = await loadNonStreamModule();
+    const helpersModule = await loadHelpersModule();
+    const reasoningCompletionModule = await loadReasoningCompletionModule();
+
+    jest
+      .spyOn(reasoningCompletionModule, 'runReasoningCompletion')
+      .mockResolvedValueOnce('advocate view')
+      .mockResolvedValueOnce('skeptic view')
+      .mockResolvedValueOnce('synthesized conclusion');
+
+    jest.spyOn(helpersModule, 'findPendingClientTools').mockReturnValue([]);
+    const buildCompletedSpy = jest
+      .spyOn(helpersModule, 'buildCompletedGenerationResult')
+      .mockImplementation(async (args) => ({
+        id: args.generationId,
+        traceId: args.traceId,
+        status: 'completed',
+        output: {
+          model: 'model-a',
+          content: args.result.text,
+          finishReason: args.result.finishReason,
+        },
+      }));
+
+    const result = await runNonStreamGeneration({
+      model: {} as never,
+      allMessages: [{ role: 'user', content: 'philosophical question' }],
+      resolvedTools: {},
+      typedAgent: buildTypedAgent({ mode: 'debate', perspectives: 2 }),
+      generationId: 'gen_debate_getter',
+      traceId: 'trc_debate_getter',
+      agentId: 'agent_debate_getter',
+      reasoningConfig: { mode: 'debate', perspectives: 2 },
+    });
+
+    expect(buildCompletedSpy).toHaveBeenCalledTimes(1);
+    expect(buildCompletedSpy.mock.calls[0][0].result.text).toBe(
+      'synthesized conclusion'
+    );
+    expect(result.status).toBe('completed');
+    expect(result.output?.content).toBe('synthesized conclusion');
+  });
+
   test('debate mode replaces the final text before completion', async () => {
     jest.doMock('ai', () => {
       const actual = jest.requireActual('ai');

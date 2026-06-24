@@ -20,20 +20,6 @@ export type NodeExecutionResult =
       options?: string[];
     };
 
-const resolveFromState = (
-  path: string,
-  state: Record<string, unknown>
-): unknown => {
-  if (!path.startsWith('state.')) return undefined;
-  const parts = path.slice('state.'.length).split('.');
-  let cursor: unknown = state;
-  for (const part of parts) {
-    if (cursor === null || typeof cursor !== 'object') return undefined;
-    cursor = (cursor as Record<string, unknown>)[part];
-  }
-  return cursor;
-};
-
 const writeToState = (
   path: string,
   value: unknown,
@@ -44,14 +30,26 @@ const writeToState = (
   state[fieldName] = value;
 };
 
+/**
+ * Resolves each inputMapping value against the run state.
+ *
+ * Every value is interpreted as JSON Logic (https://jsonlogic.com), the same
+ * evaluator used by transform and condition nodes. Single-key objects are
+ * treated as expressions and evaluated against state — `{ var: 'key' }` reads
+ * `state.key`, `{ cat: [...] }`, `{ '>': [...] }`, etc. compute derived values.
+ * Every other value (string, number, boolean, array, multi-key object) is a
+ * literal and is passed through as-is.
+ */
 export const applyInputMapping = (
-  inputMapping: Record<string, string> | undefined,
+  inputMapping: Record<string, unknown> | undefined,
   state: Record<string, unknown>
 ): Record<string, unknown> => {
   if (!inputMapping) return {};
   const result: Record<string, unknown> = {};
-  for (const [key, path] of Object.entries(inputMapping)) {
-    result[key] = resolveFromState(path, state);
+  for (const [key, value] of Object.entries(inputMapping)) {
+    result[key] = jsonLogic.is_logic(value)
+      ? jsonLogic.apply(value, state)
+      : value;
   }
   return result;
 };

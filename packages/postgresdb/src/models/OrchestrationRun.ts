@@ -11,6 +11,7 @@ import {
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Orchestration } from './Orchestration';
 import { OrchestrationCheckpoint } from './OrchestrationCheckpoint';
+import { OrchestrationNodeExecution } from './OrchestrationNodeExecution';
 import { Project } from './Project';
 
 @Table({
@@ -108,4 +109,9 @@ export class OrchestrationRun extends Model {
     return OrchestrationCheckpoint;
   })
   declare checkpoints: OrchestrationCheckpoint[];
+
+  @HasMany(() => {
+    return OrchestrationNodeExecution;
+  })
+  declare nodeExecutions: OrchestrationNodeExecution[];
 }

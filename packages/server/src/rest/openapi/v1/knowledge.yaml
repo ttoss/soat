@@ -148,6 +148,15 @@ components:
           type: string
           description: Public ID of the document
           example: 'doc_V1StGXR8Z5jdHi6B'
+        chunk_id:
+          type: string
+          description: Public ID of the document chunk that matched the query
+          example: 'dchunk_V1StGXR8Z5jdHi6B'
+        page:
+          type: integer
+          nullable: true
+          description: Page number within the source PDF (1-indexed). Null for plain-text documents.
+          example: 3
         file_id:
           x-soat-ref: files
           type: string

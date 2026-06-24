@@ -412,10 +412,58 @@ if [ "$SEARCH_COUNT" -lt 1 ]; then
 fi
 echo "Search returned $SEARCH_COUNT result(s)."
 
+# 12b. Ingest a PDF file
+echo "--- Ingesting a PDF file ---"
+PDF_BASE64="JVBERi0xLjQKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PgplbmRvYmoKMiAwIG9iago8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PgplbmRvYmoKMyAwIG9iago8PC9UeXBlL1BhZ2UvUGFyZW50IDIgMCBSL01lZGlhQm94WzAgMCA2MTIgNzkyXS9Db250ZW50cyA0IDAgUi9SZXNvdXJjZXM8PC9Gb250PDwvRjEgNSAwIFI+Pj4+Pj4KZW5kb2JqCjQgMCBvYmoKPDwvTGVuZ3RoIDQ0Pj4Kc3RyZWFtCkJUIC9GMSAxMiBUZiAxMDAgNzAwIFRkIChIZWxsbyBXb3JsZCkgVGogRVQKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8L1R5cGUvRm9udC9TdWJ0eXBlL1R5cGUxL0Jhc2VGb250L0hlbHZldGljYT4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1NCAwMDAwMCBuIAowMDAwMDAwMTA1IDAwMDAwIG4gCjAwMDAwMDAyMTcgMDAwMDAgbiAKMDAwMDAwMDMwOCAwMDAwMCBuIAp0cmFpbGVyCjw8L1NpemUgNi9Sb290IDEgMCBSPj4Kc3RhcnR4cmVmCjM3MQolJUVPRg=="
+PDF_UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --filename smoke-test.pdf \
+  --content "$PDF_BASE64" \
+  --content_type application/pdf)
+PDF_FILE_ID=$(echo "$PDF_UPLOAD_RESP" | jq -r '.id')
+echo "Uploaded PDF file id: $PDF_FILE_ID"
+
+PDF_DOC_RESP=$($SOAT_CLI ingest-document \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --file-id "$PDF_FILE_ID" \
+  --path-prefix /smoke/)
+PDF_DOC_ID=$(echo "$PDF_DOC_RESP" | jq -r '.id')
+PDF_CHUNK_COUNT=$(echo "$PDF_DOC_RESP" | jq -r '.chunk_count')
+echo "PDF document id: $PDF_DOC_ID chunk_count: $PDF_CHUNK_COUNT"
+if [ -z "$PDF_DOC_ID" ] || [ "$PDF_DOC_ID" = "null" ]; then
+  echo "ERROR: ingest-document did not return a document id" >&2
+  exit 1
+fi
+echo "PDF ingestion: OK"
+
+# 12c. Ingest a Markdown file (exercises content-type dispatch)
+echo "--- Ingesting a text file ---"
+MD_BASE64=$(printf '# Smoke Notes\n\nThis is an ingested markdown document.\n' | base64 | tr -d '\n')
+MD_UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --filename smoke-notes.md \
+  --content "$MD_BASE64" \
+  --content_type text/markdown)
+MD_FILE_ID=$(echo "$MD_UPLOAD_RESP" | jq -r '.id')
+MD_DOC_RESP=$($SOAT_CLI ingest-document \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --file-id "$MD_FILE_ID" \
+  --path-prefix /smoke/ \
+  --chunk-strategy whole)
+MD_DOC_ID=$(echo "$MD_DOC_RESP" | jq -r '.id')
+echo "Markdown document id: $MD_DOC_ID chunk_count: $(echo "$MD_DOC_RESP" | jq -r '.chunk_count')"
+if [ -z "$MD_DOC_ID" ] || [ "$MD_DOC_ID" = "null" ]; then
+  echo "ERROR: ingest-document did not return a document id for markdown" >&2
+  exit 1
+fi
+echo "Text ingestion: OK"
+
 # 13. Delete documents
 echo "--- Deleting documents ---"
 $SOAT_CLI delete-document --document-id "$DOC1_ID"
 $SOAT_CLI delete-document --document-id "$DOC2_ID"
+$SOAT_CLI delete-document --document-id "$PDF_DOC_ID"
+$SOAT_CLI delete-document --document-id "$MD_DOC_ID"
 echo "Documents deleted."
 
 # 13b. Memories — CRUD + search
@@ -557,7 +605,7 @@ echo "=== Orchestrations ==="
 echo "--- Creating orchestration-scoped auth ---"
 ORCH_POLICY_RESP=$($SOAT_CLI create-policy \
   --name smoke-orchestration-policy \
-  --document '{"statement":[{"effect":"Allow","action":["orchestrations:CreateOrchestration","orchestrations:ListOrchestrations","orchestrations:GetOrchestration","orchestrations:UpdateOrchestration","orchestrations:DeleteOrchestration","orchestrations:StartRun","orchestrations:ListRuns","orchestrations:GetRun","orchestrations:CancelRun","orchestrations:SubmitHumanInput","orchestrations:ResumeRun"]}]}' )
+  --document '{"statement":[{"effect":"Allow","action":["orchestrations:CreateOrchestration","orchestrations:ValidateOrchestration","orchestrations:ListOrchestrations","orchestrations:GetOrchestration","orchestrations:UpdateOrchestration","orchestrations:DeleteOrchestration","orchestrations:StartRun","orchestrations:ListRuns","orchestrations:GetRun","orchestrations:CancelRun","orchestrations:SubmitHumanInput","orchestrations:ResumeRun"]}]}' )
 ORCH_POLICY_ID=$(printf '%s\n' "$ORCH_POLICY_RESP" | jq -r '.id')
 if [ -z "$ORCH_POLICY_ID" ] || [ "$ORCH_POLICY_ID" = "null" ]; then
   echo "Failed to create orchestration policy"
@@ -577,6 +625,41 @@ if [ -z "$ORCH_API_KEY_ID" ] || [ "$ORCH_API_KEY_ID" = "null" ] || [ -z "$ORCH_A
   exit 1
 fi
 echo "Orchestration-scoped auth: OK"
+
+echo "--- Validating orchestration graph (valid) ---"
+ORCH_VALID_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI validate-orchestration \
+  --nodes '[{"id":"seed","type":"transform","expression":{"var":"theme"},"output_mapping":{"result":"state.theme"}},{"id":"decorate","type":"transform","expression":{"cat":[{"var":"theme"}," sonnet"]},"input_mapping":{"t":{"var":"theme"}},"output_mapping":{"result":"state.title"}}]' \
+  --edges '[{"from":"seed","to":"decorate"}]')
+if ! printf '%s\n' "$ORCH_VALID_RESP" | jq -e '.valid == true' >/dev/null 2>&1; then
+  echo "validate-orchestration did not report a valid graph as valid"
+  printf '%s\n' "$ORCH_VALID_RESP"
+  exit 1
+fi
+echo "Validate orchestration (valid): OK"
+
+echo "--- Validating orchestration graph (invalid) ---"
+ORCH_INVALID_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI validate-orchestration \
+  --nodes '[{"id":"a","type":"agent"}]' \
+  --edges '[{"from":"a","to":"ghost"}]')
+if ! printf '%s\n' "$ORCH_INVALID_RESP" | jq -e '.valid == false and (.errors | length) > 0' >/dev/null 2>&1; then
+  echo "validate-orchestration did not report an invalid graph as invalid"
+  printf '%s\n' "$ORCH_INVALID_RESP"
+  exit 1
+fi
+echo "Validate orchestration (invalid): OK"
+
+echo "--- Rejecting invalid orchestration at create ---"
+ORCH_REJECT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-orchestration-invalid" \
+  --nodes '[{"id":"a","type":"transform","expression":1},{"id":"b","type":"transform","expression":1}]' \
+  --edges '[{"from":"a","to":"b"},{"from":"b","to":"a"}]' || true)
+if ! printf '%s\n' "$ORCH_REJECT_RESP" | jq -e '.error.code == "ORCHESTRATION_VALIDATION_FAILED"' >/dev/null 2>&1; then
+  echo "create-orchestration did not reject a cyclic graph"
+  printf '%s\n' "$ORCH_REJECT_RESP"
+  exit 1
+fi
+echo "Reject invalid orchestration at create: OK"
 
 echo "--- Creating orchestration ---"
 ORCH_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
@@ -643,6 +726,12 @@ if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e --arg id "$ORCH_RUN_ID" '.id == 
   printf '%s\n' "$ORCH_RUN_GET_RESP"
   exit 1
 fi
+# Per-node execution records: every node that ran is traceable with a status.
+if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e '(.node_executions | type) == "array" and (.node_executions | length) >= 1 and (.node_executions | all(.status == "completed"))' >/dev/null 2>&1; then
+  echo "get-orchestration-run did not include completed node_executions"
+  printf '%s\n' "$ORCH_RUN_GET_RESP"
+  exit 1
+fi
 echo "Get run: OK"
 
 echo "--- Listing runs ---"
@@ -658,7 +747,7 @@ echo "--- Creating human-review orchestration ---"
 HUMAN_ORCH_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name "smoke-human-orchestration" \
-  --nodes '[{"id":"approval","type":"human","prompt":"Approve the poem?","options":["approve","reject"],"output_mapping":{"choice":"state.review"}},{"id":"finalize","type":"transform","expression":{"var":"review"},"output_mapping":{"result":"state.finalReview"}}]' \
+  --nodes '[{"id":"approval","type":"human","prompt":"Approve the poem?","options":["approve","reject"],"input_mapping":{"language":"pt-BR","documentId":{"var":"temaDocumentId"},"label":{"cat":["Tema: ",{"var":"titulo"}]}},"output_mapping":{"choice":"state.review"}},{"id":"finalize","type":"transform","expression":{"var":"review"},"output_mapping":{"result":"state.finalReview"}}]' \
   --edges '[{"from":"approval","to":"finalize"}]')
 HUMAN_ORCH_ID=$(printf '%s\n' "$HUMAN_ORCH_RESP" | jq -r '.id')
 if [ -z "$HUMAN_ORCH_ID" ] || [ "$HUMAN_ORCH_ID" = "null" ]; then
@@ -671,12 +760,18 @@ echo "Human orchestration id: $HUMAN_ORCH_ID"
 echo "--- Starting paused run ---"
 HUMAN_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$HUMAN_ORCH_ID" \
-  --input '{}')
+  --input '{"temaDocumentId":"ood_123","titulo":"Verao"}')
 HUMAN_RUN_ID=$(printf '%s\n' "$HUMAN_RUN_RESP" | jq -r '.id')
 HUMAN_RUN_STATUS=$(printf '%s\n' "$HUMAN_RUN_RESP" | jq -r '.status')
 HUMAN_NODE_ID=$(printf '%s\n' "$HUMAN_RUN_RESP" | jq -r '.required_action.node_id')
 if [ "$HUMAN_RUN_STATUS" != "paused" ] || [ "$HUMAN_NODE_ID" != "approval" ]; then
   echo "Human orchestration did not pause as expected"
+  printf '%s\n' "$HUMAN_RUN_RESP"
+  exit 1
+fi
+# JSON Logic input_mapping: literal passthrough, {var} from run input, computed expression.
+if ! printf '%s\n' "$HUMAN_RUN_RESP" | jq -e '.required_action.context.language == "pt-BR" and .required_action.context.document_id == "ood_123" and .required_action.context.label == "Tema: Verao"' >/dev/null 2>&1; then
+  echo "Human node input_mapping did not resolve JSON Logic as expected"
   printf '%s\n' "$HUMAN_RUN_RESP"
   exit 1
 fi

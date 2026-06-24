@@ -117,6 +117,11 @@ export const ERROR_CODES = {
     httpStatus: 422,
     description: 'A node in the orchestration run failed to execute.',
   },
+  ORCHESTRATION_VALIDATION_FAILED: {
+    httpStatus: 400,
+    description:
+      'The orchestration graph is invalid (e.g. a dangling edge, a node missing a required field, a cycle, or an input_mapping that references a state key no upstream node writes).',
+  },
   ORCHESTRATION_CYCLE_DETECTED: {
     httpStatus: 422,
     description:
@@ -145,6 +150,24 @@ export const ERROR_CODES = {
     httpStatus: 503,
     description:
       'The embedding service is not configured. Set EMBEDDING_PROVIDER and EMBEDDING_MODEL environment variables.',
+  },
+  PDF_PARSE_FAILED: {
+    httpStatus: 400,
+    description:
+      'The uploaded file could not be parsed as a PDF. Ensure the file is a valid PDF document.',
+  },
+  FILE_PARSE_FAILED: {
+    httpStatus: 400,
+    description: 'The referenced file contains no extractable text.',
+  },
+  FILE_NOT_FOUND: {
+    httpStatus: 400,
+    description: 'The referenced file does not exist.',
+  },
+  UNSUPPORTED_FILE_TYPE: {
+    httpStatus: 400,
+    description:
+      'The referenced file has a content type that cannot be ingested. Supported types: application/pdf, text/plain, text/markdown.',
   },
 } as const satisfies Record<
   string,

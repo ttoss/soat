@@ -1,5 +1,8 @@
 import fs from 'node:fs';
 
+import * as pdfModule from 'src/lib/pdf';
+
+import { ONE_PAGE_PDF_BUFFER, THREE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
 import { storageDir } from '../../setupTests';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -43,6 +46,8 @@ describe('Documents', () => {
                 'documents:CreateDocument',
                 'documents:DeleteDocument',
                 'documents:UpdateDocument',
+                'documents:IngestDocument',
+                'files:UploadFile',
               ],
             },
           ],
@@ -416,6 +421,207 @@ describe('Documents', () => {
         `/api/v1/documents/${tagDocId}/tags`
       );
       expect(response.status).toBe(401);
+    });
+  });
+
+  describe('POST /api/v1/documents (plain text creates exactly 1 chunk)', () => {
+    test('creating a text document produces 1 chunk, and getDocument returns its content', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'hello chunk test',
+          path: '/chunks/hello-chunk.txt',
+          filename: 'hello-chunk.txt',
+        });
+      expect(createRes.status).toBe(201);
+      const docId = createRes.body.id;
+
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${docId}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.content).toBe('hello chunk test');
+    });
+  });
+
+  describe('POST /api/v1/documents/ingest', () => {
+    let pdfFileId: string;
+    let extractPdfPagesSpy: jest.SpyInstance;
+
+    const uploadFile = async (args: {
+      buffer: Buffer;
+      filename: string;
+      contentType: string;
+    }) => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', args.buffer, {
+          filename: args.filename,
+          contentType: args.contentType,
+        })
+        .field('project_id', projectId);
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    beforeAll(async () => {
+      // unpdf uses ESM dynamic imports that don't work in Jest's CJS VM context.
+      // Spy on extractPdfPages so the rest of the ingestion flow runs for real.
+      extractPdfPagesSpy = jest
+        .spyOn(pdfModule, 'extractPdfPages')
+        .mockResolvedValue(['Hello World']);
+
+      pdfFileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'test.pdf',
+        contentType: 'application/pdf',
+      });
+    });
+
+    afterAll(() => {
+      extractPdfPagesSpy.mockRestore();
+    });
+
+    test('authenticated user with permission can ingest a PDF', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest')
+        .send({ file_id: pdfFileId, project_id: projectId });
+
+      expect(response.status).toBe(201);
+      expect(response.body.id).toMatch(/^doc_/);
+      expect(response.body.chunk_count).toBe(1);
+      expect(response.body.project_id).toBe(projectId);
+    });
+
+    test('3-page PDF produces chunk_count=3 with default page strategy', async () => {
+      extractPdfPagesSpy.mockResolvedValueOnce([
+        'Page 1: Introduction',
+        'Page 2: Methods',
+        'Page 3: Conclusion',
+      ]);
+
+      const fileId = await uploadFile({
+        buffer: THREE_PAGE_PDF_BUFFER,
+        filename: 'multi-page.pdf',
+        contentType: 'application/pdf',
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest')
+        .send({ file_id: fileId, project_id: projectId });
+
+      expect(response.status).toBe(201);
+      expect(response.body.chunk_count).toBe(3);
+    });
+
+    test('chunk_strategy=whole collapses a multi-page PDF into one chunk', async () => {
+      extractPdfPagesSpy.mockResolvedValueOnce(['Page A', 'Page B', 'Page C']);
+
+      const fileId = await uploadFile({
+        buffer: THREE_PAGE_PDF_BUFFER,
+        filename: 'whole.pdf',
+        contentType: 'application/pdf',
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest')
+        .send({
+          file_id: fileId,
+          project_id: projectId,
+          chunk_strategy: 'whole',
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.chunk_count).toBe(1);
+    });
+
+    test('chunk_strategy=size splits text into overlapping windows', async () => {
+      // Ingest a plain-text file (no PDF parsing needed) of known length.
+      const fileId = await uploadFile({
+        buffer: Buffer.from('a'.repeat(2500)),
+        filename: 'long.txt',
+        contentType: 'text/plain',
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest')
+        .send({
+          file_id: fileId,
+          project_id: projectId,
+          chunk_strategy: 'size',
+          chunk_size: 1000,
+          chunk_overlap: 0,
+        });
+
+      expect(response.status).toBe(201);
+      // 2500 chars / 1000 step (no overlap) => 3 chunks
+      expect(response.body.chunk_count).toBe(3);
+    });
+
+    test('ingests a text/markdown file as a single chunk by default', async () => {
+      const fileId = await uploadFile({
+        buffer: Buffer.from('# Title\n\nSome markdown body.'),
+        filename: 'notes.md',
+        contentType: 'text/markdown',
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest')
+        .send({ file_id: fileId, project_id: projectId });
+
+      expect(response.status).toBe(201);
+      expect(response.body.chunk_count).toBe(1);
+    });
+
+    test('returns 401 for unauthenticated request', async () => {
+      const response = await testClient
+        .post('/api/v1/documents/ingest')
+        .send({ file_id: pdfFileId, project_id: projectId });
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 400 when fileId is missing', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest')
+        .send({ project_id: projectId });
+      expect(response.status).toBe(400);
+    });
+
+    test('returns 400 when projectId is missing', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest')
+        .send({ file_id: pdfFileId });
+      expect(response.status).toBe(400);
+    });
+
+    test('returns 403 when user has no IngestDocument permission', async () => {
+      const response = await authenticatedTestClient(_noPermToken)
+        .post('/api/v1/documents/ingest')
+        .send({ file_id: pdfFileId, project_id: projectId });
+      expect(response.status).toBe(403);
+    });
+
+    test('returns 400 when fileId does not exist', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest')
+        .send({ file_id: 'file_doesnotexist000', project_id: projectId });
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('FILE_NOT_FOUND');
+    });
+
+    test('returns 400 for an unsupported content type', async () => {
+      const fileId = await uploadFile({
+        buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+        filename: 'image.png',
+        contentType: 'image/png',
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest')
+        .send({ file_id: fileId, project_id: projectId });
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('UNSUPPORTED_FILE_TYPE');
     });
   });
 });
