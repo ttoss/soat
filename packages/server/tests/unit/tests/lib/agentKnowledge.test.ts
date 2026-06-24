@@ -129,12 +129,13 @@ describe('buildKnowledgeMessages', () => {
     expect(result[0].content).toContain('[Document: guide.md]');
   });
 
-  test('returns system message with memory result formatted correctly', async () => {
+  test('returns system message with memory result labelled by memory name', async () => {
     mockSearchKnowledge.mockResolvedValueOnce([
       {
         sourceType: 'memory',
         entryId: 'mne_001',
         memoryId: 'mem_001',
+        memoryName: 'Customer Preferences',
         content: 'Memory content here',
         score: 0.8,
         createdAt: new Date(),
@@ -149,7 +150,7 @@ describe('buildKnowledgeMessages', () => {
 
     expect(result).toHaveLength(1);
     expect(result[0].role).toBe('system');
-    expect(result[0].content).toContain('[Memory: mem_001]');
+    expect(result[0].content).toContain('[Memory: Customer Preferences]');
     expect(result[0].content).toContain('Memory content here');
   });
 
@@ -210,6 +211,7 @@ describe('buildKnowledgeMessages', () => {
         sourceType: 'memory',
         entryId: 'mne_002',
         memoryId: 'mem_002',
+        memoryName: 'Memory Two',
         content: 'Memory B',
         score: 0.7,
         createdAt: new Date(),
