@@ -13,6 +13,7 @@ import {
   resolveMcpTools,
   resolveSoatTools,
 } from './agentToolResolverExternalTools';
+import { executePipelineTool } from './pipelineTools';
 
 const log = createDebug('soat:toolResolver');
 
@@ -398,9 +399,45 @@ const resolveClientTool = (typedTool: {
   });
 };
 
+const resolvePipelineTool = (
+  typedTool: {
+    publicId: string;
+    name: string;
+    description: string | null;
+    parameters: Record<string, unknown> | null;
+    pipeline: object | null;
+  },
+  args: { projectIds?: number[]; authHeader?: string }
+): Tool => {
+  const parameters =
+    typeof typedTool.parameters === 'string'
+      ? (JSON.parse(typedTool.parameters) as Record<string, unknown>)
+      : typedTool.parameters;
+  return tool({
+    description: typedTool.description ?? undefined,
+    inputSchema: jsonSchema(parameters ?? { type: 'object', properties: {} }),
+    execute: (input: unknown) => {
+      return executePipelineTool({
+        tool: {
+          id: typedTool.publicId,
+          name: typedTool.name,
+          pipeline: typedTool.pipeline,
+        },
+        input:
+          typeof input === 'object' && input !== null && !Array.isArray(input)
+            ? (input as Record<string, unknown>)
+            : {},
+        projectIds: args.projectIds,
+        authHeader: args.authHeader,
+      });
+    },
+  });
+};
+
 // ── Tool Resolution ───────────────────────────────────────────────────────
 
 type AgentToolRow = {
+  publicId: string;
   type: string;
   name: string;
   description: string | null;
@@ -416,11 +453,13 @@ type AgentToolRow = {
   mcp: { url: string; headers?: Record<string, string> } | null;
   actions: string[] | null;
   presetParameters: Record<string, unknown> | null;
+  pipeline: object | null;
 };
 
 const resolveToolByType = async (
   typedTool: AgentToolRow,
   args: {
+    projectIds?: number[];
     boundaryPolicy?: unknown;
     authHeader?: string;
     toolContext?: Record<string, string>;
@@ -435,6 +474,13 @@ const resolveToolByType = async (
       return { [typedTool.name]: resolveHttpTool(typedTool, args.toolContext) };
     case 'client':
       return { [typedTool.name]: resolveClientTool(typedTool) };
+    case 'pipeline':
+      return {
+        [typedTool.name]: resolvePipelineTool(typedTool, {
+          projectIds: args.projectIds,
+          authHeader: args.authHeader,
+        }),
+      };
     case 'mcp': {
       if (!typedTool.mcp?.url) return {};
       try {

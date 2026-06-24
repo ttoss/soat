@@ -105,6 +105,15 @@ export const ERROR_CODES = {
     description:
       'This tool type cannot be invoked server-side. Client tools must be executed by the calling client.',
   },
+  PIPELINE_STEP_FAILED: {
+    httpStatus: 422,
+    description: 'A node in the pipeline tool failed to execute.',
+  },
+  PIPELINE_DEPTH_EXCEEDED: {
+    httpStatus: 422,
+    description:
+      'The pipeline tool exceeded the maximum nesting depth (a pipeline that references itself, directly or transitively).',
+  },
   ORCHESTRATION_NOT_FOUND: {
     httpStatus: 404,
     description: 'The orchestration does not exist or is not accessible.',

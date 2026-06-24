@@ -310,4 +310,162 @@ describe('Tools', () => {
       expect(response.status).toBe(400);
     });
   });
+
+  describe('pipeline tools', () => {
+    test('authenticated user can create a pipeline tool', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'greet-pipeline',
+          type: 'pipeline',
+          description: 'Greets the caller',
+          pipeline: {
+            nodes: [
+              {
+                type: 'map',
+                expression: { cat: ['Hello ', { var: 'input.name' }] },
+                output_key: 'greeting',
+              },
+            ],
+            output_mapping: { answer: { var: 'greeting' } },
+          },
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.type).toBe('pipeline');
+      // pipeline config is echoed verbatim in snake_case
+      expect(response.body.pipeline.nodes[0].output_key).toBe('greeting');
+      expect(response.body.pipeline.output_mapping).toBeDefined();
+    });
+
+    test('calling a map-only pipeline threads state and returns output_mapping shape', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'map-chain-pipeline',
+          type: 'pipeline',
+          pipeline: {
+            nodes: [
+              {
+                type: 'map',
+                expression: { cat: ['Hello ', { var: 'input.name' }] },
+                output_key: 'greeting',
+              },
+              {
+                type: 'map',
+                expression: { var: 'greeting' },
+                output_key: 'final',
+              },
+            ],
+            output_mapping: { answer: { var: 'final' } },
+          },
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ input: { name: 'World' } });
+
+      expect(callRes.status).toBe(200);
+      expect(callRes.body).toEqual({ answer: 'Hello World' });
+    });
+
+    test('pipeline without output_mapping returns the full state', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'full-state-pipeline',
+          type: 'pipeline',
+          pipeline: {
+            nodes: [
+              {
+                type: 'map',
+                expression: { var: 'input.name' },
+                output_key: 'echoed',
+              },
+            ],
+          },
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ input: { name: 'Ada' } });
+
+      expect(callRes.status).toBe(200);
+      expect(callRes.body.echoed).toBe('Ada');
+      expect(callRes.body.input).toEqual({ name: 'Ada' });
+    });
+
+    test('calling a pipeline with an empty nodes array returns 400', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'invalid-pipeline',
+          type: 'pipeline',
+          pipeline: { nodes: [] },
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ input: {} });
+
+      expect(callRes.status).toBe(400);
+      expect(callRes.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('a failing node aborts the pipeline with PIPELINE_STEP_FAILED', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'failing-pipeline',
+          type: 'pipeline',
+          pipeline: {
+            nodes: [{ type: 'tool', tool_id: 'tool_does_not_exist' }],
+          },
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ input: {} });
+
+      expect(callRes.status).toBe(422);
+      expect(callRes.body.error.code).toBe('PIPELINE_STEP_FAILED');
+    });
+
+    test('a self-referential pipeline aborts with PIPELINE_DEPTH_EXCEEDED', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'recursive-pipeline',
+          type: 'pipeline',
+          pipeline: {
+            nodes: [{ type: 'map', expression: 1, output_key: 'x' }],
+          },
+        });
+      expect(createRes.status).toBe(201);
+      const selfId = createRes.body.id;
+
+      // Point the pipeline at itself.
+      const patchRes = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/tools/${selfId}`)
+        .send({ pipeline: { nodes: [{ type: 'tool', tool_id: selfId }] } });
+      expect(patchRes.status).toBe(200);
+
+      const callRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tools/${selfId}/call`)
+        .send({ input: {} });
+
+      expect(callRes.status).toBe(422);
+      expect(callRes.body.error.code).toBe('PIPELINE_DEPTH_EXCEEDED');
+    });
+  });
 });

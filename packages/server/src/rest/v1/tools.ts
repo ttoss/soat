@@ -114,6 +114,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
     mcp,
     actions,
     presetParameters,
+    pipeline,
     projectId: projectPublicId,
   } = (ctx.request.body ?? {}) as {
     name?: unknown;
@@ -124,6 +125,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
     mcp?: unknown;
     actions?: unknown;
     presetParameters?: unknown;
+    pipeline?: unknown;
     projectId?: string;
   };
 
@@ -144,6 +146,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
   let parsedExecute: object | undefined;
   let parsedMcp: object | undefined;
   let parsedPresetParameters: object | undefined;
+  let parsedPipeline: object | undefined;
   try {
     parsedParameters = coerceToJsonObject(parameters) as object | undefined;
     parsedExecute = coerceToJsonObject(execute) as object | undefined;
@@ -151,11 +154,12 @@ toolsRouter.post('/tools', async (ctx: Context) => {
     parsedPresetParameters = coerceToJsonObject(presetParameters) as
       | object
       | undefined;
+    parsedPipeline = coerceToJsonObject(pipeline) as object | undefined;
   } catch {
     ctx.status = 400;
     ctx.body = {
       error:
-        'parameters, execute, mcp, and preset_parameters must be JSON objects',
+        'parameters, execute, mcp, preset_parameters, and pipeline must be JSON objects',
     };
     return;
   }
@@ -170,6 +174,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
     mcp: parsedMcp,
     actions: Array.isArray(actions) ? actions : undefined,
     presetParameters: parsedPresetParameters,
+    pipeline: parsedPipeline,
   });
 
   ctx.status = 201;
@@ -255,22 +260,25 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     mcp,
     actions,
     presetParameters,
+    pipeline,
   } = (ctx.request.body ?? {}) as Record<string, unknown>;
 
   let parsedParameters: object | null | undefined;
   let parsedExecute: object | null | undefined;
   let parsedMcp: object | null | undefined;
   let parsedPresetParameters: object | null | undefined;
+  let parsedPipeline: object | null | undefined;
   try {
     parsedParameters = coerceToJsonObject(parameters);
     parsedExecute = coerceToJsonObject(execute);
     parsedMcp = coerceToJsonObject(mcp);
     parsedPresetParameters = coerceToJsonObject(presetParameters);
+    parsedPipeline = coerceToJsonObject(pipeline);
   } catch {
     ctx.status = 400;
     ctx.body = {
       error:
-        'parameters, execute, mcp, and preset_parameters must be JSON objects',
+        'parameters, execute, mcp, preset_parameters, and pipeline must be JSON objects',
     };
     return;
   }
@@ -286,6 +294,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     mcp: parsedMcp,
     actions: parseNullableArray(actions),
     presetParameters: parsedPresetParameters,
+    pipeline: parsedPipeline,
   });
 
   ctx.body = result;

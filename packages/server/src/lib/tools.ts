@@ -8,6 +8,7 @@ import {
   buildMcpToolExecute,
   executeSoatTool,
 } from './agentToolResolverExternalTools';
+import { executePipelineTool } from './pipelineTools';
 import { soatTools } from './soatTools';
 
 // ── Mapped Types ─────────────────────────────────────────────────────────
@@ -23,6 +24,7 @@ export type MappedTool = {
   mcp: object | null;
   actions: string[] | null;
   presetParameters: object | null;
+  pipeline: object | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -49,6 +51,7 @@ const mapTool = (
     mcp: tool.mcp,
     actions: tool.actions,
     presetParameters: tool.presetParameters,
+    pipeline: tool.pipeline,
     createdAt: tool.createdAt,
     updatedAt: tool.updatedAt,
   };
@@ -66,6 +69,7 @@ export const createTool = async (args: {
   mcp?: object;
   actions?: string[];
   presetParameters?: object;
+  pipeline?: object;
 }): Promise<MappedTool> => {
   const tool = await db.Tool.create({
     projectId: args.projectId,
@@ -77,6 +81,7 @@ export const createTool = async (args: {
     mcp: args.mcp ?? null,
     actions: args.actions ?? null,
     presetParameters: args.presetParameters ?? null,
+    pipeline: args.pipeline ?? null,
   });
 
   const created = await db.Tool.findOne({
@@ -135,6 +140,7 @@ const buildToolUpdates = (args: {
   mcp?: object | null;
   actions?: string[] | null;
   presetParameters?: object | null;
+  pipeline?: object | null;
 }): Record<string, unknown> => {
   const updates: Record<string, unknown> = {};
   const fields = [
@@ -146,6 +152,7 @@ const buildToolUpdates = (args: {
     'mcp',
     'actions',
     'presetParameters',
+    'pipeline',
   ] as const;
   for (const field of fields) {
     if (args[field] !== undefined) updates[field] = args[field];
@@ -164,6 +171,7 @@ export const updateTool = async (args: {
   mcp?: object | null;
   actions?: string[] | null;
   presetParameters?: object | null;
+  pipeline?: object | null;
 }): Promise<MappedTool> => {
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) {
@@ -309,6 +317,7 @@ export const callTool = async (args: {
   action?: string;
   input?: Record<string, unknown>;
   authHeader?: string;
+  depth?: number;
 }): Promise<unknown> => {
   const foundTool = await getTool({ projectIds: args.projectIds, id: args.id });
   const mergedInput = {
@@ -325,6 +334,14 @@ export const callTool = async (args: {
     });
   if (foundTool.type === 'mcp')
     return callMcpTool(foundTool, args.action, mergedInput);
+  if (foundTool.type === 'pipeline')
+    return executePipelineTool({
+      tool: foundTool,
+      input: mergedInput,
+      projectIds: args.projectIds,
+      authHeader: args.authHeader,
+      depth: args.depth,
+    });
 
   // client tools (and any unknown type) cannot be invoked server-side
   throw new DomainError(

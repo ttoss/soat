@@ -367,6 +367,7 @@ components:
             - client
             - mcp
             - soat
+            - pipeline
           description: Tool type
           example: http
         description:
@@ -404,6 +405,20 @@ components:
             Fixed parameters merged into every soat tool call. Keys matching
             fields in the action's input schema are removed from the schema
             shown to the model and injected automatically at execution time.
+        pipeline:
+          type: object
+          nullable: true
+          description: >-
+            Declarative configuration for `pipeline` tools. An ordered list of
+            `nodes` executed server-side as a single deterministic unit, with
+            JSON Logic mapping a shared `state` between them. A `tool` node calls
+            an existing tool (`tool_id`, optional `action`, `input_mapping`,
+            `output_mapping`); a `map` node evaluates a JSON Logic `expression`
+            over `state` and writes the result to `output_key`. The optional
+            top-level `output_mapping` shapes the pipeline's return value (the
+            full state is returned when omitted). State is seeded with the
+            caller's arguments under `input`. Keys are snake_case and stored
+            verbatim.
         created_at:
           type: string
           format: date-time
@@ -430,6 +445,7 @@ components:
             - client
             - mcp
             - soat
+            - pipeline
           description: Tool type (default http)
         description:
           type: string
@@ -460,6 +476,31 @@ components:
             Fixed parameters merged into every soat tool call. Keys matching
             fields in the action's input schema are removed from the schema
             shown to the model and injected automatically at execution time.
+        pipeline:
+          type: object
+          description: >-
+            Declarative configuration for `pipeline` tools: an ordered list of
+            `nodes` (`tool` and `map`) executed server-side as one deterministic
+            unit, with JSON Logic mapping a shared `state` between them. See the
+            `pipeline` field on the Tool schema for the full shape.
+          example:
+            nodes:
+              - type: map
+                expression:
+                  cat:
+                    - 'Hello '
+                    - var: input.name
+                output_key: greeting
+              - type: tool
+                tool_id: tool_V1StGXR8Z5jdHi6B
+                input_mapping:
+                  text:
+                    var: greeting
+                output_mapping:
+                  result: state.step1
+            output_mapping:
+              answer:
+                var: step1
 
     UpdateToolRequest:
       type: object
@@ -473,6 +514,7 @@ components:
             - client
             - mcp
             - soat
+            - pipeline
         description:
           type: string
           nullable: true
@@ -504,6 +546,12 @@ components:
             Fixed parameters merged into every soat tool call. Keys matching
             fields in the action's input schema are removed from the schema
             shown to the model and injected automatically at execution time.
+        pipeline:
+          type: object
+          nullable: true
+          description: >-
+            Declarative configuration for `pipeline` tools. See the `pipeline`
+            field on the Tool schema for the full shape.
 
     CallToolRequest:
       type: object

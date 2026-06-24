@@ -9,7 +9,7 @@ Standalone, reusable tool definitions that agents call during generation.
 
 The Tools module lets you define callable tools that agents use during a generation loop. A tool encapsulates its type, input schema, and execution configuration in one project-scoped record. Tools can be shared across multiple agents and invoked directly via the API independently of any agent.
 
-Four tool types are supported: `http` (calls an external HTTP endpoint), `client` (signals the calling application to execute locally), `mcp` (proxies an MCP server), and `soat` (invokes a SOAT platform action).
+Five tool types are supported: `http` (calls an external HTTP endpoint), `client` (signals the calling application to execute locally), `mcp` (proxies an MCP server), `soat` (invokes a SOAT platform action), and `pipeline` (runs a declarative sequence of tool calls and mapping steps server-side as a single deterministic unit).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -26,7 +26,7 @@ Four tool types are supported: `http` (calls an external HTTP endpoint), `client
 | `id`                | `string`                                        | Public ID (`tool_` prefix)                                                                                        |
 | `project_id`        | `string`                                        | ID of the owning project                                                                                          |
 | `name`              | `string`                                        | Machine-readable tool name sent to the model (or namespace prefix for `mcp`/`soat`)                               |
-| `type`              | `"http"` \| `"client"` \| `"mcp"` \| `"soat"`  | Tool type — determines execution behaviour                                                                        |
+| `type`              | `"http"` \| `"client"` \| `"mcp"` \| `"soat"` \| `"pipeline"` | Tool type — determines execution behaviour                                                          |
 | `description`       | `string \| null`                                | Human-readable description sent to the model for tool selection                                                   |
 | `parameters`        | `object \| null`                                | JSON Schema describing the tool's input. Required for `http` and `client` types.                                  |
 | `execute`           | `object \| null`                                | HTTP execution config (`url`, `method`, `headers`). Required for `http` type.                                     |
@@ -38,6 +38,7 @@ Four tool types are supported: `http` (calls an external HTTP endpoint), `client
 | `mcp.headers`       | `object`                                        | Additional headers sent when connecting to the MCP server.                                                        |
 | `actions`           | `string[] \| null`                              | SOAT platform actions to expose (e.g. `["search-documents"]`). Required for `soat` type.                         |
 | `preset_parameters` | `object \| null`                                | Fixed parameter values merged into every call. Keys are hidden from the model and injected automatically.         |
+| `pipeline`          | `object \| null`                                | Declarative node sequence for `pipeline` tools (`nodes` + optional top-level `output_mapping`). Required for `pipeline` type. |
 | `created_at`        | `string`                                        | ISO 8601 creation timestamp                                                                                       |
 | `updated_at`        | `string`                                        | ISO 8601 last-updated timestamp                                                                                   |
 
@@ -190,6 +191,40 @@ The SOAT server acts as a proxy: it receives the model's tool call, forwards it 
 
 A `soat` tool exposes actions from the SOAT platform itself (documents, conversations, files, secrets, etc.). Instead of pointing to an external endpoint, you list the platform actions the agent is allowed to use via the `actions` array. Each action name corresponds to an MCP tool registered on the platform (e.g., `get-document`, `search-documents`, `create-file`). The server executes these actions in-process, applying the same permission checks as the REST API. For a worked example of a fixed `soat` write tool, see [Orchestrate a Sonnet - Step 4 (Create the fixed write tool)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool).
 
+### pipeline
+
+A `pipeline` tool runs a declarative, ordered list of **nodes** server-side as a single deterministic unit. To the model (and to direct callers and orchestration tool nodes) it looks like one ordinary tool call; internally the server executes every node in order without the model orchestrating the steps. This removes the non-determinism of asking an agent to chain `compute → persist` across multiple turns.
+
+Nodes share a JSON Logic **`state`** object, seeded with the caller's arguments under `input` (reference them with `{ "var": "input.<field>" }`). Because the API converts snake_case request fields to camelCase before execution, reference caller arguments by their **camelCase** name inside JSON Logic (a request field `document_id` is read as `input.documentId`). State keys you create via `output_key` / `output_mapping` are stored verbatim. Two node types can be interleaved freely (`map → tool → map → map → tool → map`):
+
+- **`tool`** — calls an existing tool in the same project. Fields: `tool_id` (required), `action` (for `soat`/`mcp` step tools), `input_mapping` (JSON Logic per argument, evaluated against `state`), and `output_mapping` (writes selected result keys to `state.<key>`). The referenced tool runs through the same execution path as a direct call.
+- **`map`** — evaluates a JSON Logic `expression` over `state` and writes the result to `output_key` (or merges an object result via `output_mapping`). Use it to reshape or compute values between tool calls. `map` is the same evaluator used by orchestration transform/condition nodes.
+
+The optional top-level **`output_mapping`** (JSON Logic) shapes the pipeline's return value from the accumulated `state`; when omitted, the full `state` is returned.
+
+Execution is **fail-fast**: if any node errors (an HTTP step fails, a referenced tool is missing, etc.) the pipeline aborts with `PIPELINE_STEP_FAILED` identifying the node. A pipeline that references itself (directly or transitively) is bounded by a maximum nesting depth and aborts with `PIPELINE_DEPTH_EXCEEDED`. `client` tools cannot be used as pipeline nodes because they cannot run server-side.
+
+Pipeline config keys are snake_case and stored verbatim. Example: greet a caller, call a tool with the greeting, then return a derived field.
+
+```json
+{
+  "nodes": [
+    {
+      "type": "map",
+      "expression": { "cat": ["Hello ", { "var": "input.name" }] },
+      "output_key": "greeting"
+    },
+    {
+      "type": "tool",
+      "tool_id": "tool_abc",
+      "input_mapping": { "text": { "var": "greeting" } },
+      "output_mapping": { "result": "state.step1" }
+    }
+  ],
+  "output_mapping": { "answer": { "var": "step1" } }
+}
+```
+
 ### Preset Parameters
 
 `preset_parameters` lets you bake fixed values into a `soat` (or any) tool definition. When a key in `preset_parameters` matches a field in the action's input schema:
@@ -339,6 +374,83 @@ curl -X POST https://api.example.com/api/v1/tools \
     "type": "soat",
     "description": "Searches the project knowledge base",
     "actions": ["search-documents"]
+  }'
+```
+
+</TabItem>
+</Tabs>
+
+### Create a pipeline tool
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-tool \
+  --project-id "$PROJECT_ID" \
+  --name "extract-then-summarize" \
+  --type pipeline \
+  --description "Extracts text from a document then summarizes it" \
+  --pipeline '{
+    "nodes": [
+      { "type": "tool", "tool_id": "tool_extract", "input_mapping": { "id": { "var": "input.documentId" } }, "output_mapping": { "text": "state.extracted" } },
+      { "type": "tool", "tool_id": "tool_summarize", "input_mapping": { "content": { "var": "extracted" } }, "output_mapping": { "summary": "state.summary" } }
+    ],
+    "output_mapping": { "summary": { "var": "summary" } }
+  }'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.tools.createTool({
+  body: {
+    project_id: 'proj_ABC',
+    name: 'extract-then-summarize',
+    type: 'pipeline',
+    description: 'Extracts text from a document then summarizes it',
+    pipeline: {
+      nodes: [
+        {
+          type: 'tool',
+          tool_id: 'tool_extract',
+          input_mapping: { id: { var: 'input.documentId' } },
+          output_mapping: { text: 'state.extracted' },
+        },
+        {
+          type: 'tool',
+          tool_id: 'tool_summarize',
+          input_mapping: { content: { var: 'extracted' } },
+          output_mapping: { summary: 'state.summary' },
+        },
+      ],
+      output_mapping: { summary: { var: 'summary' } },
+    },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/tools \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "name": "extract-then-summarize",
+    "type": "pipeline",
+    "description": "Extracts text from a document then summarizes it",
+    "pipeline": {
+      "nodes": [
+        { "type": "tool", "tool_id": "tool_extract", "input_mapping": { "id": { "var": "input.documentId" } }, "output_mapping": { "text": "state.extracted" } },
+        { "type": "tool", "tool_id": "tool_summarize", "input_mapping": { "content": { "var": "extracted" } }, "output_mapping": { "summary": "state.summary" } }
+      ],
+      "output_mapping": { "summary": { "var": "summary" } }
+    }
   }'
 ```
 

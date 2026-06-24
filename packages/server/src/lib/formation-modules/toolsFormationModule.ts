@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import type { FormationModule, ValidationError } from '../formationsTypes';
+import { validatePipelineConfig } from '../pipelineTools';
 import {
   toNullableArray,
   toNullableObject,
@@ -52,6 +53,16 @@ const validateToolProperties = (args: {
   }
   pushFieldTypeErrors({ spec, properties, basePath, errors });
 
+  // Shared business rule: pipeline tools must carry a valid pipeline config.
+  if (properties.type === 'pipeline' && properties.pipeline !== undefined) {
+    const pipelineError = validatePipelineConfig({
+      pipeline: properties.pipeline,
+    });
+    if (pipelineError) {
+      errors.push({ path: `${basePath}.pipeline`, message: pipelineError });
+    }
+  }
+
   return errors;
 };
 
@@ -84,6 +95,7 @@ export const toolsFormationModule: FormationModule = {
       actions: toNullableArray<string>(properties.actions) ?? undefined,
       presetParameters:
         toNullableObject(properties.preset_parameters) ?? undefined,
+      pipeline: toNullableObject(properties.pipeline) ?? undefined,
     });
 
     log(
@@ -114,6 +126,7 @@ export const toolsFormationModule: FormationModule = {
       mcp: toNullableObject(properties.mcp),
       actions: toNullableArray<string>(properties.actions),
       presetParameters: toNullableObject(properties.preset_parameters),
+      pipeline: toNullableObject(properties.pipeline),
     });
   },
 
@@ -133,6 +146,7 @@ export const toolsFormationModule: FormationModule = {
         mcp: tool.mcp,
         actions: tool.actions,
         preset_parameters: tool.presetParameters,
+        pipeline: tool.pipeline,
       };
     } catch {
       return null;

@@ -63,8 +63,12 @@ export const caseTransformMiddleware = async (ctx: Context, next: Next) => {
 
   // Transform incoming request body from snake_case to camelCase
   // The 'template' key is a pass-through user document (formation templates)
-  // whose inner keys must not be transformed.
-  const BODY_SKIP_KEYS = new Set(['template']);
+  // whose inner keys must not be transformed. The 'pipeline' key is a
+  // declarative pipeline-tool document whose inner keys (tool_id,
+  // input_mapping, output_mapping, …) are part of the external snake_case
+  // contract and must be stored verbatim, so the executor and formation
+  // module read the same shape regardless of how the tool was created.
+  const BODY_SKIP_KEYS = new Set(['template', 'pipeline']);
   if (isPlainObject(ctx.request.body) || Array.isArray(ctx.request.body)) {
     ctx.request.body = transformKeys(
       ctx.request.body,
@@ -85,7 +89,9 @@ export const caseTransformMiddleware = async (ctx: Context, next: Next) => {
   // The 'execute' key is a pass-through user document (tool execute configs)
   // whose inner keys (e.g. HTTP headers like Content-Type) must not be
   // transformed — they are arbitrary user-defined strings, not camelCase fields.
-  const RESPONSE_SKIP_KEYS = new Set(['execute']);
+  // The 'pipeline' key is a pass-through pipeline-tool document already stored
+  // in snake_case (see BODY_SKIP_KEYS) and must be echoed verbatim.
+  const RESPONSE_SKIP_KEYS = new Set(['execute', 'pipeline']);
   if (isPlainObject(ctx.body) || Array.isArray(ctx.body)) {
     ctx.body = transformKeys(ctx.body, camelToSnake, RESPONSE_SKIP_KEYS);
   }

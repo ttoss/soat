@@ -1057,6 +1057,40 @@ describe('MCP tools - happy path', () => {
       expect(result.errors.length).toBeGreaterThan(0);
     });
   });
+
+  // ── Tools (pipeline) ───────────────────────────────────────────────────────
+
+  describe('Pipeline tools', () => {
+    test('create-tool and call-tool run a pipeline tool via MCP', async () => {
+      const createRes = await mcpCall('create-tool', {
+        projectId,
+        name: 'mcp-greet-pipeline',
+        type: 'pipeline',
+        pipeline: {
+          nodes: [
+            {
+              type: 'map',
+              expression: { cat: ['Hello ', { var: 'input.name' }] },
+              output_key: 'greeting',
+            },
+          ],
+          output_mapping: { answer: { var: 'greeting' } },
+        },
+      });
+      expect(createRes.status).toBe(200);
+      const created = parseResult(createRes);
+      expect(created.type).toBe('pipeline');
+      expect(created.id).toBeDefined();
+
+      const callRes = await mcpCall('call-tool', {
+        toolId: created.id,
+        input: { name: 'World' },
+      });
+      expect(callRes.status).toBe(200);
+      const result = parseResult(callRes);
+      expect(result.answer).toBe('Hello World');
+    });
+  });
 });
 
 describe('MCP OAuth discovery (RFC 9728)', () => {

@@ -789,6 +789,13 @@ components:
           type: object
           nullable: true
           description: Pre-filled parameter values injected at execution time
+        pipeline:
+          type: object
+          nullable: true
+          description: >-
+            Declarative configuration for `pipeline` tools: an ordered list of
+            `nodes` (`tool` and `map`) executed server-side with JSON Logic
+            mapping a shared state between them. Required for `pipeline` tools.
 
     DocumentResourceProperties:
       description: >-

@@ -930,6 +930,29 @@ TOOL_RESP=$($SOAT_CLI create-tool \
 TOOL_ID=$(echo "$TOOL_RESP" | jq -r '.id')
 echo "Agent Tool id: $TOOL_ID"
 
+# 19b. Create a pipeline tool that maps input then chains into the list-projects
+# tool, and call it directly to verify deterministic multi-step execution.
+echo "--- Creating pipeline tool (map -> list-projects) ---"
+PIPELINE_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name list-projects-pipeline \
+  --type pipeline \
+  --description "Echoes a label and lists projects in one deterministic call." \
+  --pipeline "{\"nodes\":[{\"type\":\"map\",\"expression\":{\"var\":\"input.label\"},\"output_key\":\"label\"},{\"type\":\"tool\",\"tool_id\":\"$TOOL_ID\",\"output_mapping\":{\"result\":\"state.projects\"}}],\"output_mapping\":{\"label\":{\"var\":\"label\"},\"projects\":{\"var\":\"projects\"}}}")
+PIPELINE_TOOL_ID=$(echo "$PIPELINE_TOOL_RESP" | jq -r '.id')
+echo "Pipeline tool id: $PIPELINE_TOOL_ID"
+
+echo "--- Calling pipeline tool ---"
+PIPELINE_CALL_RESP=$($SOAT_CLI call-tool --tool_id "$PIPELINE_TOOL_ID" --input '{"label":"smoke"}')
+echo "Pipeline call response:"
+printf '%s\n' "$PIPELINE_CALL_RESP" | jq .
+PIPELINE_LABEL=$(printf '%s\n' "$PIPELINE_CALL_RESP" | jq -r '.label')
+if [ "$PIPELINE_LABEL" != "smoke" ]; then
+  echo "ERROR: Expected pipeline output label 'smoke', got '$PIPELINE_LABEL'" >&2
+  exit 1
+fi
+echo "Pipeline tool OK."
+
 # 20. Create an agent with the list-projects tool
 echo "--- Creating agent ---"
 AGENT_RESP=$($SOAT_CLI create-agent \
