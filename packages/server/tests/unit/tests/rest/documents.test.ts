@@ -1,5 +1,8 @@
 import fs from 'node:fs';
 
+import * as pdfModule from 'src/lib/pdf';
+
+import { ONE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
 import { storageDir } from '../../setupTests';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -43,6 +46,8 @@ describe('Documents', () => {
                 'documents:CreateDocument',
                 'documents:DeleteDocument',
                 'documents:UpdateDocument',
+                'documents:CreateDocumentsFromFile',
+                'files:UploadFile',
               ],
             },
           ],
@@ -416,6 +421,116 @@ describe('Documents', () => {
         `/api/v1/documents/${tagDocId}/tags`
       );
       expect(response.status).toBe(401);
+    });
+  });
+
+  describe('POST /api/v1/documents (plain text creates exactly 1 chunk)', () => {
+    test('creating a text document produces 1 chunk, and getDocument returns its content', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'hello chunk test',
+          path: '/chunks/hello-chunk.txt',
+          filename: 'hello-chunk.txt',
+        });
+      expect(createRes.status).toBe(201);
+      const docId = createRes.body.id;
+
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${docId}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.content).toBe('hello chunk test');
+    });
+  });
+
+  describe('POST /api/v1/documents/from-file', () => {
+    let pdfFileId: string;
+    let extractPdfPagesSpy: jest.SpyInstance;
+
+    beforeAll(async () => {
+      // unpdf uses ESM dynamic imports that don't work in Jest's CJS VM context.
+      // Spy on extractPdfPages so the rest of the ingestion flow runs for real.
+      extractPdfPagesSpy = jest
+        .spyOn(pdfModule, 'extractPdfPages')
+        .mockResolvedValue(['Hello World']);
+
+      const uploadRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', ONE_PAGE_PDF_BUFFER, {
+          filename: 'test.pdf',
+          contentType: 'application/pdf',
+        })
+        .field('project_id', projectId);
+      expect(uploadRes.status).toBe(201);
+      pdfFileId = uploadRes.body.id;
+    });
+
+    afterAll(() => {
+      extractPdfPagesSpy.mockRestore();
+    });
+
+    test('authenticated user with permission can ingest a PDF', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/from-file')
+        .send({ file_id: pdfFileId, project_id: projectId });
+
+      expect(response.status).toBe(201);
+      expect(response.body.id).toMatch(/^doc_/);
+      expect(response.body.chunk_count).toBe(1);
+      expect(response.body.project_id).toBe(projectId);
+    });
+
+    test('returns 401 for unauthenticated request', async () => {
+      const response = await testClient
+        .post('/api/v1/documents/from-file')
+        .send({ file_id: pdfFileId, project_id: projectId });
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 400 when fileId is missing', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/from-file')
+        .send({ project_id: projectId });
+      expect(response.status).toBe(400);
+    });
+
+    test('returns 400 when projectId is missing', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/from-file')
+        .send({ file_id: pdfFileId });
+      expect(response.status).toBe(400);
+    });
+
+    test('returns 403 when user has no CreateDocumentsFromFile permission', async () => {
+      const response = await authenticatedTestClient(_noPermToken)
+        .post('/api/v1/documents/from-file')
+        .send({ file_id: pdfFileId, project_id: projectId });
+      expect(response.status).toBe(403);
+    });
+
+    test('returns 404 when fileId does not exist', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/from-file')
+        .send({ file_id: 'file_doesnotexist000', project_id: projectId });
+      expect(response.status).toBe(404);
+    });
+
+    test('returns 400 when file is not a PDF', async () => {
+      const textUpload = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', Buffer.from('plain text'), {
+          filename: 'plain.txt',
+          contentType: 'text/plain',
+        })
+        .field('project_id', projectId);
+      expect(textUpload.status).toBe(201);
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/from-file')
+        .send({ file_id: textUpload.body.id, project_id: projectId });
+      expect(response.status).toBe(400);
     });
   });
 });

@@ -36,7 +36,9 @@
     "json-logic-js": "^2.0.5",
     "jsonwebtoken": "^9.0.3",
     "ollama": "^0.6.3",
-    "pg": "^8.21.0"
+    "pdf-parse": "^1.1.1",
+    "pg": "^8.21.0",
+    "unpdf": "^1.6.2"
   },
   "devDependencies": {
     "@stoplight/spectral-cli": "^6.16.0",

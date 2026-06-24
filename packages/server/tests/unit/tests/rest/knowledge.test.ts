@@ -113,6 +113,7 @@ describe('Knowledge', () => {
         const result = response.body.results[0];
         expect(result.source_type).toBe('document');
         expect(result.document_id).toMatch(/^doc_/);
+        expect(result.chunk_id).toMatch(/^dchunk_/);
         expect(result.project_id).toBe(projectId);
       }
     });

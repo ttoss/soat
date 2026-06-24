@@ -25,6 +25,11 @@
       "operationId": "deleteDocument",
       "action": "documents:DeleteDocument",
       "description": "Delete a document"
+    },
+    {
+      "operationId": "createDocumentsFromFile",
+      "action": "documents:CreateDocumentsFromFile",
+      "description": "Create document chunks from a PDF file"
     }
   ],
   "srnPatterns": [

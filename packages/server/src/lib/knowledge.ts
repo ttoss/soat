@@ -1,5 +1,3 @@
-import fs from 'node:fs';
-
 import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
@@ -54,6 +52,7 @@ export type DocumentQueryConfig = {
 
 export type QueryDocumentResult = {
   id: string;
+  chunkId: string;
   fileId?: string;
   projectId?: string;
   path?: string;
@@ -63,6 +62,7 @@ export type QueryDocumentResult = {
   metadata?: unknown;
   tags?: Record<string, string>;
   content: string | null;
+  page?: number;
   score?: number;
   createdAt: Date;
   updatedAt: Date;
@@ -72,6 +72,7 @@ export type KnowledgeResult =
   | {
       sourceType: 'document';
       documentId: string;
+      chunkId: string;
       fileId?: string;
       projectId?: string;
       path?: string;
@@ -81,6 +82,7 @@ export type KnowledgeResult =
       metadata?: unknown;
       tags?: Record<string, string>;
       content: string | null;
+      page?: number;
       score?: number;
       createdAt: Date;
       updatedAt: Date;
@@ -113,84 +115,156 @@ const buildFileInclude = (args: {
   };
 };
 
-const mapRawDocument = (
-  doc: InstanceType<(typeof db)['Document']>,
+type ChunkWithDocument = InstanceType<(typeof db)['DocumentChunk']> & {
+  document?: InstanceType<(typeof db)['Document']> & {
+    file?: InstanceType<(typeof db)['File']> & {
+      project?: InstanceType<(typeof db)['Project']>;
+    };
+  };
+};
+
+const computeChunkScore = (
+  chunk: ChunkWithDocument,
   config: DocumentQueryConfig
-) => {
-  const base = mapDocument(doc);
-  let content: string | null = null;
-  if (doc.file?.storagePath && fs.existsSync(doc.file.storagePath)) {
-    content = fs.readFileSync(doc.file.storagePath, 'utf-8');
+): number | undefined => {
+  if (!config.search) return undefined;
+  const distance = parseFloat(
+    (chunk.getDataValue('distance') as string) ?? '1'
+  );
+  return 1 - distance;
+};
+
+type DocumentBase = ReturnType<typeof mapDocument>;
+
+const pickDocumentFields = (
+  base: DocumentBase | null
+): Pick<
+  QueryDocumentResult,
+  | 'fileId'
+  | 'projectId'
+  | 'path'
+  | 'filename'
+  | 'size'
+  | 'title'
+  | 'metadata'
+  | 'tags'
+> => {
+  if (!base) {
+    return {
+      fileId: undefined,
+      projectId: undefined,
+      path: undefined,
+      filename: undefined,
+      size: undefined,
+      title: undefined,
+      metadata: undefined,
+      tags: undefined,
+    };
   }
-  if (config.search) {
-    const distance = parseFloat(
-      (doc.getDataValue('distance') as string) ?? '1'
-    );
-    return { ...base, content, score: 1 - distance };
-  }
-  return { ...base, content };
+  return {
+    fileId: base.fileId,
+    projectId: base.projectId,
+    path: base.path,
+    filename: base.filename,
+    size: base.size,
+    title: base.title,
+    metadata: base.metadata,
+    tags: base.tags,
+  };
+};
+
+const mapChunkResult = (
+  chunk: ChunkWithDocument,
+  config: DocumentQueryConfig
+): QueryDocumentResult => {
+  const doc = chunk.document;
+  const base = doc ? mapDocument(doc) : null;
+  const score = computeChunkScore(chunk, config);
+
+  return {
+    id: doc ? doc.publicId : '',
+    chunkId: chunk.publicId,
+    ...pickDocumentFields(base),
+    content: chunk.content,
+    page: chunk.pageNumber ?? undefined,
+    score,
+    createdAt: chunk.createdAt,
+    updatedAt: chunk.updatedAt,
+  };
 };
 
 // ── Query engine ─────────────────────────────────────────────────────────
 
-const findDocumentsWithSearch = async (args: {
+const buildDocumentInclude = (args: {
+  docWhere: Record<string, unknown> | undefined;
+  fileInclude: ReturnType<typeof buildFileInclude>;
+}): unknown => {
+  return {
+    model: db.Document,
+    as: 'document',
+    where: args.docWhere,
+    required: args.docWhere !== undefined,
+    include: [args.fileInclude],
+  };
+};
+
+const findChunksWithSearch = async (args: {
   config: DocumentQueryConfig;
-  fileInclude: unknown;
-  effectiveDocWhere: unknown;
-  needsSubQueryFalse: boolean;
+  docWhere: Record<string, unknown> | undefined;
+  fileInclude: ReturnType<typeof buildFileInclude>;
   limit: number;
-}): Promise<Array<InstanceType<(typeof db)['Document']>>> => {
+}): Promise<ChunkWithDocument[]> => {
   const embedding = await getEmbedding({ text: args.config.search! });
   const embeddingLiteral = `[${embedding.join(',')}]`;
+  const distanceLiteral = db.DocumentChunk.sequelize!.literal(
+    `"DocumentChunk"."embedding" <=> '${embeddingLiteral}'`
+  );
 
-  return db.Document.findAll({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    where: args.effectiveDocWhere as any,
-    attributes: {
-      include: [
-        [
-          db.Document.sequelize!.literal(`embedding <=> '${embeddingLiteral}'`),
-          'distance',
-        ],
-      ],
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    include: [args.fileInclude] as any,
-    order: db.Document.sequelize!.literal(
-      `embedding <=> '${embeddingLiteral}'`
-    ),
-    subQuery: args.needsSubQueryFalse ? false : undefined,
-    limit: args.limit,
+  const docInclude = buildDocumentInclude({
+    docWhere: args.docWhere,
+    fileInclude: args.fileInclude,
   });
+
+  return db.DocumentChunk.findAll({
+    attributes: { include: [[distanceLiteral, 'distance']] },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    include: [docInclude] as any,
+    order: distanceLiteral,
+    subQuery: false,
+    limit: args.limit,
+  }) as unknown as Promise<ChunkWithDocument[]>;
 };
 
-const findDocumentsWithoutSearch = async (args: {
-  fileInclude: unknown;
-  effectiveDocWhere: unknown;
-  needsSubQueryFalse: boolean;
+const findChunksWithoutSearch = async (args: {
+  docWhere: Record<string, unknown> | undefined;
+  fileInclude: ReturnType<typeof buildFileInclude>;
   limit: number;
-}): Promise<Array<InstanceType<(typeof db)['Document']>>> => {
-  return db.Document.findAll({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    where: args.effectiveDocWhere as any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    include: [args.fileInclude] as any,
-    order: [['createdAt', 'ASC']],
-    subQuery: args.needsSubQueryFalse ? false : undefined,
-    limit: args.limit,
+}): Promise<ChunkWithDocument[]> => {
+  const docInclude = buildDocumentInclude({
+    docWhere: args.docWhere,
+    fileInclude: args.fileInclude,
   });
+
+  return db.DocumentChunk.findAll({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    include: [docInclude] as any,
+    order: [['chunkIndex', 'ASC']],
+    subQuery: false,
+    limit: args.limit,
+  }) as unknown as Promise<ChunkWithDocument[]>;
 };
 
-const mergeWhereClauses = (
-  docWhere: unknown,
-  policyWhere: Record<string, unknown> | undefined
-): Record<string, unknown> | undefined => {
+const buildDocWhere = (args: {
+  documentIds: string[] | undefined;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const merged: Record<string, any> = {
-    ...(docWhere ?? {}),
-    ...(policyWhere ?? {}),
-  };
-  return Object.keys(merged).length > 0 ? merged : undefined;
+  policyWhere: Record<string, any> | undefined;
+}): Record<string, unknown> | undefined => {
+  const idFilter =
+    args.documentIds && args.documentIds.length > 0
+      ? { publicId: args.documentIds }
+      : undefined;
+  if (!idFilter && !args.policyWhere) return undefined;
+  return { ...(idFilter ?? {}), ...(args.policyWhere ?? {}) };
 };
 
 export const resolveDocumentSearch = async (args: {
@@ -207,40 +281,23 @@ export const resolveDocumentSearch = async (args: {
   }
 
   const fileInclude = buildFileInclude({ projectIds, paths: config.paths });
-  const docWhere =
-    config.documentIds && config.documentIds.length > 0
-      ? { publicId: config.documentIds }
-      : undefined;
-
-  const effectiveDocWhere = mergeWhereClauses(docWhere, args.policyWhere);
-  const needsSubQueryFalse =
-    !!args.policyWhere &&
-    Object.keys(args.policyWhere).some((k) => {
-      return k.startsWith('$');
-    });
-
-  const rawDocuments = config.search
-    ? await findDocumentsWithSearch({
-        config,
-        fileInclude,
-        effectiveDocWhere,
-        needsSubQueryFalse,
-        limit,
-      })
-    : await findDocumentsWithoutSearch({
-        fileInclude,
-        effectiveDocWhere,
-        needsSubQueryFalse,
-        limit,
-      });
-
-  const mapped = rawDocuments.map((doc) => {
-    return mapRawDocument(doc, config);
+  const docWhere = buildDocWhere({
+    documentIds: config.documentIds,
+    policyWhere: args.policyWhere,
   });
+
+  const rawChunks = config.search
+    ? await findChunksWithSearch({ config, docWhere, fileInclude, limit })
+    : await findChunksWithoutSearch({ docWhere, fileInclude, limit });
+
+  const mapped = rawChunks.map((chunk) => {
+    return mapChunkResult(chunk, config);
+  });
+
   if (!config.search || config.minScore === undefined) return mapped;
   const minScore = config.minScore;
-  return mapped.filter((doc) => {
-    return ('score' in doc ? (doc.score ?? -1) : -1) >= minScore;
+  return mapped.filter((r) => {
+    return (r.score ?? -1) >= minScore;
   });
 };
 
@@ -307,6 +364,7 @@ export const searchKnowledge = async (
     return {
       sourceType: 'document' as const,
       documentId: doc.id,
+      chunkId: doc.chunkId,
       fileId: doc.fileId,
       projectId: doc.projectId,
       path: doc.path,
@@ -316,6 +374,7 @@ export const searchKnowledge = async (
       metadata: doc.metadata,
       tags: doc.tags,
       content: doc.content,
+      page: doc.page,
       score: doc.score,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
@@ -324,7 +383,6 @@ export const searchKnowledge = async (
 
   const allResults = [...docResults, ...memoryEntries];
 
-  // Sort by score descending when available, otherwise keep original order
   if (args.query) {
     allResults.sort((a, b) => {
       const aScore = a.score ?? 0;

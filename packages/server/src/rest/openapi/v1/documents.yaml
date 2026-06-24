@@ -110,6 +110,78 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/documents/from-file:
+    post:
+      tags:
+        - Documents
+      summary: Create document chunks from a PDF file
+      description: Parses an uploaded PDF file and creates one Document with one chunk per non-empty page. The file must already exist (uploaded via the files API) and must be a PDF.
+      operationId: createDocumentsFromFile
+      x-iam-action: documents:CreateDocumentsFromFile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - file_id
+              properties:
+                file_id:
+                  x-soat-ref: files
+                  type: string
+                  description: ID of the uploaded PDF file.
+                  example: 'file_V1StGXR8Z5jdHi6B'
+                project_id:
+                  x-soat-ref: projects
+                  type: string
+                  description: Project ID. Required for JWT auth; omit when using a project key.
+                  example: 'proj_V1StGXR8Z5jdHi6B'
+                path_prefix:
+                  type: string
+                  description: Path prefix under which to store the document (e.g. /docs/). The filename is appended automatically.
+                  example: '/docs/'
+                tags:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: Key-value tags to attach to the document.
+                chunk_strategy:
+                  type: string
+                  enum: [page, whole]
+                  description: How to split the PDF into chunks. `page` (default) creates one chunk per non-empty page; `whole` creates a single chunk with all pages joined.
+                  default: page
+      responses:
+        '201':
+          description: Document created from file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentFromFileRecord'
+        '400':
+          description: Invalid request or file is not a PDF
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/documents/{document_id}:
     get:
       tags:
@@ -443,6 +515,15 @@ components:
         updated_at:
           type: string
           format: date-time
+    DocumentFromFileRecord:
+      allOf:
+        - $ref: '#/components/schemas/DocumentRecord'
+        - type: object
+          properties:
+            chunk_count:
+              type: integer
+              description: Number of chunks (pages) created from the PDF.
+              example: 10
     ErrorResponse:
       type: object
       properties:
