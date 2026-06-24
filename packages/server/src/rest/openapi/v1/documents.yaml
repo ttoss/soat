@@ -178,14 +178,14 @@ paths:
                   description: Overlap in characters between consecutive windows when `chunk_strategy=size`. Defaults to 200.
                   example: 200
       responses:
-        '201':
-          description: Document created from file
+        '202':
+          description: Ingestion accepted. The document record has been created with `status=pending` and processing runs in the background. Poll `GET /api/v1/documents/{document_id}` until `status` is `ready` or `failed`.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/IngestedDocumentRecord'
         '400':
-          description: Invalid request, file not found, unsupported content type, or no extractable text
+          description: Invalid request, file not found, or unsupported content type
           content:
             application/json:
               schema:
@@ -524,10 +524,15 @@ components:
           type: integer
           description: File size in bytes
           example: 42
+        status:
+          type: string
+          enum: [pending, processing, ready, failed]
+          description: Ingestion lifecycle state. `pending` — enqueued; `processing` — chunks being extracted and embedded; `ready` — fully indexed; `failed` — processing error (see `metadata.failure_reason`).
+          example: 'ready'
         content:
           type: string
           nullable: true
-          description: Text content (only present on getDocument)
+          description: Text content (only present on getDocument, and only when status is ready)
           example: 'The quick brown fox jumps over the lazy dog.'
         created_at:
           type: string

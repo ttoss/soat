@@ -465,6 +465,28 @@ describe('Documents', () => {
       return res.body.id as string;
     };
 
+    const waitForDocumentStatus = async (
+      docId: string,
+      targetStatus: string,
+      timeout = 5000
+    ): Promise<Record<string, unknown>> => {
+      const deadline = Date.now() + timeout;
+      while (Date.now() < deadline) {
+        const res = await authenticatedTestClient(userToken).get(
+          `/api/v1/documents/${docId}`
+        );
+        if (res.body.status === targetStatus || res.body.status === 'failed') {
+          return res.body as Record<string, unknown>;
+        }
+        await new Promise((r) => {
+          return setTimeout(r, 50);
+        });
+      }
+      throw new Error(
+        `Timed out waiting for document ${docId} to reach status ${targetStatus}`
+      );
+    };
+
     beforeAll(async () => {
       // unpdf uses ESM dynamic imports that don't work in Jest's CJS VM context.
       // Spy on extractPdfPages so the rest of the ingestion flow runs for real.
@@ -483,15 +505,56 @@ describe('Documents', () => {
       extractPdfPagesSpy.mockRestore();
     });
 
-    test('authenticated user with permission can ingest a PDF', async () => {
+    test('ingest returns 202 with pending status immediately', async () => {
+      const fileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'immediate.pdf',
+        contentType: 'application/pdf',
+      });
+
       const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest')
+        .send({ file_id: fileId, project_id: projectId });
+
+      expect(response.status).toBe(202);
+      expect(response.body.id).toMatch(/^doc_/);
+      expect(response.body.status).toBe('pending');
+      expect(response.body.project_id).toBe(projectId);
+    });
+
+    test('document transitions to ready after background processing', async () => {
+      const fileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'lifecycle.pdf',
+        contentType: 'application/pdf',
+      });
+
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest')
+        .send({ file_id: fileId, project_id: projectId });
+
+      expect(ingestRes.status).toBe(202);
+      const docId = ingestRes.body.id as string;
+
+      const doc = await waitForDocumentStatus(docId, 'ready');
+      expect(doc.status).toBe('ready');
+    });
+
+    test('authenticated user with permission can ingest a PDF', async () => {
+      const ingestRes = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/ingest')
         .send({ file_id: pdfFileId, project_id: projectId });
 
-      expect(response.status).toBe(201);
-      expect(response.body.id).toMatch(/^doc_/);
-      expect(response.body.chunk_count).toBe(1);
-      expect(response.body.project_id).toBe(projectId);
+      expect(ingestRes.status).toBe(202);
+      expect(ingestRes.body.id).toMatch(/^doc_/);
+      expect(ingestRes.body.project_id).toBe(projectId);
+
+      const doc = await waitForDocumentStatus(
+        ingestRes.body.id as string,
+        'ready'
+      );
+      expect(doc.status).toBe('ready');
+      expect((doc.metadata as Record<string, unknown>).chunk_count).toBe(1);
     });
 
     test('3-page PDF produces chunk_count=3 with default page strategy', async () => {
@@ -507,12 +570,17 @@ describe('Documents', () => {
         contentType: 'application/pdf',
       });
 
-      const response = await authenticatedTestClient(userToken)
+      const ingestRes = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/ingest')
         .send({ file_id: fileId, project_id: projectId });
 
-      expect(response.status).toBe(201);
-      expect(response.body.chunk_count).toBe(3);
+      expect(ingestRes.status).toBe(202);
+
+      const doc = await waitForDocumentStatus(
+        ingestRes.body.id as string,
+        'ready'
+      );
+      expect((doc.metadata as Record<string, unknown>).chunk_count).toBe(3);
     });
 
     test('chunk_strategy=whole collapses a multi-page PDF into one chunk', async () => {
@@ -524,7 +592,7 @@ describe('Documents', () => {
         contentType: 'application/pdf',
       });
 
-      const response = await authenticatedTestClient(userToken)
+      const ingestRes = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/ingest')
         .send({
           file_id: fileId,
@@ -532,19 +600,23 @@ describe('Documents', () => {
           chunk_strategy: 'whole',
         });
 
-      expect(response.status).toBe(201);
-      expect(response.body.chunk_count).toBe(1);
+      expect(ingestRes.status).toBe(202);
+
+      const doc = await waitForDocumentStatus(
+        ingestRes.body.id as string,
+        'ready'
+      );
+      expect((doc.metadata as Record<string, unknown>).chunk_count).toBe(1);
     });
 
     test('chunk_strategy=size splits text into overlapping windows', async () => {
-      // Ingest a plain-text file (no PDF parsing needed) of known length.
       const fileId = await uploadFile({
         buffer: Buffer.from('a'.repeat(2500)),
         filename: 'long.txt',
         contentType: 'text/plain',
       });
 
-      const response = await authenticatedTestClient(userToken)
+      const ingestRes = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/ingest')
         .send({
           file_id: fileId,
@@ -554,9 +626,14 @@ describe('Documents', () => {
           chunk_overlap: 0,
         });
 
-      expect(response.status).toBe(201);
+      expect(ingestRes.status).toBe(202);
+
       // 2500 chars / 1000 step (no overlap) => 3 chunks
-      expect(response.body.chunk_count).toBe(3);
+      const doc = await waitForDocumentStatus(
+        ingestRes.body.id as string,
+        'ready'
+      );
+      expect((doc.metadata as Record<string, unknown>).chunk_count).toBe(3);
     });
 
     test('ingests a text/markdown file as a single chunk by default', async () => {
@@ -566,12 +643,64 @@ describe('Documents', () => {
         contentType: 'text/markdown',
       });
 
-      const response = await authenticatedTestClient(userToken)
+      const ingestRes = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/ingest')
         .send({ file_id: fileId, project_id: projectId });
 
-      expect(response.status).toBe(201);
-      expect(response.body.chunk_count).toBe(1);
+      expect(ingestRes.status).toBe(202);
+
+      const doc = await waitForDocumentStatus(
+        ingestRes.body.id as string,
+        'ready'
+      );
+      expect((doc.metadata as Record<string, unknown>).chunk_count).toBe(1);
+    });
+
+    test('document status is failed when file has no extractable text', async () => {
+      extractPdfPagesSpy.mockResolvedValueOnce([]);
+
+      const fileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'empty.pdf',
+        contentType: 'application/pdf',
+      });
+
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest')
+        .send({ file_id: fileId, project_id: projectId });
+
+      expect(ingestRes.status).toBe(202);
+
+      const doc = await waitForDocumentStatus(
+        ingestRes.body.id as string,
+        'failed'
+      );
+      expect(doc.status).toBe('failed');
+      expect((doc.metadata as Record<string, unknown>).failure_reason).toBe(
+        'FILE_PARSE_FAILED'
+      );
+    });
+
+    test('GET /documents/:id returns status while processing', async () => {
+      const fileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'inflight.pdf',
+        contentType: 'application/pdf',
+      });
+
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest')
+        .send({ file_id: fileId, project_id: projectId });
+
+      expect(ingestRes.status).toBe(202);
+      const docId = ingestRes.body.id as string;
+
+      // Immediately after enqueue, document is visible with a lifecycle status
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${docId}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(['pending', 'processing', 'ready']).toContain(getRes.body.status);
     });
 
     test('returns 401 for unauthenticated request', async () => {

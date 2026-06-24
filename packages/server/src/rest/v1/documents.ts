@@ -3,8 +3,8 @@ import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import {
   createDocument,
-  createDocumentFromFile,
   deleteDocument,
+  enqueueDocumentIngestion,
   getDocument,
   getDocumentTags,
   listDocuments,
@@ -425,7 +425,7 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     return;
   }
 
-  const result = await createDocumentFromFile({
+  const result = await enqueueDocumentIngestion({
     fileId: body.fileId,
     projectId: project.id,
     pathPrefix: body.pathPrefix,
@@ -435,7 +435,7 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     chunkOverlap: body.chunkOverlap,
   });
 
-  ctx.status = 201;
+  ctx.status = 202;
   ctx.body = result;
 });
 

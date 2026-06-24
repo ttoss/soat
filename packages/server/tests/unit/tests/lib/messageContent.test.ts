@@ -47,6 +47,7 @@ const createDocumentResult = (overrides?: {
     title: 'Test Document',
     metadata: undefined,
     tags: overrides?.tags,
+    status: 'ready' as const,
     content: overrides?.content ?? 'document content',
     createdAt: new Date(),
     updatedAt: new Date(),
