@@ -15,6 +15,7 @@ Use orchestrations when you know the exact steps in advance and want determinist
 
 ## Related Tutorials
 
+- [Conditional Branching in Orchestrations](/docs/tutorials/conditional-orchestration) — condition nodes, branch routing, and `skipped` node executions
 - [Orchestrate a Sonnet - Step 6 (Create the orchestration graph)](/docs/tutorials/orchestrate-a-sonnet#step-6--create-the-orchestration-graph)
 - [Orchestrate a Sonnet - Step 7 (Start a run)](/docs/tutorials/orchestrate-a-sonnet#step-7--start-a-run)
 - [Orchestrate a Sonnet - Step 9 (Inspect the run state)](/docs/tutorials/orchestrate-a-sonnet#step-9--inspect-the-run-state)
@@ -174,7 +175,7 @@ soat validate-orchestration \
 
 Every time a node runs, the engine persists an entry in the run's `node_executions` array capturing the resolved `input_mapping` it received, the `output` artifact it produced, its `status`, and — on failure — the structured `error`. The record is written even when a node throws, so a failed run is fully debuggable: `get-orchestration-run` shows **which** node failed, **what** input it received, and **why**, instead of only the final state plus a single error message.
 
-When a run completes, nodes that were never reached (because they were on an un-traversed condition branch or an activation group that never fired) are recorded with `status: "skipped"`. Their `input`, `output`, `started_at`, and `completed_at` fields are all `null`. This makes every declared node visible in the execution trace regardless of which branches ran.
+When a run completes, nodes that were never reached (because they were on an un-traversed condition branch or an activation group that never fired) are recorded with `status: "skipped"`. Their `input`, `output`, `started_at`, and `completed_at` fields are all `null`. This makes every declared node visible in the execution trace regardless of which branches ran. Walk through it end to end in [Conditional Branching in Orchestrations](/docs/tutorials/conditional-orchestration).
 
 ```json
 {
@@ -364,6 +365,8 @@ Both `branch_a` and `branch_b` run concurrently after `start` completes:
 ```
 
 ### Condition-based routing
+
+A `condition` node emits a string label; edges carry `condition: "<label>"` to select the active branch. The unselected branch's nodes are recorded as `skipped`. For a runnable walkthrough, see [Conditional Branching in Orchestrations](/docs/tutorials/conditional-orchestration).
 
 ```json
 {
