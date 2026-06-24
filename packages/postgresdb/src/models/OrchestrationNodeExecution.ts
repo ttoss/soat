@@ -31,10 +31,10 @@ export class OrchestrationNodeExecution extends Model {
   declare nodeType: string | null;
 
   @Column({
-    type: DataType.ENUM('completed', 'failed', 'requires_action'),
+    type: DataType.ENUM('completed', 'failed', 'requires_action', 'skipped'),
     allowNull: false,
   })
-  declare status: 'completed' | 'failed' | 'requires_action';
+  declare status: 'completed' | 'failed' | 'requires_action' | 'skipped';
 
   @Column({ type: DataType.JSONB, allowNull: true })
   declare input: object | null;

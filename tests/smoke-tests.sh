@@ -827,6 +827,39 @@ if ! printf '%s\n' "$CANCEL_RUN_RESP" | jq -e '.status == "cancelled"' >/dev/nul
 fi
 echo "Cancel run: OK"
 
+echo "--- Condition-branch skipped node executions ---"
+COND_ORCH_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-cond-skip" \
+  --nodes '[{"id":"check","type":"condition","expression":{"if":[{">": [{"var":"score"},0.8]},"high","low"]}},{"id":"high_path","type":"transform","expression":"high-ran","output_mapping":{"result":"state.high"}},{"id":"low_path","type":"transform","expression":"low-ran","output_mapping":{"result":"state.low"}}]' \
+  --edges '[{"from":"check","to":"high_path","condition":"high"},{"from":"check","to":"low_path","condition":"low"}]')
+COND_ORCH_ID=$(printf '%s\n' "$COND_ORCH_RESP" | jq -r '.id')
+if [ -z "$COND_ORCH_ID" ] || [ "$COND_ORCH_ID" = "null" ]; then
+  echo "Failed to create condition-skip orchestration"
+  printf '%s\n' "$COND_ORCH_RESP"
+  exit 1
+fi
+
+COND_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
+  --orchestration-id "$COND_ORCH_ID" \
+  --input '{"score":0.9}')
+if ! printf '%s\n' "$COND_RUN_RESP" | jq -e '.status == "completed"' >/dev/null 2>&1; then
+  echo "Condition-skip run did not complete"
+  printf '%s\n' "$COND_RUN_RESP"
+  exit 1
+fi
+if ! printf '%s\n' "$COND_RUN_RESP" | jq -e '
+  (.node_executions | map(select(.node_id == "high_path")) | .[0].status) == "completed" and
+  (.node_executions | map(select(.node_id == "low_path")) | .[0].status) == "skipped" and
+  (.node_executions | map(select(.node_id == "low_path")) | .[0].started_at) == null
+' >/dev/null 2>&1; then
+  echo "Condition-skip run did not record expected skipped node"
+  printf '%s\n' "$COND_RUN_RESP" | jq '.node_executions'
+  exit 1
+fi
+SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI delete-orchestration --orchestration-id "$COND_ORCH_ID"
+echo "Condition-branch skipped node executions: OK"
+
 echo "--- Deleting orchestrations ---"
 SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI delete-orchestration --orchestration-id "$ORCH_ID"
 SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI delete-orchestration --orchestration-id "$HUMAN_ORCH_ID"

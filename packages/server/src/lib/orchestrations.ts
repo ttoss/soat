@@ -84,7 +84,7 @@ export type MappedOrchestration = {
 export type MappedNodeExecution = {
   nodeId: string;
   nodeType: string | null;
-  status: 'completed' | 'failed' | 'requires_action';
+  status: 'completed' | 'failed' | 'requires_action' | 'skipped';
   input: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
   error: object | null;

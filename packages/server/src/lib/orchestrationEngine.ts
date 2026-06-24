@@ -11,6 +11,7 @@ import {
 import {
   buildRunError,
   executeAndRecordNode,
+  recordSkippedNodeExecutions,
 } from './orchestrationNodeRecorder';
 import {
   applyHumanInputToState,
@@ -251,6 +252,9 @@ const executeRunLoop = async (args: {
     }
 
     if (runStatus === 'running') runStatus = 'completed';
+    if (runStatus === 'completed') {
+      await recordSkippedNodeExecutions({ runRecord, nodes });
+    }
   } catch (error: unknown) {
     runStatus = 'failed';
     runError = buildRunError(error);

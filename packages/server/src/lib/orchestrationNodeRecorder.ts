@@ -19,11 +19,11 @@ const recordNodeExecution = async (args: {
   runRecord: InstanceType<typeof db.OrchestrationRun>;
   nodeId: string;
   nodeType: string | null;
-  status: 'completed' | 'failed' | 'requires_action';
+  status: 'completed' | 'failed' | 'requires_action' | 'skipped';
   input: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
   error: object | null;
-  startedAt: Date;
+  startedAt: Date | null;
 }): Promise<void> => {
   await db.OrchestrationNodeExecution.create({
     runId: args.runRecord.id as number,
@@ -34,7 +34,7 @@ const recordNodeExecution = async (args: {
     output: args.output,
     error: args.error,
     startedAt: args.startedAt,
-    completedAt: new Date(),
+    completedAt: args.status === 'skipped' ? null : new Date(),
   });
 };
 
@@ -121,4 +121,36 @@ export const executeAndRecordNode = async (args: {
     });
     throw error;
   }
+};
+
+export const recordSkippedNodeExecutions = async (args: {
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  nodes: OrchestrationNode[];
+}): Promise<void> => {
+  const executed = await db.OrchestrationNodeExecution.findAll({
+    where: { runId: args.runRecord.id as number },
+    attributes: ['nodeId'],
+  });
+  const executedIds = new Set(
+    executed.map((e) => {
+      return e.nodeId;
+    })
+  );
+  const skipped = args.nodes.filter((n) => {
+    return !executedIds.has(n.id);
+  });
+  await Promise.all(
+    skipped.map((n) => {
+      return recordNodeExecution({
+        runRecord: args.runRecord,
+        nodeId: n.id,
+        nodeType: n.type,
+        status: 'skipped',
+        input: null,
+        output: null,
+        error: null,
+        startedAt: null,
+      });
+    })
+  );
 };
