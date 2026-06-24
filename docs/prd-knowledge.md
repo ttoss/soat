@@ -6,6 +6,7 @@
 | ---------------------------------- | -------------- | ------------------------------------------------------------------------------------------------ |
 | `knowledge.ts` lib                 | ✅ Implemented | `searchKnowledge()`, `resolveDocumentSearch()`, `mapDocument()`, types                           |
 | `POST /api/v1/knowledge/search`    | ✅ Implemented | Document search works end-to-end with auth, policy, validation                                   |
+| Chunk-level document search        | ✅ Implemented | Search runs against `DocumentChunk.embedding`, not `Document`; results carry `chunk_id` and `page` (issue #244 / PR #245) |
 | OpenAPI spec (`knowledge.yaml`)    | ✅ Implemented | `searchKnowledge` operationId, `KnowledgeResult` schema                                          |
 | Permission (`SearchKnowledge`)     | ✅ Implemented | `knowledge.json` with `knowledge:SearchKnowledge`                                                |
 | Router mounted in `index.ts`       | ✅ Implemented | Knowledge routes registered                                                                      |
@@ -33,6 +34,13 @@
 - `SearchKnowledge` permission, OpenAPI spec, module docs
 - `search-knowledge` soat-tool (auto-generated from OpenAPI)
 - Migration: `documentSearch.ts` removed; `documents.ts` re-exports from `knowledge.ts`
+
+> **Update (DocumentChunk model, issue #244):** Document search is now **chunk-level**. The
+> `embedding` column moved off `Document` onto a new `DocumentChunk` model — one `Document`
+> has many chunks, each with its own pgvector embedding. `resolveDocumentSearch()` runs the
+> cosine search against `DocumentChunk.embedding` (joined back to `Document` → `File`), and
+> each document result carries `chunk_id` and `page` so matches can cite a specific page.
+> A plain-text document is the degenerate `N=1` case (one chunk, `page = null`).
 
 ---
 
@@ -368,6 +376,8 @@ Vector/hybrid mode (results ranked by score):
     {
       "source_type": "document",
       "document_id": "doc_42",
+      "chunk_id": "dchunk_19",
+      "page": 3,
       "file_id": "fil_07",
       "content": "Communication policy: all billing inquiries should be handled via email...",
       "score": 0.82
@@ -524,13 +534,17 @@ The migration is **already done**. This section is kept for historical context.
 ```
 src/lib/knowledge.ts
 ├── searchKnowledge()          — public: unified search across documents and memories, merged by score
-├── resolveDocumentSearch()    — exported: document vector search with policy/path/id filters
+├── resolveDocumentSearch()    — exported: chunk-level document vector search with policy/path/id filters
 ├── mapDocument()              — exported: shared mapper for document CRUD
-├── mapRawDocument()           — private: maps DB row + reads file content
+├── mapChunkResult()           — private: maps a DocumentChunk row (joined to Document → File); content comes from the chunk, not disk; adds chunk_id + page
 ├── buildDocWhere()            — private: builds Sequelize where for document IDs
 ├── buildFileInclude()         — private: builds File include with project/path filters
 ├── filterByScore()            — private: filters results below min_score
 └── types                      — KnowledgeResult, DocumentQueryConfig, QueryDocumentResult
+
+Document search queries the `DocumentChunk` table (`"DocumentChunk"."embedding" <=> queryEmbedding`),
+joining `DocumentChunk → Document → File → Project`. The previous `mapRawDocument()` path, which
+read file contents from disk per result, has been removed — chunk content lives in the row.
 
 src/lib/knowledgeMemory.ts
 ├── resolveMemorySearch()      — exported: cosine search against MemoryEntry table
@@ -569,7 +583,7 @@ The knowledge module is designed to accommodate additional retrieval strategies:
 
 The knowledge module owns **no tables**. It queries:
 
-- `Document` + `File` (from the documents module) — filtered by paths, tags, document IDs ✅
+- `DocumentChunk` + `Document` + `File` (from the documents module) — cosine search on `DocumentChunk.embedding`, filtered by paths, tags, document IDs; results carry `chunk_id` + `page` ✅
 - `Memory` + `MemoryEntry` (from the memory module) — filtered by `memory_ids` and `memory_tags` (glob) ✅
 - `MemoryEntity` + `MemoryEntryEntity` (from the memory module) — entity graph filters ❌ (Phase 3; depends on prd-memories.md Phase 5)
 
