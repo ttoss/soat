@@ -1,4 +1,7 @@
+import { db } from 'src/db';
 import { DomainError } from 'src/errors';
+import * as agentGenerationModule from 'src/lib/agentGeneration';
+import type { GenerationResult } from 'src/lib/agentGenerationHelpers';
 import {
   applyInputMapping,
   applyOutputMapping,
@@ -14,6 +17,7 @@ import {
   executeWebhookNode,
 } from 'src/lib/orchestrationNodeExecutors';
 import type { OrchestrationNode } from 'src/lib/orchestrations';
+import * as toolsModule from 'src/lib/tools';
 
 const makeNode = (
   overrides: Partial<OrchestrationNode> = {}
@@ -401,6 +405,131 @@ describe('executeDelayNode', () => {
     expect(result).toEqual({
       kind: 'artifact',
       artifact: { waited: 'PT0H0M0S' },
+    });
+  });
+});
+
+// ── Node executor success/error branches (coverage) ────────────────────────
+
+describe('node executor success and error branches', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  const makeGen = (content: string): GenerationResult => {
+    return {
+      id: 'gen_1',
+      traceId: 'trc_1',
+      status: 'completed',
+      output: { model: 'test-model', content, finishReason: 'stop' },
+    };
+  };
+
+  describe('executeAgentNode (mocked generation)', () => {
+    test('parses JSON content into the artifact when outputSchema is set', async () => {
+      jest
+        .spyOn(agentGenerationModule, 'createGeneration')
+        .mockResolvedValueOnce(makeGen('{"foo":"bar"}'));
+      const result = await executeAgentNode({
+        node: makeNode({
+          type: 'agent',
+          agentId: 'agt_1',
+          outputSchema: { type: 'object' },
+          inputMapping: { topic: { var: 'subject' } },
+        }),
+        state: { subject: 'cats' },
+        projectIds: [1],
+        traceId: null,
+      });
+      expect(result).toEqual({ kind: 'artifact', artifact: { foo: 'bar' } });
+    });
+
+    test('falls back to { content } when JSON parsing fails', async () => {
+      jest
+        .spyOn(agentGenerationModule, 'createGeneration')
+        .mockResolvedValueOnce(makeGen('not json'));
+      const result = await executeAgentNode({
+        node: makeNode({
+          type: 'agent',
+          agentId: 'agt_1',
+          outputSchema: { type: 'object' },
+        }),
+        state: {},
+        projectIds: [1],
+        traceId: null,
+      });
+      expect(result).toEqual({
+        kind: 'artifact',
+        artifact: { content: 'not json' },
+      });
+    });
+
+    test('returns { content } when no outputSchema is provided', async () => {
+      jest
+        .spyOn(agentGenerationModule, 'createGeneration')
+        .mockResolvedValueOnce(makeGen('hello'));
+      const result = await executeAgentNode({
+        node: makeNode({ type: 'agent', agentId: 'agt_1' }),
+        state: {},
+        projectIds: [1],
+        traceId: null,
+      });
+      expect(result).toEqual({
+        kind: 'artifact',
+        artifact: { content: 'hello' },
+      });
+    });
+
+    test('throws DomainError when generation returns a stream', async () => {
+      jest
+        .spyOn(agentGenerationModule, 'createGeneration')
+        .mockResolvedValueOnce(new ReadableStream());
+      await expect(
+        executeAgentNode({
+          node: makeNode({ type: 'agent', agentId: 'agt_1' }),
+          state: {},
+          projectIds: [1],
+          traceId: null,
+        })
+      ).rejects.toThrow(DomainError);
+    });
+  });
+
+  describe('executeToolNode (mocked callTool)', () => {
+    test('wraps a non-object tool result as { result }', async () => {
+      jest.spyOn(toolsModule, 'callTool').mockResolvedValueOnce(42);
+      const result = await executeToolNode({
+        node: makeNode({ type: 'tool', toolId: 'tool_x' }),
+        state: {},
+        projectIds: [1],
+      });
+      expect(result).toEqual({ kind: 'artifact', artifact: { result: 42 } });
+    });
+
+    test('uses an object tool result directly as the artifact', async () => {
+      jest.spyOn(toolsModule, 'callTool').mockResolvedValueOnce({ a: 1 });
+      const result = await executeToolNode({
+        node: makeNode({
+          type: 'tool',
+          toolId: 'tool_x',
+          inputMapping: { q: { var: 'query' } },
+        }),
+        state: { query: 'hi' },
+        projectIds: [1],
+      });
+      expect(result).toEqual({ kind: 'artifact', artifact: { a: 1 } });
+    });
+  });
+
+  describe('executeMemoryWriteNode (mocked db)', () => {
+    test('throws DomainError when the memory is not found', async () => {
+      jest.spyOn(db.Memory, 'findOne').mockResolvedValueOnce(null);
+      await expect(
+        executeMemoryWriteNode({
+          node: makeNode({ type: 'memory_write', memoryId: 'mem_missing' }),
+          state: {},
+        })
+      ).rejects.toThrow(DomainError);
     });
   });
 });
