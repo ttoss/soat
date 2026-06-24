@@ -359,6 +359,7 @@ Vector/hybrid mode (results ranked by score):
     {
       "source_type": "memory",
       "memory_id": "mem_abc",
+      "memory_name": "Customer Preferences",
       "entry_id": "me_001",
       "content": "Customer prefers email over phone calls, especially for billing inquiries",
       "score": 0.89,
@@ -385,6 +386,7 @@ Vector/hybrid mode (results ranked by score):
     {
       "source_type": "memory",
       "memory_id": "mem_def",
+      "memory_name": "Customer Profile",
       "entry_id": "me_003",
       "content": "Customer timezone is EST",
       "score": 0.52,
@@ -402,6 +404,7 @@ Graph-only mode (results ordered by `updated_at`, no score):
     {
       "source_type": "memory",
       "memory_id": "mem_abc",
+      "memory_name": "Customer Preferences",
       "entry_id": "me_001",
       "content": "Pedro owns Company X",
       "entities": [
@@ -425,6 +428,7 @@ Graph-only mode (results ordered by `updated_at`, no score):
     {
       "source_type": "memory",
       "memory_id": "mem_def",
+      "memory_name": "Customer Profile",
       "entry_id": "me_007",
       "content": "Pedro prefers email communication",
       "entities": [

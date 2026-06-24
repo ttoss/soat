@@ -48,10 +48,11 @@ A `KnowledgeResult` is a discriminated union on `source_type`. All results share
 
 #### Memory result (`source_type: "memory"`)
 
-| Field       | Type     | Description                                    |
-| ----------- | -------- | ---------------------------------------------- |
-| `entry_id`  | `string` | Public memory entry ID (`me_` prefix)          |
-| `memory_id` | `string` | Public ID of the parent memory (`mem_` prefix) |
+| Field         | Type     | Description                                    |
+| ------------- | -------- | ---------------------------------------------- |
+| `entry_id`    | `string` | Public memory entry ID (`me_` prefix)          |
+| `memory_id`   | `string` | Public ID of the parent memory (`mem_` prefix) |
+| `memory_name` | `string` | Human-readable name of the parent memory       |
 
 ## Key Concepts
 

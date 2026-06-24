@@ -154,6 +154,7 @@ describe('Knowledge', () => {
       expect(memResult).toBeDefined();
       expect(memResult.entry_id).toBeDefined();
       expect(memResult.memory_id).toBe(memoryId);
+      expect(memResult.memory_name).toBe('Knowledge Test Memory');
       expect(memResult.content).toBe('The sky is blue on a clear day.');
     });
 

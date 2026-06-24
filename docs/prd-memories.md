@@ -240,7 +240,7 @@ A memory entry is an atomic piece of knowledge stored inside a memory. Entries a
 - Entries are **memory-scoped** — deduplication runs within a single memory's entries. Different memories can hold related facts independently.
 - Entries are **automatically deduplicated** — the write algorithm prevents duplicate and near-duplicate entries within a memory.
 - Entries are **mutable** — they can be merged with new information or manually updated.
-- Entries are **embedded** — each entry has an embedding vector computed from its content, enabling semantic search.
+- Entries are **embedded (best-effort)** — each entry gets an embedding vector computed from its content for semantic search. Embedding is non-fatal: if the embedding provider is unavailable, the entry is still stored with a `null` embedding (and dedup is skipped for that write). The column is nullable, mirroring `DocumentChunk.embedding`. A null-embedding entry is not returned by semantic search until it is re-embedded (e.g. via a content update).
 
 ### Memory Entity
 
@@ -313,8 +313,10 @@ Every write to a memory — manual, agent, or extraction — goes through the sa
 ```
 Input: content (string), memory_id
 
-STEP 1 — EMBED
+STEP 1 — EMBED (best-effort)
   Generate embedding for the content.
+  If embedding fails, continue with a null embedding: skip STEP 2/3 dedup
+  and create the entry directly (non-fatal, mirrors document chunk ingestion).
 
 STEP 2 — SEARCH
   Search existing entries in this memory by cosine similarity.
@@ -517,7 +519,7 @@ The system embeds the latest user message and calls `searchKnowledge()` with the
 | memoryId  | INTEGER      | FK → Memory, NOT NULL          |
 | content   | TEXT         | NOT NULL                       |
 | source    | VARCHAR(20)  | NOT NULL, enum                 |
-| embedding | VECTOR(EMBEDDING_DIMENSIONS) | NOT NULL          |
+| embedding | VECTOR(EMBEDDING_DIMENSIONS) | NULL              |
 | createdAt | TIMESTAMP    | NOT NULL                       |
 | updatedAt | TIMESTAMP    | NOT NULL                       |
 

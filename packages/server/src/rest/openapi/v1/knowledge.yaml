@@ -217,6 +217,7 @@ components:
         - source_type
         - entry_id
         - memory_id
+        - memory_name
         - content
         - created_at
         - updated_at
@@ -236,6 +237,10 @@ components:
           type: string
           description: Public ID of the parent memory
           example: 'mem_V1StGXR8Z5jdHi6B'
+        memory_name:
+          type: string
+          description: Human-readable name of the parent memory
+          example: 'Customer Preferences'
         content:
           type: string
           description: Text content of the memory entry

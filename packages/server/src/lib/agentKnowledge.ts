@@ -55,7 +55,7 @@ const formatResult = (
   if (r.sourceType === 'document') {
     return `[Document: ${r.path ?? r.filename}]\n${r.content}`;
   }
-  return `[Memory: ${r.memoryId}]\n${r.content}`;
+  return `[Memory: ${r.memoryName}]\n${r.content}`;
 };
 
 export const buildKnowledgeMessages = async (args: {

@@ -15,6 +15,7 @@ export type MemoryKnowledgeResult = {
   sourceType: 'memory';
   entryId: string;
   memoryId: string;
+  memoryName: string;
   content: string;
   score?: number;
   createdAt: Date;
@@ -92,10 +93,12 @@ const resolveMemorySearchBySemantic = async (args: {
     const distance = parseFloat(
       (entry.getDataValue('distance') as string) ?? '1'
     );
+    const memory = entry.memory as InstanceType<typeof db.Memory>;
     return {
       sourceType: 'memory' as const,
       entryId: entry.publicId,
-      memoryId: (entry.memory as InstanceType<typeof db.Memory>).publicId,
+      memoryId: memory.publicId,
+      memoryName: memory.name,
       content: entry.content,
       score: 1 - distance,
       createdAt: entry.createdAt,
@@ -164,10 +167,12 @@ export const resolveMemorySearch = async (args: {
   });
 
   return entries.map((entry) => {
+    const memory = entry.memory as InstanceType<typeof db.Memory>;
     return {
       sourceType: 'memory' as const,
       entryId: entry.publicId,
-      memoryId: (entry.memory as InstanceType<typeof db.Memory>).publicId,
+      memoryId: memory.publicId,
+      memoryName: memory.name,
       content: entry.content,
       createdAt: entry.createdAt,
       updatedAt: entry.updatedAt,
