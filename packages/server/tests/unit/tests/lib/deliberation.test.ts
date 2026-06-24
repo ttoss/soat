@@ -1,4 +1,5 @@
 import { maybeApplyDebateToResult, runDebate } from 'src/lib/deliberation';
+import * as generationsModule from 'src/lib/generations';
 import * as reasoningCompletionModule from 'src/lib/reasoningCompletion';
 
 const mockRunReasoningCompletion = jest.spyOn(
@@ -6,9 +7,183 @@ const mockRunReasoningCompletion = jest.spyOn(
   'runReasoningCompletion'
 );
 
+const mockCreateGenerationRecord = jest.spyOn(
+  generationsModule,
+  'createGenerationRecord'
+);
+
+const mockUpdateGenerationRecord = jest.spyOn(
+  generationsModule,
+  'updateGenerationRecord'
+);
+
 describe('deliberation lib', () => {
   afterEach(() => {
     jest.clearAllMocks();
+  });
+
+  describe('child generation records (observability context)', () => {
+    const fakeGeneration = {
+      id: 'gen_child01',
+      projectId: 'prj_01',
+      agentId: 'agent_debate01',
+      traceId: 'trc_01',
+      initiatorGenerationId: 'gen_parent01',
+      startedByPrincipalType: null,
+      startedByPrincipalId: null,
+      status: 'in_progress',
+      startedAt: new Date(),
+      completedAt: null,
+      lastActivityAt: null,
+      stopReason: null,
+      error: null,
+      metadata: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    beforeEach(() => {
+      mockCreateGenerationRecord.mockResolvedValue(fakeGeneration);
+      mockUpdateGenerationRecord.mockResolvedValue({
+        ...fakeGeneration,
+        status: 'completed',
+      });
+    });
+
+    test('creates a child generation record for each perspective and synthesis when observability context is provided', async () => {
+      mockRunReasoningCompletion
+        .mockResolvedValueOnce('advocate text')
+        .mockResolvedValueOnce('skeptic text')
+        .mockResolvedValueOnce('synthesis result');
+
+      await runDebate({
+        agentId: 'agent_debate01',
+        projectIds: [1],
+        messages: [{ role: 'user', content: 'question' }],
+        temperature: null,
+        reasoning: { mode: 'debate', perspectives: 2 },
+        traceId: 'trc_01',
+        projectId: 1,
+        initiatorGenerationId: 'gen_parent01',
+      });
+
+      // 2 perspectives + 1 synthesis = 3 child records created
+      expect(mockCreateGenerationRecord).toHaveBeenCalledTimes(3);
+      // All share the same traceId and initiatorGenerationId
+      expect(mockCreateGenerationRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          traceId: 'trc_01',
+          agentId: 'agent_debate01',
+          projectId: 1,
+          initiatorGenerationId: 'gen_parent01',
+        })
+      );
+    });
+
+    test('marks perspective child generation completed with perspective name in metadata', async () => {
+      mockRunReasoningCompletion
+        .mockResolvedValueOnce('advocate text')
+        .mockResolvedValueOnce('skeptic text')
+        .mockResolvedValueOnce('synthesis result');
+
+      await runDebate({
+        agentId: 'agent_debate01',
+        projectIds: [1],
+        messages: [{ role: 'user', content: 'question' }],
+        temperature: null,
+        reasoning: { mode: 'debate', perspectives: 2 },
+        traceId: 'trc_01',
+        projectId: 1,
+        initiatorGenerationId: 'gen_parent01',
+      });
+
+      // First two updates are perspective completions
+      const perspectiveUpdate = mockUpdateGenerationRecord.mock.calls.find(
+        ([args]) =>
+          (args.metadata?.reasoning as Record<string, unknown> | undefined)
+            ?.perspective === 'Advocate'
+      );
+      expect(perspectiveUpdate).toBeDefined();
+      expect(perspectiveUpdate![0]).toMatchObject({
+        status: 'completed',
+        stopReason: 'stop',
+        metadata: { reasoning: { perspective: 'Advocate', output: 'advocate text' } },
+      });
+    });
+
+    test('marks synthesis child generation completed with "synthesis" perspective in metadata', async () => {
+      mockRunReasoningCompletion
+        .mockResolvedValueOnce('advocate text')
+        .mockResolvedValueOnce('skeptic text')
+        .mockResolvedValueOnce('synthesis result');
+
+      await runDebate({
+        agentId: 'agent_debate01',
+        projectIds: [1],
+        messages: [{ role: 'user', content: 'question' }],
+        temperature: null,
+        reasoning: { mode: 'debate', perspectives: 2 },
+        traceId: 'trc_01',
+        projectId: 1,
+        initiatorGenerationId: 'gen_parent01',
+      });
+
+      const synthesisUpdate = mockUpdateGenerationRecord.mock.calls.find(
+        ([args]) =>
+          (args.metadata?.reasoning as Record<string, unknown> | undefined)
+            ?.perspective === 'synthesis'
+      );
+      expect(synthesisUpdate).toBeDefined();
+      expect(synthesisUpdate![0]).toMatchObject({
+        status: 'completed',
+        stopReason: 'stop',
+        metadata: { reasoning: { perspective: 'synthesis', output: 'synthesis result' } },
+      });
+    });
+
+    test('marks perspective child generation failed when perspective call throws', async () => {
+      mockRunReasoningCompletion
+        .mockRejectedValueOnce(new Error('provider down'))
+        .mockResolvedValueOnce('skeptic text')
+        .mockResolvedValueOnce('synthesis');
+
+      await runDebate({
+        agentId: 'agent_debate01',
+        projectIds: [1],
+        messages: [{ role: 'user', content: 'question' }],
+        temperature: null,
+        reasoning: { mode: 'debate', perspectives: 2 },
+        traceId: 'trc_01',
+        projectId: 1,
+        initiatorGenerationId: 'gen_parent01',
+      });
+
+      const failedUpdate = mockUpdateGenerationRecord.mock.calls.find(
+        ([args]) => args.status === 'failed'
+      );
+      expect(failedUpdate).toBeDefined();
+      expect(failedUpdate![0]).toMatchObject({
+        status: 'failed',
+        completedAt: expect.any(Date),
+      });
+    });
+
+    test('does not create child generation records when no observability context is provided', async () => {
+      mockRunReasoningCompletion
+        .mockResolvedValueOnce('advocate text')
+        .mockResolvedValueOnce('skeptic text')
+        .mockResolvedValueOnce('synthesis result');
+
+      await runDebate({
+        agentId: 'agent_debate01',
+        projectIds: [1],
+        messages: [{ role: 'user', content: 'question' }],
+        temperature: null,
+        reasoning: { mode: 'debate', perspectives: 2 },
+      });
+
+      expect(mockCreateGenerationRecord).not.toHaveBeenCalled();
+    });
   });
 
   describe('runDebate', () => {
