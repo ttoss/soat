@@ -2,7 +2,10 @@ import fs from 'node:fs';
 
 import * as pdfModule from 'src/lib/pdf';
 
-import { ONE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
+import {
+  ONE_PAGE_PDF_BUFFER,
+  THREE_PAGE_PDF_BUFFER,
+} from '../../fixtures/pdf';
 import { storageDir } from '../../setupTests';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -480,6 +483,30 @@ describe('Documents', () => {
       expect(response.body.id).toMatch(/^doc_/);
       expect(response.body.chunk_count).toBe(1);
       expect(response.body.project_id).toBe(projectId);
+    });
+
+    test('3-page PDF produces chunk_count=3 with default page strategy', async () => {
+      extractPdfPagesSpy.mockResolvedValueOnce([
+        'Page 1: Introduction',
+        'Page 2: Methods',
+        'Page 3: Conclusion',
+      ]);
+
+      const uploadRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', THREE_PAGE_PDF_BUFFER, {
+          filename: 'multi-page.pdf',
+          contentType: 'application/pdf',
+        })
+        .field('project_id', projectId);
+      expect(uploadRes.status).toBe(201);
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/from-file')
+        .send({ file_id: uploadRes.body.id, project_id: projectId });
+
+      expect(response.status).toBe(201);
+      expect(response.body.chunk_count).toBe(3);
     });
 
     test('returns 401 for unauthenticated request', async () => {
