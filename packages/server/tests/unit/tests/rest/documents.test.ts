@@ -753,7 +753,7 @@ describe('Documents', () => {
       expect(response.body.error.code).toBe('UNSUPPORTED_FILE_TYPE');
     });
 
-    test('wait=true returns 201 with status ready synchronously', async () => {
+    test('?async=false returns 201 with status ready synchronously', async () => {
       const fileId = await uploadFile({
         buffer: ONE_PAGE_PDF_BUFFER,
         filename: 'sync-ingest.pdf',
@@ -761,8 +761,8 @@ describe('Documents', () => {
       });
 
       const ingestRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/documents/ingest')
-        .send({ file_id: fileId, project_id: projectId, wait: true });
+        .post('/api/v1/documents/ingest?async=false')
+        .send({ file_id: fileId, project_id: projectId });
 
       expect(ingestRes.status).toBe(201);
       expect(ingestRes.body.status).toBe('ready');
@@ -771,7 +771,7 @@ describe('Documents', () => {
       ).toBeGreaterThan(0);
     });
 
-    test('wait=true sets failure reason on unparseable file', async () => {
+    test('?async=false sets failure reason on unparseable file', async () => {
       extractPdfPagesSpy.mockResolvedValueOnce([]);
 
       const fileId = await uploadFile({
@@ -781,8 +781,8 @@ describe('Documents', () => {
       });
 
       const ingestRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/documents/ingest')
-        .send({ file_id: fileId, project_id: projectId, wait: true });
+        .post('/api/v1/documents/ingest?async=false')
+        .send({ file_id: fileId, project_id: projectId });
 
       expect(ingestRes.status).toBe(201);
       expect(ingestRes.body.status).toBe('failed');

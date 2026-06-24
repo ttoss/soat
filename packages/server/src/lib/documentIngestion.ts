@@ -209,11 +209,11 @@ const processDocumentIngestion = async (args: {
 };
 
 /**
- * Validate the file and create a Document record. When `wait` is true the
- * pipeline runs synchronously and the document is returned with `status=ready`
- * (HTTP 201). When `wait` is false (default) processing is deferred to the
- * next event loop tick and the document is returned with `status=pending`
- * (HTTP 202).
+ * Validate the file and create a Document record. When `async` is true
+ * (default) processing is deferred to the next event loop tick and the
+ * document is returned with `status=pending` (HTTP 202). When `async` is
+ * false the pipeline runs synchronously and the document is returned with
+ * `status=ready` (HTTP 201).
  */
 export const enqueueDocumentIngestion = async (args: {
   fileId: string;
@@ -223,14 +223,16 @@ export const enqueueDocumentIngestion = async (args: {
   chunkStrategy?: ChunkStrategy;
   chunkSize?: number;
   chunkOverlap?: number;
-  wait?: boolean;
+  async?: boolean;
 }) => {
+  const runAsync = args.async !== false;
+
   log(
-    'enqueueDocumentIngestion: fileId=%s projectId=%d strategy=%s wait=%s',
+    'enqueueDocumentIngestion: fileId=%s projectId=%d strategy=%s async=%s',
     args.fileId,
     args.projectId,
     args.chunkStrategy ?? 'page',
-    args.wait ?? false
+    runAsync
   );
 
   const file = await loadIngestibleFile(args.fileId);
@@ -258,12 +260,12 @@ export const enqueueDocumentIngestion = async (args: {
     chunkOverlap: args.chunkOverlap,
   };
 
-  if (args.wait) {
-    await processDocumentIngestion(pipelineArgs);
-  } else {
+  if (runAsync) {
     setImmediate(() => {
       void processDocumentIngestion(pipelineArgs);
     });
+  } else {
+    await processDocumentIngestion(pipelineArgs);
   }
 
   const fetched = await fetchIngestedDocById(docId);

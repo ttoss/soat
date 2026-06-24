@@ -74,7 +74,7 @@ Path examples:
 
 `POST /api/v1/documents/ingest` returns `202 Accepted` immediately by default. The document record is created with `status: pending` and chunk extraction + embedding run in the background. Poll `GET /api/v1/documents/:id` until `status` is `ready` or `failed`.
 
-Pass `wait: true` in the request body to block until processing completes. The endpoint then returns `201 Created` with `status: ready` (or `status: failed` on error) — no polling required. This is useful for small files or scripted workflows where latency is acceptable.
+Pass `?async=false` to block until processing completes. The endpoint then returns `201 Created` with `status: ready` (or `status: failed` on error) — no polling required. This is useful for small files or scripted workflows where latency is acceptable. (This mirrors the `?async=` toggle on `POST /api/v1/sessions/:id/generate`, except ingestion defaults to async.)
 
 **Lifecycle states:**
 

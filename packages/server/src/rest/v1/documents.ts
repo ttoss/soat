@@ -387,8 +387,10 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     chunkStrategy?: 'page' | 'whole' | 'size';
     chunkSize?: number;
     chunkOverlap?: number;
-    wait?: boolean;
   };
+
+  // Async by default; ?async=false runs synchronously and returns 201.
+  const isAsync = ctx.query['async'] !== 'false';
 
   if (!body.fileId) {
     ctx.status = 400;
@@ -434,10 +436,10 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     chunkStrategy: body.chunkStrategy,
     chunkSize: body.chunkSize,
     chunkOverlap: body.chunkOverlap,
-    wait: body.wait,
+    async: isAsync,
   });
 
-  ctx.status = body.wait ? 201 : 202;
+  ctx.status = isAsync ? 202 : 201;
   ctx.body = result;
 });
 
