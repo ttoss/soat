@@ -175,12 +175,21 @@ const resolveGenerationResult = async (args: {
 
   // Deep thinking: apply orchestrated reasoning BEFORE the completion result
   // is built, so the trace, event, and API response all carry the final text.
+  //
+  // The AI SDK's DefaultGenerateTextResult exposes `text` as a getter-only
+  // property. Wrapping it in a plain object lets orchestration freely mutate
+  // text/response without hitting the read-only descriptor.
+  const mutableResult = {
+    text: args.result.text,
+    response: args.result.response,
+  };
+
   await applyOrchestration({
     reasoningConfig: args.reasoningConfig,
     agentId: args.agentId,
     generationId: args.generationId,
     messages: args.allMessages,
-    result: args.result,
+    result: mutableResult,
     temperature: args.typedAgent.temperature as number | null,
   });
 
@@ -189,7 +198,12 @@ const resolveGenerationResult = async (args: {
     traceId: args.traceId,
     parentTraceId: args.parentTraceId ?? null,
     rootTraceId: args.rootTraceId ?? null,
-    result: args.result,
+    result: {
+      steps: args.result.steps,
+      finishReason: args.result.finishReason,
+      text: mutableResult.text,
+      response: mutableResult.response,
+    },
     typedAgent: args.typedAgent,
     agentId: args.agentId,
   });
