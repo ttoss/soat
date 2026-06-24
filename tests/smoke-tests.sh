@@ -415,13 +415,11 @@ echo "Search returned $SEARCH_COUNT result(s)."
 # 12b. Ingest a PDF file
 echo "--- Ingesting a PDF file ---"
 PDF_BASE64="JVBERi0xLjQKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PgplbmRvYmoKMiAwIG9iago8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PgplbmRvYmoKMyAwIG9iago8PC9UeXBlL1BhZ2UvUGFyZW50IDIgMCBSL01lZGlhQm94WzAgMCA2MTIgNzkyXS9Db250ZW50cyA0IDAgUi9SZXNvdXJjZXM8PC9Gb250PDwvRjEgNSAwIFI+Pj4+Pj4KZW5kb2JqCjQgMCBvYmoKPDwvTGVuZ3RoIDQ0Pj4Kc3RyZWFtCkJUIC9GMSAxMiBUZiAxMDAgNzAwIFRkIChIZWxsbyBXb3JsZCkgVGogRVQKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8L1R5cGUvRm9udC9TdWJ0eXBlL1R5cGUxL0Jhc2VGb250L0hlbHZldGljYT4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1NCAwMDAwMCBuIAowMDAwMDAwMTA1IDAwMDAwIG4gCjAwMDAwMDAyMTcgMDAwMDAgbiAKMDAwMDAwMDMwOCAwMDAwMCBuIAp0cmFpbGVyCjw8L1NpemUgNi9Sb290IDEgMCBSPj4Kc3RhcnR4cmVmCjM3MQolJUVPRg=="
-PDF_FILE=$(mktemp /tmp/smoke-test-XXXXXX.pdf)
-printf '%s' "$PDF_BASE64" | base64 -d > "$PDF_FILE"
-PDF_UPLOAD_RESP=$($SOAT_CLI upload-file \
+PDF_UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
   --project-id "$PROJECT_PUBLIC_ID" \
-  --file "$PDF_FILE" \
-  --filename smoke-test.pdf)
-rm -f "$PDF_FILE"
+  --filename smoke-test.pdf \
+  --content "$PDF_BASE64" \
+  --content_type application/pdf)
 PDF_FILE_ID=$(echo "$PDF_UPLOAD_RESP" | jq -r '.id')
 echo "Uploaded PDF file id: $PDF_FILE_ID"
 
@@ -438,15 +436,14 @@ if [ -z "$PDF_DOC_ID" ] || [ "$PDF_DOC_ID" = "null" ]; then
 fi
 echo "PDF ingestion: OK"
 
-# 12c. Ingest a Markdown file (exercises content-type dispatch + size chunking)
+# 12c. Ingest a Markdown file (exercises content-type dispatch)
 echo "--- Ingesting a text file ---"
-MD_FILE=$(mktemp /tmp/smoke-test-XXXXXX.md)
-printf '# Smoke Notes\n\nThis is an ingested markdown document.\n' > "$MD_FILE"
-MD_UPLOAD_RESP=$($SOAT_CLI upload-file \
+MD_BASE64=$(printf '# Smoke Notes\n\nThis is an ingested markdown document.\n' | base64 | tr -d '\n')
+MD_UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
   --project-id "$PROJECT_PUBLIC_ID" \
-  --file "$MD_FILE" \
-  --filename smoke-notes.md)
-rm -f "$MD_FILE"
+  --filename smoke-notes.md \
+  --content "$MD_BASE64" \
+  --content_type text/markdown)
 MD_FILE_ID=$(echo "$MD_UPLOAD_RESP" | jq -r '.id')
 MD_DOC_RESP=$($SOAT_CLI ingest-document \
   --project-id "$PROJECT_PUBLIC_ID" \
