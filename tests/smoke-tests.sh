@@ -425,7 +425,7 @@ rm -f "$PDF_FILE"
 PDF_FILE_ID=$(echo "$PDF_UPLOAD_RESP" | jq -r '.id')
 echo "Uploaded PDF file id: $PDF_FILE_ID"
 
-PDF_DOC_RESP=$($SOAT_CLI create-documents-from-file \
+PDF_DOC_RESP=$($SOAT_CLI ingest-document \
   --project-id "$PROJECT_PUBLIC_ID" \
   --file-id "$PDF_FILE_ID" \
   --path-prefix /smoke/)
@@ -433,16 +433,40 @@ PDF_DOC_ID=$(echo "$PDF_DOC_RESP" | jq -r '.id')
 PDF_CHUNK_COUNT=$(echo "$PDF_DOC_RESP" | jq -r '.chunk_count')
 echo "PDF document id: $PDF_DOC_ID chunk_count: $PDF_CHUNK_COUNT"
 if [ -z "$PDF_DOC_ID" ] || [ "$PDF_DOC_ID" = "null" ]; then
-  echo "ERROR: create-documents-from-file did not return a document id" >&2
+  echo "ERROR: ingest-document did not return a document id" >&2
   exit 1
 fi
 echo "PDF ingestion: OK"
+
+# 12c. Ingest a Markdown file (exercises content-type dispatch + size chunking)
+echo "--- Ingesting a text file ---"
+MD_FILE=$(mktemp /tmp/smoke-test-XXXXXX.md)
+printf '# Smoke Notes\n\nThis is an ingested markdown document.\n' > "$MD_FILE"
+MD_UPLOAD_RESP=$($SOAT_CLI upload-file \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --file "$MD_FILE" \
+  --filename smoke-notes.md)
+rm -f "$MD_FILE"
+MD_FILE_ID=$(echo "$MD_UPLOAD_RESP" | jq -r '.id')
+MD_DOC_RESP=$($SOAT_CLI ingest-document \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --file-id "$MD_FILE_ID" \
+  --path-prefix /smoke/ \
+  --chunk-strategy whole)
+MD_DOC_ID=$(echo "$MD_DOC_RESP" | jq -r '.id')
+echo "Markdown document id: $MD_DOC_ID chunk_count: $(echo "$MD_DOC_RESP" | jq -r '.chunk_count')"
+if [ -z "$MD_DOC_ID" ] || [ "$MD_DOC_ID" = "null" ]; then
+  echo "ERROR: ingest-document did not return a document id for markdown" >&2
+  exit 1
+fi
+echo "Text ingestion: OK"
 
 # 13. Delete documents
 echo "--- Deleting documents ---"
 $SOAT_CLI delete-document --document-id "$DOC1_ID"
 $SOAT_CLI delete-document --document-id "$DOC2_ID"
 $SOAT_CLI delete-document --document-id "$PDF_DOC_ID"
+$SOAT_CLI delete-document --document-id "$MD_DOC_ID"
 echo "Documents deleted."
 
 # 13b. Memories — CRUD + search

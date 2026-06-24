@@ -11,8 +11,8 @@ A Document is backed by a [File](./files.md) and associated with a project. When
 
 Documents can be created in two ways:
 
-- **Plain text** (`POST /documents`) — the entire content is stored as a single chunk.
-- **PDF ingestion** (`POST /documents/from-file`) — an uploaded PDF file is parsed page by page; each non-empty page becomes a separate chunk (configurable via `chunk_strategy`).
+- **Plain text** (`POST /documents`) — content is supplied inline. By default it is stored as a single chunk; pass `chunk_strategy` to split it.
+- **File ingestion** (`POST /documents/ingest`) — an already-uploaded file is parsed and chunked. The source format is detected from the file's content type: PDFs are parsed page by page (`application/pdf`); `text/plain` and `text/markdown` files are read as a single source. How the source is chunked is controlled by `chunk_strategy`.
 
 Documents are identified by an `id` prefixed with `doc_`. The internal database primary key is never returned.
 
@@ -43,13 +43,13 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 | `created_at` | string         | ISO 8601 creation timestamp                                                                                        |
 | `updated_at` | string         | ISO 8601 last-updated timestamp                                                                                    |
 
-### DocumentFromFileRecord (PDF ingestion response only)
+### IngestedDocumentRecord (file ingestion response only)
 
 Extends Document with:
 
-| Field         | Type   | Description                                         |
-| ------------- | ------ | --------------------------------------------------- |
-| `chunk_count` | number | Number of chunks (pages) created from the PDF       |
+| Field         | Type   | Description                                  |
+| ------------- | ------ | -------------------------------------------- |
+| `chunk_count` | number | Number of chunks created from the file       |
 
 ### DocumentChunk (internal)
 
@@ -77,18 +77,29 @@ Path examples:
 
 ## Key Concepts
 
-### PDF Ingestion and Chunking
+### File Ingestion and Chunking
 
-`POST /api/v1/documents/from-file` ingests an already-uploaded PDF file. The file must have `content_type: application/pdf` (set automatically when uploading via `POST /api/v1/files/upload` with a `.pdf` file).
+`POST /api/v1/documents/ingest` ingests an already-uploaded file (uploaded via `POST /api/v1/files/upload`). The source format is detected from the file's `content_type`:
 
-The server extracts text page-by-page and creates one Document with multiple DocumentChunks:
+| Content type     | How the source text is extracted |
+| ---------------- | -------------------------------- |
+| `application/pdf`| Parsed page-by-page; blank pages are dropped |
+| `text/plain`     | Read as a single source page     |
+| `text/markdown`  | Read as a single source page     |
 
-- **`chunk_strategy: page`** (default) — one chunk per non-empty page; `page_number` is set on each chunk.
-- **`chunk_strategy: whole`** — a single chunk with all pages joined by newlines.
+Any other content type is rejected with `UNSUPPORTED_FILE_TYPE` (`400`).
 
-Each chunk gets its own embedding vector, enabling fine-grained semantic search that can cite specific page numbers.
+The extracted text is then split into one or more DocumentChunks according to `chunk_strategy`:
 
-The response includes `chunk_count` — the number of chunks created (i.e., non-empty pages when using the default strategy).
+- **`chunk_strategy: page`** (default) — one chunk per source page; `page_number` is set on each chunk (PDF only — non-paged sources yield a single chunk).
+- **`chunk_strategy: whole`** — a single chunk with all source text joined by newlines.
+- **`chunk_strategy: size`** — fixed-size character windows with overlap, controlled by `chunk_size` (default `1000`) and `chunk_overlap` (default `200`). Page attribution is dropped.
+
+The same `chunk_strategy` / `chunk_size` / `chunk_overlap` options are also accepted by `POST /api/v1/documents` (plain text), where the default strategy is `whole`.
+
+Each chunk gets its own embedding vector, enabling fine-grained semantic search that can cite specific page numbers. Embeddings are computed concurrently across chunks, and an embedding failure is non-fatal — the chunk is stored without a vector.
+
+The response includes `chunk_count` — the number of chunks created. Note this can differ from the source's `total_pages` (recorded in `metadata`): with `whole` it is always `1`, and with `size` it depends on the text length.
 
 ### Path-Based SRNs
 
@@ -204,22 +215,22 @@ curl -X POST https://api.example.com/api/v1/documents \
 </TabItem>
 </Tabs>
 
-### Ingest a PDF file
+### Ingest a file
 
-First upload the PDF via `POST /api/v1/files/upload`, then call `POST /api/v1/documents/from-file` with the returned `file_id`.
+First upload the file via `POST /api/v1/files/upload`, then call `POST /api/v1/documents/ingest` with the returned `file_id`. Works for PDFs and `text/*` files alike.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-# Step 1: upload the PDF
+# Step 1: upload the file (PDF, .txt, or .md)
 FILE_ID=$(soat upload-file \
   --project-id proj_ABC \
   --file ./report.pdf \
   --jq '.id')
 
 # Step 2: ingest — one chunk per page (default)
-soat create-documents-from-file \
+soat ingest-document \
   --project-id proj_ABC \
   --file-id "$FILE_ID" \
   --path-prefix /reports/
@@ -232,7 +243,7 @@ soat create-documents-from-file \
 import { SoatClient } from '@soat/sdk';
 const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
 
-// Step 1: upload the PDF
+// Step 1: upload the file
 const formData = new FormData();
 formData.append('file', pdfBlob, 'report.pdf');
 formData.append('project_id', 'proj_ABC');
@@ -240,7 +251,7 @@ const { data: file, error: uploadErr } = await soat.files.uploadFile({ body: for
 if (uploadErr) throw new Error(JSON.stringify(uploadErr));
 
 // Step 2: ingest
-const { data, error } = await soat.documents.createDocumentsFromFile({
+const { data, error } = await soat.documents.ingestDocument({
   body: {
     file_id: file.id,
     project_id: 'proj_ABC',
@@ -255,14 +266,14 @@ console.log(`Created document ${data.id} with ${data.chunk_count} chunks`);
 <TabItem value="curl" label="curl">
 
 ```bash
-# Step 1: upload the PDF
+# Step 1: upload the file
 FILE_ID=$(curl -sX POST https://api.example.com/api/v1/files/upload \
   -H "Authorization: Bearer <token>" \
   -F "file=@report.pdf" \
   -F "project_id=proj_ABC" | jq -r '.id')
 
 # Step 2: ingest
-curl -X POST https://api.example.com/api/v1/documents/from-file \
+curl -X POST https://api.example.com/api/v1/documents/ingest \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d "{

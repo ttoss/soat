@@ -4,12 +4,12 @@ import path from 'node:path';
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { getEmbedding } from './embedding';
+import { chunkPages, type ChunkStrategy, persistChunks } from './chunking';
 import { emitEvent } from './eventBus';
 import { mapDocument } from './knowledge';
 import { registerResourceFieldMap } from './policyCompiler';
 
-export { createDocumentsFromFile } from './documentIngestion';
+export { createDocumentFromFile } from './documentIngestion';
 export type { DocumentQueryConfig, QueryDocumentResult } from './knowledge';
 export { resolveDocumentSearch } from './knowledge';
 
@@ -187,33 +187,26 @@ export const getDocument = async (args: { id: string }) => {
   return { ...mapped, content: null };
 };
 
-const createDocumentChunk = async (args: {
+/**
+ * Chunk plain document text and persist the chunks. Treats the content as a
+ * single source "page" and applies the requested strategy (default `whole`,
+ * i.e. one chunk — the historical behavior). Lets any document creation chunk,
+ * not just file ingestion.
+ */
+const chunkDocumentText = async (args: {
   documentId: number;
   content: string;
-  chunkIndex: number;
-  pageNumber?: number;
+  chunkStrategy?: ChunkStrategy;
+  chunkSize?: number;
+  chunkOverlap?: number;
 }) => {
-  log(
-    'createDocumentChunk: documentId=%d chunkIndex=%d pageNumber=%s',
-    args.documentId,
-    args.chunkIndex,
-    args.pageNumber ?? 'null'
-  );
-
-  let embedding: number[] | null = null;
-  try {
-    embedding = await getEmbedding({ text: args.content });
-  } catch {
-    // embedding is optional — continue without it
-  }
-
-  return db.DocumentChunk.create({
-    documentId: args.documentId,
-    content: args.content,
-    chunkIndex: args.chunkIndex,
-    pageNumber: args.pageNumber ?? null,
-    embedding,
+  const chunks = chunkPages({
+    pages: [{ text: args.content }],
+    strategy: args.chunkStrategy ?? 'whole',
+    chunkSize: args.chunkSize,
+    chunkOverlap: args.chunkOverlap,
   });
+  await persistChunks({ documentId: args.documentId, chunks });
 };
 
 export const createDocument = async (args: {
@@ -224,6 +217,9 @@ export const createDocument = async (args: {
   title?: string;
   metadata?: Record<string, unknown>;
   tags?: Record<string, string>;
+  chunkStrategy?: ChunkStrategy;
+  chunkSize?: number;
+  chunkOverlap?: number;
 }) => {
   log('createDocument: projectId=%d', args.projectId);
 
@@ -255,10 +251,12 @@ export const createDocument = async (args: {
     tags: args.tags ?? null,
   });
 
-  await createDocumentChunk({
+  await chunkDocumentText({
     documentId: doc.id as number,
     content: args.content,
-    chunkIndex: 0,
+    chunkStrategy: args.chunkStrategy,
+    chunkSize: args.chunkSize,
+    chunkOverlap: args.chunkOverlap,
   });
 
   const created = await fetchDocumentByIdWithContext(doc.id as number);
@@ -316,10 +314,9 @@ const updateDocumentContent = async (args: {
   // Re-chunk: destroy existing chunks and create a single new one
   await db.DocumentChunk.destroy({ where: { documentId: args.doc.id } });
 
-  await createDocumentChunk({
+  await chunkDocumentText({
     documentId: args.doc.id as number,
     content: args.content,
-    chunkIndex: 0,
   });
 };
 

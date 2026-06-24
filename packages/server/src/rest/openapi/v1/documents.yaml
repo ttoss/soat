@@ -85,6 +85,19 @@ paths:
                 filename:
                   type: string
                   example: 'my-doc.txt'
+                chunk_strategy:
+                  type: string
+                  enum: [page, whole, size]
+                  description: How to split the content into embeddable chunks. `whole` (default) stores the content as a single chunk; `size` splits into fixed-size character windows with overlap. `page` is equivalent to `whole` for plain text.
+                  default: whole
+                chunk_size:
+                  type: integer
+                  description: Window size in characters when `chunk_strategy=size`. Defaults to 1000.
+                  example: 1000
+                chunk_overlap:
+                  type: integer
+                  description: Overlap in characters between consecutive windows when `chunk_strategy=size`. Defaults to 200.
+                  example: 200
       responses:
         '201':
           description: Document created
@@ -110,14 +123,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /api/v1/documents/from-file:
+  /api/v1/documents/ingest:
     post:
       tags:
         - Documents
-      summary: Create document chunks from a PDF file
-      description: Parses an uploaded PDF file and creates one Document with one chunk per non-empty page. The file must already exist (uploaded via the files API) and must be a PDF.
-      operationId: createDocumentsFromFile
-      x-iam-action: documents:CreateDocumentsFromFile
+      summary: Ingest a file into a chunked document
+      description: |
+        Parses an already-uploaded file and creates one Document split into one or
+        more embedded chunks. The source format is detected from the file's content
+        type: PDFs are parsed page-by-page; `text/plain` and `text/markdown` files
+        are read as a single source. How the source is chunked is controlled by
+        `chunk_strategy`.
+      operationId: ingestDocument
+      x-iam-action: documents:IngestDocument
       requestBody:
         required: true
         content:
@@ -130,7 +148,7 @@ paths:
                 file_id:
                   x-soat-ref: files
                   type: string
-                  description: ID of the uploaded PDF file.
+                  description: ID of the uploaded file. Must be one of application/pdf, text/plain, text/markdown.
                   example: 'file_V1StGXR8Z5jdHi6B'
                 project_id:
                   x-soat-ref: projects
@@ -148,18 +166,26 @@ paths:
                   description: Key-value tags to attach to the document.
                 chunk_strategy:
                   type: string
-                  enum: [page, whole]
-                  description: How to split the PDF into chunks. `page` (default) creates one chunk per non-empty page; `whole` creates a single chunk with all pages joined.
+                  enum: [page, whole, size]
+                  description: How to split the source into chunks. `page` (default) creates one chunk per non-empty page (PDF); for non-paged sources it yields a single chunk. `whole` joins everything into one chunk. `size` splits into fixed-size character windows with overlap.
                   default: page
+                chunk_size:
+                  type: integer
+                  description: Window size in characters when `chunk_strategy=size`. Defaults to 1000.
+                  example: 1000
+                chunk_overlap:
+                  type: integer
+                  description: Overlap in characters between consecutive windows when `chunk_strategy=size`. Defaults to 200.
+                  example: 200
       responses:
         '201':
           description: Document created from file
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DocumentFromFileRecord'
+                $ref: '#/components/schemas/IngestedDocumentRecord'
         '400':
-          description: Invalid request or file is not a PDF
+          description: Invalid request, file not found, unsupported content type, or no extractable text
           content:
             application/json:
               schema:
@@ -172,12 +198,6 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: File not found
           content:
             application/json:
               schema:
@@ -515,14 +535,14 @@ components:
         updated_at:
           type: string
           format: date-time
-    DocumentFromFileRecord:
+    IngestedDocumentRecord:
       allOf:
         - $ref: '#/components/schemas/DocumentRecord'
         - type: object
           properties:
             chunk_count:
               type: integer
-              description: Number of chunks (pages) created from the PDF.
+              description: Number of chunks created from the file.
               example: 10
     ErrorResponse:
       type: object

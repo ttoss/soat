@@ -6,7 +6,6 @@ import * as pdfModule from 'src/lib/pdf';
 import { saveTrace } from 'src/lib/traces';
 
 import { ONE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
-
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 let httpServer: http.Server;
@@ -299,7 +298,7 @@ describe('MCP tools - happy path', () => {
     documentId = result.id;
   });
 
-  test('create-documents-from-file ingests a PDF', async () => {
+  test('ingest-document ingests a PDF', async () => {
     const uploadRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/files/upload')
       .attach('file', ONE_PAGE_PDF_BUFFER, {
@@ -314,7 +313,7 @@ describe('MCP tools - happy path', () => {
       .spyOn(pdfModule, 'extractPdfPages')
       .mockResolvedValue(['MCP PDF page 1']);
     try {
-      const res = await mcpCall('create-documents-from-file', {
+      const res = await mcpCall('ingest-document', {
         fileId: pdfFileId,
         projectId,
       });

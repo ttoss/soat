@@ -3,7 +3,7 @@ import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import {
   createDocument,
-  createDocumentsFromFile,
+  createDocumentFromFile,
   deleteDocument,
   getDocument,
   getDocumentTags,
@@ -176,6 +176,9 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     title?: string;
     metadata?: Record<string, unknown>;
     tags?: Record<string, string>;
+    chunkStrategy?: 'page' | 'whole' | 'size';
+    chunkSize?: number;
+    chunkOverlap?: number;
   };
 
   if (!body.content) {
@@ -223,6 +226,9 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     title: body.title,
     metadata: body.metadata,
     tags: body.tags,
+    chunkStrategy: body.chunkStrategy,
+    chunkSize: body.chunkSize,
+    chunkOverlap: body.chunkOverlap,
   });
   ctx.status = 201;
   ctx.body = doc;
@@ -366,7 +372,7 @@ documentsRouter.patch('/documents/:document_id/tags', async (ctx: Context) => {
   });
 });
 
-documentsRouter.post('/documents/from-file', async (ctx: Context) => {
+documentsRouter.post('/documents/ingest', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -378,7 +384,9 @@ documentsRouter.post('/documents/from-file', async (ctx: Context) => {
     projectId?: string;
     pathPrefix?: string;
     tags?: Record<string, string>;
-    chunkStrategy?: 'page' | 'whole';
+    chunkStrategy?: 'page' | 'whole' | 'size';
+    chunkSize?: number;
+    chunkOverlap?: number;
   };
 
   if (!body.fileId) {
@@ -400,7 +408,7 @@ documentsRouter.post('/documents/from-file', async (ctx: Context) => {
 
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: resolvedProjectPublicId,
-    action: 'documents:CreateDocumentsFromFile',
+    action: 'documents:IngestDocument',
   });
   if (!allowed) {
     ctx.status = 403;
@@ -417,12 +425,14 @@ documentsRouter.post('/documents/from-file', async (ctx: Context) => {
     return;
   }
 
-  const result = await createDocumentsFromFile({
+  const result = await createDocumentFromFile({
     fileId: body.fileId,
     projectId: project.id,
     pathPrefix: body.pathPrefix,
     tags: body.tags,
     chunkStrategy: body.chunkStrategy,
+    chunkSize: body.chunkSize,
+    chunkOverlap: body.chunkOverlap,
   });
 
   ctx.status = 201;

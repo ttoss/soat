@@ -4,12 +4,23 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { getEmbedding } from './embedding';
+import {
+  chunkPages,
+  type ChunkStrategy,
+  persistChunks,
+  type SourcePage,
+} from './chunking';
 import { emitEvent } from './eventBus';
 import { mapDocument } from './knowledge';
 import { extractPdfPages } from './pdf';
 
 const log = createDebug('soat:documents');
+
+const SUPPORTED_CONTENT_TYPES = [
+  'application/pdf',
+  'text/plain',
+  'text/markdown',
+];
 
 type IngestedDoc = InstanceType<(typeof db)['Document']> & {
   file?: InstanceType<(typeof db)['File']> & {
@@ -35,64 +46,7 @@ const fetchIngestedDocById = (id: number): Promise<IngestedDoc | null> => {
   }) as Promise<IngestedDoc | null>;
 };
 
-const createDocumentChunk = async (args: {
-  documentId: number;
-  content: string;
-  chunkIndex: number;
-  pageNumber?: number;
-}) => {
-  log(
-    'createDocumentChunk: documentId=%d chunkIndex=%d pageNumber=%s',
-    args.documentId,
-    args.chunkIndex,
-    args.pageNumber ?? 'null'
-  );
-
-  let embedding: number[] | null = null;
-  try {
-    embedding = await getEmbedding({ text: args.content });
-  } catch {
-    // embedding is optional — continue without it
-  }
-
-  return db.DocumentChunk.create({
-    documentId: args.documentId,
-    content: args.content,
-    chunkIndex: args.chunkIndex,
-    pageNumber: args.pageNumber ?? null,
-    embedding,
-  });
-};
-
-const createChunksForDocument = async (args: {
-  documentId: number;
-  pages: { text: string; pageNumber: number }[];
-  chunkStrategy: 'page' | 'whole';
-}) => {
-  if (args.chunkStrategy === 'whole') {
-    const content = args.pages
-      .map((p) => {
-        return p.text;
-      })
-      .join('\n');
-    await createDocumentChunk({
-      documentId: args.documentId,
-      content,
-      chunkIndex: 0,
-    });
-    return;
-  }
-  for (let i = 0; i < args.pages.length; i++) {
-    await createDocumentChunk({
-      documentId: args.documentId,
-      content: args.pages[i].text,
-      chunkIndex: i,
-      pageNumber: args.pages[i].pageNumber,
-    });
-  }
-};
-
-const loadPdfFile = async (fileId: string) => {
+const loadIngestibleFile = async (fileId: string) => {
   const file = await db.File.findOne({
     where: { publicId: fileId },
     include: [{ model: db.Project, as: 'project' }],
@@ -102,45 +56,76 @@ const loadPdfFile = async (fileId: string) => {
     throw new DomainError('FILE_NOT_FOUND', `File '${fileId}' not found.`);
   }
 
-  if (file.contentType !== 'application/pdf') {
+  if (!SUPPORTED_CONTENT_TYPES.includes(file.contentType ?? '')) {
     throw new DomainError(
-      'NOT_A_PDF',
-      `File '${fileId}' is not a PDF (content type: ${file.contentType ?? 'unknown'}).`
+      'UNSUPPORTED_FILE_TYPE',
+      `File '${fileId}' has unsupported content type '${file.contentType ?? 'unknown'}'. Supported: ${SUPPORTED_CONTENT_TYPES.join(', ')}.`
     );
   }
 
   return file;
 };
 
-export const createDocumentsFromFile = async (args: {
+/**
+ * Extract the source text from a file, dispatched on its content type. PDFs are
+ * parsed page-by-page; text/markdown files become a single page. Blank pages are
+ * dropped so chunk counts reflect real content.
+ */
+const extractSourcePages = async (
+  file: InstanceType<(typeof db)['File']>
+): Promise<SourcePage[]> => {
+  const buffer = fs.readFileSync(file.storagePath);
+
+  if (file.contentType === 'application/pdf') {
+    const rawPages = await extractPdfPages({ buffer });
+    return rawPages
+      .map((text, i) => {
+        return { text: text.trim(), pageNumber: i + 1 };
+      })
+      .filter((page) => {
+        return page.text.length > 0;
+      });
+  }
+
+  // text/plain, text/markdown
+  const text = buffer.toString('utf-8').trim();
+  return text.length > 0 ? [{ text, pageNumber: 1 }] : [];
+};
+
+export const createDocumentFromFile = async (args: {
   fileId: string;
   projectId: number;
   pathPrefix?: string;
   tags?: Record<string, string>;
-  chunkStrategy?: 'page' | 'whole';
+  chunkStrategy?: ChunkStrategy;
+  chunkSize?: number;
+  chunkOverlap?: number;
 }) => {
   log(
-    'createDocumentsFromFile: fileId=%s projectId=%d',
+    'createDocumentFromFile: fileId=%s projectId=%d strategy=%s',
     args.fileId,
-    args.projectId
+    args.projectId,
+    args.chunkStrategy ?? 'page'
   );
 
-  const file = await loadPdfFile(args.fileId);
-  const buffer = fs.readFileSync(file.storagePath);
-  const rawPages = await extractPdfPages({ buffer });
-  const pages = rawPages
-    .map((text, i) => {
-      return { text: text.trim(), pageNumber: i + 1 };
-    })
-    .filter((p) => {
-      return p.text.length > 0;
-    });
+  const file = await loadIngestibleFile(args.fileId);
+  const pages = await extractSourcePages(file);
 
   if (pages.length === 0) {
-    throw new DomainError('PDF_PARSE_FAILED', 'The PDF contains no text.');
+    throw new DomainError(
+      'FILE_PARSE_FAILED',
+      `File '${args.fileId}' contains no extractable text.`
+    );
   }
 
-  const filename = file.filename ?? 'document.pdf';
+  const chunks = chunkPages({
+    pages,
+    strategy: args.chunkStrategy ?? 'page',
+    chunkSize: args.chunkSize,
+    chunkOverlap: args.chunkOverlap,
+  });
+
+  const filename = file.filename ?? 'document';
   const docPath = args.pathPrefix
     ? `${args.pathPrefix.replace(/\/$/, '')}/${filename}`
     : `/${filename}`;
@@ -150,16 +135,12 @@ export const createDocumentsFromFile = async (args: {
     title: filename,
     metadata: JSON.stringify({
       source_file_id: args.fileId,
-      total_pages: rawPages.length,
+      total_pages: pages.length,
     }),
     tags: args.tags ?? null,
   });
 
-  await createChunksForDocument({
-    documentId: doc.id as number,
-    pages,
-    chunkStrategy: args.chunkStrategy ?? 'page',
-  });
+  await persistChunks({ documentId: doc.id as number, chunks });
 
   await file.update({ path: docPath });
 
@@ -176,11 +157,11 @@ export const createDocumentsFromFile = async (args: {
       resourceId: created!.publicId,
       data: {
         ...(mapped as unknown as Record<string, unknown>),
-        chunkCount: pages.length,
+        chunkCount: chunks.length,
       },
       timestamp: new Date().toISOString(),
     });
   }
 
-  return { ...mapped, chunkCount: pages.length };
+  return { ...mapped, chunkCount: chunks.length };
 };

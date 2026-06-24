@@ -151,14 +151,18 @@ export const ERROR_CODES = {
     description:
       'The uploaded file could not be parsed as a PDF. Ensure the file is a valid PDF document.',
   },
+  FILE_PARSE_FAILED: {
+    httpStatus: 400,
+    description: 'The referenced file contains no extractable text.',
+  },
   FILE_NOT_FOUND: {
-    httpStatus: 404,
+    httpStatus: 400,
     description: 'The referenced file does not exist.',
   },
-  NOT_A_PDF: {
+  UNSUPPORTED_FILE_TYPE: {
     httpStatus: 400,
     description:
-      'The referenced file is not a PDF. Only PDF files are supported for this operation.',
+      'The referenced file has a content type that cannot be ingested. Supported types: application/pdf, text/plain, text/markdown.',
   },
 } as const satisfies Record<
   string,
