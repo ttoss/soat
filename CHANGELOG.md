@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.3](https://github.com/ttoss/soat/compare/v0.13.2...v0.13.3) (2026-06-24)
+
+### Bug Fixes
+
+* expose debate perspective outputs as child generation records ([#251](https://github.com/ttoss/soat/issues/251)) ([d8308d6](https://github.com/ttoss/soat/commit/d8308d6aa65b20848f33ef7cf11ce5fba613f338))
+
+### Features
+
+* **documents:** async file ingestion with 202 + job status polling ([#250](https://github.com/ttoss/soat/issues/250)) ([9e07595](https://github.com/ttoss/soat/commit/9e075959068ddd277c5db892f3f4defb73a96979))
+* **knowledge:** expose memory_name in knowledge results; align memory embedding docs ([#252](https://github.com/ttoss/soat/issues/252)) ([60df773](https://github.com/ttoss/soat/commit/60df773061b1555e44f6b5b2f32d47955f868888)), closes [#2](https://github.com/ttoss/soat/issues/2) [#1](https://github.com/ttoss/soat/issues/1)
+* **orchestrations:** record skipped node executions on completed runs ([#253](https://github.com/ttoss/soat/issues/253)) ([0a6f9b9](https://github.com/ttoss/soat/commit/0a6f9b9849fa73d90d89c850c01b7e424d7f796e))
+
 ## [0.13.2](https://github.com/ttoss/soat/compare/v0.13.1...v0.13.2) (2026-06-24)
 
 ### Bug Fixes
