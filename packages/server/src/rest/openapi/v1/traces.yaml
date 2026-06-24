@@ -297,7 +297,7 @@ components:
             and debate child generations (perspective turns and synthesis steps)
             linked via `initiator_generation_id`.
           items:
-            $ref: '#/components/schemas/Generation'
+            $ref: './generations.yaml#/components/schemas/Generation'
 
     ErrorResponse:
       type: object
