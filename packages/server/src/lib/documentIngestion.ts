@@ -66,11 +66,6 @@ const loadIngestibleFile = async (fileId: string) => {
   return file;
 };
 
-/**
- * Extract the source text from a file, dispatched on its content type. PDFs are
- * parsed page-by-page; text/markdown files become a single page. Blank pages are
- * dropped so chunk counts reflect real content.
- */
 const extractSourcePages = async (
   file: InstanceType<(typeof db)['File']>
 ): Promise<SourcePage[]> => {
@@ -92,30 +87,50 @@ const extractSourcePages = async (
   return text.length > 0 ? [{ text, pageNumber: 1 }] : [];
 };
 
-export const createDocumentFromFile = async (args: {
+type IngestionPipelineArgs = {
+  doc: InstanceType<(typeof db)['Document']>;
   fileId: string;
-  projectId: number;
-  pathPrefix?: string;
-  tags?: Record<string, string>;
+  docPath: string;
   chunkStrategy?: ChunkStrategy;
   chunkSize?: number;
   chunkOverlap?: number;
-}) => {
-  log(
-    'createDocumentFromFile: fileId=%s projectId=%d strategy=%s',
-    args.fileId,
-    args.projectId,
-    args.chunkStrategy ?? 'page'
-  );
+};
 
-  const file = await loadIngestibleFile(args.fileId);
+const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
+  const { doc } = args;
+  const docId = doc.id as number;
+
+  const file = (await db.File.findByPk(doc.fileId, {
+    include: [{ model: db.Project, as: 'project' }],
+  })) as
+    | (InstanceType<(typeof db)['File']> & {
+        project?: InstanceType<(typeof db)['Project']>;
+      })
+    | null;
+
+  if (!file) {
+    await doc.update({
+      status: 'failed',
+      metadata: JSON.stringify({
+        source_file_id: args.fileId,
+        failure_reason: 'FILE_NOT_FOUND',
+      }),
+    });
+    return;
+  }
+
   const pages = await extractSourcePages(file);
 
   if (pages.length === 0) {
-    throw new DomainError(
-      'FILE_PARSE_FAILED',
-      `File '${args.fileId}' contains no extractable text.`
-    );
+    await doc.update({
+      status: 'failed',
+      metadata: JSON.stringify({
+        source_file_id: args.fileId,
+        failure_reason: 'FILE_PARSE_FAILED',
+      }),
+    });
+    log('runIngestionPipeline: no extractable text docId=%d', docId);
+    return;
   }
 
   const chunks = chunkPages({
@@ -125,6 +140,103 @@ export const createDocumentFromFile = async (args: {
     chunkOverlap: args.chunkOverlap,
   });
 
+  await persistChunks({ documentId: docId, chunks });
+  await file.update({ path: args.docPath });
+  await doc.update({
+    status: 'ready',
+    metadata: JSON.stringify({
+      source_file_id: args.fileId,
+      total_pages: pages.length,
+      chunk_count: chunks.length,
+    }),
+  });
+
+  log('runIngestionPipeline: ready docId=%d chunks=%d', docId, chunks.length);
+
+  const fetched = await fetchIngestedDocById(docId);
+  const project = fetched?.file?.project;
+  if (fetched && project) {
+    emitEvent({
+      type: 'documents.created',
+      projectId: project.id,
+      projectPublicId: project.publicId,
+      resourceType: 'document',
+      resourceId: fetched.publicId,
+      data: {
+        ...(mapDocument(fetched) as unknown as Record<string, unknown>),
+        chunkCount: chunks.length,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+const processDocumentIngestion = async (args: {
+  docId: number;
+  fileId: string;
+  docPath: string;
+  chunkStrategy?: ChunkStrategy;
+  chunkSize?: number;
+  chunkOverlap?: number;
+}): Promise<void> => {
+  log('processDocumentIngestion: docId=%d fileId=%s', args.docId, args.fileId);
+
+  const doc = await db.Document.findByPk(args.docId);
+  if (!doc) return;
+
+  await doc.update({ status: 'processing' });
+
+  try {
+    await runIngestionPipeline({ doc, ...args });
+  } catch (error) {
+    log(
+      'processDocumentIngestion: failed docId=%d error=%o',
+      args.docId,
+      error
+    );
+    try {
+      await doc.update({
+        status: 'failed',
+        metadata: JSON.stringify({
+          source_file_id: args.fileId,
+          failure_reason: String(error),
+        }),
+      });
+    } catch {
+      // ignore secondary failure
+    }
+  }
+};
+
+/**
+ * Validate the file and create a Document record. When `async` is true
+ * (default) processing is deferred to the next event loop tick and the
+ * document is returned with `status=pending` (HTTP 202). When `async` is
+ * false the pipeline runs synchronously and the document is returned with
+ * `status=ready` (HTTP 201).
+ */
+export const enqueueDocumentIngestion = async (args: {
+  fileId: string;
+  projectId: number;
+  pathPrefix?: string;
+  tags?: Record<string, string>;
+  chunkStrategy?: ChunkStrategy;
+  chunkSize?: number;
+  chunkOverlap?: number;
+  async?: boolean;
+}) => {
+  const runAsync = args.async !== false;
+
+  log(
+    'enqueueDocumentIngestion: fileId=%s projectId=%d strategy=%s async=%s',
+    args.fileId,
+    args.projectId,
+    args.chunkStrategy ?? 'page',
+    runAsync
+  );
+
+  const file = await loadIngestibleFile(args.fileId);
+
   const filename = file.filename ?? 'document';
   const docPath = args.pathPrefix
     ? `${args.pathPrefix.replace(/\/$/, '')}/${filename}`
@@ -133,35 +245,29 @@ export const createDocumentFromFile = async (args: {
   const doc = await db.Document.create({
     fileId: file.id,
     title: filename,
-    metadata: JSON.stringify({
-      source_file_id: args.fileId,
-      total_pages: pages.length,
-    }),
+    status: 'pending',
+    metadata: JSON.stringify({ source_file_id: args.fileId }),
     tags: args.tags ?? null,
   });
 
-  await persistChunks({ documentId: doc.id as number, chunks });
+  const docId = doc.id as number;
+  const pipelineArgs = {
+    docId,
+    fileId: args.fileId,
+    docPath,
+    chunkStrategy: args.chunkStrategy,
+    chunkSize: args.chunkSize,
+    chunkOverlap: args.chunkOverlap,
+  };
 
-  await file.update({ path: docPath });
-
-  const created = await fetchIngestedDocById(doc.id as number);
-  const mapped = mapDocument(created!);
-
-  const project = created?.file?.project;
-  if (project) {
-    emitEvent({
-      type: 'documents.created',
-      projectId: project.id,
-      projectPublicId: project.publicId,
-      resourceType: 'document',
-      resourceId: created!.publicId,
-      data: {
-        ...(mapped as unknown as Record<string, unknown>),
-        chunkCount: chunks.length,
-      },
-      timestamp: new Date().toISOString(),
+  if (runAsync) {
+    setImmediate(() => {
+      void processDocumentIngestion(pipelineArgs);
     });
+  } else {
+    await processDocumentIngestion(pipelineArgs);
   }
 
-  return { ...mapped, chunkCount: chunks.length };
+  const fetched = await fetchIngestedDocById(docId);
+  return mapDocument(fetched!);
 };

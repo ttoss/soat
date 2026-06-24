@@ -320,7 +320,26 @@ describe('MCP tools - happy path', () => {
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBeDefined();
-      expect(result.chunkCount).toBeGreaterThan(0);
+      expect(result.status).toBe('pending');
+
+      // Ingestion is async — poll until ready
+      const docId = result.id;
+      let doc = result;
+      const deadline = Date.now() + 5000;
+      while (
+        (doc.status === 'pending' || doc.status === 'processing') &&
+        Date.now() < deadline
+      ) {
+        await new Promise((r) => {
+          return setTimeout(r, 50);
+        });
+        const pollRes = await mcpCall('get-document', { documentId: docId });
+        doc = parseResult(pollRes);
+      }
+      expect(doc.status).toBe('ready');
+      expect(
+        (doc.metadata as { chunkCount?: number })?.chunkCount
+      ).toBeGreaterThan(0);
     } finally {
       spy.mockRestore();
     }

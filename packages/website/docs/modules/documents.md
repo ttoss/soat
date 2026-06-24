@@ -11,8 +11,8 @@ A Document is backed by a [File](./files.md) and associated with a project. When
 
 Documents can be created in two ways:
 
-- **Plain text** (`POST /documents`) — content is supplied inline. By default it is stored as a single chunk; pass `chunk_strategy` to split it.
-- **File ingestion** (`POST /documents/ingest`) — an already-uploaded file is parsed and chunked. The source format is detected from the file's content type: PDFs are parsed page by page (`application/pdf`); `text/plain` and `text/markdown` files are read as a single source. How the source is chunked is controlled by `chunk_strategy`.
+- **Plain text** (`POST /documents`) — content is supplied inline. By default it is stored as a single chunk; pass `chunk_strategy` to split it. The response is `201 Created`.
+- **File ingestion** (`POST /documents/ingest`) — an already-uploaded file is parsed and chunked **asynchronously**. The endpoint returns `202 Accepted` immediately with the new document in `status: pending`. Chunk extraction and embedding run in the background; poll `GET /documents/:id` until `status` is `ready` or `failed`. The source format is detected from the file's content type: PDFs are parsed page by page (`application/pdf`); `text/plain` and `text/markdown` files are read as a single source. How the source is chunked is controlled by `chunk_strategy`.
 
 Documents are identified by an `id` prefixed with `doc_`. The internal database primary key is never returned.
 
@@ -36,20 +36,13 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 | `path`       | string \| null | Logical path within the project (e.g. `/reports/q1.txt`). Also used as the resource ID segment in path-based SRNs. |
 | `filename`   | string         | Original filename                                                                                                  |
 | `size`       | number         | File size in bytes                                                                                                 |
+| `status`     | string         | Ingestion lifecycle state: `pending` → `processing` → `ready` \| `failed`. Plain-text documents are always `ready`. |
 | `title`      | string \| null | Human-readable title (auto-set to filename for PDF ingestion)                                                      |
-| `metadata`   | object \| null | Arbitrary JSON metadata (PDF ingestion sets `source_file_id` and `total_pages`)                                    |
+| `metadata`   | object \| null | Arbitrary JSON metadata. After ingestion: `source_file_id`, `total_pages`, `chunk_count`. On failure: `failure_reason`. |
 | `tags`       | object \| null | Key-value string tags                                                                                              |
-| `content`    | string \| null | Joined chunk content — only present in `GET /documents/:id` responses                                              |
+| `content`    | string \| null | Joined chunk content — only present in `GET /documents/:id` responses when `status` is `ready`                     |
 | `created_at` | string         | ISO 8601 creation timestamp                                                                                        |
 | `updated_at` | string         | ISO 8601 last-updated timestamp                                                                                    |
-
-### IngestedDocumentRecord (file ingestion response only)
-
-Extends Document with:
-
-| Field         | Type   | Description                                  |
-| ------------- | ------ | -------------------------------------------- |
-| `chunk_count` | number | Number of chunks created from the file       |
 
 ### DocumentChunk (internal)
 
@@ -77,6 +70,25 @@ Path examples:
 
 ## Key Concepts
 
+### Async File Ingestion
+
+`POST /api/v1/documents/ingest` returns `202 Accepted` immediately by default. The document record is created with `status: pending` and chunk extraction + embedding run in the background. Poll `GET /api/v1/documents/:id` until `status` is `ready` or `failed`.
+
+Pass `?async=false` to block until processing completes. The endpoint then returns `201 Created` with `status: ready` (or `status: failed` on error) — no polling required. This is useful for small files or scripted workflows where latency is acceptable. (This mirrors the `?async=` toggle on `POST /api/v1/sessions/:id/generate`, except ingestion defaults to async.)
+
+**Lifecycle states:**
+
+| Status       | Meaning                                                                           |
+| ------------ | --------------------------------------------------------------------------------- |
+| `pending`    | Enqueued; background worker has not started yet                                   |
+| `processing` | Actively extracting pages, chunking, and generating embeddings                    |
+| `ready`      | Fully indexed; content and chunk embeddings are available for search              |
+| `failed`     | Processing encountered an error. The `metadata.failure_reason` field describes it |
+
+Common `failure_reason` values: `FILE_PARSE_FAILED` (no extractable text), `FILE_NOT_FOUND`.
+
+Embedding concurrency is bounded (default: 5 simultaneous requests) to avoid overwhelming the embedding service on large documents.
+
 ### File Ingestion and Chunking
 
 `POST /api/v1/documents/ingest` ingests an already-uploaded file (uploaded via `POST /api/v1/files/upload`). The source format is detected from the file's `content_type`:
@@ -99,7 +111,7 @@ The same `chunk_strategy` / `chunk_size` / `chunk_overlap` options are also acce
 
 Each chunk gets its own embedding vector, enabling fine-grained semantic search that can cite specific page numbers. Embeddings are computed concurrently across chunks, and an embedding failure is non-fatal — the chunk is stored without a vector.
 
-The response includes `chunk_count` — the number of chunks created. Note this can differ from the source's `total_pages` (recorded in `metadata`): with `whole` it is always `1`, and with `size` it depends on the text length.
+After ingestion completes, `metadata.chunk_count` records the number of chunks created. Note this can differ from the source's `total_pages` (recorded in `metadata`): with `whole` it is always `1`, and with `size` it depends on the text length.
 
 ### Path-Based SRNs
 
@@ -250,7 +262,7 @@ formData.append('project_id', 'proj_ABC');
 const { data: file, error: uploadErr } = await soat.files.uploadFile({ body: formData });
 if (uploadErr) throw new Error(JSON.stringify(uploadErr));
 
-// Step 2: ingest
+// Step 2: ingest (returns 202 immediately)
 const { data, error } = await soat.documents.ingestDocument({
   body: {
     file_id: file.id,
@@ -259,7 +271,17 @@ const { data, error } = await soat.documents.ingestDocument({
   },
 });
 if (error) throw new Error(JSON.stringify(error));
-console.log(`Created document ${data.id} with ${data.chunk_count} chunks`);
+console.log(`Enqueued document ${data.id}, status=${data.status}`);
+
+// Step 3: poll until ready
+let doc = data;
+while (doc.status === 'pending' || doc.status === 'processing') {
+  await new Promise((r) => setTimeout(r, 500));
+  const { data: polled } = await soat.documents.getDocument({ path: { document_id: doc.id } });
+  doc = polled!;
+}
+if (doc.status === 'failed') throw new Error(`Ingestion failed: ${(doc.metadata as any)?.failure_reason}`);
+console.log(`Ready — ${(doc.metadata as any)?.chunk_count} chunks`);
 ```
 
 </TabItem>

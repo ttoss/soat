@@ -35,6 +35,12 @@ export const mapDocument = (
     title: doc.title ?? undefined,
     metadata: parseMetadata(doc.metadata),
     tags: doc.tags ?? undefined,
+    status: doc.status as
+      | 'pending'
+      | 'processing'
+      | 'ready'
+      | 'failed'
+      | undefined,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };

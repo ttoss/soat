@@ -291,6 +291,13 @@ each chunk, and stores **one Document with many `DocumentChunk` rows**. The
 `--path-prefix` organizes the documents under a common path so you can scope an agent
 to the whole subtree later with a single `document_paths` prefix.
 
+Ingestion is **asynchronous by default**: the endpoint returns `202 Accepted` with
+`status: pending` and processing runs in the background (see
+[Documents — Async File Ingestion](/docs/modules/documents#async-file-ingestion)). Here
+we pass `--async false` so the call blocks until the document is `ready` and the
+response carries the final `chunk_count` — that way the next steps can search the
+chunks immediately without polling.
+
 The default `page` chunk strategy produces **one chunk per page** — these PDFs are one
 page each, so `chunk_count` is `1`.
 
@@ -301,14 +308,16 @@ page each, so `chunk_count` is `1`.
 soat ingest-document \
   --project-id "$PROJECT_ID" \
   --file-id "$PRINTER_FILE_ID" \
-  --path-prefix "/manuals/" | jq '{id: .id, chunk_count: .chunk_count}'
-# → { "id": "doc_...", "chunk_count": 1 }
+  --path-prefix "/manuals/" \
+  --async false | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
+# → { "id": "doc_...", "status": "ready", "chunk_count": 1 }
 
 soat ingest-document \
   --project-id "$PROJECT_ID" \
   --file-id "$ROUTER_FILE_ID" \
-  --path-prefix "/manuals/" | jq '{id: .id, chunk_count: .chunk_count}'
-# → { "id": "doc_...", "chunk_count": 1 }
+  --path-prefix "/manuals/" \
+  --async false | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
+# → { "id": "doc_...", "status": "ready", "chunk_count": 1 }
 ```
 
 </TabItem>
@@ -316,39 +325,41 @@ soat ingest-document \
 
 ```ts
 const { data: printerDoc } = await adminSoat.documents.ingestDocument({
+  query: { async: false },
   body: {
     project_id: PROJECT_ID,
     file_id: PRINTER_FILE_ID,
     path_prefix: '/manuals/',
   },
 });
-console.log(printerDoc.chunk_count); // 1
+console.log(printerDoc.status, printerDoc.chunk_count); // "ready" 1
 
 const { data: routerDoc } = await adminSoat.documents.ingestDocument({
+  query: { async: false },
   body: {
     project_id: PROJECT_ID,
     file_id: ROUTER_FILE_ID,
     path_prefix: '/manuals/',
   },
 });
-console.log(routerDoc.chunk_count); // 1
+console.log(routerDoc.status, routerDoc.chunk_count); // "ready" 1
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/documents/ingest" \
+curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?async=false" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$PRINTER_FILE_ID\",\"path_prefix\":\"/manuals/\"}" \
-  | jq '{id: .id, chunk_count: .chunk_count}'
+  | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
 
-curl -s -X POST "$SOAT_URL/api/v1/documents/ingest" \
+curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?async=false" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$ROUTER_FILE_ID\",\"path_prefix\":\"/manuals/\"}" \
-  | jq '{id: .id, chunk_count: .chunk_count}'
+  | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
 ```
 
 </TabItem>
@@ -377,8 +388,9 @@ soat ingest-document \
   --path-prefix "/manuals-size/" \
   --chunk-strategy "size" \
   --chunk-size 60 \
-  --chunk-overlap 10 | jq '{id: .id, chunk_count: .chunk_count}'
-# → { "id": "doc_...", "chunk_count": 3 }   # multiple windows from one page
+  --chunk-overlap 10 \
+  --async false | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
+# → { "id": "doc_...", "status": "ready", "chunk_count": 3 }   # multiple windows from one page
 ```
 
 </TabItem>
@@ -386,6 +398,7 @@ soat ingest-document \
 
 ```ts
 const { data: sized } = await adminSoat.documents.ingestDocument({
+  query: { async: false },
   body: {
     project_id: PROJECT_ID,
     file_id: PRINTER_FILE_ID,
@@ -395,18 +408,18 @@ const { data: sized } = await adminSoat.documents.ingestDocument({
     chunk_overlap: 10,
   },
 });
-console.log(sized.chunk_count); // > 1
+console.log(sized.status, sized.chunk_count); // "ready" > 1
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/documents/ingest" \
+curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?async=false" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$PRINTER_FILE_ID\",\"path_prefix\":\"/manuals-size/\",\"chunk_strategy\":\"size\",\"chunk_size\":60,\"chunk_overlap\":10}" \
-  | jq '{id: .id, chunk_count: .chunk_count}'
+  | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
 ```
 
 </TabItem>

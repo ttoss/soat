@@ -225,7 +225,9 @@ describe('reasoning pipeline wiring', () => {
         finishReason: 'stop',
       };
       Object.defineProperty(obj, 'text', {
-        get: () => 'draft answer',
+        get: () => {
+          return 'draft answer';
+        },
         enumerable: true,
         configurable: false,
       });
@@ -253,16 +255,18 @@ describe('reasoning pipeline wiring', () => {
     jest.spyOn(helpersModule, 'findPendingClientTools').mockReturnValue([]);
     const buildCompletedSpy = jest
       .spyOn(helpersModule, 'buildCompletedGenerationResult')
-      .mockImplementation(async (args) => ({
-        id: args.generationId,
-        traceId: args.traceId,
-        status: 'completed',
-        output: {
-          model: 'model-a',
-          content: args.result.text,
-          finishReason: args.result.finishReason,
-        },
-      }));
+      .mockImplementation(async (args) => {
+        return {
+          id: args.generationId,
+          traceId: args.traceId,
+          status: 'completed',
+          output: {
+            model: 'model-a',
+            content: args.result.text,
+            finishReason: args.result.finishReason,
+          },
+        };
+      });
 
     const result = await runNonStreamGeneration({
       model: {} as never,

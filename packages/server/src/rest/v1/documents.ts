@@ -3,8 +3,8 @@ import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import {
   createDocument,
-  createDocumentFromFile,
   deleteDocument,
+  enqueueDocumentIngestion,
   getDocument,
   getDocumentTags,
   listDocuments,
@@ -389,6 +389,9 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     chunkOverlap?: number;
   };
 
+  // Async by default; ?async=false runs synchronously and returns 201.
+  const isAsync = ctx.query['async'] !== 'false';
+
   if (!body.fileId) {
     ctx.status = 400;
     ctx.body = { error: 'fileId is required' };
@@ -425,7 +428,7 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     return;
   }
 
-  const result = await createDocumentFromFile({
+  const result = await enqueueDocumentIngestion({
     fileId: body.fileId,
     projectId: project.id,
     pathPrefix: body.pathPrefix,
@@ -433,9 +436,10 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     chunkStrategy: body.chunkStrategy,
     chunkSize: body.chunkSize,
     chunkOverlap: body.chunkOverlap,
+    async: isAsync,
   });
 
-  ctx.status = 201;
+  ctx.status = isAsync ? 202 : 201;
   ctx.body = result;
 });
 

@@ -9,7 +9,7 @@ import { emitEvent } from './eventBus';
 import { mapDocument } from './knowledge';
 import { registerResourceFieldMap } from './policyCompiler';
 
-export { createDocumentFromFile } from './documentIngestion';
+export { enqueueDocumentIngestion } from './documentIngestion';
 export type { DocumentQueryConfig, QueryDocumentResult } from './knowledge';
 export { resolveDocumentSearch } from './knowledge';
 

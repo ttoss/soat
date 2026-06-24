@@ -61,9 +61,8 @@ describe('GET /api/v1/users/me', () => {
   });
 
   test('authenticated admin gets own profile', async () => {
-    const response = await authenticatedTestClient(adminToken).get(
-      '/api/v1/users/me'
-    );
+    const response =
+      await authenticatedTestClient(adminToken).get('/api/v1/users/me');
     expect(response.status).toBe(200);
     expect(response.body.id).toBeDefined();
     expect(response.body.username).toBe('admin');
@@ -72,9 +71,8 @@ describe('GET /api/v1/users/me', () => {
   });
 
   test('authenticated regular user gets own profile', async () => {
-    const response = await authenticatedTestClient(userToken).get(
-      '/api/v1/users/me'
-    );
+    const response =
+      await authenticatedTestClient(userToken).get('/api/v1/users/me');
     expect(response.status).toBe(200);
     expect(response.body.username).toBe('me_user');
     expect(response.body.role).toBe('user');

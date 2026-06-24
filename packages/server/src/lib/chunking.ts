@@ -90,32 +90,55 @@ export const chunkPages = (args: {
   });
 };
 
+export const DEFAULT_EMBEDDING_CONCURRENCY = 5;
+
+const runBounded = async (
+  count: number,
+  concurrency: number,
+  fn: (index: number) => Promise<void>
+): Promise<void> => {
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < count) {
+      const i = cursor++;
+      await fn(i);
+    }
+  };
+  const slots = Math.min(concurrency, count);
+  if (slots === 0) return;
+  await Promise.all(Array.from({ length: slots }, worker));
+};
+
 /**
  * Persist prepared chunks as DocumentChunk rows. Embeddings are computed
- * concurrently (the slow network step) before the rows are written so a
- * many-page document does not incur one serial round-trip per chunk. An
- * embedding failure is non-fatal — the chunk is stored without a vector.
+ * with bounded concurrency (default: 5) so very large documents do not open
+ * an unbounded number of simultaneous network requests. An embedding failure
+ * is non-fatal — the chunk is stored without a vector.
  */
 export const persistChunks = async (args: {
   documentId: number;
   chunks: PreparedChunk[];
+  concurrency?: number;
 }): Promise<void> => {
+  const concurrency = args.concurrency ?? DEFAULT_EMBEDDING_CONCURRENCY;
   log(
-    'persistChunks: documentId=%d count=%d',
+    'persistChunks: documentId=%d count=%d concurrency=%d',
     args.documentId,
-    args.chunks.length
+    args.chunks.length,
+    concurrency
   );
 
-  const embeddings = await Promise.all(
-    args.chunks.map(async (chunk) => {
-      try {
-        return await getEmbedding({ text: chunk.content });
-      } catch {
-        // embedding is optional — continue without it
-        return null;
-      }
-    })
+  const embeddings: (number[] | null)[] = new Array(args.chunks.length).fill(
+    null
   );
+
+  await runBounded(args.chunks.length, concurrency, async (i) => {
+    try {
+      embeddings[i] = await getEmbedding({ text: args.chunks[i].content });
+    } catch {
+      // embedding is optional — continue without it
+    }
+  });
 
   for (let i = 0; i < args.chunks.length; i++) {
     const chunk = args.chunks[i];

@@ -123,16 +123,16 @@ describe('OAuth authorization server (SPA consent)', () => {
         });
 
       // First /authorize consumes the grant
-      const first = await testClient.get('/authorize').query(
-        Object.fromEntries(new URLSearchParams(query))
-      );
+      const first = await testClient
+        .get('/authorize')
+        .query(Object.fromEntries(new URLSearchParams(query)));
       expect(first.status).toBe(302);
       expect(first.headers.location).toContain(REDIRECT_URI);
 
       // Second /authorize — grant is gone, redirect to consent screen
-      const second = await testClient.get('/authorize').query(
-        Object.fromEntries(new URLSearchParams(query))
-      );
+      const second = await testClient
+        .get('/authorize')
+        .query(Object.fromEntries(new URLSearchParams(query)));
       expect(second.status).toBe(302);
       expect(second.headers.location).toContain('/app/oauth/consent');
     });
@@ -221,7 +221,9 @@ describe('OAuth authorization server (SPA consent)', () => {
         });
 
       const authorize = await testClient.get(`/authorize?${query}`);
-      const code = new URL(authorize.headers.location as string).searchParams.get('code');
+      const code = new URL(
+        authorize.headers.location as string
+      ).searchParams.get('code');
 
       const token = await testClient.post('/token').type('form').send({
         grant_type: 'authorization_code',

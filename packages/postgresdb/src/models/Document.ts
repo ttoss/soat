@@ -60,6 +60,13 @@ export class Document extends Model {
   })
   declare tags: Record<string, string> | null;
 
+  @Column({
+    type: DataType.STRING(16),
+    allowNull: false,
+    defaultValue: 'ready',
+  })
+  declare status: 'pending' | 'processing' | 'ready' | 'failed';
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 
