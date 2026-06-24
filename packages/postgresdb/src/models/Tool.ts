@@ -63,6 +63,9 @@ export class Tool extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare presetParameters: object | null;
 
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare pipeline: object | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

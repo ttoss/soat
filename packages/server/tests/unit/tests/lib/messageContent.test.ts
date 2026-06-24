@@ -112,6 +112,7 @@ describe('resolveMessageContent', () => {
       mcp: null,
       actions: null,
       presetParameters: null,
+      pipeline: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -194,6 +195,7 @@ describe('resolveMessageContent', () => {
       mcp: null,
       actions: null,
       presetParameters: null,
+      pipeline: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -227,6 +229,7 @@ describe('resolveMessageContent', () => {
       mcp: null,
       actions: null,
       presetParameters: null,
+      pipeline: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -262,6 +265,7 @@ describe('resolveMessageContent', () => {
       mcp: null,
       actions: ['list-tools'],
       presetParameters: null,
+      pipeline: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

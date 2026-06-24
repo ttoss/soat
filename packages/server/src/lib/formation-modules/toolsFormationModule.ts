@@ -84,6 +84,7 @@ export const toolsFormationModule: FormationModule = {
       actions: toNullableArray<string>(properties.actions) ?? undefined,
       presetParameters:
         toNullableObject(properties.preset_parameters) ?? undefined,
+      pipeline: toNullableObject(properties.pipeline) ?? undefined,
     });
 
     log(
@@ -114,6 +115,7 @@ export const toolsFormationModule: FormationModule = {
       mcp: toNullableObject(properties.mcp),
       actions: toNullableArray<string>(properties.actions),
       presetParameters: toNullableObject(properties.preset_parameters),
+      pipeline: toNullableObject(properties.pipeline),
     });
   },
 
@@ -133,6 +135,7 @@ export const toolsFormationModule: FormationModule = {
         mcp: tool.mcp,
         actions: tool.actions,
         preset_parameters: tool.presetParameters,
+        pipeline: tool.pipeline,
       };
     } catch {
       return null;

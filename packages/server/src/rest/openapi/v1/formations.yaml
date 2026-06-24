@@ -729,8 +729,8 @@ components:
 
     ToolResourceProperties:
       description: >-
-        Defines a tool (HTTP endpoint, MCP server, or SOAT action) that
-        agents can invoke during a generation.
+        Defines a tool (HTTP endpoint, MCP server, SOAT action, or pipeline)
+        that agents can invoke during a generation.
       type: object
       additionalProperties: false
       required:
@@ -742,7 +742,7 @@ components:
         type:
           type: string
           nullable: true
-          description: Tool type hint (e.g. http, mcp, soat)
+          description: Tool type hint (e.g. http, mcp, soat, pipeline)
         description:
           type: string
           nullable: true
@@ -789,6 +789,16 @@ components:
           type: object
           nullable: true
           description: Pre-filled parameter values injected at execution time
+        pipeline:
+          type: object
+          nullable: true
+          description: >-
+            Pipeline definition for `pipeline` tools: an ordered `steps` array,
+            each invoking another tool by `tool_id` (optional `action`) with an
+            `input` built from earlier results via JSON Logic over
+            `{ input, steps }`, plus an optional `output` mapping. Step `input`
+            keys and `var` paths use camelCase (the runtime form). Free-form,
+            user-defined.
 
     DocumentResourceProperties:
       description: >-

@@ -334,4 +334,153 @@ describe('Tools', () => {
       expect(response.status).not.toBe(400);
     });
   });
+
+  describe('Pipeline tools', () => {
+    let pipelineToolId: string;
+
+    test('creates a pipeline tool referencing existing tools', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'compute-and-list',
+          type: 'pipeline',
+          description: 'Runs two steps in order',
+          parameters: {
+            type: 'object',
+            properties: { n: { type: 'number' } },
+          },
+          pipeline: {
+            steps: [
+              { id: 'first', tool_id: soatToolId, action: 'list-tools', input: {} },
+              {
+                id: 'second',
+                tool_id: soatToolId,
+                action: 'list-tools',
+                input: { note: { var: 'steps.first' } },
+              },
+            ],
+            output: { echo: { var: 'input.n' } },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.id).toMatch(/^tool_/);
+      expect(res.body.type).toBe('pipeline');
+      expect(res.body.pipeline).toBeDefined();
+      expect(res.body.pipeline.steps).toHaveLength(2);
+      expect(res.body.pipeline.steps[0].tool_id).toBe(soatToolId);
+      pipelineToolId = res.body.id;
+    });
+
+    test('GET returns the stored pipeline config (snake_case)', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/tools/${pipelineToolId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.pipeline.steps[0].action).toBe('list-tools');
+      expect(res.body.pipeline.output).toEqual({ echo: { var: 'input.n' } });
+    });
+
+    test('rejects a pipeline with no steps (400)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'empty-pipeline',
+          type: 'pipeline',
+          pipeline: { steps: [] },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PIPELINE_INVALID_STEP');
+    });
+
+    test('rejects a pipeline referencing an unknown tool (400)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'unknown-step',
+          type: 'pipeline',
+          pipeline: { steps: [{ id: 'a', tool_id: 'tool_doesnotexist' }] },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PIPELINE_INVALID_STEP');
+    });
+
+    test('rejects a pipeline whose step targets a client tool (400)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'client-step',
+          type: 'pipeline',
+          pipeline: { steps: [{ id: 'a', tool_id: clientToolId }] },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PIPELINE_INVALID_STEP');
+    });
+
+    test('rejects a pipeline with a forward step reference (400)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'forward-ref',
+          type: 'pipeline',
+          pipeline: {
+            steps: [
+              { id: 'a', tool_id: soatToolId, input: { x: { var: 'steps.b.v' } } },
+              { id: 'b', tool_id: soatToolId },
+            ],
+          },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PIPELINE_INVALID_STEP');
+    });
+
+    test('rejects a pipeline with duplicate step ids (400)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'dup-ids',
+          type: 'pipeline',
+          pipeline: {
+            steps: [
+              { id: 'a', tool_id: soatToolId },
+              { id: 'a', tool_id: soatToolId },
+            ],
+          },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PIPELINE_INVALID_STEP');
+    });
+
+    test('calling the pipeline runs the steps and wraps a failing step (422)', async () => {
+      // SOAT steps make an internal HTTP call that is unreachable from unit
+      // tests, so the first step fails and the runner wraps it as
+      // PIPELINE_STEP_FAILED — proving dispatch reaches the step.
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tools/${pipelineToolId}/call`)
+        .send({ input: { n: 1 } });
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe('PIPELINE_STEP_FAILED');
+      expect(res.body.error.meta.step_id).toBe('first');
+    });
+
+    test('unauthenticated pipeline call returns 401', async () => {
+      const res = await testClient
+        .post(`/api/v1/tools/${pipelineToolId}/call`)
+        .send({ input: {} });
+      expect(res.status).toBe(401);
+    });
+
+    test('pipeline call without permission returns 403 or 404', async () => {
+      const res = await authenticatedTestClient(noPermToken)
+        .post(`/api/v1/tools/${pipelineToolId}/call`)
+        .send({ input: {} });
+      expect([403, 404]).toContain(res.status);
+    });
+  });
 });
