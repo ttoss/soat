@@ -2,7 +2,10 @@ import createDebug from 'debug';
 import jsonLogic from 'json-logic-js';
 
 import { DomainError } from '../errors';
-import { applyInputMapping, applyOutputMapping } from './stateMapping';
+import {
+  applyInputMapping,
+  applyOutputMapping,
+} from './orchestrationNodeExecutors';
 import { callTool } from './tools';
 
 const log = createDebug('soat:pipeline');
