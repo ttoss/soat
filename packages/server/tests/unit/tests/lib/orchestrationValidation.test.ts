@@ -64,6 +64,30 @@ describe('validateOrchestrationGraph', () => {
       expect(result.valid).toBe(true);
     });
 
+    test('rejects a tool node that has action instead of operationId', () => {
+      const rawNode = {
+        id: 'n1',
+        type: 'tool',
+        toolId: 'tool_abc',
+        action: 'listAgents',
+      } as unknown as OrchestrationNode;
+      const result = validate({ nodes: [rawNode], edges: [] });
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({
+          message: expect.stringContaining('operationId'),
+        })
+      );
+    });
+
+    test('accepts a tool node with operationId and no action', () => {
+      const result = validate({
+        nodes: [{ id: 'n1', type: 'tool', toolId: 'tool_abc', operationId: 'listAgents' }],
+        edges: [],
+      });
+      expect(result.valid).toBe(true);
+    });
+
     test('flags duplicate node ids', () => {
       const result = validate({
         nodes: [

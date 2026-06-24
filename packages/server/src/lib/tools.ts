@@ -235,11 +235,20 @@ const callSoatTool = (
     authHeader?: string;
   }
 ): Promise<unknown> => {
-  const { action, mergedInput, authHeader } = args;
+  const { authHeader } = args;
+  // Support presetParameters.action as a fallback when no explicit action is given.
+  const action =
+    args.action ??
+    (typeof args.mergedInput['action'] === 'string'
+      ? args.mergedInput['action']
+      : undefined);
+  // Strip 'action' from the inputs so it is not forwarded as a tool parameter.
+  const { action: _action, ...mergedInput } = args.mergedInput;
+  void _action;
   if (!action) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'action is required for soat tools.'
+      'operationId is required for soat tools.'
     );
   }
   if (!tool.actions?.includes(action)) {

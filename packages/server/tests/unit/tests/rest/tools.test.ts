@@ -303,11 +303,35 @@ describe('Tools', () => {
       expect(response.status).toBe(422);
     });
 
-    test('calling a soat tool without action returns 400', async () => {
+    test('calling a soat tool without action returns 400 with operationId in error message', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/tools/${soatToolId}/call`)
         .send({});
       expect(response.status).toBe(400);
+      expect(response.body.error.message).toMatch(/operationId/i);
+    });
+
+    test('calling a soat tool via preset_parameters.action does not return operationId-required error', async () => {
+      const presetToolRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'soat-preset-action-tool',
+          type: 'soat',
+          description: 'SOAT tool with preset action',
+          actions: ['list-tools'],
+          preset_parameters: { action: 'list-tools' },
+        });
+      expect(presetToolRes.status).toBe(201);
+      const presetToolId = presetToolRes.body.id;
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tools/${presetToolId}/call`)
+        .send({});
+      // The action is extracted from presetParameters so it must NOT fail with
+      // the "operationId required" validation error (400). The internal SOAT HTTP
+      // call may fail in the test environment (500), which is expected.
+      expect(response.status).not.toBe(400);
     });
   });
 });
