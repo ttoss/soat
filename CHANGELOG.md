@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.2](https://github.com/ttoss/soat/compare/v0.13.1...v0.13.2) (2026-06-24)
+
+### Bug Fixes
+
+* **debate:** wrap AI SDK result in plain object before orchestration ([#247](https://github.com/ttoss/soat/issues/247)) ([a7f19c0](https://github.com/ttoss/soat/commit/a7f19c0ba95d5dcd5b57d4450bc4ec18318c2d41))
+
+### Features
+
+* **documents:** native file ingestion with DocumentChunk model ([#245](https://github.com/ttoss/soat/issues/245)) ([5e9776c](https://github.com/ttoss/soat/commit/5e9776c9c01d456a360b6c5ae595098d87bfcb24))
+
 ## [0.13.1](https://github.com/ttoss/soat/compare/v0.13.0...v0.13.1) (2026-06-23)
 
 * Make orchestration run input usable: object MCP schema + JSON Logic inputMapping (#240) ([3cadc79](https://github.com/ttoss/soat/commit/3cadc79612d3cecbbe079fdea83f47c0c4de0dab)), closes [#240](https://github.com/ttoss/soat/issues/240)

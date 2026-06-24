@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.2](https://127.0.0.1/41729/git/ttoss/compare/v0.13.1...v0.13.2) (2026-06-24)
+
+### Features
+
+* **documents:** native file ingestion with DocumentChunk model ([#245](https://127.0.0.1/41729/git/ttoss/issues/245)) ([5e9776c](https://127.0.0.1/41729/git/ttoss/commits/5e9776c9c01d456a360b6c5ae595098d87bfcb24))
+
 ## [0.13.1](https://127.0.0.1/41729/git/ttoss/compare/v0.13.0...v0.13.1) (2026-06-23)
 
 * Make orchestration run input usable: object MCP schema + JSON Logic inputMapping (#240) ([3cadc79](https://127.0.0.1/41729/git/ttoss/commits/3cadc79612d3cecbbe079fdea83f47c0c4de0dab)), closes [#240](https://127.0.0.1/41729/git/ttoss/issues/240)
