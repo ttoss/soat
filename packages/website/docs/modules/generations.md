@@ -27,6 +27,7 @@ Generations can be listed via `GET /generations` (filter by `agent_id`, `trace_i
 | `last_activity_at`          | string \| null | Last activity timestamp                                                                              |
 | `stop_reason`               | string \| null | Why the generation stopped (e.g. `stop`, `error`, `depth_guard`)                                     |
 | `error`                     | object \| null | Structured error payload recorded when the generation failed (see [Error Recording](#error-recording)) |
+| `metadata`                  | object \| null | Structured metadata written by reasoning modes (see [Metadata](#metadata))                           |
 | `created_at`                | string         | ISO 8601 creation timestamp                                                                          |
 | `updated_at`                | string         | ISO 8601 last-update timestamp                                                                       |
 
@@ -78,6 +79,50 @@ Generation endpoints return HTTP `502` with the `AI_PROVIDER_ERROR` code when th
 
 The `meta` field includes the `generation_id` and `trace_id` of the failed run so the failure can be inspected post-mortem via `GET /generations/:generation_id` and `GET /traces/:trace_id`.
 
-### Internal Metadata
+### Metadata
 
-Generation records carry internal coordination state (e.g. pending tool-call context used to resume `requires_action` runs). This state is not exposed through the API.
+The `metadata` field is written by the server to record the outcome of reasoning modes. It is read-only and not settable by callers.
+
+#### `metadata.reasoning` — reflect / debate summary
+
+Both reflect and debate modes write a `metadata.reasoning` object on the parent generation once the reasoning pass completes:
+
+```json
+{
+  "metadata": {
+    "reasoning": {
+      "mode": "debate",
+      "applied": true,
+      "reason": "synthesized"
+    }
+  }
+}
+```
+
+| Field | Values | Description |
+|-------|--------|-------------|
+| `mode` | `reflect` \| `debate` | Which reasoning mode ran |
+| `applied` | boolean | `true` if the reasoned answer replaced the draft |
+| `reason` | `synthesized` \| `fallback` \| `synthesis_failed` \| `approved` \| `revision_skipped` | Why `applied` is true or false |
+
+#### `metadata.reasoning` on debate child generations
+
+When debate mode runs, each perspective turn and the synthesis step creates a **child generation** linked to the parent via `initiator_generation_id`. These child records carry their own `metadata.reasoning`:
+
+```json
+{
+  "metadata": {
+    "reasoning": {
+      "perspective": "Advocate",
+      "output": "The proposal has strong upside because..."
+    }
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `perspective` | Persona name (e.g. `"Advocate"`, `"Skeptic"`) or `"synthesis"` for the final pass |
+| `output` | The text produced by this step |
+
+Use `GET /generations?trace_id=<trace_id>` to retrieve the full tree. Child records with `status: "failed"` indicate a perspective that errored; the parent generation is unaffected.

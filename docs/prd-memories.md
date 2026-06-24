@@ -16,7 +16,7 @@
 | MemoryEntity model             | ❌ Not started | Project-scoped extracted nouns/objects with `mey_` prefix, embedding column, optional `actorId` FK; deduplicated across memories |
 | MemoryEntryEntity join table   | ❌ Not started | Links entries to entities with relationship label and direction                                                                  |
 | Entity extraction on write     | ❌ Not started | Synchronous best-effort extraction inside `writeMemoryEntry()`; LLM extracts subject/relationship/object triples                 |
-| Entity-based knowledge queries | ❌ Not started | `entityIds`/`entityNames` filters in `searchKnowledge()`; graph traversal queries                                                |
+| Entity-based knowledge queries | ❌ Not started | Memory-side `resolveEntitySearch()` (entity/actor → entry-set joins). Query surface specced in prd-knowledge.md Phase 3          |
 
 ## Implementation Phases
 
@@ -104,7 +104,7 @@
 
 **Deliverables:**
 
-**5a — MemoryEntity + MemoryEntryEntity models:**
+#### 5a — MemoryEntity + MemoryEntryEntity models
 
 - `MemoryEntity` model (`mey_` prefix) — **project-scoped**, deduplicated nouns/objects extracted from entries, with optional `actorId` FK for entities that correspond to known actors
 - Entities live at **project level**, not memory level — enabling cross-memory graph traversal ("find everything about Pedro across all memories")
@@ -112,7 +112,7 @@
 - CRUD endpoints for entities: `GET/PUT/DELETE /api/v1/entities` (project-scoped, not nested under memories)
 - Entity deduplication by embedding similarity within a project (same two-threshold pattern as entries)
 
-**5b — Synchronous entity extraction on write:**
+#### 5b — Synchronous entity extraction on write
 
 - When `writeMemoryEntry()` creates or updates an entry, run a lightweight LLM extraction to decompose content into `[{ subject, relationship, object }]` triples
 - Upsert entities by name within the **project** (deduplicate by embedding similarity)
@@ -120,7 +120,7 @@
 - **Synchronous, best-effort:** extraction runs inline after the entry is persisted. If it fails, the entry still exists — entities are an enrichment, not a critical path
 - Entity extraction from a single atomic entry is cheap (~500ms LLM call), unlike Phase 4's conversation-level extraction
 
-### Entity Deduplication & Resolution
+#### Entity Deduplication & Resolution
 
 Entities are deduplicated at **project scope** so the same real-world concept is represented once across all memories. Resolution uses a layered strategy:
 
@@ -156,6 +156,9 @@ writeMemoryEntry() flow (updated):
      b. Try: extract entities + upsert + link (sync, best-effort)
         Prompt: "Extract entities and relationships from: <content>"
         → [{ subject: string, relationship: string, object: string }]
+        On UPDATE: delete this entry's existing MemoryEntryEntity links first —
+        the merged content may reference different entities, so stale links must
+        not survive. (Orphaned entities are pruned separately, not here.)
         For each triple:
           - Upsert subject entity (deduplicate by embedding within project)
           - Upsert object entity (deduplicate by embedding within project)
@@ -164,11 +167,17 @@ writeMemoryEntry() flow (updated):
   4. Return { action, entry }
 ```
 
-**5c — Entity-based knowledge queries:**
+#### 5c — Entity-based knowledge queries
 
-- `entity_ids` and `entity_names` filters in `searchKnowledge()` — find all entries linked to specific entities
-- `actor_id` filter in `searchKnowledge()` — find entries linked to entities that map to a specific actor
-- Combine with vector search: entity filter narrows the candidate set, vector search ranks within it
+The **query surface** for entity-based search (the `entity_ids`, `entity_names`, `actor_ids`,
+`entity_types`, `relationship`, and `direction` parameters; query modes; ranking) is owned by
+the knowledge module — see [prd-knowledge.md Phase 3 — Entity Graph Queries](./prd-knowledge.md#phase-3--entity-graph-queries--future).
+This phase delivers the **memory-side data layer** that Phase 3 queries against:
+
+- `resolveEntitySearch()` resolves entities by ID / name / actor / type and joins through
+  `MemoryEntryEntity` to a candidate entry set, applying `relationship` / `direction` filters.
+- Entity filters narrow the candidate set; when a `query` is present, vector search ranks within it.
+- Memory-type results are enriched with their linked entities (see [Memory Entry ↔ Entity Relationship](#memory-entry--entity-relationship)).
 
 **Unlocks:** Precise, structured knowledge retrieval. Agents can answer "what do we know about this customer?" with exact graph queries instead of hoping vector similarity surfaces the right entries.
 
@@ -399,7 +408,7 @@ The user calls `POST /api/v1/memories/:memoryId/entries` with `{ "content": "...
 
 ### 2. Agent Write (soat-tool)
 
-During a generation, an agent can call the `write_memory` tool with `{ "content": "...", "memoryId": "mem_..." }`. The write algorithm runs identically.
+During a generation, an agent can call the `write_memory` tool with `{ "content": "..." }`. The tool takes **content only** — the target memory is bound from the agent's `knowledge_config.write_memory_id` when the tool is built, so the agent cannot write to arbitrary memories. The write algorithm runs identically.
 
 ### 3. Automatic Extraction (post-conversation)
 
@@ -433,70 +442,25 @@ Extraction is triggered when an agent whose `knowledge_config` has `extraction: 
 
 ### Knowledge Config
 
-Instead of a separate join table, the Agent model stores a `knowledgeConfig` JSONB field that mirrors the `searchKnowledge` parameters. This is simpler — one field on the agent instead of a separate table and attachment endpoints.
+The Agent model stores a `knowledgeConfig` JSONB field that drives both knowledge retrieval and the
+memory write target — no separate join table or attachment endpoints. **Its full schema, the three
+retrieval paths (agent config / per-generation / self-retrieval), and the agent-config +
+per-generation merge semantics are defined once in the knowledge PRD** — see
+[prd-knowledge.md → Knowledge Config](./prd-knowledge.md#knowledge-config) and
+[Three Knowledge Retrieval Paths](./prd-knowledge.md#three-knowledge-retrieval-paths). Do not
+re-document the shape here; only the memory-owned fields are described below.
 
-```json
-PUT /api/v1/agents/{agent_id}
-{
-  "knowledge_config": {
-    "memory_ids": ["mem_abc", "mem_def"],
-    "memory_tags": ["crm", "user*"],
-    "document_paths": ["/sales/"],
-    "document_ids": ["doc_01"],
-    "min_score": 0.5,
-    "limit": 10
-  }
-}
-```
+**Memory-owned fields on `knowledge_config`:**
 
-**Simple case** — agent needs just one memory:
+- `write_memory_id` — the memory the `write_memory` tool and automatic extraction write to. Binding
+  the target here (rather than as a tool argument) is what lets the `write_memory` tool take
+  `{ content }` only.
+- `extraction` — enables post-turn fact extraction into `write_memory_id` (see Phase 4). `true` uses
+  defaults; the object form `{ enabled?, ai_provider_id?, model?, prompt? }` customizes the
+  extraction provider/model/prompt.
 
-```json
-{ "knowledge_config": { "memory_ids": ["mem_abc"] } }
-```
-
-**Rich case** — agent needs memories + scoped documents:
-
-```json
-{
-  "knowledge_config": {
-    "memory_ids": ["mem_abc"],
-    "memory_tags": ["projectA"],
-    "document_paths": ["/docs/"],
-    "limit": 20
-  }
-}
-```
-
-**No knowledge** — omit `knowledge_config` or set to `null`.
-
-### Three Knowledge Retrieval Paths
-
-There are three ways to provide knowledge to an agent:
-
-| Path                                                             | When                            | Who decides                   | Injected as                      |
-| ---------------------------------------------------------------- | ------------------------------- | ----------------------------- | -------------------------------- |
-| **Agent config** (`knowledge_config` on agent)                   | Every generation, automatically | Agent creator (at setup time) | System messages                  |
-| **Per-generation request** (`knowledge_config` in generate body) | One specific generation         | Caller (at request time)      | System messages                  |
-| **Agent self-retrieval**                                         | During generation, dynamically  | The agent (LLM decides)       | Via `search-knowledge` soat-tool |
-
-### Merge Behavior (Agent Config + Per-Generation)
-
-When both the agent's stored `knowledge_config` and a per-generation `knowledge_config` are provided, they are **appended** (not overridden):
-
-- **Array fields** (`memory_ids`, `memory_tags`, `document_paths`, `document_ids`) → union of both sets
-- **Scalar fields** (`min_score`, `limit`) → per-generation overrides agent config
-
-Example:
-
-```
-Agent config:       { memory_ids: ["mem_abc"], limit: 5 }
-Per-generation:     { memory_ids: ["mem_xyz"], document_paths: ["/docs/"] }
-
-→ Merged:           { memory_ids: ["mem_abc", "mem_xyz"], document_paths: ["/docs/"], limit: 5 }
-```
-
-Both sets of results are injected as **system messages**, ordered by score.
+`memory_ids` / `memory_tags` scope which memories an agent **reads** from; `write_memory_id` scopes
+where it **writes**.
 
 ### Generation Flow
 
@@ -553,7 +517,7 @@ The system embeds the latest user message and calls `searchKnowledge()` with the
 | memoryId  | INTEGER      | FK → Memory, NOT NULL          |
 | content   | TEXT         | NOT NULL                       |
 | source    | VARCHAR(20)  | NOT NULL, enum                 |
-| embedding | VECTOR(1536) | NOT NULL                       |
+| embedding | VECTOR(EMBEDDING_DIMENSIONS) | NOT NULL          |
 | createdAt | TIMESTAMP    | NOT NULL                       |
 | updatedAt | TIMESTAMP    | NOT NULL                       |
 
@@ -568,7 +532,7 @@ The system embeds the latest user message and calls `searchKnowledge()` with the
 | entityType | VARCHAR(50)  | NULL                            |
 | actorId    | INTEGER      | FK → Actor, NULL (unique)       |
 | properties | JSONB        | NULL, default `{}`              |
-| embedding  | VECTOR(1536) | NULL                            |
+| embedding  | VECTOR(EMBEDDING_DIMENSIONS) | NULL            |
 | createdAt  | TIMESTAMP    | NOT NULL                        |
 | updatedAt  | TIMESTAMP    | NOT NULL                        |
 
@@ -595,20 +559,11 @@ The system embeds the latest user message and calls `searchKnowledge()` with the
 
 ### Agent `knowledgeConfig` Field
 
-Stored as JSONB on the `agents` table. Schema:
-
-```ts
-interface KnowledgeConfig {
-  memoryIds?: string[]; // mem_... IDs to search
-  memoryTags?: string[]; // glob patterns to match memory tags
-  documentPaths?: string[]; // file path prefixes
-  documentIds?: string[]; // doc_... IDs
-  minScore?: number; // minimum cosine similarity (0–1)
-  limit?: number; // max results to inject
-}
-```
-
-No join table needed. The agent stores its knowledge retrieval config inline.
+Stored as JSONB on the `agents` table; no join table needed — the agent stores its knowledge
+retrieval config inline. The **canonical `KnowledgeConfig` schema** (all read-scope and write-side
+fields) lives in the knowledge PRD — see
+[prd-knowledge.md → Knowledge Config](./prd-knowledge.md#knowledge-config). The memory-owned fields
+(`write_memory_id`, `extraction`) are described under [Agent Integration](#knowledge-config) above.
 
 ## Permissions
 
@@ -636,10 +591,11 @@ No join table needed. The agent stores its knowledge retrieval config inline.
 
 | Permission                    | Endpoint                            |
 | ----------------------------- | ----------------------------------- |
-| `memories:ListMemoryEntities` | `GET /api/v1/entities`              |
-| `memories:GetMemoryEntity`    | `GET /api/v1/entities/:entityId`    |
-| `memories:UpdateMemoryEntity` | `PUT /api/v1/entities/:entityId`    |
-| `memories:DeleteMemoryEntity` | `DELETE /api/v1/entities/:entityId` |
+| `memories:ListMemoryEntities` | `GET /api/v1/entities`                      |
+| `memories:GetMemoryEntity`    | `GET /api/v1/entities/:entityId`            |
+| `memories:UpdateMemoryEntity` | `PUT /api/v1/entities/:entityId`            |
+| `memories:DeleteMemoryEntity` | `DELETE /api/v1/entities/:entityId`         |
+| `memories:ListEntityEntries`  | `GET /api/v1/entities/:entityId/entries`    |
 
 Entity creation is automatic (via extraction during `writeMemoryEntry`). No `CreateMemoryEntity` permission needed — it piggybacks on `WriteMemoryEntry`.
 

@@ -349,6 +349,14 @@ The `reasoning` config makes an agent think harder before answering. It applies 
 }
 ```
 
+**Debate observability** — each perspective turn and the synthesis step creates a child [generation](./generations.md) record linked to the parent via `initiator_generation_id` and sharing the same `trace_id`. Querying `GET /generations?trace_id=<trace_id>` returns the full tree. Each child record carries:
+
+- `metadata.reasoning.perspective` — the persona name (e.g. `"Advocate"`) or `"synthesis"` for the final pass
+- `metadata.reasoning.output` — the text produced by that step
+- `started_at` / `completed_at` — the wall-clock time for the step, useful for latency and cost debugging
+
+A child record that fails (provider error) is marked `status: "failed"` and does not affect the parent generation — debate failure semantics still apply.
+
 Failure semantics: neither reflect nor debate makes a generation worse. Individual perspective failures are dropped (quorum continues); if all perspectives fail or synthesis fails, the draft from the initial generation is returned. Both modes skip streaming generations and `requires_action` (client-tool) turns; `effort` applies to streaming as well.
 
 ### SOAT Action Permissions
