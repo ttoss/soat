@@ -412,10 +412,58 @@ if [ "$SEARCH_COUNT" -lt 1 ]; then
 fi
 echo "Search returned $SEARCH_COUNT result(s)."
 
+# 12b. Ingest a PDF file
+echo "--- Ingesting a PDF file ---"
+PDF_BASE64="JVBERi0xLjQKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PgplbmRvYmoKMiAwIG9iago8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PgplbmRvYmoKMyAwIG9iago8PC9UeXBlL1BhZ2UvUGFyZW50IDIgMCBSL01lZGlhQm94WzAgMCA2MTIgNzkyXS9Db250ZW50cyA0IDAgUi9SZXNvdXJjZXM8PC9Gb250PDwvRjEgNSAwIFI+Pj4+Pj4KZW5kb2JqCjQgMCBvYmoKPDwvTGVuZ3RoIDQ0Pj4Kc3RyZWFtCkJUIC9GMSAxMiBUZiAxMDAgNzAwIFRkIChIZWxsbyBXb3JsZCkgVGogRVQKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8L1R5cGUvRm9udC9TdWJ0eXBlL1R5cGUxL0Jhc2VGb250L0hlbHZldGljYT4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1NCAwMDAwMCBuIAowMDAwMDAwMTA1IDAwMDAwIG4gCjAwMDAwMDAyMTcgMDAwMDAgbiAKMDAwMDAwMDMwOCAwMDAwMCBuIAp0cmFpbGVyCjw8L1NpemUgNi9Sb290IDEgMCBSPj4Kc3RhcnR4cmVmCjM3MQolJUVPRg=="
+PDF_UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --filename smoke-test.pdf \
+  --content "$PDF_BASE64" \
+  --content_type application/pdf)
+PDF_FILE_ID=$(echo "$PDF_UPLOAD_RESP" | jq -r '.id')
+echo "Uploaded PDF file id: $PDF_FILE_ID"
+
+PDF_DOC_RESP=$($SOAT_CLI ingest-document \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --file-id "$PDF_FILE_ID" \
+  --path-prefix /smoke/)
+PDF_DOC_ID=$(echo "$PDF_DOC_RESP" | jq -r '.id')
+PDF_CHUNK_COUNT=$(echo "$PDF_DOC_RESP" | jq -r '.chunk_count')
+echo "PDF document id: $PDF_DOC_ID chunk_count: $PDF_CHUNK_COUNT"
+if [ -z "$PDF_DOC_ID" ] || [ "$PDF_DOC_ID" = "null" ]; then
+  echo "ERROR: ingest-document did not return a document id" >&2
+  exit 1
+fi
+echo "PDF ingestion: OK"
+
+# 12c. Ingest a Markdown file (exercises content-type dispatch)
+echo "--- Ingesting a text file ---"
+MD_BASE64=$(printf '# Smoke Notes\n\nThis is an ingested markdown document.\n' | base64 | tr -d '\n')
+MD_UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --filename smoke-notes.md \
+  --content "$MD_BASE64" \
+  --content_type text/markdown)
+MD_FILE_ID=$(echo "$MD_UPLOAD_RESP" | jq -r '.id')
+MD_DOC_RESP=$($SOAT_CLI ingest-document \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --file-id "$MD_FILE_ID" \
+  --path-prefix /smoke/ \
+  --chunk-strategy whole)
+MD_DOC_ID=$(echo "$MD_DOC_RESP" | jq -r '.id')
+echo "Markdown document id: $MD_DOC_ID chunk_count: $(echo "$MD_DOC_RESP" | jq -r '.chunk_count')"
+if [ -z "$MD_DOC_ID" ] || [ "$MD_DOC_ID" = "null" ]; then
+  echo "ERROR: ingest-document did not return a document id for markdown" >&2
+  exit 1
+fi
+echo "Text ingestion: OK"
+
 # 13. Delete documents
 echo "--- Deleting documents ---"
 $SOAT_CLI delete-document --document-id "$DOC1_ID"
 $SOAT_CLI delete-document --document-id "$DOC2_ID"
+$SOAT_CLI delete-document --document-id "$PDF_DOC_ID"
+$SOAT_CLI delete-document --document-id "$MD_DOC_ID"
 echo "Documents deleted."
 
 # 13b. Memories — CRUD + search

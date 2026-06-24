@@ -3,6 +3,7 @@ import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import {
   createDocument,
+  createDocumentFromFile,
   deleteDocument,
   getDocument,
   getDocumentTags,
@@ -175,6 +176,9 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     title?: string;
     metadata?: Record<string, unknown>;
     tags?: Record<string, string>;
+    chunkStrategy?: 'page' | 'whole' | 'size';
+    chunkSize?: number;
+    chunkOverlap?: number;
   };
 
   if (!body.content) {
@@ -222,6 +226,9 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     title: body.title,
     metadata: body.metadata,
     tags: body.tags,
+    chunkStrategy: body.chunkStrategy,
+    chunkSize: body.chunkSize,
+    chunkOverlap: body.chunkOverlap,
   });
   ctx.status = 201;
   ctx.body = doc;
@@ -363,6 +370,73 @@ documentsRouter.patch('/documents/:document_id/tags', async (ctx: Context) => {
     tags,
     merge: true,
   });
+});
+
+documentsRouter.post('/documents/ingest', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const body = ctx.request.body as {
+    fileId?: string;
+    projectId?: string;
+    pathPrefix?: string;
+    tags?: Record<string, string>;
+    chunkStrategy?: 'page' | 'whole' | 'size';
+    chunkSize?: number;
+    chunkOverlap?: number;
+  };
+
+  if (!body.fileId) {
+    ctx.status = 400;
+    ctx.body = { error: 'fileId is required' };
+    return;
+  }
+
+  let resolvedProjectPublicId = body.projectId;
+  if (!resolvedProjectPublicId) {
+    if (ctx.authUser.apiKeyProjectPublicId) {
+      resolvedProjectPublicId = ctx.authUser.apiKeyProjectPublicId;
+    } else {
+      ctx.status = 400;
+      ctx.body = { error: 'projectId is required' };
+      return;
+    }
+  }
+
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: resolvedProjectPublicId,
+    action: 'documents:IngestDocument',
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const project = await db.Project.findOne({
+    where: { publicId: resolvedProjectPublicId },
+  });
+  if (!project) {
+    ctx.status = 400;
+    ctx.body = { error: 'Invalid project ID' };
+    return;
+  }
+
+  const result = await createDocumentFromFile({
+    fileId: body.fileId,
+    projectId: project.id,
+    pathPrefix: body.pathPrefix,
+    tags: body.tags,
+    chunkStrategy: body.chunkStrategy,
+    chunkSize: body.chunkSize,
+    chunkOverlap: body.chunkOverlap,
+  });
+
+  ctx.status = 201;
+  ctx.body = result;
 });
 
 export { documentsRouter };

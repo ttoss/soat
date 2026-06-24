@@ -6,6 +6,7 @@ export { Chat } from './Chat';
 export { Conversation } from './Conversation';
 export { ConversationMessage } from './ConversationMessage';
 export { Document } from './Document';
+export { DocumentChunk } from './DocumentChunk';
 export { File } from './File';
 export { Formation } from './Formation';
 export { FormationOperation } from './FormationOperation';

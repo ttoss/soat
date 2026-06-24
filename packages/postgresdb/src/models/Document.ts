@@ -60,22 +60,6 @@ export class Document extends Model {
   })
   declare tags: Record<string, string> | null;
 
-  @Column({
-    type: DataType.VECTOR(
-      (() => {
-        const dim = Number(process.env.EMBEDDING_DIMENSIONS);
-        if (!dim) {
-          throw new Error(
-            'EMBEDDING_DIMENSIONS environment variable must be set to a positive integer'
-          );
-        }
-        return dim;
-      })()
-    ),
-    allowNull: true,
-  })
-  declare embedding: number[] | null;
-
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

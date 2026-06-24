@@ -30,6 +30,7 @@ export const PUBLIC_ID_PREFIXES = {
   formation: 'form_',
   formationResource: 'form_res_',
   formationOperation: 'form_op_',
+  documentChunk: 'dchunk_',
 } as const;
 
 /**

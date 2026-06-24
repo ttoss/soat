@@ -151,6 +151,24 @@ export const ERROR_CODES = {
     description:
       'The embedding service is not configured. Set EMBEDDING_PROVIDER and EMBEDDING_MODEL environment variables.',
   },
+  PDF_PARSE_FAILED: {
+    httpStatus: 400,
+    description:
+      'The uploaded file could not be parsed as a PDF. Ensure the file is a valid PDF document.',
+  },
+  FILE_PARSE_FAILED: {
+    httpStatus: 400,
+    description: 'The referenced file contains no extractable text.',
+  },
+  FILE_NOT_FOUND: {
+    httpStatus: 400,
+    description: 'The referenced file does not exist.',
+  },
+  UNSUPPORTED_FILE_TYPE: {
+    httpStatus: 400,
+    description:
+      'The referenced file has a content type that cannot be ingested. Supported types: application/pdf, text/plain, text/markdown.',
+  },
 } as const satisfies Record<
   string,
   { httpStatus: number; description: string }

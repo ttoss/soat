@@ -25,6 +25,11 @@
       "operationId": "deleteDocument",
       "action": "documents:DeleteDocument",
       "description": "Delete a document"
+    },
+    {
+      "operationId": "ingestDocument",
+      "action": "documents:IngestDocument",
+      "description": "Ingest a file (PDF or text) into a chunked document"
     }
   ],
   "srnPatterns": [

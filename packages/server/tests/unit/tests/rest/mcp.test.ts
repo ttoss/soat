@@ -2,8 +2,10 @@ import type http from 'node:http';
 
 import { app } from 'src/app';
 import { db } from 'src/db';
+import * as pdfModule from 'src/lib/pdf';
 import { saveTrace } from 'src/lib/traces';
 
+import { ONE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 let httpServer: http.Server;
@@ -294,6 +296,34 @@ describe('MCP tools - happy path', () => {
     const result = parseResult(res);
     expect(result.id).toBeDefined();
     documentId = result.id;
+  });
+
+  test('ingest-document ingests a PDF', async () => {
+    const uploadRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/files/upload')
+      .attach('file', ONE_PAGE_PDF_BUFFER, {
+        filename: 'mcp-test.pdf',
+        contentType: 'application/pdf',
+      })
+      .field('project_id', projectId);
+    expect(uploadRes.status).toBe(201);
+    const pdfFileId = uploadRes.body.id;
+
+    const spy = jest
+      .spyOn(pdfModule, 'extractPdfPages')
+      .mockResolvedValue(['MCP PDF page 1']);
+    try {
+      const res = await mcpCall('ingest-document', {
+        fileId: pdfFileId,
+        projectId,
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.id).toBeDefined();
+      expect(result.chunkCount).toBeGreaterThan(0);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   test('list-documents returns data array', async () => {
