@@ -452,7 +452,41 @@ Graph-only mode (results ordered by `updated_at`, no score):
 
 ### Knowledge Config
 
-Agents store a `knowledgeConfig` JSONB field that mirrors the `searchKnowledge` parameters. This replaces the previous `AgentMemory` join table approach — no separate attachment endpoints needed.
+> **Canonical schema.** This section is the single source of truth for the `knowledge_config`
+> shape. Other PRDs (e.g. prd-memories.md) link here instead of redefining it. The write-side
+> fields (`write_memory_id`, `extraction`) drive memory writes — their *behavior* is owned by
+> prd-memories.md Phase 4 — but their *shape* lives here because they ride on the same object.
+
+Agents store a `knowledgeConfig` JSONB field that mirrors the `searchKnowledge` parameters plus
+the agent write-target fields. This replaces the previous `AgentMemory` join table approach — no
+separate attachment endpoints needed.
+
+```ts
+interface KnowledgeConfig {
+  // ── Read scope (search filters; mirror searchKnowledge params) ──
+  query?: string; // fallback query when no user message is available
+  memoryIds?: string[]; // mem_... IDs to search
+  memoryTags?: string[]; // glob patterns matched against memory tags
+  documentPaths?: string[]; // file path prefixes
+  documentIds?: string[]; // doc_... IDs
+  entityIds?: string[]; // mey_... IDs (Phase 3)
+  entityNames?: string[]; // case-insensitive substring match (Phase 3)
+  actorIds?: string[]; // act_... IDs (Phase 3)
+  entityTypes?: string[]; // person, organization, … (Phase 3)
+  relationship?: string; // edge label for graph traversal (Phase 3)
+  direction?: 'subject' | 'object'; // edge direction (Phase 3)
+  minScore?: number; // minimum cosine similarity (0–1); only applies with a query
+  limit?: number; // max results to inject
+
+  // ── Write side (owned by prd-memories.md Phase 4) ──
+  writeMemoryId?: string; // target memory for the write_memory tool + extraction
+  extraction?: boolean | { enabled?: boolean; aiProviderId?: string; model?: string; prompt?: string };
+}
+```
+
+The external (snake_case) contract is the same field set: `memory_ids`, `memory_tags`,
+`document_paths`, `document_ids`, `entity_ids`, `entity_names`, `actor_ids`, `entity_types`,
+`relationship`, `direction`, `min_score`, `limit`, `query`, `write_memory_id`, `extraction`.
 
 ```json
 {
@@ -469,7 +503,7 @@ Agents store a `knowledgeConfig` JSONB field that mirrors the `searchKnowledge` 
 
 Simple case (one memory): `{ "knowledge_config": { "memory_ids": ["mem_abc"] } }`
 
-Actor-scoped case: `{ "knowledge_config": { "actor_ids": ["act_customer"] } }` — retrieves all knowledge about a specific actor across all memories
+Actor-scoped case: `{ "knowledge_config": { "actor_ids": ["act_customer"] } }` — retrieves all knowledge about a specific actor across all memories (Phase 3)
 
 ### Three Knowledge Retrieval Paths
 
