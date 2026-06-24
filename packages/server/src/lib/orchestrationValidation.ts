@@ -147,6 +147,17 @@ const validateNodeShape = (args: {
       });
     }
   }
+
+  if (node.type === 'tool') {
+    const raw = node as Record<string, unknown>;
+    if (raw['action'] !== undefined && !node.operationId) {
+      issues.push({
+        path: `${basePath}.action`,
+        message: `tool node '${node.id}' uses 'operationId', not 'action'; rename the field to 'operationId'.`,
+      });
+    }
+  }
+
   return issues;
 };
 
