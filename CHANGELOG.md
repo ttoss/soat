@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.5](https://github.com/ttoss/soat/compare/v0.13.4...v0.13.5) (2026-06-25)
+
+### Bug Fixes
+
+* **mcp:** enforce project-key scope in list-projects for admin users ([#268](https://github.com/ttoss/soat/issues/268)) ([b4a8918](https://github.com/ttoss/soat/commit/b4a8918991d2ad71b9ab4c673166ca483472cf66)), closes [#266](https://github.com/ttoss/soat/issues/266)
+
+### Features
+
+* **files:** add upload token endpoint for large file uploads via MCP ([#269](https://github.com/ttoss/soat/issues/269)) ([e62627c](https://github.com/ttoss/soat/commit/e62627c2409a1d8049f80fdd21fbd02e3ccbe29e))
+* **server:** make projectId implicit for project-scoped API keys ([#270](https://github.com/ttoss/soat/issues/270)) ([026edb7](https://github.com/ttoss/soat/commit/026edb7446f3cb176ef33a2087facd719d9f5095)), closes [#267](https://github.com/ttoss/soat/issues/267) [#267](https://github.com/ttoss/soat/issues/267)
+
 ## [0.13.4](https://github.com/ttoss/soat/compare/v0.13.3...v0.13.4) (2026-06-25)
 
 ### Bug Fixes
