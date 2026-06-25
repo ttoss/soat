@@ -15,6 +15,7 @@ type FieldEditorProps = {
   onChange: (value: string) => void;
   required?: boolean;
   refOptions?: RefOption[];
+  onFileChange?: (file: File | null) => void;
 };
 
 const TextareaField = ({
@@ -218,12 +219,32 @@ const MultiRefField = ({
   );
 };
 
+const FileField = ({
+  id,
+  onChange,
+}: {
+  id: string;
+  onChange: (file: File | null) => void;
+}) => {
+  return (
+    <input
+      id={id}
+      type="file"
+      onChange={(e) => {
+        return onChange(e.target.files?.[0] ?? null);
+      }}
+      className="flex w-full text-sm file:mr-2 file:cursor-pointer file:rounded file:border file:border-input file:bg-transparent file:px-2 file:py-1 file:text-xs"
+    />
+  );
+};
+
 type FieldInputProps = {
   id: string;
   schema: OpenApiSchema;
   value: string;
   onChange: (v: string) => void;
   refOptions?: RefOption[];
+  onFileChange?: (file: File | null) => void;
 };
 
 const FieldInput = ({
@@ -232,7 +253,11 @@ const FieldInput = ({
   value,
   onChange,
   refOptions,
+  onFileChange,
 }: FieldInputProps): React.ReactElement => {
+  if (schema.format === 'binary') {
+    return <FileField id={id} onChange={onFileChange ?? (() => {})} />;
+  }
   if (refOptions) {
     if (schema.type === 'array') {
       return (
@@ -308,6 +333,7 @@ export const FieldEditor = ({
   onChange,
   required,
   refOptions,
+  onFileChange,
 }: FieldEditorProps): React.ReactElement => {
   const id = `field-${name}`;
   const label = humanizeKey(name);
@@ -324,6 +350,7 @@ export const FieldEditor = ({
         value={value}
         onChange={onChange}
         refOptions={refOptions}
+        onFileChange={onFileChange}
       />
     </div>
   );

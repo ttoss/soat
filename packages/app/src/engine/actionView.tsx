@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { apiFetch } from '@/api/client';
+import { apiFetch, apiFetchMultipart } from '@/api/client';
 import { useAuth } from '@/auth/authContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,9 +8,11 @@ import { Label } from '@/components/ui/label';
 
 import { FieldEditor } from './fieldEditor';
 import {
+  buildMultipartFormData,
   buildRequestBody,
   getOpRequestSchema,
   initFormData,
+  isMultipartOp,
 } from './formHelpers';
 import { MethodBadge } from './methodBadge';
 import { useNavigation } from './navigationContext';
@@ -103,6 +105,67 @@ const ActionResultPanel = ({ result }: { result: JsonObject }) => {
   );
 };
 
+const useActionSubmit = (args: {
+  actionOp: ModuleOp;
+  schema: OpenApiSchema | undefined;
+  pathParams: Record<string, string>;
+  paramValues: Record<string, string>;
+  formData: Record<string, string>;
+  fileData: Record<string, File>;
+  token: string;
+}) => {
+  const {
+    actionOp,
+    schema,
+    pathParams,
+    paramValues,
+    formData,
+    fileData,
+    token,
+  } = args;
+  const [submitting, setSubmitting] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [result, setResult] = React.useState<JsonObject | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setSubmitting(true);
+    setError(null);
+    setResult(null);
+    const url = buildUrl(actionOp.pathTemplate, {
+      ...pathParams,
+      ...paramValues,
+    });
+    let res;
+    if (isMultipartOp(actionOp)) {
+      const fd = buildMultipartFormData(formData, fileData, schema);
+      res = await apiFetchMultipart<JsonObject>({ url, formData: fd, token });
+    } else {
+      const bodyResult = buildRequestBody(formData, schema);
+      if (!bodyResult.ok) {
+        setError(bodyResult.error);
+        setSubmitting(false);
+        return;
+      }
+      res = await apiFetch<JsonObject>({
+        url,
+        method: 'POST',
+        body: bodyResult.body,
+        token,
+      });
+    }
+    setSubmitting(false);
+    if (!res.ok) {
+      setError(res.error.message);
+      return;
+    }
+    setResult(res.data);
+  };
+
+  return { submitting, error, result, handleSubmit };
+};
+
 type ActionViewProps = {
   module: ModuleInfo;
   spec: OpenApiSpec;
@@ -123,14 +186,32 @@ export const ActionView = ({
   const [formData, setFormData] = React.useState<Record<string, string>>(() => {
     return initFormData(schema, {});
   });
+  const [fileData, setFileData] = React.useState<Record<string, File>>({});
   const [paramValues, setParamValues] = React.useState<Record<string, string>>(
     {}
   );
-  const [submitting, setSubmitting] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const [result, setResult] = React.useState<JsonObject | null>(null);
+
+  const handleFileChange = (name: string, file: File | null) => {
+    setFileData((prev) => {
+      if (!file) {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      }
+      return { ...prev, [name]: file };
+    });
+  };
 
   const token = state.status === 'authenticated' ? state.token : '';
+  const { submitting, error, result, handleSubmit } = useActionSubmit({
+    actionOp: actionOp!,
+    schema,
+    pathParams,
+    paramValues,
+    formData,
+    fileData,
+    token,
+  });
 
   const handleBack = () => {
     return navigate(null);
@@ -148,39 +229,6 @@ export const ActionView = ({
     return !pathParams[p];
   });
   const { properties, required } = formFields(schema);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!token) return;
-    setSubmitting(true);
-    setError(null);
-    setResult(null);
-
-    const bodyResult = buildRequestBody(formData, schema);
-    if (!bodyResult.ok) {
-      setError(bodyResult.error);
-      setSubmitting(false);
-      return;
-    }
-
-    const url = buildUrl(actionOp.pathTemplate, {
-      ...pathParams,
-      ...paramValues,
-    });
-    const res = await apiFetch<JsonObject>({
-      url,
-      method: 'POST',
-      body: bodyResult.body,
-      token,
-    });
-
-    setSubmitting(false);
-    if (!res.ok) {
-      setError(res.error.message);
-      return;
-    }
-    setResult(res.data);
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -250,6 +298,13 @@ export const ActionView = ({
                   });
                 }}
                 required={required.has(name)}
+                onFileChange={
+                  fieldSchema.format === 'binary'
+                    ? (file) => {
+                        return handleFileChange(name, file);
+                      }
+                    : undefined
+                }
               />
             );
           })}

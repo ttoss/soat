@@ -64,4 +64,25 @@ describe('FieldEditor', () => {
     renderField({ type: 'object' });
     expect(screen.getByLabelText(/agent name/i).tagName).toBe('TEXTAREA');
   });
+
+  test('renders a file input for binary format schemas', () => {
+    renderField({ type: 'string', format: 'binary' });
+    expect(screen.getByLabelText(/agent name/i)).toHaveAttribute('type', 'file');
+  });
+
+  test('calls onFileChange with the selected File for binary fields', async () => {
+    const onFileChange = vi.fn();
+    render(
+      <FieldEditor
+        name="attachment"
+        schema={{ type: 'string', format: 'binary' }}
+        value=""
+        onChange={vi.fn()}
+        onFileChange={onFileChange}
+      />
+    );
+    const file = new File(['content'], 'report.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText(/attachment/i), file);
+    expect(onFileChange).toHaveBeenCalledWith(file);
+  });
 });

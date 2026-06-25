@@ -7,6 +7,10 @@ import type {
   OpenApiSpec,
 } from './types';
 
+export const isMultipartOp = (op: ModuleOp | undefined): boolean => {
+  return Boolean(op?.operation?.requestBody?.content?.['multipart/form-data']);
+};
+
 export type RevealedSecret = { key: string; value: string };
 
 // A create response may echo a write-once secret in plaintext (e.g. an API
@@ -23,13 +27,54 @@ export const extractRevealedSecrets = (data: JsonObject): RevealedSecret[] => {
     });
 };
 
+const getRawRequestSchema = (
+  op: ModuleOp | undefined
+): OpenApiSchema | undefined => {
+  const content = op?.operation?.requestBody?.content;
+  return (
+    content?.['application/json']?.schema ??
+    content?.['multipart/form-data']?.schema
+  );
+};
+
 export const getOpRequestSchema = (
   op: ModuleOp | undefined,
   spec: OpenApiSpec
 ): OpenApiSchema | undefined => {
-  const rawSchema =
-    op?.operation?.requestBody?.content?.['application/json']?.schema;
-  return resolveSchema(rawSchema, spec);
+  return resolveSchema(getRawRequestSchema(op), spec);
+};
+
+const appendTextField = (
+  fd: FormData,
+  key: string,
+  value: string,
+  isRequired: boolean
+): void => {
+  if (value || isRequired) fd.append(key, value);
+};
+
+export const buildMultipartFormData = (
+  formData: Record<string, string>,
+  fileData: Record<string, File>,
+  schema: OpenApiSchema | undefined
+): FormData => {
+  const fd = new FormData();
+  const properties = schema?.properties ?? {};
+  const requiredFields = schema?.required ?? [];
+  for (const [key, fieldSchema] of Object.entries(properties)) {
+    if (fieldSchema.format === 'binary') {
+      const file = fileData[key];
+      if (file) fd.append(key, file);
+    } else {
+      appendTextField(
+        fd,
+        key,
+        formData[key] ?? '',
+        requiredFields.includes(key)
+      );
+    }
+  }
+  return fd;
 };
 
 export const initFormData = (

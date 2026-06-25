@@ -44,6 +44,7 @@ export type OpenApiOperation = {
     required?: boolean;
     content?: {
       'application/json'?: { schema?: OpenApiSchema };
+      'multipart/form-data'?: { schema?: OpenApiSchema };
     };
   };
   responses?: Record<
