@@ -50,6 +50,16 @@ The effective permissions of an API key depend on what is attached to it:
 
 When `project_id` is set on a key, any request made with that key is hard-locked to that project. Attempts to access resources in any other project are denied regardless of what the policies say. For a worked example of creating project-scoped keys, see [Permissions in Practice - Step 6 (Create API keys)](/docs/tutorials/permissions#step-6--create-api-keys).
 
+#### Implicit project id
+
+Because a project-scoped key already identifies its project, `project_id` is **optional** on requests made with such a key:
+
+- Omit `project_id` and the request defaults to the key's project. An agent using a project-scoped MCP connector can upload a file, list files, create documents, etc. without first calling `list-projects`.
+- Supply a `project_id` that matches the key's project and it is accepted.
+- Supply a `project_id` that belongs to a different project and the request is rejected with `403`.
+
+JWT auth is unchanged: a write that omits `project_id` still returns `400`, since a concrete project is never inferred from a user's set of accessible projects.
+
 ### Policy Attachment
 
 Policies listed in `policy_ids` are loaded from the global [Policies](./policies.md) store. The `policy_ids` list on a key stores integer internal IDs; the REST API accepts and returns the public `pol_`-prefixed IDs.

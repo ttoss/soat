@@ -8,6 +8,7 @@ import { compilePolicy } from 'src/lib/policyCompiler';
 import { consumeUploadToken, createUploadToken } from 'src/lib/uploadTokens';
 
 import { registerFileAccessRoutes } from './fileAccessRoutes';
+import { checkAuth, resolveWriteProjectId } from './helpers';
 
 const upload = multer({ storage: multer.memoryStorage() });
 const filesRouter = new Router<Context>();
@@ -80,14 +81,10 @@ filesRouter.get('/files', async (ctx: Context) => {
 });
 
 filesRouter.post('/files', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    projectId: string;
+    projectId?: string;
     path?: string;
     filename?: string;
     contentType?: string;
@@ -97,29 +94,16 @@ filesRouter.post('/files', async (ctx: Context) => {
     metadata?: string;
   };
 
-  const allowed = await ctx.authUser.isAllowed({
+  const targetProjectId = await resolveWriteProjectId({
+    ctx,
     projectPublicId: body.projectId,
     action: 'files:CreateFile',
-    resource: `soat:${body.projectId}:*:*`,
   });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const project = await db.Project.findOne({
-    where: { publicId: body.projectId },
-  });
-  if (!project) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid project ID' };
-    return;
-  }
+  if (targetProjectId === null) return;
 
   const file = await createFile({
     ...body,
-    projectId: project.id,
+    projectId: Number(targetProjectId),
   });
   ctx.status = 201;
   ctx.body = file;
@@ -129,11 +113,7 @@ filesRouter.post(
   '/files/upload',
   upload.single('file'),
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    if (!checkAuth(ctx)) return;
 
     const body = ctx.request.body as {
       projectId?: string;
@@ -150,34 +130,15 @@ filesRouter.post(
       return;
     }
 
-    if (!projectId) {
-      ctx.status = 400;
-      ctx.body = { error: 'projectId is required' };
-      return;
-    }
-
-    const allowed = await ctx.authUser.isAllowed({
+    const targetProjectId = await resolveWriteProjectId({
+      ctx,
       projectPublicId: projectId,
       action: 'files:UploadFile',
-      resource: `soat:${projectId}:*:*`,
     });
-    if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
-
-    const project = await db.Project.findOne({
-      where: { publicId: projectId },
-    });
-    if (!project) {
-      ctx.status = 400;
-      ctx.body = { error: 'Invalid project ID' };
-      return;
-    }
+    if (targetProjectId === null) return;
 
     const record = await uploadFile({
-      projectId: project.id,
+      projectId: Number(targetProjectId),
       fileBuffer: file.buffer,
       filename: file.originalname,
       contentType: file.mimetype,
@@ -191,14 +152,10 @@ filesRouter.post(
 );
 
 filesRouter.post('/files/upload/base64', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    projectId: string;
+    projectId?: string;
     content: string;
     path?: string;
     filename?: string;
@@ -212,36 +169,17 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
     return;
   }
 
-  if (!body.projectId) {
-    ctx.status = 400;
-    ctx.body = { error: 'projectId is required' };
-    return;
-  }
-
-  const allowed = await ctx.authUser.isAllowed({
+  const targetProjectId = await resolveWriteProjectId({
+    ctx,
     projectPublicId: body.projectId,
     action: 'files:UploadFile',
-    resource: `soat:${body.projectId}:*:*`,
   });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const project = await db.Project.findOne({
-    where: { publicId: body.projectId },
-  });
-  if (!project) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid project ID' };
-    return;
-  }
+  if (targetProjectId === null) return;
 
   const fileBuffer = Buffer.from(body.content, 'base64');
 
   const record = await uploadFile({
-    projectId: project.id,
+    projectId: Number(targetProjectId),
     fileBuffer,
     path: body.path,
     filename: body.filename,

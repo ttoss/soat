@@ -67,6 +67,67 @@ export const checkProjectId = (args: {
 };
 
 /**
+ * Resolves the numeric project id for a create/write operation.
+ *
+ * - An explicit `projectPublicId` is used as-is, subject to the permission check.
+ * - When omitted, a project-scoped API key supplies its own project automatically
+ *   (implicit project id).
+ * - A project-scoped key with an explicit `projectPublicId` that does not match the
+ *   key's project resolves to 403.
+ * - When omitted without a scoped key (e.g. JWT auth), responds 400 — a write needs a
+ *   concrete project and one is never inferred from a JWT user's accessible projects.
+ *
+ * Returns the numeric project id, or `null` when a response (401/400/403) has already
+ * been set on `ctx` and the caller should `return`.
+ */
+export const resolveWriteProjectId = async (args: {
+  ctx: Context;
+  projectPublicId?: string;
+  action: string;
+}): Promise<number | null> => {
+  const { ctx, action } = args;
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return null;
+  }
+
+  // Without an explicit project id, only a project-scoped API key supplies a default.
+  const projectPublicId =
+    args.projectPublicId ?? ctx.authUser.apiKeyProjectPublicId;
+
+  if (!projectPublicId) {
+    ctx.status = 400;
+    ctx.body = { error: 'projectId is required' };
+    return null;
+  }
+
+  // resolveProjectIds runs the permission check and, for a scoped key, returns null
+  // when projectPublicId does not match the key's project (→ 403).
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    projectPublicId,
+    action,
+  });
+
+  if (projectIds === null) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return null;
+  }
+
+  const targetProjectId =
+    projectIds?.[0] ?? ctx.authUser.apiKeyProjectId ?? null;
+
+  if (targetProjectId === null) {
+    ctx.status = 400;
+    ctx.body = { error: 'projectId is required' };
+    return null;
+  }
+
+  return targetProjectId;
+};
+
+/**
  * Validates that a user has permission to access a resource
  */
 export const checkResourcePermission = (args: {

@@ -1,6 +1,5 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { db } from 'src/db';
 import {
   createActor,
   deleteActor,
@@ -14,6 +13,8 @@ import {
 import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
 
+import { checkAuth, resolveWriteProjectId } from './helpers';
+
 const actorsRouter = new Router<Context>();
 
 type CreateActorBody = {
@@ -25,15 +26,6 @@ type CreateActorBody = {
   chatId?: string;
   memoryId?: string;
   autoCreateMemory?: boolean;
-};
-
-const resolveActorProjectPublicId = (
-  body: CreateActorBody,
-  authUser: NonNullable<Context['authUser']>
-): string | null => {
-  if (body.projectId) return body.projectId;
-  if (authUser.apiKeyProjectPublicId) return authUser.apiKeyProjectPublicId;
-  return null;
 };
 
 actorsRouter.get('/actors', async (ctx: Context) => {
@@ -184,11 +176,7 @@ const validateCreateActorBody = (body: CreateActorBody): string | null => {
 };
 
 actorsRouter.post('/actors', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as CreateActorBody;
   const validationError = validateCreateActorBody(body);
@@ -198,36 +186,14 @@ actorsRouter.post('/actors', async (ctx: Context) => {
     return;
   }
 
-  const resolvedProjectPublicId = resolveActorProjectPublicId(
-    body,
-    ctx.authUser
-  );
-  if (!resolvedProjectPublicId) {
-    ctx.status = 400;
-    ctx.body = { error: 'projectId is required' };
-    return;
-  }
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: resolvedProjectPublicId,
+  const targetProjectId = await resolveWriteProjectId({
+    ctx,
+    projectPublicId: body.projectId,
     action: 'actors:CreateActor',
   });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (targetProjectId === null) return;
 
-  const project = await db.Project.findOne({
-    where: { publicId: resolvedProjectPublicId },
-  });
-  if (!project) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid project ID' };
-    return;
-  }
-
-  const projectDbId = project.id as number;
+  const projectDbId = Number(targetProjectId);
   const resolved = await resolveActorLinkedIds({
     agentId: body.agentId,
     chatId: body.chatId,

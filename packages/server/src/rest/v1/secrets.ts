@@ -1,6 +1,5 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { db } from 'src/db';
 import {
   createSecret,
   deleteSecret,
@@ -8,6 +7,8 @@ import {
   listSecrets,
   updateSecret,
 } from 'src/lib/secrets';
+
+import { checkAuth, resolveWriteProjectId } from './helpers';
 
 const secretsRouter = new Router<Context>();
 
@@ -57,11 +58,7 @@ secretsRouter.get('/secrets/:secret_id', async (ctx: Context) => {
 });
 
 secretsRouter.post('/secrets', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
     projectId?: string;
@@ -75,38 +72,15 @@ secretsRouter.post('/secrets', async (ctx: Context) => {
     return;
   }
 
-  let resolvedProjectPublicId = body.projectId;
-  if (!resolvedProjectPublicId) {
-    if (ctx.authUser.apiKeyProjectPublicId) {
-      resolvedProjectPublicId = ctx.authUser.apiKeyProjectPublicId;
-    } else {
-      ctx.status = 400;
-      ctx.body = { error: 'projectId is required' };
-      return;
-    }
-  }
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: resolvedProjectPublicId,
+  const targetProjectId = await resolveWriteProjectId({
+    ctx,
+    projectPublicId: body.projectId,
     action: 'secrets:CreateSecret',
   });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const project = await db.Project.findOne({
-    where: { publicId: resolvedProjectPublicId },
-  });
-  if (!project) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid project ID' };
-    return;
-  }
+  if (targetProjectId === null) return;
 
   const secret = await createSecret({
-    projectId: project.id,
+    projectId: Number(targetProjectId),
     name: body.name,
     value: body.value,
   });

@@ -12,6 +12,7 @@ import { compilePolicy } from 'src/lib/policyCompiler';
 
 import { checkConversationAccess } from './conversationHelpers';
 import { conversationSubResourcesRouter } from './conversationSubResources';
+import { checkAuth, resolveWriteProjectId } from './helpers';
 
 const conversationsRouter = new Router<Context>();
 
@@ -107,11 +108,7 @@ conversationsRouter.get(
 );
 
 conversationsRouter.post('/conversations', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
     projectId?: string;
@@ -120,35 +117,12 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
     actorId?: string | null;
   };
 
-  let resolvedProjectPublicId = body.projectId;
-  if (!resolvedProjectPublicId) {
-    if (ctx.authUser.apiKeyProjectPublicId) {
-      resolvedProjectPublicId = ctx.authUser.apiKeyProjectPublicId;
-    } else {
-      ctx.status = 400;
-      ctx.body = { error: 'projectId is required' };
-      return;
-    }
-  }
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: resolvedProjectPublicId,
+  const targetProjectId = await resolveWriteProjectId({
+    ctx,
+    projectPublicId: body.projectId,
     action: 'conversations:CreateConversation',
   });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const project = await db.Project.findOne({
-    where: { publicId: resolvedProjectPublicId },
-  });
-  if (!project) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid project ID' };
-    return;
-  }
+  if (targetProjectId === null) return;
 
   let resolvedActorId: number | null = null;
   if (body.actorId) {
@@ -164,7 +138,7 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
   }
 
   const conversation = await createConversation({
-    projectId: project.id,
+    projectId: Number(targetProjectId),
     status: body.status,
     name: body.name ?? null,
     actorId: resolvedActorId,

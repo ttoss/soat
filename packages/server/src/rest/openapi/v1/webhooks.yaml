@@ -323,7 +323,6 @@ components:
     CreateWebhookRequest:
       type: object
       required:
-        - project_id
         - name
         - url
         - events
@@ -331,6 +330,7 @@ components:
         project_id:
           x-soat-ref: projects
           type: string
+          description: Public ID of the project. Optional when authenticating with a project-scoped API key, which defaults to the key's project; required otherwise.
         name:
           type: string
         description:

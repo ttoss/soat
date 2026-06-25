@@ -85,14 +85,13 @@ paths:
             schema:
               type: object
               required:
-                - project_id
                 - storage_type
                 - storage_path
               properties:
                 project_id:
                   x-soat-ref: projects
                   type: string
-                  description: Public ID of the project
+                  description: Public ID of the project. Optional when authenticating with a project-scoped API key, which defaults to the key's project; required otherwise.
                   example: 'proj_V1StGXR8Z5jdHi6B'
                 path:
                   type: string
@@ -151,7 +150,6 @@ paths:
               type: object
               required:
                 - file
-                - project_id
               properties:
                 file:
                   type: string
@@ -160,7 +158,7 @@ paths:
                 project_id:
                   x-soat-ref: projects
                   type: string
-                  description: Project ID to associate the file with
+                  description: Project ID to associate the file with. Optional when authenticating with a project-scoped API key, which defaults to the key's project; required otherwise.
                   example: 'proj_V1StGXR8Z5jdHi6B'
                 metadata:
                   type: string

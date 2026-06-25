@@ -14,12 +14,7 @@ import {
   updateWebhook,
 } from 'src/lib/webhooks';
 
-const resolveProjectPublicId = (args: {
-  bodyProjectId: string | undefined;
-  apiKeyProjectPublicId: string | undefined;
-}): string | undefined => {
-  return args.bodyProjectId ?? args.apiKeyProjectPublicId;
-};
+import { checkAuth, resolveWriteProjectId } from './helpers';
 
 const resolvePolicyId = async (
   policyPublicId: string | undefined
@@ -58,11 +53,7 @@ webhooksRouter.get('/webhooks', async (ctx: Context) => {
 });
 
 webhooksRouter.post('/webhooks', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
     projectId?: string;
@@ -73,40 +64,18 @@ webhooksRouter.post('/webhooks', async (ctx: Context) => {
     policyId?: string;
   };
 
-  const resolvedProjectPublicId = resolveProjectPublicId({
-    bodyProjectId: body.projectId,
-    apiKeyProjectPublicId: ctx.authUser.apiKeyProjectPublicId,
-  });
-  if (!resolvedProjectPublicId) {
-    ctx.status = 400;
-    ctx.body = { error: 'project_id is required' };
-    return;
-  }
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: resolvedProjectPublicId,
+  const targetProjectId = await resolveWriteProjectId({
+    ctx,
+    projectPublicId: body.projectId,
     action: 'webhooks:CreateWebhook',
   });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (targetProjectId === null) return;
 
   if (!body.name || !body.url || !body.events || body.events.length === 0) {
     ctx.status = 400;
     ctx.body = {
       error: 'name, url, and events are required',
     };
-    return;
-  }
-
-  const project = await db.Project.findOne({
-    where: { publicId: resolvedProjectPublicId },
-  });
-  if (!project) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid project ID' };
     return;
   }
 
@@ -118,7 +87,7 @@ webhooksRouter.post('/webhooks', async (ctx: Context) => {
   }
 
   const webhook = await createWebhook({
-    projectId: project.id,
+    projectId: Number(targetProjectId),
     policyId: policyResult.id,
     name: body.name,
     description: body.description,

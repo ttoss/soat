@@ -148,7 +148,7 @@ The response envelope is:
 
 ### Project Scope
 
-API keys are automatically scoped to a single project — `project_id` is inferred from the key and must not be supplied in the request body. JWT callers must supply `project_id` explicitly for write operations.
+Project-scoped API keys make `project_id` optional: omit it and the request defaults to the key's project, supply a matching one and it is accepted, and supply a different project's id and the request is rejected with `403`. JWT callers must supply `project_id` explicitly for write operations. See [Implicit project id](./api-keys.md#implicit-project-id) for the full rules.
 
 ## Tags
 

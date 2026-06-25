@@ -69,7 +69,11 @@ describe('command help output', () => {
     expect(output).toContain(
       'Module docs: https://soat.ttoss.dev/docs/modules/formations'
     );
-    expect(output).toContain('--project_id  <string> [required]');
+    // project_id is optional: it defaults to the project bound to a
+    // project-scoped API key (see issue #267).
+    expect(output).toContain('--project_id  <string>');
+    expect(output).not.toContain('--project_id  <string> [required]');
+    expect(output).toContain('--name  <string> [required]');
     expect(output).toContain('--template-path  <string>');
     expect(output).toContain('--parameter  <string>');
     expect(output).toContain('--env-file  <string>');

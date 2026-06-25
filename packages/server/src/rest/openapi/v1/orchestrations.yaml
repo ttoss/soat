@@ -566,7 +566,6 @@ components:
     CreateOrchestrationRequest:
       type: object
       required:
-        - project_id
         - name
         - nodes
         - edges
@@ -574,7 +573,7 @@ components:
         project_id:
           x-soat-ref: projects
           type: string
-          description: Public ID of the project.
+          description: Public ID of the project. Optional when authenticating with a project-scoped API key, which defaults to the key's project; required otherwise.
         name:
           type: string
           description: Human-readable name.
