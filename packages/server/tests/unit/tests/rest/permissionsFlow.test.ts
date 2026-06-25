@@ -154,9 +154,7 @@ describe('Group 2: JWT Permissions - User can read but not delete file', () => {
       .post('/api/v1/files')
       .send({
         project_id: projectId,
-        filename: 'test.txt',
-        storage_type: 'local',
-        storage_path: '/tmp/test.txt',
+        path: '/test.txt',
       });
 
     fileId = fileResponse.body.id;
@@ -256,9 +254,7 @@ describe('Group 3: API Key Permissions - Create key, assign permissions, test ac
       .post('/api/v1/files')
       .send({
         project_id: projectId,
-        filename: 'test.txt',
-        storage_type: 'local',
-        storage_path: '/tmp/test.txt',
+        path: '/test.txt',
       });
 
     fileId = fileResponse.body.id;
@@ -373,9 +369,7 @@ describe('Group 4: Two users in the same project with different policies', () =>
       .post('/api/v1/files')
       .send({
         project_id: projectId,
-        filename: 'shared.txt',
-        storage_type: 'local',
-        storage_path: '/tmp/shared.txt',
+        path: '/shared.txt',
       });
 
     fileId = fileResponse.body.id;
@@ -505,9 +499,7 @@ describe('Group 5: User with multiple API keys scoped to different permissions',
       .post('/api/v1/files')
       .send({
         project_id: projectId,
-        filename: 'target.txt',
-        storage_type: 'local',
-        storage_path: '/tmp/target.txt',
+        path: '/target.txt',
       });
 
     fileId = fileResponse.body.id;
@@ -613,9 +605,7 @@ describe('Group 6: API key cannot access files in a different project', () => {
       .post('/api/v1/files')
       .send({
         project_id: projectAId,
-        filename: 'alpha.txt',
-        storage_type: 'local',
-        storage_path: '/tmp/alpha.txt',
+        path: '/alpha.txt',
       });
 
     fileInProjectA = fileAResponse.body.id;
@@ -624,9 +614,7 @@ describe('Group 6: API key cannot access files in a different project', () => {
       .post('/api/v1/files')
       .send({
         project_id: projectBId,
-        filename: 'beta.txt',
-        storage_type: 'local',
-        storage_path: '/tmp/beta.txt',
+        path: '/beta.txt',
       });
 
     fileInProjectB = fileBResponse.body.id;
@@ -696,9 +684,7 @@ describe('Group 7: Policy with wildcard * grants all permissions', () => {
       .post('/api/v1/files')
       .send({
         project_id: projectId,
-        filename: 'wildcard.txt',
-        storage_type: 'local',
-        storage_path: '/tmp/wildcard.txt',
+        path: '/wildcard.txt',
       });
 
     fileId = fileResponse.body.id;
@@ -767,9 +753,7 @@ describe('Group 8: Policy with files:* grants all file-namespace permissions', (
       .post('/api/v1/files')
       .send({
         project_id: projectId,
-        filename: 'namespace.txt',
-        storage_type: 'local',
-        storage_path: '/tmp/namespace.txt',
+        path: '/namespace.txt',
       });
 
     fileId = fileResponse.body.id;
@@ -841,9 +825,7 @@ describe('Group 9: notPermissions overrides permissions when action appears in b
       .post('/api/v1/files')
       .send({
         project_id: projectId,
-        filename: 'conflict.txt',
-        storage_type: 'local',
-        storage_path: '/tmp/conflict.txt',
+        path: '/conflict.txt',
       });
 
     fileId = fileResponse.body.id;
@@ -938,9 +920,7 @@ describe('Group 10: JWT — policy with explicit project-scoped resource SRN gra
       .post('/api/v1/files')
       .send({
         project_id: projectAId,
-        filename: 'srn-jwt-a.txt',
-        storage_type: 'local',
-        storage_path: '/tmp/srn-jwt-a.txt',
+        path: '/srn-jwt-a.txt',
       });
 
     fileInProjectA = fileARes.body.id;
@@ -949,9 +929,7 @@ describe('Group 10: JWT — policy with explicit project-scoped resource SRN gra
       .post('/api/v1/files')
       .send({
         project_id: projectBId,
-        filename: 'srn-jwt-b.txt',
-        storage_type: 'local',
-        storage_path: '/tmp/srn-jwt-b.txt',
+        path: '/srn-jwt-b.txt',
       });
 
     fileInProjectB = fileBRes.body.id;
@@ -1074,9 +1052,7 @@ describe('Group 11: API key — scoped key with project-resource SRN in key poli
       .post('/api/v1/files')
       .send({
         project_id: projectAId,
-        filename: 'srn-api-a.txt',
-        storage_type: 'local',
-        storage_path: '/tmp/srn-api-a.txt',
+        path: '/srn-api-a.txt',
       });
 
     fileInProjectA = fileARes.body.id;
@@ -1149,9 +1125,7 @@ describe('Group 12: Admin API key with full-access policy is not 403', () => {
       .post('/api/v1/files')
       .send({
         project_id: projectId,
-        filename: 'admin-key.txt',
-        storage_type: 'local',
-        storage_path: '/tmp/admin-key.txt',
+        path: '/admin-key.txt',
       });
 
     fileId = fileRes.body.id;
