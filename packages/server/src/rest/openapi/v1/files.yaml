@@ -84,23 +84,20 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - storage_type
-                - storage_path
               properties:
                 project_id:
                   x-soat-ref: projects
                   type: string
                   description: Public ID of the project. Optional when authenticating with a project-scoped API key, which defaults to the key's project; required otherwise.
                   example: 'proj_V1StGXR8Z5jdHi6B'
-                path:
+                prefix:
                   type: string
-                  description: Logical path within the project (e.g. /images/logo.png). Defaults to /filename if omitted.
-                  example: '/images/logo.png'
+                  description: Directory within the project (e.g. /images). Optional; defaults to / (root). Combined with filename to form the file's key (path).
+                  example: '/images'
                 filename:
                   type: string
-                  description: Name of the file
-                  example: 'document.pdf'
+                  description: Original / download name and the key's leaf segment (e.g. logo.png).
+                  example: 'logo.png'
                 content_type:
                   type: string
                   description: MIME type of the file
@@ -109,15 +106,6 @@ paths:
                   type: integer
                   description: File size in bytes
                   example: 1024
-                storage_type:
-                  type: string
-                  enum: [local, s3, gcs]
-                  description: Storage backend type
-                  example: 'local'
-                storage_path:
-                  type: string
-                  description: Path where the file is stored
-                  example: '/uploads/document.pdf'
                 metadata:
                   type: string
                   description: JSON string with additional metadata
@@ -160,6 +148,14 @@ paths:
                   type: string
                   description: Project ID to associate the file with. Optional when authenticating with a project-scoped API key, which defaults to the key's project; required otherwise.
                   example: 'proj_V1StGXR8Z5jdHi6B'
+                prefix:
+                  type: string
+                  description: Directory within the project (e.g. /images). Optional; defaults to / (root).
+                  example: '/images'
+                filename:
+                  type: string
+                  description: Original / download name. Optional; defaults to the uploaded file's name.
+                  example: 'logo.png'
                 metadata:
                   type: string
                   description: Additional metadata as a JSON string
@@ -440,9 +436,13 @@ paths:
                   type: string
                   description: New metadata as a JSON string
                   example: '{"author":"Jane","tags":["report"]}'
+                prefix:
+                  type: string
+                  description: New directory — moves the file. The resulting path (prefix + filename) must be unique within the project.
+                  example: '/reports'
                 filename:
                   type: string
-                  description: New filename for the file
+                  description: New filename — renames the key's leaf and the download name.
                   example: 'renamed-file.txt'
       responses:
         '200':
@@ -457,6 +457,12 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: A file already exists at the target path in this project
           content:
             application/json:
               schema:
@@ -640,14 +646,14 @@ components:
           type: string
           description: Base64-encoded file content
           example: 'SGVsbG8gV29ybGQ='
+        prefix:
+          type: string
+          description: Directory within the project (e.g. /documents). Optional; defaults to / (root).
+          example: '/documents'
         filename:
           type: string
-          description: Name of the file
+          description: Original / download name and the key's leaf segment.
           example: 'document.txt'
-        path:
-          type: string
-          description: Logical path within the project (e.g. /images/logo.png). Defaults to /filename if omitted.
-          example: '/documents/document.txt'
         content_type:
           type: string
           description: MIME type of the file
@@ -666,18 +672,18 @@ components:
           type: string
           description: Public ID of the project
           example: 'proj_V1StGXR8Z5jdHi6B'
+        prefix:
+          type: string
+          description: Directory within the project (e.g. /documents). Optional; defaults to / (root).
+          example: '/documents'
         filename:
           type: string
-          description: Name of the file to be uploaded
+          description: Original / download name and the key's leaf segment.
           example: 'report.pdf'
         content_type:
           type: string
           description: MIME type of the file to be uploaded
           example: 'application/pdf'
-        path:
-          type: string
-          description: Logical path within the project (e.g. /documents/report.pdf). Defaults to /filename if omitted.
-          example: '/documents/report.pdf'
     UploadTokenResponse:
       type: object
       properties:
@@ -704,7 +710,7 @@ components:
           example: 'SGVsbG8gV29ybGQ='
         filename:
           type: string
-          description: Name of the file (overrides the token's filename)
+          description: Original / download name (overrides the token's filename)
           example: 'document.txt'
         content_type:
           type: string
@@ -722,15 +728,21 @@ components:
           type: string
           description: Unique file identifier
           example: 'abc123'
+        prefix:
+          type: string
+          readOnly: true
+          description: Directory of the file (the `path` without its last segment). Read-only — set it via `prefix` on write.
+          example: '/images'
+        filename:
+          type: string
+          description: Original / download name and the key's leaf segment.
+          example: 'logo.png'
         path:
           type: string
           nullable: true
-          description: Logical path of the file within the project (e.g. /images/logo.png)
+          readOnly: true
+          description: Full key of the file within the project — `prefix` + `/` + `filename` (e.g. /images/logo.png). Read-only; unique per project; the file's identity and policy-SRN target.
           example: '/images/logo.png'
-        filename:
-          type: string
-          description: Name of the file
-          example: 'document.pdf'
         contentType:
           type: string
           description: MIME type of the file
@@ -739,15 +751,6 @@ components:
           type: integer
           description: File size in bytes
           example: 1024
-        storage_type:
-          type: string
-          enum: [local, s3, gcs]
-          description: Storage backend type
-          example: 'local'
-        storage_path:
-          type: string
-          description: Path where the file is stored
-          example: '/uploads/document.pdf'
         metadata:
           type: string
           description: JSON string with additional metadata

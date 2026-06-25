@@ -972,25 +972,15 @@ components:
         Registers a file record within the formation's project.
       type: object
       additionalProperties: false
-      required:
-        - storage_type
-        - storage_path
       properties:
-        storage_type:
-          type: string
-          enum: [local, s3, gcs]
-          description: Storage backend type
-        storage_path:
-          type: string
-          description: Path where the file is stored in the storage backend
-        path:
+        prefix:
           type: string
           nullable: true
-          description: Logical path of the file within the project
+          description: Directory within the project. Optional; defaults to / (root). Combined with filename to form the file's key (path).
         filename:
           type: string
           nullable: true
-          description: Name of the file
+          description: Original / download name and the key's leaf segment.
         content_type:
           type: string
           nullable: true

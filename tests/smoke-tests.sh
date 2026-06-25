@@ -297,8 +297,8 @@ echo "Hello, smoke test!" > /tmp/smoke.txt
 SMOKE_FILE_B64=$(base64 /tmp/smoke.txt | tr -d '\n')
 UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
   --project_id "$PROJECT_PUBLIC_ID" \
+  --prefix /reports \
   --filename smoke.txt \
-  --path /reports/smoke.txt \
   --content "$SMOKE_FILE_B64" \
   --content_type text/plain)
 FILE_ID=$(echo "$UPLOAD_RESP" | jq -r '.id')
@@ -345,8 +345,8 @@ echo "PATCH status: 200"
 echo "--- Requesting upload token ---"
 TOKEN_RESP=$($SOAT_CLI create-upload-token \
   --project_id "$PROJECT_PUBLIC_ID" \
+  --prefix /reports \
   --filename token-upload.txt \
-  --path /reports/token-upload.txt \
   --content_type text/plain)
 UPLOAD_TOKEN=$(echo "$TOKEN_RESP" | jq -r '.upload_token')
 UPLOAD_URL=$(echo "$TOKEN_RESP" | jq -r '.upload_url')
@@ -1935,7 +1935,7 @@ echo "--- Formation: file resource type ---"
 FILE_FORMATION_RESP=$($SOAT_CLI create-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-formation-file" \
-  --template '{"resources":{"myFile":{"type":"file","properties":{"storage_type":"local","storage_path":"/smoke/formation-file.txt","filename":"formation-file.txt"}}},"outputs":{"fileId":{"ref":"myFile"}}}')
+  --template '{"resources":{"myFile":{"type":"file","properties":{"prefix":"/smoke","filename":"formation-file.txt"}}},"outputs":{"fileId":{"ref":"myFile"}}}')
 FILE_FORMATION_ID=$(printf '%s\n' "$FILE_FORMATION_RESP" | jq -r '.id')
 if [ -z "$FILE_FORMATION_ID" ] || [ "$FILE_FORMATION_ID" = "null" ]; then
   echo "ERROR: create-formation (file) did not return an id" >&2

@@ -91,11 +91,11 @@ export const filesFormationModule: FormationModule = {
       ? normalizePropertyKeys(rawProperties)
       : rawProperties;
 
+    // storage_type / storage_path are not part of the file resource schema —
+    // storage is system-managed (see FILES_STORAGE_DIR).
     const result = await createFile({
       projectId,
-      storageType: properties.storage_type as 'local' | 's3' | 'gcs',
-      storagePath: properties.storage_path as string,
-      path: toOptionalString(properties.path) ?? undefined,
+      prefix: toOptionalString(properties.prefix) ?? undefined,
       filename: toOptionalString(properties.filename) ?? undefined,
       contentType: toOptionalString(properties.content_type) ?? undefined,
       size: typeof properties.size === 'number' ? properties.size : undefined,
@@ -126,6 +126,7 @@ export const filesFormationModule: FormationModule = {
 
     await updateFileMetadata({
       id: physicalResourceId,
+      prefix: toOptionalString(properties.prefix) ?? undefined,
       filename: toOptionalString(properties.filename) ?? undefined,
       metadata: toOptionalString(properties.metadata) ?? undefined,
     });
@@ -143,9 +144,7 @@ export const filesFormationModule: FormationModule = {
       const file = await getFile({ id: physicalResourceId });
       if (!file) return null;
       return {
-        storage_type: file.storageType,
-        storage_path: file.storagePath,
-        path: file.path,
+        prefix: file.prefix,
         filename: file.filename,
         content_type: file.contentType,
         size: file.size,

@@ -5,12 +5,22 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import {
+  buildPath,
+  filenameFromPath,
+  normalizePath,
+  prefixFromPath,
+  rebuildKey,
+} from './filePaths';
+import {
   type CompiledPolicy,
   compilePolicy,
   registerResourceFieldMap,
 } from './policyCompiler';
 
 export type { CompiledPolicy };
+// Re-export the path helpers so existing importers (`from './files'`) keep
+// working; the definitions live in ./filePaths.
+export { buildPath, filenameFromPath, normalizePath, prefixFromPath };
 
 registerResourceFieldMap({
   resourceType: 'file',
@@ -27,40 +37,17 @@ const getStorageDir = () => {
   return dir;
 };
 
-export const normalizePath = (p: string): string => {
-  let normalized = p.trim();
-  if (!normalized.startsWith('/')) {
-    normalized = '/' + normalized;
-  }
-  // Collapse multiple slashes
-  normalized = normalized.replace(/\/+/g, '/');
-  // Resolve . and ..
-  const parts = normalized.split('/').filter(Boolean);
-  const resolved: string[] = [];
-  for (const part of parts) {
-    if (part === '..') {
-      if (resolved.length === 0) {
-        throw new Error('Path traversal above root is not allowed');
-      }
-      resolved.pop();
-    } else if (part !== '.') {
-      resolved.push(part);
-    }
-  }
-  // Strip trailing slash (but keep root /)
-  const result = '/' + resolved.join('/');
-  return result;
-};
-
 const mapFile = (file: InstanceType<(typeof db)['File']>) => {
   return {
     id: file.publicId,
+    // `path` is the full key (read-only): `prefix` + `/` + `filename`.
+    // `prefix` is its directory, `filename` its leaf / download name.
+    // storageType / storagePath are system-managed internals, not exposed.
+    prefix: prefixFromPath(file.path),
+    filename: file.filename ?? filenameFromPath(file.path),
     path: file.path ?? undefined,
-    filename: file.filename,
     contentType: file.contentType,
     size: file.size,
-    storageType: file.storageType,
-    storagePath: file.storagePath,
     metadata: file.metadata,
     tags: file.tags ?? undefined,
     createdAt: file.createdAt,
@@ -134,8 +121,13 @@ export const uploadFile = async (args: {
   projectId: number;
   projectPublicId?: string;
   fileBuffer: Buffer;
-  path?: string;
+  /** Directory prefix (defaults to `/`). The key is `prefix` + `/` + filename. */
+  prefix?: string;
+  /** The original filename (download name) and the key's leaf segment. */
   filename?: string;
+  /** Internal: a pre-built full path (key), used by the upload-token flow.
+   * Takes precedence over prefix/filename. */
+  path?: string;
   contentType?: string;
   metadata?: string;
 }) => {
@@ -144,9 +136,9 @@ export const uploadFile = async (args: {
   const normalizedPath =
     args.path !== undefined
       ? normalizePath(args.path)
-      : args.filename
-        ? normalizePath(args.filename)
-        : null;
+      : buildPath({ prefix: args.prefix, filename: args.filename });
+
+  const filename = args.filename ?? filenameFromPath(normalizedPath);
 
   const projectPublicId =
     args.projectPublicId ??
@@ -160,7 +152,7 @@ export const uploadFile = async (args: {
   const file = await db.File.create({
     projectId: args.projectId,
     path: normalizedPath,
-    filename: args.filename,
+    filename,
     contentType: args.contentType,
     size: args.fileBuffer.length,
     storageType: 'local' as const,
@@ -168,7 +160,7 @@ export const uploadFile = async (args: {
     metadata: args.metadata,
   });
 
-  const ext = args.filename ? path.extname(args.filename) : '';
+  const ext = filename ? path.extname(filename) : '';
   const storagePath = path.join(fileStorageDir, `${file.publicId}${ext}`);
   fs.writeFileSync(storagePath, args.fileBuffer);
 
@@ -263,7 +255,7 @@ export const downloadFile = async (args: { id: string }) => {
 
   return {
     stream: fs.createReadStream(file.storagePath),
-    filename: file.filename,
+    filename: file.filename ?? filenameFromPath(file.path),
     contentType: file.contentType,
     size: file.size,
   };
@@ -272,6 +264,9 @@ export const downloadFile = async (args: { id: string }) => {
 export const updateFileMetadata = async (args: {
   id: string;
   metadata?: string;
+  /** New directory prefix — moves the file (the key's directory changes). */
+  prefix?: string;
+  /** New filename — renames the key's leaf and the download name. */
   filename?: string;
 }) => {
   const file = await db.File.findOne({ where: { publicId: args.id } });
@@ -284,11 +279,33 @@ export const updateFileMetadata = async (args: {
   if (args.metadata !== undefined) {
     updates.metadata = args.metadata;
   }
-  if (args.filename !== undefined) {
-    updates.filename = args.filename;
+  // `path` is the full key, rebuilt from prefix + filename. Changing either
+  // recomputes it (and moves/renames the file accordingly).
+  if (args.prefix !== undefined || args.filename !== undefined) {
+    const rebuilt = rebuildKey({
+      currentPath: file.path,
+      currentFilename: file.filename,
+      prefix: args.prefix,
+      filename: args.filename,
+    });
+    updates.path = rebuilt.path;
+    updates.filename = rebuilt.filename;
   }
 
-  await file.update(updates);
+  try {
+    await file.update(updates);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.name === 'SequelizeUniqueConstraintError'
+    ) {
+      throw new DomainError(
+        'NAME_CONFLICT',
+        `A file already exists at that path in this project.`
+      );
+    }
+    throw error;
+  }
   const mapped = mapFile(file);
 
   resolveProjectPublicId({ projectId: file.projectId }).then(
@@ -310,21 +327,30 @@ export const updateFileMetadata = async (args: {
 
 export const createFile = async (args: {
   projectId: number;
-  path?: string;
+  prefix?: string;
   filename?: string;
   contentType?: string;
   size?: number;
-  storageType: 'local' | 's3' | 'gcs';
-  storagePath: string;
   metadata?: string;
 }) => {
-  const normalizedPath =
-    args.path !== undefined
-      ? normalizePath(args.path)
-      : args.filename
-        ? normalizePath(args.filename)
-        : null;
-  const file = await db.File.create({ ...args, path: normalizedPath });
+  // The full key (`path`) is built from `prefix` (directory, defaults to `/`)
+  // and `filename`. Storage backend is system-managed (see FILES_STORAGE_DIR);
+  // a metadata-only record uses local storage with an empty storagePath,
+  // filled in when bytes are uploaded.
+  const normalizedPath = buildPath({
+    prefix: args.prefix,
+    filename: args.filename,
+  });
+  const file = await db.File.create({
+    projectId: args.projectId,
+    path: normalizedPath,
+    filename: args.filename ?? filenameFromPath(normalizedPath),
+    contentType: args.contentType,
+    size: args.size,
+    metadata: args.metadata,
+    storageType: 'local' as const,
+    storagePath: '',
+  });
   const mapped = mapFile(file);
 
   resolveProjectPublicId({ projectId: args.projectId }).then(

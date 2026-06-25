@@ -208,10 +208,15 @@ const registerMetadataRoutes = (args: { filesRouter: Router<Context> }) => {
     });
     if (!allowed) return;
 
-    const body = ctx.request.body as { metadata?: string; filename?: string };
+    const body = ctx.request.body as {
+      metadata?: string;
+      prefix?: string;
+      filename?: string;
+    };
     ctx.body = await updateFileMetadata({
       id: ctx.params.file_id,
       metadata: body.metadata,
+      prefix: body.prefix,
       filename: body.filename,
     });
   });

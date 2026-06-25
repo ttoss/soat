@@ -85,12 +85,10 @@ filesRouter.post('/files', async (ctx: Context) => {
 
   const body = ctx.request.body as {
     projectId?: string;
-    path?: string;
+    prefix?: string;
     filename?: string;
     contentType?: string;
     size?: number;
-    storageType: 'local' | 's3' | 'gcs';
-    storagePath: string;
     metadata?: string;
   };
 
@@ -101,9 +99,16 @@ filesRouter.post('/files', async (ctx: Context) => {
   });
   if (targetProjectId === null) return;
 
+  // The key (`path`) is built from `prefix` (directory, default /) + `filename`.
+  // storageType / storagePath are system-managed, so any storage_* / path a
+  // caller supplies is intentionally ignored.
   const file = await createFile({
-    ...body,
     projectId: Number(targetProjectId),
+    prefix: body.prefix,
+    filename: body.filename,
+    contentType: body.contentType,
+    size: body.size,
+    metadata: body.metadata,
   });
   ctx.status = 201;
   ctx.body = file;
@@ -119,7 +124,8 @@ filesRouter.post(
       projectId?: string;
       project_id?: string;
       metadata?: string;
-      path?: string;
+      prefix?: string;
+      filename?: string;
     };
     const file = ctx.file as MulterFile | undefined;
     const projectId = body.projectId ?? body.project_id;
@@ -140,10 +146,11 @@ filesRouter.post(
     const record = await uploadFile({
       projectId: Number(targetProjectId),
       fileBuffer: file.buffer,
-      filename: file.originalname,
+      prefix: body.prefix,
+      // The uploaded file's name is the default filename unless overridden.
+      filename: body.filename ?? file.originalname,
       contentType: file.mimetype,
       metadata: body.metadata,
-      path: body.path,
     });
 
     ctx.status = 201;
@@ -157,7 +164,7 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
   const body = ctx.request.body as {
     projectId?: string;
     content: string;
-    path?: string;
+    prefix?: string;
     filename?: string;
     contentType?: string;
     metadata?: string;
@@ -181,7 +188,7 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
   const record = await uploadFile({
     projectId: Number(targetProjectId),
     fileBuffer,
-    path: body.path,
+    prefix: body.prefix,
     filename: body.filename,
     contentType: body.contentType,
     metadata: body.metadata,
@@ -200,9 +207,9 @@ filesRouter.post('/files/upload-token', async (ctx: Context) => {
 
   const body = ctx.request.body as {
     projectId: string;
+    prefix?: string;
     filename?: string;
     contentType?: string;
-    path?: string;
   };
 
   if (!body.projectId) {
@@ -233,9 +240,9 @@ filesRouter.post('/files/upload-token', async (ctx: Context) => {
 
   const token = await createUploadToken({
     projectId: project.id,
+    prefix: body.prefix,
     filename: body.filename,
     contentType: body.contentType,
-    path: body.path,
   });
 
   ctx.status = 201;
@@ -278,9 +285,11 @@ filesRouter.post(
       projectId: tokenData.projectId,
       projectPublicId: tokenData.projectPublicId,
       fileBuffer,
+      // The token fixes the location: its pre-built path wins. The filename
+      // falls back to the uploaded file's name only when the token set none.
       path: tokenData.path,
       filename:
-        multipartFile?.originalname ?? body.filename ?? tokenData.filename,
+        tokenData.filename ?? multipartFile?.originalname ?? body.filename,
       contentType:
         multipartFile?.mimetype ?? body.contentType ?? tokenData.contentType,
       metadata: body.metadata,
