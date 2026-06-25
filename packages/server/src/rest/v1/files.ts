@@ -89,8 +89,6 @@ filesRouter.post('/files', async (ctx: Context) => {
     filename?: string;
     contentType?: string;
     size?: number;
-    storageType: 'local' | 's3' | 'gcs';
-    storagePath: string;
     metadata?: string;
   };
 
@@ -101,9 +99,15 @@ filesRouter.post('/files', async (ctx: Context) => {
   });
   if (targetProjectId === null) return;
 
+  // storageType / storagePath are system-managed; any value supplied by the
+  // caller is intentionally ignored by passing only the allowed fields.
   const file = await createFile({
-    ...body,
     projectId: Number(targetProjectId),
+    path: body.path,
+    filename: body.filename,
+    contentType: body.contentType,
+    size: body.size,
+    metadata: body.metadata,
   });
   ctx.status = 201;
   ctx.body = file;

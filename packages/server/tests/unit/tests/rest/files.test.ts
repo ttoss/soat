@@ -598,21 +598,36 @@ describe('Files', () => {
           filename: 'from-create-route.txt',
           content_type: 'text/plain',
           size: 12,
-          storage_type: 'local',
-          storage_path: 'manual/from-create-route.txt',
         });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
       expect(response.body.filename).toBe('from-create-route.txt');
+      // Storage is system-managed: storage_type defaults to 'local' and the
+      // caller never provides storage_type / storage_path.
+      expect(response.body.storage_type).toBe('local');
+    });
+
+    test('ignores client-supplied storage_type / storage_path', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/files')
+        .send({
+          project_id: projectId,
+          filename: 'ignored-storage.txt',
+          storage_type: 'gcs',
+          storage_path: '/attacker/controlled/path.txt',
+        });
+
+      expect(response.status).toBe(201);
+      // System manages storage regardless of what the client sends.
+      expect(response.body.storage_type).toBe('local');
+      expect(response.body.storage_path).toBe('');
     });
 
     test('returns 401 for unauthenticated create request', async () => {
       const response = await testClient.post('/api/v1/files').send({
         project_id: projectId,
         filename: 'unauth-create.txt',
-        storage_type: 'local',
-        storage_path: 'manual/unauth-create.txt',
       });
 
       expect(response.status).toBe(401);
@@ -624,8 +639,6 @@ describe('Files', () => {
         .send({
           project_id: projectId,
           filename: 'forbidden-create.txt',
-          storage_type: 'local',
-          storage_path: 'manual/forbidden-create.txt',
         });
 
       expect(response.status).toBe(403);
@@ -640,8 +653,6 @@ describe('Files', () => {
         .send({
           project_id: 'prj_nonexistent123',
           filename: 'bad-project.txt',
-          storage_type: 'local',
-          storage_path: 'manual/bad-project.txt',
         });
 
       expect(response.status).toBe(403);

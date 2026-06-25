@@ -472,18 +472,20 @@ describe('filesFormationModule', () => {
         resourceType: 'file',
         projectId: 5,
         resolvedProperties: {
+          filename: 'file.txt',
+          // Deprecated/ignored: still accepted for backward compatibility but
+          // must not be forwarded to createFile.
           storage_type: 'local',
           storage_path: '/tmp/file',
         },
       })
     ).resolves.toBe('file_1');
 
+    // storage_type / storage_path are system-managed and must not be passed.
     expect(mockCreateFile).toHaveBeenCalledWith({
       projectId: 5,
-      storageType: 'local',
-      storagePath: '/tmp/file',
       path: undefined,
-      filename: undefined,
+      filename: 'file.txt',
       contentType: undefined,
       size: undefined,
       metadata: undefined,

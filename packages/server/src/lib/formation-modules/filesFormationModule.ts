@@ -91,10 +91,11 @@ export const filesFormationModule: FormationModule = {
       ? normalizePropertyKeys(rawProperties)
       : rawProperties;
 
+    // storage_type / storage_path are deprecated and ignored — storage is
+    // system-managed. They remain accepted in the schema for backward
+    // compatibility but are no longer forwarded to createFile.
     const result = await createFile({
       projectId,
-      storageType: properties.storage_type as 'local' | 's3' | 'gcs',
-      storagePath: properties.storage_path as string,
       path: toOptionalString(properties.path) ?? undefined,
       filename: toOptionalString(properties.filename) ?? undefined,
       contentType: toOptionalString(properties.content_type) ?? undefined,

@@ -972,17 +972,21 @@ components:
         Registers a file record within the formation's project.
       type: object
       additionalProperties: false
-      required:
-        - storage_type
-        - storage_path
       properties:
         storage_type:
           type: string
           enum: [local, s3, gcs]
-          description: Storage backend type
+          deprecated: true
+          description: >-
+            Deprecated and ignored. Storage is system-managed (see
+            FILES_STORAGE_DIR); this field is accepted for backward
+            compatibility but has no effect.
         storage_path:
           type: string
-          description: Path where the file is stored in the storage backend
+          deprecated: true
+          description: >-
+            Deprecated and ignored. Storage path is system-managed; this field
+            is accepted for backward compatibility but has no effect.
         path:
           type: string
           nullable: true

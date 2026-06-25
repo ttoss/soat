@@ -84,9 +84,6 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - storage_type
-                - storage_path
               properties:
                 project_id:
                   x-soat-ref: projects
@@ -109,15 +106,6 @@ paths:
                   type: integer
                   description: File size in bytes
                   example: 1024
-                storage_type:
-                  type: string
-                  enum: [local, s3, gcs]
-                  description: Storage backend type
-                  example: 'local'
-                storage_path:
-                  type: string
-                  description: Path where the file is stored
-                  example: '/uploads/document.pdf'
                 metadata:
                   type: string
                   description: JSON string with additional metadata
@@ -742,11 +730,13 @@ components:
         storage_type:
           type: string
           enum: [local, s3, gcs]
-          description: Storage backend type
+          readOnly: true
+          description: Storage backend type. System-managed (currently always `local`); cannot be set by the caller.
           example: 'local'
         storage_path:
           type: string
-          description: Path where the file is stored
+          readOnly: true
+          description: Path where the file is stored. System-managed and derived from FILES_STORAGE_DIR; cannot be set by the caller.
           example: '/uploads/document.pdf'
         metadata:
           type: string

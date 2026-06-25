@@ -171,8 +171,6 @@ describe('MCP tools - happy path', () => {
   test('create-file registers a file record', async () => {
     const res = await mcpCall('create-file', {
       projectId,
-      storageType: 'local',
-      storagePath: '/tmp/mcp-registered.txt',
       filename: 'mcp-registered.txt',
     });
     expect(res.status).toBe(200);

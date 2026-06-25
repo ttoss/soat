@@ -1935,7 +1935,7 @@ echo "--- Formation: file resource type ---"
 FILE_FORMATION_RESP=$($SOAT_CLI create-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-formation-file" \
-  --template '{"resources":{"myFile":{"type":"file","properties":{"storage_type":"local","storage_path":"/smoke/formation-file.txt","filename":"formation-file.txt"}}},"outputs":{"fileId":{"ref":"myFile"}}}')
+  --template '{"resources":{"myFile":{"type":"file","properties":{"path":"/smoke/formation-file.txt","filename":"formation-file.txt"}}},"outputs":{"fileId":{"ref":"myFile"}}}')
 FILE_FORMATION_ID=$(printf '%s\n' "$FILE_FORMATION_RESP" | jq -r '.id')
 if [ -z "$FILE_FORMATION_ID" ] || [ "$FILE_FORMATION_ID" = "null" ]; then
   echo "ERROR: create-formation (file) did not return an id" >&2

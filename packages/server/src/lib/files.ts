@@ -314,8 +314,6 @@ export const createFile = async (args: {
   filename?: string;
   contentType?: string;
   size?: number;
-  storageType: 'local' | 's3' | 'gcs';
-  storagePath: string;
   metadata?: string;
 }) => {
   const normalizedPath =
@@ -324,7 +322,15 @@ export const createFile = async (args: {
       : args.filename
         ? normalizePath(args.filename)
         : null;
-  const file = await db.File.create({ ...args, path: normalizedPath });
+  // Storage backend is system-managed (see FILES_STORAGE_DIR), not chosen by
+  // the caller. A metadata-only record defaults to local storage with an empty
+  // storagePath; the path is filled in when bytes are uploaded.
+  const file = await db.File.create({
+    ...args,
+    path: normalizedPath,
+    storageType: 'local' as const,
+    storagePath: '',
+  });
   const mapped = mapFile(file);
 
   resolveProjectPublicId({ projectId: args.projectId }).then(

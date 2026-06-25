@@ -26,8 +26,8 @@ Files are associated with a project and stored on the server's local filesystem.
 | `filename`     | string                   | Original filename                                                                                                   |
 | `content_type` | string                   | MIME type                                                                                                           |
 | `size`         | number                   | File size in bytes                                                                                                  |
-| `storage_type` | `local` \| `s3` \| `gcs` | Storage backend (currently `local`)                                                                                 |
-| `storage_path` | string                   | Absolute path on disk                                                                                               |
+| `storage_type` | `local` \| `s3` \| `gcs` | Read-only. System-managed storage backend (currently always `local`). Not accepted as input.                        |
+| `storage_path` | string                   | Read-only. System-managed absolute path on disk, derived from `FILES_STORAGE_DIR`. Not accepted as input.            |
 | `metadata`     | string                   | Arbitrary JSON string for custom metadata                                                                           |
 | `project_id`   | string                   | ID of the owning project                                                                                            |
 | `created_at`   | string                   | ISO 8601 creation timestamp                                                                                         |
