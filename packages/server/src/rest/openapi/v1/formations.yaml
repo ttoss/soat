@@ -976,11 +976,7 @@ components:
         path:
           type: string
           nullable: true
-          description: Logical path of the file within the project
-        filename:
-          type: string
-          nullable: true
-          description: Name of the file
+          description: Logical path of the file within the project — its key. The filename is derived from its last segment.
         content_type:
           type: string
           nullable: true

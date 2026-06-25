@@ -86,7 +86,6 @@ filesRouter.post('/files', async (ctx: Context) => {
   const body = ctx.request.body as {
     projectId?: string;
     path?: string;
-    filename?: string;
     contentType?: string;
     size?: number;
     metadata?: string;
@@ -99,12 +98,12 @@ filesRouter.post('/files', async (ctx: Context) => {
   });
   if (targetProjectId === null) return;
 
-  // storageType / storagePath are system-managed; any value supplied by the
-  // caller is intentionally ignored by passing only the allowed fields.
+  // `path` is the file's key; filename is derived from it. storageType /
+  // storagePath are system-managed. Only the allowed fields are forwarded, so
+  // any filename / storage_* a caller supplies is intentionally ignored.
   const file = await createFile({
     projectId: Number(targetProjectId),
     path: body.path,
-    filename: body.filename,
     contentType: body.contentType,
     size: body.size,
     metadata: body.metadata,
@@ -144,7 +143,7 @@ filesRouter.post(
     const record = await uploadFile({
       projectId: Number(targetProjectId),
       fileBuffer: file.buffer,
-      filename: file.originalname,
+      originalName: file.originalname,
       contentType: file.mimetype,
       metadata: body.metadata,
       path: body.path,
@@ -162,7 +161,6 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
     projectId?: string;
     content: string;
     path?: string;
-    filename?: string;
     contentType?: string;
     metadata?: string;
   };
@@ -186,7 +184,6 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
     projectId: Number(targetProjectId),
     fileBuffer,
     path: body.path,
-    filename: body.filename,
     contentType: body.contentType,
     metadata: body.metadata,
   });
@@ -204,7 +201,6 @@ filesRouter.post('/files/upload-token', async (ctx: Context) => {
 
   const body = ctx.request.body as {
     projectId: string;
-    filename?: string;
     contentType?: string;
     path?: string;
   };
@@ -237,7 +233,6 @@ filesRouter.post('/files/upload-token', async (ctx: Context) => {
 
   const token = await createUploadToken({
     projectId: project.id,
-    filename: body.filename,
     contentType: body.contentType,
     path: body.path,
   });
@@ -260,7 +255,6 @@ filesRouter.post(
     const multipartFile = ctx.file as MulterFile | undefined;
     const body = ctx.request.body as {
       content?: string;
-      filename?: string;
       contentType?: string;
       metadata?: string;
     };
@@ -283,8 +277,7 @@ filesRouter.post(
       projectPublicId: tokenData.projectPublicId,
       fileBuffer,
       path: tokenData.path,
-      filename:
-        multipartFile?.originalname ?? body.filename ?? tokenData.filename,
+      originalName: multipartFile?.originalname,
       contentType:
         multipartFile?.mimetype ?? body.contentType ?? tokenData.contentType,
       metadata: body.metadata,

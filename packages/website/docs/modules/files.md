@@ -22,18 +22,16 @@ Files are associated with a project and stored on the server's local filesystem.
 | Field          | Type                     | Description                                                                                                         |
 | -------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
 | `id`           | string                   | Public identifier                                                                                                   |
-| `path`         | string \| null           | Logical path within the project (e.g. `/assets/logo.png`). Also used as the resource ID segment in path-based SRNs. |
-| `filename`     | string                   | Original filename                                                                                                   |
+| `path`         | string \| null           | Logical path within the project — the file's **key** (e.g. `/assets/logo.png`). Its identity; also the resource ID segment in path-based SRNs. |
+| `filename`     | string                   | Read-only. Download name, derived from the last segment of `path`. Not accepted as input.                           |
 | `content_type` | string                   | MIME type                                                                                                           |
 | `size`         | number                   | File size in bytes                                                                                                  |
-| `storage_type` | `local` \| `s3` \| `gcs` | Read-only. System-managed storage backend (currently always `local`). Not accepted as input.                        |
-| `storage_path` | string                   | Read-only. System-managed absolute path on disk, derived from `FILES_STORAGE_DIR`. Not accepted as input.            |
 | `metadata`     | string                   | Arbitrary JSON string for custom metadata                                                                           |
 | `project_id`   | string                   | ID of the owning project                                                                                            |
 | `created_at`   | string                   | ISO 8601 creation timestamp                                                                                         |
 | `updated_at`   | string                   | ISO 8601 last-updated timestamp                                                                                     |
 
-The optional `path` field is a logical, project-scoped identifier for a file — similar to a filesystem path. It must be absolute (start with `/`) and is normalized at write time. The combination of `project_id + path` is unique within a project.
+`path` is the file's key: a logical, project-scoped identifier similar to an S3 object key. It must be absolute (start with `/`) and is normalized at write time. The combination of `project_id + path` is unique within a project. The `filename` is always the last segment of `path` (e.g. `/assets/logo.png` → `logo.png`); to rename a file, change its `path`. Storage backend selection (`local`/`s3`/`gcs`) and the physical on-disk location are system-managed and not exposed through the API — see [Configuration](#configuration).
 
 ## Key Concepts
 
@@ -133,7 +131,6 @@ volumes:
 ```bash
 soat upload-file-base64 \
   --project-id proj_ABC \
-  --filename logo.png \
   --content-base64 "iVBORw0KGgo..." \
   --path /assets/logo.png
 ```
@@ -148,7 +145,6 @@ const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...
 const { data, error } = await soat.files.uploadFileBase64({
   body: {
     project_id: 'proj_ABC',
-    filename: 'logo.png',
     content_base64: 'iVBORw0KGgo...',
     path: '/assets/logo.png',
   },
@@ -165,7 +161,6 @@ curl -X POST https://api.example.com/api/v1/files/upload-base64 \
   -H "Content-Type: application/json" \
   -d '{
     "project_id": "proj_ABC",
-    "filename": "logo.png",
     "content_base64": "iVBORw0KGgo...",
     "path": "/assets/logo.png"
   }'
@@ -183,7 +178,6 @@ curl -X POST https://api.example.com/api/v1/files/upload-base64 \
 # Step 1 — request a single-use token
 TOKEN=$(soat create-upload-token \
   --project-id proj_ABC \
-  --filename report.pdf \
   --content-type application/pdf \
   --path /documents/report.pdf | jq -r .upload_token)
 
@@ -200,7 +194,6 @@ soat upload-file-with-token \
 const { data: token } = await soat.files.createUploadToken({
   body: {
     project_id: 'proj_ABC',
-    filename: 'report.pdf',
     content_type: 'application/pdf',
     path: '/documents/report.pdf',
   },
@@ -221,7 +214,7 @@ if (error) throw new Error(JSON.stringify(error));
 TOKEN=$(curl -s -X POST https://api.example.com/api/v1/files/upload-token \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"project_id":"proj_ABC","filename":"report.pdf"}' | jq -r .upload_token)
+  -d '{"project_id":"proj_ABC","path":"/documents/report.pdf"}' | jq -r .upload_token)
 
 # Step 2 — upload the file (token is the credential, no Authorization header)
 curl -X POST "https://api.example.com/api/v1/files/upload/$TOKEN" \

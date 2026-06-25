@@ -52,15 +52,26 @@ export const normalizePath = (p: string): string => {
   return result;
 };
 
+/**
+ * Derives the filename (download name) from a logical path: its last segment.
+ * `/temas/report.txt` → `report.txt`. Returns undefined for an empty/null path.
+ */
+export const filenameFromPath = (p: string | null): string | undefined => {
+  if (!p) return undefined;
+  const segments = p.split('/').filter(Boolean);
+  return segments.length > 0 ? segments[segments.length - 1] : undefined;
+};
+
 const mapFile = (file: InstanceType<(typeof db)['File']>) => {
   return {
     id: file.publicId,
+    // `path` is the file's key (its identity). `filename` is derived from it
+    // (the last path segment) and is read-only. storageType / storagePath are
+    // system-managed internals and are not exposed through the API.
     path: file.path ?? undefined,
-    filename: file.filename,
+    filename: filenameFromPath(file.path) ?? file.filename,
     contentType: file.contentType,
     size: file.size,
-    storageType: file.storageType,
-    storagePath: file.storagePath,
     metadata: file.metadata,
     tags: file.tags ?? undefined,
     createdAt: file.createdAt,
@@ -135,7 +146,9 @@ export const uploadFile = async (args: {
   projectPublicId?: string;
   fileBuffer: Buffer;
   path?: string;
-  filename?: string;
+  /** The uploaded file's original name — used only to default the path when
+   * `path` is omitted. The stored filename is always derived from the path. */
+  originalName?: string;
   contentType?: string;
   metadata?: string;
 }) => {
@@ -144,9 +157,11 @@ export const uploadFile = async (args: {
   const normalizedPath =
     args.path !== undefined
       ? normalizePath(args.path)
-      : args.filename
-        ? normalizePath(args.filename)
+      : args.originalName
+        ? normalizePath(args.originalName)
         : null;
+
+  const filename = filenameFromPath(normalizedPath) ?? args.originalName;
 
   const projectPublicId =
     args.projectPublicId ??
@@ -160,7 +175,7 @@ export const uploadFile = async (args: {
   const file = await db.File.create({
     projectId: args.projectId,
     path: normalizedPath,
-    filename: args.filename,
+    filename,
     contentType: args.contentType,
     size: args.fileBuffer.length,
     storageType: 'local' as const,
@@ -168,7 +183,7 @@ export const uploadFile = async (args: {
     metadata: args.metadata,
   });
 
-  const ext = args.filename ? path.extname(args.filename) : '';
+  const ext = filename ? path.extname(filename) : '';
   const storagePath = path.join(fileStorageDir, `${file.publicId}${ext}`);
   fs.writeFileSync(storagePath, args.fileBuffer);
 
@@ -263,7 +278,7 @@ export const downloadFile = async (args: { id: string }) => {
 
   return {
     stream: fs.createReadStream(file.storagePath),
-    filename: file.filename,
+    filename: filenameFromPath(file.path) ?? file.filename,
     contentType: file.contentType,
     size: file.size,
   };
@@ -272,7 +287,9 @@ export const downloadFile = async (args: { id: string }) => {
 export const updateFileMetadata = async (args: {
   id: string;
   metadata?: string;
-  filename?: string;
+  /** New logical path (key). Renaming a file means moving its key; the
+   * filename follows the new path's last segment. */
+  path?: string;
 }) => {
   const file = await db.File.findOne({ where: { publicId: args.id } });
 
@@ -284,11 +301,26 @@ export const updateFileMetadata = async (args: {
   if (args.metadata !== undefined) {
     updates.metadata = args.metadata;
   }
-  if (args.filename !== undefined) {
-    updates.filename = args.filename;
+  if (args.path !== undefined) {
+    const normalizedPath = normalizePath(args.path);
+    updates.path = normalizedPath;
+    updates.filename = filenameFromPath(normalizedPath);
   }
 
-  await file.update(updates);
+  try {
+    await file.update(updates);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.name === 'SequelizeUniqueConstraintError'
+    ) {
+      throw new DomainError(
+        'NAME_CONFLICT',
+        `A file already exists at path '${normalizePath(args.path!)}' in this project.`
+      );
+    }
+    throw error;
+  }
   const mapped = mapFile(file);
 
   resolveProjectPublicId({ projectId: file.projectId }).then(
@@ -311,23 +343,23 @@ export const updateFileMetadata = async (args: {
 export const createFile = async (args: {
   projectId: number;
   path?: string;
-  filename?: string;
   contentType?: string;
   size?: number;
   metadata?: string;
 }) => {
   const normalizedPath =
-    args.path !== undefined
-      ? normalizePath(args.path)
-      : args.filename
-        ? normalizePath(args.filename)
-        : null;
+    args.path !== undefined ? normalizePath(args.path) : null;
+  // `path` is the file's key; `filename` is derived from it (its last segment).
   // Storage backend is system-managed (see FILES_STORAGE_DIR), not chosen by
   // the caller. A metadata-only record defaults to local storage with an empty
   // storagePath; the path is filled in when bytes are uploaded.
   const file = await db.File.create({
-    ...args,
+    projectId: args.projectId,
     path: normalizedPath,
+    filename: filenameFromPath(normalizedPath),
+    contentType: args.contentType,
+    size: args.size,
+    metadata: args.metadata,
     storageType: 'local' as const,
     storagePath: '',
   });

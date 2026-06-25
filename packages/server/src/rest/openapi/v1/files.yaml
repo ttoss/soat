@@ -92,12 +92,8 @@ paths:
                   example: 'proj_V1StGXR8Z5jdHi6B'
                 path:
                   type: string
-                  description: Logical path within the project (e.g. /images/logo.png). Defaults to /filename if omitted.
+                  description: Logical path within the project — the file's key (e.g. /images/logo.png). Unique per project; used as the file's identity and in policy SRNs. The filename is derived from its last segment.
                   example: '/images/logo.png'
-                filename:
-                  type: string
-                  description: Name of the file
-                  example: 'document.pdf'
                 content_type:
                   type: string
                   description: MIME type of the file
@@ -148,6 +144,10 @@ paths:
                   type: string
                   description: Project ID to associate the file with. Optional when authenticating with a project-scoped API key, which defaults to the key's project; required otherwise.
                   example: 'proj_V1StGXR8Z5jdHi6B'
+                path:
+                  type: string
+                  description: Logical path (key) within the project. Defaults to /<uploaded file name> when omitted.
+                  example: '/images/logo.png'
                 metadata:
                   type: string
                   description: Additional metadata as a JSON string
@@ -428,10 +428,10 @@ paths:
                   type: string
                   description: New metadata as a JSON string
                   example: '{"author":"Jane","tags":["report"]}'
-                filename:
+                path:
                   type: string
-                  description: New filename for the file
-                  example: 'renamed-file.txt'
+                  description: New logical path (key) for the file. Renaming moves the key; the filename follows the new path's last segment. Must be unique within the project.
+                  example: '/reports/renamed-file.txt'
       responses:
         '200':
           description: Metadata updated successfully
@@ -445,6 +445,12 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: A file already exists at the target path in this project
           content:
             application/json:
               schema:
@@ -628,13 +634,9 @@ components:
           type: string
           description: Base64-encoded file content
           example: 'SGVsbG8gV29ybGQ='
-        filename:
-          type: string
-          description: Name of the file
-          example: 'document.txt'
         path:
           type: string
-          description: Logical path within the project (e.g. /images/logo.png). Defaults to /filename if omitted.
+          description: Logical path within the project — the file's key (e.g. /documents/document.txt). The filename is derived from its last segment.
           example: '/documents/document.txt'
         content_type:
           type: string
@@ -654,17 +656,13 @@ components:
           type: string
           description: Public ID of the project
           example: 'proj_V1StGXR8Z5jdHi6B'
-        filename:
-          type: string
-          description: Name of the file to be uploaded
-          example: 'report.pdf'
         content_type:
           type: string
           description: MIME type of the file to be uploaded
           example: 'application/pdf'
         path:
           type: string
-          description: Logical path within the project (e.g. /documents/report.pdf). Defaults to /filename if omitted.
+          description: Logical path (key) within the project (e.g. /documents/report.pdf). Defaults to /<uploaded file name> when omitted.
           example: '/documents/report.pdf'
     UploadTokenResponse:
       type: object
@@ -690,10 +688,6 @@ components:
           type: string
           description: Base64-encoded file content
           example: 'SGVsbG8gV29ybGQ='
-        filename:
-          type: string
-          description: Name of the file (overrides the token's filename)
-          example: 'document.txt'
         content_type:
           type: string
           description: MIME type of the file (overrides the token's content type)
@@ -713,12 +707,13 @@ components:
         path:
           type: string
           nullable: true
-          description: Logical path of the file within the project (e.g. /images/logo.png)
+          description: Logical path of the file within the project — its key (e.g. /images/logo.png). Unique per project; used as the file's identity and in policy SRNs.
           example: '/images/logo.png'
         filename:
           type: string
-          description: Name of the file
-          example: 'document.pdf'
+          readOnly: true
+          description: Download name, derived from the last segment of `path`. Read-only.
+          example: 'logo.png'
         contentType:
           type: string
           description: MIME type of the file
@@ -727,17 +722,6 @@ components:
           type: integer
           description: File size in bytes
           example: 1024
-        storage_type:
-          type: string
-          enum: [local, s3, gcs]
-          readOnly: true
-          description: Storage backend type. System-managed (currently always `local`); cannot be set by the caller.
-          example: 'local'
-        storage_path:
-          type: string
-          readOnly: true
-          description: Path where the file is stored. System-managed and derived from FILES_STORAGE_DIR; cannot be set by the caller.
-          example: '/uploads/document.pdf'
         metadata:
           type: string
           description: JSON string with additional metadata
