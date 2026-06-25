@@ -155,6 +155,39 @@ describe('Projects', () => {
           .send({ policy_ids: [] });
       });
     });
+
+    describe('admin api key scoped to project sees only that project', () => {
+      let adminScopedProjectId: string;
+      let adminRawApiKey: string;
+
+      beforeAll(async () => {
+        const projRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/projects')
+          .send({ name: 'Admin Scoped Project' });
+
+        adminScopedProjectId = projRes.body.id;
+
+        await authenticatedTestClient(adminToken)
+          .post('/api/v1/projects')
+          .send({ name: 'Admin Other Project' });
+
+        const apiKeyRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/api-keys')
+          .send({ name: 'Admin Scoped Key', project_id: adminScopedProjectId });
+
+        adminRawApiKey = apiKeyRes.body.key;
+      });
+
+      test('admin api key only sees its scoped project', async () => {
+        const response =
+          await authenticatedTestClient(adminRawApiKey).get('/api/v1/projects');
+
+        expect(response.status).toBe(200);
+        expect(Array.isArray(response.body)).toBe(true);
+        expect(response.body.length).toBe(1);
+        expect(response.body[0].id).toBe(adminScopedProjectId);
+      });
+    });
   });
 
   describe('GET /api/v1/projects/:id', () => {
