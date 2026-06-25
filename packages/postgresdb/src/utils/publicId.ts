@@ -31,6 +31,7 @@ export const PUBLIC_ID_PREFIXES = {
   formationResource: 'form_res_',
   formationOperation: 'form_op_',
   documentChunk: 'dchunk_',
+  uploadToken: 'upt_',
 } as const;
 
 /**
