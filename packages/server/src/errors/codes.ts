@@ -169,6 +169,18 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'The referenced file does not exist.',
   },
+  UPLOAD_TOKEN_NOT_FOUND: {
+    httpStatus: 404,
+    description: 'The upload token does not exist.',
+  },
+  UPLOAD_TOKEN_EXPIRED: {
+    httpStatus: 410,
+    description: 'The upload token has expired. Request a new one.',
+  },
+  UPLOAD_TOKEN_USED: {
+    httpStatus: 409,
+    description: 'The upload token has already been used.',
+  },
   UNSUPPORTED_FILE_TYPE: {
     httpStatus: 400,
     description:

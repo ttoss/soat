@@ -76,6 +76,17 @@ Policies can target files by their logical `path` rather than their `id`. When a
 
 The list endpoint applies policy filters at the SQL level — the database returns only rows the caller is permitted to see. See [IAM](./iam.md) for full SRN syntax and policy authoring guidance, or walk through scoping a read-only policy to files in [Permissions in Practice - Step 7 (Verify permissions with file operations)](/docs/tutorials/permissions#step-7--verify-permissions).
 
+### Upload Tokens (large files via MCP)
+
+The `upload-file-base64` flow requires the full base64 content as a single request field. When an agent uploads through MCP, payloads larger than ~100 KB are truncated before they reach the tool call, so large files cannot be uploaded that way.
+
+Upload tokens solve this with a two-step flow — the local-storage equivalent of an S3 presigned URL:
+
+1. **Request a token** — `POST /api/v1/files/upload-token` (the `create-upload-token` MCP tool) returns a single-use `upload_token`, a relative `upload_url`, and an `expires_at` (15-minute lifetime).
+2. **Upload the content** — `POST /api/v1/files/upload/{token}` writes the file and returns the standard file record. This endpoint requires **no bearer credential** — the token is the credential — and accepts either `multipart/form-data` (field `file`) or JSON with a base64 `content` field.
+
+Only step 1 is exposed as an MCP tool; the upload itself happens over plain HTTP, bypassing the MCP payload limit entirely. The token is invalidated after a single successful upload. Subsequent uploads return `409`; expired tokens return `410`; unknown tokens return `404`.
+
 ## Configuration
 
 | Environment Variable | Required | Description                                                                                             |
@@ -143,6 +154,63 @@ curl -X POST https://api.example.com/api/v1/files/upload-base64 \
     "content_base64": "iVBORw0KGgo...",
     "path": "/assets/logo.png"
   }'
+```
+
+</TabItem>
+</Tabs>
+
+### Upload a large file via an upload token
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+# Step 1 — request a single-use token
+TOKEN=$(soat create-upload-token \
+  --project-id proj_ABC \
+  --filename report.pdf \
+  --content-type application/pdf \
+  --path /documents/report.pdf | jq -r .upload_token)
+
+# Step 2 — upload the content directly (no payload limit)
+soat upload-file-with-token \
+  --token "$TOKEN" \
+  --content "$(base64 -w0 report.pdf)"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: token } = await soat.files.createUploadToken({
+  body: {
+    project_id: 'proj_ABC',
+    filename: 'report.pdf',
+    content_type: 'application/pdf',
+    path: '/documents/report.pdf',
+  },
+});
+
+const { data, error } = await soat.files.uploadFileWithToken({
+  path: { token: token!.upload_token! },
+  body: { content: base64Content },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+# Step 1 — request a token
+TOKEN=$(curl -s -X POST https://api.example.com/api/v1/files/upload-token \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"project_id":"proj_ABC","filename":"report.pdf"}' | jq -r .upload_token)
+
+# Step 2 — upload the file (token is the credential, no Authorization header)
+curl -X POST "https://api.example.com/api/v1/files/upload/$TOKEN" \
+  -F "file=@report.pdf"
 ```
 
 </TabItem>

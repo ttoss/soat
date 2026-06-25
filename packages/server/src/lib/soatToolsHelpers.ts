@@ -66,6 +66,8 @@ export interface OperationSpec {
     };
   };
   'x-iam-action'?: string;
+  /** When true, the operation is excluded from the MCP tool surface. */
+  'x-soat-mcp-exclude'?: boolean;
 }
 
 export const snakeToCamel = (str: string): string => {
@@ -340,6 +342,14 @@ export const processOperation = (args: {
   }
 
   if (!args.operation.operationId) return null;
+
+  if (args.operation['x-soat-mcp-exclude']) {
+    log(
+      'processOperation: skipping MCP-excluded operation %s',
+      args.operation.operationId
+    );
+    return null;
+  }
 
   const toolName = operationIdToToolName(args.operation.operationId);
   log(

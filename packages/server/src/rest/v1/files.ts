@@ -2,8 +2,10 @@ import type { MulterFile } from '@ttoss/http-server';
 import { multer, Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
+import { DomainError } from 'src/errors';
 import { createFile, listFiles, uploadFile } from 'src/lib/files';
 import { compilePolicy } from 'src/lib/policyCompiler';
+import { consumeUploadToken, createUploadToken } from 'src/lib/uploadTokens';
 
 import { registerFileAccessRoutes } from './fileAccessRoutes';
 
@@ -250,6 +252,106 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
   ctx.status = 201;
   ctx.body = record;
 });
+
+filesRouter.post('/files/upload-token', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const body = ctx.request.body as {
+    projectId: string;
+    filename?: string;
+    contentType?: string;
+    path?: string;
+  };
+
+  if (!body.projectId) {
+    ctx.status = 400;
+    ctx.body = { error: 'projectId is required' };
+    return;
+  }
+
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: body.projectId,
+    action: 'files:UploadFile',
+    resource: `soat:${body.projectId}:*:*`,
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const project = await db.Project.findOne({
+    where: { publicId: body.projectId },
+  });
+  if (!project) {
+    ctx.status = 400;
+    ctx.body = { error: 'Invalid project ID' };
+    return;
+  }
+
+  const token = await createUploadToken({
+    projectId: project.id,
+    filename: body.filename,
+    contentType: body.contentType,
+    path: body.path,
+  });
+
+  ctx.status = 201;
+  ctx.body = token;
+});
+
+/**
+ * Token-authenticated upload. No bearer credential is required — the single-use
+ * token issued by POST /files/upload-token is the credential. Accepts either
+ * multipart/form-data (field `file`) or JSON with a base64 `content` field.
+ */
+filesRouter.post(
+  '/files/upload/:token',
+  upload.single('file'),
+  async (ctx: Context) => {
+    const tokenValue = ctx.params.token;
+
+    const multipartFile = ctx.file as MulterFile | undefined;
+    const body = ctx.request.body as {
+      content?: string;
+      filename?: string;
+      contentType?: string;
+      metadata?: string;
+    };
+
+    if (!multipartFile && !body.content) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        'No file provided. Send multipart field "file" or base64 "content".'
+      );
+    }
+
+    const tokenData = await consumeUploadToken({ token: tokenValue });
+
+    const fileBuffer = multipartFile
+      ? multipartFile.buffer
+      : Buffer.from(body.content as string, 'base64');
+
+    const record = await uploadFile({
+      projectId: tokenData.projectId,
+      projectPublicId: tokenData.projectPublicId,
+      fileBuffer,
+      path: tokenData.path,
+      filename:
+        multipartFile?.originalname ?? body.filename ?? tokenData.filename,
+      contentType:
+        multipartFile?.mimetype ?? body.contentType ?? tokenData.contentType,
+      metadata: body.metadata,
+    });
+
+    ctx.status = 201;
+    ctx.body = record;
+  }
+);
 
 registerFileAccessRoutes({ filesRouter });
 

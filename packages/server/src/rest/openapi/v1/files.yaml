@@ -213,6 +213,113 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /api/v1/files/upload-token:
+    post:
+      tags:
+        - Files
+      summary: Request a file upload token
+      description: >-
+        Creates a short-lived, single-use upload token — the local-storage
+        equivalent of an S3 presigned URL. The client then uploads the file
+        content directly to the returned `upload_url` via
+        `POST /api/v1/files/upload/{token}`, bypassing MCP payload size limits.
+      operationId: createUploadToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadTokenRequest'
+      responses:
+        '201':
+          description: Upload token created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadTokenResponse'
+        '400':
+          description: Missing or invalid project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/files/upload/{token}:
+    post:
+      tags:
+        - Files
+      summary: Upload a file using an upload token
+      description: >-
+        Uploads file content authorized by a single-use token from
+        `POST /api/v1/files/upload-token`. No bearer credential is required —
+        the token is the credential. Accepts either multipart/form-data (field
+        `file`) or JSON with a base64-encoded `content` field. Excluded from the
+        MCP tool surface; clients call it directly over HTTP.
+      operationId: uploadFileWithToken
+      x-soat-mcp-exclude: true
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          description: The single-use upload token (e.g. upt_...)
+          schema:
+            type: string
+            example: 'upt_V1StGXR8Z5jdHi6B'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: File content
+                metadata:
+                  type: string
+                  description: Additional metadata as a JSON string
+                  example: '{"author":"John"}'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadFileWithTokenRequest'
+      responses:
+        '201':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileRecord'
+        '400':
+          description: Missing content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Upload token not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Upload token already used
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '410':
+          description: Upload token expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/files/{file_id}:
     get:
       tags:
@@ -546,6 +653,64 @@ components:
         content_type:
           type: string
           description: MIME type of the file
+          example: 'text/plain'
+        metadata:
+          type: string
+          description: JSON string with additional metadata
+          example: '{"author":"John"}'
+    UploadTokenRequest:
+      type: object
+      required:
+        - project_id
+      properties:
+        project_id:
+          x-soat-ref: projects
+          type: string
+          description: Public ID of the project
+          example: 'proj_V1StGXR8Z5jdHi6B'
+        filename:
+          type: string
+          description: Name of the file to be uploaded
+          example: 'report.pdf'
+        content_type:
+          type: string
+          description: MIME type of the file to be uploaded
+          example: 'application/pdf'
+        path:
+          type: string
+          description: Logical path within the project (e.g. /documents/report.pdf). Defaults to /filename if omitted.
+          example: '/documents/report.pdf'
+    UploadTokenResponse:
+      type: object
+      properties:
+        upload_token:
+          type: string
+          description: Single-use token value
+          example: 'upt_V1StGXR8Z5jdHi6B'
+        upload_url:
+          type: string
+          description: Relative URL to POST the file content to
+          example: '/api/v1/files/upload/upt_V1StGXR8Z5jdHi6B'
+        expires_at:
+          type: string
+          format: date-time
+          description: Token expiration timestamp
+    UploadFileWithTokenRequest:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+          description: Base64-encoded file content
+          example: 'SGVsbG8gV29ybGQ='
+        filename:
+          type: string
+          description: Name of the file (overrides the token's filename)
+          example: 'document.txt'
+        content_type:
+          type: string
+          description: MIME type of the file (overrides the token's content type)
           example: 'text/plain'
         metadata:
           type: string

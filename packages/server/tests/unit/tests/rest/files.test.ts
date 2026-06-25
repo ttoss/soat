@@ -444,6 +444,151 @@ describe('Files', () => {
     });
   });
 
+  describe('POST /api/v1/files/upload-token', () => {
+    test('user with permission receives a token, url and expiry', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload-token')
+        .send({
+          project_id: projectId,
+          filename: 'token-report.pdf',
+          content_type: 'application/pdf',
+          path: '/documents/token-report.pdf',
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.upload_token).toMatch(/^upt_/);
+      expect(response.body.upload_url).toBe(
+        `/api/v1/files/upload/${response.body.upload_token}`
+      );
+      expect(new Date(response.body.expires_at).getTime()).toBeGreaterThan(
+        Date.now()
+      );
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient
+        .post('/api/v1/files/upload-token')
+        .send({ project_id: projectId });
+
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 400 when project_id is missing', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload-token')
+        .send({ filename: 'no-project.txt' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('projectId is required');
+    });
+
+    test('returns 403 when user has no upload permission', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .post('/api/v1/files/upload-token')
+        .send({ project_id: projectId });
+
+      expect(response.status).toBe(403);
+    });
+  });
+
+  describe('POST /api/v1/files/upload/:token', () => {
+    const requestToken = async (overrides?: Record<string, unknown>) => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload-token')
+        .send({ project_id: projectId, ...overrides });
+      return res.body.upload_token as string;
+    };
+
+    test('uploads file via base64 content without a bearer token', async () => {
+      const token = await requestToken({
+        filename: 'from-token.txt',
+        content_type: 'text/plain',
+      });
+      const content = Buffer.from('uploaded via token').toString('base64');
+
+      // testClient is unauthenticated — the token is the only credential.
+      const response = await testClient
+        .post(`/api/v1/files/upload/${token}`)
+        .send({ content });
+
+      expect(response.status).toBe(201);
+      expect(response.body.id).toBeDefined();
+      expect(response.body.filename).toBe('from-token.txt');
+      expect(response.body.content_type).toBe('text/plain');
+      expect(response.body.size).toBe(Buffer.from('uploaded via token').length);
+    });
+
+    test('uploads file via multipart/form-data', async () => {
+      const token = await requestToken();
+      const fileContent = Buffer.from('multipart token upload');
+
+      const response = await testClient
+        .post(`/api/v1/files/upload/${token}`)
+        .attach('file', fileContent, {
+          filename: 'multipart.txt',
+          contentType: 'text/plain',
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.filename).toBe('multipart.txt');
+    });
+
+    test('token is single-use — second upload returns 409', async () => {
+      const token = await requestToken();
+      const content = Buffer.from('first').toString('base64');
+
+      const first = await testClient
+        .post(`/api/v1/files/upload/${token}`)
+        .send({ content });
+      expect(first.status).toBe(201);
+
+      const second = await testClient
+        .post(`/api/v1/files/upload/${token}`)
+        .send({ content: Buffer.from('second').toString('base64') });
+      expect(second.status).toBe(409);
+      expect(second.body.error.code).toBe('UPLOAD_TOKEN_USED');
+    });
+
+    test('returns 404 for an unknown token', async () => {
+      const content = Buffer.from('data').toString('base64');
+
+      const response = await testClient
+        .post('/api/v1/files/upload/upt_doesnotexist000')
+        .send({ content });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('UPLOAD_TOKEN_NOT_FOUND');
+    });
+
+    test('returns 410 for an expired token', async () => {
+      // Create a token then force its expiry into the past.
+      const token = await requestToken();
+      await db.UploadToken.update(
+        { expiresAt: new Date(Date.now() - 1000) },
+        { where: { publicId: token } }
+      );
+
+      const content = Buffer.from('data').toString('base64');
+      const response = await testClient
+        .post(`/api/v1/files/upload/${token}`)
+        .send({ content });
+
+      expect(response.status).toBe(410);
+      expect(response.body.error.code).toBe('UPLOAD_TOKEN_EXPIRED');
+    });
+
+    test('returns 400 when neither file nor content is provided', async () => {
+      const token = await requestToken();
+
+      const response = await testClient
+        .post(`/api/v1/files/upload/${token}`)
+        .send({});
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
   describe('POST /api/v1/files', () => {
     test('authenticated user with permission can create file metadata record', async () => {
       const response = await authenticatedTestClient(userToken)

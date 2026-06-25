@@ -103,7 +103,27 @@ describe('MCP tools - happy path', () => {
     return text;
   };
 
+  const listTools = () => {
+    return authenticatedTestClient(adminToken)
+      .post('/mcp')
+      .set('Content-Type', 'application/json')
+      .set('Accept', 'application/json, text/event-stream')
+      .send({ jsonrpc: '2.0', id: 4, method: 'tools/list', params: {} });
+  };
+
   // ── Files ────────────────────────────────────────────────────────────────
+
+  test('create-upload-token is exposed but upload-file-with-token is excluded', async () => {
+    const res = await listTools();
+    expect(res.status).toBe(200);
+    const names: string[] = (res.body.result?.tools ?? []).map(
+      (t: { name: string }) => {
+        return t.name;
+      }
+    );
+    expect(names).toContain('create-upload-token');
+    expect(names).not.toContain('upload-file-with-token');
+  });
 
   test('upload-file creates a file', async () => {
     const res = await mcpCall('upload-file-base64', {
