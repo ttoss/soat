@@ -118,7 +118,53 @@ const REQUIRED_NODE_FIELDS: Partial<
   memory_write: 'memoryId',
   delay: 'duration',
   loop: 'subGraph',
+  poll: 'toolId',
   sub_orchestration: 'orchestrationId',
+};
+
+/**
+ * A tool node uses `operationId`, not `action`; flag the legacy field name.
+ */
+const toolNodeShapeIssues = (args: {
+  node: OrchestrationNode;
+  basePath: string;
+}): OrchestrationValidationIssue[] => {
+  const { node, basePath } = args;
+  const raw = node as Record<string, unknown>;
+  if (raw['action'] !== undefined && !node.operationId) {
+    return [
+      {
+        path: `${basePath}.action`,
+        message: `tool node '${node.id}' uses 'operationId', not 'action'; rename the field to 'operationId'.`,
+      },
+    ];
+  }
+  return [];
+};
+
+/**
+ * A poll node needs three fields; REQUIRED_NODE_FIELDS only enforces the
+ * primary one (toolId), so the exit condition and cadence are checked here.
+ */
+const pollNodeShapeIssues = (args: {
+  node: OrchestrationNode;
+  basePath: string;
+}): OrchestrationValidationIssue[] => {
+  const { node, basePath } = args;
+  const issues: OrchestrationValidationIssue[] = [];
+  if (node.expression === undefined || node.expression === null) {
+    issues.push({
+      path: `${basePath}.expression`,
+      message: `poll node '${node.id}' is missing required field 'expression' (the JSON Logic exit condition).`,
+    });
+  }
+  if (!node.interval) {
+    issues.push({
+      path: `${basePath}.interval`,
+      message: `poll node '${node.id}' is missing required field 'interval'.`,
+    });
+  }
+  return issues;
 };
 
 const validateNodeShape = (args: {
@@ -149,13 +195,11 @@ const validateNodeShape = (args: {
   }
 
   if (node.type === 'tool') {
-    const raw = node as Record<string, unknown>;
-    if (raw['action'] !== undefined && !node.operationId) {
-      issues.push({
-        path: `${basePath}.action`,
-        message: `tool node '${node.id}' uses 'operationId', not 'action'; rename the field to 'operationId'.`,
-      });
-    }
+    issues.push(...toolNodeShapeIssues({ node, basePath }));
+  }
+
+  if (node.type === 'poll') {
+    issues.push(...pollNodeShapeIssues({ node, basePath }));
   }
 
   return issues;

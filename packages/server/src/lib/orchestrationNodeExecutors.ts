@@ -4,6 +4,7 @@ import { createGeneration } from './agentGeneration';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
 import { searchKnowledge } from './knowledge';
 import { writeMemoryEntry } from './memoryEntries';
+import { parseDuration } from './orchestrationDuration';
 import { startOrchestrationRun } from './orchestrationEngine';
 import type { OrchestrationNode } from './orchestrations';
 import { callTool } from './tools';
@@ -237,19 +238,6 @@ export const executeHumanNode = (args: {
   };
 };
 
-const parseIsoDuration = (duration: string): number => {
-  const match =
-    /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(
-      duration
-    );
-  if (!match) return 0;
-  const days = parseFloat(match[1] ?? '0');
-  const hours = parseFloat(match[2] ?? '0');
-  const minutes = parseFloat(match[3] ?? '0');
-  const seconds = parseFloat(match[4] ?? '0');
-  return ((days * 24 + hours) * 60 + minutes) * 60000 + seconds * 1000;
-};
-
 export const executeDelayNode = async (args: {
   node: OrchestrationNode;
 }): Promise<NodeExecutionResult> => {
@@ -259,7 +247,7 @@ export const executeDelayNode = async (args: {
       'ORCHESTRATION_NODE_FAILED',
       `Delay node '${node.id}' missing duration.`
     );
-  const ms = parseIsoDuration(node.duration);
+  const ms = parseDuration(node.duration);
   await new Promise<void>((resolve) => {
     return setTimeout(resolve, ms);
   });

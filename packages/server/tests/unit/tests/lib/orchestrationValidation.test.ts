@@ -82,7 +82,55 @@ describe('validateOrchestrationGraph', () => {
 
     test('accepts a tool node with operationId and no action', () => {
       const result = validate({
-        nodes: [{ id: 'n1', type: 'tool', toolId: 'tool_abc', operationId: 'listAgents' }],
+        nodes: [
+          {
+            id: 'n1',
+            type: 'tool',
+            toolId: 'tool_abc',
+            operationId: 'listAgents',
+          },
+        ],
+        edges: [],
+      });
+      expect(result.valid).toBe(true);
+    });
+
+    test('flags a poll node missing toolId, expression and interval', () => {
+      const result = validate({
+        nodes: [{ id: 'p', type: 'poll' }],
+        edges: [],
+      });
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({
+          message: expect.stringContaining("missing required field 'toolId'"),
+        })
+      );
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({
+          path: 'nodes[0].expression',
+          message: expect.stringContaining('exit condition'),
+        })
+      );
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({
+          path: 'nodes[0].interval',
+          message: expect.stringContaining("'interval'"),
+        })
+      );
+    });
+
+    test('accepts a fully specified poll node', () => {
+      const result = validate({
+        nodes: [
+          {
+            id: 'p',
+            type: 'poll',
+            toolId: 'tool_abc',
+            interval: '5s',
+            expression: { '==': [{ var: 'response.status' }, 'completed'] },
+          },
+        ],
         edges: [],
       });
       expect(result.valid).toBe(true);

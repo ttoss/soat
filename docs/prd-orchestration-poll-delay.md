@@ -4,22 +4,26 @@ Add a **poll** node (call a tool on an interval until a JSON Logic exit conditio
 
 ## Implementation Status
 
+> **Status: implemented.** Decisions locked: `interval`/`duration` accept a friendly suffix form (`5s`, `30s`, `5m`, `2h`, `500ms`) **and** ISO 8601 (`PT5S`), via a shared `parseDuration`; `fail_on_timeout` defaults to `false`.
+
 | Component | Status | Notes |
 | --- | --- | --- |
-| `delay` node — executor | ✅ Implemented | `executeDelayNode` blocks via `setTimeout(parseIsoDuration(duration))` — `orchestrationNodeExecutors.ts:253` |
-| `delay` node — type / dispatch / validation | ✅ Implemented | `'delay'` in `OrchestratorNodeType`; dispatch case in `orchestrationExecutors.ts:87`; `REQUIRED_NODE_FIELDS.delay = 'duration'` |
-| `delay` node — OpenAPI | ✅ Implemented | `duration` property + `delay` enum value — `orchestrations.yaml:391,453` |
-| `delay` node — docs | ❌ Missing | Node-type table in `modules/orchestrations.md` stops at `human`; `delay` (and `loop`, `webhook`, `sub_orchestration`) are undocumented |
-| `delay` node — dynamic duration | ❌ Not started | `duration` is a static string today; reading it from state via `input_mapping` is an optional enhancement |
-| `poll` node — type | ❌ Not started | Add `'poll'` to `OrchestratorNodeType` + `interval` field on `OrchestrationNode` |
-| `poll` node — executor | ❌ Not started | New `executePollNode`: `callTool` → evaluate JSON Logic exit condition → wait `interval` → repeat, bounded by `maxIterations` |
-| `poll` node — dispatch | ❌ Not started | Add `case 'poll'` in `dispatchNodeExecution` (`orchestrationExecutors.ts`) |
-| `poll` node — validation | ❌ Not started | Requires **three** fields (`toolId`, `expression`, `interval`); needs a dedicated branch in `validateNodeShape` (the single-field `REQUIRED_NODE_FIELDS` map is insufficient) |
-| `poll` node — OpenAPI | ❌ Not started | Add `poll` enum value + `interval` property; regenerate SDK + CLI |
-| `poll` node — tests | ❌ Not started | Unit (executor), validation, REST integration, MCP, smoke |
-| `poll` node — docs | ❌ Not started | Node-type table row + "Polling" Key Concepts subsection |
+| `delay` node — executor | ✅ Implemented | `executeDelayNode` blocks via `setTimeout(parseDuration(duration))` — `orchestrationNodeExecutors.ts` |
+| `delay` node — type / dispatch / validation | ✅ Implemented | `'delay'` in `OrchestratorNodeType`; dispatch case in `orchestrationExecutors.ts`; `REQUIRED_NODE_FIELDS.delay = 'duration'` |
+| `delay` node — OpenAPI | ✅ Implemented | `duration` property + `delay` enum value; description now covers the suffix form |
+| `delay` node — docs | ✅ Done | Node-type table in `modules/orchestrations.md` now lists `delay`, `loop`, `webhook`, `sub_orchestration` (previously undocumented) |
+| `delay` / `poll` — friendly duration | ✅ Implemented | Shared `parseDuration` in `orchestrationDuration.ts` accepts suffix form + ISO 8601 |
+| `delay` node — dynamic duration | ❌ Not started | `duration` is a static string today; reading it from state via `input_mapping` is a deferred enhancement |
+| `poll` node — type | ✅ Implemented | `'poll'` in `OrchestratorNodeType`; `interval` + `failOnTimeout` on `OrchestrationNode` |
+| `poll` node — executor | ✅ Implemented | `executePollNode` in `orchestrationPollNode.ts`: `callTool` → evaluate exit condition against `{...state, response, attempt}` → wait `interval` → repeat, bounded by `maxIterations` (default 10, ceiling 1000) + 10-min wall-clock |
+| `poll` node — dispatch | ✅ Implemented | `case 'poll'` in `dispatchNodeExecution` (`orchestrationExecutors.ts`) |
+| `poll` node — validation | ✅ Implemented | `REQUIRED_NODE_FIELDS.poll = 'toolId'` + `pollNodeShapeIssues` branch requiring `expression` and `interval` |
+| `poll` node — error code | ✅ Implemented | `ORCHESTRATION_POLL_EXHAUSTED` (422) — raised only when `fail_on_timeout` |
+| `poll` node — OpenAPI / SDK / CLI | ✅ Implemented | `poll` enum value + `interval` / `fail_on_timeout`; SDK regenerated (CLI manifest unchanged — no new endpoints) |
+| `poll` node — tests | ✅ Implemented | Executor unit, validation unit, REST integration (complete + timeout), smoke (validate). DB-backed suites run in CI (no local Docker) |
+| `poll` node — docs | ✅ Done | Node-type table row + "Polling" Key Concepts subsection |
 
-> **Key finding:** the **delay node already ships** end-to-end in code — it just isn't documented. The substantive net-new work in this PRD is the **poll node**. A separate collection-iteration node, `loop`, already exists (`executeLoopNode`, `orchestrationNodeExecutors.ts:348`); it iterates a `state` collection and is **not** a condition-based polling loop, so `poll` does not overlap with it.
+> **Key finding:** the **delay node already shipped** end-to-end in code — it was just undocumented (now fixed). The substantive net-new work was the **poll node**. A separate collection-iteration node, `loop`, already exists (`executeLoopNode`); it iterates a `state` collection and is **not** a condition-based polling loop, so `poll` does not overlap with it.
 
 ## Background — what already exists
 
@@ -230,9 +234,10 @@ Per `.claude/rules/quality-assurance.md`, write the failing test before the prod
 - **Tool side effects.** Each attempt re-invokes the tool; authors must ensure the polled operation is safe to repeat (idempotent reads, not re-submissions). Documented in the Polling subsection.
 - **Field reuse of `expression`.** `transform`/`condition` evaluate against `state`; `poll` evaluates against `{...state, response, attempt}`. The augmented context is poll-specific — must be called out clearly in docs to avoid confusion.
 
-## Open Questions
+## Resolved Decisions
 
-1. **`interval` vs. reusing `duration`.** Recommendation: a distinct `interval` field (self-documenting; `duration` reads like a total, not a per-attempt cadence). Alternative: reuse the existing `duration` field to keep the schema smaller. *(Decision needed before OpenAPI edit.)*
-2. **Default `fail_on_timeout`.** Recommendation: `false` (complete with `condition_met: false`) so authors branch with a downstream `condition` node — composes with existing primitives and avoids surprise run failures. Teams that prefer hard failures set it `true`.
-3. **`MAX_POLL_WALL_CLOCK` value.** Recommendation: 10 minutes as a safety ceiling, overridable later. Confirm it fits the platform's request timeout.
-4. **Scope confirmation.** This PRD treats `delay` as already-shipped (documentation only). Confirm there's no desired behavioral change to `delay` (e.g. dynamic duration) for v1.
+1. **`interval` is a distinct field** (not a reuse of `duration`) — self-documenting per-attempt cadence.
+2. **Friendly duration format.** Both `interval` and `duration` accept a suffix form (`5s`, `30s`, `5m`, `2h`, `500ms`) **and** ISO 8601 (`PT5S`), via a single shared `parseDuration`. Bare integers are intentionally rejected (unit ambiguity).
+3. **`fail_on_timeout` defaults to `false`** — on exhaustion the node completes with `condition_met: false` so authors branch with a downstream `condition` node; set `true` for a hard run failure.
+4. **`MAX_POLL_WALL_CLOCK` = 10 minutes** — a fixed safety ceiling in the executor.
+5. **`delay` is documentation-only** for v1; dynamic (state-driven) duration remains a deferred enhancement.
