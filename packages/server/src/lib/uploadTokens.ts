@@ -42,9 +42,10 @@ export const createUploadToken = async (args: {
 
   log('createUploadToken: created token=%s', token.publicId);
 
+  const baseUrl = process.env.SERVER_BASE_URL?.replace(/\/$/, '') ?? '';
   return {
     uploadToken: token.publicId,
-    uploadUrl: `/api/v1/files/upload/${token.publicId}`,
+    uploadUrl: `${baseUrl}/api/v1/files/upload/${token.publicId}`,
     expiresAt: token.expiresAt,
   };
 };

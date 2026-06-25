@@ -468,6 +468,28 @@ describe('Files', () => {
       );
     });
 
+    test('upload_url is absolute when SERVER_BASE_URL is set', async () => {
+      const originalBaseUrl = process.env.SERVER_BASE_URL;
+      process.env.SERVER_BASE_URL = 'https://api.example.com';
+
+      try {
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/files/upload-token')
+          .send({ project_id: projectId, filename: 'absolute-url.txt' });
+
+        expect(response.status).toBe(201);
+        expect(response.body.upload_url).toBe(
+          `https://api.example.com/api/v1/files/upload/${response.body.upload_token}`
+        );
+      } finally {
+        if (originalBaseUrl === undefined) {
+          delete process.env.SERVER_BASE_URL;
+        } else {
+          process.env.SERVER_BASE_URL = originalBaseUrl;
+        }
+      }
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .post('/api/v1/files/upload-token')

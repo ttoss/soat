@@ -217,6 +217,9 @@ paths:
         equivalent of an S3 presigned URL. The client then uploads the file
         content directly to the returned `upload_url` via
         `POST /api/v1/files/upload/{token}`, bypassing MCP payload size limits.
+        When the server is configured with `SERVER_BASE_URL`, `upload_url` is a
+        fully-qualified absolute URL so MCP agents and other clients can POST to
+        it without knowing the server base URL in advance.
       operationId: createUploadToken
       requestBody:
         required: true
@@ -693,8 +696,10 @@ components:
           example: 'upt_V1StGXR8Z5jdHi6B'
         upload_url:
           type: string
-          description: Relative URL to POST the file content to
-          example: '/api/v1/files/upload/upt_V1StGXR8Z5jdHi6B'
+          description: >-
+            Fully-qualified URL to POST the file content to (absolute when
+            SERVER_BASE_URL is configured, relative otherwise).
+          example: 'https://api.example.com/api/v1/files/upload/upt_V1StGXR8Z5jdHi6B'
         expires_at:
           type: string
           format: date-time
