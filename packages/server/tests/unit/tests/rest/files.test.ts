@@ -486,7 +486,10 @@ describe('Files', () => {
       expect(response.status).toBe(403);
     });
 
-    test('returns 400 when project does not exist', async () => {
+    test('returns 403 when project does not exist', async () => {
+      // Project resolution now flows through resolveProjectIds (#267), which
+      // returns 403 for a project the caller cannot prove access to —
+      // including one that does not exist — rather than leaking its absence.
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/files')
         .send({
@@ -496,8 +499,8 @@ describe('Files', () => {
           storage_path: 'manual/bad-project.txt',
         });
 
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBe('Invalid project ID');
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBe('Forbidden');
     });
   });
 
