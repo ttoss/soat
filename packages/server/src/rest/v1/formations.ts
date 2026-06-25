@@ -1,6 +1,5 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { db } from 'src/db';
 import {
   createFormation,
   deleteFormation,
@@ -15,20 +14,9 @@ import {
   validateFormationTemplate,
 } from 'src/lib/formations';
 
-export const formationsRouter = new Router<Context>();
+import { checkAuth, resolveWriteProjectId } from './helpers';
 
-const resolveProjectPublicId = (
-  body: { projectId?: string },
-  apiKeyProjectPublicId: string | null | undefined
-): string | null => {
-  if (body.projectId) {
-    return body.projectId;
-  }
-  if (apiKeyProjectPublicId) {
-    return apiKeyProjectPublicId;
-  }
-  return null;
-};
+export const formationsRouter = new Router<Context>();
 
 const buildMissingParamsError = (
   template: FormationTemplate,
@@ -60,11 +48,7 @@ formationsRouter.post('/formations/validate', async (ctx: Context) => {
 });
 
 formationsRouter.post('/formations/plan', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
     projectId?: string;
@@ -73,25 +57,12 @@ formationsRouter.post('/formations/plan', async (ctx: Context) => {
     parameters?: Record<string, string>;
   };
 
-  const resolvedProjectPublicId = resolveProjectPublicId(
-    body,
-    ctx.authUser.apiKeyProjectPublicId
-  );
-  if (!resolvedProjectPublicId) {
-    ctx.status = 400;
-    ctx.body = { error: 'project_id is required' };
-    return;
-  }
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: resolvedProjectPublicId,
+  const targetProjectId = await resolveWriteProjectId({
+    ctx,
+    projectPublicId: body.projectId,
     action: 'formations:PlanFormation',
   });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (targetProjectId === null) return;
 
   const parsedTemplate = parseFormationTemplateInput(body.template);
   const validation = validateFormationTemplate(parsedTemplate);
@@ -101,17 +72,8 @@ formationsRouter.post('/formations/plan', async (ctx: Context) => {
     return;
   }
 
-  const project = await db.Project.findOne({
-    where: { publicId: resolvedProjectPublicId },
-  });
-  if (!project) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid project ID' };
-    return;
-  }
-
   ctx.body = await planFormation({
-    projectId: project.id,
+    projectId: Number(targetProjectId),
     template: parsedTemplate as FormationTemplate,
     formationId: body.formationId,
     parameters: body.parameters,
@@ -119,11 +81,7 @@ formationsRouter.post('/formations/plan', async (ctx: Context) => {
 });
 
 formationsRouter.post('/formations', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
     projectId?: string;
@@ -139,25 +97,12 @@ formationsRouter.post('/formations', async (ctx: Context) => {
     return;
   }
 
-  const resolvedProjectPublicId = resolveProjectPublicId(
-    body,
-    ctx.authUser.apiKeyProjectPublicId
-  );
-  if (!resolvedProjectPublicId) {
-    ctx.status = 400;
-    ctx.body = { error: 'project_id is required' };
-    return;
-  }
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: resolvedProjectPublicId,
+  const targetProjectId = await resolveWriteProjectId({
+    ctx,
+    projectPublicId: body.projectId,
     action: 'formations:CreateFormation',
   });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (targetProjectId === null) return;
 
   const parsedTemplate = parseFormationTemplateInput(body.template);
   const validation = validateFormationTemplate(parsedTemplate);
@@ -177,17 +122,8 @@ formationsRouter.post('/formations', async (ctx: Context) => {
     return;
   }
 
-  const project = await db.Project.findOne({
-    where: { publicId: resolvedProjectPublicId },
-  });
-  if (!project) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid project ID' };
-    return;
-  }
-
   const result = await createFormation({
-    projectId: project.id,
+    projectId: Number(targetProjectId),
     name: body.name,
     template: parsedTemplate as FormationTemplate,
     metadata: body.metadata,

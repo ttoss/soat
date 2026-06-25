@@ -1,6 +1,5 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { db } from 'src/db';
 import {
   createDocument,
   deleteDocument,
@@ -13,6 +12,8 @@ import {
 } from 'src/lib/documents';
 import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
+
+import { checkAuth, resolveWriteProjectId } from './helpers';
 
 const documentsRouter = new Router<Context>();
 
@@ -162,11 +163,7 @@ documentsRouter.get('/documents/:document_id', async (ctx: Context) => {
 });
 
 documentsRouter.post('/documents', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
     projectId?: string;
@@ -187,39 +184,15 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     return;
   }
 
-  // Resolve projectId: use explicit value, infer from project key, or error for JWT
-  let resolvedProjectPublicId = body.projectId;
-  if (!resolvedProjectPublicId) {
-    if (ctx.authUser.apiKeyProjectPublicId) {
-      resolvedProjectPublicId = ctx.authUser.apiKeyProjectPublicId;
-    } else {
-      ctx.status = 400;
-      ctx.body = { error: 'projectId is required' };
-      return;
-    }
-  }
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: resolvedProjectPublicId,
+  const targetProjectId = await resolveWriteProjectId({
+    ctx,
+    projectPublicId: body.projectId,
     action: 'documents:CreateDocument',
   });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const project = await db.Project.findOne({
-    where: { publicId: resolvedProjectPublicId },
-  });
-  if (!project) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid project ID' };
-    return;
-  }
+  if (targetProjectId === null) return;
 
   const doc = await createDocument({
-    projectId: project.id,
+    projectId: Number(targetProjectId),
     content: body.content,
     path: body.path,
     filename: body.filename,
@@ -373,11 +346,7 @@ documentsRouter.patch('/documents/:document_id/tags', async (ctx: Context) => {
 });
 
 documentsRouter.post('/documents/ingest', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
     fileId?: string;
@@ -398,39 +367,16 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     return;
   }
 
-  let resolvedProjectPublicId = body.projectId;
-  if (!resolvedProjectPublicId) {
-    if (ctx.authUser.apiKeyProjectPublicId) {
-      resolvedProjectPublicId = ctx.authUser.apiKeyProjectPublicId;
-    } else {
-      ctx.status = 400;
-      ctx.body = { error: 'projectId is required' };
-      return;
-    }
-  }
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: resolvedProjectPublicId,
+  const targetProjectId = await resolveWriteProjectId({
+    ctx,
+    projectPublicId: body.projectId,
     action: 'documents:IngestDocument',
   });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const project = await db.Project.findOne({
-    where: { publicId: resolvedProjectPublicId },
-  });
-  if (!project) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid project ID' };
-    return;
-  }
+  if (targetProjectId === null) return;
 
   const result = await enqueueDocumentIngestion({
     fileId: body.fileId,
-    projectId: project.id,
+    projectId: Number(targetProjectId),
     pathPrefix: body.pathPrefix,
     tags: body.tags,
     chunkStrategy: body.chunkStrategy,

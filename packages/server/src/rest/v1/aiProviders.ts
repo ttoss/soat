@@ -11,6 +11,8 @@ import {
   updateAiProvider,
 } from 'src/lib/aiProviders';
 
+import { checkAuth, resolveWriteProjectId } from './helpers';
+
 const aiProvidersRouter = new Router<Context>();
 
 type CreateAiProviderBody = {
@@ -34,15 +36,6 @@ const validateCreateAiProviderBody = (
     return `provider must be one of: ${AI_PROVIDER_SLUGS.join(', ')}`;
   }
   if (!body.defaultModel) return 'defaultModel is required';
-  return null;
-};
-
-const resolveAiProviderProjectPublicId = (
-  body: CreateAiProviderBody,
-  authUser: NonNullable<Context['authUser']>
-): string | null => {
-  if (body.projectId) return body.projectId;
-  if (authUser.apiKeyProjectPublicId) return authUser.apiKeyProjectPublicId;
   return null;
 };
 
@@ -97,11 +90,7 @@ aiProvidersRouter.get('/ai-providers/:ai_provider_id', async (ctx: Context) => {
 });
 
 aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as CreateAiProviderBody;
 
@@ -112,39 +101,17 @@ aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
     return;
   }
 
-  const resolvedProjectPublicId = resolveAiProviderProjectPublicId(
-    body,
-    ctx.authUser
-  );
-  if (!resolvedProjectPublicId) {
-    ctx.status = 400;
-    ctx.body = { error: 'projectId is required' };
-    return;
-  }
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: resolvedProjectPublicId,
+  const targetProjectId = await resolveWriteProjectId({
+    ctx,
+    projectPublicId: body.projectId,
     action: 'aiProviders:CreateAiProvider',
   });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const project = await db.Project.findOne({
-    where: { publicId: resolvedProjectPublicId },
-  });
-  if (!project) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid project ID' };
-    return;
-  }
+  if (targetProjectId === null) return;
 
   let resolvedSecretId: number | undefined;
   if (body.secretId) {
     const secret = await db.Secret.findOne({
-      where: { publicId: body.secretId, projectId: project.id },
+      where: { publicId: body.secretId, projectId: Number(targetProjectId) },
     });
     if (!secret) {
       ctx.status = 400;
@@ -155,7 +122,7 @@ aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
   }
 
   const provider = await createAiProvider({
-    projectId: project.id,
+    projectId: Number(targetProjectId),
     secretId: resolvedSecretId,
     name: body.name!,
     provider: body.provider as AiProviderSlug,

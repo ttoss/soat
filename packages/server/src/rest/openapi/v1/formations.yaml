@@ -69,13 +69,12 @@ paths:
             schema:
               type: object
               required:
-                - project_id
                 - template
               properties:
                 project_id:
                   x-soat-ref: projects
                   type: string
-                  description: Project ID
+                  description: Project ID. Optional when authenticating with a project-scoped API key, which defaults to the key's project; required otherwise.
                   example: proj_V1StGXR8Z5jdHi6B
                 formation_id:
                   x-soat-ref: formations
@@ -151,14 +150,13 @@ paths:
             schema:
               type: object
               required:
-                - project_id
                 - name
                 - template
               properties:
                 project_id:
                   x-soat-ref: projects
                   type: string
-                  description: Project ID
+                  description: Project ID. Optional when authenticating with a project-scoped API key, which defaults to the key's project; required otherwise.
                   example: proj_V1StGXR8Z5jdHi6B
                 name:
                   type: string

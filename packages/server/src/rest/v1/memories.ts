@@ -1,6 +1,5 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { db } from 'src/db';
 import {
   createMemory,
   deleteMemory,
@@ -9,20 +8,9 @@ import {
   updateMemory,
 } from 'src/lib/memories';
 
-const memoriesRouter = new Router<Context>();
+import { checkAuth, resolveWriteProjectId } from './helpers';
 
-const resolveProjectPublicId = (
-  body: { projectId?: string },
-  apiKeyProjectPublicId: string | null | undefined
-): string | null => {
-  if (body.projectId) {
-    return body.projectId;
-  }
-  if (apiKeyProjectPublicId) {
-    return apiKeyProjectPublicId;
-  }
-  return null;
-};
+const memoriesRouter = new Router<Context>();
 
 memoriesRouter.get('/memories', async (ctx: Context) => {
   if (!ctx.authUser) {
@@ -82,11 +70,7 @@ memoriesRouter.get('/memories/:memory_id', async (ctx: Context) => {
 });
 
 memoriesRouter.post('/memories', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
     projectId?: string;
@@ -101,37 +85,15 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     return;
   }
 
-  const resolvedProjectPublicId = resolveProjectPublicId(
-    body,
-    ctx.authUser.apiKeyProjectPublicId
-  );
-  if (!resolvedProjectPublicId) {
-    ctx.status = 400;
-    ctx.body = { error: 'projectId is required' };
-    return;
-  }
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: resolvedProjectPublicId,
+  const targetProjectId = await resolveWriteProjectId({
+    ctx,
+    projectPublicId: body.projectId,
     action: 'memories:CreateMemory',
   });
-  if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const project = await db.Project.findOne({
-    where: { publicId: resolvedProjectPublicId },
-  });
-  if (!project) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid project ID' };
-    return;
-  }
+  if (targetProjectId === null) return;
 
   const memory = await createMemory({
-    projectId: project.id,
+    projectId: Number(targetProjectId),
     name: body.name,
     description: body.description,
     tags: body.tags,

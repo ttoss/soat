@@ -14,9 +14,8 @@ import {
 
 import {
   checkAuth,
-  checkProjectId,
-  getTargetProjectId,
   resolveProjectIdsWithAction,
+  resolveWriteProjectId,
 } from './helpers';
 
 export const chatsRouter = new Router<Context>();
@@ -63,20 +62,12 @@ chatsRouter.post('/chats', async (ctx: Context) => {
     return;
   }
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const targetProjectId = await resolveWriteProjectId({
     ctx,
     projectPublicId: validated.projectId,
     action: 'chats:CreateChat',
   });
-
-  if (projectIds === null) return;
-
-  const targetProjectId = getTargetProjectId({
-    projectIds,
-    apiKeyProjectId: ctx.authUser?.apiKeyProjectId,
-  });
-
-  if (!checkProjectId({ ctx, projectId: targetProjectId })) return;
+  if (targetProjectId === null) return;
 
   const result = await createChat({
     projectId: Number(targetProjectId),
