@@ -287,59 +287,9 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
   }
 };
 
-const createJwtResolveProjectIds = (args: {
-  userId: number;
-  role: 'admin' | 'user';
-  userPolicyIds: number[];
-  db: Context['db'];
-  jwtIsAllowed: ReturnType<typeof createJwtIsAllowed>;
-}) => {
-  return async ({
-    projectPublicId,
-    action,
-  }: {
-    projectPublicId?: string;
-    action: string;
-  }) => {
-    if (args.role === 'admin' && !projectPublicId) return undefined;
-
-    return resolveProjectIdsByPublicIdAndPolicy({
-      reqProjectPublicId: projectPublicId,
-      action,
-      isAllowed: args.jwtIsAllowed,
-      policyIds: args.userPolicyIds,
-      db: args.db,
-    });
-  };
-};
-
-const createJwtGetPolicies = (args: {
-  userPolicyIds: number[];
-  role: 'admin' | 'user';
-  db: Context['db'];
-}) => {
-  return async (_reqProjectPublicId: string): Promise<PolicyDocument[]> => {
-    if (args.role === 'admin') {
-      return [
-        {
-          statement: [{ effect: 'Allow', action: ['*'], resource: ['*'] }],
-        },
-      ];
-    }
-
-    if (args.userPolicyIds.length === 0) return [];
-
-    const policies = await args.db.Policy.findAll({
-      where: { id: args.userPolicyIds },
-    });
-    return policies.map((p: InstanceType<(typeof args.db)['Policy']>) => {
-      return p.document as PolicyDocument;
-    });
-  };
-};
-
+// eslint-disable-next-line max-lines-per-function
 const resolveJwt = async (ctx: Context, token: string) => {
-  let payload: { publicId: string; role: string };
+  let payload: { publicId: string; role: string; prj?: string };
 
   try {
     payload = jwt.verify(token, JWT_SECRET) as typeof payload;
@@ -352,29 +302,76 @@ const resolveJwt = async (ctx: Context, token: string) => {
     attributes: USER_ATTRIBUTES,
   });
 
-  if (!user) {
-    return;
-  }
-
+  if (!user) return;
   const userId = user.id as number;
   const role = user.role as 'admin' | 'user';
   const userPolicyIds = (user.policyIds as number[]) ?? [];
   const jwtIsAllowed = createJwtIsAllowed({ role, userPolicyIds, db: ctx.db });
+  const oauthProjectPublicId = payload.prj;
+
+  const isAllowed: IsAllowedFn = oauthProjectPublicId
+    ? (args) => {
+        return args.projectPublicId !== oauthProjectPublicId
+          ? Promise.resolve(false)
+          : jwtIsAllowed(args);
+      }
+    : jwtIsAllowed;
 
   ctx.authUser = {
     id: userId,
     publicId: user.publicId as string,
     username: user.username as string,
     role,
-    isAllowed: jwtIsAllowed,
-    resolveProjectIds: createJwtResolveProjectIds({
-      userId,
-      role,
-      userPolicyIds,
-      db: ctx.db,
-      jwtIsAllowed,
-    }),
-    getPolicies: createJwtGetPolicies({ userPolicyIds, role, db: ctx.db }),
+    ...(oauthProjectPublicId ? { oauthProjectPublicId } : {}),
+    isAllowed,
+    resolveProjectIds: oauthProjectPublicId
+      ? createApiKeyResolveProjectIds({
+          apiKeyProjectPublicId: oauthProjectPublicId,
+          apiKeyIsAllowed: isAllowed,
+          apiKeyPolicyIds: [],
+          userPolicyIds,
+          db: ctx.db,
+        })
+      : async ({
+          projectPublicId,
+          action,
+        }: {
+          projectPublicId?: string;
+          action: string;
+        }) => {
+          if (role === 'admin' && !projectPublicId) return undefined;
+          return resolveProjectIdsByPublicIdAndPolicy({
+            reqProjectPublicId: projectPublicId,
+            action,
+            isAllowed: jwtIsAllowed,
+            policyIds: userPolicyIds,
+            db: ctx.db,
+          });
+        },
+    getPolicies: oauthProjectPublicId
+      ? createApiKeyGetPolicies({
+          apiKeyProjectPublicId: oauthProjectPublicId,
+          apiKeyPolicyIds: [],
+          userPolicyIds,
+          db: ctx.db,
+        })
+      : async (_: string): Promise<PolicyDocument[]> => {
+          if (role === 'admin')
+            return [
+              {
+                statement: [
+                  { effect: 'Allow', action: ['*'], resource: ['*'] },
+                ],
+              },
+            ];
+          if (userPolicyIds.length === 0) return [];
+          const policies = await ctx.db.Policy.findAll({
+            where: { id: userPolicyIds },
+          });
+          return policies.map((p: InstanceType<(typeof ctx.db)['Policy']>) => {
+            return p.document as PolicyDocument;
+          });
+        },
   };
 };
 

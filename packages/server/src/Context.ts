@@ -36,6 +36,8 @@ export type AuthUser = {
   apiKeyProjectId?: number;
   /** Public string id of the project the API key is scoped to. */
   apiKeyProjectPublicId?: string;
+  /** Public string id of the project an OAuth token is scoped to. */
+  oauthProjectPublicId?: string;
 };
 
 export type Context = {
