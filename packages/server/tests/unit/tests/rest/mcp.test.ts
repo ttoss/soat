@@ -129,7 +129,7 @@ describe('MCP tools - happy path', () => {
     const res = await mcpCall('upload-file-base64', {
       projectId,
       content: Buffer.from('hello mcp').toString('base64'),
-      path: '/mcp-test.txt',
+      filename: 'mcp-test.txt',
     });
     expect(res.status).toBe(200);
     const result = parseResult(res);
@@ -161,7 +161,7 @@ describe('MCP tools - happy path', () => {
   test('update-file-metadata renames the file', async () => {
     const res = await mcpCall('update-file-metadata', {
       fileId,
-      path: '/mcp-renamed.txt',
+      filename: 'mcp-renamed.txt',
     });
     expect(res.status).toBe(200);
     const result = parseResult(res);
@@ -171,7 +171,7 @@ describe('MCP tools - happy path', () => {
   test('create-file registers a file record', async () => {
     const res = await mcpCall('create-file', {
       projectId,
-      path: '/mcp-registered.txt',
+      filename: 'mcp-registered.txt',
     });
     expect(res.status).toBe(200);
     const result = parseResult(res);

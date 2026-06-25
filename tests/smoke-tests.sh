@@ -297,7 +297,8 @@ echo "Hello, smoke test!" > /tmp/smoke.txt
 SMOKE_FILE_B64=$(base64 /tmp/smoke.txt | tr -d '\n')
 UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
   --project_id "$PROJECT_PUBLIC_ID" \
-  --path /reports/smoke.txt \
+  --prefix /reports \
+  --filename smoke.txt \
   --content "$SMOKE_FILE_B64" \
   --content_type text/plain)
 FILE_ID=$(echo "$UPLOAD_RESP" | jq -r '.id')
@@ -344,7 +345,8 @@ echo "PATCH status: 200"
 echo "--- Requesting upload token ---"
 TOKEN_RESP=$($SOAT_CLI create-upload-token \
   --project_id "$PROJECT_PUBLIC_ID" \
-  --path /reports/token-upload.txt \
+  --prefix /reports \
+  --filename token-upload.txt \
   --content_type text/plain)
 UPLOAD_TOKEN=$(echo "$TOKEN_RESP" | jq -r '.upload_token')
 UPLOAD_URL=$(echo "$TOKEN_RESP" | jq -r '.upload_url')
@@ -456,7 +458,7 @@ echo "--- Ingesting a PDF file ---"
 PDF_BASE64="JVBERi0xLjQKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PgplbmRvYmoKMiAwIG9iago8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PgplbmRvYmoKMyAwIG9iago8PC9UeXBlL1BhZ2UvUGFyZW50IDIgMCBSL01lZGlhQm94WzAgMCA2MTIgNzkyXS9Db250ZW50cyA0IDAgUi9SZXNvdXJjZXM8PC9Gb250PDwvRjEgNSAwIFI+Pj4+Pj4KZW5kb2JqCjQgMCBvYmoKPDwvTGVuZ3RoIDQ0Pj4Kc3RyZWFtCkJUIC9GMSAxMiBUZiAxMDAgNzAwIFRkIChIZWxsbyBXb3JsZCkgVGogRVQKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8L1R5cGUvRm9udC9TdWJ0eXBlL1R5cGUxL0Jhc2VGb250L0hlbHZldGljYT4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1NCAwMDAwMCBuIAowMDAwMDAwMTA1IDAwMDAwIG4gCjAwMDAwMDAyMTcgMDAwMDAgbiAKMDAwMDAwMDMwOCAwMDAwMCBuIAp0cmFpbGVyCjw8L1NpemUgNi9Sb290IDEgMCBSPj4Kc3RhcnR4cmVmCjM3MQolJUVPRg=="
 PDF_UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
   --project-id "$PROJECT_PUBLIC_ID" \
-  --path /smoke-test.pdf \
+  --filename smoke-test.pdf \
   --content "$PDF_BASE64" \
   --content_type application/pdf)
 PDF_FILE_ID=$(echo "$PDF_UPLOAD_RESP" | jq -r '.id')
@@ -480,7 +482,7 @@ echo "--- Ingesting a text file ---"
 MD_BASE64=$(printf '# Smoke Notes\n\nThis is an ingested markdown document.\n' | base64 | tr -d '\n')
 MD_UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
   --project-id "$PROJECT_PUBLIC_ID" \
-  --path /smoke-notes.md \
+  --filename smoke-notes.md \
   --content "$MD_BASE64" \
   --content_type text/markdown)
 MD_FILE_ID=$(echo "$MD_UPLOAD_RESP" | jq -r '.id')
@@ -1933,7 +1935,7 @@ echo "--- Formation: file resource type ---"
 FILE_FORMATION_RESP=$($SOAT_CLI create-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-formation-file" \
-  --template '{"resources":{"myFile":{"type":"file","properties":{"path":"/smoke/formation-file.txt"}}},"outputs":{"fileId":{"ref":"myFile"}}}')
+  --template '{"resources":{"myFile":{"type":"file","properties":{"prefix":"/smoke","filename":"formation-file.txt"}}},"outputs":{"fileId":{"ref":"myFile"}}}')
 FILE_FORMATION_ID=$(printf '%s\n' "$FILE_FORMATION_RESP" | jq -r '.id')
 if [ -z "$FILE_FORMATION_ID" ] || [ "$FILE_FORMATION_ID" = "null" ]; then
   echo "ERROR: create-formation (file) did not return an id" >&2

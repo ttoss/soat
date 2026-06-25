@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { normalizePath } from './files';
+import { buildPath } from './files';
 
 const log = createDebug('soat:upload-tokens');
 
@@ -16,25 +16,27 @@ const UPLOAD_TOKEN_TTL_MS = 15 * 60 * 1000;
  */
 export const createUploadToken = async (args: {
   projectId: number;
+  prefix?: string;
   filename?: string;
   contentType?: string;
-  path?: string;
   ttlMs?: number;
 }) => {
   log(
-    'createUploadToken: projectId=%d filename=%s path=%s',
+    'createUploadToken: projectId=%d prefix=%s filename=%s',
     args.projectId,
-    args.filename,
-    args.path
+    args.prefix,
+    args.filename
   );
 
   const expiresAt = new Date(Date.now() + (args.ttlMs ?? UPLOAD_TOKEN_TTL_MS));
 
+  // Store the pre-built full path (key) so the upload lands at the authorized
+  // location regardless of the uploaded file's own name.
   const token = await db.UploadToken.create({
     projectId: args.projectId,
     filename: args.filename,
     contentType: args.contentType,
-    path: args.path !== undefined ? normalizePath(args.path) : null,
+    path: buildPath({ prefix: args.prefix, filename: args.filename }),
     expiresAt,
   });
 

@@ -95,7 +95,7 @@ export const filesFormationModule: FormationModule = {
     // storage is system-managed (see FILES_STORAGE_DIR).
     const result = await createFile({
       projectId,
-      path: toOptionalString(properties.path) ?? undefined,
+      prefix: toOptionalString(properties.prefix) ?? undefined,
       filename: toOptionalString(properties.filename) ?? undefined,
       contentType: toOptionalString(properties.content_type) ?? undefined,
       size: typeof properties.size === 'number' ? properties.size : undefined,
@@ -126,7 +126,7 @@ export const filesFormationModule: FormationModule = {
 
     await updateFileMetadata({
       id: physicalResourceId,
-      path: toOptionalString(properties.path) ?? undefined,
+      prefix: toOptionalString(properties.prefix) ?? undefined,
       filename: toOptionalString(properties.filename) ?? undefined,
       metadata: toOptionalString(properties.metadata) ?? undefined,
     });
@@ -144,7 +144,7 @@ export const filesFormationModule: FormationModule = {
       const file = await getFile({ id: physicalResourceId });
       if (!file) return null;
       return {
-        path: file.path,
+        prefix: file.prefix,
         filename: file.filename,
         content_type: file.contentType,
         size: file.size,

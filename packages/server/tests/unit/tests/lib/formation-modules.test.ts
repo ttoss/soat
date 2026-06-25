@@ -472,7 +472,8 @@ describe('filesFormationModule', () => {
         resourceType: 'file',
         projectId: 5,
         resolvedProperties: {
-          path: '/file.txt',
+          prefix: '/docs',
+          filename: 'file.txt',
         },
       })
     ).resolves.toBe('file_1');
@@ -480,8 +481,8 @@ describe('filesFormationModule', () => {
     // storage is system-managed and is not forwarded to createFile.
     expect(mockCreateFile).toHaveBeenCalledWith({
       projectId: 5,
-      path: '/file.txt',
-      filename: undefined,
+      prefix: '/docs',
+      filename: 'file.txt',
       contentType: undefined,
       size: undefined,
       metadata: undefined,
@@ -504,7 +505,7 @@ describe('filesFormationModule', () => {
       applyCreateResource({
         resourceType: 'file',
         projectId: 5,
-        resolvedProperties: { storage_type: 'local', path: '/file.txt' },
+        resolvedProperties: { storage_type: 'local', filename: 'file.txt' },
       })
     ).rejects.toThrow(/storage_type/);
   });
@@ -520,14 +521,14 @@ describe('filesFormationModule', () => {
       applyUpdateResource({
         resourceType: 'file',
         physicalResourceId: 'file_1',
-        resolvedProperties: { path: '/new.txt' },
+        resolvedProperties: { filename: 'new.txt' },
       })
     ).resolves.toBeUndefined();
 
     expect(mockUpdateFileMetadata).toHaveBeenCalledWith({
       id: 'file_1',
-      path: '/new.txt',
-      filename: undefined,
+      prefix: undefined,
+      filename: 'new.txt',
       metadata: undefined,
     });
   });

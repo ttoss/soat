@@ -154,7 +154,7 @@ describe('Group 2: JWT Permissions - User can read but not delete file', () => {
       .post('/api/v1/files')
       .send({
         project_id: projectId,
-        path: '/test.txt',
+        filename: 'test.txt',
       });
 
     fileId = fileResponse.body.id;
@@ -254,7 +254,7 @@ describe('Group 3: API Key Permissions - Create key, assign permissions, test ac
       .post('/api/v1/files')
       .send({
         project_id: projectId,
-        path: '/test.txt',
+        filename: 'test.txt',
       });
 
     fileId = fileResponse.body.id;
@@ -369,7 +369,7 @@ describe('Group 4: Two users in the same project with different policies', () =>
       .post('/api/v1/files')
       .send({
         project_id: projectId,
-        path: '/shared.txt',
+        filename: 'shared.txt',
       });
 
     fileId = fileResponse.body.id;
@@ -499,7 +499,7 @@ describe('Group 5: User with multiple API keys scoped to different permissions',
       .post('/api/v1/files')
       .send({
         project_id: projectId,
-        path: '/target.txt',
+        filename: 'target.txt',
       });
 
     fileId = fileResponse.body.id;
@@ -605,7 +605,7 @@ describe('Group 6: API key cannot access files in a different project', () => {
       .post('/api/v1/files')
       .send({
         project_id: projectAId,
-        path: '/alpha.txt',
+        filename: 'alpha.txt',
       });
 
     fileInProjectA = fileAResponse.body.id;
@@ -614,7 +614,7 @@ describe('Group 6: API key cannot access files in a different project', () => {
       .post('/api/v1/files')
       .send({
         project_id: projectBId,
-        path: '/beta.txt',
+        filename: 'beta.txt',
       });
 
     fileInProjectB = fileBResponse.body.id;
@@ -684,7 +684,7 @@ describe('Group 7: Policy with wildcard * grants all permissions', () => {
       .post('/api/v1/files')
       .send({
         project_id: projectId,
-        path: '/wildcard.txt',
+        filename: 'wildcard.txt',
       });
 
     fileId = fileResponse.body.id;
@@ -753,7 +753,7 @@ describe('Group 8: Policy with files:* grants all file-namespace permissions', (
       .post('/api/v1/files')
       .send({
         project_id: projectId,
-        path: '/namespace.txt',
+        filename: 'namespace.txt',
       });
 
     fileId = fileResponse.body.id;
@@ -825,7 +825,7 @@ describe('Group 9: notPermissions overrides permissions when action appears in b
       .post('/api/v1/files')
       .send({
         project_id: projectId,
-        path: '/conflict.txt',
+        filename: 'conflict.txt',
       });
 
     fileId = fileResponse.body.id;
@@ -920,7 +920,7 @@ describe('Group 10: JWT — policy with explicit project-scoped resource SRN gra
       .post('/api/v1/files')
       .send({
         project_id: projectAId,
-        path: '/srn-jwt-a.txt',
+        filename: 'srn-jwt-a.txt',
       });
 
     fileInProjectA = fileARes.body.id;
@@ -929,7 +929,7 @@ describe('Group 10: JWT — policy with explicit project-scoped resource SRN gra
       .post('/api/v1/files')
       .send({
         project_id: projectBId,
-        path: '/srn-jwt-b.txt',
+        filename: 'srn-jwt-b.txt',
       });
 
     fileInProjectB = fileBRes.body.id;
@@ -1052,7 +1052,7 @@ describe('Group 11: API key — scoped key with project-resource SRN in key poli
       .post('/api/v1/files')
       .send({
         project_id: projectAId,
-        path: '/srn-api-a.txt',
+        filename: 'srn-api-a.txt',
       });
 
     fileInProjectA = fileARes.body.id;
@@ -1125,7 +1125,7 @@ describe('Group 12: Admin API key with full-access policy is not 403', () => {
       .post('/api/v1/files')
       .send({
         project_id: projectId,
-        path: '/admin-key.txt',
+        filename: 'admin-key.txt',
       });
 
     fileId = fileRes.body.id;

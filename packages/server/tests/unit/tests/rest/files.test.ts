@@ -393,13 +393,15 @@ describe('Files', () => {
         .send({
           project_id: projectId,
           content,
-          path: '/base64upload.txt',
+          prefix: '/uploads',
+          filename: 'base64upload.txt',
           content_type: 'text/plain',
         });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
-      // filename is derived from the path (its last segment).
+      // key = prefix + '/' + filename.
+      expect(response.body.path).toBe('/uploads/base64upload.txt');
       expect(response.body.filename).toBe('base64upload.txt');
       expect(response.body.content_type).toBe('text/plain');
     });
@@ -409,7 +411,7 @@ describe('Files', () => {
 
       const response = await testClient
         .post('/api/v1/files/upload/base64')
-        .send({ project_id: projectId, content, path: '/test.txt' });
+        .send({ project_id: projectId, content, filename: 'test.txt' });
 
       expect(response.status).toBe(401);
     });
@@ -417,7 +419,7 @@ describe('Files', () => {
     test('returns 400 when content is missing', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/files/upload/base64')
-        .send({ project_id: projectId, path: '/missing-content.txt' });
+        .send({ project_id: projectId, filename: 'missing-content.txt' });
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBe('content is required (base64-encoded)');
@@ -428,7 +430,7 @@ describe('Files', () => {
 
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/files/upload/base64')
-        .send({ content, path: '/missing-project.txt' });
+        .send({ content, filename: 'missing-project.txt' });
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBe('projectId is required');
@@ -439,7 +441,7 @@ describe('Files', () => {
 
       const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/files/upload/base64')
-        .send({ project_id: projectId, content, path: '/denied.txt' });
+        .send({ project_id: projectId, content, filename: 'denied.txt' });
 
       expect(response.status).toBe(403);
     });
@@ -452,7 +454,8 @@ describe('Files', () => {
         .send({
           project_id: projectId,
           content_type: 'application/pdf',
-          path: '/documents/token-report.pdf',
+          prefix: '/documents',
+          filename: 'token-report.pdf',
         });
 
       expect(response.status).toBe(201);
@@ -476,7 +479,7 @@ describe('Files', () => {
     test('returns 400 when project_id is missing', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/files/upload-token')
-        .send({ path: '/no-project.txt' });
+        .send({ filename: 'no-project.txt' });
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBe('projectId is required');
@@ -501,7 +504,7 @@ describe('Files', () => {
 
     test('uploads file via base64 content without a bearer token', async () => {
       const token = await requestToken({
-        path: '/from-token.txt',
+        filename: 'from-token.txt',
         content_type: 'text/plain',
       });
       const content = Buffer.from('uploaded via token').toString('base64');
@@ -513,7 +516,7 @@ describe('Files', () => {
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
-      // filename derives from the token's path.
+      // filename comes from the token.
       expect(response.body.filename).toBe('from-token.txt');
       expect(response.body.content_type).toBe('text/plain');
       expect(response.body.size).toBe(Buffer.from('uploaded via token').length);
@@ -596,53 +599,61 @@ describe('Files', () => {
         .post('/api/v1/files')
         .send({
           project_id: projectId,
-          path: '/from-create-route.txt',
+          filename: 'from-create-route.txt',
           content_type: 'text/plain',
           size: 12,
         });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
-      // filename is derived from the path; storage is system-managed and not
-      // exposed in the response.
+      // prefix defaults to root, so the key is /<filename>; storage is
+      // system-managed and not exposed in the response.
+      expect(response.body.prefix).toBe('/');
       expect(response.body.filename).toBe('from-create-route.txt');
+      expect(response.body.path).toBe('/from-create-route.txt');
       expect(response.body.storage_type).toBeUndefined();
       expect(response.body.storage_path).toBeUndefined();
     });
 
-    test('keeps filename decoupled from path and ignores storage fields', async () => {
+    test('builds the key from prefix + filename and ignores storage fields', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/files')
         .send({
           project_id: projectId,
-          path: '/keyed/q1.pdf',
-          filename: 'Original Report.pdf',
+          prefix: '/keyed',
+          filename: 'q1.pdf',
           storage_type: 'gcs',
           storage_path: '/attacker/controlled/path.txt',
         });
 
       expect(response.status).toBe(201);
-      // path is the key; filename is the original/download name (may differ);
-      // storage stays internal.
+      // path (read-only key) = prefix + '/' + filename; storage stays internal.
+      expect(response.body.prefix).toBe('/keyed');
+      expect(response.body.filename).toBe('q1.pdf');
       expect(response.body.path).toBe('/keyed/q1.pdf');
-      expect(response.body.filename).toBe('Original Report.pdf');
       expect(response.body.storage_type).toBeUndefined();
       expect(response.body.storage_path).toBeUndefined();
     });
 
-    test('derives filename from path when filename is omitted', async () => {
+    test('ignores a client-supplied read-only path', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/files')
-        .send({ project_id: projectId, path: '/derived/report.pdf' });
+        .send({
+          project_id: projectId,
+          prefix: '/docs',
+          filename: 'report.pdf',
+          path: '/attacker/elsewhere.pdf',
+        });
 
       expect(response.status).toBe(201);
-      expect(response.body.filename).toBe('report.pdf');
+      // path is derived from prefix + filename; the supplied path is ignored.
+      expect(response.body.path).toBe('/docs/report.pdf');
     });
 
     test('returns 401 for unauthenticated create request', async () => {
       const response = await testClient.post('/api/v1/files').send({
         project_id: projectId,
-        path: '/unauth-create.txt',
+        filename: 'unauth-create.txt',
       });
 
       expect(response.status).toBe(401);
@@ -653,7 +664,7 @@ describe('Files', () => {
         .post('/api/v1/files')
         .send({
           project_id: projectId,
-          path: '/forbidden-create.txt',
+          filename: 'forbidden-create.txt',
         });
 
       expect(response.status).toBe(403);
@@ -667,7 +678,7 @@ describe('Files', () => {
         .post('/api/v1/files')
         .send({
           project_id: 'prj_nonexistent123',
-          path: '/bad-project.txt',
+          filename: 'bad-project.txt',
         });
 
       expect(response.status).toBe(403);
@@ -690,48 +701,49 @@ describe('Files', () => {
       fileId = res.body.id;
     });
 
-    test('moving the file via path keeps the original filename', async () => {
+    test('moving via prefix keeps the filename and rebuilds the key', async () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/files/${fileId}/metadata`)
-        .send({ path: '/moved/original-name.txt' });
+        .send({ prefix: '/moved' });
 
       expect(response.status).toBe(200);
-      expect(response.body.path).toBe('/moved/original-name.txt');
-      // Moving the key does not change the original/download name.
+      expect(response.body.prefix).toBe('/moved');
       expect(response.body.filename).toBe('original-name.txt');
+      expect(response.body.path).toBe('/moved/original-name.txt');
     });
 
-    test('renaming the download name via filename leaves the key', async () => {
+    test('renaming via filename keeps the prefix and rebuilds the key', async () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/files/${fileId}/metadata`)
         .send({ filename: 'friendly-name.txt' });
 
       expect(response.status).toBe(200);
-      expect(response.body.path).toBe('/moved/original-name.txt');
+      expect(response.body.prefix).toBe('/moved');
       expect(response.body.filename).toBe('friendly-name.txt');
+      expect(response.body.path).toBe('/moved/friendly-name.txt');
     });
 
-    test('user can update path and metadata together', async () => {
+    test('user can update prefix and metadata together', async () => {
       const newMetadata = JSON.stringify({ version: 3 });
 
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/files/${fileId}/metadata`)
-        .send({ path: '/reports/final.txt', metadata: newMetadata });
+        .send({ prefix: '/reports', metadata: newMetadata });
 
       expect(response.status).toBe(200);
-      expect(response.body.path).toBe('/reports/final.txt');
+      expect(response.body.path).toBe('/reports/friendly-name.txt');
       expect(response.body.metadata).toBe(newMetadata);
     });
 
-    test('moving to an existing path returns 409', async () => {
-      // Seed another file to collide with.
+    test('moving onto an existing key returns 409', async () => {
+      // Seed another file to collide with: /occupied.txt.
       await authenticatedTestClient(userToken)
         .post('/api/v1/files')
-        .send({ project_id: projectId, path: '/occupied.txt' });
+        .send({ project_id: projectId, filename: 'occupied.txt' });
 
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/files/${fileId}/metadata`)
-        .send({ path: '/occupied.txt' });
+        .send({ prefix: '/', filename: 'occupied.txt' });
 
       expect(response.status).toBe(409);
       expect(response.body.error.code).toBe('NAME_CONFLICT');

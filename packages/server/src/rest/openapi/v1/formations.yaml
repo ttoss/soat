@@ -973,14 +973,14 @@ components:
       type: object
       additionalProperties: false
       properties:
-        path:
+        prefix:
           type: string
           nullable: true
-          description: Logical path of the file within the project — its key. Optional; defaults to a root path built from the filename.
+          description: Directory within the project. Optional; defaults to / (root). Combined with filename to form the file's key (path).
         filename:
           type: string
           nullable: true
-          description: Original / download name. Optional; defaults to the last segment of path.
+          description: Original / download name and the key's leaf segment.
         content_type:
           type: string
           nullable: true
