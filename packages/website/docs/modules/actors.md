@@ -96,7 +96,9 @@ An Actor can be linked to a [Memory](./memories.md) container via `memory_id`. T
 }
 ```
 
-The response will include `memory_id` pointing to the newly created memory. When combined with `external_id` (idempotent creation), the memory is only created the first time — repeat calls return the existing actor with its existing `memory_id` unchanged.
+The response will include `memory_id` pointing to the newly created memory.
+
+`auto_create_memory` is **create-if-missing**, not create-always: it only creates a memory when no `memory_id` is supplied in the same request. If you pass an explicit `memory_id`, that memory is linked and `auto_create_memory` has no effect. When combined with `external_id` (idempotent creation), the memory is created at most once — repeat calls return the existing actor with its existing `memory_id` unchanged.
 
 Deleting an actor does **not** delete its linked memory. Memory data outlives the actor record and may contain valuable information.
 

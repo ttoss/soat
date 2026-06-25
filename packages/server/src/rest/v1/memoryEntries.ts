@@ -112,7 +112,7 @@ memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {
   const body = ctx.request.body as {
     memoryId?: string;
     content?: string;
-    source?: string;
+    sourceType?: string;
     duplicateThreshold?: number;
     updateThreshold?: number;
   };
@@ -133,9 +133,9 @@ memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {
   const result = await writeMemoryEntry({
     memoryId: memoryRowId,
     content: body.content,
-    source:
-      body.source === 'agent' || body.source === 'extraction'
-        ? body.source
+    sourceType:
+      body.sourceType === 'agent' || body.sourceType === 'extraction'
+        ? body.sourceType
         : 'manual',
     duplicateThreshold: body.duplicateThreshold,
     updateThreshold: body.updateThreshold,

@@ -43,7 +43,7 @@ Memory entries are the individual knowledge items stored inside a memory. When a
 | `id`         | `string` | Public ID (`me_` prefix)                                |
 | `memory_id`  | `string` | ID of the parent memory                                 |
 | `content`    | `string` | Text content of the entry                               |
-| `source`     | `string` | Origin: `manual` (default), `agent`, or `extraction`    |
+| `source_type` | `string` | How the entry was created: `manual` (default), `agent`, or `extraction` |
 | `created_at` | `string` | ISO 8601 creation timestamp                             |
 | `updated_at` | `string` | ISO 8601 last-updated timestamp                         |
 
@@ -72,7 +72,7 @@ See all three outcomes in action in [Agent with Persistent Memory - Step 5 (Writ
 | Field                 | Type   | Default  | Description                                 |
 | --------------------- | ------ | -------- | ------------------------------------------- |
 | `content`             | string | —        | The fact or observation to write            |
-| `source`              | string | `manual` | Origin: `manual`, `agent`, `extraction`     |
+| `source_type`         | string | `manual` | How the entry was created: `manual`, `agent`, `extraction` |
 | `duplicate_threshold` | number | `0.95`   | Similarity above which the write is skipped |
 | `update_threshold`    | number | `0.75`   | Similarity above which entries are merged   |
 
@@ -119,7 +119,7 @@ Set `knowledge_config` on an agent to have the server search relevant memory ent
 
 #### `write_memory` Tool
 
-Set `write_memory_id` in the agent's `knowledge_config` to automatically inject a `write_memory` tool into every generation. The tool accepts a single `content` input — the atomic fact to write. The target memory is fixed by `write_memory_id`; the agent cannot choose a different memory. Entries written by the tool are tagged with `source: "agent"`.
+Set `write_memory_id` in the agent's `knowledge_config` to automatically inject a `write_memory` tool into every generation. The tool accepts a single `content` input — the atomic fact to write. The target memory is fixed by `write_memory_id`; the agent cannot choose a different memory. Entries written by the tool are tagged with `source_type: "agent"`.
 
 ```json
 {
@@ -162,7 +162,7 @@ How it works:
 
 - After a conversation, session, or direct agent generation completes, the server runs a fire-and-forget extraction step. It never blocks or fails the generation response.
 - The extraction step sends the turn's transcript as a plain completion (no tools, no knowledge injection) and asks for a JSON array of atomic facts. Transient content such as greetings is skipped.
-- Each candidate fact (at most 20 per turn) goes through the standard [write algorithm](#write-algorithm) — duplicates are skipped, related facts are merged. Entries are tagged with `source: "extraction"`.
+- Each candidate fact (at most 20 per turn) goes through the standard [write algorithm](#write-algorithm) — duplicates are skipped, related facts are merged. Entries are tagged with `source_type: "extraction"`.
 - A summary (`{ candidates, created, updated, skipped }`) is recorded on the originating generation's `metadata.extraction` field for observability via the [Generations](./generations.md) API.
 
 Object form fields (all optional):

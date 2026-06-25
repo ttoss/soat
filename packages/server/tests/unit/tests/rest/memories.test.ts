@@ -350,24 +350,24 @@ describe('Memories', () => {
         expect(response.body.id).toBeDefined();
         expect(response.body.id).toMatch(/^mem_entry_/);
         expect(response.body.content).toBe('Customer prefers email over phone');
-        expect(response.body.source).toBe('manual');
+        expect(response.body.source_type).toBe('manual');
         expect(response.body.memory_id).toBe(freshMemoryId);
         expect(response.body.created_at).toBeDefined();
         expect(response.body.action).toBe('created');
       });
 
-      test('can create entry with explicit source', async () => {
+      test('can create entry with explicit source_type', async () => {
         const freshMemoryId = await createTestMemory();
         const response = await authenticatedTestClient(userToken)
           .post('/api/v1/memory-entries')
           .send({
             memory_id: freshMemoryId,
             content: 'Agent created note',
-            source: 'agent',
+            source_type: 'agent',
           });
 
         expect(response.status).toBe(201);
-        expect(response.body.source).toBe('agent');
+        expect(response.body.source_type).toBe('agent');
         expect(response.body.action).toBe('created');
       });
 

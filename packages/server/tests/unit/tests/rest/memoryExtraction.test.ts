@@ -66,7 +66,11 @@ describe('Memory Extraction', () => {
       `/api/v1/memory-entries?memory_id=${memoryId}`
     );
     expect(res.status).toBe(200);
-    return res.body as Array<{ id: string; content: string; source: string }>;
+    return res.body as Array<{
+      id: string;
+      content: string;
+      source_type: string;
+    }>;
   };
 
   const waitForEntries = async (
@@ -170,7 +174,7 @@ describe('Memory Extraction', () => {
       const entries = await waitForEntries(memoryId, 1);
       expect(entries).toHaveLength(1);
       expect(entries[0].content).toBe('User prefers to be contacted by email');
-      expect(entries[0].source).toBe('extraction');
+      expect(entries[0].source_type).toBe('extraction');
 
       // The extraction prompt must include both sides of the turn.
       expect(mockRunExtractionCompletion).toHaveBeenCalledTimes(1);
@@ -433,7 +437,7 @@ describe('Memory Extraction', () => {
       const entries = await waitForEntries(memoryId, 1);
       expect(entries).toHaveLength(1);
       expect(entries[0].content).toBe('Project deadline is Friday');
-      expect(entries[0].source).toBe('extraction');
+      expect(entries[0].source_type).toBe('extraction');
     });
   });
 });

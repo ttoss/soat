@@ -252,7 +252,7 @@ describe('memoryEntriesFormationModule - update without content', () => {
       publicId: 'me_1',
       memoryId: 1,
       content: 'original content',
-      source: 'manual',
+      sourceType: 'manual',
     });
     const entrySave = jest
       .spyOn(memoryEntryInstance, 'save')
