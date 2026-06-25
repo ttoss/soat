@@ -341,6 +341,47 @@ if [ "$PATCH_ID" != "$FILE_ID" ]; then
 fi
 echo "PATCH status: 200"
 
+# 7b. Upload a large file via an upload token (two-step presigned-URL flow)
+echo "--- Requesting upload token ---"
+TOKEN_RESP=$($SOAT_CLI create-upload-token \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --filename token-upload.txt \
+  --path /reports/token-upload.txt \
+  --content_type text/plain)
+UPLOAD_TOKEN=$(echo "$TOKEN_RESP" | jq -r '.upload_token')
+UPLOAD_URL=$(echo "$TOKEN_RESP" | jq -r '.upload_url')
+if [ -z "$UPLOAD_TOKEN" ] || [ "$UPLOAD_TOKEN" = "null" ]; then
+  echo "ERROR: upload token not returned" >&2
+  exit 1
+fi
+if [ "$UPLOAD_URL" != "/api/v1/files/upload/$UPLOAD_TOKEN" ]; then
+  echo "ERROR: upload_url '$UPLOAD_URL' does not match token" >&2
+  exit 1
+fi
+echo "Upload token: $UPLOAD_TOKEN"
+
+echo "--- Uploading via token ---"
+echo "Hello from upload token!" > /tmp/smoke-token.txt
+TOKEN_FILE_B64=$(base64 /tmp/smoke-token.txt | tr -d '\n')
+TOKEN_UPLOAD_RESP=$($SOAT_CLI upload-file-with-token \
+  --token "$UPLOAD_TOKEN" \
+  --content "$TOKEN_FILE_B64")
+TOKEN_FILE_ID=$(echo "$TOKEN_UPLOAD_RESP" | jq -r '.id')
+if [ -z "$TOKEN_FILE_ID" ] || [ "$TOKEN_FILE_ID" = "null" ]; then
+  echo "ERROR: token upload did not return a file id" >&2
+  exit 1
+fi
+echo "Token-uploaded file id: $TOKEN_FILE_ID"
+
+# A token is single-use — a second upload must fail with 409.
+echo "--- Verifying token is single-use ---"
+expect_cli_error_status 409 upload-file-with-token \
+  --token "$UPLOAD_TOKEN" \
+  --content "$TOKEN_FILE_B64"
+echo "Token correctly rejected on reuse (409)."
+
+$SOAT_CLI delete-file --file-id "$TOKEN_FILE_ID"
+
 # 8. Delete file
 echo "--- Deleting file ---"
 $SOAT_CLI delete-file --file-id "$FILE_ID"
