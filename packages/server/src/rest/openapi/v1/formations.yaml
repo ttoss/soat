@@ -973,20 +973,6 @@ components:
       type: object
       additionalProperties: false
       properties:
-        storage_type:
-          type: string
-          enum: [local, s3, gcs]
-          deprecated: true
-          description: >-
-            Deprecated and ignored. Storage is system-managed (see
-            FILES_STORAGE_DIR); this field is accepted for backward
-            compatibility but has no effect.
-        storage_path:
-          type: string
-          deprecated: true
-          description: >-
-            Deprecated and ignored. Storage path is system-managed; this field
-            is accepted for backward compatibility but has no effect.
         path:
           type: string
           nullable: true

@@ -473,10 +473,6 @@ describe('filesFormationModule', () => {
         projectId: 5,
         resolvedProperties: {
           filename: 'file.txt',
-          // Deprecated/ignored: still accepted for backward compatibility but
-          // must not be forwarded to createFile.
-          storage_type: 'local',
-          storage_path: '/tmp/file',
         },
       })
     ).resolves.toBe('file_1');
@@ -500,6 +496,17 @@ describe('filesFormationModule', () => {
         resolvedProperties: null as unknown as Record<string, unknown>,
       })
     ).rejects.toThrow('File `properties` must be an object');
+  });
+
+  test('rejects storage_type / storage_path as unknown fields', async () => {
+    // Storage is system-managed and is not part of the file resource schema.
+    await expect(
+      applyCreateResource({
+        resourceType: 'file',
+        projectId: 5,
+        resolvedProperties: { storage_type: 'local', filename: 'file.txt' },
+      })
+    ).rejects.toThrow(/storage_type/);
   });
 
   test('updates file', async () => {

@@ -91,9 +91,8 @@ export const filesFormationModule: FormationModule = {
       ? normalizePropertyKeys(rawProperties)
       : rawProperties;
 
-    // storage_type / storage_path are deprecated and ignored — storage is
-    // system-managed. They remain accepted in the schema for backward
-    // compatibility but are no longer forwarded to createFile.
+    // storage_type / storage_path are not part of the file resource schema —
+    // storage is system-managed (see FILES_STORAGE_DIR).
     const result = await createFile({
       projectId,
       path: toOptionalString(properties.path) ?? undefined,
@@ -144,8 +143,6 @@ export const filesFormationModule: FormationModule = {
       const file = await getFile({ id: physicalResourceId });
       if (!file) return null;
       return {
-        storage_type: file.storageType,
-        storage_path: file.storagePath,
         path: file.path,
         filename: file.filename,
         content_type: file.contentType,
