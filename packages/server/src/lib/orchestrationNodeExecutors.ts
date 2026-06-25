@@ -336,12 +336,18 @@ const runLoopBatches = async (args: {
   items: unknown[];
   parallelism: number;
   itemVariable: string;
-  subGraph: string;
+  orchestrationId: string;
   projectIds: number[];
   authHeader?: string;
 }): Promise<unknown[]> => {
-  const { items, parallelism, itemVariable, subGraph, projectIds, authHeader } =
-    args;
+  const {
+    items,
+    parallelism,
+    itemVariable,
+    orchestrationId,
+    projectIds,
+    authHeader,
+  } = args;
   const results: unknown[] = [];
   for (let i = 0; i < items.length; i += parallelism) {
     const batch = items.slice(i, i + parallelism);
@@ -349,7 +355,7 @@ const runLoopBatches = async (args: {
       batch.map((item) => {
         const itemInput: Record<string, unknown> = { [itemVariable]: item };
         return startOrchestrationRun({
-          orchestrationPublicId: subGraph,
+          orchestrationPublicId: orchestrationId,
           projectId: projectIds[0],
           projectIds,
           input: itemInput,
@@ -374,10 +380,10 @@ export const executeLoopNode = async (args: {
   authHeader?: string;
 }): Promise<NodeExecutionResult> => {
   const { node, state, projectIds, authHeader } = args;
-  if (!node.subGraph)
+  if (!node.orchestrationId)
     throw new DomainError(
       'ORCHESTRATION_NODE_FAILED',
-      `Loop node '${node.id}' missing subGraph.`
+      `Loop node '${node.id}' missing orchestrationId.`
     );
 
   const collectionPath = node.collection ?? 'state.items';
@@ -388,7 +394,7 @@ export const executeLoopNode = async (args: {
     items,
     parallelism,
     itemVariable,
-    subGraph: node.subGraph,
+    orchestrationId: node.orchestrationId,
     projectIds,
     authHeader,
   });

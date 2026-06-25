@@ -377,7 +377,7 @@ describe('executeToolNode', () => {
 });
 
 describe('executeLoopNode', () => {
-  test('throws DomainError when subGraph is missing', async () => {
+  test('throws DomainError when orchestrationId is missing', async () => {
     await expect(
       executeLoopNode({
         node: makeNode({ type: 'loop' }),

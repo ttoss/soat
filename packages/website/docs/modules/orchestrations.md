@@ -88,7 +88,7 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | `memory_write` | Writes a [Memory](./memories.md) entry. Uses `memoryId` and `inputMapping` with `content`.                                        |
 | `condition`    | Evaluates a JSON Logic rule and emits a string label. Downstream edges use `condition: "<label>"` to select the active branch.      |
 | `human`        | Pauses the run and waits for external input. The run enters `paused` status with `requiredAction`.                                  |
-| `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `subGraph`, `collection`, `itemVariable`, and `parallelism`. See [Loops](#loops-collection-iteration). |
+| `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `orchestrationId`, `collection`, `itemVariable`, and `parallelism`. See [Loops](#loops-collection-iteration). |
 | `poll`         | Calls a tool on an interval until a JSON Logic exit condition on the response holds. Uses `toolId`, `exitCondition`, and `interval`. See [Polling](#polling). |
 | `delay`        | Waits for a fixed `duration`, then continues. Accepts `5s`/`5m`/`2h`/`500ms` or ISO 8601 (`PT5S`).                                   |
 | `webhook`      | Emits an HTTP POST (`mode: "emit"`, `webhookUrl`) or pauses awaiting a callback (`mode: "receive"`).                                 |
@@ -100,7 +100,7 @@ A `loop` node iterates an array in the run state and runs a **sub-orchestration 
 
 | Field | Default | Purpose |
 | --- | --- | --- |
-| `subGraph` | — (required) | Public ID of the orchestration to run for each item |
+| `orchestrationId` | — (required) | Public ID of the orchestration to run for each item (same field the `sub_orchestration` node uses) |
 | `collection` | `state.items` | State path to the array to iterate; a path without the `state.` prefix is normalised to one. A missing or non-array value yields zero iterations |
 | `itemVariable` | `item` | Each element is passed as the sub-run's **input** under this key, so the sub-graph reads it with `{"var": "item"}` |
 | `parallelism` | `5` | Items are processed in batches of this size |
@@ -111,7 +111,7 @@ The node completes with an artifact `{ results: [...] }` — one entry per item,
 {
   "id": "summarise_each",
   "type": "loop",
-  "sub_graph": "orch_summariseOne",
+  "orchestration_id": "orch_summariseOne",
   "collection": "state.documents",
   "item_variable": "doc",
   "parallelism": 3,

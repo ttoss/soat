@@ -452,9 +452,6 @@ components:
         item_variable:
           type: string
           description: For loop nodes — variable name injected into state for each item.
-        sub_graph:
-          type: string
-          description: For loop nodes — sub-graph definition to run per item.
         parallelism:
           type: integer
           description: For loop nodes — number of items to process in parallel.
@@ -484,7 +481,10 @@ components:
         orchestration_id:
           x-soat-ref: orchestrations
           type: string
-          description: For sub_orchestration nodes — public ID of the child orchestration.
+          description: >
+            Public ID of the orchestration this node runs — the child
+            orchestration for sub_orchestration nodes, and the orchestration run
+            once per item for loop nodes.
         max_iterations:
           type: integer
           description: >

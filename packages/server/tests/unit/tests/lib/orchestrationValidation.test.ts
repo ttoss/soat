@@ -188,7 +188,7 @@ describe('validateOrchestrationGraph', () => {
     test('allows a cycle when a loop node is present', () => {
       const result = validate({
         nodes: [
-          { id: 'a', type: 'loop', subGraph: 'orch_child' },
+          { id: 'a', type: 'loop', orchestrationId: 'orch_child' },
           { id: 'b', type: 'transform', expression: 2 },
         ],
         edges: [

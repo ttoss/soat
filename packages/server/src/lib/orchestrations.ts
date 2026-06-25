@@ -41,10 +41,10 @@ export type OrchestrationNode = {
   options?: string[];
   // memory_write node
   memoryId?: string;
-  // loop node
+  // loop node — runs the orchestration named by `orchestrationId` (shared with
+  // the sub_orchestration node) once per item in `collection`.
   collection?: string;
   itemVariable?: string;
-  subGraph?: string;
   parallelism?: number;
   // poll node — reuses toolId/operationId/inputMapping (the tool to call) and
   // maxIterations (attempt cap). exitCondition is the JSON Logic stop condition

@@ -1434,7 +1434,7 @@ describe('Orchestrations', () => {
       expect(runRes.body.status).toBe('paused');
     });
 
-    test('loop node without sub_graph is rejected at create', async () => {
+    test('loop node without orchestration_id is rejected at create', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
@@ -1456,7 +1456,7 @@ describe('Orchestrations', () => {
             {
               id: 'loop',
               type: 'loop',
-              sub_graph: subOrchId,
+              orchestration_id: subOrchId,
               collection: 'state.items',
               item_variable: 'item',
               output_mapping: { results: 'state.results' },
@@ -1484,7 +1484,7 @@ describe('Orchestrations', () => {
             {
               id: 'loop',
               type: 'loop',
-              sub_graph: subOrchId,
+              orchestration_id: subOrchId,
               collection: 'state.items',
               item_variable: 'item',
               output_mapping: { results: 'state.results' },
@@ -1515,7 +1515,7 @@ describe('Orchestrations', () => {
             {
               id: 'loop',
               type: 'loop',
-              sub_graph: subOrchId,
+              orchestration_id: subOrchId,
               collection: 'items', // no 'state.' prefix — resolveLoopCollection normalises it
               item_variable: 'item',
               output_mapping: { results: 'state.results' },

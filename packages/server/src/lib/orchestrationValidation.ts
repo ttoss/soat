@@ -117,7 +117,7 @@ const REQUIRED_NODE_FIELDS: Partial<
   condition: 'expression',
   memory_write: 'memoryId',
   delay: 'duration',
-  loop: 'subGraph',
+  loop: 'orchestrationId',
   poll: 'toolId',
   sub_orchestration: 'orchestrationId',
 };
