@@ -12,7 +12,9 @@ const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
 };
 
 export const listProjects = async (args: { authUser: AuthUser }) => {
-  if (args.authUser.role === 'admin') {
+  // Admin fast-path: skip when the request uses a project-scoped API key so
+  // the key's project restriction is enforced even for admin users.
+  if (args.authUser.role === 'admin' && !args.authUser.apiKeyProjectPublicId) {
     const projects = await db.Project.findAll();
     return projects.map(mapProject);
   }
