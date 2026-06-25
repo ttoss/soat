@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.6](https://github.com/ttoss/soat/compare/v0.13.5...v0.13.6) (2026-06-25)
+
+### Bug Fixes
+
+* scope MCP OAuth sessions to the selected project ([#278](https://github.com/ttoss/soat/issues/278)) ([3c19877](https://github.com/ttoss/soat/commit/3c198772b9a093c55d6d78d1a47da87415f22348)), closes [#273](https://github.com/ttoss/soat/issues/273)
+
+### Features
+
+* **app:** add file upload support for multipart/form-data operations ([#276](https://github.com/ttoss/soat/issues/276)) ([a133ce4](https://github.com/ttoss/soat/commit/a133ce49b237f7c003f3792f6c5b8914194e0d65))
+* **files:** address files by prefix + filename, read-only path key ([#275](https://github.com/ttoss/soat/issues/275)) ([95edfc4](https://github.com/ttoss/soat/commit/95edfc43a5af81b3f65cd198b6eb4a16739a4954))
+* **files:** return absolute upload_url when SERVER_BASE_URL is set ([#277](https://github.com/ttoss/soat/issues/277)) ([26a50fe](https://github.com/ttoss/soat/commit/26a50fe998cf2643a30a0a24452b1d59c30f00a2))
+
 ## [0.13.5](https://github.com/ttoss/soat/compare/v0.13.4...v0.13.5) (2026-06-25)
 
 ### Bug Fixes
