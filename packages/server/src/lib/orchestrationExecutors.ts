@@ -15,6 +15,7 @@ import {
   executeTransformNode,
   executeWebhookNode,
 } from './orchestrationNodeExecutors';
+import { executePollNode } from './orchestrationPollNode';
 import type { OrchestrationEdge, OrchestrationNode } from './orchestrations';
 
 export {
@@ -80,6 +81,8 @@ const dispatchNodeExecution = async (
       });
     case 'tool':
       return executeToolNode({ node: nodeDefn, state, projectIds, authHeader });
+    case 'poll':
+      return executePollNode({ node: nodeDefn, state, projectIds, authHeader });
     case 'knowledge':
       return executeKnowledgeNode({ node: nodeDefn, state, projectIds });
     case 'memory_write':

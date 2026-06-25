@@ -146,6 +146,11 @@ export const ERROR_CODES = {
     description:
       'The orchestration run exceeded the maximum number of iterations.',
   },
+  ORCHESTRATION_POLL_EXHAUSTED: {
+    httpStatus: 422,
+    description:
+      'A poll node reached its attempt limit without its exit condition becoming true (only raised when fail_on_timeout is set).',
+  },
   EMBEDDING_NOT_CONFIGURED: {
     httpStatus: 503,
     description:

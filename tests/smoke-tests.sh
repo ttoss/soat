@@ -637,6 +637,28 @@ if ! printf '%s\n' "$ORCH_VALID_RESP" | jq -e '.valid == true' >/dev/null 2>&1; 
 fi
 echo "Validate orchestration (valid): OK"
 
+echo "--- Validating orchestration graph with a poll node (valid) ---"
+ORCH_POLL_VALID_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI validate-orchestration \
+  --nodes '[{"id":"wait","type":"poll","tool_id":"tool_status","interval":"5s","exit_condition":{"==":[{"var":"response.status"},"completed"]},"max_iterations":3}]' \
+  --edges '[]')
+if ! printf '%s\n' "$ORCH_POLL_VALID_RESP" | jq -e '.valid == true' >/dev/null 2>&1; then
+  echo "validate-orchestration did not accept a well-formed poll node"
+  printf '%s\n' "$ORCH_POLL_VALID_RESP"
+  exit 1
+fi
+echo "Validate orchestration with poll node (valid): OK"
+
+echo "--- Validating orchestration graph with an incomplete poll node (invalid) ---"
+ORCH_POLL_INVALID_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI validate-orchestration \
+  --nodes '[{"id":"wait","type":"poll"}]' \
+  --edges '[]')
+if ! printf '%s\n' "$ORCH_POLL_INVALID_RESP" | jq -e '.valid == false and (.errors | length) > 0' >/dev/null 2>&1; then
+  echo "validate-orchestration did not reject an incomplete poll node"
+  printf '%s\n' "$ORCH_POLL_INVALID_RESP"
+  exit 1
+fi
+echo "Validate orchestration with incomplete poll node (invalid): OK"
+
 echo "--- Validating orchestration graph (invalid) ---"
 ORCH_INVALID_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI validate-orchestration \
   --nodes '[{"id":"a","type":"agent"}]' \

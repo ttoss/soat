@@ -1,3 +1,5 @@
+import * as toolsModule from 'src/lib/tools';
+
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Orchestrations', () => {
@@ -1432,7 +1434,7 @@ describe('Orchestrations', () => {
       expect(runRes.body.status).toBe('paused');
     });
 
-    test('loop node without sub_graph is rejected at create', async () => {
+    test('loop node without orchestration_id is rejected at create', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
@@ -1454,7 +1456,7 @@ describe('Orchestrations', () => {
             {
               id: 'loop',
               type: 'loop',
-              sub_graph: subOrchId,
+              orchestration_id: subOrchId,
               collection: 'state.items',
               item_variable: 'item',
               output_mapping: { results: 'state.results' },
@@ -1482,7 +1484,7 @@ describe('Orchestrations', () => {
             {
               id: 'loop',
               type: 'loop',
-              sub_graph: subOrchId,
+              orchestration_id: subOrchId,
               collection: 'state.items',
               item_variable: 'item',
               output_mapping: { results: 'state.results' },
@@ -1513,7 +1515,7 @@ describe('Orchestrations', () => {
             {
               id: 'loop',
               type: 'loop',
-              sub_graph: subOrchId,
+              orchestration_id: subOrchId,
               collection: 'items', // no 'state.' prefix — resolveLoopCollection normalises it
               item_variable: 'item',
               output_mapping: { results: 'state.results' },
@@ -1571,6 +1573,100 @@ describe('Orchestrations', () => {
         });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
+    });
+
+    test('poll node missing required fields is rejected at create', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Poll Incomplete',
+          nodes: [{ id: 'poll', type: 'poll' }],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(400);
+      expect(createRes.body.error.code).toBe('ORCHESTRATION_VALIDATION_FAILED');
+    });
+
+    test('poll node completes when the exit condition is met', async () => {
+      const spy = jest
+        .spyOn(toolsModule, 'callTool')
+        .mockResolvedValue({ status: 'completed' });
+      try {
+        const createRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name: 'Poll Until Done',
+            nodes: [
+              {
+                id: 'wait',
+                type: 'poll',
+                tool_id: 'tool_status',
+                interval: '0s',
+                exit_condition: {
+                  '==': [{ var: 'response.status' }, 'completed'],
+                },
+                output_mapping: {
+                  condition_met: 'state.done',
+                  result: 'state.final',
+                },
+              },
+            ],
+            edges: [],
+            project_id: projectId,
+          });
+        expect(createRes.status).toBe(201);
+
+        const runRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send({ orchestration_id: createRes.body.id, input: {} });
+        expect(runRes.status).toBe(201);
+        expect(runRes.body.status).toBe('completed');
+        expect(runRes.body.state.done).toBe(true);
+        expect(runRes.body.state.final).toEqual({ status: 'completed' });
+        expect(spy).toHaveBeenCalledTimes(1);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    test('poll node times out without failing when the condition never holds', async () => {
+      const spy = jest
+        .spyOn(toolsModule, 'callTool')
+        .mockResolvedValue({ status: 'pending' });
+      try {
+        const createRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name: 'Poll Times Out',
+            nodes: [
+              {
+                id: 'wait',
+                type: 'poll',
+                tool_id: 'tool_status',
+                interval: '0s',
+                max_iterations: 2,
+                exit_condition: {
+                  '==': [{ var: 'response.status' }, 'completed'],
+                },
+                output_mapping: { condition_met: 'state.done' },
+              },
+            ],
+            edges: [],
+            project_id: projectId,
+          });
+        expect(createRes.status).toBe(201);
+
+        const runRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send({ orchestration_id: createRes.body.id, input: {} });
+        expect(runRes.status).toBe(201);
+        expect(runRes.body.status).toBe('completed');
+        expect(runRes.body.state.done).toBe(false);
+        expect(spy).toHaveBeenCalledTimes(2);
+      } finally {
+        spy.mockRestore();
+      }
     });
   });
 

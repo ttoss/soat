@@ -388,6 +388,7 @@ components:
               condition,
               human,
               loop,
+              poll,
               delay,
               webhook,
               sub_orchestration,
@@ -400,13 +401,20 @@ components:
         tool_id:
           x-soat-ref: tools
           type: string
-          description: For tool nodes — public ID of the tool to call.
+          description: For tool and poll nodes — public ID of the tool to call.
         operation_id:
           type: string
-          description: For tool nodes — specific operation/action on MCP/SOAT tools.
+          description: For tool and poll nodes — specific operation/action on MCP/SOAT tools.
         expression:
           type: object
           description: For transform/condition nodes — JSON Logic rule (https://jsonlogic.com) evaluated against the run state.
+        exit_condition:
+          type: object
+          description: >
+            For poll nodes — JSON Logic stop condition, evaluated each attempt
+            against the run state augmented with `response` (the latest tool
+            result) and `attempt` (1-based count); a truthy result stops
+            polling.
         prompt:
           type: string
           description: For human nodes — prompt shown to the human reviewer.
@@ -444,15 +452,25 @@ components:
         item_variable:
           type: string
           description: For loop nodes — variable name injected into state for each item.
-        sub_graph:
-          type: string
-          description: For loop nodes — sub-graph definition to run per item.
         parallelism:
           type: integer
           description: For loop nodes — number of items to process in parallel.
+        interval:
+          type: string
+          description: >
+            For poll nodes — wait between attempts. Accepts a friendly suffix
+            form (`5s`, `30s`, `5m`, `2h`, `500ms`) or ISO 8601 (e.g. PT5S).
+        fail_on_timeout:
+          type: boolean
+          description: >
+            For poll nodes — when max_iterations is reached without the exit
+            condition becoming true, fail the run (true) instead of completing
+            with condition_met=false (default false).
         duration:
           type: string
-          description: For delay nodes — ISO 8601 duration (e.g. PT5S).
+          description: >
+            For delay nodes — how long to wait. Accepts a friendly suffix form
+            (`5s`, `30s`, `5m`, `2h`, `500ms`) or ISO 8601 (e.g. PT5S).
         mode:
           type: string
           enum: [emit, receive]
@@ -463,10 +481,15 @@ components:
         orchestration_id:
           x-soat-ref: orchestrations
           type: string
-          description: For sub_orchestration nodes — public ID of the child orchestration.
+          description: >
+            Public ID of the orchestration this node runs — the child
+            orchestration for sub_orchestration nodes, and the orchestration run
+            once per item for loop nodes.
         max_iterations:
           type: integer
-          description: Maximum iterations before the node is aborted.
+          description: >
+            Maximum iterations before the node is aborted. For poll nodes this
+            is the maximum number of attempts (default 10, ceiling 1000).
 
     OrchestrationEdge:
       type: object

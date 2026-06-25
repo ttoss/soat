@@ -12,8 +12,11 @@ import {
   executeToolNode,
   executeTransformNode,
   executeWebhookNode,
+  parseDuration,
 } from 'src/lib/orchestrationNodeExecutors';
+import { executePollNode } from 'src/lib/orchestrationPollNode';
 import type { OrchestrationNode } from 'src/lib/orchestrations';
+import * as toolsModule from 'src/lib/tools';
 
 const makeNode = (
   overrides: Partial<OrchestrationNode> = {}
@@ -335,10 +338,46 @@ describe('executeToolNode', () => {
       })
     ).rejects.toThrow(DomainError);
   });
+
+  test('returns an object tool result as the artifact', async () => {
+    const spy = jest
+      .spyOn(toolsModule, 'callTool')
+      .mockResolvedValue({ ok: true, value: 7 });
+    try {
+      const result = await executeToolNode({
+        node: makeNode({ type: 'tool', toolId: 'tool_x' }),
+        state: {},
+        projectIds: [1],
+      });
+      expect(result).toEqual({
+        kind: 'artifact',
+        artifact: { ok: true, value: 7 },
+      });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('wraps a primitive tool result under a result key', async () => {
+    const spy = jest.spyOn(toolsModule, 'callTool').mockResolvedValue('done');
+    try {
+      const result = await executeToolNode({
+        node: makeNode({ type: 'tool', toolId: 'tool_x' }),
+        state: {},
+        projectIds: [1],
+      });
+      expect(result).toEqual({
+        kind: 'artifact',
+        artifact: { result: 'done' },
+      });
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });
 
 describe('executeLoopNode', () => {
-  test('throws DomainError when subGraph is missing', async () => {
+  test('throws DomainError when orchestrationId is missing', async () => {
     await expect(
       executeLoopNode({
         node: makeNode({ type: 'loop' }),
@@ -402,5 +441,190 @@ describe('executeDelayNode', () => {
       kind: 'artifact',
       artifact: { waited: 'PT0H0M0S' },
     });
+  });
+
+  test('accepts the friendly suffix form (0s) for an instant wait', async () => {
+    const result = await executeDelayNode({
+      node: makeNode({ type: 'delay', duration: '0s' }),
+    });
+    expect(result).toEqual({ kind: 'artifact', artifact: { waited: '0s' } });
+  });
+});
+
+// ── parseDuration ──────────────────────────────────────────────────────────
+
+describe('parseDuration', () => {
+  test('parses the friendly suffix form', () => {
+    expect(parseDuration('5s')).toBe(5000);
+    expect(parseDuration('30s')).toBe(30000);
+    expect(parseDuration('5m')).toBe(300000);
+    expect(parseDuration('2h')).toBe(7200000);
+    expect(parseDuration('1d')).toBe(86400000);
+    expect(parseDuration('500ms')).toBe(500);
+  });
+
+  test('parses ISO 8601 durations', () => {
+    expect(parseDuration('PT5S')).toBe(5000);
+    expect(parseDuration('PT1M30S')).toBe(90000);
+    expect(parseDuration('P1DT2H')).toBe(93600000);
+  });
+
+  test('returns 0 for unparseable input', () => {
+    expect(parseDuration('INVALID')).toBe(0);
+    expect(parseDuration('')).toBe(0);
+  });
+});
+
+// ── executePollNode ────────────────────────────────────────────────────────
+
+describe('executePollNode', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  const pollNode = (overrides: Partial<OrchestrationNode> = {}) => {
+    return makeNode({
+      type: 'poll',
+      toolId: 'tool_status',
+      interval: '0s',
+      exitCondition: { '==': [{ var: 'response.status' }, 'completed'] },
+      ...overrides,
+    });
+  };
+
+  test('throws DomainError when toolId is missing', async () => {
+    await expect(
+      executePollNode({
+        node: pollNode({ toolId: undefined }),
+        state: {},
+        projectIds: [1],
+      })
+    ).rejects.toThrow(DomainError);
+  });
+
+  test('throws DomainError when exitCondition is missing', async () => {
+    await expect(
+      executePollNode({
+        node: pollNode({ exitCondition: undefined }),
+        state: {},
+        projectIds: [1],
+      })
+    ).rejects.toThrow(DomainError);
+  });
+
+  test('throws DomainError when interval is missing', async () => {
+    await expect(
+      executePollNode({
+        node: pollNode({ interval: undefined }),
+        state: {},
+        projectIds: [1],
+      })
+    ).rejects.toThrow(DomainError);
+  });
+
+  test('completes on the first attempt when the condition is already true', async () => {
+    const spy = jest
+      .spyOn(toolsModule, 'callTool')
+      .mockResolvedValue({ status: 'completed' });
+
+    const result = await executePollNode({
+      node: pollNode(),
+      state: {},
+      projectIds: [1],
+    });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      kind: 'artifact',
+      artifact: {
+        result: { status: 'completed' },
+        attempts: 1,
+        conditionMet: true,
+        timedOut: false,
+      },
+    });
+  });
+
+  test('polls until the exit condition becomes true', async () => {
+    const spy = jest
+      .spyOn(toolsModule, 'callTool')
+      .mockResolvedValueOnce({ status: 'pending' })
+      .mockResolvedValueOnce({ status: 'pending' })
+      .mockResolvedValueOnce({ status: 'completed' });
+
+    const result = await executePollNode({
+      node: pollNode(),
+      state: {},
+      projectIds: [1],
+    });
+
+    expect(spy).toHaveBeenCalledTimes(3);
+    expect(result).toEqual({
+      kind: 'artifact',
+      artifact: {
+        result: { status: 'completed' },
+        attempts: 3,
+        conditionMet: true,
+        timedOut: false,
+      },
+    });
+  });
+
+  test('passes input_mapping and the augmented context to the condition', async () => {
+    const spy = jest
+      .spyOn(toolsModule, 'callTool')
+      .mockResolvedValue({ status: 'completed' });
+
+    await executePollNode({
+      node: pollNode({ inputMapping: { id: { var: 'jobId' } } }),
+      state: { jobId: 'job_123' },
+      projectIds: [7],
+      authHeader: 'Bearer t',
+    });
+
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'tool_status',
+        input: { id: 'job_123' },
+        projectIds: [7],
+        authHeader: 'Bearer t',
+      })
+    );
+  });
+
+  test('completes with conditionMet=false when attempts are exhausted', async () => {
+    jest
+      .spyOn(toolsModule, 'callTool')
+      .mockResolvedValue({ status: 'pending' });
+
+    const result = await executePollNode({
+      node: pollNode({ maxIterations: 3 }),
+      state: {},
+      projectIds: [1],
+    });
+
+    expect(result).toEqual({
+      kind: 'artifact',
+      artifact: {
+        result: { status: 'pending' },
+        attempts: 3,
+        conditionMet: false,
+        timedOut: true,
+      },
+    });
+  });
+
+  test('throws ORCHESTRATION_POLL_EXHAUSTED when fail_on_timeout is set', async () => {
+    jest
+      .spyOn(toolsModule, 'callTool')
+      .mockResolvedValue({ status: 'pending' });
+
+    await expect(
+      executePollNode({
+        node: pollNode({ maxIterations: 2, failOnTimeout: true }),
+        state: {},
+        projectIds: [1],
+      })
+    ).rejects.toThrow(DomainError);
   });
 });

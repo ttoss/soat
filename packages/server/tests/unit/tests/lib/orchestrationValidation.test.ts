@@ -82,7 +82,55 @@ describe('validateOrchestrationGraph', () => {
 
     test('accepts a tool node with operationId and no action', () => {
       const result = validate({
-        nodes: [{ id: 'n1', type: 'tool', toolId: 'tool_abc', operationId: 'listAgents' }],
+        nodes: [
+          {
+            id: 'n1',
+            type: 'tool',
+            toolId: 'tool_abc',
+            operationId: 'listAgents',
+          },
+        ],
+        edges: [],
+      });
+      expect(result.valid).toBe(true);
+    });
+
+    test('flags a poll node missing toolId, exitCondition and interval', () => {
+      const result = validate({
+        nodes: [{ id: 'p', type: 'poll' }],
+        edges: [],
+      });
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({
+          message: expect.stringContaining("missing required field 'toolId'"),
+        })
+      );
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({
+          path: 'nodes[0].exit_condition',
+          message: expect.stringContaining('stop condition'),
+        })
+      );
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({
+          path: 'nodes[0].interval',
+          message: expect.stringContaining("'interval'"),
+        })
+      );
+    });
+
+    test('accepts a fully specified poll node', () => {
+      const result = validate({
+        nodes: [
+          {
+            id: 'p',
+            type: 'poll',
+            toolId: 'tool_abc',
+            interval: '5s',
+            exitCondition: { '==': [{ var: 'response.status' }, 'completed'] },
+          },
+        ],
         edges: [],
       });
       expect(result.valid).toBe(true);
@@ -140,7 +188,7 @@ describe('validateOrchestrationGraph', () => {
     test('allows a cycle when a loop node is present', () => {
       const result = validate({
         nodes: [
-          { id: 'a', type: 'loop', subGraph: 'orch_child' },
+          { id: 'a', type: 'loop', orchestrationId: 'orch_child' },
           { id: 'b', type: 'transform', expression: 2 },
         ],
         edges: [

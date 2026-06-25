@@ -20,6 +20,7 @@ export type OrchestratorNodeType =
   | 'condition'
   | 'human'
   | 'loop'
+  | 'poll'
   | 'delay'
   | 'webhook'
   | 'sub_orchestration';
@@ -40,12 +41,20 @@ export type OrchestrationNode = {
   options?: string[];
   // memory_write node
   memoryId?: string;
-  // loop node
+  // loop node — runs the orchestration named by `orchestrationId` (shared with
+  // the sub_orchestration node) once per item in `collection`.
   collection?: string;
   itemVariable?: string;
-  subGraph?: string;
   parallelism?: number;
-  // delay node — ISO 8601 duration (e.g. PT5S)
+  // poll node — reuses toolId/operationId/inputMapping (the tool to call) and
+  // maxIterations (attempt cap). exitCondition is the JSON Logic stop condition
+  // (truthy ⇒ stop), interval is the wait between attempts, and failOnTimeout
+  // fails the run when the attempt cap is reached without the condition holding.
+  exitCondition?: unknown;
+  interval?: string;
+  failOnTimeout?: boolean;
+  // delay node / poll node — duration string: a friendly suffix form
+  // (`5s`, `30s`, `5m`, `2h`, `500ms`) or ISO 8601 (e.g. PT5S).
   duration?: string;
   // webhook node
   mode?: 'emit' | 'receive';

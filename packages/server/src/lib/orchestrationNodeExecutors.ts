@@ -237,16 +237,37 @@ export const executeHumanNode = (args: {
   };
 };
 
-const parseIsoDuration = (duration: string): number => {
-  const match =
+const SUFFIX_UNIT_MS: Record<string, number> = {
+  ms: 1,
+  s: 1000,
+  m: 60000,
+  h: 3600000,
+  d: 86400000,
+};
+
+/**
+ * Parses a duration string to milliseconds. Accepts a friendly suffix form
+ * (`5s`, `30s`, `5m`, `2h`, `1d`, `500ms`) or ISO 8601 (`PT5S`, `PT1M30S`,
+ * `P1DT2H`). Unparseable input resolves to `0` (a no-op wait), matching the
+ * delay node's long-standing behaviour. Shared by the `delay` and `poll` nodes
+ * so both accept the same formats.
+ */
+export const parseDuration = (value: string): number => {
+  const suffix = /^(\d+(?:\.\d+)?)(ms|s|m|h|d)$/.exec(value.trim());
+  if (suffix) {
+    const amount = parseFloat(suffix[1] ?? '0');
+    const unitMs = SUFFIX_UNIT_MS[suffix[2] ?? 's'] ?? 1000;
+    return amount * unitMs;
+  }
+  const iso =
     /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(
-      duration
+      value
     );
-  if (!match) return 0;
-  const days = parseFloat(match[1] ?? '0');
-  const hours = parseFloat(match[2] ?? '0');
-  const minutes = parseFloat(match[3] ?? '0');
-  const seconds = parseFloat(match[4] ?? '0');
+  if (!iso) return 0;
+  const days = parseFloat(iso[1] ?? '0');
+  const hours = parseFloat(iso[2] ?? '0');
+  const minutes = parseFloat(iso[3] ?? '0');
+  const seconds = parseFloat(iso[4] ?? '0');
   return ((days * 24 + hours) * 60 + minutes) * 60000 + seconds * 1000;
 };
 
@@ -259,7 +280,7 @@ export const executeDelayNode = async (args: {
       'ORCHESTRATION_NODE_FAILED',
       `Delay node '${node.id}' missing duration.`
     );
-  const ms = parseIsoDuration(node.duration);
+  const ms = parseDuration(node.duration);
   await new Promise<void>((resolve) => {
     return setTimeout(resolve, ms);
   });
@@ -315,12 +336,18 @@ const runLoopBatches = async (args: {
   items: unknown[];
   parallelism: number;
   itemVariable: string;
-  subGraph: string;
+  orchestrationId: string;
   projectIds: number[];
   authHeader?: string;
 }): Promise<unknown[]> => {
-  const { items, parallelism, itemVariable, subGraph, projectIds, authHeader } =
-    args;
+  const {
+    items,
+    parallelism,
+    itemVariable,
+    orchestrationId,
+    projectIds,
+    authHeader,
+  } = args;
   const results: unknown[] = [];
   for (let i = 0; i < items.length; i += parallelism) {
     const batch = items.slice(i, i + parallelism);
@@ -328,7 +355,7 @@ const runLoopBatches = async (args: {
       batch.map((item) => {
         const itemInput: Record<string, unknown> = { [itemVariable]: item };
         return startOrchestrationRun({
-          orchestrationPublicId: subGraph,
+          orchestrationPublicId: orchestrationId,
           projectId: projectIds[0],
           projectIds,
           input: itemInput,
@@ -353,10 +380,10 @@ export const executeLoopNode = async (args: {
   authHeader?: string;
 }): Promise<NodeExecutionResult> => {
   const { node, state, projectIds, authHeader } = args;
-  if (!node.subGraph)
+  if (!node.orchestrationId)
     throw new DomainError(
       'ORCHESTRATION_NODE_FAILED',
-      `Loop node '${node.id}' missing subGraph.`
+      `Loop node '${node.id}' missing orchestrationId.`
     );
 
   const collectionPath = node.collection ?? 'state.items';
@@ -367,7 +394,7 @@ export const executeLoopNode = async (args: {
     items,
     parallelism,
     itemVariable,
-    subGraph: node.subGraph,
+    orchestrationId: node.orchestrationId,
     projectIds,
     authHeader,
   });
