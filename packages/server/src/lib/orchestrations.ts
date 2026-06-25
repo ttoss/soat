@@ -46,10 +46,11 @@ export type OrchestrationNode = {
   itemVariable?: string;
   subGraph?: string;
   parallelism?: number;
-  // poll node — reuses toolId/operationId/inputMapping (the tool to call),
-  // expression (the JSON Logic exit condition), and maxIterations (attempt cap).
-  // interval is the wait between attempts; failOnTimeout fails the run when the
-  // attempt cap is reached without the exit condition becoming true.
+  // poll node — reuses toolId/operationId/inputMapping (the tool to call) and
+  // maxIterations (attempt cap). exitCondition is the JSON Logic stop condition
+  // (truthy ⇒ stop), interval is the wait between attempts, and failOnTimeout
+  // fails the run when the attempt cap is reached without the condition holding.
+  exitCondition?: unknown;
   interval?: string;
   failOnTimeout?: boolean;
   // delay node / poll node — duration string: a friendly suffix form

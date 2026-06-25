@@ -152,10 +152,10 @@ const pollNodeShapeIssues = (args: {
 }): OrchestrationValidationIssue[] => {
   const { node, basePath } = args;
   const issues: OrchestrationValidationIssue[] = [];
-  if (node.expression === undefined || node.expression === null) {
+  if (node.exitCondition === undefined || node.exitCondition === null) {
     issues.push({
-      path: `${basePath}.expression`,
-      message: `poll node '${node.id}' is missing required field 'expression' (the JSON Logic exit condition).`,
+      path: `${basePath}.exit_condition`,
+      message: `poll node '${node.id}' is missing required field 'exit_condition' (the JSON Logic stop condition).`,
     });
   }
   if (!node.interval) {

@@ -95,7 +95,7 @@ describe('validateOrchestrationGraph', () => {
       expect(result.valid).toBe(true);
     });
 
-    test('flags a poll node missing toolId, expression and interval', () => {
+    test('flags a poll node missing toolId, exitCondition and interval', () => {
       const result = validate({
         nodes: [{ id: 'p', type: 'poll' }],
         edges: [],
@@ -108,8 +108,8 @@ describe('validateOrchestrationGraph', () => {
       );
       expect(result.errors).toContainEqual(
         expect.objectContaining({
-          path: 'nodes[0].expression',
-          message: expect.stringContaining('exit condition'),
+          path: 'nodes[0].exit_condition',
+          message: expect.stringContaining('stop condition'),
         })
       );
       expect(result.errors).toContainEqual(
@@ -128,7 +128,7 @@ describe('validateOrchestrationGraph', () => {
             type: 'poll',
             toolId: 'tool_abc',
             interval: '5s',
-            expression: { '==': [{ var: 'response.status' }, 'completed'] },
+            exitCondition: { '==': [{ var: 'response.status' }, 'completed'] },
           },
         ],
         edges: [],

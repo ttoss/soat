@@ -487,7 +487,7 @@ describe('executePollNode', () => {
       type: 'poll',
       toolId: 'tool_status',
       interval: '0s',
-      expression: { '==': [{ var: 'response.status' }, 'completed'] },
+      exitCondition: { '==': [{ var: 'response.status' }, 'completed'] },
       ...overrides,
     });
   };
@@ -502,10 +502,10 @@ describe('executePollNode', () => {
     ).rejects.toThrow(DomainError);
   });
 
-  test('throws DomainError when expression is missing', async () => {
+  test('throws DomainError when exitCondition is missing', async () => {
     await expect(
       executePollNode({
-        node: pollNode({ expression: undefined }),
+        node: pollNode({ exitCondition: undefined }),
         state: {},
         projectIds: [1],
       })

@@ -27,10 +27,10 @@ const assertPollNode = (
       'ORCHESTRATION_NODE_FAILED',
       `Poll node '${node.id}' missing toolId.`
     );
-  if (node.expression === undefined || node.expression === null)
+  if (node.exitCondition === undefined || node.exitCondition === null)
     throw new DomainError(
       'ORCHESTRATION_NODE_FAILED',
-      `Poll node '${node.id}' missing expression (the exit condition).`
+      `Poll node '${node.id}' missing exitCondition.`
     );
   if (!node.interval)
     throw new DomainError(
@@ -43,7 +43,7 @@ const assertPollNode = (
 /**
  * Polls a tool until a JSON Logic exit condition is satisfied. Each attempt
  * calls `toolId` (with `inputMapping` resolved against state), then evaluates
- * `expression` against an augmented context — `{ ...state, response, attempt }`
+ * `exitCondition` against an augmented context — `{ ...state, response, attempt }`
  * — where `response` is the latest tool result and `attempt` is the 1-based
  * count. Stops on a truthy condition, or when `maxIterations` (default 10) /
  * the wall-clock ceiling is reached. On exhaustion it either fails the run
@@ -77,7 +77,7 @@ export const executePollNode = async (args: {
     });
 
     const context = { ...state, response: lastResponse, attempt };
-    if (evaluateLogic(node.expression, context)) {
+    if (evaluateLogic(node.exitCondition, context)) {
       return {
         kind: 'artifact',
         artifact: {

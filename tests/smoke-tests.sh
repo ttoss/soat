@@ -639,7 +639,7 @@ echo "Validate orchestration (valid): OK"
 
 echo "--- Validating orchestration graph with a poll node (valid) ---"
 ORCH_POLL_VALID_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI validate-orchestration \
-  --nodes '[{"id":"wait","type":"poll","tool_id":"tool_status","interval":"5s","expression":{"==":[{"var":"response.status"},"completed"]},"max_iterations":3}]' \
+  --nodes '[{"id":"wait","type":"poll","tool_id":"tool_status","interval":"5s","exit_condition":{"==":[{"var":"response.status"},"completed"]},"max_iterations":3}]' \
   --edges '[]')
 if ! printf '%s\n' "$ORCH_POLL_VALID_RESP" | jq -e '.valid == true' >/dev/null 2>&1; then
   echo "validate-orchestration did not accept a well-formed poll node"

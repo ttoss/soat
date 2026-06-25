@@ -407,12 +407,14 @@ components:
           description: For tool and poll nodes — specific operation/action on MCP/SOAT tools.
         expression:
           type: object
+          description: For transform/condition nodes — JSON Logic rule (https://jsonlogic.com) evaluated against the run state.
+        exit_condition:
+          type: object
           description: >
-            For transform/condition nodes — JSON Logic rule
-            (https://jsonlogic.com) evaluated against the run state. For poll
-            nodes it is the exit condition, evaluated each attempt against the
-            run state augmented with `response` (the latest tool result) and
-            `attempt` (1-based count); a truthy result stops polling.
+            For poll nodes — JSON Logic stop condition, evaluated each attempt
+            against the run state augmented with `response` (the latest tool
+            result) and `attempt` (1-based count); a truthy result stops
+            polling.
         prompt:
           type: string
           description: For human nodes — prompt shown to the human reviewer.

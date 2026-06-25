@@ -1603,7 +1603,7 @@ describe('Orchestrations', () => {
                 type: 'poll',
                 tool_id: 'tool_status',
                 interval: '0s',
-                expression: {
+                exit_condition: {
                   '==': [{ var: 'response.status' }, 'completed'],
                 },
                 output_mapping: {
@@ -1646,7 +1646,7 @@ describe('Orchestrations', () => {
                 tool_id: 'tool_status',
                 interval: '0s',
                 max_iterations: 2,
-                expression: {
+                exit_condition: {
                   '==': [{ var: 'response.status' }, 'completed'],
                 },
                 output_mapping: { condition_met: 'state.done' },

@@ -17,7 +17,7 @@ Add a **poll** node (call a tool on an interval until a JSON Logic exit conditio
 | `poll` node — type | ✅ Implemented | `'poll'` in `OrchestratorNodeType`; `interval` + `failOnTimeout` on `OrchestrationNode` |
 | `poll` node — executor | ✅ Implemented | `executePollNode` in `orchestrationPollNode.ts`: `callTool` → evaluate exit condition against `{...state, response, attempt}` → wait `interval` → repeat, bounded by `maxIterations` (default 10, ceiling 1000) + 10-min wall-clock |
 | `poll` node — dispatch | ✅ Implemented | `case 'poll'` in `dispatchNodeExecution` (`orchestrationExecutors.ts`) |
-| `poll` node — validation | ✅ Implemented | `REQUIRED_NODE_FIELDS.poll = 'toolId'` + `pollNodeShapeIssues` branch requiring `expression` and `interval` |
+| `poll` node — validation | ✅ Implemented | `REQUIRED_NODE_FIELDS.poll = 'toolId'` + `pollNodeShapeIssues` branch requiring `exitCondition` and `interval` |
 | `poll` node — error code | ✅ Implemented | `ORCHESTRATION_POLL_EXHAUSTED` (422) — raised only when `fail_on_timeout` |
 | `poll` node — OpenAPI / SDK / CLI | ✅ Implemented | `poll` enum value + `interval` / `fail_on_timeout`; SDK regenerated (CLI manifest unchanged — no new endpoints) |
 | `poll` node — tests | ✅ Implemented | Executor unit, validation unit, REST integration (complete + timeout), smoke (validate). DB-backed suites run in CI (no local Docker) |
@@ -57,10 +57,10 @@ The orchestration engine (`packages/server/src/lib/orchestration*.ts`) executes 
 
 **Deliverables:**
 
-- `'poll'` added to `OrchestratorNodeType`; `interval?: string` and `failOnTimeout?: boolean` added to `OrchestrationNode` (reusing existing `toolId`, `operationId`, `inputMapping`, `expression`, `maxIterations`, `outputMapping`).
+- `'poll'` added to `OrchestratorNodeType`; `exitCondition?: unknown`, `interval?: string`, and `failOnTimeout?: boolean` added to `OrchestrationNode` (reusing existing `toolId`, `operationId`, `inputMapping`, `maxIterations`, `outputMapping`). `exitCondition` is poll's own JSON Logic field — distinct from `transform`/`condition`'s `expression` so its stop-the-loop intent is explicit.
 - `executePollNode` in `orchestrationNodeExecutors.ts` (algorithm below); `parseIsoDuration` extracted to a shared helper used by both `delay` and `poll`.
 - Dispatch `case 'poll'` in `orchestrationExecutors.ts`.
-- Dedicated poll validation branch in `validateNodeShape` (requires `toolId`, `expression`, `interval`).
+- Dedicated poll validation branch in `validateNodeShape` (requires `toolId`, `exitCondition`, `interval`).
 - OpenAPI: `poll` enum value + `interval` / `fail_on_timeout` properties documented; `pnpm --filter @soat/sdk generate` and `pnpm --filter @soat/cli generate` re-run.
 - Tests: executor unit tests, validation tests, REST integration test (create + run an orchestration containing a poll node), MCP test if orchestration node creation is covered there, and a smoke-test step.
 - Docs: node-type table row + a "Polling" Key Concepts subsection.
@@ -93,7 +93,7 @@ A `poll` node reuses the `tool` node's fields plus a polling cadence:
 | `tool_id` | reused | ✅ | Tool to call each attempt |
 | `operation_id` | reused | – | Action for MCP/SOAT tools |
 | `input_mapping` | reused | – | Tool input, JSON Logic against state |
-| `expression` | reused | ✅ | JSON Logic **exit condition**; truthy → stop polling |
+| `exit_condition` | **new** | ✅ | JSON Logic stop condition; truthy → stop polling |
 | `interval` | **new** | ✅ | ISO 8601 wait between attempts (e.g. `PT5S`) |
 | `max_iterations` | reused | – | Max attempts (default `10`, hard ceiling `1000`) |
 | `fail_on_timeout` | **new** | – | On exhaustion: `true` → fail the run; `false` (default) → complete with `condition_met: false` |
@@ -108,7 +108,7 @@ A `poll` node reuses the `tool` node's fields plus a polling cadence:
 So the condition reads the live response, e.g. stop when an external job reports `completed`:
 
 ```json
-"expression": { "==": [{ "var": "response.status" }, "completed"] }
+"exit_condition": { "==": [{ "var": "response.status" }, "completed"] }
 ```
 
 **Result artifact.** On completion the node produces:
@@ -131,7 +131,7 @@ loop:
   inputs        = applyInputMapping(node.inputMapping, state)
   lastResponse  = await callTool({ projectIds, id: toolId, action: operationId, input: inputs, authHeader })
   context       = { ...state, response: lastResponse, attempt }
-  if truthy(evaluateLogic(node.expression, context)):
+  if truthy(evaluateLogic(node.exitCondition, context)):
       return artifact { result: lastResponse, attempts: attempt, condition_met: true,  timed_out: false }
   if attempt >= maxAttempts OR now >= deadline:
       if node.failOnTimeout: throw DomainError('ORCHESTRATION_POLL_EXHAUSTED', …)
@@ -172,7 +172,7 @@ In `packages/server/src/rest/openapi/v1/orchestrations.yaml`, `OrchestrationNode
             with condition_met=false (default).
 ```
 
-3. Clarify in the existing field descriptions that `tool_id`, `operation_id`, `input_mapping`, `expression`, and `max_iterations` are also used by `poll` nodes (`expression` = the exit condition; `max_iterations` = max attempts, default 10).
+3. Add `exit_condition` (poll's JSON Logic stop condition) and clarify that `tool_id`, `operation_id`, `input_mapping`, and `max_iterations` are also used by `poll` nodes (`max_iterations` = max attempts, default 10).
 
 Regenerate downstream artifacts after editing the spec:
 
@@ -188,7 +188,7 @@ The MCP tool surface for `create-orchestration` / `update-orchestration` updates
 `poll` needs **three** required fields, but `REQUIRED_NODE_FIELDS` (`orchestrationValidation.ts:111`) maps each type to a *single* field. Approach:
 
 - Set `poll: 'toolId'` in `REQUIRED_NODE_FIELDS` (primary field).
-- Add a `poll`-specific branch in `validateNodeShape` (mirroring the existing `tool`-node special case at `orchestrationValidation.ts:151`) that also requires `expression` and `interval`, emitting a clear per-field message when missing.
+- Add a `poll`-specific branch in `validateNodeShape` (mirroring the existing `tool`-node special case at `orchestrationValidation.ts:151`) that also requires `exitCondition` and `interval`, emitting a clear per-field message when missing.
 
 No change to cycle detection or reachability analysis — `poll` is a normal acyclic node whose `input_mapping`/`expression` `{var:…}` refs are validated by the existing reachability pass.
 
@@ -220,7 +220,7 @@ Per `.claude/rules/quality-assurance.md`, write the failing test before the prod
   - poll completes immediately when the condition is true on attempt 1 (assert `attempts: 1`, `condition_met: true`); use a `jest.spyOn(toolsModule, 'callTool')` stub returning a canned response.
   - poll loops then succeeds (stubbed `callTool` returns "pending" then "completed"); assert attempt count and that `sleep` was awaited between attempts (inject/fake the timer).
   - exhaustion with `fail_on_timeout: false` → `condition_met: false`, `timed_out: true`; with `true` → throws `ORCHESTRATION_POLL_EXHAUSTED`.
-  - missing `tool_id` / `expression` / `interval` → `ORCHESTRATION_NODE_FAILED`.
+  - missing `tool_id` / `exit_condition` / `interval` → `ORCHESTRATION_NODE_FAILED`.
   - `delay` happy path + missing-`duration` error.
 - **Validation** (`lib/orchestrationValidation.test.ts`): a poll node missing each of the three required fields yields the expected issue path/message; a complete poll node validates clean.
 - **REST integration** (`rest/orchestrations.test.ts`): create an orchestration with a poll node (mock `createGeneration`/external tool as needed), start a run, assert the run reaches `completed` and the poll artifact shape. Cover `401` and `403`.
@@ -232,11 +232,12 @@ Per `.claude/rules/quality-assurance.md`, write the failing test before the prod
 
 - **Blocking execution (primary risk).** `poll` (like `delay`) runs inside the synchronous run loop and holds the originating HTTP request open for the whole poll. A poll of `max_iterations × interval` plus per-call tool latency can hold a connection for minutes. **Mitigations:** conservative default `max_iterations = 10`, a hard `MAX_POLL_WALL_CLOCK` ceiling enforced in the executor, and documenting that poll is for short, bounded waits. True async resumption (pause + timer-driven resume) is deferred to Phase 3 and depends on introducing a scheduler/job queue (none exists today; the `requires_action`/resume mechanism has no timer to wake it).
 - **Tool side effects.** Each attempt re-invokes the tool; authors must ensure the polled operation is safe to repeat (idempotent reads, not re-submissions). Documented in the Polling subsection.
-- **Field reuse of `expression`.** `transform`/`condition` evaluate against `state`; `poll` evaluates against `{...state, response, attempt}`. The augmented context is poll-specific — must be called out clearly in docs to avoid confusion.
+- **Augmented condition context.** `transform`/`condition` evaluate their `expression` against `state`; `poll` evaluates its dedicated `exit_condition` against `{...state, response, attempt}`. The augmented context is poll-specific — called out clearly in docs to avoid confusion.
 
 ## Resolved Decisions
 
 1. **`interval` is a distinct field** (not a reuse of `duration`) — self-documenting per-attempt cadence.
+1. **`exit_condition` is poll's own field** (not the shared `expression`) — it encodes direction (truthy ⇒ stop) and matches the schema's existing `*_condition` vocabulary (`activation_condition` on edges). `expression` stays vague/direction-less, so a dedicated name was chosen.
 2. **Friendly duration format.** Both `interval` and `duration` accept a suffix form (`5s`, `30s`, `5m`, `2h`, `500ms`) **and** ISO 8601 (`PT5S`), via a single shared `parseDuration`. Bare integers are intentionally rejected (unit ambiguity).
 3. **`fail_on_timeout` defaults to `false`** — on exhaustion the node completes with `condition_met: false` so authors branch with a downstream `condition` node; set `true` for a hard run failure.
 4. **`MAX_POLL_WALL_CLOCK` = 10 minutes** — a fixed safety ceiling in the executor.

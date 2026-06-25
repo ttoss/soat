@@ -89,7 +89,7 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | `condition`    | Evaluates a JSON Logic rule and emits a string label. Downstream edges use `condition: "<label>"` to select the active branch.      |
 | `human`        | Pauses the run and waits for external input. The run enters `paused` status with `requiredAction`.                                  |
 | `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `subGraph`, `collection`, `itemVariable`, and `parallelism`. See [Loops](#loops-collection-iteration). |
-| `poll`         | Calls a tool on an interval until a JSON Logic exit condition on the response holds. Uses `toolId`, `expression`, and `interval`. See [Polling](#polling). |
+| `poll`         | Calls a tool on an interval until a JSON Logic exit condition on the response holds. Uses `toolId`, `exitCondition`, and `interval`. See [Polling](#polling). |
 | `delay`        | Waits for a fixed `duration`, then continues. Accepts `5s`/`5m`/`2h`/`500ms` or ISO 8601 (`PT5S`).                                   |
 | `webhook`      | Emits an HTTP POST (`mode: "emit"`, `webhookUrl`) or pauses awaiting a callback (`mode: "receive"`).                                 |
 | `sub_orchestration` | Runs another orchestration as a single step. Uses `orchestrationId`.                                                           |
@@ -126,7 +126,7 @@ A `poll` node repeatedly calls a [Tool](./tools.md) until a [JSON Logic](https:/
 Each attempt:
 
 1. Calls `toolId` (resolving `inputMapping` against state, like a `tool` node).
-2. Evaluates `expression` against an **augmented context** — the run state plus `response` (the latest tool result) and `attempt` (1-based count). A truthy result stops polling.
+2. Evaluates `exitCondition` against an **augmented context** — the run state plus `response` (the latest tool result) and `attempt` (1-based count). A truthy result stops polling.
 3. Otherwise waits `interval` and retries, bounded by `maxIterations` (default 10, ceiling 1000) and a 10-minute wall-clock ceiling.
 
 The node completes with an artifact `{ result, attempts, conditionMet, timedOut }`. On exhaustion it completes with `conditionMet: false` (branch on it downstream with a `condition` node) — unless `failOnTimeout: true`, which fails the run with `ORCHESTRATION_POLL_EXHAUSTED`.
@@ -137,7 +137,7 @@ The node completes with an artifact `{ result, attempts, conditionMet, timedOut 
   "type": "poll",
   "tool_id": "tool_renderStatus",
   "input_mapping": { "id": { "var": "jobId" } },
-  "expression": { "==": [{ "var": "response.status" }, "completed"] },
+  "exit_condition": { "==": [{ "var": "response.status" }, "completed"] },
   "interval": "5s",
   "max_iterations": 60,
   "output_mapping": { "result": "state.render" }
