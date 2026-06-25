@@ -447,10 +447,10 @@ describe('Files', () => {
     });
   });
 
-  describe('POST /api/v1/files/upload-token', () => {
+  describe('POST /api/v1/files/presigned-url', () => {
     test('user with permission receives a token, url and expiry', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/files/upload-token')
+        .post('/api/v1/files/presigned-url')
         .send({
           project_id: projectId,
           content_type: 'application/pdf',
@@ -468,9 +468,31 @@ describe('Files', () => {
       );
     });
 
+    test('upload_url is absolute when SERVER_BASE_URL is set', async () => {
+      const originalBaseUrl = process.env.SERVER_BASE_URL;
+      process.env.SERVER_BASE_URL = 'https://api.example.com';
+
+      try {
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/files/presigned-url')
+          .send({ project_id: projectId, filename: 'absolute-url.txt' });
+
+        expect(response.status).toBe(201);
+        expect(response.body.upload_url).toBe(
+          `https://api.example.com/api/v1/files/upload/${response.body.upload_token}`
+        );
+      } finally {
+        if (originalBaseUrl === undefined) {
+          delete process.env.SERVER_BASE_URL;
+        } else {
+          process.env.SERVER_BASE_URL = originalBaseUrl;
+        }
+      }
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
-        .post('/api/v1/files/upload-token')
+        .post('/api/v1/files/presigned-url')
         .send({ project_id: projectId });
 
       expect(response.status).toBe(401);
@@ -478,7 +500,7 @@ describe('Files', () => {
 
     test('returns 400 when project_id is missing', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/files/upload-token')
+        .post('/api/v1/files/presigned-url')
         .send({ filename: 'no-project.txt' });
 
       expect(response.status).toBe(400);
@@ -487,7 +509,7 @@ describe('Files', () => {
 
     test('returns 403 when user has no upload permission', async () => {
       const response = await authenticatedTestClient(noPermToken)
-        .post('/api/v1/files/upload-token')
+        .post('/api/v1/files/presigned-url')
         .send({ project_id: projectId });
 
       expect(response.status).toBe(403);
@@ -497,7 +519,7 @@ describe('Files', () => {
   describe('POST /api/v1/files/upload/:token', () => {
     const requestToken = async (overrides?: Record<string, unknown>) => {
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/files/upload-token')
+        .post('/api/v1/files/presigned-url')
         .send({ project_id: projectId, ...overrides });
       return res.body.upload_token as string;
     };

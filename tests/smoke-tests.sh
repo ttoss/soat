@@ -341,9 +341,9 @@ if [ "$PATCH_ID" != "$FILE_ID" ]; then
 fi
 echo "PATCH status: 200"
 
-# 7b. Upload a large file via an upload token (two-step presigned-URL flow)
-echo "--- Requesting upload token ---"
-TOKEN_RESP=$($SOAT_CLI create-upload-token \
+# 7b. Upload a large file via a presigned URL (two-step presigned-URL flow)
+echo "--- Requesting presigned URL ---"
+TOKEN_RESP=$($SOAT_CLI create-presigned-url \
   --project_id "$PROJECT_PUBLIC_ID" \
   --prefix /reports \
   --filename token-upload.txt \
@@ -354,10 +354,13 @@ if [ -z "$UPLOAD_TOKEN" ] || [ "$UPLOAD_TOKEN" = "null" ]; then
   echo "ERROR: upload token not returned" >&2
   exit 1
 fi
-if [ "$UPLOAD_URL" != "/api/v1/files/upload/$UPLOAD_TOKEN" ]; then
-  echo "ERROR: upload_url '$UPLOAD_URL' does not match token" >&2
-  exit 1
-fi
+case "$UPLOAD_URL" in
+  */api/v1/files/upload/"$UPLOAD_TOKEN") ;;
+  *)
+    echo "ERROR: upload_url '$UPLOAD_URL' does not match token" >&2
+    exit 1
+    ;;
+esac
 echo "Upload token: $UPLOAD_TOKEN"
 
 echo "--- Uploading via token ---"
