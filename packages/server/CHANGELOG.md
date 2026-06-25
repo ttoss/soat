@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.6](https://127.0.0.1/41729/git/ttoss/compare/v0.13.5...v0.13.6) (2026-06-25)
+
+### Bug Fixes
+
+* scope MCP OAuth sessions to the selected project ([#278](https://127.0.0.1/41729/git/ttoss/issues/278)) ([3c19877](https://127.0.0.1/41729/git/ttoss/commits/3c198772b9a093c55d6d78d1a47da87415f22348)), closes [#273](https://127.0.0.1/41729/git/ttoss/issues/273)
+
+### Features
+
+* **files:** address files by prefix + filename, read-only path key ([#275](https://127.0.0.1/41729/git/ttoss/issues/275)) ([95edfc4](https://127.0.0.1/41729/git/ttoss/commits/95edfc43a5af81b3f65cd198b6eb4a16739a4954))
+* **files:** return absolute upload_url when SERVER_BASE_URL is set ([#277](https://127.0.0.1/41729/git/ttoss/issues/277)) ([26a50fe](https://127.0.0.1/41729/git/ttoss/commits/26a50fe998cf2643a30a0a24452b1d59c30f00a2))
+
 ## [0.13.5](https://127.0.0.1/41729/git/ttoss/compare/v0.13.4...v0.13.5) (2026-06-25)
 
 ### Bug Fixes

@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.6](https://127.0.0.1/41729/git/ttoss/compare/v0.13.5...v0.13.6) (2026-06-25)
+
+### Features
+
+* **app:** add file upload support for multipart/form-data operations ([#276](https://127.0.0.1/41729/git/ttoss/issues/276)) ([a133ce4](https://127.0.0.1/41729/git/ttoss/commits/a133ce49b237f7c003f3792f6c5b8914194e0d65))
+
 ## [0.13.5](https://127.0.0.1/41729/git/ttoss/compare/v0.13.4...v0.13.5) (2026-06-25)
 
 **Note:** Version bump only for package @soat/app
