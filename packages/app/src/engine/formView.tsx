@@ -1,15 +1,17 @@
 import * as React from 'react';
 
-import { apiFetch } from '@/api/client';
+import { apiFetch, apiFetchMultipart } from '@/api/client';
 import { useAuth } from '@/auth/authContext';
 import { Button } from '@/components/ui/button';
 
 import { FieldEditor } from './fieldEditor';
 import {
+  buildMultipartFormData,
   buildRequestBody,
   extractRevealedSecrets,
   getOpRequestSchema,
   initFormData,
+  isMultipartOp,
   type RevealedSecret,
 } from './formHelpers';
 import { MethodBadge } from './methodBadge';
@@ -44,16 +46,29 @@ type SubmitResult =
 const submitForm = async (args: {
   op: ModuleOp;
   formData: Record<string, string>;
+  fileData: Record<string, File>;
   schema: OpenApiSchema | undefined;
   pathParams: Record<string, string>;
   mode: 'create' | 'edit';
   token: string;
 }): Promise<SubmitResult> => {
-  const { op, formData, schema, pathParams, mode, token } = args;
-  const bodyResult = buildRequestBody(formData, schema);
-  if (!bodyResult.ok) return { ok: false, error: bodyResult.error };
+  const { op, formData, fileData, schema, pathParams, mode, token } = args;
   const url = buildUrl(op.pathTemplate, pathParams);
   const method = mode === 'create' ? 'POST' : 'PUT';
+
+  if (isMultipartOp(op)) {
+    const fd = buildMultipartFormData(formData, fileData, schema);
+    const result = await apiFetchMultipart<JsonObject>({
+      url,
+      formData: fd,
+      token,
+    });
+    if (!result.ok) return { ok: false, error: result.error.message };
+    return { ok: true, data: result.data };
+  }
+
+  const bodyResult = buildRequestBody(formData, schema);
+  if (!bodyResult.ok) return { ok: false, error: bodyResult.error };
   const result = await apiFetch<JsonObject>({
     url,
     method,
@@ -120,9 +135,11 @@ const useFormSubmit = (args: {
   mode: 'create' | 'edit';
   token: string;
   formData: Record<string, string>;
+  fileData: Record<string, File>;
   onSuccess: (data: JsonObject) => void;
 }) => {
-  const { op, schema, pathParams, mode, token, formData, onSuccess } = args;
+  const { op, schema, pathParams, mode, token, formData, fileData, onSuccess } =
+    args;
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -134,6 +151,7 @@ const useFormSubmit = (args: {
     const result = await submitForm({
       op,
       formData,
+      fileData,
       schema,
       pathParams,
       mode,
@@ -213,6 +231,7 @@ type FormBodyProps = {
   required: Set<string>;
   formData: Record<string, string>;
   setFormData: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  onFileChange: (name: string, file: File | null) => void;
   submitting: boolean;
   mode: 'create' | 'edit';
   onSubmit: (e: React.FormEvent) => void;
@@ -229,6 +248,7 @@ const FormBody = ({
   required,
   formData,
   setFormData,
+  onFileChange,
   submitting,
   mode,
   onSubmit,
@@ -265,6 +285,13 @@ const FormBody = ({
               }}
               required={required.has(name)}
               refOptions={refOptions[name]}
+              onFileChange={
+                fieldSchema.format === 'binary'
+                  ? (file) => {
+                      return onFileChange(name, file);
+                    }
+                  : undefined
+              }
             />
           );
         })}
@@ -322,7 +349,19 @@ export const FormView = ({
   const [formData, setFormData] = React.useState<Record<string, string>>(() => {
     return initFormData(schema, resolvedPrefill);
   });
+  const [fileData, setFileData] = React.useState<Record<string, File>>({});
   const [secrets, setSecrets] = React.useState<RevealedSecret[]>([]);
+
+  const handleFileChange = (name: string, file: File | null) => {
+    setFileData((prev) => {
+      if (!file) {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      }
+      return { ...prev, [name]: file };
+    });
+  };
 
   const token = state.status === 'authenticated' ? state.token : '';
   const { op, title, httpMethod } = getFormModeValues(mode, module);
@@ -334,6 +373,7 @@ export const FormView = ({
     mode,
     token,
     formData,
+    fileData,
     onSuccess: (data) => {
       // Only a create can surface a write-once secret; on edit just go back.
       const revealed = mode === 'create' ? extractRevealedSecrets(data) : [];
@@ -375,6 +415,7 @@ export const FormView = ({
       required={new Set(schema.required ?? [])}
       formData={formData}
       setFormData={setFormData}
+      onFileChange={handleFileChange}
       submitting={submitting}
       mode={mode}
       refOptions={refOptions}

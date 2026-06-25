@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'vitest';
 
 import {
+  buildMultipartFormData,
   buildRequestBody,
   extractRevealedSecrets,
   getOpRequestSchema,
   initFormData,
+  isMultipartOp,
 } from '@/engine/formHelpers';
 import type { ModuleOp, OpenApiSchema } from '@/engine/types';
 
@@ -124,6 +126,110 @@ describe('buildRequestBody', () => {
       ok: true,
       body: { count: null },
     });
+  });
+});
+
+describe('isMultipartOp', () => {
+  test('returns true for a multipart/form-data operation', () => {
+    const op: ModuleOp = {
+      method: 'post',
+      pathTemplate: '/api/v1/files/upload',
+      operation: {
+        operationId: 'uploadFile',
+        requestBody: {
+          content: {
+            'multipart/form-data': {
+              schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } },
+            },
+          },
+        },
+      },
+    };
+    expect(isMultipartOp(op)).toBe(true);
+  });
+
+  test('returns false for an application/json operation', () => {
+    const op: ModuleOp = {
+      method: 'post',
+      pathTemplate: '/api/v1/agents',
+      operation: {
+        operationId: 'createAgent',
+        requestBody: {
+          content: { 'application/json': { schema: { type: 'object' } } },
+        },
+      },
+    };
+    expect(isMultipartOp(op)).toBe(false);
+  });
+
+  test('returns false for undefined', () => {
+    expect(isMultipartOp(undefined)).toBe(false);
+  });
+});
+
+describe('getOpRequestSchema (multipart)', () => {
+  test('resolves the schema from a multipart/form-data operation', () => {
+    const op: ModuleOp = {
+      method: 'post',
+      pathTemplate: '/api/v1/files/upload',
+      operation: {
+        operationId: 'uploadFile',
+        requestBody: {
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: { file: { type: 'string', format: 'binary' } },
+              },
+            },
+          },
+        },
+      },
+    };
+    const schema = getOpRequestSchema(op, testSpec);
+    expect(schema?.properties?.file?.format).toBe('binary');
+  });
+});
+
+describe('buildMultipartFormData', () => {
+  const schema: OpenApiSchema = {
+    type: 'object',
+    required: ['file'],
+    properties: {
+      file: { type: 'string', format: 'binary' },
+      prefix: { type: 'string' },
+      project_id: { type: 'string' },
+    },
+  };
+
+  test('appends File objects for binary fields', () => {
+    const file = new File(['hello'], 'test.txt', { type: 'text/plain' });
+    const fd = buildMultipartFormData({}, { file }, schema);
+    expect(fd.get('file')).toBe(file);
+  });
+
+  test('appends string values for non-binary fields', () => {
+    const file = new File(['data'], 'data.bin');
+    const fd = buildMultipartFormData(
+      { prefix: '/images', project_id: 'prj_1' },
+      { file },
+      schema
+    );
+    expect(fd.get('prefix')).toBe('/images');
+    expect(fd.get('project_id')).toBe('prj_1');
+  });
+
+  test('omits empty optional string fields', () => {
+    const file = new File(['data'], 'data.bin');
+    const fd = buildMultipartFormData({ prefix: '', project_id: '' }, { file }, schema);
+    expect(fd.get('prefix')).toBeNull();
+    expect(fd.get('project_id')).toBeNull();
+  });
+
+  test('omits missing binary fields', () => {
+    const fd = buildMultipartFormData({ prefix: '/docs' }, {}, schema);
+    expect(fd.get('file')).toBeNull();
+    expect(fd.get('prefix')).toBe('/docs');
   });
 });
 

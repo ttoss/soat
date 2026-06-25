@@ -241,6 +241,56 @@ export const testSpec: OpenApiSpec = {
     '/api/v1/tools/{tool_id}': {
       get: { operationId: 'getTool', tags: ['Tools'] },
     },
+    '/api/v1/files': {
+      get: { operationId: 'listFiles', tags: ['Files'], summary: 'List files' },
+    },
+    '/api/v1/files/{file_id}': {
+      get: { operationId: 'getFile', tags: ['Files'] },
+      delete: { operationId: 'deleteFile', tags: ['Files'] },
+    },
+    '/api/v1/files/upload': {
+      post: {
+        operationId: 'uploadFile',
+        tags: ['Files'],
+        summary: 'Upload a file',
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                required: ['file'],
+                properties: {
+                  file: {
+                    type: 'string',
+                    format: 'binary',
+                    description: 'File content',
+                  },
+                  project_id: {
+                    type: 'string',
+                    'x-soat-ref': 'projects',
+                    description: 'Project ID',
+                  },
+                  prefix: {
+                    type: 'string',
+                    description: 'Directory prefix',
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '201': {
+            content: {
+              'application/json': {
+                schema: { type: 'object' },
+              },
+            },
+          },
+        },
+      },
+    },
     '/api/v1/projects/{project_id}/api-keys': {
       get: {
         operationId: 'listApiKeys',

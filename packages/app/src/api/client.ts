@@ -33,6 +33,37 @@ const extractError = (errorBody: unknown, status: number): ApiError => {
   return { message: `HTTP ${status}` };
 };
 
+export const apiFetchMultipart = async <T>(args: {
+  url: string;
+  formData: FormData;
+  token: string;
+}): Promise<ApiResult<T>> => {
+  const baseUrl = apiBaseUrl() ?? '';
+  const fullUrl = args.url.startsWith('http')
+    ? args.url
+    : `${baseUrl}${args.url}`;
+  const response = await fetch(fullUrl, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${args.token}` },
+    body: args.formData,
+  });
+  const text = await response.text();
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = text;
+  }
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: extractError(body, response.status),
+    };
+  }
+  return { ok: true, data: body as T };
+};
+
 export const apiFetch = async <T>(args: {
   url: string;
   method?: string;
