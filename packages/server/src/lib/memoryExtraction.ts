@@ -214,7 +214,7 @@ const writeCandidates = async (args: {
       const result = await writeMemoryEntry({
         memoryId: args.memoryId,
         content,
-        source: 'extraction',
+        sourceType: 'extraction',
       });
       summary[result.action] += 1;
     } catch (error) {

@@ -47,7 +47,7 @@ A webhook is scoped to a project. When you create a webhook you specify a URL an
 | `status_code`     | number \| null                     | HTTP response status code                  |
 | `attempts`        | number                             | Number of delivery attempts made           |
 | `last_attempt_at` | string \| null                     | Timestamp of the most recent attempt       |
-| `response_body`   | string \| null                     | Truncated response body from the receiver  |
+| `response_body`   | string \| null                     | Response body returned by the receiver      |
 | `created_at`      | string                             | ISO 8601 creation timestamp                |
 | `updated_at`      | string                             | ISO 8601 last-updated timestamp            |
 

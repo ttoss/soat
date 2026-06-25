@@ -78,7 +78,7 @@ paths:
                   type: string
                   description: The text content of the memory entry
                   example: The customer prefers email communication over phone calls
-                source:
+                source_type:
                   type: string
                   enum: [manual, agent, extraction]
                   description: How this entry was created
@@ -233,7 +233,7 @@ components:
         content:
           type: string
           example: The customer prefers email communication over phone calls
-        source:
+        source_type:
           type: string
           enum: [manual, agent, extraction]
           example: manual

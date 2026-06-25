@@ -69,7 +69,7 @@ export type QueryDocumentResult = {
   tags?: Record<string, string>;
   content: string | null;
   page?: number;
-  score?: number;
+  similarityScore?: number;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -89,7 +89,7 @@ export type KnowledgeResult =
       tags?: Record<string, string>;
       content: string | null;
       page?: number;
-      score?: number;
+      similarityScore?: number;
       createdAt: Date;
       updatedAt: Date;
     }
@@ -185,7 +185,7 @@ const mapChunkResult = (
 ): QueryDocumentResult => {
   const doc = chunk.document;
   const base = doc ? mapDocument(doc) : null;
-  const score = computeChunkScore(chunk, config);
+  const similarityScore = computeChunkScore(chunk, config);
 
   return {
     id: doc ? doc.publicId : '',
@@ -193,7 +193,7 @@ const mapChunkResult = (
     ...pickDocumentFields(base),
     content: chunk.content,
     page: chunk.pageNumber ?? undefined,
-    score,
+    similarityScore,
     createdAt: chunk.createdAt,
     updatedAt: chunk.updatedAt,
   };
@@ -303,7 +303,7 @@ export const resolveDocumentSearch = async (args: {
   if (!config.search || config.minScore === undefined) return mapped;
   const minScore = config.minScore;
   return mapped.filter((r) => {
-    return (r.score ?? -1) >= minScore;
+    return (r.similarityScore ?? -1) >= minScore;
   });
 };
 
@@ -381,7 +381,7 @@ export const searchKnowledge = async (
       tags: doc.tags,
       content: doc.content,
       page: doc.page,
-      score: doc.score,
+      similarityScore: doc.similarityScore,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     };
@@ -391,8 +391,8 @@ export const searchKnowledge = async (
 
   if (args.query) {
     allResults.sort((a, b) => {
-      const aScore = a.score ?? 0;
-      const bScore = b.score ?? 0;
+      const aScore = a.similarityScore ?? 0;
+      const bScore = b.similarityScore ?? 0;
       return bScore - aScore;
     });
   }

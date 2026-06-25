@@ -104,7 +104,7 @@ export const memoryEntriesFormationModule: FormationModule = {
     const result = await createMemoryEntry({
       memoryId,
       content: properties.content as string,
-      source: toOptionalString(properties.source) as
+      sourceType: toOptionalString(properties.source_type) as
         | 'manual'
         | 'agent'
         | undefined,
@@ -162,7 +162,7 @@ export const memoryEntriesFormationModule: FormationModule = {
       return {
         memory_id: entry.memoryId,
         content: entry.content,
-        source: entry.source,
+        source_type: entry.sourceType,
       };
     } catch {
       return null;

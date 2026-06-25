@@ -197,7 +197,7 @@ components:
           type: string
           nullable: true
           description: Full text content of the document
-        score:
+        similarity_score:
           type: number
           description: Semantic similarity score (0–1). Only present when `query` was provided.
           minimum: 0
@@ -244,7 +244,7 @@ components:
         content:
           type: string
           description: Text content of the memory entry
-        score:
+        similarity_score:
           type: number
           description: Semantic similarity score (0–1). Only present when `query` was provided.
           minimum: 0

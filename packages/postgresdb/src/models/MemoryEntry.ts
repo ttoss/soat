@@ -53,7 +53,7 @@ export class MemoryEntry extends Model {
     allowNull: false,
     defaultValue: 'manual',
   })
-  declare source: MemoryEntrySource;
+  declare sourceType: MemoryEntrySource;
 
   @Column({
     type: DataType.VECTOR(

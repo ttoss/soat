@@ -871,10 +871,11 @@ components:
         content:
           type: string
           description: Text content of the memory entry
-        source:
+        source_type:
           type: string
+          enum: [manual, agent, extraction]
           nullable: true
-          description: Origin label (e.g. manual, document, import)
+          description: How this entry was created (defaults to manual)
 
     WebhookResourceProperties:
       description: >-

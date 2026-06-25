@@ -197,7 +197,7 @@ describe('formationsResourceHandlers', () => {
           resolvedProperties: {
             memory_id: 'mem_public',
             content: 'Remember this',
-            source: 'manual',
+            source_type: 'manual',
           },
         })
       ).resolves.toBe('me_1');
@@ -287,7 +287,7 @@ describe('formationsResourceHandlers', () => {
       expect(mockCreateMemoryEntry).toHaveBeenCalledWith({
         memoryId: 7,
         content: 'Remember this',
-        source: 'manual',
+        sourceType: 'manual',
       });
       expect(mockCreateWebhook).toHaveBeenCalledWith({
         projectId: 1,
@@ -376,7 +376,7 @@ describe('formationsResourceHandlers', () => {
         publicId: 'men_1',
         memoryId: 1,
         content: 'old content',
-        source: 'manual',
+        sourceType: 'manual',
       });
       const entrySave = jest
         .spyOn(memoryEntryInstance, 'save')

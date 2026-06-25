@@ -129,7 +129,7 @@ export const buildWriteMemoryTool = (args: { writeMemoryId: string }): Tool => {
       const result = await writeMemoryEntry({
         memoryId: memory.id as number,
         content,
-        source: 'agent',
+        sourceType: 'agent',
       });
       return { action: result.action, entryId: result.entry.id };
     },

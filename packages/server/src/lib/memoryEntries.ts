@@ -12,7 +12,7 @@ const mapMemoryEntry = (
     id: instance.publicId,
     memoryId: instance.memory?.publicId,
     content: instance.content,
-    source: instance.source,
+    sourceType: instance.sourceType,
     createdAt: instance.createdAt,
     updatedAt: instance.updatedAt,
   };
@@ -82,7 +82,7 @@ const mergeAndUpdateEntry = async (args: {
 export const writeMemoryEntry = async (args: {
   memoryId: number;
   content: string;
-  source?: MemoryEntrySource;
+  sourceType?: MemoryEntrySource;
   duplicateThreshold?: number;
   updateThreshold?: number;
 }): Promise<{
@@ -134,7 +134,7 @@ export const writeMemoryEntry = async (args: {
   const entry = await db.MemoryEntry.create({
     memoryId: args.memoryId,
     content: args.content,
-    source: args.source ?? 'manual',
+    sourceType: args.sourceType ?? 'manual',
     embedding,
   });
 
@@ -149,7 +149,7 @@ export const writeMemoryEntry = async (args: {
 export const createMemoryEntry = async (args: {
   memoryId: number;
   content: string;
-  source?: MemoryEntrySource;
+  sourceType?: MemoryEntrySource;
 }) => {
   let embedding: number[] | null = null;
 
@@ -162,7 +162,7 @@ export const createMemoryEntry = async (args: {
   const entry = await db.MemoryEntry.create({
     memoryId: args.memoryId,
     content: args.content,
-    source: args.source ?? 'manual',
+    sourceType: args.sourceType ?? 'manual',
     embedding,
   });
 

@@ -17,7 +17,7 @@ export type MemoryKnowledgeResult = {
   memoryId: string;
   memoryName: string;
   content: string;
-  score?: number;
+  similarityScore?: number;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -100,7 +100,7 @@ const resolveMemorySearchBySemantic = async (args: {
       memoryId: memory.publicId,
       memoryName: memory.name,
       content: entry.content,
-      score: 1 - distance,
+      similarityScore: 1 - distance,
       createdAt: entry.createdAt,
       updatedAt: entry.updatedAt,
     };
@@ -108,7 +108,7 @@ const resolveMemorySearchBySemantic = async (args: {
   if (args.minScore === undefined) return results;
   const { minScore } = args;
   return results.filter((r) => {
-    return (r.score ?? 0) >= minScore;
+    return (r.similarityScore ?? 0) >= minScore;
   });
 };
 

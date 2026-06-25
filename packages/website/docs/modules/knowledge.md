@@ -28,7 +28,7 @@ A `KnowledgeResult` is a discriminated union on `source_type`. All results share
 | ------------- | -------------------------- | -------------------------------------------------------- |
 | `source_type` | `"document"` \| `"memory"` | Discriminant for the knowledge source type               |
 | `content`     | `string\|null`             | Text content of the result                               |
-| `score`       | `number`                   | Relevance score (0–1); only present when `query` is used |
+| `similarity_score` | `number`              | Semantic similarity score (0–1); only present when `query` is used |
 | `created_at`  | `string`                   | ISO 8601 creation timestamp                              |
 | `updated_at`  | `string`                   | ISO 8601 last-updated timestamp                          |
 
@@ -68,7 +68,7 @@ The `POST /knowledge/search` endpoint accepts the following filters. At least on
 | `document_paths` | `string[]` | Filter document results to paths starting with these prefixes                              |
 | `document_ids`   | `string[]` | Filter document results to specific document IDs                                           |
 
-When `query` is set, results include a `score` field and are ordered by descending relevance. `min_score` and `limit` apply additional controls. For a walkthrough that passes both `memory_ids` and `document_paths` and inspects the interleaved, scored results, see [Agent with Persistent Memory — Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly).
+When `query` is set, results include a `similarity_score` field and are ordered by descending relevance. `min_score` and `limit` apply additional controls. For a walkthrough that passes both `memory_ids` and `document_paths` and inspects the interleaved, scored results, see [Agent with Persistent Memory — Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly).
 
 `memory_ids` and `memory_tags` can be combined — the search includes entries from memories matching **either** (union semantics).
 
