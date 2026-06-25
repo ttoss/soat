@@ -12,7 +12,7 @@ Add a **poll** node (call a tool on an interval until a JSON Logic exit conditio
 | `delay` node — type / dispatch / validation | ✅ Implemented | `'delay'` in `OrchestratorNodeType`; dispatch case in `orchestrationExecutors.ts`; `REQUIRED_NODE_FIELDS.delay = 'duration'` |
 | `delay` node — OpenAPI | ✅ Implemented | `duration` property + `delay` enum value; description now covers the suffix form |
 | `delay` node — docs | ✅ Done | Node-type table in `modules/orchestrations.md` now lists `delay`, `loop`, `webhook`, `sub_orchestration` (previously undocumented) |
-| `delay` / `poll` — friendly duration | ✅ Implemented | Shared `parseDuration` in `orchestrationDuration.ts` accepts suffix form + ISO 8601 |
+| `delay` / `poll` — friendly duration | ✅ Implemented | Shared `parseDuration` in `orchestrationNodeExecutors.ts` accepts suffix form + ISO 8601 |
 | `delay` node — dynamic duration | ❌ Not started | `duration` is a static string today; reading it from state via `input_mapping` is a deferred enhancement |
 | `poll` node — type | ✅ Implemented | `'poll'` in `OrchestratorNodeType`; `interval` + `failOnTimeout` on `OrchestrationNode` |
 | `poll` node — executor | ✅ Implemented | `executePollNode` in `orchestrationPollNode.ts`: `callTool` → evaluate exit condition against `{...state, response, attempt}` → wait `interval` → repeat, bounded by `maxIterations` (default 10, ceiling 1000) + 10-min wall-clock |

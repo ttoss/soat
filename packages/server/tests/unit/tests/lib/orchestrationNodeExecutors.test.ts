@@ -1,5 +1,4 @@
 import { DomainError } from 'src/errors';
-import { parseDuration } from 'src/lib/orchestrationDuration';
 import {
   applyInputMapping,
   applyOutputMapping,
@@ -13,6 +12,7 @@ import {
   executeToolNode,
   executeTransformNode,
   executeWebhookNode,
+  parseDuration,
 } from 'src/lib/orchestrationNodeExecutors';
 import { executePollNode } from 'src/lib/orchestrationPollNode';
 import type { OrchestrationNode } from 'src/lib/orchestrations';
@@ -337,6 +337,42 @@ describe('executeToolNode', () => {
         projectIds: [1],
       })
     ).rejects.toThrow(DomainError);
+  });
+
+  test('returns an object tool result as the artifact', async () => {
+    const spy = jest
+      .spyOn(toolsModule, 'callTool')
+      .mockResolvedValue({ ok: true, value: 7 });
+    try {
+      const result = await executeToolNode({
+        node: makeNode({ type: 'tool', toolId: 'tool_x' }),
+        state: {},
+        projectIds: [1],
+      });
+      expect(result).toEqual({
+        kind: 'artifact',
+        artifact: { ok: true, value: 7 },
+      });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('wraps a primitive tool result under a result key', async () => {
+    const spy = jest.spyOn(toolsModule, 'callTool').mockResolvedValue('done');
+    try {
+      const result = await executeToolNode({
+        node: makeNode({ type: 'tool', toolId: 'tool_x' }),
+        state: {},
+        projectIds: [1],
+      });
+      expect(result).toEqual({
+        kind: 'artifact',
+        artifact: { result: 'done' },
+      });
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
