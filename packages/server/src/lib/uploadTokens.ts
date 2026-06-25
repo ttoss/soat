@@ -16,16 +16,23 @@ const UPLOAD_TOKEN_TTL_MS = 15 * 60 * 1000;
  */
 export const createUploadToken = async (args: {
   projectId: number;
+  filename?: string;
   contentType?: string;
   path?: string;
   ttlMs?: number;
 }) => {
-  log('createUploadToken: projectId=%d path=%s', args.projectId, args.path);
+  log(
+    'createUploadToken: projectId=%d filename=%s path=%s',
+    args.projectId,
+    args.filename,
+    args.path
+  );
 
   const expiresAt = new Date(Date.now() + (args.ttlMs ?? UPLOAD_TOKEN_TTL_MS));
 
   const token = await db.UploadToken.create({
     projectId: args.projectId,
+    filename: args.filename,
     contentType: args.contentType,
     path: args.path !== undefined ? normalizePath(args.path) : null,
     expiresAt,
@@ -81,6 +88,7 @@ export const consumeUploadToken = async (args: { token: string }) => {
   return {
     projectId: token.projectId,
     projectPublicId: token.project?.publicId,
+    filename: token.filename,
     contentType: token.contentType,
     path: token.path ?? undefined,
   };

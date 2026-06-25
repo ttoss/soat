@@ -96,6 +96,7 @@ export const filesFormationModule: FormationModule = {
     const result = await createFile({
       projectId,
       path: toOptionalString(properties.path) ?? undefined,
+      filename: toOptionalString(properties.filename) ?? undefined,
       contentType: toOptionalString(properties.content_type) ?? undefined,
       size: typeof properties.size === 'number' ? properties.size : undefined,
       metadata: toOptionalString(properties.metadata) ?? undefined,
@@ -126,6 +127,7 @@ export const filesFormationModule: FormationModule = {
     await updateFileMetadata({
       id: physicalResourceId,
       path: toOptionalString(properties.path) ?? undefined,
+      filename: toOptionalString(properties.filename) ?? undefined,
       metadata: toOptionalString(properties.metadata) ?? undefined,
     });
 
@@ -143,6 +145,7 @@ export const filesFormationModule: FormationModule = {
       if (!file) return null;
       return {
         path: file.path,
+        filename: file.filename,
         content_type: file.contentType,
         size: file.size,
         metadata: file.metadata,

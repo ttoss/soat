@@ -610,22 +610,33 @@ describe('Files', () => {
       expect(response.body.storage_path).toBeUndefined();
     });
 
-    test('ignores client-supplied storage and filename fields', async () => {
+    test('keeps filename decoupled from path and ignores storage fields', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/files')
         .send({
           project_id: projectId,
-          path: '/ignored-inputs.txt',
-          filename: 'attacker-name.txt',
+          path: '/keyed/q1.pdf',
+          filename: 'Original Report.pdf',
           storage_type: 'gcs',
           storage_path: '/attacker/controlled/path.txt',
         });
 
       expect(response.status).toBe(201);
-      // path is the only locator: filename follows it, storage stays internal.
-      expect(response.body.filename).toBe('ignored-inputs.txt');
+      // path is the key; filename is the original/download name (may differ);
+      // storage stays internal.
+      expect(response.body.path).toBe('/keyed/q1.pdf');
+      expect(response.body.filename).toBe('Original Report.pdf');
       expect(response.body.storage_type).toBeUndefined();
       expect(response.body.storage_path).toBeUndefined();
+    });
+
+    test('derives filename from path when filename is omitted', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/files')
+        .send({ project_id: projectId, path: '/derived/report.pdf' });
+
+      expect(response.status).toBe(201);
+      expect(response.body.filename).toBe('report.pdf');
     });
 
     test('returns 401 for unauthenticated create request', async () => {
@@ -664,7 +675,7 @@ describe('Files', () => {
     });
   });
 
-  describe('PATCH /api/v1/files/:id/metadata - rename via path', () => {
+  describe('PATCH /api/v1/files/:id/metadata - rename & move', () => {
     let fileId: string;
 
     beforeAll(async () => {
@@ -679,30 +690,40 @@ describe('Files', () => {
       fileId = res.body.id;
     });
 
-    test('renaming changes the path and the derived filename', async () => {
+    test('moving the file via path keeps the original filename', async () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/files/${fileId}/metadata`)
-        .send({ path: '/renamed-file.txt' });
+        .send({ path: '/moved/original-name.txt' });
 
       expect(response.status).toBe(200);
-      expect(response.body.path).toBe('/renamed-file.txt');
-      expect(response.body.filename).toBe('renamed-file.txt');
+      expect(response.body.path).toBe('/moved/original-name.txt');
+      // Moving the key does not change the original/download name.
+      expect(response.body.filename).toBe('original-name.txt');
     });
 
-    test('user can update both path and metadata', async () => {
+    test('renaming the download name via filename leaves the key', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/files/${fileId}/metadata`)
+        .send({ filename: 'friendly-name.txt' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.path).toBe('/moved/original-name.txt');
+      expect(response.body.filename).toBe('friendly-name.txt');
+    });
+
+    test('user can update path and metadata together', async () => {
       const newMetadata = JSON.stringify({ version: 3 });
 
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/files/${fileId}/metadata`)
-        .send({ path: '/reports/both-updated.txt', metadata: newMetadata });
+        .send({ path: '/reports/final.txt', metadata: newMetadata });
 
       expect(response.status).toBe(200);
-      expect(response.body.path).toBe('/reports/both-updated.txt');
-      expect(response.body.filename).toBe('both-updated.txt');
+      expect(response.body.path).toBe('/reports/final.txt');
       expect(response.body.metadata).toBe(newMetadata);
     });
 
-    test('renaming to an existing path returns 409', async () => {
+    test('moving to an existing path returns 409', async () => {
       // Seed another file to collide with.
       await authenticatedTestClient(userToken)
         .post('/api/v1/files')

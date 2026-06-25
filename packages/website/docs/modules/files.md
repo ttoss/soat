@@ -22,8 +22,8 @@ Files are associated with a project and stored on the server's local filesystem.
 | Field          | Type                     | Description                                                                                                         |
 | -------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
 | `id`           | string                   | Public identifier                                                                                                   |
-| `path`         | string \| null           | Logical path within the project — the file's **key** (e.g. `/assets/logo.png`). Its identity; also the resource ID segment in path-based SRNs. |
-| `filename`     | string                   | Read-only. Download name, derived from the last segment of `path`. Not accepted as input.                           |
+| `path`         | string \| null           | Logical path within the project — the file's **key** (e.g. `/assets/logo.png`). Its identity; also the resource ID segment in path-based SRNs. Optional on write (defaults to `/` + `filename`). |
+| `filename`     | string                   | Original / download name (used for `Content-Disposition`). Optional on write; defaults to the last segment of `path`. Decoupled from the key, so it can differ. |
 | `content_type` | string                   | MIME type                                                                                                           |
 | `size`         | number                   | File size in bytes                                                                                                  |
 | `metadata`     | string                   | Arbitrary JSON string for custom metadata                                                                           |
@@ -31,7 +31,7 @@ Files are associated with a project and stored on the server's local filesystem.
 | `created_at`   | string                   | ISO 8601 creation timestamp                                                                                         |
 | `updated_at`   | string                   | ISO 8601 last-updated timestamp                                                                                     |
 
-`path` is the file's key: a logical, project-scoped identifier similar to an S3 object key. It must be absolute (start with `/`) and is normalized at write time. The combination of `project_id + path` is unique within a project. The `filename` is always the last segment of `path` (e.g. `/assets/logo.png` → `logo.png`); to rename a file, change its `path`. Storage backend selection (`local`/`s3`/`gcs`) and the physical on-disk location are system-managed and not exposed through the API — see [Configuration](#configuration).
+`path` is the file's key: a logical, project-scoped identifier similar to an S3 object key. It must be absolute (start with `/`) and is normalized at write time. The combination of `project_id + path` is unique within a project. `path` is optional on write — when omitted it defaults to `/` + `filename` (the project root). `filename` is the original / download name (the `Content-Disposition` name); it is optional and defaults to the last segment of `path`, but may be set independently to preserve an uploaded file's original name even when the key differs. To **move** a file, change its `path`; to **rename the download name**, change its `filename`. Storage backend selection (`local`/`s3`/`gcs`) and the physical on-disk location are system-managed and not exposed through the API — see [Configuration](#configuration).
 
 ## Key Concepts
 

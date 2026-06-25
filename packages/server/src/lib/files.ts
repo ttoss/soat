@@ -65,11 +65,12 @@ export const filenameFromPath = (p: string | null): string | undefined => {
 const mapFile = (file: InstanceType<(typeof db)['File']>) => {
   return {
     id: file.publicId,
-    // `path` is the file's key (its identity). `filename` is derived from it
-    // (the last path segment) and is read-only. storageType / storagePath are
-    // system-managed internals and are not exposed through the API.
+    // `path` is the file's key (its identity). `filename` is the original /
+    // download name — preserved as stored, falling back to the last path
+    // segment. storageType / storagePath are system-managed internals and are
+    // not exposed through the API.
     path: file.path ?? undefined,
-    filename: filenameFromPath(file.path) ?? file.filename,
+    filename: file.filename ?? filenameFromPath(file.path),
     contentType: file.contentType,
     size: file.size,
     metadata: file.metadata,
@@ -146,9 +147,9 @@ export const uploadFile = async (args: {
   projectPublicId?: string;
   fileBuffer: Buffer;
   path?: string;
-  /** The uploaded file's original name — used only to default the path when
-   * `path` is omitted. The stored filename is always derived from the path. */
-  originalName?: string;
+  /** The original filename (download name). Also used to default the path to
+   * `/<filename>` (project root) when `path` is omitted. */
+  filename?: string;
   contentType?: string;
   metadata?: string;
 }) => {
@@ -157,11 +158,11 @@ export const uploadFile = async (args: {
   const normalizedPath =
     args.path !== undefined
       ? normalizePath(args.path)
-      : args.originalName
-        ? normalizePath(args.originalName)
+      : args.filename
+        ? normalizePath(args.filename)
         : null;
 
-  const filename = filenameFromPath(normalizedPath) ?? args.originalName;
+  const filename = args.filename ?? filenameFromPath(normalizedPath);
 
   const projectPublicId =
     args.projectPublicId ??
@@ -278,7 +279,7 @@ export const downloadFile = async (args: { id: string }) => {
 
   return {
     stream: fs.createReadStream(file.storagePath),
-    filename: filenameFromPath(file.path) ?? file.filename,
+    filename: file.filename ?? filenameFromPath(file.path),
     contentType: file.contentType,
     size: file.size,
   };
@@ -287,9 +288,10 @@ export const downloadFile = async (args: { id: string }) => {
 export const updateFileMetadata = async (args: {
   id: string;
   metadata?: string;
-  /** New logical path (key). Renaming a file means moving its key; the
-   * filename follows the new path's last segment. */
+  /** New logical path (key) — moves the file. Must be unique in the project. */
   path?: string;
+  /** New original / download name (does not change the key). */
+  filename?: string;
 }) => {
   const file = await db.File.findOne({ where: { publicId: args.id } });
 
@@ -302,9 +304,10 @@ export const updateFileMetadata = async (args: {
     updates.metadata = args.metadata;
   }
   if (args.path !== undefined) {
-    const normalizedPath = normalizePath(args.path);
-    updates.path = normalizedPath;
-    updates.filename = filenameFromPath(normalizedPath);
+    updates.path = normalizePath(args.path);
+  }
+  if (args.filename !== undefined) {
+    updates.filename = args.filename;
   }
 
   try {
@@ -343,20 +346,26 @@ export const updateFileMetadata = async (args: {
 export const createFile = async (args: {
   projectId: number;
   path?: string;
+  filename?: string;
   contentType?: string;
   size?: number;
   metadata?: string;
 }) => {
+  // `path` is the file's key. When omitted it defaults to `/<filename>`
+  // (project root). `filename` is the original / download name and defaults to
+  // the last path segment. Storage backend is system-managed (see
+  // FILES_STORAGE_DIR); a metadata-only record uses local storage with an
+  // empty storagePath, filled in when bytes are uploaded.
   const normalizedPath =
-    args.path !== undefined ? normalizePath(args.path) : null;
-  // `path` is the file's key; `filename` is derived from it (its last segment).
-  // Storage backend is system-managed (see FILES_STORAGE_DIR), not chosen by
-  // the caller. A metadata-only record defaults to local storage with an empty
-  // storagePath; the path is filled in when bytes are uploaded.
+    args.path !== undefined
+      ? normalizePath(args.path)
+      : args.filename
+        ? normalizePath(args.filename)
+        : null;
   const file = await db.File.create({
     projectId: args.projectId,
     path: normalizedPath,
-    filename: filenameFromPath(normalizedPath),
+    filename: args.filename ?? filenameFromPath(normalizedPath),
     contentType: args.contentType,
     size: args.size,
     metadata: args.metadata,

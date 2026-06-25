@@ -92,8 +92,12 @@ paths:
                   example: 'proj_V1StGXR8Z5jdHi6B'
                 path:
                   type: string
-                  description: Logical path within the project — the file's key (e.g. /images/logo.png). Unique per project; used as the file's identity and in policy SRNs. The filename is derived from its last segment.
+                  description: Logical path within the project — the file's key (e.g. /images/logo.png). Unique per project; used as the file's identity and in policy SRNs. Optional; defaults to a root path built from the filename.
                   example: '/images/logo.png'
+                filename:
+                  type: string
+                  description: Original / download name. Optional; defaults to the last segment of path.
+                  example: 'logo.png'
                 content_type:
                   type: string
                   description: MIME type of the file
@@ -430,8 +434,12 @@ paths:
                   example: '{"author":"Jane","tags":["report"]}'
                 path:
                   type: string
-                  description: New logical path (key) for the file. Renaming moves the key; the filename follows the new path's last segment. Must be unique within the project.
+                  description: New logical path (key) for the file — moves the file. Must be unique within the project.
                   example: '/reports/renamed-file.txt'
+                filename:
+                  type: string
+                  description: New original / download name. Does not change the key.
+                  example: 'renamed-file.txt'
       responses:
         '200':
           description: Metadata updated successfully
@@ -636,8 +644,12 @@ components:
           example: 'SGVsbG8gV29ybGQ='
         path:
           type: string
-          description: Logical path within the project — the file's key (e.g. /documents/document.txt). The filename is derived from its last segment.
+          description: Logical path within the project — the file's key (e.g. /documents/document.txt). Optional; defaults to a root path built from the filename.
           example: '/documents/document.txt'
+        filename:
+          type: string
+          description: Original / download name. Optional; defaults to the last segment of path.
+          example: 'document.txt'
         content_type:
           type: string
           description: MIME type of the file
@@ -656,6 +668,10 @@ components:
           type: string
           description: Public ID of the project
           example: 'proj_V1StGXR8Z5jdHi6B'
+        filename:
+          type: string
+          description: Original / download name. Optional; defaults to the last segment of path.
+          example: 'report.pdf'
         content_type:
           type: string
           description: MIME type of the file to be uploaded
@@ -688,6 +704,10 @@ components:
           type: string
           description: Base64-encoded file content
           example: 'SGVsbG8gV29ybGQ='
+        filename:
+          type: string
+          description: Original / download name (overrides the token's filename)
+          example: 'document.txt'
         content_type:
           type: string
           description: MIME type of the file (overrides the token's content type)
@@ -711,8 +731,7 @@ components:
           example: '/images/logo.png'
         filename:
           type: string
-          readOnly: true
-          description: Download name, derived from the last segment of `path`. Read-only.
+          description: Original / download name. Defaults to the last segment of `path` when not provided.
           example: 'logo.png'
         contentType:
           type: string

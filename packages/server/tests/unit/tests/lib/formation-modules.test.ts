@@ -477,11 +477,11 @@ describe('filesFormationModule', () => {
       })
     ).resolves.toBe('file_1');
 
-    // path is the only locator; filename is derived and storage is
-    // system-managed — neither is forwarded to createFile.
+    // storage is system-managed and is not forwarded to createFile.
     expect(mockCreateFile).toHaveBeenCalledWith({
       projectId: 5,
       path: '/file.txt',
+      filename: undefined,
       contentType: undefined,
       size: undefined,
       metadata: undefined,
@@ -527,6 +527,7 @@ describe('filesFormationModule', () => {
     expect(mockUpdateFileMetadata).toHaveBeenCalledWith({
       id: 'file_1',
       path: '/new.txt',
+      filename: undefined,
       metadata: undefined,
     });
   });
