@@ -76,16 +76,18 @@ Policies can target files by their logical `path` rather than their `id`. When a
 
 The list endpoint applies policy filters at the SQL level — the database returns only rows the caller is permitted to see. See [IAM](./iam.md) for full SRN syntax and policy authoring guidance, or walk through scoping a read-only policy to files in [Permissions in Practice - Step 7 (Verify permissions with file operations)](/docs/tutorials/permissions#step-7--verify-permissions).
 
-### Upload Tokens (large files via MCP)
+### Upload Tokens (decoupled uploads)
 
-The `upload-file-base64` flow requires the full base64 content as a single request field. When an agent uploads through MCP, payloads larger than ~100 KB are truncated before they reach the tool call, so large files cannot be uploaded that way.
+Upload tokens provide a two-step upload flow — the local-storage equivalent of an S3 presigned URL — usable from any client (SDK, CLI, curl, or an MCP agent):
 
-Upload tokens solve this with a two-step flow — the local-storage equivalent of an S3 presigned URL:
-
-1. **Request a token** — `POST /api/v1/files/upload-token` (the `create-upload-token` MCP tool) returns a single-use `upload_token`, a relative `upload_url`, and an `expires_at` (15-minute lifetime).
+1. **Request a token** — `POST /api/v1/files/upload-token` returns a single-use `upload_token`, a relative `upload_url`, and an `expires_at` (15-minute lifetime). This step is authenticated and requires `files:UploadFile`.
 2. **Upload the content** — `POST /api/v1/files/upload/{token}` writes the file and returns the standard file record. This endpoint requires **no bearer credential** — the token is the credential — and accepts either `multipart/form-data` (field `file`) or JSON with a base64 `content` field.
 
-Only step 1 is exposed as an MCP tool; the upload itself happens over plain HTTP, bypassing the MCP payload limit entirely. The token is invalidated after a single successful upload. Subsequent uploads return `409`; expired tokens return `410`; unknown tokens return `404`.
+Because the two steps are decoupled, the party that authorizes the upload (step 1) need not be the party that transfers the bytes (step 2) — the token can be handed to a browser, a worker, or a CLI to complete the upload directly over HTTP.
+
+**Large files via MCP.** This flow is what makes large uploads possible through MCP. The `upload-file-base64` tool requires the full base64 content as a single tool-call parameter, and payloads larger than ~100 KB are truncated before they reach the agent's tool call. With upload tokens, only step 1 is exposed as the `create-upload-token` MCP tool; the agent (or its client) then performs step 2 over plain HTTP, bypassing the MCP payload limit entirely.
+
+The token is invalidated after a single successful upload. Subsequent uploads return `409`; expired tokens return `410`; unknown tokens return `404`.
 
 ## Configuration
 
@@ -159,7 +161,7 @@ curl -X POST https://api.example.com/api/v1/files/upload-base64 \
 </TabItem>
 </Tabs>
 
-### Upload a large file via an upload token
+### Upload a file via an upload token
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
