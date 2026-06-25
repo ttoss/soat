@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.4](https://github.com/ttoss/soat/compare/v0.13.3...v0.13.4) (2026-06-25)
+
+### Features
+
+* improve debate round visibility and trace generation embedding ([#259](https://github.com/ttoss/soat/issues/259)) ([b5fdbff](https://github.com/ttoss/soat/commit/b5fdbffd1ca83e6e43909bb4578747fb0eb2f81b))
+* tighten weak/inconsistent REST field names ([#263](https://github.com/ttoss/soat/issues/263)) ([e5a3e84](https://github.com/ttoss/soat/commit/e5a3e84a))
+
+### BREAKING CHANGES
+
+* `Knowledge` search results expose `similarity_score` instead of `score`, and `MemoryEntry` exposes `source_type` instead of `source`. Generated types and operations are updated accordingly ([#263](https://github.com/ttoss/soat/issues/263)).
+
 ## [0.13.3](https://github.com/ttoss/soat/compare/v0.13.2...v0.13.3) (2026-06-24)
 
 **Note:** Version bump only for package @soat/sdk

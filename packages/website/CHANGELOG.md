@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.4](https://127.0.0.1/41729/git/ttoss/compare/v0.13.3...v0.13.4) (2026-06-25)
+
+### Features
+
+* add pipeline tool type for deterministic multi-step tool sequences ([#260](https://127.0.0.1/41729/git/ttoss/issues/260)) ([4a90872](https://127.0.0.1/41729/git/ttoss/commits/4a90872bcd7b073b663155c6a4be60e65d23cdbb))
+* improve debate round visibility and trace generation embedding ([#259](https://127.0.0.1/41729/git/ttoss/issues/259)) ([b5fdbff](https://127.0.0.1/41729/git/ttoss/commits/b5fdbffd1ca83e6e43909bb4578747fb0eb2f81b))
+* orchestration poll node (+ friendly durations, delay docs) ([#261](https://127.0.0.1/41729/git/ttoss/issues/261)) ([823702e](https://127.0.0.1/41729/git/ttoss/commits/823702eddf05d1a56242f7d7ab3c86cf0dbb0806))
+
 ## [0.13.3](https://127.0.0.1/41729/git/ttoss/compare/v0.13.2...v0.13.3) (2026-06-24)
 
 ### Bug Fixes
