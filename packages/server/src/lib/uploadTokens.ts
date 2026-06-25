@@ -10,11 +10,11 @@ const log = createDebug('soat:upload-tokens');
 const UPLOAD_TOKEN_TTL_MS = 15 * 60 * 1000;
 
 /**
- * Creates a short-lived, single-use upload token for a project — the
+ * Creates a short-lived, single-use presigned upload URL for a project — the
  * local-storage equivalent of an S3 presigned URL. The returned token value is
  * embedded in the upload URL the client then POSTs the file content to.
  */
-export const createUploadToken = async (args: {
+export const createPresignedUrl = async (args: {
   projectId: number;
   prefix?: string;
   filename?: string;
@@ -22,7 +22,7 @@ export const createUploadToken = async (args: {
   ttlMs?: number;
 }) => {
   log(
-    'createUploadToken: projectId=%d prefix=%s filename=%s',
+    'createPresignedUrl: projectId=%d prefix=%s filename=%s',
     args.projectId,
     args.prefix,
     args.filename
@@ -40,7 +40,7 @@ export const createUploadToken = async (args: {
     expiresAt,
   });
 
-  log('createUploadToken: created token=%s', token.publicId);
+  log('createPresignedUrl: created token=%s', token.publicId);
 
   const baseUrl = process.env.SERVER_BASE_URL?.replace(/\/$/, '') ?? '';
   return {

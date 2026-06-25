@@ -207,33 +207,33 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-  /api/v1/files/upload-token:
+  /api/v1/files/presigned-url:
     post:
       tags:
         - Files
-      summary: Request a file upload token
+      summary: Create a presigned upload URL
       description: >-
-        Creates a short-lived, single-use upload token — the local-storage
-        equivalent of an S3 presigned URL. The client then uploads the file
-        content directly to the returned `upload_url` via
+        Creates a short-lived, single-use presigned upload URL — the
+        local-storage equivalent of an S3 presigned URL. The client then uploads
+        the file content directly to the returned `upload_url` via
         `POST /api/v1/files/upload/{token}`, bypassing MCP payload size limits.
         When the server is configured with `SERVER_BASE_URL`, `upload_url` is a
         fully-qualified absolute URL so MCP agents and other clients can POST to
         it without knowing the server base URL in advance.
-      operationId: createUploadToken
+      operationId: createPresignedUrl
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UploadTokenRequest'
+              $ref: '#/components/schemas/PresignedUrlRequest'
       responses:
         '201':
-          description: Upload token created successfully
+          description: Presigned URL created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UploadTokenResponse'
+                $ref: '#/components/schemas/PresignedUrlResponse'
         '400':
           description: Missing or invalid project
           content:
@@ -251,7 +251,7 @@ paths:
       summary: Upload a file using an upload token
       description: >-
         Uploads file content authorized by a single-use token from
-        `POST /api/v1/files/upload-token`. No bearer credential is required —
+        `POST /api/v1/files/presigned-url`. No bearer credential is required —
         the token is the credential. Accepts either multipart/form-data (field
         `file`) or JSON with a base64-encoded `content` field. Excluded from the
         MCP tool surface; clients call it directly over HTTP.
@@ -665,7 +665,7 @@ components:
           type: string
           description: JSON string with additional metadata
           example: '{"author":"John"}'
-    UploadTokenRequest:
+    PresignedUrlRequest:
       type: object
       required:
         - project_id
@@ -687,7 +687,7 @@ components:
           type: string
           description: MIME type of the file to be uploaded
           example: 'application/pdf'
-    UploadTokenResponse:
+    PresignedUrlResponse:
       type: object
       properties:
         upload_token:

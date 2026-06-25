@@ -5,7 +5,7 @@ import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { createFile, listFiles, uploadFile } from 'src/lib/files';
 import { compilePolicy } from 'src/lib/policyCompiler';
-import { consumeUploadToken, createUploadToken } from 'src/lib/uploadTokens';
+import { consumeUploadToken, createPresignedUrl } from 'src/lib/uploadTokens';
 
 import { registerFileAccessRoutes } from './fileAccessRoutes';
 import { checkAuth, resolveWriteProjectId } from './helpers';
@@ -198,7 +198,7 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
   ctx.body = record;
 });
 
-filesRouter.post('/files/upload-token', async (ctx: Context) => {
+filesRouter.post('/files/presigned-url', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
@@ -238,7 +238,7 @@ filesRouter.post('/files/upload-token', async (ctx: Context) => {
     return;
   }
 
-  const token = await createUploadToken({
+  const token = await createPresignedUrl({
     projectId: project.id,
     prefix: body.prefix,
     filename: body.filename,
@@ -251,7 +251,7 @@ filesRouter.post('/files/upload-token', async (ctx: Context) => {
 
 /**
  * Token-authenticated upload. No bearer credential is required — the single-use
- * token issued by POST /files/upload-token is the credential. Accepts either
+ * token issued by POST /files/presigned-url is the credential. Accepts either
  * multipart/form-data (field `file`) or JSON with a base64 `content` field.
  */
 filesRouter.post(

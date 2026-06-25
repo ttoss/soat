@@ -113,7 +113,7 @@ describe('MCP tools - happy path', () => {
 
   // ── Files ────────────────────────────────────────────────────────────────
 
-  test('create-upload-token is exposed but upload-file-with-token is excluded', async () => {
+  test('create-presigned-url is exposed but upload-file-with-token is excluded', async () => {
     const res = await listTools();
     expect(res.status).toBe(200);
     const names: string[] = (res.body.result?.tools ?? []).map(
@@ -121,7 +121,7 @@ describe('MCP tools - happy path', () => {
         return t.name;
       }
     );
-    expect(names).toContain('create-upload-token');
+    expect(names).toContain('create-presigned-url');
     expect(names).not.toContain('upload-file-with-token');
   });
 
