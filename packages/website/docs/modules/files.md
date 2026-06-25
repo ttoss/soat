@@ -85,9 +85,22 @@ Upload tokens provide a two-step upload flow — the local-storage equivalent of
 
 Because the two steps are decoupled, the party that authorizes the upload (step 1) need not be the party that transfers the bytes (step 2) — the token can be handed to a browser, a worker, or a CLI to complete the upload directly over HTTP.
 
-**Large files via MCP.** This flow is what makes large uploads possible through MCP. The `upload-file-base64` tool requires the full base64 content as a single tool-call parameter, and payloads larger than ~100 KB are truncated before they reach the agent's tool call. With upload tokens, only step 1 is exposed as the `create-upload-token` MCP tool; the agent (or its client) then performs step 2 over plain HTTP, bypassing the MCP payload limit entirely.
-
 The token is invalidated after a single successful upload. Subsequent uploads return `409`; expired tokens return `410`; unknown tokens return `404`.
+
+#### Large files via MCP
+
+This flow is what makes large uploads possible through MCP. The `upload-file-base64` tool requires the full base64 content as a single tool-call parameter, and payloads larger than ~100 KB are truncated before they reach the agent's tool call. With upload tokens, only step 1 (`create-upload-token`) is exposed as an MCP tool — a small request and a small response that always fit.
+
+The critical part is **step 2 is not an MCP tool**. The agent performs it out-of-band, using whatever non-MCP HTTP capability its runtime provides — **a shell (e.g. `curl`), a `fetch`/HTTP tool, or a direct SDK call**. The bytes travel over plain HTTP and never become a tool-call argument, so the MCP payload limit never applies.
+
+For large files, use `multipart/form-data` and stream the file straight from disk so it is never held as one big in-memory string — do **not** use the base64 `content` field, which would just reintroduce a large payload:
+
+```bash
+# Step 1 returned upload_url = /api/v1/files/upload/upt_xxx
+curl -F "file=@/path/to/large-report.pdf" "$BASE_URL/api/v1/files/upload/upt_xxx"
+```
+
+> An agent whose runtime has **no** out-of-band HTTP path (a pure LLM with only MCP tools and no shell, fetch, or SDK) cannot perform step 2 — but such an agent has no way to move a large file through any mechanism regardless. The token flow assumes the agent can make an ordinary HTTP request outside of MCP.
 
 ## Configuration
 
