@@ -146,7 +146,7 @@ paths:
                   example: 'proj_V1StGXR8Z5jdHi6B'
                 path:
                   type: string
-                  description: Logical path (key) within the project. Defaults to /<uploaded file name> when omitted.
+                  description: Logical path (key) within the project. Defaults to a path derived from the uploaded file name when omitted.
                   example: '/images/logo.png'
                 metadata:
                   type: string
@@ -662,7 +662,7 @@ components:
           example: 'application/pdf'
         path:
           type: string
-          description: Logical path (key) within the project (e.g. /documents/report.pdf). Defaults to /<uploaded file name> when omitted.
+          description: Logical path (key) within the project (e.g. /documents/report.pdf). Defaults to a path derived from the uploaded file name when omitted.
           example: '/documents/report.pdf'
     UploadTokenResponse:
       type: object
