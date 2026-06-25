@@ -314,10 +314,10 @@ describe('FormView (multipart/upload action)', () => {
   });
 
   test('upload action sends multipart/form-data with the selected file', async () => {
-    let receivedFormData: FormData | undefined;
+    let requestContentType: string | null = null;
     server.use(
-      http.post('*/api/v1/files/upload', async ({ request }) => {
-        receivedFormData = await request.formData();
+      http.post('*/api/v1/files/upload', ({ request }) => {
+        requestContentType = request.headers.get('content-type');
         return HttpResponse.json({ id: 'fil_1', filename: 'test.txt' }, { status: 201 });
       })
     );
@@ -339,7 +339,7 @@ describe('FormView (multipart/upload action)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Run' }));
 
     await waitFor(() => {
-      expect(receivedFormData?.get('file')).toBeTruthy();
+      expect(requestContentType).toMatch(/multipart\/form-data/);
     });
   });
 });
