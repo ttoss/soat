@@ -12,9 +12,13 @@ const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
 };
 
 export const listProjects = async (args: { authUser: AuthUser }) => {
-  // Admin fast-path: skip when the request uses a project-scoped API key so
-  // the key's project restriction is enforced even for admin users.
-  if (args.authUser.role === 'admin' && !args.authUser.apiKeyProjectPublicId) {
+  // Admin fast-path: skip when the request uses a project-scoped API key or a
+  // project-scoped OAuth token so the restriction is enforced even for admins.
+  if (
+    args.authUser.role === 'admin' &&
+    !args.authUser.apiKeyProjectPublicId &&
+    !args.authUser.oauthProjectPublicId
+  ) {
     const projects = await db.Project.findAll();
     return projects.map(mapProject);
   }
@@ -46,7 +50,7 @@ export const getProject = async (args: { id: string; authUser: AuthUser }) => {
     );
   }
 
-  if (args.authUser.role === 'admin') {
+  if (args.authUser.role === 'admin' && !args.authUser.oauthProjectPublicId) {
     return mapProject(project);
   }
 

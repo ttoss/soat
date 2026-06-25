@@ -1,3 +1,5 @@
+import jwt from 'jsonwebtoken';
+
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Projects', () => {
@@ -153,6 +155,71 @@ describe('Projects', () => {
         await authenticatedTestClient(adminToken)
           .put(`/api/v1/users/${userId}/policies`)
           .send({ policy_ids: [] });
+      });
+    });
+
+    describe('OAuth token scoped to project sees only that project', () => {
+      let oauthScopedProjectId: string;
+      let otherProjectId: string;
+      let adminOauthToken: string;
+
+      beforeAll(async () => {
+        const projARes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/projects')
+          .send({ name: 'OAuth Scoped Project' });
+        oauthScopedProjectId = projARes.body.id;
+
+        const projBRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/projects')
+          .send({ name: 'OAuth Other Project' });
+        otherProjectId = projBRes.body.id;
+
+        // Decode the admin JWT to get publicId, then issue an OAuth-style token
+        // (same JWT_SECRET, adds prj claim to simulate the OAuth issueTokens hook)
+        const decoded = jwt.decode(adminToken) as {
+          publicId: string;
+          role: string;
+        };
+        adminOauthToken = jwt.sign(
+          {
+            sub: decoded.publicId,
+            publicId: decoded.publicId,
+            role: decoded.role,
+            scope: `mcp:access prj:${oauthScopedProjectId}`,
+            prj: oauthScopedProjectId,
+          },
+          'dev-secret',
+          { expiresIn: '1h' }
+        );
+      });
+
+      test('OAuth token only sees its scoped project', async () => {
+        const response =
+          await authenticatedTestClient(adminOauthToken).get(
+            '/api/v1/projects'
+          );
+
+        expect(response.status).toBe(200);
+        expect(Array.isArray(response.body)).toBe(true);
+        expect(response.body.length).toBe(1);
+        expect(response.body[0].id).toBe(oauthScopedProjectId);
+      });
+
+      test('OAuth token cannot access a project outside its scope', async () => {
+        const response = await authenticatedTestClient(adminOauthToken).get(
+          `/api/v1/projects/${otherProjectId}`
+        );
+
+        expect(response.status).toBe(403);
+      });
+
+      test('OAuth token can access its scoped project', async () => {
+        const response = await authenticatedTestClient(adminOauthToken).get(
+          `/api/v1/projects/${oauthScopedProjectId}`
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.body.id).toBe(oauthScopedProjectId);
       });
     });
 
