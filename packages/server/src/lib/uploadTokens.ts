@@ -42,7 +42,7 @@ export const createPresignedUrl = async (args: {
 
   log('createPresignedUrl: created token=%s', token.publicId);
 
-  const baseUrl = process.env.SERVER_BASE_URL?.replace(/\/$/, '') ?? '';
+  const baseUrl = process.env.SOAT_BASE_URL?.replace(/\/$/, '') ?? '';
   return {
     uploadToken: token.publicId,
     uploadUrl: `${baseUrl}/api/v1/files/upload/${token.publicId}`,

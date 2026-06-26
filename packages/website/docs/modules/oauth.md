@@ -94,5 +94,5 @@ The access token is an HS256 JWT (`@ttoss/auth-core` `signJwt`) carrying:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `SOAT_PUBLIC_URL` | `http://localhost:<PORT>` | OAuth issuer / resource identifier advertised in discovery metadata |
+| `SOAT_BASE_URL` | `http://localhost:<PORT>` | OAuth issuer / resource identifier advertised in discovery metadata |
 | `JWT_SECRET` | `dev-secret` | HS256 signing secret for issued access tokens |
