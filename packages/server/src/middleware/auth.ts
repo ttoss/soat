@@ -190,10 +190,15 @@ const createApiKeyResolveProjectIds = (args: {
   };
 };
 
+const ADMIN_WILDCARD_POLICY: PolicyDocument = {
+  statement: [{ effect: 'Allow', action: ['*'], resource: ['*'] }],
+};
+
 const createApiKeyGetPolicies = (args: {
   apiKeyProjectPublicId: string | undefined;
   apiKeyPolicyIds: number[];
   userPolicyIds: number[];
+  role: 'admin' | 'user';
   db: Context['db'];
 }) => {
   return async (reqProjectPublicId: string): Promise<PolicyDocument[]> => {
@@ -211,6 +216,7 @@ const createApiKeyGetPolicies = (args: {
         return p.document as PolicyDocument;
       });
     }
+    if (args.role === 'admin') return [ADMIN_WILDCARD_POLICY];
     if (args.userPolicyIds.length === 0) return [];
     const userPolicies = await args.db.Policy.findAll({
       where: { id: args.userPolicyIds },
@@ -279,6 +285,7 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
           apiKeyProjectPublicId,
           apiKeyPolicyIds,
           userPolicyIds,
+          role: keyUser.role as 'admin' | 'user',
           db: ctx.db,
         }),
       };
@@ -353,6 +360,7 @@ const resolveJwt = async (ctx: Context, token: string) => {
           apiKeyProjectPublicId: oauthProjectPublicId,
           apiKeyPolicyIds: [],
           userPolicyIds,
+          role,
           db: ctx.db,
         })
       : async (_: string): Promise<PolicyDocument[]> => {
