@@ -191,6 +191,11 @@ export const ERROR_CODES = {
     description:
       'The agent reasoning config is invalid (e.g. an unknown mode, no pipeline steps, too many steps, a duplicate or unnamed step, a step missing a prompt, an unknown step kind, or a fanout count/rounds out of range).',
   },
+  FILE_TOO_LARGE_FOR_SYNC: {
+    httpStatus: 413,
+    description:
+      'The file is too large to ingest synchronously. Retry without `?async=false` (or with `?async=true`) to run ingestion in the background and poll the document status.',
+  },
   PIPELINE_INVALID_STEP: {
     httpStatus: 400,
     description:

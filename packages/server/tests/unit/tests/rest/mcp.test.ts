@@ -387,6 +387,27 @@ describe('MCP tools - happy path', () => {
     expect(result.id).toBe(documentId);
   });
 
+  test('get-document-status returns a lightweight status payload', async () => {
+    const res = await mcpCall('get-document-status', { documentId });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBe(documentId);
+    expect(result.status).toBe('ready');
+    // The heavy chunk content must not be present on the status tool.
+    expect(result.content).toBeUndefined();
+  });
+
+  test('reingest-document re-processes an existing document', async () => {
+    const res = await mcpCall('reingest-document', {
+      documentId,
+      async: false,
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBe(documentId);
+    expect(result.status).toBe('ready');
+  });
+
   test('search-documents returns results', async () => {
     const res = await mcpCall('search-documents', { query: 'mcp test' });
     expect(res.status).toBe(200);

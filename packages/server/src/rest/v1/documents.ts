@@ -5,8 +5,10 @@ import {
   deleteDocument,
   enqueueDocumentIngestion,
   getDocument,
+  getDocumentStatus,
   getDocumentTags,
   listDocuments,
+  reingestDocument,
   updateDocument,
   updateDocumentTags,
 } from 'src/lib/documents';
@@ -272,6 +274,36 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
   ctx.body = updated;
 });
 
+documentsRouter.get('/documents/:document_id/status', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const status = await getDocumentStatus({ id: ctx.params.document_id });
+  if (!status) {
+    ctx.status = 404;
+    ctx.body = { error: 'Document not found' };
+    return;
+  }
+
+  if (!(await checkDocumentPermission(ctx, status, 'documents:GetDocument'))) {
+    return;
+  }
+
+  // Return only the lightweight lifecycle payload — never chunk content.
+  ctx.body = {
+    id: status.id,
+    status: status.status,
+    chunkCount: status.chunkCount,
+    totalChunks: status.totalChunks,
+    totalPages: status.totalPages,
+    progress: status.progress,
+    error: status.error,
+  };
+});
+
 documentsRouter.get('/documents/:document_id/tags', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -379,6 +411,45 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     projectId: Number(targetProjectId),
     pathPrefix: body.pathPrefix,
     tags: body.tags,
+    chunkStrategy: body.chunkStrategy,
+    chunkSize: body.chunkSize,
+    chunkOverlap: body.chunkOverlap,
+    async: isAsync,
+  });
+
+  ctx.status = isAsync ? 202 : 201;
+  ctx.body = result;
+});
+
+documentsRouter.post('/documents/:document_id/ingest', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const doc = await getDocumentStatus({ id: ctx.params.document_id });
+  if (!doc) {
+    ctx.status = 404;
+    ctx.body = { error: 'Document not found' };
+    return;
+  }
+
+  if (!(await checkDocumentPermission(ctx, doc, 'documents:IngestDocument'))) {
+    return;
+  }
+
+  const body = ctx.request.body as {
+    chunkStrategy?: 'page' | 'whole' | 'size';
+    chunkSize?: number;
+    chunkOverlap?: number;
+  };
+
+  // Async by default; ?async=false runs synchronously and returns 201.
+  const isAsync = ctx.query['async'] !== 'false';
+
+  const result = await reingestDocument({
+    id: ctx.params.document_id,
     chunkStrategy: body.chunkStrategy,
     chunkSize: body.chunkSize,
     chunkOverlap: body.chunkOverlap,

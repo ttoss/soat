@@ -76,6 +76,45 @@ Path examples:
 
 Pass `?async=false` to block until processing completes. The endpoint then returns `201 Created` with `status: ready` (or `status: failed` on error) — no polling required. This is useful for small files or scripted workflows where latency is acceptable. (This mirrors the `?async=` toggle on `POST /api/v1/sessions/:id/generate`, except ingestion defaults to async.)
 
+Synchronous ingestion is bounded by file size: a file larger than `SYNC_INGESTION_MAX_BYTES` (default 10 MB) is rejected with `413 FILE_TOO_LARGE_FOR_SYNC` rather than blocking the request until it times out. Retry such files in async mode and poll the status endpoint.
+
+### Polling Ingestion Status
+
+Polling `GET /documents/:id` returns the full document including the assembled chunk content, which can be several megabytes. To check ingestion progress cheaply, use `GET /api/v1/documents/:id/status` instead — it returns only the lifecycle fields:
+
+```json
+{
+  "id": "doc_V1StGXR8Z5jdHi6B",
+  "status": "processing",
+  "chunk_count": 7,
+  "total_chunks": 12,
+  "total_pages": 12,
+  "progress": 58,
+  "error": null
+}
+```
+
+Field semantics (they change with `status`):
+
+| Field | Meaning |
+| --- | --- |
+| `status` | `pending` → `processing` → `ready` \| `failed` |
+| `chunk_count` | Chunks **currently indexed** — a live count. It is `0` while `pending`, grows during `processing`, and equals the final total once `ready`. |
+| `total_chunks` | Planned total number of chunks, known once chunking begins (`null` until then). The denominator for `progress`. |
+| `total_pages` | Source pages extracted. `null` until extraction has run (i.e. until `ready`/`failed`); `null` is not the same as zero pages. |
+| `progress` | Percentage `chunk_count / total_chunks`. `0` while `pending`, climbs while `processing` (capped at `99`), `100` when `ready`, `null` when `failed` or not yet computable. |
+| `error` | The `failure_reason` (e.g. `FILE_PARSE_FAILED`, `INGESTION_TIMEOUT`). Only set when `status` is `failed`; otherwise `null`. |
+
+Because chunks are persisted incrementally as their embeddings complete, `chunk_count` and `progress` advance during `processing` rather than jumping from `0` to the total at the end. This is the recommended endpoint for both async ingestion polling and quick status checks.
+
+### Stuck Ingestion Recovery
+
+If an ingestion worker dies mid-processing, a document can be left in `processing` (or `pending`) indefinitely. Such a document is **self-recovered**: when it is read via `GET /documents/:id` or `GET /documents/:id/status` and has made no progress for longer than `INGESTION_STALL_TIMEOUT_MS` (default 5 minutes), it is transitioned to `failed` with `metadata.failure_reason = INGESTION_TIMEOUT`. From there it can be re-processed with the re-ingest endpoint below.
+
+### Re-ingesting a Document
+
+`POST /api/v1/documents/:id/ingest` re-runs ingestion for an existing document against its already-stored source file. Existing chunks are discarded and the document is reset to `status: pending` before re-processing. Use it to recover a stuck or failed document, or to re-chunk an existing document with a different `chunk_strategy`, without deleting and re-uploading the file. It accepts the same `chunk_strategy` / `chunk_size` / `chunk_overlap` body fields and `?async=` toggle as `POST /documents/ingest`, and returns `202` (async, default) or `201` (sync).
+
 **Lifecycle states:**
 
 | Status       | Meaning                                                                           |
@@ -85,7 +124,7 @@ Pass `?async=false` to block until processing completes. The endpoint then retur
 | `ready`      | Fully indexed; content and chunk embeddings are available for search              |
 | `failed`     | Processing encountered an error. The `metadata.failure_reason` field describes it |
 
-Common `failure_reason` values: `FILE_PARSE_FAILED` (no extractable text), `FILE_NOT_FOUND`.
+Common `failure_reason` values: `FILE_PARSE_FAILED` (no extractable text), `FILE_NOT_FOUND`, `INGESTION_TIMEOUT` (ingestion stalled and was auto-recovered — see [Stuck Ingestion Recovery](#stuck-ingestion-recovery)).
 
 Embedding concurrency is bounded (default: 5 simultaneous requests) to avoid overwhelming the embedding service on large documents.
 
@@ -152,6 +191,8 @@ If `project_id` is supplied but the caller lacks permission for that project, th
 | `EMBEDDING_MODEL`      | Yes      | Model name, e.g. `qwen3-embedding:0.6b`                      |
 | `EMBEDDING_DIMENSIONS` | Yes      | Vector dimensions — must match the model output, e.g. `1024` |
 | `OLLAMA_BASE_URL`      | No       | Ollama server URL, defaults to `http://localhost:11434`      |
+| `SYNC_INGESTION_MAX_BYTES` | No   | Max file size (bytes) allowed for synchronous ingestion (`?async=false`). Larger files return `413`. Defaults to `10485760` (10 MB). |
+| `INGESTION_STALL_TIMEOUT_MS` | No | How long (ms) a document may stay in `pending`/`processing` with no progress before it is auto-failed with `INGESTION_TIMEOUT`. Defaults to `300000` (5 min). |
 
 ### Ollama setup example
 

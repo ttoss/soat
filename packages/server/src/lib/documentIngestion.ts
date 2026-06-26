@@ -22,6 +22,60 @@ const SUPPORTED_CONTENT_TYPES = [
   'text/markdown',
 ];
 
+// Files larger than this cannot be ingested synchronously (`?async=false`):
+// parsing + embedding a large file blocks the request long enough to time out
+// behind most proxies. Configurable via SYNC_INGESTION_MAX_BYTES.
+const SYNC_INGESTION_DEFAULT_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+
+// A document left in `pending`/`processing` with no progress for longer than
+// this is considered abandoned (e.g. the process crashed mid-ingestion) and is
+// marked `failed` on the next read so callers can recover. Configurable via
+// INGESTION_STALL_TIMEOUT_MS.
+const INGESTION_STALL_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+const getSyncIngestionMaxBytes = (): number => {
+  const raw = process.env.SYNC_INGESTION_MAX_BYTES;
+  if (!raw) return SYNC_INGESTION_DEFAULT_MAX_BYTES;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : SYNC_INGESTION_DEFAULT_MAX_BYTES;
+};
+
+const getStallTimeoutMs = (): number => {
+  const raw = process.env.INGESTION_STALL_TIMEOUT_MS;
+  if (!raw) return INGESTION_STALL_DEFAULT_TIMEOUT_MS;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0
+    ? parsed
+    : INGESTION_STALL_DEFAULT_TIMEOUT_MS;
+};
+
+/**
+ * Normalize a thrown value into a stable, human-readable failure reason.
+ * Without this, a non-Error rejection serializes to the useless string
+ * `"[object Object]"` (issue #3).
+ */
+const describeError = (error: unknown): string => {
+  if (error instanceof DomainError) return error.code;
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string' && error.length > 0) return error;
+  return 'INGESTION_FAILED';
+};
+
+const assertSyncIngestible = (
+  file: InstanceType<(typeof db)['File']>
+): void => {
+  const max = getSyncIngestionMaxBytes();
+  const size = file.size ?? 0;
+  if (size > max) {
+    throw new DomainError(
+      'FILE_TOO_LARGE_FOR_SYNC',
+      `File is ${size} bytes, which exceeds the ${max}-byte synchronous ingestion limit. Retry in async mode (omit ?async=false) and poll GET /documents/{id}/status.`
+    );
+  }
+};
+
 type IngestedDoc = InstanceType<(typeof db)['Document']> & {
   file?: InstanceType<(typeof db)['File']> & {
     project?: InstanceType<(typeof db)['Project']>;
@@ -96,6 +150,45 @@ type IngestionPipelineArgs = {
   chunkOverlap?: number;
 };
 
+/**
+ * Persist chunks while keeping the document's progress metadata current.
+ * Records the totals up front (so the status endpoint has a denominator) and
+ * periodically rewrites `indexed_chunks`, which also bumps `updatedAt` to keep
+ * a long-running ingestion from looking stalled (issue #4).
+ */
+const persistChunksWithProgress = async (args: {
+  doc: InstanceType<(typeof db)['Document']>;
+  docId: number;
+  fileId: string;
+  totalPages: number;
+  chunks: { content: string; chunkIndex: number; pageNumber?: number }[];
+}): Promise<void> => {
+  const writeProgress = (indexed: number) => {
+    return args.doc.update({
+      metadata: JSON.stringify({
+        source_file_id: args.fileId,
+        total_pages: args.totalPages,
+        total_chunks: args.chunks.length,
+        indexed_chunks: indexed,
+      }),
+    });
+  };
+
+  await writeProgress(0);
+
+  let lastTouch = Date.now();
+  await persistChunks({
+    documentId: args.docId,
+    chunks: args.chunks,
+    onProgress: async (indexed) => {
+      const now = Date.now();
+      if (now - lastTouch < 10_000 && indexed < args.chunks.length) return;
+      lastTouch = now;
+      await writeProgress(indexed);
+    },
+  });
+};
+
 const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
   const { doc } = args;
   const docId = doc.id as number;
@@ -140,13 +233,21 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
     chunkOverlap: args.chunkOverlap,
   });
 
-  await persistChunks({ documentId: docId, chunks });
+  await persistChunksWithProgress({
+    doc,
+    docId,
+    fileId: args.fileId,
+    totalPages: pages.length,
+    chunks,
+  });
+
   await file.update({ path: args.docPath });
   await doc.update({
     status: 'ready',
     metadata: JSON.stringify({
       source_file_id: args.fileId,
       total_pages: pages.length,
+      total_chunks: chunks.length,
       chunk_count: chunks.length,
     }),
   });
@@ -199,7 +300,7 @@ const processDocumentIngestion = async (args: {
         status: 'failed',
         metadata: JSON.stringify({
           source_file_id: args.fileId,
-          failure_reason: String(error),
+          failure_reason: describeError(error),
         }),
       });
     } catch {
@@ -237,6 +338,10 @@ export const enqueueDocumentIngestion = async (args: {
 
   const file = await loadIngestibleFile(args.fileId);
 
+  if (!runAsync) {
+    assertSyncIngestible(file);
+  }
+
   const filename = file.filename ?? 'document';
   const docPath = args.pathPrefix
     ? `${args.pathPrefix.replace(/\/$/, '')}/${filename}`
@@ -254,6 +359,133 @@ export const enqueueDocumentIngestion = async (args: {
   const pipelineArgs = {
     docId,
     fileId: args.fileId,
+    docPath,
+    chunkStrategy: args.chunkStrategy,
+    chunkSize: args.chunkSize,
+    chunkOverlap: args.chunkOverlap,
+  };
+
+  if (runAsync) {
+    setImmediate(() => {
+      void processDocumentIngestion(pipelineArgs);
+    });
+  } else {
+    await processDocumentIngestion(pipelineArgs);
+  }
+
+  const fetched = await fetchIngestedDocById(docId);
+  return mapDocument(fetched!);
+};
+
+/**
+ * True when a document is in a non-terminal ingestion state (`pending` or
+ * `processing`) but has not been touched within the stall timeout — i.e. the
+ * ingestion was abandoned (issue #4).
+ */
+export const isIngestionStale = (
+  doc: InstanceType<(typeof db)['Document']>
+): boolean => {
+  if (doc.status !== 'pending' && doc.status !== 'processing') return false;
+  const updatedAt = doc.updatedAt ? new Date(doc.updatedAt).getTime() : 0;
+  return Date.now() - updatedAt > getStallTimeoutMs();
+};
+
+/**
+ * If a document's ingestion has stalled, transition it to `failed` with a
+ * `INGESTION_TIMEOUT` reason so callers get a terminal state to act on instead
+ * of polling forever. Mutates `doc` in place and returns whether it recovered.
+ */
+export const recoverStaleDocument = async (
+  doc: InstanceType<(typeof db)['Document']>
+): Promise<boolean> => {
+  if (!isIngestionStale(doc)) return false;
+
+  let meta: Record<string, unknown> = {};
+  try {
+    meta = doc.metadata ? JSON.parse(doc.metadata) : {};
+  } catch {
+    meta = {};
+  }
+
+  await doc.update({
+    status: 'failed',
+    metadata: JSON.stringify({ ...meta, failure_reason: 'INGESTION_TIMEOUT' }),
+  });
+  log(
+    'recoverStaleDocument: marked stalled ingestion failed id=%s',
+    doc.publicId
+  );
+  return true;
+};
+
+const ensureReingestibleFile = (args: {
+  id: string;
+  file?: IngestedDoc['file'];
+}): NonNullable<IngestedDoc['file']> => {
+  const { file } = args;
+  if (!file) {
+    throw new DomainError(
+      'FILE_NOT_FOUND',
+      `Document '${args.id}' has no underlying file to re-ingest.`
+    );
+  }
+  if (!SUPPORTED_CONTENT_TYPES.includes(file.contentType ?? '')) {
+    throw new DomainError(
+      'UNSUPPORTED_FILE_TYPE',
+      `File '${file.publicId}' has unsupported content type '${file.contentType ?? 'unknown'}'. Supported: ${SUPPORTED_CONTENT_TYPES.join(', ')}.`
+    );
+  }
+  return file;
+};
+
+/**
+ * Re-run ingestion for an existing document against its already-stored source
+ * file (issue #7). Clears the existing chunks, resets the document to
+ * `pending`, then runs the same pipeline as the initial ingestion. Useful to
+ * recover a stuck document or re-process with a different chunk strategy.
+ * Returns `null` when the document does not exist.
+ */
+export const reingestDocument = async (args: {
+  id: string;
+  chunkStrategy?: ChunkStrategy;
+  chunkSize?: number;
+  chunkOverlap?: number;
+  async?: boolean;
+}) => {
+  const doc = (await db.Document.findOne({
+    where: { publicId: args.id },
+    include: fileProjectInclude(),
+  })) as IngestedDoc | null;
+
+  if (!doc) return null;
+
+  const file = ensureReingestibleFile({ id: args.id, file: doc.file });
+
+  const runAsync = args.async !== false;
+  if (!runAsync) {
+    assertSyncIngestible(file);
+  }
+
+  log(
+    'reingestDocument: id=%s async=%s strategy=%s',
+    args.id,
+    runAsync,
+    args.chunkStrategy ?? 'page'
+  );
+
+  const docId = doc.id as number;
+
+  // Start from a clean slate so re-processing does not accumulate chunks.
+  await db.DocumentChunk.destroy({ where: { documentId: docId } });
+  await doc.update({
+    status: 'pending',
+    metadata: JSON.stringify({ source_file_id: file.publicId }),
+  });
+
+  const docPath = file.path ?? `/${file.filename ?? 'document'}`;
+  const pipelineArgs = {
+    docId,
+    fileId: file.publicId,
     docPath,
     chunkStrategy: args.chunkStrategy,
     chunkSize: args.chunkSize,
