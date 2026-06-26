@@ -932,6 +932,8 @@ describe('Documents', () => {
       expect(res.body.chunk_count).toBeGreaterThan(0);
       // total_pages is null for a non-paged (plain text) source.
       expect(res.body.total_pages).toBeNull();
+      // A ready document reports 100% progress.
+      expect(res.body.progress).toBe(100);
       // The heavy `content` field must not be present on the status endpoint.
       expect(res.body.content).toBeUndefined();
     });
@@ -956,7 +958,9 @@ describe('Documents', () => {
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('ready');
       expect(res.body.chunk_count).toBe(1);
+      expect(res.body.total_chunks).toBe(1);
       expect(res.body.total_pages).toBe(1);
+      expect(res.body.progress).toBe(100);
     });
 
     test('includes an error reason for a failed document', async () => {
@@ -980,6 +984,8 @@ describe('Documents', () => {
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('failed');
       expect(res.body.error).toBe('FILE_PARSE_FAILED');
+      // A failed document has no meaningful progress.
+      expect(res.body.progress).toBeNull();
     });
 
     test('unauthenticated request returns 401', async () => {

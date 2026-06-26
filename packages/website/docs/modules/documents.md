@@ -85,9 +85,11 @@ Polling `GET /documents/:id` returns the full document including the assembled c
 ```json
 {
   "id": "doc_V1StGXR8Z5jdHi6B",
-  "status": "ready",
-  "chunk_count": 12,
+  "status": "processing",
+  "chunk_count": 7,
+  "total_chunks": 12,
   "total_pages": 12,
+  "progress": 58,
   "error": null
 }
 ```
@@ -97,11 +99,13 @@ Field semantics (they change with `status`):
 | Field | Meaning |
 | --- | --- |
 | `status` | `pending` → `processing` → `ready` \| `failed` |
-| `chunk_count` | Chunks **currently indexed** — a live count. It is `0` while `pending`, grows during `processing`, and equals the final total once `ready`. Use it as a progress signal. |
+| `chunk_count` | Chunks **currently indexed** — a live count. It is `0` while `pending`, grows during `processing`, and equals the final total once `ready`. |
+| `total_chunks` | Planned total number of chunks, known once chunking begins (`null` until then). The denominator for `progress`. |
 | `total_pages` | Source pages extracted. `null` until extraction has run (i.e. until `ready`/`failed`); `null` is not the same as zero pages. |
+| `progress` | Percentage `chunk_count / total_chunks`. `0` while `pending`, climbs while `processing` (capped at `99`), `100` when `ready`, `null` when `failed` or not yet computable. |
 | `error` | The `failure_reason` (e.g. `FILE_PARSE_FAILED`, `INGESTION_TIMEOUT`). Only set when `status` is `failed`; otherwise `null`. |
 
-This is the recommended endpoint for both async ingestion polling and quick status checks.
+Because chunks are persisted incrementally as their embeddings complete, `chunk_count` and `progress` advance during `processing` rather than jumping from `0` to the total at the end. This is the recommended endpoint for both async ingestion polling and quick status checks.
 
 ### Stuck Ingestion Recovery
 

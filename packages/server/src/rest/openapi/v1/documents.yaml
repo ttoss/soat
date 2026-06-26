@@ -718,11 +718,21 @@ components:
           type: integer
           description: Number of chunks **currently indexed** for this document (a live count). Grows while `status=processing` and equals the final total once `ready`; `0` while `pending`.
           example: 10
+        total_chunks:
+          type: integer
+          nullable: true
+          description: Planned total number of chunks, known once chunking begins. `null` until then. Used as the denominator for `progress`.
+          example: 12
         total_pages:
           type: integer
           nullable: true
           description: Number of source pages extracted. Only known after extraction, so it is `null` until `status` is `ready` or `failed` (not the same as zero pages).
           example: 12
+        progress:
+          type: integer
+          nullable: true
+          description: Ingestion progress as a percentage (`chunk_count / total_chunks`). `0` while `pending`, climbs while `processing` (capped at 99), `100` when `ready`, and `null` when `failed` or not yet computable.
+          example: 100
         error:
           type: string
           nullable: true

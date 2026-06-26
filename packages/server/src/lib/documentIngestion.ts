@@ -150,6 +150,45 @@ type IngestionPipelineArgs = {
   chunkOverlap?: number;
 };
 
+/**
+ * Persist chunks while keeping the document's progress metadata current.
+ * Records the totals up front (so the status endpoint has a denominator) and
+ * periodically rewrites `indexed_chunks`, which also bumps `updatedAt` to keep
+ * a long-running ingestion from looking stalled (issue #4).
+ */
+const persistChunksWithProgress = async (args: {
+  doc: InstanceType<(typeof db)['Document']>;
+  docId: number;
+  fileId: string;
+  totalPages: number;
+  chunks: { content: string; chunkIndex: number; pageNumber?: number }[];
+}): Promise<void> => {
+  const writeProgress = (indexed: number) => {
+    return args.doc.update({
+      metadata: JSON.stringify({
+        source_file_id: args.fileId,
+        total_pages: args.totalPages,
+        total_chunks: args.chunks.length,
+        indexed_chunks: indexed,
+      }),
+    });
+  };
+
+  await writeProgress(0);
+
+  let lastTouch = Date.now();
+  await persistChunks({
+    documentId: args.docId,
+    chunks: args.chunks,
+    onProgress: async (indexed) => {
+      const now = Date.now();
+      if (now - lastTouch < 10_000 && indexed < args.chunks.length) return;
+      lastTouch = now;
+      await writeProgress(indexed);
+    },
+  });
+};
+
 const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
   const { doc } = args;
   const docId = doc.id as number;
@@ -194,13 +233,21 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
     chunkOverlap: args.chunkOverlap,
   });
 
-  await persistChunks({ documentId: docId, chunks });
+  await persistChunksWithProgress({
+    doc,
+    docId,
+    fileId: args.fileId,
+    totalPages: pages.length,
+    chunks,
+  });
+
   await file.update({ path: args.docPath });
   await doc.update({
     status: 'ready',
     metadata: JSON.stringify({
       source_file_id: args.fileId,
       total_pages: pages.length,
+      total_chunks: chunks.length,
       chunk_count: chunks.length,
     }),
   });

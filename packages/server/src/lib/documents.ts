@@ -176,6 +176,26 @@ const parseDocMetadata = (
 };
 
 /**
+ * Compute an ingestion progress percentage (0–100) from the live chunk count
+ * and the planned total. `null` when progress is not meaningful (failed, or
+ * processing before the total is known). Capped at 99 while still `processing`
+ * so it only reads 100 once the document is `ready`.
+ */
+const computeIngestionProgress = (args: {
+  status: string;
+  chunkCount: number;
+  totalChunks?: number;
+}): number | null => {
+  if (args.status === 'ready') return 100;
+  if (args.status === 'pending') return 0;
+  if (args.status !== 'processing') return null; // failed / unknown
+  if (typeof args.totalChunks !== 'number' || args.totalChunks <= 0)
+    return null;
+  const pct = Math.floor((args.chunkCount / args.totalChunks) * 100);
+  return Math.max(0, Math.min(99, pct));
+};
+
+/**
  * Lightweight ingestion status for polling (issues #5, #6). Returns only the
  * lifecycle fields — never the (potentially multi-megabyte) chunk content that
  * `getDocument` assembles. Self-recovers a stalled document to `failed` so a
@@ -185,9 +205,14 @@ const parseDocMetadata = (
  * - `chunk_count` — the number of chunks **currently indexed** (a live count of
  *   persisted chunks). It grows during `processing` and equals the final total
  *   once `ready`. `0` while `pending` / early `processing`.
+ * - `total_chunks` — the planned number of chunks, known once chunking starts.
+ *   `null` until then (e.g. early `pending`).
  * - `total_pages` — the number of source pages extracted. Only known once
  *   extraction has run, so it is `null` until the document is `ready` (or
  *   `failed`). `null` does not mean "zero pages".
+ * - `progress` — `chunk_count / total_chunks` as a percentage (0–100). `0` while
+ *   `pending`, climbs while `processing` (capped at 99), `100` when `ready`,
+ *   `null` when `failed` or not yet computable.
  */
 export const getDocumentStatus = async (args: { id: string }) => {
   const doc = await fetchDocumentWithContext(args.id);
@@ -205,6 +230,11 @@ export const getDocumentStatus = async (args: { id: string }) => {
     where: { documentId: doc.id },
   });
 
+  const totalChunks =
+    typeof metadata.total_chunks === 'number'
+      ? metadata.total_chunks
+      : undefined;
+
   const totalPages =
     typeof metadata.total_pages === 'number' ? metadata.total_pages : null;
 
@@ -217,7 +247,13 @@ export const getDocumentStatus = async (args: { id: string }) => {
     id: mapped.id,
     status: doc.status,
     chunkCount,
+    totalChunks: totalChunks ?? null,
     totalPages,
+    progress: computeIngestionProgress({
+      status: doc.status,
+      chunkCount,
+      totalChunks,
+    }),
     error: doc.status === 'failed' ? failureReason : undefined,
     // Context for the route's permission check — not part of the public
     // status response shape.

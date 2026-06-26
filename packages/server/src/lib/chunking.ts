@@ -114,11 +114,17 @@ const runBounded = async (
  * with bounded concurrency (default: 5) so very large documents do not open
  * an unbounded number of simultaneous network requests. An embedding failure
  * is non-fatal — the chunk is stored without a vector.
+ *
+ * Each chunk row is created as soon as its embedding resolves (not in a single
+ * batch at the end), so a live count of persisted chunks reflects ingestion
+ * progress while the document is still `processing`. `onProgress` is invoked
+ * after every successful insert with the number of chunks persisted so far.
  */
 export const persistChunks = async (args: {
   documentId: number;
   chunks: PreparedChunk[];
   concurrency?: number;
+  onProgress?: (completed: number) => Promise<void> | void;
 }): Promise<void> => {
   const concurrency = args.concurrency ?? DEFAULT_EMBEDDING_CONCURRENCY;
   log(
@@ -128,26 +134,26 @@ export const persistChunks = async (args: {
     concurrency
   );
 
-  const embeddings: (number[] | null)[] = new Array(args.chunks.length).fill(
-    null
-  );
+  let completed = 0;
 
   await runBounded(args.chunks.length, concurrency, async (i) => {
+    const chunk = args.chunks[i];
+    let embedding: number[] | null = null;
     try {
-      embeddings[i] = await getEmbedding({ text: args.chunks[i].content });
+      embedding = await getEmbedding({ text: chunk.content });
     } catch {
       // embedding is optional — continue without it
     }
-  });
 
-  for (let i = 0; i < args.chunks.length; i++) {
-    const chunk = args.chunks[i];
     await db.DocumentChunk.create({
       documentId: args.documentId,
       content: chunk.content,
       chunkIndex: chunk.chunkIndex,
       pageNumber: chunk.pageNumber ?? null,
-      embedding: embeddings[i],
+      embedding,
     });
-  }
+
+    completed += 1;
+    if (args.onProgress) await args.onProgress(completed);
+  });
 };
