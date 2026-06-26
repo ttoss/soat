@@ -79,7 +79,7 @@ The list endpoint applies policy filters at the SQL level — the database retur
 
 Upload tokens provide a two-step upload flow — the local-storage equivalent of an S3 presigned URL — usable from any client (SDK, CLI, curl, or an MCP agent):
 
-1. **Request a token** — `POST /api/v1/files/upload-token` returns a single-use `upload_token`, a relative `upload_url`, and an `expires_at` (15-minute lifetime). This step is authenticated and requires `files:UploadFile`.
+1. **Request a token** — `POST /api/v1/files/upload-token` returns a single-use `upload_token`, an `upload_url`, and an `expires_at` (15-minute lifetime). This step is authenticated and requires `files:UploadFile`. By default `upload_url` is **relative** (e.g. `/api/v1/files/upload/upt_xxx`); when the server is configured with `SOAT_BASE_URL`, it is returned as a **fully-qualified absolute URL** so clients and MCP agents can POST to it without knowing the server base URL in advance — see [Configuration](#configuration).
 2. **Upload the content** — `POST /api/v1/files/upload/{token}` writes the file and returns the standard file record. This endpoint requires **no bearer credential** — the token is the credential — and accepts either `multipart/form-data` (field `file`) or JSON with a base64 `content` field.
 
 Because the two steps are decoupled, the party that authorizes the upload (step 1) need not be the party that transfers the bytes (step 2) — the token can be handed to a browser, a worker, or a CLI to complete the upload directly over HTTP.
@@ -106,6 +106,7 @@ curl -F "file=@/path/to/large-report.pdf" "$BASE_URL/api/v1/files/upload/upt_xxx
 | Environment Variable | Required | Description                                                                                             |
 | -------------------- | -------- | ------------------------------------------------------------------------------------------------------- |
 | `FILES_STORAGE_DIR`  | Yes      | Absolute path to the directory where uploaded files are stored. Must be writable by the server process. |
+| `SOAT_BASE_URL`      | No       | Public base URL of the server (e.g. `https://api.example.com`). When set, the upload-token flow returns an absolute `upload_url`; otherwise the URL is relative. A trailing slash is trimmed. |
 
 When running via Docker, mount a volume at this path to persist files across container restarts:
 
