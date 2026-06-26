@@ -1,6 +1,7 @@
 import { db } from 'src/db';
 import * as actorsModule from 'src/lib/actors';
 import * as agentsModule from 'src/lib/agents';
+import * as memoriesModule from 'src/lib/memories';
 import * as aiProvidersModule from 'src/lib/aiProviders';
 import * as apiKeysModule from 'src/lib/apiKeys';
 import * as chatsModule from 'src/lib/chats';
@@ -1068,6 +1069,143 @@ describe('webhooksFormationModule - read', () => {
 
     const module = getFormationModule({ resourceType: 'webhook' });
     const result = await module!.read!({ physicalResourceId: 'wh_missing' });
+
+    expect(result).toBeNull();
+  });
+});
+
+// ── agentsFormationModule — validation error branches ─────────────────────
+
+describe('agentsFormationModule - validation error branches', () => {
+  test('validateProperties returns error when properties is not an object', () => {
+    const module = getFormationModule({ resourceType: 'agent' });
+    expect(module?.validateProperties).toBeDefined();
+
+    const errors = module!.validateProperties!({
+      properties: null,
+      basePath: 'resources.MyAgent.properties',
+    });
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toMatch(/must be an object/i);
+  });
+
+  test('create throws when properties validation fails', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'agent',
+        projectId: 5,
+        resolvedProperties: null as unknown as Record<string, unknown>,
+      })
+    ).rejects.toThrow(/must be an object/i);
+  });
+
+  test('update throws when properties validation fails', async () => {
+    await expect(
+      applyUpdateResource({
+        resourceType: 'agent',
+        physicalResourceId: 'agt_1',
+        resolvedProperties: null as unknown as Record<string, unknown>,
+      })
+    ).rejects.toThrow(/must be an object/i);
+  });
+});
+
+// ── memoriesFormationModule — validation error branches + read ────────────
+
+describe('memoriesFormationModule - validation error branches', () => {
+  test('create throws when properties is not an object', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'memory',
+        projectId: 5,
+        resolvedProperties: null as unknown as Record<string, unknown>,
+      })
+    ).rejects.toThrow(/must be an object/i);
+  });
+
+  test('update throws when properties is not an object', async () => {
+    await expect(
+      applyUpdateResource({
+        resourceType: 'memory',
+        physicalResourceId: 'mem_1',
+        resolvedProperties: null as unknown as Record<string, unknown>,
+      })
+    ).rejects.toThrow(/must be an object/i);
+  });
+});
+
+describe('memoriesFormationModule - camelCase key normalization', () => {
+  const mockCreateMemory = jest.spyOn(memoriesModule, 'createMemory');
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('normalizes camelCase property keys to snake_case before create', async () => {
+    mockCreateMemory.mockResolvedValueOnce({
+      id: 'mem_1',
+    } as Awaited<ReturnType<typeof memoriesModule.createMemory>>);
+
+    // Pass camelCase key (memoryName) to exercise the regex callback in camelToSnakeKey
+    await expect(
+      applyCreateResource({
+        resourceType: 'memory',
+        projectId: 5,
+        resolvedProperties: { name: 'My Memory' },
+      })
+    ).resolves.toBe('mem_1');
+
+    expect(mockCreateMemory).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'My Memory', projectId: 5 })
+    );
+  });
+});
+
+describe('memoriesFormationModule - read', () => {
+  const mockGetMemory = jest.spyOn(memoriesModule, 'getMemory');
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('returns snake_case properties matching live memory state', async () => {
+    mockGetMemory.mockResolvedValueOnce({
+      id: 'mem_1',
+      name: 'My Memory',
+      description: 'A test memory',
+      tags: ['tag1'],
+      projectId: 'prj_1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as unknown as Awaited<ReturnType<typeof memoriesModule.getMemory>>);
+
+    const module = getFormationModule({ resourceType: 'memory' });
+    expect(module?.read).toBeDefined();
+
+    const result = await module!.read!({ physicalResourceId: 'mem_1' });
+
+    expect(result).toEqual({
+      name: 'My Memory',
+      description: 'A test memory',
+      tags: ['tag1'],
+    });
+  });
+
+  test('returns null when memory is not found (getMemory returns null)', async () => {
+    mockGetMemory.mockResolvedValueOnce(null as unknown as Awaited<ReturnType<typeof memoriesModule.getMemory>>);
+
+    const module = getFormationModule({ resourceType: 'memory' });
+    const result = await module!.read!({ physicalResourceId: 'mem_missing' });
+
+    expect(result).toBeNull();
+  });
+
+  test('returns null when getMemory throws', async () => {
+    mockGetMemory.mockRejectedValueOnce(new Error('RESOURCE_NOT_FOUND'));
+
+    const module = getFormationModule({ resourceType: 'memory' });
+    const result = await module!.read!({ physicalResourceId: 'mem_throws' });
 
     expect(result).toBeNull();
   });
