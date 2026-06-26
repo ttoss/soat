@@ -239,7 +239,7 @@ describe('webhookDispatcher', () => {
           statement: [
             {
               effect: 'Allow',
-              action: ['files.created'],
+              action: ['*'],
               resource: '*',
             },
           ],
@@ -283,7 +283,7 @@ describe('webhookDispatcher', () => {
           statement: [
             {
               effect: 'Deny',
-              action: ['files.created'],
+              action: ['*'],
               resource: '*',
             },
           ],
