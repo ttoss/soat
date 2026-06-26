@@ -180,6 +180,14 @@ const parseDocMetadata = (
  * lifecycle fields — never the (potentially multi-megabyte) chunk content that
  * `getDocument` assembles. Self-recovers a stalled document to `failed` so a
  * poller eventually sees a terminal state (issue #4).
+ *
+ * Field semantics, by lifecycle state:
+ * - `chunk_count` — the number of chunks **currently indexed** (a live count of
+ *   persisted chunks). It grows during `processing` and equals the final total
+ *   once `ready`. `0` while `pending` / early `processing`.
+ * - `total_pages` — the number of source pages extracted. Only known once
+ *   extraction has run, so it is `null` until the document is `ready` (or
+ *   `failed`). `null` does not mean "zero pages".
  */
 export const getDocumentStatus = async (args: { id: string }) => {
   const doc = await fetchDocumentWithContext(args.id);
@@ -191,13 +199,14 @@ export const getDocumentStatus = async (args: { id: string }) => {
   const metadata = parseDocMetadata(doc.metadata);
   const mapped = mapDocument(doc);
 
-  const chunkCount =
-    typeof metadata.chunk_count === 'number'
-      ? metadata.chunk_count
-      : await db.DocumentChunk.count({ where: { documentId: doc.id } });
+  // Always report the live count so the value is meaningful while processing,
+  // not just after metadata is written on completion.
+  const chunkCount = await db.DocumentChunk.count({
+    where: { documentId: doc.id },
+  });
 
   const totalPages =
-    typeof metadata.total_pages === 'number' ? metadata.total_pages : undefined;
+    typeof metadata.total_pages === 'number' ? metadata.total_pages : null;
 
   const failureReason =
     typeof metadata.failure_reason === 'string'

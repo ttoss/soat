@@ -84,6 +84,7 @@ Polling `GET /documents/:id` returns the full document including the assembled c
 
 ```json
 {
+  "id": "doc_V1StGXR8Z5jdHi6B",
   "status": "ready",
   "chunk_count": 12,
   "total_pages": 12,
@@ -91,7 +92,16 @@ Polling `GET /documents/:id` returns the full document including the assembled c
 }
 ```
 
-`error` is populated only when `status` is `failed` (it carries the `failure_reason`). This is the recommended endpoint for both async ingestion polling and quick status checks.
+Field semantics (they change with `status`):
+
+| Field | Meaning |
+| --- | --- |
+| `status` | `pending` → `processing` → `ready` \| `failed` |
+| `chunk_count` | Chunks **currently indexed** — a live count. It is `0` while `pending`, grows during `processing`, and equals the final total once `ready`. Use it as a progress signal. |
+| `total_pages` | Source pages extracted. `null` until extraction has run (i.e. until `ready`/`failed`); `null` is not the same as zero pages. |
+| `error` | The `failure_reason` (e.g. `FILE_PARSE_FAILED`, `INGESTION_TIMEOUT`). Only set when `status` is `failed`; otherwise `null`. |
+
+This is the recommended endpoint for both async ingestion polling and quick status checks.
 
 ### Stuck Ingestion Recovery
 

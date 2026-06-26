@@ -716,12 +716,12 @@ components:
           example: 'ready'
         chunk_count:
           type: integer
-          description: Number of chunks indexed for this document.
+          description: Number of chunks **currently indexed** for this document (a live count). Grows while `status=processing` and equals the final total once `ready`; `0` while `pending`.
           example: 10
         total_pages:
           type: integer
           nullable: true
-          description: Number of source pages extracted (PDF ingestion). Absent for non-paged sources.
+          description: Number of source pages extracted. Only known after extraction, so it is `null` until `status` is `ready` or `failed` (not the same as zero pages).
           example: 12
         error:
           type: string

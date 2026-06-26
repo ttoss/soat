@@ -928,7 +928,10 @@ describe('Documents', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('ready');
+      // chunk_count is the live count of indexed chunks.
       expect(res.body.chunk_count).toBeGreaterThan(0);
+      // total_pages is null for a non-paged (plain text) source.
+      expect(res.body.total_pages).toBeNull();
       // The heavy `content` field must not be present on the status endpoint.
       expect(res.body.content).toBeUndefined();
     });
