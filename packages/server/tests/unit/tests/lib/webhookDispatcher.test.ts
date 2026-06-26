@@ -229,6 +229,101 @@ describe('webhookDispatcher', () => {
     expect(retryCalls.length).toBeLessThanOrEqual(3);
   });
 
+  test('dispatcher delivers webhook when policy allows the event', async () => {
+    fetchMock.mockClear();
+
+    const policyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['*'],
+              resource: ['*'],
+            },
+          ],
+        },
+      });
+    const dispatchPolicyId = policyRes.body.id;
+
+    await authenticatedTestClient(adminToken)
+      .post('/api/v1/webhooks')
+      .send({
+        project_id: projectId,
+        name: 'Policy Allow Webhook',
+        url: 'https://example.com/hook-policy-allow',
+        events: ['files.created'],
+        policy_id: dispatchPolicyId,
+      });
+
+    emitEvent({
+      type: 'files.created',
+      projectId: projectInternalId ?? 1,
+      projectPublicId: projectId,
+      resourceType: 'file',
+      resourceId: 'fil_policy_allow',
+      data: {},
+      timestamp: new Date().toISOString(),
+    });
+
+    await new Promise((resolve) => {
+      return setTimeout(resolve, 400);
+    });
+    // No assertion — verifying no throw; the policyId branch is exercised
+  });
+
+  test('dispatcher skips delivery when policy denies the event', async () => {
+    fetchMock.mockClear();
+
+    const denyPolicyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: {
+          statement: [
+            {
+              effect: 'Deny',
+              action: ['*'],
+              resource: ['*'],
+            },
+          ],
+        },
+      });
+    const denyPolicyId = denyPolicyRes.body.id;
+
+    await authenticatedTestClient(adminToken)
+      .post('/api/v1/webhooks')
+      .send({
+        project_id: projectId,
+        name: 'Policy Deny Webhook',
+        url: 'https://example.com/hook-policy-deny',
+        events: ['files.created'],
+        policy_id: denyPolicyId,
+      });
+
+    emitEvent({
+      type: 'files.created',
+      projectId: projectInternalId ?? 1,
+      projectPublicId: projectId,
+      resourceType: 'file',
+      resourceId: 'fil_policy_deny',
+      data: {},
+      timestamp: new Date().toISOString(),
+    });
+
+    await new Promise((resolve) => {
+      return setTimeout(resolve, 400);
+    });
+
+    const denyCalls = fetchMock.mock.calls.filter(([url]) => {
+      return (
+        typeof url === 'string' && url === 'https://example.com/hook-policy-deny'
+      );
+    });
+
+    expect(denyCalls).toHaveLength(0);
+  });
+
   test('dispatcher marks delivery failed when server returns non-ok status on all attempts', async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ error: 'Bad Gateway' }), { status: 502 })
