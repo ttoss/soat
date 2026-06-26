@@ -216,6 +216,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: The file is too large to ingest synchronously (`?async=false`). Retry in async mode and poll the document status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/documents/{document_id}:
     get:
       tags:
@@ -352,6 +358,139 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/documents/{document_id}/status:
+    get:
+      tags:
+        - Documents
+      summary: Get document ingestion status
+      description: |
+        Returns a lightweight ingestion status payload for polling — `status`,
+        `chunk_count`, `total_pages`, and (when failed) `error`. Unlike
+        `GET /documents/{document_id}`, it never returns the assembled chunk
+        content, so it is cheap to poll on large documents. A document whose
+        ingestion has stalled (no progress past the configured timeout) is
+        transitioned to `failed` with `error=INGESTION_TIMEOUT` on read.
+      operationId: getDocumentStatus
+      x-iam-action: documents:GetDocument
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          description: Document ID
+          schema:
+            type: string
+            example: 'doc_V1StGXR8Z5jdHi6B'
+      responses:
+        '200':
+          description: Document ingestion status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentStatusRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/documents/{document_id}/ingest:
+    post:
+      tags:
+        - Documents
+      summary: Re-ingest an existing document
+      description: |
+        Re-runs ingestion for an existing document against its already-stored
+        source file. Existing chunks are discarded and the document is reset to
+        `status=pending` before re-processing. Use this to recover a document
+        stuck in `processing`/`failed` or to re-chunk with a different strategy
+        without re-uploading the file. Async by default (`202`); pass
+        `?async=false` to run synchronously (`201`).
+      operationId: reingestDocument
+      x-iam-action: documents:IngestDocument
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          description: Document ID
+          schema:
+            type: string
+            example: 'doc_V1StGXR8Z5jdHi6B'
+        - name: async
+          in: query
+          required: false
+          description: When omitted or `true` (default), processing runs in the background and `202 Accepted` is returned immediately with `status=pending`. Pass `false` to run synchronously and receive `201 Created` with `status=ready`.
+          schema:
+            type: boolean
+            default: true
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                chunk_strategy:
+                  type: string
+                  enum: [page, whole, size]
+                  description: How to split the source into chunks. Defaults to `page`.
+                  default: page
+                chunk_size:
+                  type: integer
+                  description: Window size in characters when `chunk_strategy=size`. Defaults to 1000.
+                  example: 1000
+                chunk_overlap:
+                  type: integer
+                  description: Overlap in characters between consecutive windows when `chunk_strategy=size`. Defaults to 200.
+                  example: 200
+      responses:
+        '201':
+          description: Re-ingestion completed synchronously (only when `?async=false`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestedDocumentRecord'
+        '202':
+          description: Re-ingestion accepted. The document was reset to `status=pending` and processing runs in the background. Poll `GET /api/v1/documents/{document_id}/status`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestedDocumentRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: The file is too large to re-ingest synchronously (`?async=false`). Retry in async mode.
           content:
             application/json:
               schema:
@@ -563,6 +702,42 @@ components:
               type: integer
               description: Number of chunks created from the file.
               example: 10
+    DocumentStatusRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Document ID
+          example: 'doc_V1StGXR8Z5jdHi6B'
+        status:
+          type: string
+          enum: [pending, processing, ready, failed]
+          description: Ingestion lifecycle state.
+          example: 'ready'
+        chunk_count:
+          type: integer
+          description: Number of chunks **currently indexed** for this document (a live count). Grows while `status=processing` and equals the final total once `ready`; `0` while `pending`.
+          example: 10
+        total_chunks:
+          type: integer
+          nullable: true
+          description: Planned total number of chunks, known once chunking begins. `null` until then. Used as the denominator for `progress`.
+          example: 12
+        total_pages:
+          type: integer
+          nullable: true
+          description: Number of source pages extracted. Only known after extraction, so it is `null` until `status` is `ready` or `failed` (not the same as zero pages).
+          example: 12
+        progress:
+          type: integer
+          nullable: true
+          description: Ingestion progress as a percentage (`chunk_count / total_chunks`). `0` while `pending`, climbs while `processing` (capped at 99), `100` when `ready`, and `null` when `failed` or not yet computable.
+          example: 100
+        error:
+          type: string
+          nullable: true
+          description: Failure reason when `status` is `failed` (e.g. `FILE_PARSE_FAILED`, `INGESTION_TIMEOUT`).
+          example: 'INGESTION_TIMEOUT'
     ErrorResponse:
       type: object
       properties:

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 
+import { db } from 'src/db';
 import * as pdfModule from 'src/lib/pdf';
 
 import { ONE_PAGE_PDF_BUFFER, THREE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
@@ -789,6 +790,414 @@ describe('Documents', () => {
       expect(
         (ingestRes.body.metadata as Record<string, unknown>).failure_reason
       ).toBe('FILE_PARSE_FAILED');
+    });
+
+    test('failure_reason never serializes to [object Object] (issue #3)', async () => {
+      // A non-Error rejection (plain object) must not leak as "[object Object]".
+      extractPdfPagesSpy.mockRejectedValueOnce({ unexpected: 'shape' });
+
+      const fileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'weird-error.pdf',
+        contentType: 'application/pdf',
+      });
+
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest?async=false')
+        .send({ file_id: fileId, project_id: projectId });
+
+      expect(ingestRes.status).toBe(201);
+      expect(ingestRes.body.status).toBe('failed');
+      const reason = (ingestRes.body.metadata as Record<string, unknown>)
+        .failure_reason;
+      expect(reason).not.toBe('[object Object]');
+      expect(typeof reason).toBe('string');
+      expect((reason as string).length).toBeGreaterThan(0);
+    });
+
+    test('preserves an Error message in failure_reason', async () => {
+      extractPdfPagesSpy.mockRejectedValueOnce(new Error('boom while parsing'));
+
+      const fileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'error-message.pdf',
+        contentType: 'application/pdf',
+      });
+
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest?async=false')
+        .send({ file_id: fileId, project_id: projectId });
+
+      expect(ingestRes.status).toBe(201);
+      expect(ingestRes.body.status).toBe('failed');
+      expect(
+        (ingestRes.body.metadata as Record<string, unknown>).failure_reason
+      ).toBe('boom while parsing');
+    });
+
+    test('?async=false on a file over the sync limit returns 413 (issue #3)', async () => {
+      const prev = process.env.SYNC_INGESTION_MAX_BYTES;
+      process.env.SYNC_INGESTION_MAX_BYTES = '16';
+
+      try {
+        const fileId = await uploadFile({
+          buffer: Buffer.from('this text is definitely longer than 16 bytes'),
+          filename: 'too-big.txt',
+          contentType: 'text/plain',
+        });
+
+        const ingestRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/documents/ingest?async=false')
+          .send({ file_id: fileId, project_id: projectId });
+
+        expect(ingestRes.status).toBe(413);
+        expect(ingestRes.body.error.code).toBe('FILE_TOO_LARGE_FOR_SYNC');
+        expect(ingestRes.body.error.message).toMatch(/async/i);
+      } finally {
+        if (prev === undefined) delete process.env.SYNC_INGESTION_MAX_BYTES;
+        else process.env.SYNC_INGESTION_MAX_BYTES = prev;
+      }
+    });
+
+    test('async ingestion is not blocked by the sync size limit', async () => {
+      const prev = process.env.SYNC_INGESTION_MAX_BYTES;
+      process.env.SYNC_INGESTION_MAX_BYTES = '16';
+
+      try {
+        const fileId = await uploadFile({
+          buffer: Buffer.from('this text is definitely longer than 16 bytes'),
+          filename: 'big-async.txt',
+          contentType: 'text/plain',
+        });
+
+        const ingestRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/documents/ingest')
+          .send({ file_id: fileId, project_id: projectId });
+
+        expect(ingestRes.status).toBe(202);
+        expect(ingestRes.body.status).toBe('pending');
+      } finally {
+        if (prev === undefined) delete process.env.SYNC_INGESTION_MAX_BYTES;
+        else process.env.SYNC_INGESTION_MAX_BYTES = prev;
+      }
+    });
+  });
+
+  describe('GET /api/v1/documents/:id/status (issues #5, #6)', () => {
+    let extractSpy: jest.SpyInstance;
+
+    const uploadFile = async (args: {
+      buffer: Buffer;
+      filename: string;
+      contentType: string;
+    }) => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', args.buffer, {
+          filename: args.filename,
+          contentType: args.contentType,
+        })
+        .field('project_id', projectId);
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    beforeAll(() => {
+      extractSpy = jest
+        .spyOn(pdfModule, 'extractPdfPages')
+        .mockResolvedValue(['Hello World']);
+    });
+
+    afterAll(() => {
+      extractSpy.mockRestore();
+    });
+
+    test('returns a lightweight status payload for a ready document', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'Status check content.',
+          filename: 'status.txt',
+        });
+      const docId = createRes.body.id as string;
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${docId}/status`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('ready');
+      // chunk_count is the live count of indexed chunks.
+      expect(res.body.chunk_count).toBeGreaterThan(0);
+      // total_pages is null for a non-paged (plain text) source.
+      expect(res.body.total_pages).toBeNull();
+      // A ready document reports 100% progress.
+      expect(res.body.progress).toBe(100);
+      // The heavy `content` field must not be present on the status endpoint.
+      expect(res.body.content).toBeUndefined();
+    });
+
+    test('reports total_pages and chunk_count after PDF ingestion', async () => {
+      const fileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'status-pdf.pdf',
+        contentType: 'application/pdf',
+      });
+
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest?async=false')
+        .send({ file_id: fileId, project_id: projectId });
+      expect(ingestRes.status).toBe(201);
+      const docId = ingestRes.body.id as string;
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${docId}/status`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('ready');
+      expect(res.body.chunk_count).toBe(1);
+      expect(res.body.total_chunks).toBe(1);
+      expect(res.body.total_pages).toBe(1);
+      expect(res.body.progress).toBe(100);
+    });
+
+    test('includes an error reason for a failed document', async () => {
+      const fileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'status-failed.pdf',
+        contentType: 'application/pdf',
+      });
+
+      extractSpy.mockResolvedValueOnce([]);
+
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest?async=false')
+        .send({ file_id: fileId, project_id: projectId });
+      const docId = ingestRes.body.id as string;
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${docId}/status`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('failed');
+      expect(res.body.error).toBe('FILE_PARSE_FAILED');
+      // A failed document has no meaningful progress.
+      expect(res.body.progress).toBeNull();
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({ project_id: projectId, content: 'x', filename: 's401.txt' });
+      const res = await testClient.get(
+        `/api/v1/documents/${createRes.body.id}/status`
+      );
+      expect(res.status).toBe(401);
+    });
+
+    test('returns 404 for a non-existent document', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        '/api/v1/documents/doc_nonexistent/status'
+      );
+      expect(res.status).toBe(404);
+    });
+
+    test('self-recovers a document stuck in processing (issue #4)', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'Stuck content.',
+          filename: 'stuck.txt',
+        });
+      const docId = createRes.body.id as string;
+
+      // Simulate a worker that died mid-ingestion: status stuck in `processing`
+      // with an updatedAt far in the past (older than the stall timeout).
+      const stale = new Date(Date.now() - 60 * 60 * 1000);
+      await db.Document.update(
+        { status: 'processing', updatedAt: stale },
+        { where: { publicId: docId }, silent: true }
+      );
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${docId}/status`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('failed');
+      expect(res.body.error).toBe('INGESTION_TIMEOUT');
+    });
+  });
+
+  describe('POST /api/v1/documents/:id/ingest — re-ingest (issue #7)', () => {
+    let extractSpy: jest.SpyInstance;
+
+    const uploadFile = async (args: {
+      buffer: Buffer;
+      filename: string;
+      contentType: string;
+    }) => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', args.buffer, {
+          filename: args.filename,
+          contentType: args.contentType,
+        })
+        .field('project_id', projectId);
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    const waitForDocumentStatus = async (
+      docId: string,
+      targetStatus: string,
+      timeout = 5000
+    ): Promise<Record<string, unknown>> => {
+      const deadline = Date.now() + timeout;
+      while (Date.now() < deadline) {
+        const res = await authenticatedTestClient(userToken).get(
+          `/api/v1/documents/${docId}`
+        );
+        if (res.body.status === targetStatus || res.body.status === 'failed') {
+          return res.body as Record<string, unknown>;
+        }
+        await new Promise((r) => {
+          return setTimeout(r, 50);
+        });
+      }
+      throw new Error(`Timed out waiting for ${docId} -> ${targetStatus}`);
+    };
+
+    beforeAll(() => {
+      extractSpy = jest
+        .spyOn(pdfModule, 'extractPdfPages')
+        .mockResolvedValue(['Re-ingest me']);
+    });
+
+    afterAll(() => {
+      extractSpy.mockRestore();
+    });
+
+    test('re-ingests an existing document with a new chunk strategy', async () => {
+      extractSpy.mockResolvedValueOnce(['Page 1', 'Page 2', 'Page 3']);
+      const fileId = await uploadFile({
+        buffer: THREE_PAGE_PDF_BUFFER,
+        filename: 'reingest.pdf',
+        contentType: 'application/pdf',
+      });
+
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest?async=false')
+        .send({ file_id: fileId, project_id: projectId });
+      expect(ingestRes.status).toBe(201);
+      const docId = ingestRes.body.id as string;
+      expect(
+        (ingestRes.body.metadata as Record<string, unknown>).chunk_count
+      ).toBe(3);
+
+      extractSpy.mockResolvedValueOnce(['Page 1', 'Page 2', 'Page 3']);
+      const reRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/documents/${docId}/ingest?async=false`)
+        .send({ chunk_strategy: 'whole' });
+
+      expect(reRes.status).toBe(201);
+      expect(reRes.body.id).toBe(docId);
+      expect(reRes.body.status).toBe('ready');
+      expect((reRes.body.metadata as Record<string, unknown>).chunk_count).toBe(
+        1
+      );
+    });
+
+    test('async re-ingest returns 202 then transitions to ready', async () => {
+      const fileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'reingest-async.pdf',
+        contentType: 'application/pdf',
+      });
+
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest?async=false')
+        .send({ file_id: fileId, project_id: projectId });
+      const docId = ingestRes.body.id as string;
+
+      const reRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/documents/${docId}/ingest`)
+        .send({});
+
+      expect(reRes.status).toBe(202);
+      expect(reRes.body.status).toBe('pending');
+
+      const doc = await waitForDocumentStatus(docId, 'ready');
+      expect(doc.status).toBe('ready');
+    });
+
+    test('re-ingest recovers a document stuck in processing (issue #4)', async () => {
+      const fileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'reingest-stuck.pdf',
+        contentType: 'application/pdf',
+      });
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest?async=false')
+        .send({ file_id: fileId, project_id: projectId });
+      const docId = ingestRes.body.id as string;
+
+      await db.Document.update(
+        { status: 'processing' },
+        { where: { publicId: docId }, silent: true }
+      );
+
+      const reRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/documents/${docId}/ingest?async=false`)
+        .send({});
+
+      expect(reRes.status).toBe(201);
+      expect(reRes.body.status).toBe('ready');
+    });
+
+    test('returns 404 for a non-existent document', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/doc_nonexistent/ingest')
+        .send({});
+      expect(res.status).toBe(404);
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const fileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'reingest-401.pdf',
+        contentType: 'application/pdf',
+      });
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest?async=false')
+        .send({ file_id: fileId, project_id: projectId });
+      const docId = ingestRes.body.id as string;
+
+      const res = await testClient
+        .post(`/api/v1/documents/${docId}/ingest`)
+        .send({});
+      expect(res.status).toBe(401);
+    });
+
+    test('returns 403 without IngestDocument permission', async () => {
+      const fileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'reingest-403.pdf',
+        contentType: 'application/pdf',
+      });
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest?async=false')
+        .send({ file_id: fileId, project_id: projectId });
+      const docId = ingestRes.body.id as string;
+
+      const res = await authenticatedTestClient(_noPermToken)
+        .post(`/api/v1/documents/${docId}/ingest`)
+        .send({});
+      expect(res.status).toBe(403);
     });
   });
 });
