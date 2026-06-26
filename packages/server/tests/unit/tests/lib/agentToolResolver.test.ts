@@ -7,7 +7,13 @@ import {
   resolveBodyParamInterpolations,
   resolveUrlPathParams,
 } from 'src/lib/agentToolResolver';
-import { buildMcpToolExecute } from 'src/lib/agentToolResolverExternalTools';
+import {
+  buildMcpToolExecute,
+  executeSoatTool,
+  resolveMcpTools,
+  resolveSoatTools,
+} from 'src/lib/agentToolResolverExternalTools';
+import { soatTools } from 'src/lib/soatTools';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -1066,5 +1072,120 @@ describe('buildMcpToolExecute', () => {
       method: 'POST',
       error: networkError,
     });
+  });
+});
+
+describe('resolveMcpTools - direct', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('returns empty result when list response has no result field', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({}), { status: 200 })
+    );
+    const result = await resolveMcpTools({
+      typedTool: { mcp: { url: 'http://localhost:19999/mcp' } },
+      buildContextHeaders: () => ({}),
+      logToolCallingError: jest.fn(),
+    });
+    expect(Object.keys(result)).toHaveLength(0);
+  });
+
+  test('uses default empty schema when tool has no inputSchema', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ result: { tools: [{ name: 'noschema_tool' }] } }),
+        { status: 200 }
+      )
+    );
+    const result = await resolveMcpTools({
+      typedTool: { mcp: { url: 'http://localhost:19999/mcp' } },
+      buildContextHeaders: () => ({}),
+      logToolCallingError: jest.fn(),
+    });
+    expect(result).toHaveProperty('noschema_tool');
+  });
+});
+
+describe('executeSoatTool - direct', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('exercises body/context/trace/depth branches when POST def with body fn is provided', async () => {
+    const postDef = soatTools.find((t) => typeof t.body === 'function');
+    if (!postDef) {
+      return;
+    }
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ id: 'new-1' }), { status: 201 })
+    );
+    await executeSoatTool({
+      toolName: 'test',
+      def: postDef,
+      rawArgs: {},
+      base: 'http://localhost:5047',
+      toolContext: { env: 'test' },
+      traceId: 'trc_123',
+      rootTraceId: null,
+      remainingDepth: 3,
+      buildContextHeaders: () => ({}),
+      logToolCallingError: jest.fn(),
+    });
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  test('calls logToolCallingError and rethrows when fetch throws', async () => {
+    const listDef = soatTools.find((t) => t.method === 'GET');
+    if (!listDef) {
+      return;
+    }
+    const logToolCallingError = jest.fn();
+    const networkError = new Error('SOAT network failure');
+    jest.spyOn(global, 'fetch').mockRejectedValueOnce(networkError);
+    await expect(
+      executeSoatTool({
+        toolName: 'test',
+        def: listDef,
+        rawArgs: {},
+        base: 'http://localhost:5047',
+        buildContextHeaders: () => ({}),
+        logToolCallingError,
+      })
+    ).rejects.toThrow('SOAT network failure');
+    expect(logToolCallingError).toHaveBeenCalled();
+  });
+});
+
+describe('resolveSoatTools - direct', () => {
+  test('returns empty object when actions is null', () => {
+    const result = resolveSoatTools({
+      typedTool: {
+        name: 'myTool',
+        description: null,
+        actions: null,
+        presetParameters: null,
+      },
+      buildContextHeaders: () => ({}),
+      isSoatActionAllowedByBoundary: () => true,
+      logToolCallingError: jest.fn(),
+    });
+    expect(Object.keys(result)).toHaveLength(0);
+  });
+
+  test('skips action when def not found in soatTools registry', () => {
+    const result = resolveSoatTools({
+      typedTool: {
+        name: 'myTool',
+        description: null,
+        actions: ['completely-unknown-action-xyz'],
+        presetParameters: null,
+      },
+      buildContextHeaders: () => ({}),
+      isSoatActionAllowedByBoundary: () => true,
+      logToolCallingError: jest.fn(),
+    });
+    expect(Object.keys(result)).toHaveLength(0);
   });
 });
