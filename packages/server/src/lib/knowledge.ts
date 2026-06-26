@@ -205,12 +205,13 @@ const buildDocumentInclude = (args: {
   docWhere: Record<string, unknown> | undefined;
   fileInclude: ReturnType<typeof buildFileInclude>;
 }): unknown => {
+  const fileRequired = args.fileInclude.where !== undefined;
   return {
     model: db.Document,
     as: 'document',
     where: args.docWhere,
-    required: args.docWhere !== undefined,
-    include: [args.fileInclude],
+    required: args.docWhere !== undefined || fileRequired,
+    include: [{ ...args.fileInclude, required: fileRequired }],
   };
 };
 
@@ -219,6 +220,8 @@ const findChunksWithSearch = async (args: {
   docWhere: Record<string, unknown> | undefined;
   fileInclude: ReturnType<typeof buildFileInclude>;
   limit: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  topLevelWhere?: Record<string, any>;
 }): Promise<ChunkWithDocument[]> => {
   const embedding = await getEmbedding({ text: args.config.search! });
   const embeddingLiteral = `[${embedding.join(',')}]`;
@@ -231,12 +234,19 @@ const findChunksWithSearch = async (args: {
     fileInclude: args.fileInclude,
   });
 
+  const needsSubQueryFalse =
+    args.topLevelWhere !== undefined &&
+    Object.keys(args.topLevelWhere).some((k) => {
+      return k.startsWith('$');
+    });
+
   return db.DocumentChunk.findAll({
+    where: args.topLevelWhere,
     attributes: { include: [[distanceLiteral, 'distance']] },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     include: [docInclude] as any,
     order: distanceLiteral,
-    subQuery: false,
+    subQuery: needsSubQueryFalse ? false : undefined,
     limit: args.limit,
   }) as unknown as Promise<ChunkWithDocument[]>;
 };
@@ -245,32 +255,35 @@ const findChunksWithoutSearch = async (args: {
   docWhere: Record<string, unknown> | undefined;
   fileInclude: ReturnType<typeof buildFileInclude>;
   limit: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  topLevelWhere?: Record<string, any>;
 }): Promise<ChunkWithDocument[]> => {
   const docInclude = buildDocumentInclude({
     docWhere: args.docWhere,
     fileInclude: args.fileInclude,
   });
 
+  const needsSubQueryFalse =
+    args.topLevelWhere !== undefined &&
+    Object.keys(args.topLevelWhere).some((k) => {
+      return k.startsWith('$');
+    });
+
   return db.DocumentChunk.findAll({
+    where: args.topLevelWhere,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     include: [docInclude] as any,
     order: [['chunkIndex', 'ASC']],
-    subQuery: false,
+    subQuery: needsSubQueryFalse ? false : undefined,
     limit: args.limit,
   }) as unknown as Promise<ChunkWithDocument[]>;
 };
 
 const buildDocWhere = (args: {
   documentIds: string[] | undefined;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  policyWhere: Record<string, any> | undefined;
 }): Record<string, unknown> | undefined => {
-  const idFilter =
-    args.documentIds && args.documentIds.length > 0
-      ? { publicId: args.documentIds }
-      : undefined;
-  if (!idFilter && !args.policyWhere) return undefined;
-  return { ...(idFilter ?? {}), ...(args.policyWhere ?? {}) };
+  if (!args.documentIds || args.documentIds.length === 0) return undefined;
+  return { publicId: args.documentIds };
 };
 
 export const resolveDocumentSearch = async (args: {
@@ -286,15 +299,28 @@ export const resolveDocumentSearch = async (args: {
     return [];
   }
 
+  const effectivePolicyWhere =
+    args.policyWhere && Object.keys(args.policyWhere).length > 0
+      ? args.policyWhere
+      : undefined;
+
   const fileInclude = buildFileInclude({ projectIds, paths: config.paths });
-  const docWhere = buildDocWhere({
-    documentIds: config.documentIds,
-    policyWhere: args.policyWhere,
-  });
+  const docWhere = buildDocWhere({ documentIds: config.documentIds });
 
   const rawChunks = config.search
-    ? await findChunksWithSearch({ config, docWhere, fileInclude, limit })
-    : await findChunksWithoutSearch({ docWhere, fileInclude, limit });
+    ? await findChunksWithSearch({
+        config,
+        docWhere,
+        fileInclude,
+        limit,
+        topLevelWhere: effectivePolicyWhere,
+      })
+    : await findChunksWithoutSearch({
+        docWhere,
+        fileInclude,
+        limit,
+        topLevelWhere: effectivePolicyWhere,
+      });
 
   const mapped = rawChunks.map((chunk) => {
     return mapChunkResult(chunk, config);

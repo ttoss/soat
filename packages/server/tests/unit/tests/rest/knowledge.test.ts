@@ -109,13 +109,12 @@ describe('Knowledge', () => {
         });
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.results)).toBe(true);
-      if (response.body.results.length > 0) {
-        const result = response.body.results[0];
-        expect(result.source_type).toBe('document');
-        expect(result.document_id).toMatch(/^doc_/);
-        expect(result.chunk_id).toMatch(/^dchunk_/);
-        expect(result.project_id).toBe(projectId);
-      }
+      expect(response.body.results.length).toBeGreaterThan(0);
+      const result = response.body.results[0];
+      expect(result.source_type).toBe('document');
+      expect(result.document_id).toMatch(/^doc_/);
+      expect(result.chunk_id).toMatch(/^dchunk_/);
+      expect(result.project_id).toBe(projectId);
     });
 
     test('returns 403 when user has no permission', async () => {
