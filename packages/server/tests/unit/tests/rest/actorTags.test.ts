@@ -3,6 +3,7 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 describe('ActorTags', () => {
   let adminToken: string;
   let userToken: string;
+  let noPermToken: string;
   let userId: string;
   let projectId: string;
   let actorId: string;
@@ -20,6 +21,12 @@ describe('ActorTags', () => {
 
     userId = createUserRes.body.id;
     userToken = await loginAs('actortagsuser', 'actortagspass');
+
+    // User with no actor permissions — triggers 403 on tag routes
+    await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'actortagsnoperm', password: 'noPermPass' });
+    noPermToken = await loginAs('actortagsnoperm', 'noPermPass');
 
     const projectRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/projects')
@@ -87,6 +94,14 @@ describe('ActorTags', () => {
 
       expect(response.status).toBe(404);
     });
+
+    test('user without permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/actors/${actorId}/tags`
+      );
+
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('PUT /api/v1/actors/:id/tags', () => {
@@ -129,6 +144,14 @@ describe('ActorTags', () => {
         .send({ key: 'value' });
 
       expect(response.status).toBe(404);
+    });
+
+    test('user without permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .put(`/api/v1/actors/${actorId}/tags`)
+        .send({ key: 'value' });
+
+      expect(response.status).toBe(403);
     });
   });
 
@@ -177,6 +200,14 @@ describe('ActorTags', () => {
         .send({ key: 'value' });
 
       expect(response.status).toBe(404);
+    });
+
+    test('user without permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .patch(`/api/v1/actors/${actorId}/tags`)
+        .send({ key: 'value' });
+
+      expect(response.status).toBe(403);
     });
   });
 });
