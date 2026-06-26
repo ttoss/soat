@@ -33,33 +33,77 @@ describe('Reasoning config', () => {
     jest.clearAllMocks();
   });
 
-  describe('agent reasoning contract', () => {
-    test('agent create round-trips the reasoning config', async () => {
+  describe('agent pipeline contract', () => {
+    test('agent create round-trips a pipeline config', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/agents')
         .send({
           project_id: projectId,
           ai_provider_id: aiProviderId,
-          name: 'ReasoningContractAgent',
+          name: 'PipelineContractAgent',
           reasoning: {
             effort: 'high',
-            mode: 'reflect',
-            critique: {
-              ai_provider_id: aiProviderId,
-              model: 'critique-model',
-              prompt: 'Focus on factual accuracy.',
-            },
+            mode: 'pipeline',
+            steps: [
+              {
+                name: 'critique',
+                prompt: 'Critique: {draft}',
+                ai_provider_id: aiProviderId,
+                model: 'critique-model',
+                halt_if_equals: 'APPROVED',
+              },
+              {
+                name: 'final',
+                prompt: 'Improve using {steps.critique}',
+                output: true,
+              },
+            ],
           },
         });
 
       expect(res.status).toBe(201);
       expect(res.body.reasoning.effort).toBe('high');
-      expect(res.body.reasoning.mode).toBe('reflect');
-      expect(res.body.reasoning.critique.ai_provider_id).toBe(aiProviderId);
-      expect(res.body.reasoning.critique.model).toBe('critique-model');
-      expect(res.body.reasoning.critique.prompt).toBe(
-        'Focus on factual accuracy.'
-      );
+      expect(res.body.reasoning.mode).toBe('pipeline');
+      expect(res.body.reasoning.steps).toHaveLength(2);
+      expect(res.body.reasoning.steps[0].name).toBe('critique');
+      expect(res.body.reasoning.steps[0].ai_provider_id).toBe(aiProviderId);
+      expect(res.body.reasoning.steps[0].model).toBe('critique-model');
+      expect(res.body.reasoning.steps[0].halt_if_equals).toBe('APPROVED');
+      expect(res.body.reasoning.steps[1].output).toBe(true);
+    });
+
+    test('agent create round-trips a fanout step', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'FanoutContractAgent',
+          reasoning: {
+            mode: 'pipeline',
+            steps: [
+              {
+                kind: 'fanout',
+                name: 'angles',
+                perspectives: [
+                  { name: 'Skeptic', prompt: 'Find the flaw.' },
+                  { name: 'Advocate' },
+                ],
+                prompt: 'Argue an angle on {question}',
+              },
+              {
+                name: 'final',
+                prompt: 'Reconcile {steps.angles}',
+                output: true,
+              },
+            ],
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.reasoning.steps[0].kind).toBe('fanout');
+      expect(res.body.reasoning.steps[0].perspectives).toHaveLength(2);
+      expect(res.body.reasoning.steps[0].perspectives[0].name).toBe('Skeptic');
     });
 
     test('agent update sets and clears the reasoning config', async () => {
@@ -76,9 +120,14 @@ describe('Reasoning config', () => {
 
       const updateRes = await authenticatedTestClient(adminToken)
         .put(`/api/v1/agents/${agentId}`)
-        .send({ reasoning: { mode: 'reflect' } });
+        .send({
+          reasoning: {
+            mode: 'pipeline',
+            steps: [{ name: 'final', prompt: 'Refine: {draft}', output: true }],
+          },
+        });
       expect(updateRes.status).toBe(200);
-      expect(updateRes.body.reasoning.mode).toBe('reflect');
+      expect(updateRes.body.reasoning.mode).toBe('pipeline');
 
       const clearRes = await authenticatedTestClient(adminToken)
         .put(`/api/v1/agents/${agentId}`)
@@ -88,71 +137,56 @@ describe('Reasoning config', () => {
     });
   });
 
-  describe('debate config round-trip', () => {
-    test('agent create round-trips integer perspectives and synthesis override', async () => {
-      const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/agents')
-        .send({
-          project_id: projectId,
-          ai_provider_id: aiProviderId,
-          name: 'DebateContractAgent',
-          reasoning: {
-            mode: 'debate',
-            perspectives: 2,
-            max_rounds: 1,
-            synthesis: {
-              ai_provider_id: aiProviderId,
-              model: 'synth-model',
-              prompt: 'Weigh the arguments and commit.',
-            },
-          },
-        });
+  describe('pipeline validation', () => {
+    const createWithReasoning = (reasoning: unknown) => {
+      return authenticatedTestClient(adminToken).post('/api/v1/agents').send({
+        project_id: projectId,
+        ai_provider_id: aiProviderId,
+        name: 'InvalidReasoningAgent',
+        reasoning,
+      });
+    };
 
-      expect(res.status).toBe(201);
-      expect(res.body.reasoning.mode).toBe('debate');
-      expect(res.body.reasoning.perspectives).toBe(2);
-      expect(res.body.reasoning.max_rounds).toBe(1);
-      expect(res.body.reasoning.synthesis.ai_provider_id).toBe(aiProviderId);
-      expect(res.body.reasoning.synthesis.model).toBe('synth-model');
-      expect(res.body.reasoning.synthesis.prompt).toBe(
-        'Weigh the arguments and commit.'
-      );
+    test('rejects an unknown mode', async () => {
+      const res = await createWithReasoning({ mode: 'reflect' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_REASONING_CONFIG');
     });
 
-    test('agent create round-trips explicit perspective objects', async () => {
-      const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/agents')
-        .send({
-          project_id: projectId,
-          ai_provider_id: aiProviderId,
-          name: 'HeterogeneousDebateAgent',
-          reasoning: {
-            mode: 'debate',
-            perspectives: [
-              {
-                name: 'Skeptic',
-                prompt: 'Find the fatal flaw.',
-                ai_provider_id: aiProviderId,
-                model: 'skeptic-model',
-              },
-              { name: 'Advocate' },
-            ],
-          },
-        });
+    test('rejects a pipeline with no steps', async () => {
+      const res = await createWithReasoning({ mode: 'pipeline', steps: [] });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_REASONING_CONFIG');
+    });
 
-      expect(res.status).toBe(201);
-      expect(res.body.reasoning.mode).toBe('debate');
-      expect(Array.isArray(res.body.reasoning.perspectives)).toBe(true);
-      expect(res.body.reasoning.perspectives).toHaveLength(2);
-      expect(res.body.reasoning.perspectives[0].name).toBe('Skeptic');
-      expect(res.body.reasoning.perspectives[0].prompt).toBe(
-        'Find the fatal flaw.'
-      );
-      expect(res.body.reasoning.perspectives[0].ai_provider_id).toBe(
-        aiProviderId
-      );
-      expect(res.body.reasoning.perspectives[0].model).toBe('skeptic-model');
-      expect(res.body.reasoning.perspectives[1].name).toBe('Advocate');
+    test('rejects more than the maximum number of steps', async () => {
+      const steps = Array.from({ length: 9 }, (_unused, i) => {
+        return { name: `s${i}`, prompt: 'p' };
+      });
+      const res = await createWithReasoning({ mode: 'pipeline', steps });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_REASONING_CONFIG');
+    });
+
+    test('rejects duplicate step names', async () => {
+      const res = await createWithReasoning({
+        mode: 'pipeline',
+        steps: [
+          { name: 'dup', prompt: 'a' },
+          { name: 'dup', prompt: 'b' },
+        ],
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_REASONING_CONFIG');
+    });
+
+    test('rejects a fanout count out of range', async () => {
+      const res = await createWithReasoning({
+        mode: 'pipeline',
+        steps: [{ name: 'a', prompt: 'p', kind: 'fanout', count: 9 }],
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_REASONING_CONFIG');
     });
   });
 
@@ -178,17 +212,44 @@ describe('Reasoning config', () => {
         },
       });
 
+      const override = {
+        mode: 'pipeline',
+        effort: 'high',
+        steps: [{ name: 'final', prompt: 'Refine: {draft}', output: true }],
+      };
+
       const res = await authenticatedTestClient(adminToken)
         .post(`/api/v1/agents/${agentId}/generate`)
         .send({
           messages: [{ role: 'user', content: 'Hard question.' }],
-          reasoning: { mode: 'reflect', effort: 'high' },
+          reasoning: override,
         });
 
       expect(res.status).toBe(200);
       expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
       const callArgs = mockCreateGeneration.mock.calls[0][0];
-      expect(callArgs.reasoning).toEqual({ mode: 'reflect', effort: 'high' });
+      expect(callArgs.reasoning).toEqual(override);
+    });
+
+    test('generate route rejects an invalid reasoning override', async () => {
+      const agentRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'ReasoningOverrideRejectAgent',
+        });
+      const agentId = agentRes.body.id;
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: 'Hard question.' }],
+          reasoning: { mode: 'pipeline', steps: [] },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_REASONING_CONFIG');
     });
   });
 });

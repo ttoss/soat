@@ -11,13 +11,13 @@ import {
   savePendingGeneration,
   type TypedAgent,
 } from './agentGenerationHelpers';
-import { applyOrchestration } from './deliberation';
 import {
   fireCompletionSideEffects,
   recordGenerationFailure,
 } from './generationLifecycle';
 import { toProviderDomainError } from './providerError';
 import { type ProviderOptionsMap, type ReasoningConfig } from './reasoning';
+import { applyOrchestration } from './reasoningPipeline';
 
 const log = createDebug('soat:generation');
 

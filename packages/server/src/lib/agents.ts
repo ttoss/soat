@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { validateReasoningConfig } from './reasoning';
 
 // Re-export symbols that callers expect from this module.
 export {
@@ -151,6 +152,8 @@ export const createAgent = async (args: {
   maxContextMessages?: number;
   singleSessionPerActor?: boolean;
 }): Promise<MappedAgent> => {
+  validateReasoningConfig(args.reasoningConfig);
+
   const aiProviderId = await resolveAiProviderDbId(args.aiProviderId);
   if (!aiProviderId)
     throw new DomainError(
@@ -240,6 +243,8 @@ export const updateAgent = async (
     id: string;
   } & AgentUpdateFields
 ): Promise<MappedAgent> => {
+  validateReasoningConfig(args.reasoningConfig);
+
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
 

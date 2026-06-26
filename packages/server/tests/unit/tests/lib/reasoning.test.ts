@@ -1,39 +1,20 @@
-import * as eventBusModule from 'src/lib/eventBus';
 import {
-  applyReflection,
   buildReasoningProviderOptions,
-  maybeApplyReflectionToResult,
   resolveReasoningConfig,
+  validateReasoningConfig,
 } from 'src/lib/reasoning';
-import * as reasoningCompletionModule from 'src/lib/reasoningCompletion';
-
-const mockRunReasoningCompletion = jest.spyOn(
-  reasoningCompletionModule,
-  'runReasoningCompletion'
-);
-
-const mockEmitEvent = jest
-  .spyOn(eventBusModule, 'emitEvent')
-  .mockImplementation(() => {
-    return undefined;
-  });
 
 describe('reasoning lib', () => {
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
   describe('resolveReasoningConfig', () => {
     test('returns the agent config when no override is given', () => {
-      expect(
-        resolveReasoningConfig({ agentConfig: { mode: 'reflect' } })
-      ).toEqual({ mode: 'reflect' });
+      const config = { mode: 'pipeline', steps: [{ name: 'a', prompt: 'x' }] };
+      expect(resolveReasoningConfig({ agentConfig: config })).toEqual(config);
     });
 
     test('the per-generate override replaces the agent config entirely', () => {
       expect(
         resolveReasoningConfig({
-          agentConfig: { mode: 'reflect', effort: 'high' },
+          agentConfig: { mode: 'pipeline', effort: 'high', steps: [] },
           override: { effort: 'low' },
         })
       ).toEqual({ effort: 'low' });
@@ -49,7 +30,7 @@ describe('reasoning lib', () => {
 
     test('ignores non-object configs', () => {
       expect(
-        resolveReasoningConfig({ agentConfig: 'reflect' as never })
+        resolveReasoningConfig({ agentConfig: 'pipeline' as never })
       ).toBeNull();
     });
   });
@@ -101,195 +82,115 @@ describe('reasoning lib', () => {
     });
   });
 
-  describe('applyReflection', () => {
-    const baseArgs = {
-      agentId: 'agent_test01',
-      projectIds: [1],
-      messages: [{ role: 'user', content: 'What is the capital of France?' }],
-      draft: 'The capital of France is Lyon.',
-      temperature: null,
+  describe('validateReasoningConfig', () => {
+    const expectCode = (fn: () => void, code: string) => {
+      try {
+        fn();
+        throw new Error('expected validateReasoningConfig to throw');
+      } catch (error) {
+        expect((error as { code?: string }).code).toBe(code);
+      }
     };
 
-    test('runs critique then revision and returns the revised text', async () => {
-      mockRunReasoningCompletion
-        .mockResolvedValueOnce('The draft names the wrong city; it is Paris.')
-        .mockResolvedValueOnce('The capital of France is Paris.');
-
-      const result = await applyReflection({
-        ...baseArgs,
-        reasoning: { mode: 'reflect' },
-      });
-
-      expect(result.applied).toBe(true);
-      expect(result.text).toBe('The capital of France is Paris.');
-      expect(mockRunReasoningCompletion).toHaveBeenCalledTimes(2);
-
-      const critiqueCall = mockRunReasoningCompletion.mock.calls[0][0];
-      expect(critiqueCall.prompt).toContain('What is the capital of France?');
-      expect(critiqueCall.prompt).toContain('The capital of France is Lyon.');
-
-      const reviseCall = mockRunReasoningCompletion.mock.calls[1][0];
-      expect(reviseCall.prompt).toContain(
-        'The draft names the wrong city; it is Paris.'
-      );
+    test('accepts null, effort-only, and mode:none configs', () => {
+      expect(() => {
+        return validateReasoningConfig(null);
+      }).not.toThrow();
+      expect(() => {
+        return validateReasoningConfig(undefined);
+      }).not.toThrow();
+      expect(() => {
+        return validateReasoningConfig({ effort: 'high' });
+      }).not.toThrow();
+      expect(() => {
+        return validateReasoningConfig({ mode: 'none' });
+      }).not.toThrow();
     });
 
-    test('short-circuits without a revision call when the critique approves', async () => {
-      mockRunReasoningCompletion.mockResolvedValueOnce('APPROVED');
-
-      const result = await applyReflection({
-        ...baseArgs,
-        draft: 'The capital of France is Paris.',
-        reasoning: { mode: 'reflect' },
-      });
-
-      expect(result.applied).toBe(false);
-      expect(result.text).toBe('The capital of France is Paris.');
-      expect(mockRunReasoningCompletion).toHaveBeenCalledTimes(1);
+    test('accepts a valid pipeline with a completion and a fanout step', () => {
+      expect(() => {
+        return validateReasoningConfig({
+          mode: 'pipeline',
+          steps: [
+            {
+              kind: 'fanout',
+              name: 'angles',
+              count: 3,
+              prompt: 'a {question}',
+            },
+            { name: 'final', prompt: 'b {steps.angles}', output: true },
+          ],
+        });
+      }).not.toThrow();
     });
 
-    test('routes the critique call through the critique override triple', async () => {
-      mockRunReasoningCompletion
-        .mockResolvedValueOnce('Needs more precision.')
-        .mockResolvedValueOnce('Revised answer.');
-
-      await applyReflection({
-        ...baseArgs,
-        reasoning: {
-          mode: 'reflect',
-          critique: {
-            aiProviderId: 'aip_cheap01',
-            model: 'tiny-critic',
-            prompt: 'Critique only factual accuracy.',
-          },
-        },
-      });
-
-      const critiqueCall = mockRunReasoningCompletion.mock.calls[0][0];
-      expect(critiqueCall.aiProviderId).toBe('aip_cheap01');
-      expect(critiqueCall.model).toBe('tiny-critic');
-      // The custom prompt replaces the default critique instructions...
-      expect(critiqueCall.prompt).toContain('Critique only factual accuracy.');
-      expect(critiqueCall.prompt).not.toContain('weaknesses');
-      // ...but the engine-owned scaffolding (question + draft) is kept.
-      expect(critiqueCall.prompt).toContain('What is the capital of France?');
-      expect(critiqueCall.prompt).toContain('The capital of France is Lyon.');
-
-      // The revision stays on the agent's own model.
-      const reviseCall = mockRunReasoningCompletion.mock.calls[1][0];
-      expect(reviseCall.aiProviderId).toBeUndefined();
-      expect(reviseCall.model).toBeUndefined();
+    test('rejects an unknown mode', () => {
+      expectCode(() => {
+        return validateReasoningConfig({ mode: 'reflect' });
+      }, 'INVALID_REASONING_CONFIG');
     });
 
-    test('returns the draft when the critique call fails', async () => {
-      mockRunReasoningCompletion.mockRejectedValueOnce(
-        new Error('provider down')
-      );
-
-      const result = await applyReflection({
-        ...baseArgs,
-        reasoning: { mode: 'reflect' },
-      });
-
-      expect(result.applied).toBe(false);
-      expect(result.text).toBe(baseArgs.draft);
+    test('rejects a pipeline with no steps', () => {
+      expectCode(() => {
+        return validateReasoningConfig({ mode: 'pipeline', steps: [] });
+      }, 'INVALID_REASONING_CONFIG');
     });
 
-    test('returns the draft when the revision call fails', async () => {
-      mockRunReasoningCompletion
-        .mockResolvedValueOnce('The city is wrong.')
-        .mockRejectedValueOnce(new Error('provider down'));
-
-      const result = await applyReflection({
-        ...baseArgs,
-        reasoning: { mode: 'reflect' },
+    test('rejects more than the maximum number of steps', () => {
+      const steps = Array.from({ length: 9 }, (_unused, i) => {
+        return { name: `s${i}`, prompt: 'p' };
       });
-
-      expect(result.applied).toBe(false);
-      expect(result.text).toBe(baseArgs.draft);
+      expectCode(() => {
+        return validateReasoningConfig({ mode: 'pipeline', steps });
+      }, 'INVALID_REASONING_CONFIG');
     });
 
-    test('does nothing when mode is not reflect', async () => {
-      const result = await applyReflection({
-        ...baseArgs,
-        reasoning: { effort: 'high' },
-      });
-
-      expect(result.applied).toBe(false);
-      expect(result.text).toBe(baseArgs.draft);
-      expect(mockRunReasoningCompletion).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('maybeApplyReflectionToResult observability', () => {
-    test('emits a fallback event when the critique call fails', async () => {
-      mockRunReasoningCompletion.mockRejectedValueOnce(new Error('down'));
-
-      await maybeApplyReflectionToResult({
-        reasoningConfig: { mode: 'reflect' },
-        agentId: 'agent_test',
-        generationId: 'gen_reflect',
-        projectId: 1,
-        projectPublicId: 'prj_01',
-        messages: [{ role: 'user', content: 'question' }],
-        result: { text: 'draft' },
-      });
-
-      expect(mockEmitEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'agents.reasoning.fallback',
-          projectId: 1,
-          projectPublicId: 'prj_01',
-          resourceType: 'generation',
-          resourceId: 'gen_reflect',
-          data: expect.objectContaining({
-            mode: 'reflect',
-            reason: 'critique_failed',
-          }),
-        })
-      );
+    test('rejects duplicate step names', () => {
+      expectCode(() => {
+        return validateReasoningConfig({
+          mode: 'pipeline',
+          steps: [
+            { name: 'dup', prompt: 'a' },
+            { name: 'dup', prompt: 'b' },
+          ],
+        });
+      }, 'INVALID_REASONING_CONFIG');
     });
 
-    test('does not emit a fallback event when reflection revises the draft', async () => {
-      mockRunReasoningCompletion
-        .mockResolvedValueOnce('The draft is too vague.')
-        .mockResolvedValueOnce('revised answer');
-
-      const result = { text: 'draft' };
-      await maybeApplyReflectionToResult({
-        reasoningConfig: { mode: 'reflect' },
-        agentId: 'agent_test',
-        generationId: 'gen_reflect',
-        projectId: 1,
-        projectPublicId: 'prj_01',
-        messages: [{ role: 'user', content: 'question' }],
-        result,
-      });
-
-      expect(result.text).toBe('revised answer');
-      const fallbackEmits = mockEmitEvent.mock.calls.filter(([event]) => {
-        return event.type === 'agents.reasoning.fallback';
-      });
-      expect(fallbackEmits).toHaveLength(0);
+    test('rejects a step missing a prompt', () => {
+      expectCode(() => {
+        return validateReasoningConfig({
+          mode: 'pipeline',
+          steps: [{ name: 'a' }],
+        });
+      }, 'INVALID_REASONING_CONFIG');
     });
 
-    test('does not emit a fallback event when the draft is approved', async () => {
-      mockRunReasoningCompletion.mockResolvedValueOnce('APPROVED');
+    test('rejects an unknown step kind', () => {
+      expectCode(() => {
+        return validateReasoningConfig({
+          mode: 'pipeline',
+          steps: [{ name: 'a', prompt: 'p', kind: 'loop' }],
+        });
+      }, 'INVALID_REASONING_CONFIG');
+    });
 
-      await maybeApplyReflectionToResult({
-        reasoningConfig: { mode: 'reflect' },
-        agentId: 'agent_test',
-        generationId: 'gen_reflect',
-        projectId: 1,
-        projectPublicId: 'prj_01',
-        messages: [{ role: 'user', content: 'question' }],
-        result: { text: 'draft' },
-      });
+    test('rejects a fanout step with no count or perspectives', () => {
+      expectCode(() => {
+        return validateReasoningConfig({
+          mode: 'pipeline',
+          steps: [{ name: 'a', prompt: 'p', kind: 'fanout' }],
+        });
+      }, 'INVALID_REASONING_CONFIG');
+    });
 
-      const fallbackEmits = mockEmitEvent.mock.calls.filter(([event]) => {
-        return event.type === 'agents.reasoning.fallback';
-      });
-      expect(fallbackEmits).toHaveLength(0);
+    test('rejects a fanout count out of range', () => {
+      expectCode(() => {
+        return validateReasoningConfig({
+          mode: 'pipeline',
+          steps: [{ name: 'a', prompt: 'p', kind: 'fanout', count: 9 }],
+        });
+      }, 'INVALID_REASONING_CONFIG');
     });
   });
 });

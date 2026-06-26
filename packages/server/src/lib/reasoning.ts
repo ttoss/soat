@@ -2,34 +2,37 @@ import type { JSONValue } from 'ai';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { DomainError } from '../errors';
 import { emitEvent } from './eventBus';
 import { updateGenerationRecord } from './generations';
-import * as reasoningCompletion from './reasoningCompletion';
 
 const log = createDebug('soat:reasoning');
 
 /**
- * Reasoning outcomes that mean the engine silently degraded to the plain
- * draft instead of delivering the requested deep-thinking strategy. Emitting
- * an event for these makes the degradation detectable (deep thinking never
- * fails a request, so without this it is invisible).
+ * Hard caps for a reasoning pipeline. These bound the cost of a user-defined
+ * thinking strategy — a pipeline is pure meta-cognition, never a workflow
+ * engine (see `orchestrationEngine.ts` for that layer).
  */
-const FALLBACK_REASONS = new Set([
-  'critique_failed',
-  'revision_failed',
-  'fallback',
-  'synthesis_failed',
-]);
+export const MAX_STEPS = 8;
+export const MAX_FANOUT = 5;
+export const MAX_ROUNDS = 3;
+export const MAX_TOTAL_COMPLETIONS = 24;
+
+/**
+ * Reasoning outcomes that mean the engine silently degraded to the plain
+ * draft instead of delivering the requested pipeline. Emitting an event for
+ * these makes the degradation detectable (deep thinking never fails a request,
+ * so without this it is invisible).
+ */
+const FALLBACK_REASONS = new Set(['all_failed', 'output_failed', 'fallback']);
 
 export type ReasoningSummary = {
   mode: string;
   applied: boolean;
   reason: string;
-  /** Debate only — number of configured perspectives. */
-  perspectives?: number;
-  /** Debate only — number of rounds run. */
-  rounds?: number;
-  /** Debate only — number of perspective turns that failed and were dropped. */
+  /** Number of steps that produced output. */
+  stepsRun?: number;
+  /** Number of step/perspective turns that failed and were dropped. */
   dropped?: number;
   /** True when the engine degraded to the plain draft. */
   fallback?: boolean;
@@ -69,12 +72,6 @@ export const emitReasoningFallbackEvent = (args: {
 
 export type ReasoningEffort = 'low' | 'medium' | 'high';
 
-export type ReasoningOverrideTriple = {
-  aiProviderId?: string;
-  model?: string;
-  prompt?: string;
-};
-
 export type PerspectiveConfig = {
   name?: string;
   prompt?: string;
@@ -82,19 +79,35 @@ export type PerspectiveConfig = {
   model?: string;
 };
 
+export type ReasoningStep = {
+  /** Unique, human-readable step name; referenced as `{steps.<name>}`. */
+  name: string;
+  /** `completion` (default) runs one call; `fanout` runs N perspectives. */
+  kind?: 'completion' | 'fanout';
+  /** Prompt template — supports `{question}`, `{draft}`, `{steps.<name>}`. */
+  prompt: string;
+  aiProviderId?: string;
+  model?: string;
+  temperature?: number;
+  /** Marks the step whose output is the final answer (else the last step). */
+  output?: boolean;
+  /** If the step output equals this, halt and keep the current draft. */
+  haltIfEquals?: string;
+  /** Fanout only — number of auto-named perspectives (2–5). */
+  count?: number;
+  /** Fanout only — explicit perspective objects (overrides `count`). */
+  perspectives?: PerspectiveConfig[];
+  /** Fanout only — rounds of perspective turns (default 1, max 3). */
+  rounds?: number;
+};
+
 export type ReasoningConfig = {
   /** Provider-native reasoning effort, forwarded to providers that support it. */
   effort?: ReasoningEffort;
   /** Orchestrated reasoning strategy. Defaults to none. */
-  mode?: 'none' | 'reflect' | 'debate';
-  /** Reflect only — overrides for the critique pass. */
-  critique?: ReasoningOverrideTriple;
-  /** Debate only — integer count (2–5) or explicit perspective objects. */
-  perspectives?: number | PerspectiveConfig[];
-  /** Debate only — rounds of perspective turns. Default 1, max 3. */
-  maxRounds?: number;
-  /** Debate only — override triple for the synthesis pass. */
-  synthesis?: ReasoningOverrideTriple;
+  mode?: 'none' | 'pipeline';
+  /** Pipeline only — ordered steps run after the base draft. */
+  steps?: ReasoningStep[];
 };
 
 export type ReasoningMessage = { role: string; content: unknown };
@@ -114,9 +127,153 @@ export const resolveReasoningConfig = (args: {
   }
   const config = candidate as ReasoningConfig;
   if (config.mode === 'none' && !config.effort) return null;
-  if (!config.mode && !config.effort && !config.critique) return null;
+  if (!config.mode && !config.effort) return null;
   return config;
 };
+
+// ── Validation ─────────────────────────────────────────────────────────────
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+const invalid = (message: string): never => {
+  throw new DomainError('INVALID_REASONING_CONFIG', message);
+};
+
+const isStringOrUndefined = (value: unknown): boolean => {
+  return value === undefined || typeof value === 'string';
+};
+
+const resolveFanoutRounds = (step: Record<string, unknown>, index: number) => {
+  const rounds = step.rounds === undefined ? 1 : step.rounds;
+  if (typeof rounds !== 'number' || rounds < 1 || rounds > MAX_ROUNDS) {
+    invalid(
+      `reasoning.steps[${index}].rounds must be between 1 and ${MAX_ROUNDS}.`
+    );
+  }
+  return rounds as number;
+};
+
+const resolveFanoutWidth = (step: Record<string, unknown>, index: number) => {
+  if (Array.isArray(step.perspectives)) {
+    const width = step.perspectives.length;
+    if (width < 2 || width > MAX_FANOUT) {
+      invalid(
+        `reasoning.steps[${index}].perspectives must have 2–${MAX_FANOUT} entries.`
+      );
+    }
+    return width;
+  }
+  const count = step.count;
+  if (typeof count !== 'number' || count < 2 || count > MAX_FANOUT) {
+    invalid(
+      `reasoning.steps[${index}] fanout needs count (2–${MAX_FANOUT}) or perspectives.`
+    );
+  }
+  return count as number;
+};
+
+const validateStepContent = (
+  step: Record<string, unknown>,
+  index: number
+): void => {
+  if (typeof step.prompt !== 'string' || step.prompt.trim().length === 0) {
+    invalid(`reasoning.steps[${index}].prompt is required.`);
+  }
+  if (!isStringOrUndefined(step.aiProviderId)) {
+    invalid(`reasoning.steps[${index}].aiProviderId must be a string.`);
+  }
+  if (!isStringOrUndefined(step.model)) {
+    invalid(`reasoning.steps[${index}].model must be a string.`);
+  }
+};
+
+const validateStepIdentity = (args: {
+  step: Record<string, unknown>;
+  index: number;
+  names: Set<string>;
+}): 'completion' | 'fanout' => {
+  const { step, index, names } = args;
+  if (typeof step.name !== 'string' || step.name.trim().length === 0) {
+    invalid(`reasoning.steps[${index}].name is required.`);
+  }
+  const name = step.name as string;
+  if (names.has(name)) {
+    invalid(`reasoning.steps[${index}].name '${name}' is duplicated.`);
+  }
+  names.add(name);
+
+  const kind = step.kind ?? 'completion';
+  if (kind !== 'completion' && kind !== 'fanout') {
+    invalid(`reasoning.steps[${index}].kind '${String(kind)}' is invalid.`);
+  }
+  return kind as 'completion' | 'fanout';
+};
+
+const validateStep = (args: {
+  step: unknown;
+  index: number;
+  names: Set<string>;
+}): number => {
+  if (!isPlainObject(args.step)) {
+    invalid(`reasoning.steps[${args.index}] must be an object.`);
+    return 1;
+  }
+  const step = args.step;
+  const kind = validateStepIdentity({
+    step,
+    index: args.index,
+    names: args.names,
+  });
+  validateStepContent(step, args.index);
+  if (kind !== 'fanout') return 1;
+  return (
+    resolveFanoutWidth(step, args.index) * resolveFanoutRounds(step, args.index)
+  );
+};
+
+const validatePipelineSteps = (steps: unknown): void => {
+  if (!Array.isArray(steps) || steps.length === 0) {
+    invalid('reasoning.steps is required and must be a non-empty array.');
+    return;
+  }
+  if (steps.length > MAX_STEPS) {
+    invalid(`reasoning.steps cannot exceed ${MAX_STEPS} steps.`);
+  }
+  const names = new Set<string>();
+  let totalCompletions = 0;
+  for (const [index, step] of steps.entries()) {
+    totalCompletions += validateStep({ step, index, names });
+  }
+  if (totalCompletions > MAX_TOTAL_COMPLETIONS) {
+    invalid(
+      `reasoning pipeline exceeds ${MAX_TOTAL_COMPLETIONS} total completions.`
+    );
+  }
+};
+
+/**
+ * Validates a reasoning config at every write choke point (agent create/update
+ * and the per-generate override). Throws `INVALID_REASONING_CONFIG` on any
+ * structural problem. A null/undefined config or an effort-only config is
+ * always valid.
+ */
+export const validateReasoningConfig = (config: unknown): void => {
+  if (config === null || config === undefined) return;
+  if (!isPlainObject(config)) {
+    invalid('reasoning must be an object.');
+    return;
+  }
+  const mode = config.mode;
+  if (mode !== undefined && mode !== 'none' && mode !== 'pipeline') {
+    invalid(`reasoning.mode '${String(mode)}' is invalid.`);
+  }
+  if (mode !== 'pipeline') return;
+  validatePipelineSteps(config.steps);
+};
+
+// ── Provider-native effort ───────────────────────────────────────────────────
 
 const EFFORT_BUDGET_TOKENS: Record<ReasoningEffort, number> = {
   low: 4096,
@@ -173,13 +330,15 @@ export const buildReasoningProviderOptions = (args: {
 
 /**
  * Resolves the effective reasoning config and provider-native options for a
- * generation context in one step.
+ * generation context in one step. Validates the per-generate override so a bad
+ * override fails up front rather than mid-generation.
  */
 export const resolveReasoningForContext = (args: {
   typedAgent: { reasoningConfig: unknown };
   override?: object;
   provider: string;
 }) => {
+  if (args.override !== undefined) validateReasoningConfig(args.override);
   const reasoningConfig = resolveReasoningConfig({
     agentConfig: args.typedAgent.reasoningConfig,
     override: args.override,
@@ -191,165 +350,10 @@ export const resolveReasoningForContext = (args: {
   return { reasoningConfig, reasoningOptions };
 };
 
-const DEFAULT_CRITIQUE_INSTRUCTIONS = [
-  'You are reviewing a draft answer. Identify factual errors, gaps, unsupported claims, and weaknesses in the reasoning.',
-  'Be specific and concise.',
-].join('\n');
-
-const formatQuestion = (messages: ReasoningMessage[]): string => {
-  return messages
-    .filter((message) => {
-      return (
-        (message.role === 'user' || message.role === 'assistant') &&
-        typeof message.content === 'string' &&
-        (message.content as string).trim().length > 0
-      );
-    })
-    .map((message) => {
-      return `${message.role}: ${message.content as string}`;
-    })
-    .join('\n');
-};
-
-const buildCritiquePrompt = (args: {
-  question: string;
-  draft: string;
-  instructions?: string;
-}): string => {
-  // A custom prompt replaces only the critique instructions; the
-  // engine-owned scaffolding (question, draft, APPROVED contract) is kept.
-  return [
-    args.instructions ?? DEFAULT_CRITIQUE_INSTRUCTIONS,
-    'Reply with exactly APPROVED and nothing else if no meaningful improvement is possible.',
-    '',
-    'Question:',
-    args.question,
-    '',
-    'Draft answer:',
-    args.draft,
-  ].join('\n');
-};
-
-const buildRevisionPrompt = (args: {
-  question: string;
-  draft: string;
-  critique: string;
-}): string => {
-  return [
-    'Improve the draft answer using the critique. Respond with the final answer only — no preamble, no commentary about the revision.',
-    '',
-    'Question:',
-    args.question,
-    '',
-    'Draft answer:',
-    args.draft,
-    '',
-    'Critique:',
-    args.critique,
-  ].join('\n');
-};
-
-const isApproved = (critique: string): boolean => {
-  const trimmed = critique.trim();
-  return trimmed === 'APPROVED' || trimmed === 'APPROVED.';
-};
-
-export type ReflectionResult = {
-  text: string;
-  /** True when the returned text differs from the draft. */
-  applied: boolean;
-  reason:
-    | 'revised'
-    | 'approved'
-    | 'skipped'
-    | 'critique_failed'
-    | 'revision_failed';
-};
-
-const runRevision = async (args: {
-  agentId: string;
-  projectIds?: number[];
-  question: string;
-  draft: string;
-  critique: string;
-  temperature?: number | null;
-}): Promise<ReflectionResult> => {
-  try {
-    const revised = await reasoningCompletion.runReasoningCompletion({
-      agentId: args.agentId,
-      projectIds: args.projectIds,
-      prompt: buildRevisionPrompt({
-        question: args.question,
-        draft: args.draft,
-        critique: args.critique,
-      }),
-      temperature: args.temperature ?? undefined,
-    });
-    if (revised.trim().length === 0) {
-      return { text: args.draft, applied: false, reason: 'revision_failed' };
-    }
-    log('runRevision: revised agentId=%s', args.agentId);
-    return { text: revised, applied: true, reason: 'revised' };
-  } catch (error) {
-    log(
-      'runRevision: failed agentId=%s error=%s',
-      args.agentId,
-      error instanceof Error ? error.message : String(error)
-    );
-    return { text: args.draft, applied: false, reason: 'revision_failed' };
-  }
-};
-
 /**
- * Reflect mode: critique the draft, then revise it. Failures and approvals
- * fall back to the draft — reflection must never make a generation worse or
- * fail a request that already has an answer.
+ * Records the reasoning outcome on the generation record's metadata (merged,
+ * fire-and-forget) — same observability pattern as `metadata.extraction`.
  */
-export const applyReflection = async (args: {
-  agentId: string;
-  projectIds?: number[];
-  reasoning: ReasoningConfig;
-  messages: ReasoningMessage[];
-  draft: string;
-  temperature?: number | null;
-}): Promise<ReflectionResult> => {
-  if (args.reasoning.mode !== 'reflect' || args.draft.trim().length === 0) {
-    return { text: args.draft, applied: false, reason: 'skipped' };
-  }
-
-  const question = formatQuestion(args.messages);
-  const critiqueOverride = args.reasoning.critique ?? {};
-
-  let critique: string;
-  try {
-    critique = await reasoningCompletion.runReasoningCompletion({
-      agentId: args.agentId,
-      projectIds: args.projectIds,
-      aiProviderId: critiqueOverride.aiProviderId,
-      model: critiqueOverride.model,
-      prompt: buildCritiquePrompt({
-        question,
-        draft: args.draft,
-        instructions: critiqueOverride.prompt,
-      }),
-    });
-  } catch (error) {
-    log(
-      'applyReflection: critique failed agentId=%s error=%s',
-      args.agentId,
-      error instanceof Error ? error.message : String(error)
-    );
-    return { text: args.draft, applied: false, reason: 'critique_failed' };
-  }
-
-  if (isApproved(critique)) {
-    log('applyReflection: draft approved agentId=%s', args.agentId);
-    return { text: args.draft, applied: false, reason: 'approved' };
-  }
-
-  return runRevision({ ...args, question, critique });
-};
-
 export const recordReasoningSummary = async (args: {
   generationId: string;
   summary: ReasoningSummary;
@@ -374,68 +378,3 @@ export const recordReasoningSummary = async (args: {
     );
   }
 };
-
-type ReflectableResult = {
-  text: string;
-  response?: { messages?: Array<unknown>; modelId?: string };
-};
-
-/**
- * Pipeline hook: applies reflect mode to a completed raw generation result
- * in place — the trace, completion event, and API response are all built
- * from the final text afterwards. Records the outcome on the generation
- * record's `metadata.reasoning` (fire-and-forget).
- */
-export const maybeApplyReflectionToResult = async (args: {
-  reasoningConfig?: ReasoningConfig | null;
-  agentId: string;
-  generationId: string;
-  projectId?: number;
-  projectPublicId?: string;
-  messages: ReasoningMessage[];
-  result: ReflectableResult;
-  temperature?: number | null;
-}): Promise<void> => {
-  if (args.reasoningConfig?.mode !== 'reflect') return;
-
-  const reflection = await applyReflection({
-    agentId: args.agentId,
-    reasoning: args.reasoningConfig,
-    messages: args.messages,
-    draft: args.result.text,
-    temperature: args.temperature,
-  });
-
-  if (reflection.applied) {
-    args.result.text = reflection.text;
-    // The draft's responseMessages no longer match the final text — drop
-    // them so conversation replay does not resurrect the draft.
-    if (args.result.response) {
-      args.result.response = { ...args.result.response, messages: undefined };
-    }
-  }
-
-  emitReasoningFallbackEvent({
-    projectId: args.projectId,
-    projectPublicId: args.projectPublicId,
-    generationId: args.generationId,
-    mode: 'reflect',
-    reason: reflection.reason,
-  });
-
-  void recordReasoningSummary({
-    generationId: args.generationId,
-    summary: {
-      mode: 'reflect',
-      applied: reflection.applied,
-      reason: reflection.reason,
-      fallback: FALLBACK_REASONS.has(reflection.reason),
-    },
-  });
-};
-
-/**
- * Records the reflection outcome on the generation record's metadata
- * (merged, fire-and-forget) — same observability pattern as
- * `metadata.extraction`.
- */

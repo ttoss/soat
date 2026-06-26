@@ -1654,8 +1654,14 @@ resources:
                   name: 'reasoning-agent',
                   reasoning: {
                     effort: 'high',
-                    mode: 'reflect',
-                    critique: { model: 'tiny-critic' },
+                    mode: 'pipeline',
+                    steps: [
+                      {
+                        name: 'final',
+                        prompt: 'Refine: {draft}',
+                        output: true,
+                      },
+                    ],
                   },
                 },
               },
@@ -1672,8 +1678,8 @@ resources:
       );
       expect(agentRes.status).toBe(200);
       expect(agentRes.body.reasoning.effort).toBe('high');
-      expect(agentRes.body.reasoning.mode).toBe('reflect');
-      expect(agentRes.body.reasoning.critique.model).toBe('tiny-critic');
+      expect(agentRes.body.reasoning.mode).toBe('pipeline');
+      expect(agentRes.body.reasoning.steps[0].name).toBe('final');
     });
 
     test('formation update can switch extraction to the boolean form', async () => {

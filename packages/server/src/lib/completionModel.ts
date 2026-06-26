@@ -11,8 +11,7 @@ const log = createDebug('soat:completion-model');
 
 /**
  * Resolves a LanguageModel for an internal system completion (memory
- * extraction, reasoning critique/revision, future deliberation perspectives)
- * anchored to an agent.
+ * extraction, reasoning pipeline steps) anchored to an agent.
  *
  * By default the agent's own AI provider and model are used. `aiProviderId`
  * switches to another provider — which must belong to the agent's project,
