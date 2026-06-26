@@ -188,6 +188,69 @@ describe('Reasoning config', () => {
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_REASONING_CONFIG');
     });
+
+    test('rejects a prompt referencing an unknown step', async () => {
+      const res = await createWithReasoning({
+        mode: 'pipeline',
+        steps: [
+          { name: 'a', prompt: 'p' },
+          { name: 'final', prompt: 'Use {steps.typo}', output: true },
+        ],
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_REASONING_CONFIG');
+    });
+
+    test('rejects a prompt referencing a later step', async () => {
+      const res = await createWithReasoning({
+        mode: 'pipeline',
+        steps: [
+          { name: 'first', prompt: 'Use {steps.second}' },
+          { name: 'second', prompt: 'q', output: true },
+        ],
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_REASONING_CONFIG');
+    });
+
+    test('accepts a prompt referencing an earlier step', async () => {
+      const res = await createWithReasoning({
+        mode: 'pipeline',
+        steps: [
+          { name: 'first', prompt: 'p' },
+          { name: 'second', prompt: 'Use {steps.first}', output: true },
+        ],
+      });
+      expect(res.status).toBe(201);
+    });
+
+    test('rejects a perspective entry with a non-string field', async () => {
+      const res = await createWithReasoning({
+        mode: 'pipeline',
+        steps: [
+          {
+            name: 'angles',
+            kind: 'fanout',
+            prompt: 'p',
+            perspectives: [{ name: 'ok' }, { name: 123 }],
+          },
+        ],
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_REASONING_CONFIG');
+    });
+
+    test('rejects a pipeline exceeding the total completion budget', async () => {
+      const res = await createWithReasoning({
+        mode: 'pipeline',
+        steps: [
+          { name: 'a', kind: 'fanout', prompt: 'p', count: 5, rounds: 3 },
+          { name: 'b', kind: 'fanout', prompt: 'q', count: 5, rounds: 2 },
+        ],
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_REASONING_CONFIG');
+    });
   });
 
   describe('per-generate reasoning override', () => {

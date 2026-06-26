@@ -3,12 +3,15 @@
  * (`runReasoningCompletion`) is spied; no traceId/projectId is passed so no
  * child generation records hit the DB — the wiring tests cover that path.
  */
+import * as eventBus from 'src/lib/eventBus';
+import { MAX_TOTAL_COMPLETIONS } from 'src/lib/reasoning';
 import * as reasoningCompletionModule from 'src/lib/reasoningCompletion';
 import {
   formatQuestion,
   resolveTemplate,
   runReasoningPipeline,
 } from 'src/lib/reasoningPipeline';
+import { applyReasoningPipeline } from 'src/lib/reasoningPipelineHook';
 
 const mockRun = jest.spyOn(reasoningCompletionModule, 'runReasoningCompletion');
 
@@ -193,5 +196,50 @@ describe('runReasoningPipeline', () => {
       reason: 'completed',
       dropped: 1,
     });
+  });
+
+  test('never launches more than the total completion budget', async () => {
+    mockRun.mockResolvedValue('x');
+
+    // Eight fanout steps × 5 × 3 = 120 potential completions, far above the cap.
+    const steps = Array.from({ length: 8 }, (_unused, i) => {
+      return {
+        kind: 'fanout' as const,
+        name: `s${i}`,
+        prompt: 'Angle: {question}',
+        count: 5,
+        rounds: 3,
+      };
+    });
+
+    await runReasoningPipeline({ ...baseArgs, steps });
+
+    expect(mockRun.mock.calls.length).toBeLessThanOrEqual(MAX_TOTAL_COMPLETIONS);
+  });
+});
+
+describe('applyReasoningPipeline legacy-mode signal', () => {
+  test('emits a fallback event for an inert legacy mode and runs no completions', async () => {
+    const emit = jest
+      .spyOn(eventBus, 'emitEvent')
+      .mockImplementation(() => undefined);
+
+    // A stored agent from before the pipeline migration.
+    const legacyConfig = { mode: 'reflect' } as never;
+
+    await applyReasoningPipeline({
+      reasoningConfig: legacyConfig,
+      agentId: 'agent_1',
+      generationId: 'gen_1',
+      projectId: 1,
+      projectPublicId: 'prj_1',
+      messages: [],
+      result: { text: 'draft answer' },
+    });
+
+    expect(mockRun).not.toHaveBeenCalled();
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'agents.reasoning.fallback' })
+    );
   });
 });

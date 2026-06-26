@@ -19,12 +19,31 @@ export const MAX_ROUNDS = 3;
 export const MAX_TOTAL_COMPLETIONS = 24;
 
 /**
+ * Latency bounds for a reasoning pipeline. A pipeline runs after the draft is
+ * already produced, so an unbounded or hung step would silently add latency
+ * (and cost) to a request that has otherwise succeeded. Each completion is
+ * capped individually and the whole pipeline shares an overall deadline.
+ */
+export const REASONING_STEP_TIMEOUT_MS = 60_000;
+export const REASONING_PIPELINE_TIMEOUT_MS = 120_000;
+
+/**
  * Reasoning outcomes that mean the engine silently degraded to the plain
  * draft instead of delivering the requested pipeline. Emitting an event for
  * these makes the degradation detectable (deep thinking never fails a request,
  * so without this it is invisible).
  */
 const FALLBACK_REASONS = new Set(['all_failed', 'output_failed', 'fallback']);
+
+/**
+ * True when a reasoning outcome reason represents a degradation to the draft
+ * (as opposed to a clean completion or an intentional `halt_if_equals`
+ * short-circuit). The single source of truth for both the webhook event and
+ * the `metadata.reasoning.fallback` summary flag, so the two never disagree.
+ */
+export const isFallbackReason = (reason: string): boolean => {
+  return FALLBACK_REASONS.has(reason);
+};
 
 export type ReasoningSummary = {
   mode: string;
@@ -145,6 +164,81 @@ const isStringOrUndefined = (value: unknown): boolean => {
   return value === undefined || typeof value === 'string';
 };
 
+/** Matches the same template tokens `resolveTemplate` resolves at runtime. */
+const TEMPLATE_TOKEN = /\{([\w.]+)\}/g;
+
+/**
+ * Extracts the step names referenced via `{steps.<name>}` in a prompt. Mirrors
+ * the runtime token grammar so validation and resolution stay in lockstep.
+ */
+const extractStepRefs = (prompt: unknown): string[] => {
+  if (typeof prompt !== 'string') return [];
+  const refs: string[] = [];
+  for (const match of prompt.matchAll(TEMPLATE_TOKEN)) {
+    const token = match[1];
+    if (token.startsWith('steps.')) refs.push(token.slice('steps.'.length));
+  }
+  return refs;
+};
+
+/**
+ * Rejects a step whose prompt (or any of its perspective prompts) references a
+ * `{steps.<name>}` that is not an earlier, declared step. Without this, a typo
+ * or forward reference silently resolves to an empty string at runtime instead
+ * of failing fast.
+ */
+const validateStepReferences = (args: {
+  step: Record<string, unknown>;
+  index: number;
+  priorNames: Set<string>;
+}): void => {
+  const prompts: unknown[] = [args.step.prompt];
+  if (Array.isArray(args.step.perspectives)) {
+    for (const perspective of args.step.perspectives) {
+      if (isPlainObject(perspective)) prompts.push(perspective.prompt);
+    }
+  }
+  for (const prompt of prompts) {
+    for (const ref of extractStepRefs(prompt)) {
+      if (!args.priorNames.has(ref)) {
+        invalid(
+          `reasoning.steps[${args.index}] references unknown step '${ref}'; a {steps.<name>} token must name an earlier step.`
+        );
+      }
+    }
+  }
+};
+
+/**
+ * Validates the explicit `perspectives` of a fanout step. Only the array length
+ * is bounded elsewhere; this enforces the shape the runtime relies on.
+ */
+const validatePerspectives = (
+  step: Record<string, unknown>,
+  index: number
+): void => {
+  if (!Array.isArray(step.perspectives)) return;
+  for (const [entryIndex, perspective] of step.perspectives.entries()) {
+    const path = `reasoning.steps[${index}].perspectives[${entryIndex}]`;
+    if (!isPlainObject(perspective)) {
+      invalid(`${path} must be an object.`);
+      continue;
+    }
+    if (!isStringOrUndefined(perspective.name)) {
+      invalid(`${path}.name must be a string.`);
+    }
+    if (!isStringOrUndefined(perspective.prompt)) {
+      invalid(`${path}.prompt must be a string.`);
+    }
+    if (!isStringOrUndefined(perspective.aiProviderId)) {
+      invalid(`${path}.aiProviderId must be a string.`);
+    }
+    if (!isStringOrUndefined(perspective.model)) {
+      invalid(`${path}.model must be a string.`);
+    }
+  }
+};
+
 const resolveFanoutRounds = (step: Record<string, unknown>, index: number) => {
   const rounds = step.rounds === undefined ? 1 : step.rounds;
   if (typeof rounds !== 'number' || rounds < 1 || rounds > MAX_ROUNDS) {
@@ -228,6 +322,7 @@ const validateStep = (args: {
   });
   validateStepContent(step, args.index);
   if (kind !== 'fanout') return 1;
+  validatePerspectives(step, args.index);
   return (
     resolveFanoutWidth(step, args.index) * resolveFanoutRounds(step, args.index)
   );
@@ -244,6 +339,11 @@ const validatePipelineSteps = (steps: unknown): void => {
   const names = new Set<string>();
   let totalCompletions = 0;
   for (const [index, step] of steps.entries()) {
+    // `names` holds only earlier steps here — validateStep adds this step's
+    // name — so reference checking against it enforces earlier-only ordering.
+    if (isPlainObject(step)) {
+      validateStepReferences({ step, index, priorNames: names });
+    }
     totalCompletions += validateStep({ step, index, names });
   }
   if (totalCompletions > MAX_TOTAL_COMPLETIONS) {

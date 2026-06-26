@@ -513,7 +513,7 @@ components:
         reasoning:
           type: object
           nullable: true
-          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning; `mode: reflect` critiques and revises; `mode: debate` runs multiple perspectives then synthesizes.'
+          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning; `mode: pipeline` runs an ordered list of reasoning steps after the base draft. reflect and debate are expressed as pipelines — see the Agents module docs.'
           properties:
             effort:
               type: string
@@ -525,6 +525,7 @@ components:
               description: 'Orchestrated reasoning strategy. `pipeline` runs an ordered list of reasoning steps after the base draft. Applies to non-streaming completed generations only.'
             steps:
               type: array
+              maxItems: 8
               description: 'Pipeline only — ordered reasoning steps run after the base draft. The output step (`output: true`, else the last) produces the final answer. Prompts support `{question}`, `{draft}`, and `{steps.<name>}`. reflect and debate are expressed as step configs — see the Agents module docs.'
               items:
                 type: object
@@ -560,9 +561,13 @@ components:
                     description: If the step output equals this string, halt the pipeline and keep the draft.
                   count:
                     type: integer
+                    minimum: 2
+                    maximum: 5
                     description: 'Fanout only — number of auto-named perspectives (2–5).'
                   rounds:
                     type: integer
+                    minimum: 1
+                    maximum: 3
                     description: 'Fanout only — rounds of perspective turns (default 1, max 3).'
                   perspectives:
                     type: array
@@ -690,7 +695,7 @@ components:
         reasoning:
           type: object
           nullable: true
-          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning; `mode: reflect` critiques and revises; `mode: debate` runs multiple perspectives then synthesizes.'
+          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning; `mode: pipeline` runs an ordered list of reasoning steps after the base draft. reflect and debate are expressed as pipelines — see the Agents module docs.'
           properties:
             effort:
               type: string
@@ -702,6 +707,7 @@ components:
               description: 'Orchestrated reasoning strategy. `pipeline` runs an ordered list of reasoning steps after the base draft.'
             steps:
               type: array
+              maxItems: 8
               description: 'Pipeline only — ordered reasoning steps run after the base draft. The output step (`output: true`, else the last) produces the final answer. Prompts support `{question}`, `{draft}`, and `{steps.<name>}`. reflect and debate are expressed as step configs — see the Agents module docs.'
               items:
                 type: object
@@ -737,9 +743,13 @@ components:
                     description: If the step output equals this string, halt the pipeline and keep the draft.
                   count:
                     type: integer
+                    minimum: 2
+                    maximum: 5
                     description: 'Fanout only — number of auto-named perspectives (2–5).'
                   rounds:
                     type: integer
+                    minimum: 1
+                    maximum: 3
                     description: 'Fanout only — rounds of perspective turns (default 1, max 3).'
                   perspectives:
                     type: array
@@ -865,7 +875,7 @@ components:
         reasoning:
           type: object
           nullable: true
-          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning; `mode: reflect` critiques and revises; `mode: debate` runs multiple perspectives then synthesizes.'
+          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning; `mode: pipeline` runs an ordered list of reasoning steps after the base draft. reflect and debate are expressed as pipelines — see the Agents module docs.'
           properties:
             effort:
               type: string
@@ -877,6 +887,7 @@ components:
               description: 'Orchestrated reasoning strategy. `pipeline` runs an ordered list of reasoning steps after the base draft.'
             steps:
               type: array
+              maxItems: 8
               description: 'Pipeline only — ordered reasoning steps run after the base draft. The output step (`output: true`, else the last) produces the final answer. Prompts support `{question}`, `{draft}`, and `{steps.<name>}`. reflect and debate are expressed as step configs — see the Agents module docs.'
               items:
                 type: object
@@ -912,9 +923,13 @@ components:
                     description: If the step output equals this string, halt the pipeline and keep the draft.
                   count:
                     type: integer
+                    minimum: 2
+                    maximum: 5
                     description: 'Fanout only — number of auto-named perspectives (2–5).'
                   rounds:
                     type: integer
+                    minimum: 1
+                    maximum: 3
                     description: 'Fanout only — rounds of perspective turns (default 1, max 3).'
                   perspectives:
                     type: array
@@ -1014,6 +1029,7 @@ components:
               description: Orchestrated reasoning strategy for this generation.
             steps:
               type: array
+              maxItems: 8
               description: 'Pipeline only — ordered reasoning steps for this generation. The output step (`output: true`, else the last) produces the final answer. Prompts support `{question}`, `{draft}`, and `{steps.<name>}`.'
               items:
                 type: object
@@ -1049,9 +1065,13 @@ components:
                     description: If the step output equals this string, halt the pipeline and keep the draft.
                   count:
                     type: integer
+                    minimum: 2
+                    maximum: 5
                     description: 'Fanout only — number of auto-named perspectives (2–5).'
                   rounds:
                     type: integer
+                    minimum: 1
+                    maximum: 3
                     description: 'Fanout only — rounds of perspective turns (default 1, max 3).'
                   perspectives:
                     type: array
