@@ -7,6 +7,7 @@ import {
   resolveBodyParamInterpolations,
   resolveUrlPathParams,
 } from 'src/lib/agentToolResolver';
+import { buildMcpToolExecute } from 'src/lib/agentToolResolverExternalTools';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -1035,5 +1036,35 @@ describe('resolveAgentTools - mcp and soat types', () => {
       expect.stringContaining('/api/v1/files'),
       expect.objectContaining({ method: 'GET' })
     );
+  });
+});
+
+describe('buildMcpToolExecute', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('calls logToolCallingError and rethrows when fetch throws', async () => {
+    const logToolCallingError = jest.fn();
+    const networkError = new Error('Network failure');
+
+    jest.spyOn(global, 'fetch').mockRejectedValueOnce(networkError);
+
+    const execute = buildMcpToolExecute({
+      mcpUrl: 'http://localhost:19999/mcp',
+      mcpHeaders: { 'Content-Type': 'application/json' },
+      mcpToolName: 'my_tool',
+      logToolCallingError,
+    });
+
+    await expect(execute({})).rejects.toThrow('Network failure');
+
+    expect(logToolCallingError).toHaveBeenCalledWith({
+      toolName: 'my_tool',
+      toolType: 'mcp',
+      url: 'http://localhost:19999/mcp',
+      method: 'POST',
+      error: networkError,
+    });
   });
 });
