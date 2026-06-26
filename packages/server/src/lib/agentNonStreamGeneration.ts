@@ -186,6 +186,7 @@ const resolveGenerationResult = async (args: {
     generationId: args.generationId,
     traceId: args.traceId,
     projectId: args.typedAgent.project.id as number,
+    projectPublicId: args.typedAgent.project.publicId,
     messages: args.allMessages,
     result: mutableResult,
     temperature: args.typedAgent.temperature as number | null,

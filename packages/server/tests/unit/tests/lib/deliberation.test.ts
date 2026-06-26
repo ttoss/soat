@@ -1,5 +1,7 @@
 import { maybeApplyDebateToResult, runDebate } from 'src/lib/deliberation';
+import * as eventBusModule from 'src/lib/eventBus';
 import * as generationsModule from 'src/lib/generations';
+import * as reasoningModule from 'src/lib/reasoning';
 import * as reasoningCompletionModule from 'src/lib/reasoningCompletion';
 
 const mockRunReasoningCompletion = jest.spyOn(
@@ -16,6 +18,20 @@ const mockUpdateGenerationRecord = jest.spyOn(
   generationsModule,
   'updateGenerationRecord'
 );
+
+const mockRecordReasoningSummary = jest.spyOn(
+  reasoningModule,
+  'recordReasoningSummary'
+);
+
+const mockEmitEvent = jest.spyOn(eventBusModule, 'emitEvent');
+
+// Default no-op implementations so unrelated tests don't hit the DB / bus.
+// clearAllMocks() (below) resets call counts but keeps these implementations.
+mockRecordReasoningSummary.mockResolvedValue(undefined);
+mockEmitEvent.mockImplementation(() => {
+  return undefined;
+});
 
 describe('deliberation lib', () => {
   afterEach(() => {
@@ -99,15 +115,20 @@ describe('deliberation lib', () => {
 
       // First two updates are perspective completions
       const perspectiveUpdate = mockUpdateGenerationRecord.mock.calls.find(
-        ([args]) =>
-          (args.metadata?.reasoning as Record<string, unknown> | undefined)
-            ?.perspective === 'Advocate'
+        ([args]) => {
+          return (
+            (args.metadata?.reasoning as Record<string, unknown> | undefined)
+              ?.perspective === 'Advocate'
+          );
+        }
       );
       expect(perspectiveUpdate).toBeDefined();
       expect(perspectiveUpdate![0]).toMatchObject({
         status: 'completed',
         stopReason: 'stop',
-        metadata: { reasoning: { perspective: 'Advocate', output: 'advocate text' } },
+        metadata: {
+          reasoning: { perspective: 'Advocate', output: 'advocate text' },
+        },
       });
     });
 
@@ -129,15 +150,20 @@ describe('deliberation lib', () => {
       });
 
       const synthesisUpdate = mockUpdateGenerationRecord.mock.calls.find(
-        ([args]) =>
-          (args.metadata?.reasoning as Record<string, unknown> | undefined)
-            ?.perspective === 'synthesis'
+        ([args]) => {
+          return (
+            (args.metadata?.reasoning as Record<string, unknown> | undefined)
+              ?.perspective === 'synthesis'
+          );
+        }
       );
       expect(synthesisUpdate).toBeDefined();
       expect(synthesisUpdate![0]).toMatchObject({
         status: 'completed',
         stopReason: 'stop',
-        metadata: { reasoning: { perspective: 'synthesis', output: 'synthesis result' } },
+        metadata: {
+          reasoning: { perspective: 'synthesis', output: 'synthesis result' },
+        },
       });
     });
 
@@ -161,20 +187,26 @@ describe('deliberation lib', () => {
       });
 
       const r0AdvocateUpdate = mockUpdateGenerationRecord.mock.calls.find(
-        ([args]) =>
-          (args.metadata?.reasoning as Record<string, unknown> | undefined)
-            ?.perspective === 'Advocate' &&
-          (args.metadata?.reasoning as Record<string, unknown> | undefined)
-            ?.round === 0
+        ([args]) => {
+          return (
+            (args.metadata?.reasoning as Record<string, unknown> | undefined)
+              ?.perspective === 'Advocate' &&
+            (args.metadata?.reasoning as Record<string, unknown> | undefined)
+              ?.round === 0
+          );
+        }
       );
       expect(r0AdvocateUpdate).toBeDefined();
 
       const r1AdvocateUpdate = mockUpdateGenerationRecord.mock.calls.find(
-        ([args]) =>
-          (args.metadata?.reasoning as Record<string, unknown> | undefined)
-            ?.perspective === 'Advocate' &&
-          (args.metadata?.reasoning as Record<string, unknown> | undefined)
-            ?.round === 1
+        ([args]) => {
+          return (
+            (args.metadata?.reasoning as Record<string, unknown> | undefined)
+              ?.perspective === 'Advocate' &&
+            (args.metadata?.reasoning as Record<string, unknown> | undefined)
+              ?.round === 1
+          );
+        }
       );
       expect(r1AdvocateUpdate).toBeDefined();
     });
@@ -197,7 +229,9 @@ describe('deliberation lib', () => {
       });
 
       const failedUpdate = mockUpdateGenerationRecord.mock.calls.find(
-        ([args]) => args.status === 'failed'
+        ([args]) => {
+          return args.status === 'failed';
+        }
       );
       expect(failedUpdate).toBeDefined();
       expect(failedUpdate![0]).toMatchObject({
@@ -542,6 +576,160 @@ describe('deliberation lib', () => {
       });
 
       expect(result.text).toBe('original draft');
+    });
+  });
+
+  describe('runDebate telemetry', () => {
+    const baseArgs = {
+      agentId: 'agent_debate01',
+      projectIds: [1],
+      messages: [{ role: 'user', content: 'question' }],
+      temperature: null,
+    };
+
+    test('reports perspectives, rounds and dropped=0 on a clean run', async () => {
+      mockRunReasoningCompletion
+        .mockResolvedValueOnce('advocate')
+        .mockResolvedValueOnce('skeptic')
+        .mockResolvedValueOnce('synthesis');
+
+      const result = await runDebate({
+        ...baseArgs,
+        reasoning: { mode: 'debate', perspectives: 2 },
+      });
+
+      expect(result.perspectives).toBe(2);
+      expect(result.rounds).toBe(1);
+      expect(result.dropped).toBe(0);
+    });
+
+    test('counts dropped perspective turns', async () => {
+      mockRunReasoningCompletion
+        .mockRejectedValueOnce(new Error('down'))
+        .mockResolvedValueOnce('skeptic')
+        .mockResolvedValueOnce('pragmatist')
+        .mockResolvedValueOnce('synthesis');
+
+      const result = await runDebate({
+        ...baseArgs,
+        reasoning: { mode: 'debate', perspectives: 3 },
+      });
+
+      expect(result.applied).toBe(true);
+      expect(result.perspectives).toBe(3);
+      expect(result.rounds).toBe(1);
+      expect(result.dropped).toBe(1);
+    });
+
+    test('reports full drop count on a fallback', async () => {
+      mockRunReasoningCompletion.mockRejectedValue(new Error('down'));
+
+      const result = await runDebate({
+        ...baseArgs,
+        reasoning: { mode: 'debate', perspectives: 3 },
+      });
+
+      expect(result.applied).toBe(false);
+      expect(result.reason).toBe('fallback');
+      expect(result.perspectives).toBe(3);
+      expect(result.dropped).toBe(3);
+    });
+
+    test('rounds reflects the capped maxRounds', async () => {
+      for (let i = 0; i < 7; i++) {
+        mockRunReasoningCompletion.mockResolvedValueOnce(`text ${i}`);
+      }
+
+      const result = await runDebate({
+        ...baseArgs,
+        reasoning: { mode: 'debate', perspectives: 2, maxRounds: 10 },
+      });
+
+      expect(result.rounds).toBe(3);
+    });
+  });
+
+  describe('maybeApplyDebateToResult observability', () => {
+    test('records a rich reasoning summary with telemetry', async () => {
+      mockRunReasoningCompletion
+        .mockResolvedValueOnce('p1')
+        .mockResolvedValueOnce('p2')
+        .mockResolvedValueOnce('synthesis');
+
+      await maybeApplyDebateToResult({
+        reasoningConfig: { mode: 'debate', perspectives: 2 },
+        agentId: 'agent_test',
+        generationId: 'gen_test',
+        projectId: 1,
+        projectPublicId: 'prj_01',
+        messages: [{ role: 'user', content: 'question' }],
+        result: { text: 'draft' },
+      });
+
+      expect(mockRecordReasoningSummary).toHaveBeenCalledWith(
+        expect.objectContaining({
+          generationId: 'gen_test',
+          summary: expect.objectContaining({
+            mode: 'debate',
+            applied: true,
+            reason: 'synthesized',
+            perspectives: 2,
+            rounds: 1,
+            dropped: 0,
+            fallback: false,
+          }),
+        })
+      );
+    });
+
+    test('emits a fallback event when debate degrades to the draft', async () => {
+      mockRunReasoningCompletion.mockRejectedValue(new Error('down'));
+
+      await maybeApplyDebateToResult({
+        reasoningConfig: { mode: 'debate', perspectives: 2 },
+        agentId: 'agent_test',
+        generationId: 'gen_test',
+        projectId: 1,
+        projectPublicId: 'prj_01',
+        messages: [{ role: 'user', content: 'question' }],
+        result: { text: 'draft' },
+      });
+
+      expect(mockEmitEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'agents.reasoning.fallback',
+          projectId: 1,
+          projectPublicId: 'prj_01',
+          resourceType: 'generation',
+          resourceId: 'gen_test',
+          data: expect.objectContaining({
+            mode: 'debate',
+            reason: 'fallback',
+          }),
+        })
+      );
+    });
+
+    test('does not emit a fallback event when debate succeeds', async () => {
+      mockRunReasoningCompletion
+        .mockResolvedValueOnce('p1')
+        .mockResolvedValueOnce('p2')
+        .mockResolvedValueOnce('synthesis');
+
+      await maybeApplyDebateToResult({
+        reasoningConfig: { mode: 'debate', perspectives: 2 },
+        agentId: 'agent_test',
+        generationId: 'gen_test',
+        projectId: 1,
+        projectPublicId: 'prj_01',
+        messages: [{ role: 'user', content: 'question' }],
+        result: { text: 'draft' },
+      });
+
+      const fallbackEmits = mockEmitEvent.mock.calls.filter(([event]) => {
+        return event.type === 'agents.reasoning.fallback';
+      });
+      expect(fallbackEmits).toHaveLength(0);
     });
   });
 });
