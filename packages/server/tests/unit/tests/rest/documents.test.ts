@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 
+import jwt from 'jsonwebtoken';
 import { db } from 'src/db';
 import * as pdfModule from 'src/lib/pdf';
+import { JWT_SECRET } from 'src/middleware/auth';
 
 import { ONE_PAGE_PDF_BUFFER, THREE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
 import { storageDir } from '../../setupTests';
@@ -116,6 +118,19 @@ describe('Documents', () => {
   });
 
   describe('GET /api/v1/documents', () => {
+    let ingestedDocId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'Document for list test.',
+          filename: 'list-test.txt',
+        });
+      ingestedDocId = res.body.id;
+    });
+
     test('authenticated user with permission can list documents', async () => {
       const response = await authenticatedTestClient(userToken).get(
         `/api/v1/documents?project_id=${projectId}`
@@ -123,6 +138,33 @@ describe('Documents', () => {
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.data)).toBe(true);
+    });
+
+    test('admin with OAuth project-scoped token can list documents by project_id', async () => {
+      // Simulate the OAuth token with a `prj` field — this is what the SOAT CLI issues
+      // when an admin authenticates via OAuth with a project scope.
+      const adminUser = await db.User.findOne({
+        where: { username: 'admin' },
+        attributes: ['publicId', 'role'],
+      });
+      const oauthToken = jwt.sign(
+        { publicId: adminUser!.publicId, role: 'admin', prj: projectId },
+        JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+
+      const response = await authenticatedTestClient(oauthToken).get(
+        `/api/v1/documents?project_id=${projectId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBeGreaterThan(0);
+      expect(
+        response.body.data.some((d: { id: string }) => {
+          return d.id === ingestedDocId;
+        })
+      ).toBe(true);
     });
 
     test('unauthenticated request cannot list documents', async () => {
