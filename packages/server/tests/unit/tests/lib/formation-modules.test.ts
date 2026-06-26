@@ -1099,6 +1099,69 @@ describe('webhooksFormationModule - camelCase key normalization', () => {
   });
 });
 
+describe('webhooksFormationModule - create, update, and getAttributes', () => {
+  const mockCreateWebhook = jest.spyOn(webhooksModule, 'createWebhook');
+  const mockUpdateWebhook = jest.spyOn(webhooksModule, 'updateWebhook');
+  const mockFindWebhookSecret = jest.spyOn(webhooksModule, 'findWebhookSecret');
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('creates webhook and returns id when properties are valid', async () => {
+    mockCreateWebhook.mockResolvedValueOnce({
+      id: 'wh_created',
+    } as Awaited<ReturnType<typeof webhooksModule.createWebhook>>);
+
+    const physicalId = await applyCreateResource({
+      resourceType: 'webhook',
+      projectId: 1,
+      resolvedProperties: {
+        name: 'Test Webhook',
+        url: 'https://example.com/hook',
+        events: ['conversation.created'],
+      },
+    });
+
+    expect(physicalId).toBe('wh_created');
+    expect(mockCreateWebhook).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Test Webhook',
+        url: 'https://example.com/hook',
+        events: ['conversation.created'],
+        projectId: 1,
+      })
+    );
+  });
+
+  test('updates webhook when properties are valid', async () => {
+    mockUpdateWebhook.mockResolvedValueOnce(
+      undefined as Awaited<ReturnType<typeof webhooksModule.updateWebhook>>
+    );
+
+    await applyUpdateResource({
+      resourceType: 'webhook',
+      physicalResourceId: 'wh_existing',
+      resolvedProperties: {
+        name: 'Updated Webhook',
+      },
+    });
+
+    expect(mockUpdateWebhook).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'wh_existing', name: 'Updated Webhook' })
+    );
+  });
+
+  test('getAttributes returns secret when findWebhookSecret returns a result', async () => {
+    mockFindWebhookSecret.mockResolvedValueOnce({ secret: 'whsec_test123' });
+
+    const module = getFormationModule({ resourceType: 'webhook' });
+    const attrs = await module!.getAttributes!({ physicalResourceId: 'wh_1' });
+
+    expect(attrs).toEqual({ secret: 'whsec_test123' });
+  });
+});
+
 // ── agentsFormationModule — validation error branches ─────────────────────
 
 describe('agentsFormationModule - validation error branches', () => {
