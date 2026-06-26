@@ -12,7 +12,11 @@
 | Reflect mode (draft → critique → revise)    | ✅ Implemented | `applyReflection()` in `reasoning.ts`; APPROVED short-circuit; failures degrade to the draft     |
 | Debate mode (homogeneous + heterogeneous)   | ✅ Implemented | `runDebate()` in `deliberation.ts`; auto-personas or explicit `perspectives[]`; `maxRounds` (cap 3); `synthesis` override triple; perspective failures drop (quorum continues); full-failure/synthesis-failure degrade to draft |
 | `applyOrchestration` pipeline hook          | ✅ Implemented | Single hook dispatches to reflect or debate; wired into `resolveGenerationResult` in `agentNonStreamGeneration.ts` |
-| Trace integration                           | ❌ Not started | Each internal call recorded as trace steps tagged with perspective name + model                 |
+| Trace integration                           | ✅ Implemented | Each perspective turn + synthesis recorded as a child generation (shared `traceId`, `initiatorGenerationId`) tagged with perspective name + round + model |
+| `metadata.reasoning` telemetry summary      | ✅ Implemented | Parent generation summary enriched: debate adds `{ perspectives, rounds, dropped, fallback }`; reflect adds `{ fallback }` — `recordReasoningSummary()` in `reasoning.ts` |
+| Silent-degradation event                    | ✅ Implemented | `agents.reasoning.fallback` event emitted on debate fallback/synthesis_failed and reflect critique_failed/revision_failed — `emitReasoningFallbackEvent()` in `reasoning.ts` |
+| Async debate generate (`?async=true`)       | ❌ Not started | Larger effort; depends on the session async/poll mechanism (deferred)                            |
+| `reasoning.budget` guard                    | ❌ Not started | Optional cap on total internal completions per generation (deferred)                            |
 | Discussions resource module                 | ❌ Not started | Visible transcript, organizer-selected turns, human participants (original PRD, now Phase 4)    |
 
 ## Implementation Phases
@@ -70,16 +74,19 @@
 
 ---
 
-### Phase 3 — Observability & Async ❌ Not started
+### Phase 3 — Observability & Async 🟡 Observability slice complete; async/budget deferred
 
 **Goal:** Deliberation is slow (N×M calls); make it watchable and non-blocking.
 
 **Deliverables:**
 
-- Async generate (`?async=true` parity with sessions) returning `in_progress` + poll, for debate-mode generations
-- Trace UI affordances: deliberation steps grouped per round, perspective name + model on each step; `metadata.reasoning` summary on the generation record (`{ mode, perspectives, rounds, dropped, fallback }`) — same pattern as `metadata.extraction`
-- Optional `reasoning.budget` guard (max total completions per generation)
-- Webhook/event on deliberation fallback so silent degradation is detectable
+- ✅ **Trace integration** — each perspective turn and the synthesis step is recorded as a child generation sharing the parent's `traceId` and linked via `initiatorGenerationId`, tagged with perspective name, round, model, output, and status (`completed`/`failed`). Grouped per round via the `round` field.
+- ✅ **`metadata.reasoning` summary** on the parent generation record (same pattern as `metadata.extraction`): debate records `{ mode, applied, reason, perspectives, rounds, dropped, fallback }`; reflect records `{ mode, applied, reason, fallback }`.
+- ✅ **Webhook/event on deliberation fallback** — `agents.reasoning.fallback` is emitted whenever the engine silently degrades to the plain draft (debate `fallback`/`synthesis_failed`; reflect `critique_failed`/`revision_failed`), so silent degradation is detectable. Payload: `{ mode, reason, perspectives?, dropped? }`.
+- ❌ **Async generate** (`?async=true` parity with sessions) returning `in_progress` + poll, for debate-mode generations — deferred (larger; depends on the session async mechanism).
+- ❌ Optional **`reasoning.budget` guard** (max total completions per generation) — deferred.
+
+**Unlocks:** The deliberation engine's cost and health are now measurable per generation, and silent fallbacks surface on webhooks instead of being invisible.
 
 ---
 

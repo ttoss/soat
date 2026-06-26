@@ -93,7 +93,11 @@ Both reflect and debate modes write a `metadata.reasoning` object on the parent 
     "reasoning": {
       "mode": "debate",
       "applied": true,
-      "reason": "synthesized"
+      "reason": "synthesized",
+      "perspectives": 3,
+      "rounds": 1,
+      "dropped": 0,
+      "fallback": false
     }
   }
 }
@@ -103,7 +107,13 @@ Both reflect and debate modes write a `metadata.reasoning` object on the parent 
 |-------|--------|-------------|
 | `mode` | `reflect` \| `debate` | Which reasoning mode ran |
 | `applied` | boolean | `true` if the reasoned answer replaced the draft |
-| `reason` | `synthesized` \| `fallback` \| `synthesis_failed` \| `approved` \| `revision_skipped` | Why `applied` is true or false |
+| `reason` | `synthesized` \| `fallback` \| `synthesis_failed` \| `approved` \| `critique_failed` \| `revision_failed` | Why `applied` is true or false |
+| `fallback` | boolean | `true` when the engine silently degraded to the plain draft (also emits an [`agents.reasoning.fallback`](./webhooks.md) event) |
+| `perspectives` | number | Debate only — number of configured perspectives |
+| `rounds` | number | Debate only — number of debate rounds run (capped at 3) |
+| `dropped` | number | Debate only — number of perspective turns that failed and were dropped from the synthesis |
+
+`perspectives`, `rounds`, and `dropped` make the cost and health of a debate measurable: a high `dropped` count or `fallback: true` means the deep-thinking pass under-delivered and the answer is closer to (or exactly) the plain draft.
 
 #### `metadata.reasoning` on debate child generations
 

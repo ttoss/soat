@@ -1,6 +1,8 @@
+import * as eventBusModule from 'src/lib/eventBus';
 import {
   applyReflection,
   buildReasoningProviderOptions,
+  maybeApplyReflectionToResult,
   resolveReasoningConfig,
 } from 'src/lib/reasoning';
 import * as reasoningCompletionModule from 'src/lib/reasoningCompletion';
@@ -9,6 +11,12 @@ const mockRunReasoningCompletion = jest.spyOn(
   reasoningCompletionModule,
   'runReasoningCompletion'
 );
+
+const mockEmitEvent = jest
+  .spyOn(eventBusModule, 'emitEvent')
+  .mockImplementation(() => {
+    return undefined;
+  });
 
 describe('reasoning lib', () => {
   afterEach(() => {
@@ -210,6 +218,78 @@ describe('reasoning lib', () => {
       expect(result.applied).toBe(false);
       expect(result.text).toBe(baseArgs.draft);
       expect(mockRunReasoningCompletion).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('maybeApplyReflectionToResult observability', () => {
+    test('emits a fallback event when the critique call fails', async () => {
+      mockRunReasoningCompletion.mockRejectedValueOnce(new Error('down'));
+
+      await maybeApplyReflectionToResult({
+        reasoningConfig: { mode: 'reflect' },
+        agentId: 'agent_test',
+        generationId: 'gen_reflect',
+        projectId: 1,
+        projectPublicId: 'prj_01',
+        messages: [{ role: 'user', content: 'question' }],
+        result: { text: 'draft' },
+      });
+
+      expect(mockEmitEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'agents.reasoning.fallback',
+          projectId: 1,
+          projectPublicId: 'prj_01',
+          resourceType: 'generation',
+          resourceId: 'gen_reflect',
+          data: expect.objectContaining({
+            mode: 'reflect',
+            reason: 'critique_failed',
+          }),
+        })
+      );
+    });
+
+    test('does not emit a fallback event when reflection revises the draft', async () => {
+      mockRunReasoningCompletion
+        .mockResolvedValueOnce('The draft is too vague.')
+        .mockResolvedValueOnce('revised answer');
+
+      const result = { text: 'draft' };
+      await maybeApplyReflectionToResult({
+        reasoningConfig: { mode: 'reflect' },
+        agentId: 'agent_test',
+        generationId: 'gen_reflect',
+        projectId: 1,
+        projectPublicId: 'prj_01',
+        messages: [{ role: 'user', content: 'question' }],
+        result,
+      });
+
+      expect(result.text).toBe('revised answer');
+      const fallbackEmits = mockEmitEvent.mock.calls.filter(([event]) => {
+        return event.type === 'agents.reasoning.fallback';
+      });
+      expect(fallbackEmits).toHaveLength(0);
+    });
+
+    test('does not emit a fallback event when the draft is approved', async () => {
+      mockRunReasoningCompletion.mockResolvedValueOnce('APPROVED');
+
+      await maybeApplyReflectionToResult({
+        reasoningConfig: { mode: 'reflect' },
+        agentId: 'agent_test',
+        generationId: 'gen_reflect',
+        projectId: 1,
+        projectPublicId: 'prj_01',
+        messages: [{ role: 'user', content: 'question' }],
+        result: { text: 'draft' },
+      });
+
+      const fallbackEmits = mockEmitEvent.mock.calls.filter(([event]) => {
+        return event.type === 'agents.reasoning.fallback';
+      });
+      expect(fallbackEmits).toHaveLength(0);
     });
   });
 });

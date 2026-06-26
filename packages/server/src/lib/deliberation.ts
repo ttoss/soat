@@ -9,6 +9,7 @@ import type {
   ReasoningOverrideTriple,
 } from './reasoning';
 import {
+  emitReasoningFallbackEvent,
   maybeApplyReflectionToResult,
   recordReasoningSummary,
 } from './reasoning';
@@ -111,6 +112,12 @@ export type DebateResult = {
   text: string;
   applied: boolean;
   reason: 'synthesized' | 'skipped' | 'fallback' | 'synthesis_failed';
+  /** Number of configured perspectives. */
+  perspectives: number;
+  /** Number of rounds run (capped maxRounds). */
+  rounds: number;
+  /** Number of perspective turns that failed and were dropped. */
+  dropped: number;
 };
 
 type DebateContext = {
@@ -150,8 +157,9 @@ const runPerspectiveTurns = async (
   ctx: DebateContext,
   perspectives: PerspectiveConfig[],
   maxRounds: number
-): Promise<TranscriptEntry[]> => {
+): Promise<{ transcript: TranscriptEntry[]; dropped: number }> => {
   const transcript: TranscriptEntry[] = [];
+  let dropped = 0;
   for (let round = 0; round < maxRounds; round++) {
     for (const perspective of perspectives) {
       const name = perspective.name ?? 'Perspective';
@@ -182,6 +190,7 @@ const runPerspectiveTurns = async (
           });
         }
       } catch (error) {
+        dropped += 1;
         log(
           'runDebate: perspective=%s round=%d failed error=%s',
           name,
@@ -198,14 +207,20 @@ const runPerspectiveTurns = async (
       }
     }
   }
-  return transcript;
+  return { transcript, dropped };
+};
+
+type SynthesisOutcome = {
+  text: string;
+  applied: boolean;
+  reason: 'synthesized' | 'synthesis_failed';
 };
 
 const runSynthesis = async (
   ctx: DebateContext,
   synthesis: ReasoningOverrideTriple,
   transcript: TranscriptEntry[]
-): Promise<DebateResult> => {
+): Promise<SynthesisOutcome> => {
   const childGenId = await createChildGenerationRecord(ctx);
   try {
     const synthesized = await reasoningCompletion.runReasoningCompletion({
@@ -271,7 +286,14 @@ export const runDebate = async (args: {
   temperature?: number | null;
 }): Promise<DebateResult> => {
   if (args.reasoning.mode !== 'debate') {
-    return { text: '', applied: false, reason: 'skipped' };
+    return {
+      text: '',
+      applied: false,
+      reason: 'skipped',
+      perspectives: 0,
+      rounds: 0,
+      dropped: 0,
+    };
   }
 
   const perspectives = normalizePerspectives(args.reasoning);
@@ -294,17 +316,32 @@ export const runDebate = async (args: {
     maxRounds
   );
 
-  const transcript = await runPerspectiveTurns(ctx, perspectives, maxRounds);
+  const { transcript, dropped } = await runPerspectiveTurns(
+    ctx,
+    perspectives,
+    maxRounds
+  );
+
+  const telemetry = {
+    perspectives: perspectives.length,
+    rounds: maxRounds,
+    dropped,
+  };
 
   if (transcript.length === 0) {
     log(
       'runDebate: no perspectives succeeded, fallback agentId=%s',
       args.agentId
     );
-    return { text: '', applied: false, reason: 'fallback' };
+    return { text: '', applied: false, reason: 'fallback', ...telemetry };
   }
 
-  return runSynthesis(ctx, args.reasoning.synthesis ?? {}, transcript);
+  const outcome = await runSynthesis(
+    ctx,
+    args.reasoning.synthesis ?? {},
+    transcript
+  );
+  return { ...outcome, ...telemetry };
 };
 
 type DebatableResult = {
@@ -324,6 +361,7 @@ export const maybeApplyDebateToResult = async (args: {
   generationId: string;
   traceId?: string;
   projectId?: number;
+  projectPublicId?: string;
   messages: ReasoningMessage[];
   result: DebatableResult;
   temperature?: number | null;
@@ -347,12 +385,25 @@ export const maybeApplyDebateToResult = async (args: {
     }
   }
 
+  emitReasoningFallbackEvent({
+    projectId: args.projectId,
+    projectPublicId: args.projectPublicId,
+    generationId: args.generationId,
+    mode: 'debate',
+    reason: debate.reason,
+    data: { perspectives: debate.perspectives, dropped: debate.dropped },
+  });
+
   void recordReasoningSummary({
     generationId: args.generationId,
     summary: {
       mode: 'debate',
       applied: debate.applied,
       reason: debate.reason,
+      perspectives: debate.perspectives,
+      rounds: debate.rounds,
+      dropped: debate.dropped,
+      fallback: !debate.applied,
     },
   });
 };
@@ -363,6 +414,7 @@ type OrchestrationArgs = {
   generationId: string;
   traceId?: string;
   projectId?: number;
+  projectPublicId?: string;
   messages: ReasoningMessage[];
   result: DebatableResult;
   temperature?: number | null;

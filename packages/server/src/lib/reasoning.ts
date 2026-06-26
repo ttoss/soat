@@ -2,10 +2,70 @@ import type { JSONValue } from 'ai';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { emitEvent } from './eventBus';
 import { updateGenerationRecord } from './generations';
 import * as reasoningCompletion from './reasoningCompletion';
 
 const log = createDebug('soat:reasoning');
+
+/**
+ * Reasoning outcomes that mean the engine silently degraded to the plain
+ * draft instead of delivering the requested deep-thinking strategy. Emitting
+ * an event for these makes the degradation detectable (deep thinking never
+ * fails a request, so without this it is invisible).
+ */
+const FALLBACK_REASONS = new Set([
+  'critique_failed',
+  'revision_failed',
+  'fallback',
+  'synthesis_failed',
+]);
+
+export type ReasoningSummary = {
+  mode: string;
+  applied: boolean;
+  reason: string;
+  /** Debate only — number of configured perspectives. */
+  perspectives?: number;
+  /** Debate only — number of rounds run. */
+  rounds?: number;
+  /** Debate only — number of perspective turns that failed and were dropped. */
+  dropped?: number;
+  /** True when the engine degraded to the plain draft. */
+  fallback?: boolean;
+};
+
+/**
+ * Emits a `agents.reasoning.fallback` event when a reasoning strategy degraded
+ * to the draft, so silent degradation surfaces on webhooks. Synchronous and
+ * best-effort — a missing project context is a no-op, never an error.
+ */
+export const emitReasoningFallbackEvent = (args: {
+  projectId?: number;
+  projectPublicId?: string;
+  generationId: string;
+  mode: string;
+  reason: string;
+  data?: Record<string, unknown>;
+}): void => {
+  if (!FALLBACK_REASONS.has(args.reason)) return;
+  if (args.projectId === undefined || !args.projectPublicId) {
+    log(
+      'emitReasoningFallbackEvent: missing project context, skipping generationId=%s',
+      args.generationId
+    );
+    return;
+  }
+  emitEvent({
+    type: 'agents.reasoning.fallback',
+    projectId: args.projectId,
+    projectPublicId: args.projectPublicId,
+    resourceType: 'generation',
+    resourceId: args.generationId,
+    data: { mode: args.mode, reason: args.reason, ...(args.data ?? {}) },
+    timestamp: new Date().toISOString(),
+  });
+};
 
 export type ReasoningEffort = 'low' | 'medium' | 'high';
 
@@ -292,7 +352,7 @@ export const applyReflection = async (args: {
 
 export const recordReasoningSummary = async (args: {
   generationId: string;
-  summary: { mode: string; applied: boolean; reason: string };
+  summary: ReasoningSummary;
 }): Promise<void> => {
   try {
     const generation = await db.Generation.findOne({
@@ -330,6 +390,8 @@ export const maybeApplyReflectionToResult = async (args: {
   reasoningConfig?: ReasoningConfig | null;
   agentId: string;
   generationId: string;
+  projectId?: number;
+  projectPublicId?: string;
   messages: ReasoningMessage[];
   result: ReflectableResult;
   temperature?: number | null;
@@ -353,12 +415,21 @@ export const maybeApplyReflectionToResult = async (args: {
     }
   }
 
+  emitReasoningFallbackEvent({
+    projectId: args.projectId,
+    projectPublicId: args.projectPublicId,
+    generationId: args.generationId,
+    mode: 'reflect',
+    reason: reflection.reason,
+  });
+
   void recordReasoningSummary({
     generationId: args.generationId,
     summary: {
       mode: 'reflect',
       applied: reflection.applied,
       reason: reflection.reason,
+      fallback: FALLBACK_REASONS.has(reflection.reason),
     },
   });
 };

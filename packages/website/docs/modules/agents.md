@@ -322,7 +322,21 @@ The `reasoning` config makes an agent think harder before answering. It applies 
 | `max_rounds`    | integer         | Debate only — perspective rounds, default 1, capped at 3                                                        |
 | `synthesis`     | object          | Debate only — `{ ai_provider_id?, model?, prompt? }` override for the final synthesis pass                      |
 
-**Reflect mode** runs three steps behind a single generate call: the agent drafts an answer, a critique pass reviews it (on the agent's own model, or the `critique` override — a different model family catches blind spots the drafting model shares with itself), and a revision pass produces the final answer. If the critique approves the draft, the revision is skipped. The response is a normal generation result; the outcome is recorded on the generation's `metadata.reasoning` (`{ mode, applied, reason }`).
+#### Choosing a mode
+
+`reflect` and `debate` are **mutually exclusive** strategies. `effort` is orthogonal — it tunes provider-native reasoning and composes with either mode (or with `mode: none`).
+
+|                | `reflect`                                                  | `debate`                                                       |
+| -------------- | ---------------------------------------------------------- | -------------------------------------------------------------- |
+| **Viewpoints** | 1 — the agent checks its own work                          | 2–5 independent perspectives, then a synthesis pass            |
+| **Core move**  | draft → critique → revise                                  | independent takes → reconcile                                  |
+| **Cost**       | ~3 LLM calls                                               | N × `max_rounds` + 1 calls                                     |
+| **Best for**   | catching the agent's *own* errors, polishing, fact-checks  | contested or open-ended questions where diverse angles matter  |
+| **Avoid when** | the task is genuinely multi-perspective (one mind shares its own blind spots) | latency/cost-sensitive or simple factual tasks (overkill) |
+
+Start with `reflect` for a cheap quality bump on any agent. Reach for `debate` when the question is contested or open-ended and a single model's blind spots are a real risk — and prefer the **array form of `perspectives` with different model families**, since same-model personas tend to agree rather than surface the disagreement that synthesis harvests.
+
+**Reflect mode** runs three steps behind a single generate call: the agent drafts an answer, a critique pass reviews it (on the agent's own model, or the `critique` override — a different model family catches blind spots the drafting model shares with itself), and a revision pass produces the final answer. If the critique approves the draft, the revision is skipped. The response is a normal generation result; the outcome is recorded on the generation's [`metadata.reasoning`](./generations.md#metadatareasoning--reflect--debate-summary) summary (`{ mode, applied, reason, fallback }`).
 
 ```json
 {
@@ -356,6 +370,10 @@ The `reasoning` config makes an agent think harder before answering. It applies 
 - `started_at` / `completed_at` — the wall-clock time for the step, useful for latency and cost debugging
 
 A child record that fails (provider error) is marked `status: "failed"` and does not affect the parent generation — debate failure semantics still apply.
+
+The parent generation's [`metadata.reasoning`](./generations.md#metadatareasoning--reflect--debate-summary) summary additionally carries `perspectives`, `rounds`, and `dropped` counts so the cost and health of the debate are measurable at a glance.
+
+**Silent-degradation events** — deep thinking never fails a request: when every perspective fails, synthesis fails, or a reflect critique/revision call fails, the engine falls back to the plain draft. Because that fallback is otherwise invisible, it emits an `agents.reasoning.fallback` [webhook event](./webhooks.md) (`data: { mode, reason, perspectives?, dropped? }`) and sets `metadata.reasoning.fallback: true`. Subscribe to it to detect when an agent is paying for deep thinking but receiving the plain draft.
 
 Failure semantics: neither reflect nor debate makes a generation worse. Individual perspective failures are dropped (quorum continues); if all perspectives fail or synthesis fails, the draft from the initial generation is returned. Both modes skip streaming generations and `requires_action` (client-tool) turns; `effort` applies to streaming as well.
 
