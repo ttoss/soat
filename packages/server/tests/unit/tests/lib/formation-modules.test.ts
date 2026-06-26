@@ -1136,7 +1136,7 @@ describe('webhooksFormationModule - create, update, and getAttributes', () => {
 
   test('updates webhook when properties are valid', async () => {
     mockUpdateWebhook.mockResolvedValueOnce(
-      undefined as Awaited<ReturnType<typeof webhooksModule.updateWebhook>>
+      null as Awaited<ReturnType<typeof webhooksModule.updateWebhook>>
     );
 
     await applyUpdateResource({
