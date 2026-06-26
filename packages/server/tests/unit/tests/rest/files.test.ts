@@ -468,9 +468,9 @@ describe('Files', () => {
       );
     });
 
-    test('upload_url is absolute when SERVER_BASE_URL is set', async () => {
-      const originalBaseUrl = process.env.SERVER_BASE_URL;
-      process.env.SERVER_BASE_URL = 'https://api.example.com';
+    test('upload_url is absolute when SOAT_BASE_URL is set', async () => {
+      const originalBaseUrl = process.env.SOAT_BASE_URL;
+      process.env.SOAT_BASE_URL = 'https://api.example.com';
 
       try {
         const response = await authenticatedTestClient(userToken)
@@ -483,9 +483,9 @@ describe('Files', () => {
         );
       } finally {
         if (originalBaseUrl === undefined) {
-          delete process.env.SERVER_BASE_URL;
+          delete process.env.SOAT_BASE_URL;
         } else {
-          process.env.SERVER_BASE_URL = originalBaseUrl;
+          process.env.SOAT_BASE_URL = originalBaseUrl;
         }
       }
     });
