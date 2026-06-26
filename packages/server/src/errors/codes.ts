@@ -186,6 +186,11 @@ export const ERROR_CODES = {
     description:
       'The referenced file has a content type that cannot be ingested. Supported types: application/pdf, text/plain, text/markdown.',
   },
+  FILE_TOO_LARGE_FOR_SYNC: {
+    httpStatus: 413,
+    description:
+      'The file is too large to ingest synchronously. Retry without `?async=false` (or with `?async=true`) to run ingestion in the background and poll the document status.',
+  },
   PIPELINE_INVALID_STEP: {
     httpStatus: 400,
     description:

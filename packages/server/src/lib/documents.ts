@@ -5,11 +5,15 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { chunkPages, type ChunkStrategy, persistChunks } from './chunking';
+import { recoverStaleDocument } from './documentIngestion';
 import { emitEvent } from './eventBus';
 import { mapDocument } from './knowledge';
 import { registerResourceFieldMap } from './policyCompiler';
 
-export { enqueueDocumentIngestion } from './documentIngestion';
+export {
+  enqueueDocumentIngestion,
+  reingestDocument,
+} from './documentIngestion';
 export type { DocumentQueryConfig, QueryDocumentResult } from './knowledge';
 export { resolveDocumentSearch } from './knowledge';
 
@@ -157,10 +161,69 @@ export const listDocuments = async (args: {
   return { data: rows.map(mapDocument), total: count, limit, offset };
 };
 
+const parseDocMetadata = (
+  metadata: string | null | undefined
+): Record<string, unknown> => {
+  if (!metadata) return {};
+  try {
+    const parsed: unknown = JSON.parse(metadata);
+    return parsed && typeof parsed === 'object'
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+};
+
+/**
+ * Lightweight ingestion status for polling (issues #5, #6). Returns only the
+ * lifecycle fields — never the (potentially multi-megabyte) chunk content that
+ * `getDocument` assembles. Self-recovers a stalled document to `failed` so a
+ * poller eventually sees a terminal state (issue #4).
+ */
+export const getDocumentStatus = async (args: { id: string }) => {
+  const doc = await fetchDocumentWithContext(args.id);
+
+  if (!doc) return null;
+
+  await recoverStaleDocument(doc);
+
+  const metadata = parseDocMetadata(doc.metadata);
+  const mapped = mapDocument(doc);
+
+  const chunkCount =
+    typeof metadata.chunk_count === 'number'
+      ? metadata.chunk_count
+      : await db.DocumentChunk.count({ where: { documentId: doc.id } });
+
+  const totalPages =
+    typeof metadata.total_pages === 'number' ? metadata.total_pages : undefined;
+
+  const failureReason =
+    typeof metadata.failure_reason === 'string'
+      ? metadata.failure_reason
+      : undefined;
+
+  return {
+    id: mapped.id,
+    status: doc.status,
+    chunkCount,
+    totalPages,
+    error: doc.status === 'failed' ? failureReason : undefined,
+    // Context for the route's permission check — not part of the public
+    // status response shape.
+    projectId: mapped.projectId,
+    path: mapped.path,
+    tags: mapped.tags,
+  };
+};
+
 export const getDocument = async (args: { id: string }) => {
   const doc = await fetchDocumentWithContext(args.id);
 
   if (!doc) return null;
+
+  await recoverStaleDocument(doc);
 
   const mapped = mapDocument(doc);
 

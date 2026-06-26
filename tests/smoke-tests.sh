@@ -502,6 +502,38 @@ if [ -z "$MD_DOC_ID" ] || [ "$MD_DOC_ID" = "null" ]; then
 fi
 echo "Text ingestion: OK"
 
+# 12d. Lightweight ingestion status endpoint (issues #5/#6)
+echo "--- Checking document status endpoint ---"
+PDF_STATUS_RESP=$($SOAT_CLI get-document-status --document-id "$PDF_DOC_ID")
+PDF_STATUS=$(echo "$PDF_STATUS_RESP" | jq -r '.status')
+PDF_STATUS_CHUNKS=$(echo "$PDF_STATUS_RESP" | jq -r '.chunk_count')
+echo "Document status: $PDF_STATUS chunk_count: $PDF_STATUS_CHUNKS"
+if [ "$PDF_STATUS" != "ready" ]; then
+  echo "ERROR: get-document-status expected 'ready', got '$PDF_STATUS'" >&2
+  exit 1
+fi
+# The status payload must be lightweight — no chunk content.
+if [ "$(echo "$PDF_STATUS_RESP" | jq -r '.content // "absent"')" != "absent" ]; then
+  echo "ERROR: get-document-status leaked chunk content" >&2
+  exit 1
+fi
+echo "Document status endpoint: OK"
+
+# 12e. Re-ingest an existing document with a different chunk strategy (issue #7)
+echo "--- Re-ingesting document ---"
+REINGEST_RESP=$($SOAT_CLI reingest-document \
+  --document-id "$PDF_DOC_ID" \
+  --async false \
+  --chunk-strategy whole)
+REINGEST_STATUS=$(echo "$REINGEST_RESP" | jq -r '.status')
+REINGEST_CHUNKS=$(echo "$REINGEST_RESP" | jq -r '.chunk_count')
+echo "Re-ingested status: $REINGEST_STATUS chunk_count: $REINGEST_CHUNKS"
+if [ "$REINGEST_STATUS" != "ready" ]; then
+  echo "ERROR: reingest-document expected 'ready', got '$REINGEST_STATUS'" >&2
+  exit 1
+fi
+echo "Re-ingest: OK"
+
 # 13. Delete documents
 echo "--- Deleting documents ---"
 $SOAT_CLI delete-document --document-id "$DOC1_ID"
