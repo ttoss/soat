@@ -322,6 +322,20 @@ The `reasoning` config makes an agent think harder before answering. It applies 
 | `max_rounds`    | integer         | Debate only — perspective rounds, default 1, capped at 3                                                        |
 | `synthesis`     | object          | Debate only — `{ ai_provider_id?, model?, prompt? }` override for the final synthesis pass                      |
 
+#### Choosing a mode
+
+`reflect` and `debate` are **mutually exclusive** strategies. `effort` is orthogonal — it tunes provider-native reasoning and composes with either mode (or with `mode: none`).
+
+|                | `reflect`                                                  | `debate`                                                       |
+| -------------- | ---------------------------------------------------------- | -------------------------------------------------------------- |
+| **Viewpoints** | 1 — the agent checks its own work                          | 2–5 independent perspectives, then a synthesis pass            |
+| **Core move**  | draft → critique → revise                                  | independent takes → reconcile                                  |
+| **Cost**       | ~3 LLM calls                                               | N × `max_rounds` + 1 calls                                     |
+| **Best for**   | catching the agent's *own* errors, polishing, fact-checks  | contested or open-ended questions where diverse angles matter  |
+| **Avoid when** | the task is genuinely multi-perspective (one mind shares its own blind spots) | latency/cost-sensitive or simple factual tasks (overkill) |
+
+Start with `reflect` for a cheap quality bump on any agent. Reach for `debate` when the question is contested or open-ended and a single model's blind spots are a real risk — and prefer the **array form of `perspectives` with different model families**, since same-model personas tend to agree rather than surface the disagreement that synthesis harvests.
+
 **Reflect mode** runs three steps behind a single generate call: the agent drafts an answer, a critique pass reviews it (on the agent's own model, or the `critique` override — a different model family catches blind spots the drafting model shares with itself), and a revision pass produces the final answer. If the critique approves the draft, the revision is skipped. The response is a normal generation result; the outcome is recorded on the generation's [`metadata.reasoning`](./generations.md#metadatareasoning--reflect--debate-summary) summary (`{ mode, applied, reason, fallback }`).
 
 ```json
