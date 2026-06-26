@@ -240,7 +240,7 @@ describe('webhookDispatcher', () => {
             {
               effect: 'Allow',
               action: ['*'],
-              resource: '*',
+              resource: ['*'],
             },
           ],
         },
@@ -284,7 +284,7 @@ describe('webhookDispatcher', () => {
             {
               effect: 'Deny',
               action: ['*'],
-              resource: '*',
+              resource: ['*'],
             },
           ],
         },

@@ -1,4 +1,5 @@
 import { DomainError } from 'src/errors';
+import * as agentGenerationModule from 'src/lib/agentGeneration';
 import {
   applyInputMapping,
   applyOutputMapping,
@@ -180,6 +181,66 @@ describe('executeAgentNode', () => {
         traceId: null,
       })
     ).rejects.toThrow(DomainError);
+  });
+
+  test('parses JSON string content when outputSchema is provided', async () => {
+    const spy = jest
+      .spyOn(agentGenerationModule, 'createGeneration')
+      .mockResolvedValueOnce({
+        id: 'gen_1',
+        traceId: 'trc_1',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: '{"answer":"yes"}',
+          finishReason: 'stop',
+          responseMessages: [],
+        },
+      } as Awaited<ReturnType<typeof agentGenerationModule.createGeneration>>);
+
+    const result = await executeAgentNode({
+      node: makeNode({
+        type: 'agent',
+        agentId: 'agt_test',
+        outputSchema: { type: 'object', properties: { answer: { type: 'string' } } },
+      }),
+      state: {},
+      projectIds: [1],
+      traceId: null,
+    });
+
+    expect(result).toEqual({ kind: 'artifact', artifact: { answer: 'yes' } });
+    spy.mockRestore();
+  });
+
+  test('returns content as-is when outputSchema is provided but content is invalid JSON', async () => {
+    const spy = jest
+      .spyOn(agentGenerationModule, 'createGeneration')
+      .mockResolvedValueOnce({
+        id: 'gen_2',
+        traceId: 'trc_2',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: 'not valid json',
+          finishReason: 'stop',
+          responseMessages: [],
+        },
+      } as Awaited<ReturnType<typeof agentGenerationModule.createGeneration>>);
+
+    const result = await executeAgentNode({
+      node: makeNode({
+        type: 'agent',
+        agentId: 'agt_test',
+        outputSchema: { type: 'object' },
+      }),
+      state: {},
+      projectIds: [1],
+      traceId: null,
+    });
+
+    expect(result).toEqual({ kind: 'artifact', artifact: { content: 'not valid json' } });
+    spy.mockRestore();
   });
 });
 

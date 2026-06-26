@@ -1072,6 +1072,31 @@ describe('webhooksFormationModule - read', () => {
 
     expect(result).toBeNull();
   });
+
+  test('returns null when getWebhook throws', async () => {
+    mockGetWebhook.mockRejectedValueOnce(new Error('Database error'));
+
+    const module = getFormationModule({ resourceType: 'webhook' });
+    const result = await module!.read!({ physicalResourceId: 'wh_error' });
+
+    expect(result).toBeNull();
+  });
+});
+
+describe('webhooksFormationModule - camelCase key normalization', () => {
+  test('validateProperties normalizes camelCase keys to snake_case before field validation', () => {
+    const module = getFormationModule({ resourceType: 'webhook' });
+    expect(module?.validateProperties).toBeDefined();
+
+    // camelCase keys like 'webhookUrl' trigger the camelToSnakeKey replace callback
+    const errors = module!.validateProperties!({
+      properties: { webhookUrl: 'http://example.com', events: ['*'], name: 'test' },
+      basePath: 'resources.MyWebhook.properties',
+    });
+
+    // 'webhook_url' is not a valid field; validation reports unknown field
+    expect(errors.some((e) => e.message.includes('webhook_url'))).toBe(true);
+  });
 });
 
 // ── agentsFormationModule — validation error branches ─────────────────────

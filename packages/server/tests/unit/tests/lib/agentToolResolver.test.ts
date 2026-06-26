@@ -3,6 +3,7 @@ import {
   buildContextHeaders,
   HttpToolError,
   isSoatActionAllowedByBoundary,
+  parseHttpExecuteConfig,
   resolveAgentTools,
   resolveBodyParamInterpolations,
   resolveUrlPathParams,
@@ -599,6 +600,25 @@ describe('resolveUrlPathParams', () => {
     });
     expect(result.resolvedUrl).toBe('https://example.com/{id}/details');
     expect(result.remainingArgs).toEqual({});
+  });
+});
+
+describe('parseHttpExecuteConfig', () => {
+  test('returns null when execute is null (parsedExecute not a plain object)', () => {
+    expect(parseHttpExecuteConfig(null)).toBeNull();
+  });
+
+  test('returns null when url is not a string', () => {
+    expect(parseHttpExecuteConfig({ url: 123 } as never)).toBeNull();
+  });
+
+  test('returns null when url is an empty string', () => {
+    expect(parseHttpExecuteConfig({ url: '' } as never)).toBeNull();
+  });
+
+  test('returns HttpExecuteConfig when execute has a valid url string', () => {
+    const result = parseHttpExecuteConfig({ url: 'https://example.com/api' });
+    expect(result).toMatchObject({ url: 'https://example.com/api' });
   });
 });
 
