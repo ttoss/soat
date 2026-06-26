@@ -3,15 +3,15 @@ import createDebug from 'debug';
 
 import { createGenerationRecord, updateGenerationRecord } from './generations';
 import {
-  emitReasoningFallbackEvent,
   MAX_FANOUT,
   MAX_ROUNDS,
   MAX_STEPS,
+  MAX_TOTAL_COMPLETIONS,
   type PerspectiveConfig,
-  type ReasoningConfig,
+  REASONING_PIPELINE_TIMEOUT_MS,
+  REASONING_STEP_TIMEOUT_MS,
   type ReasoningMessage,
   type ReasoningStep,
-  recordReasoningSummary,
 } from './reasoning';
 import * as reasoningCompletion from './reasoningCompletion';
 
@@ -79,6 +79,10 @@ type PipelineContext = {
   question: string;
   draft: string;
   temperature?: number | null;
+  /** Mutable runtime budget — defence-in-depth beyond write-time validation. */
+  budget: { remaining: number };
+  /** Epoch ms after which no further completion may start. */
+  deadline: number;
 };
 
 const createChildGenerationRecord = async (
@@ -118,6 +122,14 @@ const runCompletion = async (args: {
   temperature?: number | null;
   round?: number;
 }): Promise<string> => {
+  if (args.ctx.budget.remaining <= 0) {
+    throw new Error('reasoning completion budget exhausted');
+  }
+  const remainingMs = args.ctx.deadline - Date.now();
+  if (remainingMs <= 0) {
+    throw new Error('reasoning pipeline deadline exceeded');
+  }
+  args.ctx.budget.remaining -= 1;
   const childGenId = await createChildGenerationRecord(args.ctx);
   try {
     const text = await reasoningCompletion.runReasoningCompletion({
@@ -127,6 +139,9 @@ const runCompletion = async (args: {
       model: args.model,
       prompt: args.prompt,
       temperature: args.temperature ?? args.ctx.temperature ?? undefined,
+      abortSignal: AbortSignal.timeout(
+        Math.min(remainingMs, REASONING_STEP_TIMEOUT_MS)
+      ),
     });
     if (childGenId) {
       void updateGenerationRecord({
@@ -314,6 +329,8 @@ export const runReasoningPipeline = async (args: {
     question: args.question,
     draft: args.draft,
     temperature: args.temperature,
+    budget: { remaining: MAX_TOTAL_COMPLETIONS },
+    deadline: Date.now() + REASONING_PIPELINE_TIMEOUT_MS,
   };
   const outputIndex = resolveOutputIndex(steps);
   const stepOutputs: Record<string, string> = {};
@@ -357,92 +374,4 @@ export const runReasoningPipeline = async (args: {
     };
   }
   return fallback(stepsRun === 0 ? 'all_failed' : 'output_failed');
-};
-
-type PipelineResult = {
-  text: string;
-  response?: { messages?: Array<unknown>; modelId?: string };
-};
-
-/**
- * Pipeline hook: applies `mode: pipeline` reasoning to a completed raw
- * generation result in place — the trace, completion event, and API response
- * are all built from the final text afterwards. No-op for any other mode.
- */
-export const maybeApplyPipelineToResult = async (args: {
-  reasoningConfig?: ReasoningConfig | null;
-  agentId: string;
-  generationId: string;
-  traceId?: string;
-  projectId?: number;
-  projectPublicId?: string;
-  messages: ReasoningMessage[];
-  result: PipelineResult;
-  temperature?: number | null;
-}): Promise<void> => {
-  const config = args.reasoningConfig;
-  if (
-    config?.mode !== 'pipeline' ||
-    !Array.isArray(config.steps) ||
-    config.steps.length === 0 ||
-    args.result.text.trim().length === 0
-  ) {
-    return;
-  }
-
-  const outcome = await runReasoningPipeline({
-    agentId: args.agentId,
-    steps: config.steps,
-    question: formatQuestion(args.messages),
-    draft: args.result.text,
-    temperature: args.temperature,
-    traceId: args.traceId,
-    projectId: args.projectId,
-    initiatorGenerationId: args.generationId,
-  });
-
-  if (outcome.applied) {
-    args.result.text = outcome.text;
-    // The draft's responseMessages no longer match the final text — drop them
-    // so conversation replay does not resurrect the draft.
-    if (args.result.response) {
-      args.result.response = { ...args.result.response, messages: undefined };
-    }
-  }
-
-  emitReasoningFallbackEvent({
-    projectId: args.projectId,
-    projectPublicId: args.projectPublicId,
-    generationId: args.generationId,
-    mode: 'pipeline',
-    reason: outcome.reason,
-    data: { stepsRun: outcome.stepsRun, dropped: outcome.dropped },
-  });
-
-  void recordReasoningSummary({
-    generationId: args.generationId,
-    summary: {
-      mode: 'pipeline',
-      applied: outcome.applied,
-      reason: outcome.reason,
-      stepsRun: outcome.stepsRun,
-      dropped: outcome.dropped,
-      fallback: !outcome.applied,
-    },
-  });
-};
-
-/** Applies orchestrated reasoning (currently `pipeline` mode) in place. */
-export const applyOrchestration = async (args: {
-  reasoningConfig?: ReasoningConfig | null;
-  agentId: string;
-  generationId: string;
-  traceId?: string;
-  projectId?: number;
-  projectPublicId?: string;
-  messages: ReasoningMessage[];
-  result: PipelineResult;
-  temperature?: number | null;
-}): Promise<void> => {
-  await maybeApplyPipelineToResult(args);
 };

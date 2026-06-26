@@ -20,6 +20,8 @@ export const runReasoningCompletion = async (args: {
   aiProviderId?: string;
   model?: string;
   temperature?: number;
+  /** Aborts the completion (e.g. a per-step timeout) so it cannot hang. */
+  abortSignal?: AbortSignal;
 }): Promise<string> => {
   const { model, modelName } = await resolveCompletionModel({
     agentId: args.agentId,
@@ -34,6 +36,10 @@ export const runReasoningCompletion = async (args: {
     model,
     prompt: args.prompt,
     temperature: args.temperature ?? 0,
+    abortSignal: args.abortSignal,
+    // A reasoning step is best-effort and degrades to the draft on failure;
+    // cap retries so a flaky provider cannot multiply latency and cost.
+    maxRetries: 1,
   });
 
   return text;

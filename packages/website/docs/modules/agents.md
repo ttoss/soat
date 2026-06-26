@@ -343,9 +343,9 @@ The `reasoning` config makes an agent think harder before answering. It applies 
 | `perspectives`   | array   | Fanout only — explicit `{ name?, prompt?, ai_provider_id?, model? }` objects (overrides `count`) |
 | `rounds`         | integer | Fanout only — rounds of perspective turns (default 1, max 3)                                  |
 
-**Template tokens** — `{question}` (the transcript), `{draft}` (the agent's initial answer), and `{steps.<name>}` (an earlier step's output; a fanout step's output is the joined transcript of its perspectives).
+**Template tokens** — `{question}` (the transcript), `{draft}` (the agent's initial answer), and `{steps.<name>}` (an earlier step's output; a fanout step's output is the joined transcript of its perspectives). A `{steps.<name>}` token must name a step declared **earlier** in the list; a reference to an unknown or later step is rejected with `INVALID_REASONING_CONFIG` (400) rather than silently resolving to an empty string.
 
-**Caps** — a pipeline allows at most 8 steps, fanout width 2–5, 3 rounds, and 24 total completions. Violations are rejected with `INVALID_REASONING_CONFIG` (400) at agent create/update and on the per-generate override.
+**Caps** — a pipeline allows at most 8 steps, fanout width 2–5, 3 rounds, and 24 total completions. Violations are rejected with `INVALID_REASONING_CONFIG` (400) at agent create/update and on the per-generate override. Each step also carries a per-step timeout and the pipeline an overall deadline, so a slow or hung provider degrades to the draft instead of stalling a request that has already produced its answer.
 
 ```json
 {
@@ -404,7 +404,7 @@ N independent perspectives, then a synthesis. Prefer **different model families*
 
 Each step (and each fanout perspective turn) creates a child [generation](./generations.md) record linked to the parent via `initiator_generation_id` and sharing the same `trace_id`. Querying `GET /generations?trace_id=<trace_id>` returns the full tree. Each child carries `metadata.reasoning.step` (the step or persona name), `metadata.reasoning.output`, and `started_at` / `completed_at`. The parent generation's [`metadata.reasoning`](./generations.md#metadatareasoning--pipeline-summary) summary carries `mode`, `applied`, `reason`, `stepsRun`, `dropped`, and `fallback`.
 
-**Silent-degradation events** — deep thinking never fails a request: when a step fails or the output step produces nothing, the engine falls back to the plain draft. Because that fallback is otherwise invisible, it emits an `agents.reasoning.fallback` [webhook event](./webhooks.md) (`data: { mode, reason, stepsRun, dropped }`) and sets `metadata.reasoning.fallback: true`. Subscribe to it to detect when an agent is paying for deep thinking but receiving the plain draft.
+**Silent-degradation events** — deep thinking never fails a request: when a step fails or the output step produces nothing, the engine falls back to the plain draft. Because that fallback is otherwise invisible, it emits an `agents.reasoning.fallback` [webhook event](./webhooks.md) (`data: { mode, reason, stepsRun, dropped }`) and sets `metadata.reasoning.fallback: true`. Subscribe to it to detect when an agent is paying for deep thinking but receiving the plain draft. An intentional `halt_if_equals` short-circuit is **not** a degradation — it keeps the draft on purpose, so it does not emit the event nor set the flag. An agent still stored with a removed legacy mode (`reflect`/`debate`) is inert and returns the plain draft, and also emits the event (`data: { legacyMode: true }`) so the migration gap is visible.
 
 Failure semantics: a pipeline never makes a generation worse. A failed non-output step is dropped and the pipeline continues; if the output step fails or nothing produces text, the initial draft is returned. Pipelines skip streaming generations and `requires_action` (client-tool) turns; `effort` applies to streaming as well.
 
