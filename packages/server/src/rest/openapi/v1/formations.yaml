@@ -593,7 +593,7 @@ components:
         reasoning:
           type: object
           nullable: true
-          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning; `mode: reflect` critiques and revises; `mode: debate` runs multiple perspectives then synthesizes.'
+          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning; `mode: pipeline` runs an ordered list of reasoning steps after the base draft. reflect and debate are expressed as pipelines — see the Agents module docs.'
           properties:
             effort:
               type: string
@@ -601,56 +601,69 @@ components:
               description: Provider-native reasoning effort, forwarded to providers that support it.
             mode:
               type: string
-              enum: [none, reflect, debate]
+              enum: [none, pipeline]
               description: Orchestrated reasoning strategy.
-            critique:
-              type: object
-              description: Reflect only — overrides for the critique pass.
-              properties:
-                ai_provider_id:
-                  x-soat-ref: ai-providers
-                  type: string
-                  description: AI provider override for the critique call. Must belong to the agent's project.
-                model:
-                  type: string
-                  description: Model override for the critique call.
-                prompt:
-                  type: string
-                  description: Replaces the default critique instructions.
-            perspectives:
-              description: 'Debate only — number of auto-generated perspectives (2–5) or an array of explicit perspective objects.'
-              oneOf:
-                - type: integer
-                - type: array
-                  items:
-                    type: object
-                    properties:
-                      name:
-                        type: string
-                      prompt:
-                        type: string
-                      ai_provider_id:
-                        x-soat-ref: ai-providers
-                        type: string
-                      model:
-                        type: string
-            max_rounds:
-              type: integer
-              description: Debate only — rounds of perspective turns. Default 1, max 3.
-            synthesis:
-              type: object
-              description: Debate only — override triple for the synthesis pass.
-              properties:
-                ai_provider_id:
-                  x-soat-ref: ai-providers
-                  type: string
-                  description: AI provider override for the synthesis call. Must belong to the agent's project.
-                model:
-                  type: string
-                  description: Model override for the synthesis call.
-                prompt:
-                  type: string
-                  description: Replaces the default synthesis instructions.
+            steps:
+              type: array
+              maxItems: 8
+              description: 'Pipeline only — ordered reasoning steps run after the base draft. The output step (`output: true`, else the last) produces the final answer.'
+              items:
+                type: object
+                required:
+                  - name
+                  - prompt
+                properties:
+                  name:
+                    type: string
+                    description: Unique step name; referenced as `{steps.<name>}`.
+                  kind:
+                    type: string
+                    enum: [completion, fanout]
+                    description: '`completion` (default) runs one call; `fanout` runs N perspectives over rounds.'
+                  prompt:
+                    type: string
+                    description: 'Prompt template supporting `{question}`, `{draft}`, and `{steps.<name>}`.'
+                  ai_provider_id:
+                    x-soat-ref: ai-providers
+                    type: string
+                    description: AI provider override for this step. Must belong to the agent's project.
+                  model:
+                    type: string
+                    description: Model override for this step.
+                  temperature:
+                    type: number
+                    description: Sampling temperature for this step.
+                  output:
+                    type: boolean
+                    description: Marks the step whose output is the final answer (else the last step).
+                  halt_if_equals:
+                    type: string
+                    description: If the step output equals this string, halt the pipeline and keep the draft.
+                  count:
+                    type: integer
+                    minimum: 2
+                    maximum: 5
+                    description: 'Fanout only — number of auto-named perspectives (2–5).'
+                  rounds:
+                    type: integer
+                    minimum: 1
+                    maximum: 3
+                    description: 'Fanout only — rounds of perspective turns (default 1, max 3).'
+                  perspectives:
+                    type: array
+                    description: 'Fanout only — explicit perspective objects; overrides count.'
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        prompt:
+                          type: string
+                        ai_provider_id:
+                          x-soat-ref: ai-providers
+                          type: string
+                        model:
+                          type: string
 
     ActorResourceProperties:
       description: >-

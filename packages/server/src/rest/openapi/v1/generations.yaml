@@ -55,8 +55,8 @@ paths:
           required: false
           description: >
             Filter by the public ID of the parent generation. Returns all
-            generations triggered by that generation — debate perspective turns,
-            synthesis steps, and sub-agent invocations. Null-initiated (top-level)
+            generations triggered by that generation — reasoning pipeline steps
+            and perspective turns, and sub-agent invocations. Null-initiated (top-level)
             generations are not returned.
           schema:
             type: string
@@ -186,7 +186,7 @@ components:
           nullable: true
           description: >
             Public ID of the generation that triggered this one. Set for
-            debate perspective/synthesis child generations and sub-agent
+            reasoning pipeline child generations and sub-agent
             invocations alike. Null for top-level generations.
         started_by_principal_type:
           type: string

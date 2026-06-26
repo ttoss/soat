@@ -18,7 +18,7 @@ Generations can be listed via `GET /generations` (filter by `agent_id`, `trace_i
 | `project_id`                | string         | Project the generation belongs to                                                                    |
 | `agent_id`                  | string         | Agent that ran the generation                                                                        |
 | `trace_id`                  | string         | Trace this generation belongs to                                                                     |
-| `initiator_generation_id`   | string \| null | Generation that triggered this one. Set for debate perspective/synthesis children and sub-agent invocations alike; `null` for top-level generations |
+| `initiator_generation_id`   | string \| null | Generation that triggered this one. Set for pipeline step children and sub-agent invocations alike; `null` for top-level generations |
 | `started_by_principal_type` | string \| null | Type of the principal that started the generation                                                    |
 | `started_by_principal_id`   | string \| null | ID of the principal that started the generation                                                      |
 | `status`                    | string         | Lifecycle status: `in_progress`, `requires_action`, `completed`, or `failed`                         |
@@ -83,19 +83,18 @@ The `meta` field includes the `generation_id` and `trace_id` of the failed run s
 
 The `metadata` field is written by the server to record the outcome of reasoning modes. It is read-only and not settable by callers.
 
-#### `metadata.reasoning` — reflect / debate summary
+#### `metadata.reasoning` — pipeline summary
 
-Both reflect and debate modes write a `metadata.reasoning` object on the parent generation once the reasoning pass completes:
+The [`pipeline` reasoning mode](./agents.md#reasoning-deep-thinking) writes a `metadata.reasoning` object on the parent generation once the pipeline completes:
 
 ```json
 {
   "metadata": {
     "reasoning": {
-      "mode": "debate",
+      "mode": "pipeline",
       "applied": true,
-      "reason": "synthesized",
-      "perspectives": 3,
-      "rounds": 1,
+      "reason": "completed",
+      "stepsRun": 3,
       "dropped": 0,
       "fallback": false
     }
@@ -105,26 +104,25 @@ Both reflect and debate modes write a `metadata.reasoning` object on the parent 
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `mode` | `reflect` \| `debate` | Which reasoning mode ran |
-| `applied` | boolean | `true` if the reasoned answer replaced the draft |
-| `reason` | `synthesized` \| `fallback` \| `synthesis_failed` \| `approved` \| `critique_failed` \| `revision_failed` | Why `applied` is true or false |
+| `mode` | `pipeline` | The orchestrated reasoning mode that ran |
+| `applied` | boolean | `true` if the pipeline's final answer replaced the draft |
+| `reason` | `completed` \| `halted` \| `all_failed` \| `output_failed` | Why `applied` is true or false |
+| `stepsRun` | number | Number of step (and fanout) completions that produced output |
+| `dropped` | number | Number of step/perspective turns that failed and were dropped |
 | `fallback` | boolean | `true` when the engine silently degraded to the plain draft (also emits an [`agents.reasoning.fallback`](./webhooks.md) event) |
-| `perspectives` | number | Debate only — number of configured perspectives |
-| `rounds` | number | Debate only — number of debate rounds run (capped at 3) |
-| `dropped` | number | Debate only — number of perspective turns that failed and were dropped from the synthesis |
 
-`perspectives`, `rounds`, and `dropped` make the cost and health of a debate measurable: a high `dropped` count or `fallback: true` means the deep-thinking pass under-delivered and the answer is closer to (or exactly) the plain draft.
+`stepsRun`, `dropped`, and `fallback` make the cost and health of a pipeline measurable: a high `dropped` count or `fallback: true` means the deep-thinking pass under-delivered and the answer is closer to (or exactly) the plain draft. `reason: halted` means a step's `halt_if_equals` short-circuit fired and the draft was kept deliberately.
 
-#### `metadata.reasoning` on debate child generations
+#### `metadata.reasoning` on pipeline child generations
 
-When debate mode runs, each perspective turn and the synthesis step creates a **child generation** linked to the parent via `initiator_generation_id`. These child records carry their own `metadata.reasoning`:
+Each pipeline step (and each fanout perspective turn) creates a **child generation** linked to the parent via `initiator_generation_id`. These child records carry their own `metadata.reasoning`:
 
 ```json
 {
   "metadata": {
     "reasoning": {
-      "perspective": "Advocate",
-      "output": "The proposal has strong upside because..."
+      "step": "critique",
+      "output": "The draft overstates the second claim because..."
     }
   }
 }
@@ -132,19 +130,19 @@ When debate mode runs, each perspective turn and the synthesis step creates a **
 
 | Field | Description |
 |-------|-------------|
-| `perspective` | Persona name (e.g. `"Advocate"`, `"Skeptic"`) or `"synthesis"` for the final pass |
-| `round` | Zero-based round index. Present on perspective turns only (not on the synthesis step). Useful when `maxRounds > 1` to distinguish the same persona's first and second contributions |
+| `step` | The step `name` (e.g. `"critique"`, `"final"`) or, for a fanout step, the perspective name (e.g. `"Skeptic"`) |
+| `round` | Zero-based round index. Present on fanout perspective turns only. Useful when `rounds > 1` to distinguish the same persona's first and second contributions |
 | `output` | The text produced by this step |
 
-:::info Debate rounds vs sub-agent traces
+:::info Pipeline steps vs sub-agent traces
 
-Debate rounds are **not** sub-traces — they live in the **same trace** as the parent generation. `GET /traces/:id/tree` only shows sub-agent hierarchy (child traces); debate rounds will not appear there as children.
+Pipeline steps are **not** sub-traces — they live in the **same trace** as the parent generation. `GET /traces/:id/tree` only shows sub-agent hierarchy (child traces); pipeline steps will not appear there as children.
 
-To retrieve debate rounds for a parent generation, use either:
+To retrieve pipeline steps for a parent generation, use either:
 
-- `GET /generations?trace_id=X&initiator_generation_id=<parent_gen_id>` — returns only the debate children of that specific generation.
-- `GET /traces/:id/tree?include=generations` — returns the full trace tree with all generations (including debate children) embedded on each node.
+- `GET /generations?trace_id=X&initiator_generation_id=<parent_gen_id>` — returns only the pipeline children of that specific generation.
+- `GET /traces/:id/tree?include=generations` — returns the full trace tree with all generations (including pipeline children) embedded on each node.
 
 :::
 
-Child records with `status: "failed"` indicate a perspective that errored; the parent generation is unaffected.
+Child records with `status: "failed"` indicate a step that errored; the parent generation is unaffected.

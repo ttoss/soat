@@ -11,13 +11,13 @@ import {
   savePendingGeneration,
   type TypedAgent,
 } from './agentGenerationHelpers';
-import { applyOrchestration } from './deliberation';
 import {
   fireCompletionSideEffects,
   recordGenerationFailure,
 } from './generationLifecycle';
 import { toProviderDomainError } from './providerError';
 import { type ProviderOptionsMap, type ReasoningConfig } from './reasoning';
+import { applyReasoningPipeline } from './reasoningPipelineHook';
 
 const log = createDebug('soat:generation');
 
@@ -180,7 +180,7 @@ const resolveGenerationResult = async (args: {
     response: args.result.response,
   };
 
-  await applyOrchestration({
+  await applyReasoningPipeline({
     reasoningConfig: args.reasoningConfig,
     agentId: args.agentId,
     generationId: args.generationId,

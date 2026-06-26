@@ -1137,25 +1137,33 @@ fi
 $SOAT_CLI update-agent --agent-id "$AGENT_ID" --knowledge_config '{}' >/dev/null
 echo "knowledge_config extraction round-trip: OK"
 
-# 22b3. Reasoning config (deep thinking) round-trip
-echo "--- Setting reasoning config ---"
+# 22b3. Reasoning config (deep thinking) pipeline round-trip
+echo "--- Setting reasoning pipeline config ---"
 RC_UPDATE_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
-  --reasoning '{"mode":"reflect","effort":"low","critique":{"prompt":"Critique factual accuracy only."}}')
-if ! printf '%s\n' "$RC_UPDATE_RESP" | jq -e '.reasoning.mode == "reflect" and .reasoning.effort == "low"' >/dev/null 2>&1; then
+  --reasoning '{"mode":"pipeline","effort":"low","steps":[{"name":"critique","prompt":"Critique factual accuracy only: {draft}"},{"name":"final","prompt":"Improve using {steps.critique}","output":true}]}')
+if ! printf '%s\n' "$RC_UPDATE_RESP" | jq -e '.reasoning.mode == "pipeline" and .reasoning.effort == "low"' >/dev/null 2>&1; then
   echo "ERROR: update-agent did not round-trip the reasoning config" >&2
   echo "$RC_UPDATE_RESP" >&2
   exit 1
 fi
 RC_GET_RESP=$($SOAT_CLI get-agent --agent-id "$AGENT_ID")
-if ! printf '%s\n' "$RC_GET_RESP" | jq -e '.reasoning.critique.prompt == "Critique factual accuracy only."' >/dev/null 2>&1; then
-  echo "ERROR: get-agent did not return the reasoning critique config" >&2
+if ! printf '%s\n' "$RC_GET_RESP" | jq -e '.reasoning.steps[0].name == "critique" and .reasoning.steps[1].output == true' >/dev/null 2>&1; then
+  echo "ERROR: get-agent did not return the reasoning pipeline steps" >&2
   echo "$RC_GET_RESP" >&2
   exit 1
 fi
+# An invalid pipeline (empty steps) must be rejected.
+RC_BAD_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
+  --reasoning '{"mode":"pipeline","steps":[]}' 2>&1 || true)
+if ! printf '%s\n' "$RC_BAD_RESP" | jq -e '.error.code == "INVALID_REASONING_CONFIG"' >/dev/null 2>&1; then
+  echo "ERROR: an empty pipeline was not rejected with INVALID_REASONING_CONFIG" >&2
+  echo "$RC_BAD_RESP" >&2
+  exit 1
+fi
 # Disable again so later generations in this script stay single-pass
-# (reflect behavior is LLM-dependent and covered by unit tests, not smoke).
+# (pipeline behavior is LLM-dependent and covered by unit tests, not smoke).
 $SOAT_CLI update-agent --agent-id "$AGENT_ID" --reasoning '{"mode":"none"}' >/dev/null
-echo "reasoning config round-trip: OK"
+echo "reasoning pipeline config round-trip: OK"
 
 # 22c. Create a deterministic HTTP tool for tool_output message content
 echo "--- Creating project-detail tool ---"

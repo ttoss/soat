@@ -38,7 +38,7 @@ Agents differ from [Chats](./chats.md) in that they can call tools, observe resu
 | `boundary_policy`          | object        | Boundary policy that limits which `soat` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions) |
 | `temperature`              | number        | Sampling temperature                                                                                                             |
 | `knowledge_config`         | object        | Knowledge retrieval config injected before every generation — see [Knowledge Config](#knowledge-config)                          |
-| `reasoning`                | object        | Deep-thinking configuration (provider-native effort, reflect mode, or debate mode) — see [Reasoning (Deep Thinking)](#reasoning-deep-thinking) |
+| `reasoning`                | object        | Deep-thinking configuration (provider-native effort and/or a reasoning step pipeline) — see [Reasoning (Deep Thinking)](#reasoning-deep-thinking) |
 | `max_context_messages`     | number        | Maximum number of recent messages sent to the model per generation — see [Context Window Limiting](#context-window-limiting)     |
 | `single_session_per_actor` | boolean       | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)         |
 | `created_at`               | string        | ISO 8601 creation timestamp                                                                                                      |
@@ -313,69 +313,100 @@ Results are injected as system messages prepended to the conversation:
 
 The `reasoning` config makes an agent think harder before answering. It applies to non-streaming generations across all flows (direct generate, conversations, sessions) and can be set on the agent or overridden per request in the generate body (object replace, not merge).
 
-| Field      | Type     | Description                                                                                                          |
-| ---------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
-| `effort`        | string          | `low` \| `medium` \| `high` — forwarded as provider-native reasoning options (OpenAI reasoning effort, Anthropic extended-thinking budget, Google thinking budget). Ignored on providers without a mapping. |
-| `mode`          | string          | `none` (default) \| `reflect` \| `debate` — orchestrated reasoning strategy                                     |
-| `critique`      | object          | Reflect only — `{ ai_provider_id?, model?, prompt? }` overrides for the critique pass (same contract as [extraction overrides](./memories.md#automatic-extraction)) |
-| `perspectives`  | integer\|array  | Debate only — number of auto-generated personas (2–5, default 3) or an array of `{ name?, prompt?, ai_provider_id?, model? }` objects |
-| `max_rounds`    | integer         | Debate only — perspective rounds, default 1, capped at 3                                                        |
-| `synthesis`     | object          | Debate only — `{ ai_provider_id?, model?, prompt? }` override for the final synthesis pass                      |
+| Field    | Type   | Description                                                                                                                                                                                                 |
+| -------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `effort` | string | `low` \| `medium` \| `high` — forwarded as provider-native reasoning options (OpenAI reasoning effort, Anthropic extended-thinking budget, Google thinking budget). Ignored on providers without a mapping. Composes with any `mode`. |
+| `mode`   | string | `none` (default) \| `pipeline` — orchestrated reasoning strategy                                                                                                                                          |
+| `steps`  | array  | Pipeline only — the ordered reasoning steps run after the draft (see [Pipeline mode](#pipeline-mode))                                                                                                       |
 
-#### Choosing a mode
+`effort` is orthogonal — it tunes provider-native reasoning and composes with `mode: pipeline` or `mode: none`.
 
-`reflect` and `debate` are **mutually exclusive** strategies. `effort` is orthogonal — it tunes provider-native reasoning and composes with either mode (or with `mode: none`).
+#### Pipeline mode
 
-|                | `reflect`                                                  | `debate`                                                       |
-| -------------- | ---------------------------------------------------------- | -------------------------------------------------------------- |
-| **Viewpoints** | 1 — the agent checks its own work                          | 2–5 independent perspectives, then a synthesis pass            |
-| **Core move**  | draft → critique → revise                                  | independent takes → reconcile                                  |
-| **Cost**       | ~3 LLM calls                                               | N × `max_rounds` + 1 calls                                     |
-| **Best for**   | catching the agent's *own* errors, polishing, fact-checks  | contested or open-ended questions where diverse angles matter  |
-| **Avoid when** | the task is genuinely multi-perspective (one mind shares its own blind spots) | latency/cost-sensitive or simple factual tasks (overkill) |
+`mode: pipeline` runs an ordered list of pure-text steps after the agent produces its initial draft. Each step is a **side-effect-free completion** (no tools, no knowledge retrieval); the designated **output step** produces the final answer. Pipelines never fail a request — any step failure degrades to the plain draft.
 
-Start with `reflect` for a cheap quality bump on any agent. Reach for `debate` when the question is contested or open-ended and a single model's blind spots are a real risk — and prefer the **array form of `perspectives` with different model families**, since same-model personas tend to agree rather than surface the disagreement that synthesis harvests.
+> **Reasoning vs orchestration.** A reasoning pipeline is *meta-cognition over a single answer*: pure-text steps, bounded, fallback-safe, ephemeral. It is **not** the [orchestration engine](./orchestrations.md), which composes tool-using, permissioned agents into a persisted, resumable graph. Reach for reasoning to make one agent think harder; reach for orchestration to make many agents collaborate.
 
-**Reflect mode** runs three steps behind a single generate call: the agent drafts an answer, a critique pass reviews it (on the agent's own model, or the `critique` override — a different model family catches blind spots the drafting model shares with itself), and a revision pass produces the final answer. If the critique approves the draft, the revision is skipped. The response is a normal generation result; the outcome is recorded on the generation's [`metadata.reasoning`](./generations.md#metadatareasoning--reflect--debate-summary) summary (`{ mode, applied, reason, fallback }`).
+**Step fields**
+
+| Field            | Type    | Description                                                                                  |
+| ---------------- | ------- | ------------------------------------------------------------------------------------------- |
+| `name`           | string  | Required, unique; referenced elsewhere as `{steps.<name>}`                                   |
+| `kind`           | string  | `completion` (default) — one call; or `fanout` — N perspectives over rounds                  |
+| `prompt`         | string  | Template supporting `{question}`, `{draft}`, and `{steps.<name>}` tokens                     |
+| `ai_provider_id` | string  | Per-step provider override (must belong to the agent's project)                              |
+| `model`          | string  | Per-step model override                                                                      |
+| `temperature`    | number  | Per-step sampling temperature                                                                |
+| `output`         | boolean | Marks the step whose output is the final answer (defaults to the last step)                  |
+| `halt_if_equals` | string  | If the step output equals this string, halt the pipeline and keep the draft                  |
+| `count`          | integer | Fanout only — number of auto-named perspectives (2–5)                                         |
+| `perspectives`   | array   | Fanout only — explicit `{ name?, prompt?, ai_provider_id?, model? }` objects (overrides `count`) |
+| `rounds`         | integer | Fanout only — rounds of perspective turns (default 1, max 3)                                  |
+
+**Template tokens** — `{question}` (the transcript), `{draft}` (the agent's initial answer), and `{steps.<name>}` (an earlier step's output; a fanout step's output is the joined transcript of its perspectives). A `{steps.<name>}` token must name a step declared **earlier** in the list; a reference to an unknown or later step is rejected with `INVALID_REASONING_CONFIG` (400) rather than silently resolving to an empty string.
+
+**Caps** — a pipeline allows at most 8 steps, fanout width 2–5, 3 rounds, and 24 total completions. Violations are rejected with `INVALID_REASONING_CONFIG` (400) at agent create/update and on the per-generate override. Each step also carries a per-step timeout and the pipeline an overall deadline, so a slow or hung provider degrades to the draft instead of stalling a request that has already produced its answer.
 
 ```json
 {
   "reasoning": {
     "effort": "high",
-    "mode": "reflect",
-    "critique": { "ai_provider_id": "aip_cheap", "model": "gpt-4o-mini" }
+    "mode": "pipeline",
+    "steps": [
+      { "kind": "fanout", "name": "angles", "count": 3, "prompt": "Argue one angle on: {question}" },
+      { "name": "final", "prompt": "Reconcile the angles into one answer:\n{steps.angles}", "output": true }
+    ]
   }
 }
 ```
 
-**Debate mode** runs N perspectives on the question (using auto-generated personas such as Advocate/Skeptic/Pragmatist, or explicit perspective objects with per-perspective provider/model/prompt overrides), then a synthesis pass produces the final answer. Each perspective sees the question and all prior turns in the transcript.
+#### Example: reflect (self-critique)
+
+A draft → critique → revise loop. The `halt_if_equals` short-circuit keeps the draft when the critique approves it. A different model family for the critique catches blind spots the drafting model shares with itself.
 
 ```json
 {
   "reasoning": {
-    "mode": "debate",
-    "perspectives": [
-      { "name": "Skeptic", "prompt": "Attack the strongest claim.", "ai_provider_id": "aip_alt", "model": "claude-sonnet-4-6" },
-      { "name": "Advocate", "prompt": "Steelman the proposal with evidence." }
-    ],
-    "synthesis": { "ai_provider_id": "aip_flagship", "prompt": "Weigh the arguments; commit to a recommendation." }
+    "mode": "pipeline",
+    "steps": [
+      { "name": "critique", "prompt": "Critique this draft; reply exactly APPROVED if it needs no change:\n{draft}", "model": "gpt-4o-mini", "halt_if_equals": "APPROVED" },
+      { "name": "final", "prompt": "Revise the draft using the critique:\nDraft: {draft}\nCritique: {steps.critique}", "output": true }
+    ]
   }
 }
 ```
 
-**Debate observability** — each perspective turn and the synthesis step creates a child [generation](./generations.md) record linked to the parent via `initiator_generation_id` and sharing the same `trace_id`. Querying `GET /generations?trace_id=<trace_id>` returns the full tree. Each child record carries:
+#### Example: debate (multiple perspectives)
 
-- `metadata.reasoning.perspective` — the persona name (e.g. `"Advocate"`) or `"synthesis"` for the final pass
-- `metadata.reasoning.output` — the text produced by that step
-- `started_at` / `completed_at` — the wall-clock time for the step, useful for latency and cost debugging
+N independent perspectives, then a synthesis. Prefer **different model families** across perspectives — same-model personas tend to agree rather than surface the disagreement synthesis harvests. Each perspective sees the question and all prior turns in the transcript.
 
-A child record that fails (provider error) is marked `status: "failed"` and does not affect the parent generation — debate failure semantics still apply.
+```json
+{
+  "reasoning": {
+    "mode": "pipeline",
+    "steps": [
+      {
+        "kind": "fanout",
+        "name": "debate",
+        "prompt": "Take a position on: {question}",
+        "perspectives": [
+          { "name": "Skeptic", "prompt": "Attack the strongest claim.", "ai_provider_id": "aip_alt", "model": "claude-sonnet-4-6" },
+          { "name": "Advocate", "prompt": "Steelman the proposal with evidence." }
+        ]
+      },
+      { "name": "synthesis", "prompt": "Weigh these perspectives and commit to a recommendation:\n{steps.debate}", "output": true }
+    ]
+  }
+}
+```
 
-The parent generation's [`metadata.reasoning`](./generations.md#metadatareasoning--reflect--debate-summary) summary additionally carries `perspectives`, `rounds`, and `dropped` counts so the cost and health of the debate are measurable at a glance.
+#### Observability
 
-**Silent-degradation events** — deep thinking never fails a request: when every perspective fails, synthesis fails, or a reflect critique/revision call fails, the engine falls back to the plain draft. Because that fallback is otherwise invisible, it emits an `agents.reasoning.fallback` [webhook event](./webhooks.md) (`data: { mode, reason, perspectives?, dropped? }`) and sets `metadata.reasoning.fallback: true`. Subscribe to it to detect when an agent is paying for deep thinking but receiving the plain draft.
+Each step (and each fanout perspective turn) creates a child [generation](./generations.md) record linked to the parent via `initiator_generation_id` and sharing the same `trace_id`. Querying `GET /generations?trace_id=<trace_id>` returns the full tree. Each child carries `metadata.reasoning.step` (the step or persona name), `metadata.reasoning.output`, and `started_at` / `completed_at`. The parent generation's [`metadata.reasoning`](./generations.md#metadatareasoning--pipeline-summary) summary carries `mode`, `applied`, `reason`, `stepsRun`, `dropped`, and `fallback`.
 
-Failure semantics: neither reflect nor debate makes a generation worse. Individual perspective failures are dropped (quorum continues); if all perspectives fail or synthesis fails, the draft from the initial generation is returned. Both modes skip streaming generations and `requires_action` (client-tool) turns; `effort` applies to streaming as well.
+**Silent-degradation events** — deep thinking never fails a request: when a step fails or the output step produces nothing, the engine falls back to the plain draft. Because that fallback is otherwise invisible, it emits an `agents.reasoning.fallback` [webhook event](./webhooks.md) (`data: { mode, reason, stepsRun, dropped }`) and sets `metadata.reasoning.fallback: true`. Subscribe to it to detect when an agent is paying for deep thinking but receiving the plain draft. An intentional `halt_if_equals` short-circuit is **not** a degradation — it keeps the draft on purpose, so it does not emit the event nor set the flag. An agent still stored with a removed legacy mode (`reflect`/`debate`) is inert and returns the plain draft, and also emits the event (`data: { legacyMode: true }`) so the migration gap is visible.
+
+Failure semantics: a pipeline never makes a generation worse. A failed non-output step is dropped and the pipeline continues; if the output step fails or nothing produces text, the initial draft is returned. Pipelines skip streaming generations and `requires_action` (client-tool) turns; `effort` applies to streaming as well.
 
 ### SOAT Action Permissions
 

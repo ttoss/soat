@@ -186,6 +186,11 @@ export const ERROR_CODES = {
     description:
       'The referenced file has a content type that cannot be ingested. Supported types: application/pdf, text/plain, text/markdown.',
   },
+  INVALID_REASONING_CONFIG: {
+    httpStatus: 400,
+    description:
+      'The agent reasoning config is invalid (e.g. an unknown mode, no pipeline steps, too many steps, a duplicate or unnamed step, a step missing a prompt, an unknown step kind, or a fanout count/rounds out of range).',
+  },
   FILE_TOO_LARGE_FOR_SYNC: {
     httpStatus: 413,
     description:
