@@ -3,6 +3,30 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.7](https://github.com/ttoss/soat/compare/v0.13.6...v0.13.7) (2026-06-27)
+
+* feat(reasoning)!: replace reflect/debate with a generic pipeline mode (#285) ([1bb12e8](https://github.com/ttoss/soat/commit/1bb12e8b02e116cec9bd0ff46fc48889ac1d34c9)), closes [#285](https://github.com/ttoss/soat/issues/285) [#286](https://github.com/ttoss/soat/issues/286)
+
+### Bug Fixes
+
+* **documents:** robust ingestion errors, status endpoint, and re-ingest ([#283](https://github.com/ttoss/soat/issues/283)) ([e4cc102](https://github.com/ttoss/soat/commit/e4cc102142368a409184f54b2ccdc3d3a5989257))
+* **knowledge:** fix empty results when projectId combined with documentPaths ([#282](https://github.com/ttoss/soat/issues/282)) ([07fb2a9](https://github.com/ttoss/soat/commit/07fb2a9f8dae081b64d6fd598514c54c88311868))
+* list-documents with project_id returns empty for admin OAuth tokens ([#284](https://github.com/ttoss/soat/issues/284)) ([0a22ba6](https://github.com/ttoss/soat/commit/0a22ba68c64cfbf43405c47e33f594c9f04bb57b))
+
+### Features
+
+* **reasoning:** observability for deep-thinking deliberation ([#280](https://github.com/ttoss/soat/issues/280)) ([4cff79b](https://github.com/ttoss/soat/commit/4cff79bb4a85b4396d9b0cd39bb99369201e53b2))
+
+### BREAKING CHANGES
+
+* reasoning.mode no longer accepts `reflect` or `debate`, and
+the `critique`/`perspectives`/`max_rounds`/`synthesis` fields are removed. Use
+`mode: pipeline` with `steps`. Agents already stored with the old modes become
+inert no-ops (the plain draft is returned).
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01G6ic7jk7gJdbkpzumsTAA2
+
 ## [0.13.6](https://github.com/ttoss/soat/compare/v0.13.5...v0.13.6) (2026-06-25)
 
 ### Bug Fixes
