@@ -185,7 +185,10 @@ describe('Projects', () => {
         otherProjectId = projBRes.body.id;
 
         // Decode the admin JWT to get publicId, then issue an OAuth-style token
-        // (same JWT_SECRET, adds prj claim to simulate the OAuth issueTokens hook)
+        // (same JWT_SECRET, adds prj claim to simulate the OAuth issueTokens hook).
+        // The `*` scope mirrors an "all permissions" consent — consent is now
+        // enforced at request time, so a token with no action scopes grants
+        // nothing. Project scoping is still enforced via the `prj` boundary.
         const decoded = jwt.decode(adminToken) as {
           publicId: string;
           role: string;
@@ -195,7 +198,7 @@ describe('Projects', () => {
             sub: decoded.publicId,
             publicId: decoded.publicId,
             role: decoded.role,
-            scope: `mcp:access prj:${oauthScopedProjectId}`,
+            scope: `* mcp:access prj:${oauthScopedProjectId}`,
             prj: oauthScopedProjectId,
           },
           'dev-secret',

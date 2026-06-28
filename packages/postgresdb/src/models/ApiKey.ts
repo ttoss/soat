@@ -43,8 +43,8 @@ export class ApiKey extends Model {
   @ForeignKey(() => {
     return Project;
   })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare projectId: number | null;
+  @Column({ type: DataType.INTEGER, allowNull: false })
+  declare projectId: number;
 
   @BelongsTo(
     () => {
@@ -52,7 +52,7 @@ export class ApiKey extends Model {
     },
     { onDelete: 'CASCADE' }
   )
-  declare project: Project | null;
+  declare project: Project;
 
   @Column({
     type: DataType.ARRAY(DataType.INTEGER),

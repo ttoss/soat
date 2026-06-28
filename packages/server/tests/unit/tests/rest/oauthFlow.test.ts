@@ -274,4 +274,73 @@ describe('OAuth authorization server (SPA consent)', () => {
       expect([400, 401]).toContain(second.status);
     });
   });
+
+  // ── consent is enforced at request time (not just carried in the token) ─────
+  describe('access token consent enforcement', () => {
+    const issueAccessToken = async (selection: unknown): Promise<string> => {
+      const reg = await testClient.post('/register').send({
+        redirect_uris: [REDIRECT_URI],
+        token_endpoint_auth_method: 'none',
+      });
+      const clientId = reg.body.client_id as string;
+      const { verifier, challenge } = pkce();
+      const query = authorizeQuery(clientId, challenge);
+
+      await authenticatedTestClient(adminToken)
+        .post('/api/v1/oauth/consent')
+        .send({ project_id: projectId, selection, authorize_query: query });
+
+      const authorize = await testClient.get(`/authorize?${query}`);
+      const code = new URL(
+        authorize.headers.location as string
+      ).searchParams.get('code');
+
+      const token = await testClient.post('/token').type('form').send({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: REDIRECT_URI,
+        client_id: clientId,
+        code_verifier: verifier,
+      });
+      return token.body.access_token as string;
+    };
+
+    test('module-scoped consent denies actions outside the consented module', async () => {
+      // Token consents only to the `agents` module; reading the project itself
+      // is an action outside that module and must be denied — even though the
+      // subject is an admin (whose JWT would otherwise have full access).
+      const accessToken = await issueAccessToken({
+        kind: 'modules',
+        modules: ['agents'],
+      });
+
+      const res = await authenticatedTestClient(accessToken).get(
+        `/api/v1/projects/${projectId}`
+      );
+      expect(res.status).toBe(403);
+    });
+
+    test('all-permissions consent allows access within the consented project', async () => {
+      const accessToken = await issueAccessToken({ kind: 'all' });
+
+      const res = await authenticatedTestClient(accessToken).get(
+        `/api/v1/projects/${projectId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(projectId);
+    });
+
+    test('consent cannot reach beyond the consented project', async () => {
+      const other = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'oauth-other-project' });
+
+      const accessToken = await issueAccessToken({ kind: 'all' });
+
+      const res = await authenticatedTestClient(accessToken).get(
+        `/api/v1/projects/${other.body.id}`
+      );
+      expect(res.status).toBe(403);
+    });
+  });
 });

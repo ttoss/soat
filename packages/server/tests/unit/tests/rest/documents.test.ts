@@ -147,8 +147,16 @@ describe('Documents', () => {
         where: { username: 'admin' },
         attributes: ['publicId', 'role'],
       });
+      // `scope: '*'` mirrors an "all permissions" consent. Consent is enforced
+      // at request time, so the token must carry the granted action scopes; the
+      // `prj` claim still confines it to the one project.
       const oauthToken = jwt.sign(
-        { publicId: adminUser!.publicId, role: 'admin', prj: projectId },
+        {
+          publicId: adminUser!.publicId,
+          role: 'admin',
+          scope: `* mcp:access prj:${projectId}`,
+          prj: projectId,
+        },
         JWT_SECRET,
         { expiresIn: '1h' }
       );
