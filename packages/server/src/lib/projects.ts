@@ -1,4 +1,3 @@
-import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import type { AuthUser } from '../Context';
@@ -16,28 +15,6 @@ const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
   };
 };
 
-const mapMember = (args: {
-  projectPublicId: string;
-  user: InstanceType<(typeof db)['User']>;
-}) => {
-  return {
-    projectId: args.projectPublicId,
-    userId: args.user.publicId,
-    username: args.user.username,
-    role: args.user.role,
-  };
-};
-
-/**
- * Project membership is modelled as a managed, project-scoped policy rather
- * than a dedicated join table — keeping policies the single source of truth
- * for project access. Each project has at most one membership policy, shared
- * by all its members and identified by this deterministic name.
- */
-const memberPolicyName = (projectPublicId: string) => {
-  return `member:${projectPublicId}`;
-};
-
 const getProjectOrThrow = async (id: string) => {
   const project = await db.Project.findOne({ where: { publicId: id } });
 
@@ -46,50 +23,6 @@ const getProjectOrThrow = async (id: string) => {
   }
 
   return project;
-};
-
-const getUserOrThrow = async (id: string) => {
-  const user = await db.User.findOne({ where: { publicId: id } });
-
-  if (!user) {
-    throw new DomainError('RESOURCE_NOT_FOUND', `User '${id}' not found.`);
-  }
-
-  return user;
-};
-
-/**
- * Finds the managed membership policy for a project, creating it on first use.
- * The policy grants full access to every resource scoped to the project,
- * mirroring the `soat:<project>:*:*` SRN that callers previously had to author
- * by hand.
- */
-const findOrCreateMemberPolicy = async (projectPublicId: string) => {
-  const name = memberPolicyName(projectPublicId);
-  const existing = await db.Policy.findOne({ where: { name } });
-
-  if (existing) {
-    return existing;
-  }
-
-  log(
-    'findOrCreateMemberPolicy: creating membership policy for %s',
-    projectPublicId
-  );
-
-  return db.Policy.create({
-    name,
-    description: `Managed membership policy granting full access to project ${projectPublicId}.`,
-    document: {
-      statement: [
-        {
-          effect: 'Allow',
-          action: ['*'],
-          resource: [`soat:${projectPublicId}:*:*`],
-        },
-      ],
-    },
-  });
 };
 
 export const listProjects = async (args: { authUser: AuthUser }) => {
@@ -139,8 +72,8 @@ export const getProject = async (args: { id: string; authUser: AuthUser }) => {
     projectPublicId: args.id,
     action: 'projects:GetProject',
     // Probe with the project's SRN (consistent with listProjects /
-    // resolveProjectIds) so project-scoped policies — including the managed
-    // membership policy — grant access, not just unscoped `*` policies.
+    // resolveProjectIds) so project-scoped policies grant access, not just
+    // unscoped `*` policies.
     resource: `soat:${args.id}:*:*`,
   });
 
@@ -180,84 +113,4 @@ export const deleteProject = async (args: { id: string }): Promise<void> => {
   }
 
   await project.destroy();
-};
-
-export const listProjectMembers = async (args: { projectId: string }) => {
-  log('listProjectMembers: projectId=%s', args.projectId);
-
-  await getProjectOrThrow(args.projectId);
-
-  const policy = await db.Policy.findOne({
-    where: { name: memberPolicyName(args.projectId) },
-  });
-
-  if (!policy) {
-    return [];
-  }
-
-  const members = await db.User.findAll({
-    where: { policyIds: { [Op.contains]: [policy.id as number] } },
-  });
-
-  return members.map((user: InstanceType<(typeof db)['User']>) => {
-    return mapMember({ projectPublicId: args.projectId, user });
-  });
-};
-
-export const addProjectMember = async (args: {
-  projectId: string;
-  userId: string;
-}) => {
-  log('addProjectMember: projectId=%s userId=%s', args.projectId, args.userId);
-
-  await getProjectOrThrow(args.projectId);
-  const user = await getUserOrThrow(args.userId);
-
-  const policy = await findOrCreateMemberPolicy(args.projectId);
-  const policyId = policy.id as number;
-  const policyIds = (user.policyIds as number[] | undefined) ?? [];
-
-  if (!policyIds.includes(policyId)) {
-    await user.update({ policyIds: [...policyIds, policyId] });
-    log(
-      'addProjectMember: attached policy id=%s to user=%s',
-      policyId,
-      args.userId
-    );
-  }
-
-  return mapMember({ projectPublicId: args.projectId, user });
-};
-
-export const removeProjectMember = async (args: {
-  projectId: string;
-  userId: string;
-}): Promise<void> => {
-  log(
-    'removeProjectMember: projectId=%s userId=%s',
-    args.projectId,
-    args.userId
-  );
-
-  await getProjectOrThrow(args.projectId);
-  const user = await getUserOrThrow(args.userId);
-
-  const policy = await db.Policy.findOne({
-    where: { name: memberPolicyName(args.projectId) },
-  });
-  const policyId = policy?.id as number | undefined;
-  const policyIds = (user.policyIds as number[] | undefined) ?? [];
-
-  if (policyId === undefined || !policyIds.includes(policyId)) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `User '${args.userId}' is not a member of project '${args.projectId}'.`
-    );
-  }
-
-  await user.update({
-    policyIds: policyIds.filter((id) => {
-      return id !== policyId;
-    }),
-  });
 };

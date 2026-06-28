@@ -89,40 +89,6 @@ if [ "$(echo "$PROJECT_RENAME_RESP" | jq -r '.name')" != "smoke-test-project-ren
 fi
 echo "Project rename: OK"
 
-# 3a2. Project members coverage
-echo "--- Project members coverage ---"
-MEMBER_USER_RESP=$($SOAT_CLI create-user --username "smoke-member-$$" --password memberpass123)
-MEMBER_USER_ID=$(echo "$MEMBER_USER_RESP" | jq -r '.id')
-if [ -z "$MEMBER_USER_ID" ] || [ "$MEMBER_USER_ID" = "null" ]; then
-  echo "ERROR: Failed to create member user" >&2
-  echo "$MEMBER_USER_RESP" >&2
-  exit 1
-fi
-
-ADD_MEMBER_RESP=$($SOAT_CLI add-project-member --project-id "$PROJECT_PUBLIC_ID" --user-id "$MEMBER_USER_ID")
-if [ "$(echo "$ADD_MEMBER_RESP" | jq -r '.user_id')" != "$MEMBER_USER_ID" ]; then
-  echo "ERROR: add-project-member did not return the added member" >&2
-  echo "$ADD_MEMBER_RESP" >&2
-  exit 1
-fi
-
-MEMBERS_LIST_RESP=$($SOAT_CLI list-project-members --project-id "$PROJECT_PUBLIC_ID")
-if ! printf '%s\n' "$MEMBERS_LIST_RESP" | jq -e --arg id "$MEMBER_USER_ID" 'any(.[]; .user_id == $id)' >/dev/null 2>&1; then
-  echo "ERROR: list-project-members did not include the added member" >&2
-  echo "$MEMBERS_LIST_RESP" >&2
-  exit 1
-fi
-
-$SOAT_CLI remove-project-member --project-id "$PROJECT_PUBLIC_ID" --user-id "$MEMBER_USER_ID"
-
-MEMBERS_AFTER_RESP=$($SOAT_CLI list-project-members --project-id "$PROJECT_PUBLIC_ID")
-if printf '%s\n' "$MEMBERS_AFTER_RESP" | jq -e --arg id "$MEMBER_USER_ID" 'any(.[]; .user_id == $id)' >/dev/null 2>&1; then
-  echo "ERROR: remove-project-member did not remove the member" >&2
-  echo "$MEMBERS_AFTER_RESP" >&2
-  exit 1
-fi
-echo "Project members coverage: OK"
-
 # 3b. Policies module coverage
 echo "--- Policies coverage ---"
 POLICY_READ_RESP=$($SOAT_CLI create-policy \
