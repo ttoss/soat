@@ -92,6 +92,17 @@ describe('parseModules', () => {
     expect(agents.actions?.[0].operation.operationId).toBe('generateAgent');
   });
 
+  test('a sub-resource PUT becomes an action, not the module updateOp', () => {
+    const users = byTag(modules, 'Users');
+    // The detail-path PUT is still the edit form…
+    expect(users.updateOp?.operation.operationId).toBe('updateUser');
+    // …but PUT on a deeper sub-resource path is a standalone action.
+    const actionIds = (users.actions ?? []).map((a) => {
+      return a.operation.operationId;
+    });
+    expect(actionIds).toContain('attachUserPolicies');
+  });
+
   test('marks a module project-scoped when its paths include {project_id}', () => {
     expect(byTag(modules, 'Webhooks').isProjectScoped).toBe(true);
     expect(byTag(modules, 'Agents').isProjectScoped).toBe(false);

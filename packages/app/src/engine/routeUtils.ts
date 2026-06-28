@@ -122,13 +122,16 @@ const extractTag = (op: Record<string, unknown>): string => {
   return (op['tags'] as string[] | undefined)?.[0] ?? 'Other';
 };
 
+// Methods that, in the absence of a GET on the same path, identify a
+// standalone action operation (e.g. PUT /users/{user_id}/policies).
+const ACTION_METHODS = ['post', 'put', 'patch', 'delete'] as const;
+
 const findViewFromSpecPath = (
   template: string,
   pathItem: RawPathItem,
   params: Record<string, string>
 ): ViewDescriptor | null => {
   const getOp = pathItem['get'];
-  const postOp = pathItem['post'];
 
   if (getOp) {
     const lastSegment = template.split('/').filter(Boolean).pop() ?? '';
@@ -141,13 +144,20 @@ const findViewFromSpecPath = (
     };
   }
 
-  if (postOp) {
-    return {
-      tag: extractTag(postOp),
-      operationId: extractOpId(postOp),
-      pathParams: params,
-      mode: 'action',
-    };
+  // No GET on this path: a POST/PUT/PATCH/DELETE here is a standalone action.
+  // Without covering PUT/PATCH/DELETE, action URLs like
+  // /app/v1/users/{id}/policies resolve to a null view and drop the user out
+  // of the page.
+  for (const method of ACTION_METHODS) {
+    const op = pathItem[method];
+    if (op) {
+      return {
+        tag: extractTag(op),
+        operationId: extractOpId(op),
+        pathParams: params,
+        mode: 'action',
+      };
+    }
   }
 
   return null;

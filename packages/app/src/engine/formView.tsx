@@ -16,6 +16,7 @@ import {
 } from './formHelpers';
 import { MethodBadge } from './methodBadge';
 import { useNavigation } from './navigationContext';
+import { useRefFieldOptions } from './refFieldOptions';
 import { SecretReveal } from './secretReveal';
 import { buildUrl } from './specUtils';
 import type {
@@ -166,60 +167,6 @@ const useFormSubmit = (args: {
   };
 
   return { submitting, error, handleSubmit };
-};
-
-const useRefFieldOptions = ({
-  schema,
-  token,
-}: {
-  schema: OpenApiSchema | undefined;
-  token: string;
-}): Record<string, RefOption[]> => {
-  const [refOptions, setRefOptions] = React.useState<
-    Record<string, RefOption[]>
-  >({});
-
-  React.useEffect(() => {
-    if (!schema?.properties || !token) return;
-
-    const refFields = Object.entries(schema.properties).filter(
-      ([, fieldSchema]) => {
-        // Both scalar refs (single-select) and array refs (multi-select chips)
-        // need their referenced resource's options fetched.
-        return Boolean(fieldSchema['x-soat-ref']);
-      }
-    );
-    if (refFields.length === 0) return;
-
-    Promise.all(
-      refFields.map(async ([name, fieldSchema]) => {
-        const ref = fieldSchema['x-soat-ref']!;
-        const result = await apiFetch<unknown>({
-          url: `/api/v1/${ref}`,
-          token,
-        });
-        if (!result.ok) return [name, []] as const;
-        const list = Array.isArray(result.data) ? result.data : [];
-        const options: RefOption[] = list
-          .filter((item): item is JsonObject => {
-            return (
-              typeof item === 'object' && item !== null && !Array.isArray(item)
-            );
-          })
-          .map((item) => {
-            return {
-              value: String(item.id ?? ''),
-              label: String(item.name ?? item.id ?? ''),
-            };
-          });
-        return [name, options] as const;
-      })
-    ).then((entries) => {
-      setRefOptions(Object.fromEntries(entries));
-    });
-  }, [schema, token]);
-
-  return refOptions;
 };
 
 type FormBodyProps = {
