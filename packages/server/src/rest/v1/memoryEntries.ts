@@ -9,6 +9,7 @@ import {
   updateMemoryEntry,
   writeMemoryEntry,
 } from 'src/lib/memoryEntries';
+import { rejectUnknownFields } from 'src/lib/requestValidation';
 
 export const memoryEntriesRouter = new Router<Context>();
 
@@ -109,6 +110,12 @@ memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {
     return;
   }
 
+  rejectUnknownFields({
+    method: 'post',
+    path: '/memory-entries',
+    body: ctx.request.body as Record<string, unknown>,
+  });
+
   const body = ctx.request.body as {
     memoryId?: string;
     content?: string;
@@ -175,6 +182,12 @@ memoryEntriesRouter.put('/memory-entries/:entry_id', async (ctx: Context) => {
     'memories:UpdateMemoryEntry'
   );
   if (!entry) return;
+
+  rejectUnknownFields({
+    method: 'put',
+    path: '/memory-entries/:entry_id',
+    body: ctx.request.body as Record<string, unknown>,
+  });
 
   const body = ctx.request.body as { content?: string };
 

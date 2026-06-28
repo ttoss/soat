@@ -8,20 +8,44 @@ in documentation.
 
 ## Implementation Status
 
-> **Status: proposed.** Not started. This PRD captures the decision and a phased rollout
-> so the team can sign off on the *behavior change* before any module sweep. The
-> reusable primitive it builds on — `getRequestSchemaFields` in `src/lib/openapiSpec.ts` —
-> already shipped in PR #296 (agents now derive their allowlist from the spec).
+> **Status: implemented (Phases 1–2).** The mechanism and the full per-module rollout
+> have shipped on PR #296. Phase 3 (automatic middleware, deep validation) remains
+> deferred. Implementation notes below the table.
 
 | Component | Status | Notes |
 | --- | --- | --- |
-| `getRequestSchemaFields({ schemaName })` | ✅ Implemented (PR #296) | Reads `components.schemas[schemaName]` from the merged spec, returns `{ allowedFields, requiredFields }` in camelCase |
-| `agents` route uses spec-derived allowlist | ✅ Implemented (PR #296) | `KNOWN_CREATE_AGENT_FIELDS` / `KNOWN_UPDATE_AGENT_FIELDS` now derived, not hardcoded |
-| Shared `rejectUnknownFields` helper | ❌ Not started | Phase 1 — extract the agents check into a reusable lib function that throws `DomainError` |
-| `agents` migrated to shared helper + `DomainError` | ❌ Not started | Phase 1 — also fixes a current `errors.md` violation (raw `ctx.body = { error }`) |
-| Per-module rollout (opt-in) | ❌ Not started | Phase 2 — one route group at a time, each with tests |
-| Automatic route→schema middleware | ❌ Not started | Phase 3 (optional) — zero per-handler code |
-| Deep (nested) field validation | ❌ Not started | Phase 3 (optional) — match the formation layer's depth |
+| `getRequestSchemaFields({ schemaName })` | ✅ Implemented | Resolves a **named** component schema → `{ allowedFields, requiredFields }` in camelCase |
+| `getRouteRequestSchemaFields({ method, path })` | ✅ Implemented | Resolves a route's request body schema — inline **or** `$ref` — from the merged spec; returns `null` for open maps / no body. Normalizes `:param` → `{param}` and the `/api/v1` prefix |
+| Shared `rejectUnknownFields({ method, path, body })` | ✅ Implemented | `src/lib/requestValidation.ts`; throws `DomainError('VALIDATION_FAILED')`; no-ops when there is no property-based body schema |
+| `agents` migrated to shared helper + `DomainError` | ✅ Implemented | Replaced the hand-rolled `KNOWN_*` sets and raw `ctx.body = { error }` (fixes an `errors.md` violation) |
+| Per-module rollout | ✅ Implemented | All CRUD modules instrumented (see exclusions below) |
+| Automatic route→schema middleware | ❌ Deferred | Phase 3 — the route resolver already exists; wrapping it in middleware is the remaining step |
+| Deep (nested) field validation | ❌ Deferred | Phase 3 (optional) — match the formation layer's depth |
+
+### Implementation notes
+
+**Route-based resolution.** Most modules declare their request bodies as *inline* schemas
+(no `$ref`), so a `schemaName`-only helper could not cover them. `getRouteRequestSchemaFields`
+resolves the body schema by `(method, path)` against the merged spec, following a `$ref` when
+present and reading inline `properties` otherwise. `rejectUnknownFields` is called as
+`rejectUnknownFields({ method, path: '<router path>', body: ctx.request.body as Record<string, unknown> })`.
+
+**Exclusions (intentionally lenient or open-ended):**
+- `POST /chat/completions`, `POST /chats/:chat_id/completions` — LLM completion endpoints that
+  legitimately accept extra sampling params (`temperature`, `top_p`, …).
+- `POST /embeddings`, `POST /tools/:tool_id/call` — passthrough/open input.
+- `POST /files` — intentionally accepts-and-ignores client read-only/storage fields (`path`,
+  `storage_*`) as a security behavior; covered by dedicated "ignores …" tests.
+- `POST /users/login`, `POST /users/bootstrap` — auth flows left untouched.
+- Tags endpoints (`PUT|PATCH /*/tags`) — open `additionalProperties` string maps; the resolver
+  returns `null` for them, so the helper no-ops.
+- No-body routes (cancel/resume/rotate-secret) — no request schema.
+
+**Spec drift fixed during rollout** (handler accepted a field the schema omitted; strict
+validation would otherwise have rejected valid requests): `provider` on the ai-providers update
+schema; `instructions`/`external_id`/`agent_id`/`chat_id` on the actors schemas; `title`/
+`metadata`/`tags` on the documents create schema; `name` on the conversations update schema
+(and dropped its erroneous `required: [status]`). SDK and CLI were regenerated.
 
 > **Key finding:** the codebase is **internally inconsistent today**. The *formation*
 > layer already rejects unknown fields from the same specs (`formationSpecLoader.ts` +

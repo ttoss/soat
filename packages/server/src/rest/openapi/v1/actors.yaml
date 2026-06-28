@@ -135,6 +135,10 @@ paths:
                   type: string
                   description: Optional external identifier (e.g. WhatsApp phone number). If provided and an actor with this externalId already exists in the project, the existing actor is returned (idempotent — 200 OK).
                   example: '+15551234567'
+                instructions:
+                  type: string
+                  nullable: true
+                  description: Persona-specific instructions composed into the effective system prompt during conversation generation.
                 agent_id:
                   x-soat-ref: agents
                   type: string
@@ -285,9 +289,23 @@ paths:
                 name:
                   type: string
                   example: 'Alice Smith'
+                external_id:
+                  type: string
+                  description: External identifier (e.g. WhatsApp phone number)
+                  example: '+15551234567'
                 instructions:
                   type: string
                   description: Persona-specific instructions
+                agent_id:
+                  x-soat-ref: agents
+                  type: string
+                  nullable: true
+                  description: Agent to link this actor to. Mutually exclusive with chat_id.
+                chat_id:
+                  x-soat-ref: chats
+                  type: string
+                  nullable: true
+                  description: Chat to link this actor to. Mutually exclusive with agent_id.
                 memory_id:
                   x-soat-ref: memories
                   type: string

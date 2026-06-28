@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { rejectUnknownFields } from 'src/lib/requestValidation';
 import {
   callTool,
   createTool,
@@ -142,6 +143,12 @@ toolsRouter.post('/tools', async (ctx: Context) => {
   );
   if (!targetProjectId) return;
 
+  rejectUnknownFields({
+    method: 'post',
+    path: '/tools',
+    body: (ctx.request.body ?? {}) as Record<string, unknown>,
+  });
+
   let parsedParameters: object | undefined;
   let parsedExecute: object | undefined;
   let parsedMcp: object | undefined;
@@ -250,6 +257,12 @@ toolsRouter.get('/tools/:tool_id', async (ctx: Context) => {
 toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
   const projectIds = await checkToolsAccess(ctx, 'tools:UpdateTool');
   if (projectIds === null) return;
+
+  rejectUnknownFields({
+    method: 'patch',
+    path: '/tools/:tool_id',
+    body: (ctx.request.body ?? {}) as Record<string, unknown>,
+  });
 
   const {
     name,

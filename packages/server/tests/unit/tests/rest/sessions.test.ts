@@ -187,7 +187,6 @@ describe('Sessions', () => {
         .send({
           project_id: projectId,
           name: 'filter-test-actor',
-          type: 'user',
         });
       const actorId = actorRes.body.id;
       expect(actorId).toMatch(/^actor_/);
@@ -1541,7 +1540,7 @@ describe('Sessions', () => {
       // Create a human actor explicitly (adminToken has all permissions)
       const actorRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/actors')
-        .send({ project_id: projectId, name: 'Pedro', type: 'human' });
+        .send({ project_id: projectId, name: 'Pedro' });
       expect(actorRes.status).toBe(201);
       preExistingActorId = actorRes.body.id;
 
@@ -1623,7 +1622,6 @@ describe('Sessions', () => {
           project_id: projectId,
           name: 'Context Test Actor',
           external_id: testActorExternalId,
-          type: 'human',
         });
       expect(actorRes.status).toBe(201);
       testActorId = actorRes.body.id;

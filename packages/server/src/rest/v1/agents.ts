@@ -140,7 +140,8 @@ agentsRouter.post('/agents', async (ctx: Context) => {
   const reqBody = ctx.request.body as CreateAgentBody;
 
   rejectUnknownFields({
-    schemaName: 'CreateAgentRequest',
+    method: 'post',
+    path: '/agents',
     body: reqBody as Record<string, unknown>,
   });
 
@@ -245,7 +246,7 @@ agentsRouter.put('/agents/:agent_id', async (ctx: Context) => {
 
   const body = ctx.request.body as Record<string, unknown>;
 
-  rejectUnknownFields({ schemaName: 'UpdateAgentRequest', body });
+  rejectUnknownFields({ method: 'put', path: '/agents/:agent_id', body });
 
   const result = await updateAgent({
     projectIds,
@@ -276,7 +277,7 @@ agentsRouter.patch('/agents/:agent_id', async (ctx: Context) => {
 
   const body = ctx.request.body as Record<string, unknown>;
 
-  rejectUnknownFields({ schemaName: 'UpdateAgentRequest', body });
+  rejectUnknownFields({ method: 'patch', path: '/agents/:agent_id', body });
 
   const result = await updateAgent({
     projectIds,

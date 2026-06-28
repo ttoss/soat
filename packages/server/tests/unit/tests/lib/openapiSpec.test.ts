@@ -17,6 +17,10 @@ type OpenapiSpecModule = {
   loadMergedOpenApiSpec: () => MergedSpec;
   getMergedOpenApiSpec: () => MergedSpec;
   getRequestSchemaFields: (args: { schemaName: string }) => RequestSchemaFields;
+  getRouteRequestSchemaFields: (args: {
+    method: string;
+    path: string;
+  }) => RequestSchemaFields | null;
 };
 
 describe('openapiSpec', () => {
@@ -235,6 +239,61 @@ describe('openapiSpec', () => {
       expect(() => {
         return getRequestSchemaFields({ schemaName: 'NoSuchSchema' });
       }).toThrow(/no properties/);
+    });
+  });
+
+  describe('getRouteRequestSchemaFields', () => {
+    const { getRouteRequestSchemaFields } = jest.requireActual(
+      'src/lib/openapiSpec'
+    ) as OpenapiSpecModule;
+
+    test('resolves a $ref request body and normalizes :param + prefix', () => {
+      const fields = getRouteRequestSchemaFields({
+        method: 'put',
+        path: '/agents/:agent_id',
+      });
+      expect(fields).not.toBeNull();
+      expect(fields!.allowedFields.has('aiProviderId')).toBe(true);
+      // create-only field is absent from UpdateAgentRequest
+      expect(fields!.allowedFields.has('projectId')).toBe(false);
+    });
+
+    test('resolves an inline request body schema', () => {
+      const fields = getRouteRequestSchemaFields({
+        method: 'post',
+        path: '/projects',
+      });
+      expect(fields).not.toBeNull();
+      expect(fields!.allowedFields.has('name')).toBe(true);
+    });
+
+    test('is case-insensitive on the HTTP method', () => {
+      const fields = getRouteRequestSchemaFields({
+        method: 'POST',
+        path: '/agents',
+      });
+      expect(fields?.allowedFields.has('aiProviderId')).toBe(true);
+    });
+
+    test('returns null for an open additionalProperties map (tags)', () => {
+      expect(
+        getRouteRequestSchemaFields({
+          method: 'put',
+          path: '/actors/:actor_id/tags',
+        })
+      ).toBeNull();
+    });
+
+    test('returns null for an unknown route', () => {
+      expect(
+        getRouteRequestSchemaFields({ method: 'post', path: '/nope' })
+      ).toBeNull();
+    });
+
+    test('returns null for an unsupported method', () => {
+      expect(
+        getRouteRequestSchemaFields({ method: 'options', path: '/agents' })
+      ).toBeNull();
     });
   });
 });

@@ -27,7 +27,7 @@ describe('caseTransform middleware', () => {
   test('request body accepts snake_case and converts to camelCase internally', async () => {
     const response = await authenticatedTestClient(adminToken)
       .post('/api/v1/projects')
-      .send({ name: 'case-test-project', description: 'test' });
+      .send({ name: 'case-test-project' });
     expect(response.status).toBe(201);
     expect(response.body.id).toBeDefined();
 
