@@ -234,7 +234,7 @@ echo "Secrets coverage: OK"
 # 3e. Actors module coverage
 echo "--- Actors coverage ---"
 ACTOR_CREATE_RESP=$($SOAT_CLI create-actor \
-  --project_id "$PROJECT_PUBLIC_ID" --name smoke-actor --type customer --external_id smoke-ext-actor)
+  --project_id "$PROJECT_PUBLIC_ID" --name smoke-actor --external_id smoke-ext-actor)
 ACTOR_ID=$(echo "$ACTOR_CREATE_RESP" | jq -r '.id')
 if [ -z "$ACTOR_ID" ] || [ "$ACTOR_ID" = "null" ]; then
   echo "ERROR: Failed to create actor" >&2
