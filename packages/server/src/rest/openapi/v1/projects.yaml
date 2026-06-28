@@ -183,7 +183,7 @@ paths:
       description: >
         Lists the users who are members of a project. Requires admin role.
 
-        Membership is a convenience layer over [policies](../iam): adding a
+        Membership is a convenience layer over policies: adding a
         member attaches a managed project-scoped policy
         (`soat:<project>:*:*`) to the user. This endpoint reports only members
         added through the members API; access granted by other policies or by
