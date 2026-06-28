@@ -138,6 +138,10 @@ export const getProject = async (args: { id: string; authUser: AuthUser }) => {
   const allowed = await args.authUser.isAllowed({
     projectPublicId: args.id,
     action: 'projects:GetProject',
+    // Probe with the project's SRN (consistent with listProjects /
+    // resolveProjectIds) so project-scoped policies — including the managed
+    // membership policy — grant access, not just unscoped `*` policies.
+    resource: `soat:${args.id}:*:*`,
   });
 
   if (!allowed) {
