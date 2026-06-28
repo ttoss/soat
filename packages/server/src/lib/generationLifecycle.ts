@@ -47,9 +47,9 @@ export const recordGenerationFailure = async (args: {
     }),
   ]);
 
+  // Error responses bypass the caseTransform middleware, so meta keys are
+  // written in snake_case to match the external REST contract.
   if (args.error instanceof DomainError) {
-    // Error responses bypass the caseTransform middleware, so meta keys are
-    // written in snake_case to match the external REST contract.
     return new DomainError(args.error.code, args.error.message, {
       ...args.error.meta,
       generation_id: args.generationId,
@@ -57,7 +57,13 @@ export const recordGenerationFailure = async (args: {
     });
   }
 
-  return args.error;
+  // Wrap unexpected errors so the trace_id reaches the caller.
+  const message =
+    args.error instanceof Error ? args.error.message : 'Internal Server Error';
+  return new DomainError('GENERATION_FAILED', message, {
+    generation_id: args.generationId,
+    trace_id: args.traceId,
+  });
 };
 
 type CompletionSideEffectsArgs = {

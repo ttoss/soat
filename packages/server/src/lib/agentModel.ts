@@ -28,6 +28,10 @@ const parseBedrockSecret = (secretValue: string | null): BedrockSecret => {
   try {
     return JSON.parse(secretValue) as BedrockSecret;
   } catch {
+    // Plain ABSK bearer token stored directly as the secret value
+    if (secretValue.startsWith('ABSK')) {
+      return { apiKey: secretValue };
+    }
     return {};
   }
 };
@@ -35,8 +39,11 @@ const parseBedrockSecret = (secretValue: string | null): BedrockSecret => {
 const buildBedrockModel = (args: BuildModelArgs): LanguageModel => {
   const secret = parseBedrockSecret(args.secretValue);
   const region = (args.config?.region as string | undefined) ?? 'us-east-1';
-  const options = secret.apiKey
-    ? { region, apiKey: secret.apiKey }
+  // config.apiKey is accepted as a credential fallback when no secret is linked
+  const configApiKey = args.config?.apiKey as string | undefined;
+  const resolvedApiKey = secret.apiKey ?? configApiKey;
+  const options = resolvedApiKey
+    ? { region, apiKey: resolvedApiKey }
     : {
         region,
         accessKeyId: secret.accessKeyId,

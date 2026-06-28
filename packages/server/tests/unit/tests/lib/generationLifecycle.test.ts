@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+import { DomainError } from 'src/errors';
 import { buildModel } from 'src/lib/agentModel';
 import {
   fireCompletionSideEffects,
@@ -128,7 +129,7 @@ describe('generationLifecycle', () => {
     }).not.toThrow();
   });
 
-  test('recordGenerationFailure persists the error and enriches DomainErrors', async () => {
+  test('recordGenerationFailure wraps non-DomainErrors in GENERATION_FAILED with trace_id', async () => {
     await createGenerationRecord({
       publicId: 'gen_lifecycle_fail01',
       projectId,
@@ -142,12 +143,38 @@ describe('generationLifecycle', () => {
       error: new Error('provider exploded'),
     });
 
-    expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message).toBe('provider exploded');
+    expect(error).toBeInstanceOf(DomainError);
+    const domainError = error as DomainError;
+    expect(domainError.code).toBe('GENERATION_FAILED');
+    expect(domainError.message).toBe('provider exploded');
+    expect(domainError.meta?.trace_id).toBe('trc_lifecycle_fail01');
+    expect(domainError.meta?.generation_id).toBe('gen_lifecycle_fail01');
 
     const failed = await getGeneration({ publicId: 'gen_lifecycle_fail01' });
     expect(failed?.status).toBe('failed');
     expect(failed?.stopReason).toBe('error');
     expect(failed?.error?.message).toBe('provider exploded');
+  });
+
+  test('recordGenerationFailure enriches DomainErrors with generation and trace IDs', async () => {
+    await createGenerationRecord({
+      publicId: 'gen_lifecycle_fail02',
+      projectId,
+      agentId: agentPublicId,
+      traceId: 'trc_lifecycle_fail02',
+    });
+
+    const original = new DomainError('AI_PROVIDER_ERROR', 'upstream failed');
+    const error = await recordGenerationFailure({
+      generationId: 'gen_lifecycle_fail02',
+      traceId: 'trc_lifecycle_fail02',
+      error: original,
+    });
+
+    expect(error).toBeInstanceOf(DomainError);
+    const domainError = error as DomainError;
+    expect(domainError.code).toBe('AI_PROVIDER_ERROR');
+    expect(domainError.meta?.trace_id).toBe('trc_lifecycle_fail02');
+    expect(domainError.meta?.generation_id).toBe('gen_lifecycle_fail02');
   });
 });

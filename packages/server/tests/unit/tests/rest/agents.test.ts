@@ -452,6 +452,19 @@ describe('Agents', () => {
       expect(response.status).toBe(201);
       expect(response.body.max_context_messages).toBe(10);
     });
+
+    test('unknown fields in body return 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          prompt: 'should be instructions',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toMatch(/prompt/);
+    });
   });
 
   describe('GET /api/v1/agents', () => {
@@ -584,6 +597,63 @@ describe('Agents', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.tool_ids).toEqual([toolId]);
+    });
+
+    test('unknown fields in PUT body return 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agentId}`)
+        .send({ prompt: 'should be instructions' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toMatch(/prompt/);
+    });
+  });
+
+  describe('PATCH /api/v1/agents/:agentId', () => {
+    let agentId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Patch Agent Test',
+        });
+      agentId = res.body.id;
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient
+        .patch(`/api/v1/agents/${agentId}`)
+        .send({ name: 'renamed' });
+      expect(response.status).toBe(401);
+    });
+
+    test('unknown agentId returns 404', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch('/api/v1/agents/agt_doesnotexist0000')
+        .send({ name: 'renamed' });
+      expect(response.status).toBe(404);
+    });
+
+    test('authenticated user can partially update an agent via PATCH', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${agentId}`)
+        .send({ name: 'Patched Agent', max_steps: 7 });
+
+      expect(response.status).toBe(200);
+      expect(response.body.name).toBe('Patched Agent');
+      expect(response.body.max_steps).toBe(7);
+    });
+
+    test('unknown fields in PATCH body return 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${agentId}`)
+        .send({ prompt: 'should be instructions' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toMatch(/prompt/);
     });
   });
 
