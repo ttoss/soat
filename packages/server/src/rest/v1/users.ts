@@ -1,6 +1,5 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { rejectUnknownFields } from 'src/lib/requestValidation';
 import {
   attachUserPolicies,
   createFirstAdminUser,
@@ -79,12 +78,6 @@ usersRouter.post('/users', async (ctx: Context) => {
     ctx.body = { error: 'Forbidden' };
     return;
   }
-
-  rejectUnknownFields({
-    method: 'post',
-    path: '/users',
-    body: ctx.request.body as Record<string, unknown>,
-  });
 
   const body = ctx.request.body as {
     username: string;
@@ -168,12 +161,6 @@ usersRouter.put('/users/:user_id/policies', async (ctx: Context) => {
     ctx.body = { error: 'Forbidden' };
     return;
   }
-
-  rejectUnknownFields({
-    method: 'put',
-    path: '/users/:user_id/policies',
-    body: ctx.request.body as Record<string, unknown>,
-  });
 
   const { policyIds } = ctx.request.body as { policyIds: string[] };
 

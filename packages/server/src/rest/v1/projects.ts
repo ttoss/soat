@@ -7,7 +7,6 @@ import {
   listProjects,
   updateProject,
 } from 'src/lib/projects';
-import { rejectUnknownFields } from 'src/lib/requestValidation';
 
 const projectsRouter = new Router<Context>();
 
@@ -23,12 +22,6 @@ projectsRouter.post('/projects', async (ctx: Context) => {
     ctx.body = { error: 'Forbidden' };
     return;
   }
-
-  rejectUnknownFields({
-    method: 'post',
-    path: '/projects',
-    body: ctx.request.body as Record<string, unknown>,
-  });
 
   const { name } = ctx.request.body as { name?: string };
 
@@ -82,12 +75,6 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     ctx.body = { error: 'Forbidden' };
     return;
   }
-
-  rejectUnknownFields({
-    method: 'patch',
-    path: '/projects/:project_id',
-    body: ctx.request.body as Record<string, unknown>,
-  });
 
   const { name } = ctx.request.body as { name?: string };
 

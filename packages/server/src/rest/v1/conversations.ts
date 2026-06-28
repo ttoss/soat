@@ -9,7 +9,6 @@ import {
   updateConversation,
 } from 'src/lib/conversations';
 import { compilePolicy } from 'src/lib/policyCompiler';
-import { rejectUnknownFields } from 'src/lib/requestValidation';
 
 import { checkConversationAccess } from './conversationHelpers';
 import { conversationSubResourcesRouter } from './conversationSubResources';
@@ -111,12 +110,6 @@ conversationsRouter.get(
 conversationsRouter.post('/conversations', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
-  rejectUnknownFields({
-    method: 'post',
-    path: '/conversations',
-    body: ctx.request.body as Record<string, unknown>,
-  });
-
   const body = ctx.request.body as {
     projectId?: string;
     status?: string;
@@ -162,12 +155,6 @@ conversationsRouter.patch(
       ctx.body = { error: 'Unauthorized' };
       return;
     }
-
-    rejectUnknownFields({
-      method: 'patch',
-      path: '/conversations/:conversation_id',
-      body: ctx.request.body as Record<string, unknown>,
-    });
 
     const body = ctx.request.body as { status?: string; name?: string | null };
 

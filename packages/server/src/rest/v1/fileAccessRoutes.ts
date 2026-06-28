@@ -8,7 +8,6 @@ import {
   updateFileMetadata,
   updateFileTags,
 } from 'src/lib/files';
-import { rejectUnknownFields } from 'src/lib/requestValidation';
 
 import { db } from '../../db';
 import { canAccessFile } from '../../lib/fileAuthorization';
@@ -208,12 +207,6 @@ const registerMetadataRoutes = (args: { filesRouter: Router<Context> }) => {
       file,
     });
     if (!allowed) return;
-
-    rejectUnknownFields({
-      method: 'patch',
-      path: '/files/:file_id/metadata',
-      body: ctx.request.body as Record<string, unknown>,
-    });
 
     const body = ctx.request.body as {
       metadata?: string;

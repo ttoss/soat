@@ -140,6 +140,46 @@ export const getRequestSchemaFields = (args: {
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);
 
 /**
+ * Matches a concrete request path (e.g. `/api/v1/agents/agt_123`) against the
+ * OpenAPI path templates in the merged spec and returns the matching template
+ * key (e.g. `/api/v1/agents/{agent_id}`), or `null` when none matches.
+ *
+ * A template segment wrapped in braces (`{agent_id}`) matches any single
+ * non-empty concrete segment; every other segment must match literally. When
+ * several templates match, the one with the fewest brace segments wins so a
+ * static route (`/orchestrations/validate`) is preferred over a parameterized
+ * one (`/orchestrations/{orchestration_id}`).
+ */
+export const matchOpenApiPath = (args: { path: string }): string | null => {
+  const requestSegments = args.path.split('/').filter(Boolean);
+
+  let best: string | null = null;
+  let bestParamCount = Number.POSITIVE_INFINITY;
+
+  for (const template of Object.keys(getMergedOpenApiSpec().paths)) {
+    const templateSegments = template.split('/').filter(Boolean);
+    if (templateSegments.length !== requestSegments.length) continue;
+
+    let paramCount = 0;
+    const matches = templateSegments.every((segment, index) => {
+      const isParam = segment.startsWith('{') && segment.endsWith('}');
+      if (isParam) {
+        paramCount += 1;
+        return requestSegments[index].length > 0;
+      }
+      return segment === requestSegments[index];
+    });
+
+    if (matches && paramCount < bestParamCount) {
+      best = template;
+      bestParamCount = paramCount;
+    }
+  }
+
+  return best;
+};
+
+/**
  * Normalizes a route as registered on the router (e.g. `/agents/:agent_id`) to
  * the OpenAPI path-key form used in the specs (`/api/v1/agents/{agent_id}`):
  * `:param` → `{param}`, and the `/api/v1` prefix is added if absent.

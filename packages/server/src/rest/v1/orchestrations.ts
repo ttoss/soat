@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import type {
@@ -19,7 +18,6 @@ import {
   updateOrchestration,
   validateOrchestrationGraph,
 } from 'src/lib/orchestrations';
-import { rejectUnknownFields } from 'src/lib/requestValidation';
 
 import { resolveStartRunScope } from './orchestrationAuth';
 
@@ -135,12 +133,6 @@ orchestrationsRouter.post('/orchestrations', async (ctx: Context) => {
   );
   if (!auth) return;
 
-  rejectUnknownFields({
-    method: 'post',
-    path: '/orchestrations',
-    body: (ctx.request.body ?? {}) as Record<string, unknown>,
-  });
-
   const result = await createOrchestration({
     projectId: auth.primaryId,
     name: validated.name,
@@ -173,11 +165,6 @@ orchestrationsRouter.post('/orchestrations/validate', async (ctx: Context) => {
     ctx.body = { error: 'Unauthorized' };
     return;
   }
-  rejectUnknownFields({
-    method: 'post',
-    path: '/orchestrations/validate',
-    body: (ctx.request.body ?? {}) as Record<string, unknown>,
-  });
   const body = (ctx.request.body ?? {}) as {
     nodes?: unknown;
     edges?: unknown;
@@ -290,12 +277,6 @@ orchestrationsRouter.patch(
       return;
     }
 
-    rejectUnknownFields({
-      method: 'patch',
-      path: '/orchestrations/:orchestration_id',
-      body: (ctx.request.body ?? {}) as Record<string, unknown>,
-    });
-
     const body = (ctx.request.body ?? {}) as RawUpdateBody;
 
     const result = await updateOrchestration({
@@ -353,12 +334,6 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
     ctx.body = { error: 'Unauthorized' };
     return;
   }
-
-  rejectUnknownFields({
-    method: 'post',
-    path: '/orchestration-runs',
-    body: (ctx.request.body ?? {}) as Record<string, unknown>,
-  });
 
   const body = (ctx.request.body ?? {}) as {
     orchestrationId?: unknown;
@@ -498,12 +473,6 @@ orchestrationsRouter.post(
     const runId = ctx.params['run_id'] as string;
     const auth = await resolveAuth(ctx, 'orchestrations:SubmitHumanInput');
     if (!auth) return;
-
-    rejectUnknownFields({
-      method: 'post',
-      path: '/orchestration-runs/:run_id/human-input',
-      body: (ctx.request.body ?? {}) as Record<string, unknown>,
-    });
 
     const body = (ctx.request.body ?? {}) as {
       nodeId?: unknown;
