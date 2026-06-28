@@ -1,5 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 
+import jwt from 'jsonwebtoken';
+
+import { JWT_SECRET } from '../../../../src/middleware/auth';
 import { verifyOauthAccessToken } from '../../../../src/oauth/server';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -339,6 +342,67 @@ describe('OAuth authorization server (SPA consent)', () => {
 
       const res = await authenticatedTestClient(accessToken).get(
         `/api/v1/projects/${other.body.id}`
+      );
+      expect(res.status).toBe(403);
+    });
+  });
+
+  // ── the owning user's policies are the ceiling, even via OAuth ──────────────
+  describe('access token cannot exceed the owning user (user ceiling)', () => {
+    let fileId: string;
+    let readOnlyOauthToken: string;
+
+    beforeAll(async () => {
+      // A non-admin user whose own policies permit reading files but not
+      // deleting them.
+      const userRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'oauthceiling', password: 'supersecret' });
+      const userPublicId = userRes.body.id;
+
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+          },
+        });
+
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${userPublicId}/policies`)
+        .send({ policy_ids: [policyRes.body.id] });
+
+      const fileRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/files')
+        .send({ project_id: projectId, filename: 'ceiling.txt' });
+      fileId = fileRes.body.id;
+
+      // An OAuth token for that user consenting to ALL permissions (`*`). The
+      // broad consent must not let the token exceed the user's read-only ceiling.
+      readOnlyOauthToken = jwt.sign(
+        {
+          sub: userPublicId,
+          publicId: userPublicId,
+          role: 'user',
+          scope: `* mcp:access prj:${projectId}`,
+          prj: projectId,
+        },
+        JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+    });
+
+    test('an all-permissions token can still do what the user is allowed (read)', async () => {
+      const res = await authenticatedTestClient(readOnlyOauthToken).get(
+        `/api/v1/files/${fileId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(fileId);
+    });
+
+    test('an all-permissions token cannot do what the user is denied (delete)', async () => {
+      const res = await authenticatedTestClient(readOnlyOauthToken).delete(
+        `/api/v1/files/${fileId}`
       );
       expect(res.status).toBe(403);
     });
