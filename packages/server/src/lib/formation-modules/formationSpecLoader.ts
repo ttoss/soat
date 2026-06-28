@@ -6,8 +6,18 @@ import createDebug from 'debug';
 import yaml from 'js-yaml';
 
 import type { ValidationError } from '../formationsTypes';
+import type { FieldSpec, SchemaFields } from '../openapiSchemaFields';
+import {
+  deriveSchemaFields,
+  hasProperties,
+  isObjectRecord,
+} from '../openapiSchemaFields';
 
 const log = createDebug('soat:formations:specLoader');
+
+// Re-exported so the formation modules keep importing these from here.
+export { isObjectRecord };
+export type { FieldSpec };
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
@@ -28,16 +38,7 @@ type OpenApiSpec = {
 
 // ── Module spec ──────────────────────────────────────────────────────────
 
-export type FieldSpec = {
-  type?: string;
-  nullable: boolean;
-};
-
-export type ModuleOpenApiSpec = {
-  allowedFields: Set<string>;
-  requiredFields: Set<string>;
-  fieldSpecs: Record<string, FieldSpec>;
-};
+export type ModuleOpenApiSpec = SchemaFields;
 
 // ── Type validators ──────────────────────────────────────────────────────
 
@@ -148,41 +149,21 @@ export const loadModuleSpec = (args: {
   const schema = spec.components?.schemas?.[args.schemaName];
 
   /* istanbul ignore next */
-  if (!schema || !schema.properties) {
+  if (!hasProperties(schema)) {
     throw new Error(
       `${args.schemaName} schema is missing in formations OpenAPI spec`
     );
   }
 
-  const fieldSpecs = Object.fromEntries(
-    Object.entries(schema.properties).map(([key, propertySchema]) => {
-      return [
-        key,
-        {
-          type: propertySchema?.type,
-          nullable: propertySchema?.nullable === true,
-        },
-      ];
-    })
-  ) as Record<string, FieldSpec>;
-
-  const result: ModuleOpenApiSpec = {
-    allowedFields: new Set(Object.keys(schema.properties)),
-    requiredFields: new Set(schema.required ?? []),
-    fieldSpecs,
-  };
+  // Identity key transform: formation templates use the spec's snake_case
+  // property names verbatim (they are not run through caseTransform).
+  const result = deriveSchemaFields({ schema });
 
   specCache[args.schemaName] = result;
   return result;
 };
 
 // ── Guard helpers ────────────────────────────────────────────────────────
-
-export const isObjectRecord = (
-  value: unknown
-): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
 
 export const isFormationExpression = (value: unknown): boolean => {
   if (!isObjectRecord(value)) return false;

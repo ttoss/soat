@@ -4,6 +4,12 @@ import * as url from 'node:url';
 
 import yaml from 'js-yaml';
 
+import type { SchemaWithProperties } from './openapiSchemaFields';
+import {
+  deriveSchemaFields,
+  hasProperties,
+  isObjectRecord,
+} from './openapiSchemaFields';
 import { snakeToCamel } from './soatToolsHelpers';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
@@ -81,20 +87,6 @@ export const getMergedOpenApiSpec = (): MergedSpec => {
   return cachedSpec;
 };
 
-type SchemaWithProperties = {
-  properties: Record<string, unknown>;
-  required?: unknown;
-};
-
-const isObjectRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
-
-const hasProperties = (value: unknown): value is SchemaWithProperties => {
-  if (!isObjectRecord(value)) return false;
-  return isObjectRecord(value.properties);
-};
-
 export type RequestSchemaFields = {
   /** Allowed body field names, converted to camelCase (internal convention). */
   allowedFields: Set<string>;
@@ -103,17 +95,13 @@ export type RequestSchemaFields = {
 };
 
 const deriveFields = (schema: SchemaWithProperties): RequestSchemaFields => {
-  const required = Array.isArray(schema.required) ? schema.required : [];
-  return {
-    allowedFields: new Set(Object.keys(schema.properties).map(snakeToCamel)),
-    requiredFields: new Set(
-      required
-        .filter((f): f is string => {
-          return typeof f === 'string';
-        })
-        .map(snakeToCamel)
-    ),
-  };
+  // Request bodies are compared in camelCase (after caseTransform); the
+  // per-field type specs the kernel also derives are unused here.
+  const { allowedFields, requiredFields } = deriveSchemaFields({
+    schema,
+    transformKey: snakeToCamel,
+  });
+  return { allowedFields, requiredFields };
 };
 
 /**
