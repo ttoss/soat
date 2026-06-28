@@ -8,6 +8,7 @@ import {
   listAgents,
   updateAgent,
 } from 'src/lib/agents';
+import { getRequestSchemaFields } from 'src/lib/openapiSpec';
 
 import { agentGenerationRouter } from './agentGeneration';
 
@@ -15,44 +16,17 @@ export const agentsRouter = new Router<Context>();
 
 // ── Agents CRUD ──────────────────────────────────────────────────────────
 
-const KNOWN_CREATE_AGENT_FIELDS = new Set([
-  'aiProviderId',
-  'name',
-  'instructions',
-  'model',
-  'toolIds',
-  'maxSteps',
-  'toolChoice',
-  'stopConditions',
-  'activeToolIds',
-  'stepRules',
-  'boundaryPolicy',
-  'temperature',
-  'knowledgeConfig',
-  'reasoning',
-  'maxContextMessages',
-  'singleSessionPerActor',
-  'projectId',
-]);
+// The set of accepted body fields is derived from the OpenAPI spec — the single
+// source of truth for the REST contract — rather than being duplicated here.
+// Field names are returned in camelCase to match the request body after the
+// caseTransform middleware has converted the snake_case wire format.
+const KNOWN_CREATE_AGENT_FIELDS = getRequestSchemaFields({
+  schemaName: 'CreateAgentRequest',
+}).allowedFields;
 
-const KNOWN_UPDATE_AGENT_FIELDS = new Set([
-  'aiProviderId',
-  'name',
-  'instructions',
-  'model',
-  'toolIds',
-  'maxSteps',
-  'toolChoice',
-  'stopConditions',
-  'activeToolIds',
-  'stepRules',
-  'boundaryPolicy',
-  'temperature',
-  'knowledgeConfig',
-  'reasoning',
-  'maxContextMessages',
-  'singleSessionPerActor',
-]);
+const KNOWN_UPDATE_AGENT_FIELDS = getRequestSchemaFields({
+  schemaName: 'UpdateAgentRequest',
+}).allowedFields;
 
 const findUnknownFields = (
   body: Record<string, unknown>,

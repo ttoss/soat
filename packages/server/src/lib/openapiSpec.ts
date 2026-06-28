@@ -4,6 +4,8 @@ import * as url from 'node:url';
 
 import yaml from 'js-yaml';
 
+import { snakeToCamel } from './soatToolsHelpers';
+
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 type SpecFile = {
@@ -77,4 +79,54 @@ export const getMergedOpenApiSpec = (): MergedSpec => {
     cachedSpec = loadMergedOpenApiSpec();
   }
   return cachedSpec;
+};
+
+type SchemaWithProperties = {
+  properties: Record<string, unknown>;
+  required?: unknown;
+};
+
+const hasProperties = (value: unknown): value is SchemaWithProperties => {
+  if (typeof value !== 'object' || value === null) return false;
+  const { properties } = value as { properties?: unknown };
+  return typeof properties === 'object' && properties !== null;
+};
+
+export type RequestSchemaFields = {
+  /** Allowed body field names, converted to camelCase (internal convention). */
+  allowedFields: Set<string>;
+  /** Required body field names, converted to camelCase. */
+  requiredFields: Set<string>;
+};
+
+/**
+ * Derives the set of known body fields for a request schema directly from the
+ * OpenAPI specs — the single source of truth for the REST contract, SDK, CLI,
+ * and MCP surface. Property names are stored as snake_case in the spec and
+ * returned here as camelCase to match the request body after the caseTransform
+ * middleware has run.
+ */
+export const getRequestSchemaFields = (args: {
+  schemaName: string;
+}): RequestSchemaFields => {
+  const schema = getMergedOpenApiSpec().components.schemas[args.schemaName];
+
+  if (!hasProperties(schema)) {
+    throw new Error(
+      `Schema '${args.schemaName}' has no properties in the OpenAPI spec`
+    );
+  }
+
+  const required = Array.isArray(schema.required) ? schema.required : [];
+
+  return {
+    allowedFields: new Set(Object.keys(schema.properties).map(snakeToCamel)),
+    requiredFields: new Set(
+      required
+        .filter((f): f is string => {
+          return typeof f === 'string';
+        })
+        .map(snakeToCamel)
+    ),
+  };
 };

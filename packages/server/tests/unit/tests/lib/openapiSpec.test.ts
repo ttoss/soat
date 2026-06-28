@@ -8,9 +8,17 @@ type MergedSpec = {
   };
 };
 
+type RequestSchemaFields = {
+  allowedFields: Set<string>;
+  requiredFields: Set<string>;
+};
+
 type OpenapiSpecModule = {
   loadMergedOpenApiSpec: () => MergedSpec;
   getMergedOpenApiSpec: () => MergedSpec;
+  getRequestSchemaFields: (args: {
+    schemaName: string;
+  }) => RequestSchemaFields;
 };
 
 describe('openapiSpec', () => {
@@ -178,5 +186,121 @@ describe('openapiSpec', () => {
     const first = getMergedOpenApiSpec();
     const second = getMergedOpenApiSpec();
     expect(first).toBe(second);
+  });
+
+  describe('getRequestSchemaFields', () => {
+    test('derives camelCase allowed and required fields from a schema', () => {
+      jest.doMock('node:fs', () => {
+        return {
+          existsSync: jest.fn(() => {
+            return true;
+          }),
+          readdirSync: jest.fn(() => {
+            return ['agents.yaml'];
+          }),
+          readFileSync: jest.fn(() => {
+            return '';
+          }),
+        };
+      });
+
+      jest.doMock('js-yaml', () => {
+        return {
+          __esModule: true,
+          default: {
+            load: jest.fn(() => {
+              return {
+                components: {
+                  schemas: {
+                    CreateAgentRequest: {
+                      type: 'object',
+                      required: ['ai_provider_id'],
+                      properties: {
+                        ai_provider_id: { type: 'string' },
+                        project_id: { type: 'string' },
+                        max_steps: { type: 'integer' },
+                        single_session_per_actor: { type: 'boolean' },
+                      },
+                    },
+                  },
+                },
+              };
+            }),
+          },
+        };
+      });
+
+      const { getRequestSchemaFields } = jest.requireActual(
+        'src/lib/openapiSpec'
+      ) as OpenapiSpecModule;
+
+      const fields = getRequestSchemaFields({
+        schemaName: 'CreateAgentRequest',
+      });
+
+      expect([...fields.allowedFields].sort()).toEqual([
+        'aiProviderId',
+        'maxSteps',
+        'projectId',
+        'singleSessionPerActor',
+      ]);
+      expect([...fields.requiredFields]).toEqual(['aiProviderId']);
+    });
+
+    test('throws when the schema is missing or has no properties', () => {
+      jest.doMock('node:fs', () => {
+        return {
+          existsSync: jest.fn(() => {
+            return true;
+          }),
+          readdirSync: jest.fn(() => {
+            return ['agents.yaml'];
+          }),
+          readFileSync: jest.fn(() => {
+            return '';
+          }),
+        };
+      });
+
+      jest.doMock('js-yaml', () => {
+        return {
+          __esModule: true,
+          default: {
+            load: jest.fn(() => {
+              return { components: { schemas: {} } };
+            }),
+          },
+        };
+      });
+
+      const { getRequestSchemaFields } = jest.requireActual(
+        'src/lib/openapiSpec'
+      ) as OpenapiSpecModule;
+
+      expect(() => {
+        return getRequestSchemaFields({ schemaName: 'CreateAgentRequest' });
+      }).toThrow(/no properties/);
+    });
+
+    test('matches the real CreateAgentRequest / UpdateAgentRequest specs', () => {
+      const { getRequestSchemaFields } = jest.requireActual(
+        'src/lib/openapiSpec'
+      ) as OpenapiSpecModule;
+
+      const create = getRequestSchemaFields({
+        schemaName: 'CreateAgentRequest',
+      });
+      expect(create.allowedFields.has('aiProviderId')).toBe(true);
+      expect(create.allowedFields.has('projectId')).toBe(true);
+      expect(create.allowedFields.has('knowledgeConfig')).toBe(true);
+      expect(create.requiredFields.has('aiProviderId')).toBe(true);
+
+      const update = getRequestSchemaFields({
+        schemaName: 'UpdateAgentRequest',
+      });
+      expect(update.allowedFields.has('aiProviderId')).toBe(true);
+      // projectId is create-only — must not be an updatable field
+      expect(update.allowedFields.has('projectId')).toBe(false);
+    });
   });
 });
