@@ -8,34 +8,13 @@ import {
   listAgents,
   updateAgent,
 } from 'src/lib/agents';
-import { getRequestSchemaFields } from 'src/lib/openapiSpec';
+import { rejectUnknownFields } from 'src/lib/requestValidation';
 
 import { agentGenerationRouter } from './agentGeneration';
 
 export const agentsRouter = new Router<Context>();
 
 // ── Agents CRUD ──────────────────────────────────────────────────────────
-
-// The set of accepted body fields is derived from the OpenAPI spec — the single
-// source of truth for the REST contract — rather than being duplicated here.
-// Field names are returned in camelCase to match the request body after the
-// caseTransform middleware has converted the snake_case wire format.
-const KNOWN_CREATE_AGENT_FIELDS = getRequestSchemaFields({
-  schemaName: 'CreateAgentRequest',
-}).allowedFields;
-
-const KNOWN_UPDATE_AGENT_FIELDS = getRequestSchemaFields({
-  schemaName: 'UpdateAgentRequest',
-}).allowedFields;
-
-const findUnknownFields = (
-  body: Record<string, unknown>,
-  known: Set<string>
-): string[] => {
-  return Object.keys(body).filter((k) => {
-    return !known.has(k);
-  });
-};
 
 type CreateAgentBody = {
   aiProviderId?: unknown;
@@ -160,15 +139,10 @@ agentsRouter.post('/agents', async (ctx: Context) => {
 
   const reqBody = ctx.request.body as CreateAgentBody;
 
-  const unknownCreate = findUnknownFields(
-    reqBody as Record<string, unknown>,
-    KNOWN_CREATE_AGENT_FIELDS
-  );
-  if (unknownCreate.length > 0) {
-    ctx.status = 400;
-    ctx.body = { error: `Unknown field(s): ${unknownCreate.join(', ')}` };
-    return;
-  }
+  rejectUnknownFields({
+    schemaName: 'CreateAgentRequest',
+    body: reqBody as Record<string, unknown>,
+  });
 
   if (!reqBody.aiProviderId || typeof reqBody.aiProviderId !== 'string') {
     ctx.status = 400;
@@ -271,12 +245,7 @@ agentsRouter.put('/agents/:agent_id', async (ctx: Context) => {
 
   const body = ctx.request.body as Record<string, unknown>;
 
-  const unknownUpdate = findUnknownFields(body, KNOWN_UPDATE_AGENT_FIELDS);
-  if (unknownUpdate.length > 0) {
-    ctx.status = 400;
-    ctx.body = { error: `Unknown field(s): ${unknownUpdate.join(', ')}` };
-    return;
-  }
+  rejectUnknownFields({ schemaName: 'UpdateAgentRequest', body });
 
   const result = await updateAgent({
     projectIds,
@@ -307,12 +276,7 @@ agentsRouter.patch('/agents/:agent_id', async (ctx: Context) => {
 
   const body = ctx.request.body as Record<string, unknown>;
 
-  const unknownPatch = findUnknownFields(body, KNOWN_UPDATE_AGENT_FIELDS);
-  if (unknownPatch.length > 0) {
-    ctx.status = 400;
-    ctx.body = { error: `Unknown field(s): ${unknownPatch.join(', ')}` };
-    return;
-  }
+  rejectUnknownFields({ schemaName: 'UpdateAgentRequest', body });
 
   const result = await updateAgent({
     projectIds,

@@ -463,7 +463,8 @@ describe('Agents', () => {
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toMatch(/prompt/);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/prompt/);
     });
   });
 
@@ -605,7 +606,8 @@ describe('Agents', () => {
         .send({ prompt: 'should be instructions' });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toMatch(/prompt/);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/prompt/);
     });
   });
 
@@ -653,7 +655,8 @@ describe('Agents', () => {
         .send({ prompt: 'should be instructions' });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toMatch(/prompt/);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/prompt/);
     });
   });
 
