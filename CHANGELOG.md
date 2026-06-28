@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.8](https://github.com/ttoss/soat/compare/v0.13.7...v0.13.8) (2026-06-28)
+
+### Bug Fixes
+
+* **agents:** address UX/docs issues from [#293](https://github.com/ttoss/soat/issues/293) (Bedrock, PATCH, unknown fields, trace_id) ([#294](https://github.com/ttoss/soat/issues/294)) ([31fafc6](https://github.com/ttoss/soat/commit/31fafc654844da7f62975a048a50a2590ba1e741))
+* **app:** surface sub-resource writes as actions and run them with the right verb ([#292](https://github.com/ttoss/soat/issues/292)) ([adf305d](https://github.com/ttoss/soat/commit/adf305d463b57657496e7deefd61641e31b1e23e))
+
+### Features
+
+* **projects:** add rename endpoint and fix project-scoped GET access ([#291](https://github.com/ttoss/soat/issues/291)) ([1e5723e](https://github.com/ttoss/soat/commit/1e5723ed4a8d08c3f1133d5c832d6f35369b4e9d))
+
 ## [0.13.7](https://github.com/ttoss/soat/compare/v0.13.6...v0.13.7) (2026-06-27)
 
 * feat(reasoning)!: replace reflect/debate with a generic pipeline mode (#285) ([1bb12e8](https://github.com/ttoss/soat/commit/1bb12e8b02e116cec9bd0ff46fc48889ac1d34c9)), closes [#285](https://github.com/ttoss/soat/issues/285) [#286](https://github.com/ttoss/soat/issues/286)

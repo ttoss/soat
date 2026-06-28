@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.8](https://127.0.0.1/41729/git/ttoss/compare/v0.13.7...v0.13.8) (2026-06-28)
+
+### Bug Fixes
+
+* **app:** surface sub-resource writes as actions and run them with the right verb ([#292](https://127.0.0.1/41729/git/ttoss/issues/292)) ([adf305d](https://127.0.0.1/41729/git/ttoss/commits/adf305d463b57657496e7deefd61641e31b1e23e))
+
 ## [0.13.7](https://127.0.0.1/41729/git/ttoss/compare/v0.13.6...v0.13.7) (2026-06-27)
 
 **Note:** Version bump only for package @soat/app
