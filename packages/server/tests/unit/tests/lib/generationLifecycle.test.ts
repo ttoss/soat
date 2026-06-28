@@ -177,4 +177,26 @@ describe('generationLifecycle', () => {
     expect(domainError.meta?.trace_id).toBe('trc_lifecycle_fail02');
     expect(domainError.meta?.generation_id).toBe('gen_lifecycle_fail02');
   });
+
+  test('recordGenerationFailure uses "Internal Server Error" message for non-Error thrown values', async () => {
+    await createGenerationRecord({
+      publicId: 'gen_lifecycle_fail03',
+      projectId,
+      agentId: agentPublicId,
+      traceId: 'trc_lifecycle_fail03',
+    });
+
+    const error = await recordGenerationFailure({
+      generationId: 'gen_lifecycle_fail03',
+      traceId: 'trc_lifecycle_fail03',
+      error: { code: 'SOME_OBJECT', detail: 'not an Error instance' },
+    });
+
+    expect(error).toBeInstanceOf(DomainError);
+    const domainError = error as DomainError;
+    expect(domainError.code).toBe('GENERATION_FAILED');
+    expect(domainError.message).toBe('Internal Server Error');
+    expect(domainError.meta?.trace_id).toBe('trc_lifecycle_fail03');
+    expect(domainError.meta?.generation_id).toBe('gen_lifecycle_fail03');
+  });
 });
