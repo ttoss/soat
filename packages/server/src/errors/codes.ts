@@ -28,6 +28,11 @@ export const ERROR_CODES = {
     description:
       'The upstream AI provider returned an error (e.g. insufficient credits, rate limit, or the provider is unreachable).',
   },
+  GENERATION_FAILED: {
+    httpStatus: 500,
+    description:
+      'An unexpected error occurred during agent generation. Check the trace for details.',
+  },
   GENERATION_NOT_FOUND: {
     httpStatus: 404,
     description:

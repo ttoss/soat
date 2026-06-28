@@ -162,8 +162,51 @@ paths:
       tags:
         - Agents
       summary: Update an agent
-      description: Updates an existing agent.
+      description: Updates an existing agent. Identical to PATCH — both perform partial updates.
       operationId: updateAgent
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAgentRequest'
+      responses:
+        '200':
+          description: Agent updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - Agents
+      summary: Partially update an agent
+      description: Partially updates an existing agent. Identical to PUT — both perform partial updates.
+      operationId: patchAgent
       parameters:
         - name: agent_id
           in: path

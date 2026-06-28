@@ -15,6 +15,54 @@ export const agentsRouter = new Router<Context>();
 
 // ── Agents CRUD ──────────────────────────────────────────────────────────
 
+const KNOWN_CREATE_AGENT_FIELDS = new Set([
+  'aiProviderId',
+  'name',
+  'instructions',
+  'model',
+  'toolIds',
+  'maxSteps',
+  'toolChoice',
+  'stopConditions',
+  'activeToolIds',
+  'stepRules',
+  'boundaryPolicy',
+  'temperature',
+  'knowledgeConfig',
+  'reasoning',
+  'maxContextMessages',
+  'singleSessionPerActor',
+  'projectId',
+]);
+
+const KNOWN_UPDATE_AGENT_FIELDS = new Set([
+  'aiProviderId',
+  'name',
+  'instructions',
+  'model',
+  'toolIds',
+  'maxSteps',
+  'toolChoice',
+  'stopConditions',
+  'activeToolIds',
+  'stepRules',
+  'boundaryPolicy',
+  'temperature',
+  'knowledgeConfig',
+  'reasoning',
+  'maxContextMessages',
+  'singleSessionPerActor',
+]);
+
+const findUnknownFields = (
+  body: Record<string, unknown>,
+  known: Set<string>
+): string[] => {
+  return Object.keys(body).filter((k) => {
+    return !known.has(k);
+  });
+};
+
 type CreateAgentBody = {
   aiProviderId?: unknown;
   name?: unknown;
@@ -138,6 +186,16 @@ agentsRouter.post('/agents', async (ctx: Context) => {
 
   const reqBody = ctx.request.body as CreateAgentBody;
 
+  const unknownCreate = findUnknownFields(
+    reqBody as Record<string, unknown>,
+    KNOWN_CREATE_AGENT_FIELDS
+  );
+  if (unknownCreate.length > 0) {
+    ctx.status = 400;
+    ctx.body = { error: `Unknown field(s): ${unknownCreate.join(', ')}` };
+    return;
+  }
+
   if (!reqBody.aiProviderId || typeof reqBody.aiProviderId !== 'string') {
     ctx.status = 400;
     ctx.body = { error: 'aiProviderId is required' };
@@ -238,6 +296,49 @@ agentsRouter.put('/agents/:agent_id', async (ctx: Context) => {
   }
 
   const body = ctx.request.body as Record<string, unknown>;
+
+  const unknownUpdate = findUnknownFields(body, KNOWN_UPDATE_AGENT_FIELDS);
+  if (unknownUpdate.length > 0) {
+    ctx.status = 400;
+    ctx.body = { error: `Unknown field(s): ${unknownUpdate.join(', ')}` };
+    return;
+  }
+
+  const result = await updateAgent({
+    projectIds,
+    id: ctx.params.agent_id,
+    ...parseUpdateAgentBody(body),
+  });
+
+  ctx.body = result;
+});
+
+agentsRouter.patch('/agents/:agent_id', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    action: 'agents:UpdateAgent',
+  });
+
+  /* istanbul ignore next */
+  if (projectIds === null) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const body = ctx.request.body as Record<string, unknown>;
+
+  const unknownPatch = findUnknownFields(body, KNOWN_UPDATE_AGENT_FIELDS);
+  if (unknownPatch.length > 0) {
+    ctx.status = 400;
+    ctx.body = { error: `Unknown field(s): ${unknownPatch.join(', ')}` };
+    return;
+  }
 
   const result = await updateAgent({
     projectIds,

@@ -108,6 +108,36 @@ describe('buildModel', () => {
     expect(model).toBeDefined();
   });
 
+  test('builds bedrock model from plain ABSK string secret (no JSON wrapping)', () => {
+    const model = buildModel({
+      provider: 'bedrock',
+      secretValue: 'ABSKsomeplainkey',
+      model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+    });
+    expect(model).toBeDefined();
+  });
+
+  test('builds bedrock model from config.apiKey when no secret is provided', () => {
+    const model = buildModel({
+      provider: 'bedrock',
+      secretValue: null,
+      model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+      config: { apiKey: 'ABSKfromconfig' },
+    });
+    expect(model).toBeDefined();
+  });
+
+  test('config.apiKey is not used when secret already provides apiKey', () => {
+    // secret wins over config.apiKey — both should produce a valid model
+    const model = buildModel({
+      provider: 'bedrock',
+      secretValue: JSON.stringify({ apiKey: 'ABSKfromsecret' }),
+      model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+      config: { apiKey: 'ABSKfromconfig' },
+    });
+    expect(model).toBeDefined();
+  });
+
   test('builds ollama model without throwing', () => {
     const model = buildModel({
       provider: 'ollama',

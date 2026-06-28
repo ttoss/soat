@@ -75,7 +75,15 @@ The `bedrock` provider supports two authentication modes, determined by the shap
 { "apiKey": "ABSK..." }
 ```
 
+> **Important:** The secret value **must be stored as a JSON object** (shown above), not as a plain string. If you store a raw `ABSK…` string without the JSON wrapper the server attempts to parse it as JSON first, and if that fails it detects the `ABSK` prefix and uses it directly — so plain strings work as a convenience, but the JSON form is preferred.
+
 If neither field is present the default AWS credential chain (environment variables, instance profile, etc.) is used. The `region` field in the provider's `config` object defaults to `us-east-1`.
+
+You can also pass the API key directly in the provider's `config` object as `api_key` (without linking a secret). This is useful for quick testing but the secret-linked approach is recommended for production.
+
+```json
+{ "api_key": "ABSK..." }
+```
 
 ## Examples
 
