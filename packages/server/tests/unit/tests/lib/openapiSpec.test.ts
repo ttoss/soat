@@ -16,9 +16,7 @@ type RequestSchemaFields = {
 type OpenapiSpecModule = {
   loadMergedOpenApiSpec: () => MergedSpec;
   getMergedOpenApiSpec: () => MergedSpec;
-  getRequestSchemaFields: (args: {
-    schemaName: string;
-  }) => RequestSchemaFields;
+  getRequestSchemaFields: (args: { schemaName: string }) => RequestSchemaFields;
 };
 
 describe('openapiSpec', () => {
@@ -189,118 +187,54 @@ describe('openapiSpec', () => {
   });
 
   describe('getRequestSchemaFields', () => {
-    test('derives camelCase allowed and required fields from a schema', () => {
-      jest.doMock('node:fs', () => {
-        return {
-          existsSync: jest.fn(() => {
-            return true;
-          }),
-          readdirSync: jest.fn(() => {
-            return ['agents.yaml'];
-          }),
-          readFileSync: jest.fn(() => {
-            return '';
-          }),
-        };
-      });
+    // These tests read the real OpenAPI specs on disk — the spec is the
+    // contract under test, so there is nothing to mock. fs/js-yaml are only
+    // mocked elsewhere in this file to simulate conditions that cannot be
+    // produced with the real spec (missing dir, unparseable file).
+    const { getRequestSchemaFields } = jest.requireActual(
+      'src/lib/openapiSpec'
+    ) as OpenapiSpecModule;
 
-      jest.doMock('js-yaml', () => {
-        return {
-          __esModule: true,
-          default: {
-            load: jest.fn(() => {
-              return {
-                components: {
-                  schemas: {
-                    CreateAgentRequest: {
-                      type: 'object',
-                      required: ['ai_provider_id'],
-                      properties: {
-                        ai_provider_id: { type: 'string' },
-                        project_id: { type: 'string' },
-                        max_steps: { type: 'integer' },
-                        single_session_per_actor: { type: 'boolean' },
-                      },
-                    },
-                  },
-                },
-              };
-            }),
-          },
-        };
-      });
-
-      const { getRequestSchemaFields } = jest.requireActual(
-        'src/lib/openapiSpec'
-      ) as OpenapiSpecModule;
-
-      const fields = getRequestSchemaFields({
-        schemaName: 'CreateAgentRequest',
-      });
-
-      expect([...fields.allowedFields].sort()).toEqual([
-        'aiProviderId',
-        'maxSteps',
-        'projectId',
-        'singleSessionPerActor',
-      ]);
-      expect([...fields.requiredFields]).toEqual(['aiProviderId']);
-    });
-
-    test('throws when the schema is missing or has no properties', () => {
-      jest.doMock('node:fs', () => {
-        return {
-          existsSync: jest.fn(() => {
-            return true;
-          }),
-          readdirSync: jest.fn(() => {
-            return ['agents.yaml'];
-          }),
-          readFileSync: jest.fn(() => {
-            return '';
-          }),
-        };
-      });
-
-      jest.doMock('js-yaml', () => {
-        return {
-          __esModule: true,
-          default: {
-            load: jest.fn(() => {
-              return { components: { schemas: {} } };
-            }),
-          },
-        };
-      });
-
-      const { getRequestSchemaFields } = jest.requireActual(
-        'src/lib/openapiSpec'
-      ) as OpenapiSpecModule;
-
-      expect(() => {
-        return getRequestSchemaFields({ schemaName: 'CreateAgentRequest' });
-      }).toThrow(/no properties/);
-    });
-
-    test('matches the real CreateAgentRequest / UpdateAgentRequest specs', () => {
-      const { getRequestSchemaFields } = jest.requireActual(
-        'src/lib/openapiSpec'
-      ) as OpenapiSpecModule;
-
+    test('derives camelCase allowed and required fields from the real spec', () => {
       const create = getRequestSchemaFields({
         schemaName: 'CreateAgentRequest',
       });
-      expect(create.allowedFields.has('aiProviderId')).toBe(true);
-      expect(create.allowedFields.has('projectId')).toBe(true);
-      expect(create.allowedFields.has('knowledgeConfig')).toBe(true);
-      expect(create.requiredFields.has('aiProviderId')).toBe(true);
 
+      // snake_case spec properties are returned in camelCase
+      expect(create.allowedFields.has('aiProviderId')).toBe(true);
+      expect(create.allowedFields.has('maxSteps')).toBe(true);
+      expect(create.allowedFields.has('singleSessionPerActor')).toBe(true);
+      expect(create.allowedFields.has('knowledgeConfig')).toBe(true);
+
+      // conversion is exhaustive — no snake_case leaks through
+      for (const field of create.allowedFields) {
+        expect(field).not.toContain('_');
+      }
+
+      // required is derived from the schema's `required` array
+      expect([...create.requiredFields]).toEqual(['aiProviderId']);
+    });
+
+    test('distinguishes create-only fields from updatable ones', () => {
+      const create = getRequestSchemaFields({
+        schemaName: 'CreateAgentRequest',
+      });
       const update = getRequestSchemaFields({
         schemaName: 'UpdateAgentRequest',
       });
-      expect(update.allowedFields.has('aiProviderId')).toBe(true);
-      // projectId is create-only — must not be an updatable field
+
+      expect(create.allowedFields.has('projectId')).toBe(true);
+      // projectId is create-only — it must not be an updatable field
       expect(update.allowedFields.has('projectId')).toBe(false);
+      expect(update.allowedFields.has('aiProviderId')).toBe(true);
+      // UpdateAgentRequest has no required fields
+      expect(update.requiredFields.size).toBe(0);
+    });
+
+    test('throws for a schema that is absent from the spec', () => {
+      expect(() => {
+        return getRequestSchemaFields({ schemaName: 'NoSuchSchema' });
+      }).toThrow(/no properties/);
     });
   });
 });
