@@ -432,6 +432,17 @@ describe('MCP tools - happy path', () => {
     expect(result.id).toBe(projectId);
   });
 
+  test('update-project renames the project', async () => {
+    const res = await mcpCall('update-project', {
+      projectId,
+      name: 'MCP Happy Path Renamed',
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBe(projectId);
+    expect(result.name).toBe('MCP Happy Path Renamed');
+  });
+
   // ── Secrets ──────────────────────────────────────────────────────────────
 
   test('create-secret creates a secret', async () => {

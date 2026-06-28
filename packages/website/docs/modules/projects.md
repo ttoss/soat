@@ -62,6 +62,16 @@ To grant a user access to all projects, use a wildcard project segment:
 
 Authorization is policy-only — there is no Layer 1 membership gate. All access decisions are evaluated through the policy engine against the requested action and the resource SRN. See [IAM](./iam.md) for details.
 
+To grant a user access to a single project, attach a [Policy](./policies.md) scoped to that project's SRN. A project-scoped grant is honored by every project endpoint, including `GET /projects/{id}`:
+
+```json
+{
+  "statement": [
+    { "effect": "Allow", "action": ["*"], "resource": ["soat:proj_ABC:*:*"] }
+  ]
+}
+```
+
 ## Examples
 
 ### Create a project
@@ -129,6 +139,40 @@ if (error) throw new Error(JSON.stringify(error));
 ```bash
 curl https://api.example.com/api/v1/projects/proj_ABC \
   -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+### Rename a project
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat update-project --project-id proj_ABC --name "Renamed Project"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+const { data, error } = await soat.projects.updateProject({
+  path: { project_id: 'proj_ABC' },
+  body: { name: 'Renamed Project' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PATCH https://api.example.com/api/v1/projects/proj_ABC \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Renamed Project"}'
 ```
 
 </TabItem>

@@ -111,6 +111,47 @@ paths:
           description: Forbidden
         '404':
           description: Project not found
+    patch:
+      tags:
+        - Projects
+      summary: Rename a project
+      description: Updates a project's name. Requires admin role.
+      operationId: updateProject
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          description: Project public ID (proj_ prefix)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  example: Renamed Project
+      responses:
+        '200':
+          description: Project updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectRecord'
+        '400':
+          description: Invalid request body
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (non-admin user)
+        '404':
+          description: Project not found
     delete:
       tags:
         - Projects

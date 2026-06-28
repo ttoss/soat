@@ -330,6 +330,66 @@ describe('Projects', () => {
     });
   });
 
+  describe('PATCH /api/v1/projects/:id', () => {
+    let projectId: string;
+
+    beforeEach(async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Renamable Project' });
+
+      projectId = res.body.id;
+    });
+
+    test('admin can rename a project', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ name: 'Renamed Project' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe(projectId);
+      expect(response.body.name).toBe('Renamed Project');
+      expect(response.body.updated_at).toBeDefined();
+
+      const getRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${projectId}`
+      );
+      expect(getRes.body.name).toBe('Renamed Project');
+    });
+
+    test('missing name returns 400', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({});
+
+      expect(response.status).toBe(400);
+    });
+
+    test('unauthenticated request cannot rename a project', async () => {
+      const response = await testClient
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ name: 'Nope' });
+
+      expect(response.status).toBe(401);
+    });
+
+    test('non-admin user cannot rename a project', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ name: 'Nope' });
+
+      expect(response.status).toBe(403);
+    });
+
+    test('returns 404 for unknown project id', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch('/api/v1/projects/proj_nonexistent12345')
+        .send({ name: 'Nope' });
+
+      expect(response.status).toBe(404);
+    });
+  });
+
   describe('DELETE /api/v1/projects/:id', () => {
     test('admin can delete a project', async () => {
       const createRes = await authenticatedTestClient(adminToken)

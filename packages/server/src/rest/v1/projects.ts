@@ -5,6 +5,7 @@ import {
   deleteProject,
   getProject,
   listProjects,
+  updateProject,
 } from 'src/lib/projects';
 
 const projectsRouter = new Router<Context>();
@@ -60,6 +61,32 @@ projectsRouter.get('/projects/:project_id', async (ctx: Context) => {
   });
 
   ctx.body = result;
+});
+
+projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  if (ctx.authUser.role !== 'admin') {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const { name } = ctx.request.body as { name?: string };
+
+  if (!name || typeof name !== 'string') {
+    ctx.status = 400;
+    ctx.body = { error: 'name is required' };
+    return;
+  }
+
+  const project = await updateProject({ id: ctx.params.project_id, name });
+
+  ctx.body = project;
 });
 
 projectsRouter.delete('/projects/:project_id', async (ctx: Context) => {

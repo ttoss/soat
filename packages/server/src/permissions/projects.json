@@ -12,6 +12,11 @@
       "description": "Get a project by ID"
     },
     {
+      "operationId": "updateProject",
+      "action": "projects:UpdateProject",
+      "description": "Rename a project (admin only)"
+    },
+    {
       "operationId": "deleteProject",
       "action": "projects:DeleteProject",
       "description": "Delete a project (admin only)"

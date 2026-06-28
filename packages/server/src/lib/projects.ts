@@ -1,6 +1,10 @@
+import createDebug from 'debug';
+
 import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
+
+const log = createDebug('soat:projects');
 
 const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
   return {
@@ -9,6 +13,16 @@ const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
   };
+};
+
+const getProjectOrThrow = async (id: string) => {
+  const project = await db.Project.findOne({ where: { publicId: id } });
+
+  if (!project) {
+    throw new DomainError('RESOURCE_NOT_FOUND', `Project '${id}' not found.`);
+  }
+
+  return project;
 };
 
 export const listProjects = async (args: { authUser: AuthUser }) => {
@@ -57,6 +71,10 @@ export const getProject = async (args: { id: string; authUser: AuthUser }) => {
   const allowed = await args.authUser.isAllowed({
     projectPublicId: args.id,
     action: 'projects:GetProject',
+    // Probe with the project's SRN (consistent with listProjects /
+    // resolveProjectIds) so project-scoped policies grant access, not just
+    // unscoped `*` policies.
+    resource: `soat:${args.id}:*:*`,
   });
 
   if (!allowed) {
@@ -71,6 +89,16 @@ export const getProject = async (args: { id: string; authUser: AuthUser }) => {
 
 export const createProject = async (args: { name: string }) => {
   const project = await db.Project.create({ name: args.name });
+  return mapProject(project);
+};
+
+export const updateProject = async (args: { id: string; name: string }) => {
+  log('updateProject: id=%s name=%s', args.id, args.name);
+
+  const project = await getProjectOrThrow(args.id);
+
+  await project.update({ name: args.name });
+
   return mapProject(project);
 };
 

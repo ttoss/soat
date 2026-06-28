@@ -79,6 +79,16 @@ PROJECT_RESP=$($SOAT_CLI create-project --name smoke-test-project)
 PROJECT_PUBLIC_ID=$(echo "$PROJECT_RESP" | jq -r '.id')
 echo "Project id: $PROJECT_PUBLIC_ID"
 
+# 3a. Rename the project
+echo "--- Renaming project ---"
+PROJECT_RENAME_RESP=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --name smoke-test-project-renamed)
+if [ "$(echo "$PROJECT_RENAME_RESP" | jq -r '.name')" != "smoke-test-project-renamed" ]; then
+  echo "ERROR: update-project did not rename the project" >&2
+  echo "$PROJECT_RENAME_RESP" >&2
+  exit 1
+fi
+echo "Project rename: OK"
+
 # 3b. Policies module coverage
 echo "--- Policies coverage ---"
 POLICY_READ_RESP=$($SOAT_CLI create-policy \
