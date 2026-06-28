@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.8](https://127.0.0.1/41729/git/ttoss/compare/v0.13.7...v0.13.8) (2026-06-28)
+
+### Bug Fixes
+
+* **agents:** address UX/docs issues from [#293](https://127.0.0.1/41729/git/ttoss/issues/293) (Bedrock, PATCH, unknown fields, trace_id) ([#294](https://127.0.0.1/41729/git/ttoss/issues/294)) ([31fafc6](https://127.0.0.1/41729/git/ttoss/commits/31fafc654844da7f62975a048a50a2590ba1e741))
+
+### Features
+
+* **projects:** add rename endpoint and fix project-scoped GET access ([#291](https://127.0.0.1/41729/git/ttoss/issues/291)) ([1e5723e](https://127.0.0.1/41729/git/ttoss/commits/1e5723ed4a8d08c3f1133d5c832d6f35369b4e9d))
+
 ## [0.13.7](https://127.0.0.1/41729/git/ttoss/compare/v0.13.6...v0.13.7) (2026-06-27)
 
 * feat(reasoning)!: replace reflect/debate with a generic pipeline mode (#285) ([1bb12e8](https://127.0.0.1/41729/git/ttoss/commits/1bb12e8b02e116cec9bd0ff46fc48889ac1d34c9)), closes [#285](https://127.0.0.1/41729/git/ttoss/issues/285) [#286](https://127.0.0.1/41729/git/ttoss/issues/286)
