@@ -115,6 +115,21 @@ describe('Secrets', () => {
       expect(response.status).toBe(400);
     });
 
+    test('unknown body field returns 400 VALIDATION_FAILED', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/secrets')
+        .send({
+          project_id: projectId,
+          name: 'Strict Secret',
+          value: 'v',
+          rotate: true,
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/rotate/);
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .post('/api/v1/secrets')

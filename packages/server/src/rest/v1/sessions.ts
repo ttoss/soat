@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
+import { rejectUnknownFields } from 'src/lib/requestValidation';
 import {
   createSession,
   deleteSession,
@@ -55,6 +56,12 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
   if (!ctx.authUser) {
     throw new DomainError('UNAUTHORIZED', 'Unauthorized');
   }
+
+  rejectUnknownFields({
+    method: 'post',
+    path: '/sessions',
+    body: ctx.request.body as Record<string, unknown>,
+  });
 
   const body = ctx.request.body as {
     agentId?: string;
@@ -154,6 +161,12 @@ sessionsRouter.get('/sessions/:session_id', async (ctx: Context) => {
 
 sessionsRouter.patch('/sessions/:session_id', async (ctx: Context) => {
   const { agentId } = await checkSessionAccess(ctx, 'agents:UpdateSession');
+
+  rejectUnknownFields({
+    method: 'patch',
+    path: '/sessions/:session_id',
+    body: ctx.request.body as Record<string, unknown>,
+  });
 
   const body = ctx.request.body as {
     name?: string | null;

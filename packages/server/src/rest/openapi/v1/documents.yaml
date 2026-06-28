@@ -85,6 +85,17 @@ paths:
                 filename:
                   type: string
                   example: 'my-doc.txt'
+                title:
+                  type: string
+                  description: Document title
+                metadata:
+                  type: object
+                  description: Arbitrary metadata object
+                tags:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: Key-value tags
                 chunk_strategy:
                   type: string
                   enum: [page, whole, size]

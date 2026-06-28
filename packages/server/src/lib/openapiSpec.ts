@@ -4,6 +4,8 @@ import * as url from 'node:url';
 
 import yaml from 'js-yaml';
 
+import { snakeToCamel } from './soatToolsHelpers';
+
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 type SpecFile = {
@@ -77,4 +79,115 @@ export const getMergedOpenApiSpec = (): MergedSpec => {
     cachedSpec = loadMergedOpenApiSpec();
   }
   return cachedSpec;
+};
+
+type SchemaWithProperties = {
+  properties: Record<string, unknown>;
+  required?: unknown;
+};
+
+const isObjectRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+const hasProperties = (value: unknown): value is SchemaWithProperties => {
+  if (!isObjectRecord(value)) return false;
+  return isObjectRecord(value.properties);
+};
+
+export type RequestSchemaFields = {
+  /** Allowed body field names, converted to camelCase (internal convention). */
+  allowedFields: Set<string>;
+  /** Required body field names, converted to camelCase. */
+  requiredFields: Set<string>;
+};
+
+const deriveFields = (schema: SchemaWithProperties): RequestSchemaFields => {
+  const required = Array.isArray(schema.required) ? schema.required : [];
+  return {
+    allowedFields: new Set(Object.keys(schema.properties).map(snakeToCamel)),
+    requiredFields: new Set(
+      required
+        .filter((f): f is string => {
+          return typeof f === 'string';
+        })
+        .map(snakeToCamel)
+    ),
+  };
+};
+
+/**
+ * Derives the set of known body fields for a named request schema directly from
+ * the OpenAPI specs — the single source of truth for the REST contract, SDK,
+ * CLI, and MCP surface. Property names are stored as snake_case in the spec and
+ * returned here as camelCase to match the request body after the caseTransform
+ * middleware has run.
+ */
+export const getRequestSchemaFields = (args: {
+  schemaName: string;
+}): RequestSchemaFields => {
+  const schema = getMergedOpenApiSpec().components.schemas[args.schemaName];
+
+  if (!hasProperties(schema)) {
+    throw new Error(
+      `Schema '${args.schemaName}' has no properties in the OpenAPI spec`
+    );
+  }
+
+  return deriveFields(schema);
+};
+
+const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);
+
+/**
+ * Normalizes a route as registered on the router (e.g. `/agents/:agent_id`) to
+ * the OpenAPI path-key form used in the specs (`/api/v1/agents/{agent_id}`):
+ * `:param` → `{param}`, and the `/api/v1` prefix is added if absent.
+ */
+const normalizeRoutePath = (path: string): string => {
+  const withBraces = path.replace(/:([A-Za-z0-9_]+)/g, '{$1}');
+  return withBraces.startsWith('/api/v1') ? withBraces : `/api/v1${withBraces}`;
+};
+
+const resolveJsonRequestSchema = (operation: unknown): unknown => {
+  if (!isObjectRecord(operation)) return undefined;
+  const { requestBody } = operation;
+  if (!isObjectRecord(requestBody)) return undefined;
+  const { content } = requestBody;
+  if (!isObjectRecord(content)) return undefined;
+  const json = content['application/json'];
+  if (!isObjectRecord(json)) return undefined;
+  return json.schema;
+};
+
+/**
+ * Resolves the allowed/required body fields for a specific route's
+ * `application/json` request schema — handling both inline schemas and `$ref`s
+ * to named component schemas. Returns `null` when the route has no
+ * property-based object body (no request body, or an open `additionalProperties`
+ * map such as a tags endpoint), signalling "nothing to validate".
+ */
+export const getRouteRequestSchemaFields = (args: {
+  method: string;
+  path: string;
+}): RequestSchemaFields | null => {
+  const method = args.method.toLowerCase();
+  if (!HTTP_METHODS.has(method)) return null;
+
+  const spec = getMergedOpenApiSpec();
+  const pathItem = spec.paths[normalizeRoutePath(args.path)];
+  if (!isObjectRecord(pathItem)) return null;
+
+  const schema = resolveJsonRequestSchema(pathItem[method]);
+  if (!isObjectRecord(schema)) return null;
+
+  const ref = schema.$ref;
+  if (typeof ref === 'string') {
+    const schemaName = ref.split('/').pop();
+    if (!schemaName) return null;
+    const named = spec.components.schemas[schemaName];
+    return hasProperties(named) ? deriveFields(named) : null;
+  }
+
+  return hasProperties(schema) ? deriveFields(schema) : null;
 };

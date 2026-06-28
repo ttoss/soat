@@ -12,6 +12,7 @@ import {
 } from 'src/lib/actors';
 import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
+import { rejectUnknownFields } from 'src/lib/requestValidation';
 
 import { checkAuth, resolveWriteProjectId } from './helpers';
 
@@ -178,6 +179,12 @@ const validateCreateActorBody = (body: CreateActorBody): string | null => {
 actorsRouter.post('/actors', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
+  rejectUnknownFields({
+    method: 'post',
+    path: '/actors',
+    body: ctx.request.body as Record<string, unknown>,
+  });
+
   const body = ctx.request.body as CreateActorBody;
   const validationError = validateCreateActorBody(body);
   if (validationError) {
@@ -280,6 +287,12 @@ actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
     ctx.body = { error: 'Forbidden' };
     return;
   }
+
+  rejectUnknownFields({
+    method: 'patch',
+    path: '/actors/:actor_id',
+    body: ctx.request.body as Record<string, unknown>,
+  });
 
   const body = ctx.request.body as {
     name?: string;

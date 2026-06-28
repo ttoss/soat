@@ -377,7 +377,6 @@ Now disable `auto_generate` and add a follow-up user message. We will generate t
 
 ```bash
 soat update-session \
-  --agent-id "$AGENT_ID" \
   --session-id "$SESSION_ID" \
   --auto-generate false
 
@@ -573,7 +572,6 @@ Disable `auto_generate`, add a user message, then trigger generation with `async
 
 ```bash
 soat update-session \
-  --agent-id "$AGENT_ID" \
   --session-id "$SESSION_ID" \
   --auto-generate false
 

@@ -8,9 +8,19 @@ type MergedSpec = {
   };
 };
 
+type RequestSchemaFields = {
+  allowedFields: Set<string>;
+  requiredFields: Set<string>;
+};
+
 type OpenapiSpecModule = {
   loadMergedOpenApiSpec: () => MergedSpec;
   getMergedOpenApiSpec: () => MergedSpec;
+  getRequestSchemaFields: (args: { schemaName: string }) => RequestSchemaFields;
+  getRouteRequestSchemaFields: (args: {
+    method: string;
+    path: string;
+  }) => RequestSchemaFields | null;
 };
 
 describe('openapiSpec', () => {
@@ -178,5 +188,112 @@ describe('openapiSpec', () => {
     const first = getMergedOpenApiSpec();
     const second = getMergedOpenApiSpec();
     expect(first).toBe(second);
+  });
+
+  describe('getRequestSchemaFields', () => {
+    // These tests read the real OpenAPI specs on disk — the spec is the
+    // contract under test, so there is nothing to mock. fs/js-yaml are only
+    // mocked elsewhere in this file to simulate conditions that cannot be
+    // produced with the real spec (missing dir, unparseable file).
+    const { getRequestSchemaFields } = jest.requireActual(
+      'src/lib/openapiSpec'
+    ) as OpenapiSpecModule;
+
+    test('derives camelCase allowed and required fields from the real spec', () => {
+      const create = getRequestSchemaFields({
+        schemaName: 'CreateAgentRequest',
+      });
+
+      // snake_case spec properties are returned in camelCase
+      expect(create.allowedFields.has('aiProviderId')).toBe(true);
+      expect(create.allowedFields.has('maxSteps')).toBe(true);
+      expect(create.allowedFields.has('singleSessionPerActor')).toBe(true);
+      expect(create.allowedFields.has('knowledgeConfig')).toBe(true);
+
+      // conversion is exhaustive — no snake_case leaks through
+      for (const field of create.allowedFields) {
+        expect(field).not.toContain('_');
+      }
+
+      // required is derived from the schema's `required` array
+      expect([...create.requiredFields]).toEqual(['aiProviderId']);
+    });
+
+    test('distinguishes create-only fields from updatable ones', () => {
+      const create = getRequestSchemaFields({
+        schemaName: 'CreateAgentRequest',
+      });
+      const update = getRequestSchemaFields({
+        schemaName: 'UpdateAgentRequest',
+      });
+
+      expect(create.allowedFields.has('projectId')).toBe(true);
+      // projectId is create-only — it must not be an updatable field
+      expect(update.allowedFields.has('projectId')).toBe(false);
+      expect(update.allowedFields.has('aiProviderId')).toBe(true);
+      // UpdateAgentRequest has no required fields
+      expect(update.requiredFields.size).toBe(0);
+    });
+
+    test('throws for a schema that is absent from the spec', () => {
+      expect(() => {
+        return getRequestSchemaFields({ schemaName: 'NoSuchSchema' });
+      }).toThrow(/no properties/);
+    });
+  });
+
+  describe('getRouteRequestSchemaFields', () => {
+    const { getRouteRequestSchemaFields } = jest.requireActual(
+      'src/lib/openapiSpec'
+    ) as OpenapiSpecModule;
+
+    test('resolves a $ref request body and normalizes :param + prefix', () => {
+      const fields = getRouteRequestSchemaFields({
+        method: 'put',
+        path: '/agents/:agent_id',
+      });
+      expect(fields).not.toBeNull();
+      expect(fields!.allowedFields.has('aiProviderId')).toBe(true);
+      // create-only field is absent from UpdateAgentRequest
+      expect(fields!.allowedFields.has('projectId')).toBe(false);
+    });
+
+    test('resolves an inline request body schema', () => {
+      const fields = getRouteRequestSchemaFields({
+        method: 'post',
+        path: '/projects',
+      });
+      expect(fields).not.toBeNull();
+      expect(fields!.allowedFields.has('name')).toBe(true);
+    });
+
+    test('is case-insensitive on the HTTP method', () => {
+      const fields = getRouteRequestSchemaFields({
+        method: 'POST',
+        path: '/agents',
+      });
+      expect(fields?.allowedFields.has('aiProviderId')).toBe(true);
+    });
+
+    test('returns null for an open additionalProperties map (tags)', () => {
+      expect(
+        getRouteRequestSchemaFields({
+          method: 'put',
+          path: '/actors/:actor_id/tags',
+        })
+      ).toBeNull();
+    });
+
+    test('returns null for an unknown route', () => {
+      expect(
+        getRouteRequestSchemaFields({ method: 'post', path: '/nope' })
+      ).toBeNull();
+    });
+
+    test('returns null for an unsupported method', () => {
+      expect(
+        getRouteRequestSchemaFields({ method: 'options', path: '/agents' })
+      ).toBeNull();
+    });
   });
 });

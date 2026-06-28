@@ -5,6 +5,7 @@ import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { createFile, listFiles, uploadFile } from 'src/lib/files';
 import { compilePolicy } from 'src/lib/policyCompiler';
+import { rejectUnknownFields } from 'src/lib/requestValidation';
 import { consumeUploadToken, createPresignedUrl } from 'src/lib/uploadTokens';
 
 import { registerFileAccessRoutes } from './fileAccessRoutes';
@@ -82,6 +83,11 @@ filesRouter.get('/files', async (ctx: Context) => {
 
 filesRouter.post('/files', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
+
+  // NOTE: POST /files is intentionally lenient — it accepts and ignores
+  // client-supplied read-only/storage fields (path, storage_*) as a
+  // robustness/security behavior, so it is excluded from strict field
+  // validation. See the strict-field-validation PRD.
 
   const body = ctx.request.body as {
     projectId?: string;
@@ -161,6 +167,12 @@ filesRouter.post(
 filesRouter.post('/files/upload/base64', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
+  rejectUnknownFields({
+    method: 'post',
+    path: '/files/upload/base64',
+    body: ctx.request.body as Record<string, unknown>,
+  });
+
   const body = ctx.request.body as {
     projectId?: string;
     content: string;
@@ -204,6 +216,12 @@ filesRouter.post('/files/presigned-url', async (ctx: Context) => {
     ctx.body = { error: 'Unauthorized' };
     return;
   }
+
+  rejectUnknownFields({
+    method: 'post',
+    path: '/files/presigned-url',
+    body: ctx.request.body as Record<string, unknown>,
+  });
 
   const body = ctx.request.body as {
     projectId: string;

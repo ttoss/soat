@@ -11,6 +11,7 @@ import {
   streamChatCompletion,
   streamChatCompletionForChat,
 } from 'src/lib/chats';
+import { rejectUnknownFields } from 'src/lib/requestValidation';
 
 import {
   checkAuth,
@@ -54,6 +55,12 @@ const validateCreateChatBody = (
 
 chatsRouter.post('/chats', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
+
+  rejectUnknownFields({
+    method: 'post',
+    path: '/chats',
+    body: ctx.request.body as Record<string, unknown>,
+  });
 
   const validated = validateCreateChatBody(ctx.request.body);
   if (validated.error !== undefined) {

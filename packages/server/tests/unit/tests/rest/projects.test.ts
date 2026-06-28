@@ -58,6 +58,16 @@ describe('Projects', () => {
 
       expect(response.status).toBe(400);
     });
+
+    test('unknown body field returns 400 VALIDATION_FAILED', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Strict Project', description: 'not a field' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/description/);
+    });
   });
 
   describe('GET /api/v1/projects', () => {

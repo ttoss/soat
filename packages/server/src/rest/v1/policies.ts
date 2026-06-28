@@ -8,6 +8,7 @@ import {
   listPolicies,
   updatePolicy,
 } from 'src/lib/policies';
+import { rejectUnknownFields } from 'src/lib/requestValidation';
 
 const policiesRouter = new Router<Context>();
 
@@ -40,6 +41,12 @@ policiesRouter.post('/policies', async (ctx: Context) => {
     ctx.body = { error: 'Forbidden' };
     return;
   }
+
+  rejectUnknownFields({
+    method: 'post',
+    path: '/policies',
+    body: ctx.request.body as Record<string, unknown>,
+  });
 
   const { name, description, document } = ctx.request.body as {
     name?: string;
@@ -105,6 +112,12 @@ policiesRouter.put('/policies/:policy_id', async (ctx: Context) => {
     ctx.body = { error: 'Forbidden' };
     return;
   }
+
+  rejectUnknownFields({
+    method: 'put',
+    path: '/policies/:policy_id',
+    body: ctx.request.body as Record<string, unknown>,
+  });
 
   const { name, description, document } = ctx.request.body as {
     name?: string;

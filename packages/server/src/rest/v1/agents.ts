@@ -8,60 +8,13 @@ import {
   listAgents,
   updateAgent,
 } from 'src/lib/agents';
+import { rejectUnknownFields } from 'src/lib/requestValidation';
 
 import { agentGenerationRouter } from './agentGeneration';
 
 export const agentsRouter = new Router<Context>();
 
 // ── Agents CRUD ──────────────────────────────────────────────────────────
-
-const KNOWN_CREATE_AGENT_FIELDS = new Set([
-  'aiProviderId',
-  'name',
-  'instructions',
-  'model',
-  'toolIds',
-  'maxSteps',
-  'toolChoice',
-  'stopConditions',
-  'activeToolIds',
-  'stepRules',
-  'boundaryPolicy',
-  'temperature',
-  'knowledgeConfig',
-  'reasoning',
-  'maxContextMessages',
-  'singleSessionPerActor',
-  'projectId',
-]);
-
-const KNOWN_UPDATE_AGENT_FIELDS = new Set([
-  'aiProviderId',
-  'name',
-  'instructions',
-  'model',
-  'toolIds',
-  'maxSteps',
-  'toolChoice',
-  'stopConditions',
-  'activeToolIds',
-  'stepRules',
-  'boundaryPolicy',
-  'temperature',
-  'knowledgeConfig',
-  'reasoning',
-  'maxContextMessages',
-  'singleSessionPerActor',
-]);
-
-const findUnknownFields = (
-  body: Record<string, unknown>,
-  known: Set<string>
-): string[] => {
-  return Object.keys(body).filter((k) => {
-    return !known.has(k);
-  });
-};
 
 type CreateAgentBody = {
   aiProviderId?: unknown;
@@ -186,15 +139,11 @@ agentsRouter.post('/agents', async (ctx: Context) => {
 
   const reqBody = ctx.request.body as CreateAgentBody;
 
-  const unknownCreate = findUnknownFields(
-    reqBody as Record<string, unknown>,
-    KNOWN_CREATE_AGENT_FIELDS
-  );
-  if (unknownCreate.length > 0) {
-    ctx.status = 400;
-    ctx.body = { error: `Unknown field(s): ${unknownCreate.join(', ')}` };
-    return;
-  }
+  rejectUnknownFields({
+    method: 'post',
+    path: '/agents',
+    body: reqBody as Record<string, unknown>,
+  });
 
   if (!reqBody.aiProviderId || typeof reqBody.aiProviderId !== 'string') {
     ctx.status = 400;
@@ -297,12 +246,7 @@ agentsRouter.put('/agents/:agent_id', async (ctx: Context) => {
 
   const body = ctx.request.body as Record<string, unknown>;
 
-  const unknownUpdate = findUnknownFields(body, KNOWN_UPDATE_AGENT_FIELDS);
-  if (unknownUpdate.length > 0) {
-    ctx.status = 400;
-    ctx.body = { error: `Unknown field(s): ${unknownUpdate.join(', ')}` };
-    return;
-  }
+  rejectUnknownFields({ method: 'put', path: '/agents/:agent_id', body });
 
   const result = await updateAgent({
     projectIds,
@@ -333,12 +277,7 @@ agentsRouter.patch('/agents/:agent_id', async (ctx: Context) => {
 
   const body = ctx.request.body as Record<string, unknown>;
 
-  const unknownPatch = findUnknownFields(body, KNOWN_UPDATE_AGENT_FIELDS);
-  if (unknownPatch.length > 0) {
-    ctx.status = 400;
-    ctx.body = { error: `Unknown field(s): ${unknownPatch.join(', ')}` };
-    return;
-  }
+  rejectUnknownFields({ method: 'patch', path: '/agents/:agent_id', body });
 
   const result = await updateAgent({
     projectIds,

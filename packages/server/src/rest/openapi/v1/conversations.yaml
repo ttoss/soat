@@ -203,13 +203,15 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - status
               properties:
                 status:
                   type: string
                   enum: [open, closed]
                   description: New conversation status
+                name:
+                  type: string
+                  nullable: true
+                  description: New conversation name
       responses:
         '200':
           description: Conversation updated

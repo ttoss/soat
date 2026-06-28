@@ -224,6 +224,11 @@ paths:
               properties:
                 name:
                   type: string
+                provider:
+                  type: string
+                  enum: [openai, anthropic, google, cohere, mistral]
+                  description: LLM provider
+                  example: openai
                 default_model:
                   type: string
                 secret_id:
