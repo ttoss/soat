@@ -132,6 +132,17 @@ describe('pathToView', () => {
     expect(view?.pathParams).toEqual({ agent_id: 'agt_1' });
   });
 
+  test('PUT-only sub-resource URL → action view', () => {
+    const view = pathToView(
+      '/app/v1/users/usr_1/policies',
+      testSpec,
+      modules
+    );
+    expect(view?.mode).toBe('action');
+    expect(view?.operationId).toBe('attachUserPolicies');
+    expect(view?.pathParams).toEqual({ user_id: 'usr_1' });
+  });
+
   test('project-scoped URL extracts project_id', () => {
     const view = pathToView('/app/v1/projects/prj_1/webhooks', testSpec, modules);
     expect(view?.mode).toBe('list');

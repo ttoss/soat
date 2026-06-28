@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { describe, expect, test } from 'vitest';
@@ -14,6 +14,12 @@ import { renderWithAuth } from '../testUtils';
 const agentsModule = (): ModuleInfo => {
   const m = parseModules(testSpec).find((x) => x.tag === 'Agents');
   if (!m) throw new Error('Agents module missing');
+  return m;
+};
+
+const usersModule = (): ModuleInfo => {
+  const m = parseModules(testSpec).find((x) => x.tag === 'Users');
+  if (!m) throw new Error('Users module missing');
   return m;
 };
 
@@ -151,5 +157,54 @@ describe('ActionView', () => {
     );
     expect(screen.getByText('POST')).toBeInTheDocument();
     expect(screen.getByText(/\/api\/v1\/agents/)).toBeInTheDocument();
+  });
+
+  test('a PUT sub-resource action shows the PUT badge', () => {
+    renderWithAuth(
+      <ActionView
+        module={usersModule()}
+        spec={testSpec}
+        pathParams={{ user_id: 'usr_1' }}
+        operationId="attachUserPolicies"
+      />
+    );
+    expect(screen.getByText('PUT')).toBeInTheDocument();
+    expect(screen.getByText('/api/v1/users/{user_id}/policies')).toBeInTheDocument();
+  });
+
+  test('attach-policies submits via PUT with the selected policy_ids', async () => {
+    let method: string | undefined;
+    let body: JsonObject | undefined;
+    server.use(
+      http.get('*/api/v1/policies', () => {
+        return HttpResponse.json([{ id: 'pol_1', name: 'Read Only' }]);
+      }),
+      // http.put only matches PUT — if the view wrongly issued POST the request
+      // would be unhandled and MSW (onUnhandledRequest: 'error') fails the test.
+      http.put('*/api/v1/users/:user_id/policies', async ({ request }) => {
+        method = request.method;
+        body = (await request.json()) as JsonObject;
+        return HttpResponse.json({ id: 'usr_1' });
+      })
+    );
+
+    renderWithAuth(
+      <ActionView
+        module={usersModule()}
+        spec={testSpec}
+        pathParams={{ user_id: 'usr_1' }}
+        operationId="attachUserPolicies"
+      />
+    );
+
+    // The policy picker loads its options from /api/v1/policies.
+    await screen.findByRole('option', { name: 'Read Only' });
+    await userEvent.selectOptions(screen.getByRole('combobox'), 'pol_1');
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      return expect(method).toBe('PUT');
+    });
+    expect(body).toEqual({ policy_ids: ['pol_1'] });
   });
 });

@@ -191,6 +191,30 @@ export const testSpec: OpenApiSpec = {
       },
       delete: { operationId: 'deleteUser', tags: ['Users'] },
     },
+    '/api/v1/users/{user_id}/policies': {
+      put: {
+        operationId: 'attachUserPolicies',
+        tags: ['Users'],
+        summary: 'Attach policies to a user',
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['policy_ids'],
+                properties: {
+                  policy_ids: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    'x-soat-ref': 'policies',
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     '/api/v1/policies': {
       get: {
         operationId: 'listPolicies',

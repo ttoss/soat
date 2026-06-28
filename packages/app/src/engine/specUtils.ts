@@ -101,36 +101,34 @@ const segmentCount = (pathTemplate: string): number => {
   return pathTemplate.split('/').filter(Boolean).length;
 };
 
-// The collection path is where new items are created and listed
-// (e.g. /agents or /projects/{project_id}/webhooks). Pick the shortest
-// collection-shaped GET so deeper sub-collections never win.
-const collectionPath = (ops: ModuleOp[]): string | undefined => {
-  return ops
-    .filter((op) => {
-      return op.method === 'get' && isCollectionPath(op.pathTemplate);
-    })
-    .sort((a, b) => {
-      return segmentCount(a.pathTemplate) - segmentCount(b.pathTemplate);
-    })[0]?.pathTemplate;
-};
-
 const isCreatePost = (pathTemplate: string, collection: string | undefined) => {
   if (collection) return pathTemplate === collection;
   return isCollectionPath(pathTemplate) && !pathTemplate.includes('{');
 };
 
+const pushAction = (module: ModuleInfo, op: ModuleOp): void => {
+  module.actions = module.actions ?? [];
+  module.actions.push(op);
+};
+
 const classifyInto = (
   module: ModuleInfo,
   op: ModuleOp,
-  collection: string | undefined
+  collection: string | undefined,
+  detail: string | undefined
 ): void => {
   if (op.method === 'post') {
     if (isCreatePost(op.pathTemplate, collection)) {
       if (!module.createOp) module.createOp = op;
     } else {
-      module.actions = module.actions ?? [];
-      module.actions.push(op);
+      pushAction(module, op);
     }
+    return;
+  }
+  // A PUT/PATCH/DELETE off the detail path (e.g. /users/{id}/policies) is an
+  // action — otherwise it would shadow the edit form and break routing.
+  if (op.method !== 'get' && op.pathTemplate !== detail) {
+    pushAction(module, op);
     return;
   }
   const key = classifyNonPost(op.method, op.pathTemplate);
@@ -145,13 +143,21 @@ const buildModule = (tag: string, ops: ModuleOp[]): ModuleInfo => {
       return op.pathTemplate.includes('{project_id}');
     }),
   };
-  const collection = collectionPath(ops);
   // Classify shallow paths first so list/detail/create win over sub-paths.
   const sorted = [...ops].sort((a, b) => {
     return segmentCount(a.pathTemplate) - segmentCount(b.pathTemplate);
   });
+  // The collection path (shortest collection GET) is where items are
+  // listed/created; the detail path (shortest item-scoped path) owns
+  // get/update/delete. Writes on deeper sub-paths become actions.
+  const collection = sorted.find((op) => {
+    return op.method === 'get' && isCollectionPath(op.pathTemplate);
+  })?.pathTemplate;
+  const detail = sorted.find((op) => {
+    return !isCollectionPath(op.pathTemplate);
+  })?.pathTemplate;
   for (const op of sorted) {
-    classifyInto(module, op, collection);
+    classifyInto(module, op, collection, detail);
   }
   return module;
 };

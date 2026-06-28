@@ -16,6 +16,7 @@ import {
 } from './formHelpers';
 import { MethodBadge } from './methodBadge';
 import { useNavigation } from './navigationContext';
+import { useRefFieldOptions } from './refFieldOptions';
 import {
   actionLabel,
   buildUrl,
@@ -150,7 +151,7 @@ const useActionSubmit = (args: {
       }
       res = await apiFetch<JsonObject>({
         url,
-        method: 'POST',
+        method: actionOp.method.toUpperCase(),
         body: bodyResult.body,
         token,
       });
@@ -203,6 +204,9 @@ export const ActionView = ({
   };
 
   const token = state.status === 'authenticated' ? state.token : '';
+  // Load options for x-soat-ref fields (e.g. policy_ids → /api/v1/policies) so
+  // they render as populated pickers, mirroring the create/edit form.
+  const refOptions = useRefFieldOptions({ schema, token });
   const { submitting, error, result, handleSubmit } = useActionSubmit({
     actionOp: actionOp!,
     schema,
@@ -247,7 +251,7 @@ export const ActionView = ({
           <div className="flex flex-col gap-1">
             <h2 className="text-xl font-semibold">{actionLabel(actionOp)}</h2>
             <div className="flex items-center gap-2">
-              <MethodBadge method="POST" />
+              <MethodBadge method={actionOp.method} />
               <span className="font-mono text-xs text-muted-foreground">
                 {actionOp.pathTemplate}
               </span>
@@ -298,6 +302,7 @@ export const ActionView = ({
                   });
                 }}
                 required={required.has(name)}
+                refOptions={refOptions[name]}
                 onFileChange={
                   fieldSchema.format === 'binary'
                     ? (file) => {
