@@ -111,6 +111,47 @@ paths:
           description: Forbidden
         '404':
           description: Project not found
+    patch:
+      tags:
+        - Projects
+      summary: Rename a project
+      description: Updates a project's name. Requires admin role.
+      operationId: updateProject
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          description: Project public ID (proj_ prefix)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  example: Renamed Project
+      responses:
+        '200':
+          description: Project updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectRecord'
+        '400':
+          description: Invalid request body
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (non-admin user)
+        '404':
+          description: Project not found
     delete:
       tags:
         - Projects
@@ -134,6 +175,122 @@ paths:
           description: Forbidden (non-admin user)
         '404':
           description: Project not found
+  /api/v1/projects/{project_id}/members:
+    get:
+      tags:
+        - Projects
+      summary: List project members
+      description: >
+        Lists the users who are members of a project. Requires admin role.
+
+        Membership is a convenience layer over [policies](../iam): adding a
+        member attaches a managed project-scoped policy
+        (`soat:<project>:*:*`) to the user. This endpoint reports only members
+        added through the members API; access granted by other policies or by
+        the admin role is not reflected here.
+      operationId: listProjectMembers
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          description: Project public ID (proj_ prefix)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: List of project members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectMember'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (non-admin user)
+        '404':
+          description: Project not found
+    post:
+      tags:
+        - Projects
+      summary: Add a project member
+      description: >
+        Adds a user to a project by attaching a managed project-scoped policy
+        that grants full access to the project. Idempotent — adding an existing
+        member is a no-op. Requires admin role.
+      operationId: addProjectMember
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          description: Project public ID (proj_ prefix)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+              properties:
+                user_id:
+                  type: string
+                  description: Public ID of the user to add (usr_ prefix)
+                  example: usr_V1StGXR8Z5jdHi6B
+      responses:
+        '201':
+          description: Member added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMember'
+        '400':
+          description: Invalid request body
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (non-admin user)
+        '404':
+          description: Project or user not found
+  /api/v1/projects/{project_id}/members/{user_id}:
+    delete:
+      tags:
+        - Projects
+      summary: Remove a project member
+      description: >
+        Removes a user from a project by detaching the managed project-scoped
+        membership policy. Requires admin role. Returns 404 if the user is not a
+        member added through the members API.
+      operationId: removeProjectMember
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          description: Project public ID (proj_ prefix)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - name: user_id
+          in: path
+          required: true
+          description: User public ID (usr_ prefix)
+          schema:
+            type: string
+            example: usr_V1StGXR8Z5jdHi6B
+      responses:
+        '204':
+          description: Member removed successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (non-admin user)
+        '404':
+          description: Project not found, or user is not a member
 components:
   securitySchemes:
     bearerAuth:
@@ -159,3 +316,23 @@ components:
           type: string
           format: date-time
           example: '2024-01-01T00:00:00.000Z'
+    ProjectMember:
+      type: object
+      properties:
+        project_id:
+          type: string
+          description: Public project ID (proj_ prefix)
+          example: proj_V1StGXR8Z5jdHi6B
+        user_id:
+          type: string
+          description: Public user ID (usr_ prefix)
+          example: usr_V1StGXR8Z5jdHi6B
+        username:
+          type: string
+          example: alice
+        role:
+          type: string
+          enum:
+            - admin
+            - user
+          example: user

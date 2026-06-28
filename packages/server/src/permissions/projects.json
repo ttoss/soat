@@ -12,9 +12,29 @@
       "description": "Get a project by ID"
     },
     {
+      "operationId": "updateProject",
+      "action": "projects:UpdateProject",
+      "description": "Rename a project (admin only)"
+    },
+    {
       "operationId": "deleteProject",
       "action": "projects:DeleteProject",
       "description": "Delete a project (admin only)"
+    },
+    {
+      "operationId": "listProjectMembers",
+      "action": "projects:ListProjectMembers",
+      "description": "List the members of a project (admin only)"
+    },
+    {
+      "operationId": "addProjectMember",
+      "action": "projects:AddProjectMember",
+      "description": "Add a user to a project (admin only)"
+    },
+    {
+      "operationId": "removeProjectMember",
+      "action": "projects:RemoveProjectMember",
+      "description": "Remove a user from a project (admin only)"
     }
   ]
 }

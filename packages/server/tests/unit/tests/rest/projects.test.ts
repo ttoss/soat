@@ -330,6 +330,283 @@ describe('Projects', () => {
     });
   });
 
+  describe('PATCH /api/v1/projects/:id', () => {
+    let projectId: string;
+
+    beforeEach(async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Renamable Project' });
+
+      projectId = res.body.id;
+    });
+
+    test('admin can rename a project', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ name: 'Renamed Project' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe(projectId);
+      expect(response.body.name).toBe('Renamed Project');
+      expect(response.body.updated_at).toBeDefined();
+
+      const getRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${projectId}`
+      );
+      expect(getRes.body.name).toBe('Renamed Project');
+    });
+
+    test('missing name returns 400', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({});
+
+      expect(response.status).toBe(400);
+    });
+
+    test('unauthenticated request cannot rename a project', async () => {
+      const response = await testClient
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ name: 'Nope' });
+
+      expect(response.status).toBe(401);
+    });
+
+    test('non-admin user cannot rename a project', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ name: 'Nope' });
+
+      expect(response.status).toBe(403);
+    });
+
+    test('returns 404 for unknown project id', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch('/api/v1/projects/proj_nonexistent12345')
+        .send({ name: 'Nope' });
+
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe('project members', () => {
+    let projectId: string;
+    let memberId: string;
+    let memberToken: string;
+
+    beforeAll(async () => {
+      const projRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Members Project' });
+      projectId = projRes.body.id;
+
+      const userRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'bob', password: 'bobpass' });
+      memberId = userRes.body.id;
+      memberToken = await loginAs('bob', 'bobpass');
+    });
+
+    describe('GET /api/v1/projects/:id/members', () => {
+      test('empty before any members are added', async () => {
+        const response = await authenticatedTestClient(adminToken).get(
+          `/api/v1/projects/${projectId}/members`
+        );
+
+        expect(response.status).toBe(200);
+        expect(Array.isArray(response.body)).toBe(true);
+        expect(response.body.length).toBe(0);
+      });
+
+      test('unauthenticated request returns 401', async () => {
+        const response = await testClient.get(
+          `/api/v1/projects/${projectId}/members`
+        );
+
+        expect(response.status).toBe(401);
+      });
+
+      test('non-admin user cannot list members', async () => {
+        const response = await authenticatedTestClient(userToken).get(
+          `/api/v1/projects/${projectId}/members`
+        );
+
+        expect(response.status).toBe(403);
+      });
+
+      test('returns 404 for unknown project id', async () => {
+        const response = await authenticatedTestClient(adminToken).get(
+          '/api/v1/projects/proj_nonexistent12345/members'
+        );
+
+        expect(response.status).toBe(404);
+      });
+    });
+
+    describe('POST /api/v1/projects/:id/members', () => {
+      test('admin can add a member, which grants project access', async () => {
+        // Before membership, the user cannot see the project.
+        const beforeRes = await authenticatedTestClient(memberToken).get(
+          `/api/v1/projects/${projectId}`
+        );
+        expect(beforeRes.status).toBe(403);
+
+        const response = await authenticatedTestClient(adminToken)
+          .post(`/api/v1/projects/${projectId}/members`)
+          .send({ user_id: memberId });
+
+        expect(response.status).toBe(201);
+        expect(response.body.project_id).toBe(projectId);
+        expect(response.body.user_id).toBe(memberId);
+        expect(response.body.username).toBe('bob');
+        expect(response.body.role).toBe('user');
+
+        // The member now appears in the listing.
+        const listRes = await authenticatedTestClient(adminToken).get(
+          `/api/v1/projects/${projectId}/members`
+        );
+        expect(
+          listRes.body.map((m: { user_id: string }) => {
+            return m.user_id;
+          })
+        ).toContain(memberId);
+
+        // And can now access the project.
+        const afterRes = await authenticatedTestClient(memberToken).get(
+          `/api/v1/projects/${projectId}`
+        );
+        expect(afterRes.status).toBe(200);
+      });
+
+      test('adding an existing member is idempotent', async () => {
+        await authenticatedTestClient(adminToken)
+          .post(`/api/v1/projects/${projectId}/members`)
+          .send({ user_id: memberId });
+
+        const response = await authenticatedTestClient(adminToken)
+          .post(`/api/v1/projects/${projectId}/members`)
+          .send({ user_id: memberId });
+
+        expect(response.status).toBe(201);
+
+        const listRes = await authenticatedTestClient(adminToken).get(
+          `/api/v1/projects/${projectId}/members`
+        );
+        const matches = listRes.body.filter((m: { user_id: string }) => {
+          return m.user_id === memberId;
+        });
+        expect(matches.length).toBe(1);
+      });
+
+      test('missing user_id returns 400', async () => {
+        const response = await authenticatedTestClient(adminToken)
+          .post(`/api/v1/projects/${projectId}/members`)
+          .send({});
+
+        expect(response.status).toBe(400);
+      });
+
+      test('unauthenticated request returns 401', async () => {
+        const response = await testClient
+          .post(`/api/v1/projects/${projectId}/members`)
+          .send({ user_id: memberId });
+
+        expect(response.status).toBe(401);
+      });
+
+      test('non-admin user cannot add a member', async () => {
+        const response = await authenticatedTestClient(userToken)
+          .post(`/api/v1/projects/${projectId}/members`)
+          .send({ user_id: memberId });
+
+        expect(response.status).toBe(403);
+      });
+
+      test('returns 404 for unknown project', async () => {
+        const response = await authenticatedTestClient(adminToken)
+          .post('/api/v1/projects/proj_nonexistent12345/members')
+          .send({ user_id: memberId });
+
+        expect(response.status).toBe(404);
+      });
+
+      test('returns 404 for unknown user', async () => {
+        const response = await authenticatedTestClient(adminToken)
+          .post(`/api/v1/projects/${projectId}/members`)
+          .send({ user_id: 'usr_nonexistent12345' });
+
+        expect(response.status).toBe(404);
+      });
+    });
+
+    describe('DELETE /api/v1/projects/:id/members/:user_id', () => {
+      beforeEach(async () => {
+        await authenticatedTestClient(adminToken)
+          .post(`/api/v1/projects/${projectId}/members`)
+          .send({ user_id: memberId });
+      });
+
+      test('admin can remove a member, revoking project access', async () => {
+        const response = await authenticatedTestClient(adminToken).delete(
+          `/api/v1/projects/${projectId}/members/${memberId}`
+        );
+
+        expect(response.status).toBe(204);
+
+        const listRes = await authenticatedTestClient(adminToken).get(
+          `/api/v1/projects/${projectId}/members`
+        );
+        expect(
+          listRes.body.map((m: { user_id: string }) => {
+            return m.user_id;
+          })
+        ).not.toContain(memberId);
+
+        const accessRes = await authenticatedTestClient(memberToken).get(
+          `/api/v1/projects/${projectId}`
+        );
+        expect(accessRes.status).toBe(403);
+      });
+
+      test('removing a non-member returns 404', async () => {
+        await authenticatedTestClient(adminToken).delete(
+          `/api/v1/projects/${projectId}/members/${memberId}`
+        );
+
+        const response = await authenticatedTestClient(adminToken).delete(
+          `/api/v1/projects/${projectId}/members/${memberId}`
+        );
+
+        expect(response.status).toBe(404);
+      });
+
+      test('unauthenticated request returns 401', async () => {
+        const response = await testClient.delete(
+          `/api/v1/projects/${projectId}/members/${memberId}`
+        );
+
+        expect(response.status).toBe(401);
+      });
+
+      test('non-admin user cannot remove a member', async () => {
+        const response = await authenticatedTestClient(userToken).delete(
+          `/api/v1/projects/${projectId}/members/${memberId}`
+        );
+
+        expect(response.status).toBe(403);
+      });
+
+      test('returns 404 for unknown project', async () => {
+        const response = await authenticatedTestClient(adminToken).delete(
+          `/api/v1/projects/proj_nonexistent12345/members/${memberId}`
+        );
+
+        expect(response.status).toBe(404);
+      });
+    });
+  });
+
   describe('DELETE /api/v1/projects/:id', () => {
     test('admin can delete a project', async () => {
       const createRes = await authenticatedTestClient(adminToken)

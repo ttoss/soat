@@ -432,6 +432,47 @@ describe('MCP tools - happy path', () => {
     expect(result.id).toBe(projectId);
   });
 
+  test('update-project renames the project', async () => {
+    const res = await mcpCall('update-project', {
+      projectId,
+      name: 'MCP Happy Path Renamed',
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBe(projectId);
+    expect(result.name).toBe('MCP Happy Path Renamed');
+  });
+
+  test('add-project-member / list-project-members / remove-project-member', async () => {
+    const userRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'mcpmember', password: 'mcpmemberpass' });
+    const memberId = userRes.body.id;
+
+    const addRes = await mcpCall('add-project-member', {
+      projectId,
+      userId: memberId,
+    });
+    expect(addRes.status).toBe(200);
+    const added = parseResult(addRes);
+    expect(added.userId).toBe(memberId);
+
+    const listRes = await mcpCall('list-project-members', { projectId });
+    expect(listRes.status).toBe(200);
+    const members = parseResult(listRes);
+    expect(
+      members.map((m: { userId: string }) => {
+        return m.userId;
+      })
+    ).toContain(memberId);
+
+    const removeRes = await mcpCall('remove-project-member', {
+      projectId,
+      userId: memberId,
+    });
+    expect(removeRes.status).toBe(200);
+  });
+
   // ── Secrets ──────────────────────────────────────────────────────────────
 
   test('create-secret creates a secret', async () => {
