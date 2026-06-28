@@ -7,7 +7,6 @@ import {
   listMemories,
   updateMemory,
 } from 'src/lib/memories';
-import { rejectUnknownFields } from 'src/lib/requestValidation';
 
 import { checkAuth, resolveWriteProjectId } from './helpers';
 
@@ -73,12 +72,6 @@ memoriesRouter.get('/memories/:memory_id', async (ctx: Context) => {
 memoriesRouter.post('/memories', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
-  rejectUnknownFields({
-    method: 'post',
-    path: '/memories',
-    body: ctx.request.body as Record<string, unknown>,
-  });
-
   const body = ctx.request.body as {
     projectId?: string;
     name?: string;
@@ -133,12 +126,6 @@ memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
     ctx.body = { error: 'Forbidden' };
     return;
   }
-
-  rejectUnknownFields({
-    method: 'put',
-    path: '/memories/:memory_id',
-    body: ctx.request.body as Record<string, unknown>,
-  });
 
   const body = ctx.request.body as {
     name?: string;

@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import {
@@ -15,7 +14,6 @@ import {
 } from 'src/lib/documents';
 import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
-import { rejectUnknownFields } from 'src/lib/requestValidation';
 
 import { checkAuth, resolveWriteProjectId } from './helpers';
 
@@ -169,12 +167,6 @@ documentsRouter.get('/documents/:document_id', async (ctx: Context) => {
 documentsRouter.post('/documents', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
-  rejectUnknownFields({
-    method: 'post',
-    path: '/documents',
-    body: ctx.request.body as Record<string, unknown>,
-  });
-
   const body = ctx.request.body as {
     projectId?: string;
     content: string;
@@ -262,12 +254,6 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
   if (!(await checkDocumentPermission(ctx, doc, 'documents:UpdateDocument'))) {
     return;
   }
-
-  rejectUnknownFields({
-    method: 'patch',
-    path: '/documents/:document_id',
-    body: ctx.request.body as Record<string, unknown>,
-  });
 
   const body = ctx.request.body as {
     content?: string;
@@ -394,12 +380,6 @@ documentsRouter.patch('/documents/:document_id/tags', async (ctx: Context) => {
 documentsRouter.post('/documents/ingest', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
-  rejectUnknownFields({
-    method: 'post',
-    path: '/documents/ingest',
-    body: ctx.request.body as Record<string, unknown>,
-  });
-
   const body = ctx.request.body as {
     fileId?: string;
     projectId?: string;
@@ -458,12 +438,6 @@ documentsRouter.post('/documents/:document_id/ingest', async (ctx: Context) => {
   if (!(await checkDocumentPermission(ctx, doc, 'documents:IngestDocument'))) {
     return;
   }
-
-  rejectUnknownFields({
-    method: 'post',
-    path: '/documents/:document_id/ingest',
-    body: ctx.request.body as Record<string, unknown>,
-  });
 
   const body = ctx.request.body as {
     chunkStrategy?: 'page' | 'whole' | 'size';

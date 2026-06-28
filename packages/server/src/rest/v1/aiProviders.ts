@@ -10,7 +10,6 @@ import {
   listAiProviders,
   updateAiProvider,
 } from 'src/lib/aiProviders';
-import { rejectUnknownFields } from 'src/lib/requestValidation';
 
 import { checkAuth, resolveWriteProjectId } from './helpers';
 
@@ -93,12 +92,6 @@ aiProvidersRouter.get('/ai-providers/:ai_provider_id', async (ctx: Context) => {
 aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
-  rejectUnknownFields({
-    method: 'post',
-    path: '/ai-providers',
-    body: ctx.request.body as Record<string, unknown>,
-  });
-
   const body = ctx.request.body as CreateAiProviderBody;
 
   const validationError = validateCreateAiProviderBody(body);
@@ -167,12 +160,6 @@ aiProvidersRouter.patch(
       ctx.body = { error: 'Forbidden' };
       return;
     }
-
-    rejectUnknownFields({
-      method: 'patch',
-      path: '/ai-providers/:ai_provider_id',
-      body: ctx.request.body as Record<string, unknown>,
-    });
 
     const body = ctx.request.body as {
       secretId?: string;

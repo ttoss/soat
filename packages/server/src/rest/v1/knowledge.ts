@@ -2,7 +2,6 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { searchKnowledge } from 'src/lib/knowledge';
 import { compilePolicy } from 'src/lib/policyCompiler';
-import { rejectUnknownFields } from 'src/lib/requestValidation';
 
 const knowledgeRouter = new Router<Context>();
 
@@ -49,12 +48,6 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     ctx.body = { error: 'Unauthorized' };
     return;
   }
-
-  rejectUnknownFields({
-    method: 'post',
-    path: '/knowledge/search',
-    body: ctx.request.body as Record<string, unknown>,
-  });
 
   const body = ctx.request.body as KnowledgeSearchBody;
 

@@ -21,6 +21,7 @@ type OpenapiSpecModule = {
     method: string;
     path: string;
   }) => RequestSchemaFields | null;
+  matchOpenApiPath: (args: { path: string }) => string | null;
 };
 
 describe('openapiSpec', () => {
@@ -294,6 +295,42 @@ describe('openapiSpec', () => {
       expect(
         getRouteRequestSchemaFields({ method: 'options', path: '/agents' })
       ).toBeNull();
+    });
+  });
+
+  describe('matchOpenApiPath', () => {
+    const { matchOpenApiPath } = jest.requireActual(
+      'src/lib/openapiSpec'
+    ) as OpenapiSpecModule;
+
+    test('matches a static collection path', () => {
+      expect(matchOpenApiPath({ path: '/api/v1/agents' })).toBe(
+        '/api/v1/agents'
+      );
+    });
+
+    test('matches a parameterized path to its template', () => {
+      expect(matchOpenApiPath({ path: '/api/v1/agents/agt_123' })).toBe(
+        '/api/v1/agents/{agent_id}'
+      );
+    });
+
+    test('prefers a static segment over a parameterized one', () => {
+      // /orchestrations/validate is static; it must win over any
+      // /orchestrations/{...} template of the same length.
+      expect(
+        matchOpenApiPath({ path: '/api/v1/orchestrations/validate' })
+      ).toBe('/api/v1/orchestrations/validate');
+    });
+
+    test('matches a nested parameterized path', () => {
+      expect(matchOpenApiPath({ path: '/api/v1/actors/act_1/tags' })).toBe(
+        '/api/v1/actors/{actor_id}/tags'
+      );
+    });
+
+    test('returns null when no template matches', () => {
+      expect(matchOpenApiPath({ path: '/api/v1/does/not/exist' })).toBeNull();
     });
   });
 });

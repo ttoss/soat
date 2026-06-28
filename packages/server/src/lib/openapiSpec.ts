@@ -4,6 +4,12 @@ import * as url from 'node:url';
 
 import yaml from 'js-yaml';
 
+import type { SchemaWithProperties } from './openapiSchemaFields';
+import {
+  deriveSchemaFields,
+  hasProperties,
+  isObjectRecord,
+} from './openapiSchemaFields';
 import { snakeToCamel } from './soatToolsHelpers';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
@@ -81,20 +87,6 @@ export const getMergedOpenApiSpec = (): MergedSpec => {
   return cachedSpec;
 };
 
-type SchemaWithProperties = {
-  properties: Record<string, unknown>;
-  required?: unknown;
-};
-
-const isObjectRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
-
-const hasProperties = (value: unknown): value is SchemaWithProperties => {
-  if (!isObjectRecord(value)) return false;
-  return isObjectRecord(value.properties);
-};
-
 export type RequestSchemaFields = {
   /** Allowed body field names, converted to camelCase (internal convention). */
   allowedFields: Set<string>;
@@ -103,17 +95,13 @@ export type RequestSchemaFields = {
 };
 
 const deriveFields = (schema: SchemaWithProperties): RequestSchemaFields => {
-  const required = Array.isArray(schema.required) ? schema.required : [];
-  return {
-    allowedFields: new Set(Object.keys(schema.properties).map(snakeToCamel)),
-    requiredFields: new Set(
-      required
-        .filter((f): f is string => {
-          return typeof f === 'string';
-        })
-        .map(snakeToCamel)
-    ),
-  };
+  // Request bodies are compared in camelCase (after caseTransform); the
+  // per-field type specs the kernel also derives are unused here.
+  const { allowedFields, requiredFields } = deriveSchemaFields({
+    schema,
+    transformKey: snakeToCamel,
+  });
+  return { allowedFields, requiredFields };
 };
 
 /**
@@ -138,6 +126,46 @@ export const getRequestSchemaFields = (args: {
 };
 
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);
+
+/**
+ * Matches a concrete request path (e.g. `/api/v1/agents/agt_123`) against the
+ * OpenAPI path templates in the merged spec and returns the matching template
+ * key (e.g. `/api/v1/agents/{agent_id}`), or `null` when none matches.
+ *
+ * A template segment wrapped in braces (`{agent_id}`) matches any single
+ * non-empty concrete segment; every other segment must match literally. When
+ * several templates match, the one with the fewest brace segments wins so a
+ * static route (`/orchestrations/validate`) is preferred over a parameterized
+ * one (`/orchestrations/{orchestration_id}`).
+ */
+export const matchOpenApiPath = (args: { path: string }): string | null => {
+  const requestSegments = args.path.split('/').filter(Boolean);
+
+  let best: string | null = null;
+  let bestParamCount = Number.POSITIVE_INFINITY;
+
+  for (const template of Object.keys(getMergedOpenApiSpec().paths)) {
+    const templateSegments = template.split('/').filter(Boolean);
+    if (templateSegments.length !== requestSegments.length) continue;
+
+    let paramCount = 0;
+    const matches = templateSegments.every((segment, index) => {
+      const isParam = segment.startsWith('{') && segment.endsWith('}');
+      if (isParam) {
+        paramCount += 1;
+        return requestSegments[index].length > 0;
+      }
+      return segment === requestSegments[index];
+    });
+
+    if (matches && paramCount < bestParamCount) {
+      best = template;
+      bestParamCount = paramCount;
+    }
+  }
+
+  return best;
+};
 
 /**
  * Normalizes a route as registered on the router (e.g. `/agents/:agent_id`) to

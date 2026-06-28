@@ -8,7 +8,6 @@ import {
   listAgents,
   updateAgent,
 } from 'src/lib/agents';
-import { rejectUnknownFields } from 'src/lib/requestValidation';
 
 import { agentGenerationRouter } from './agentGeneration';
 
@@ -139,12 +138,6 @@ agentsRouter.post('/agents', async (ctx: Context) => {
 
   const reqBody = ctx.request.body as CreateAgentBody;
 
-  rejectUnknownFields({
-    method: 'post',
-    path: '/agents',
-    body: reqBody as Record<string, unknown>,
-  });
-
   if (!reqBody.aiProviderId || typeof reqBody.aiProviderId !== 'string') {
     ctx.status = 400;
     ctx.body = { error: 'aiProviderId is required' };
@@ -246,8 +239,6 @@ agentsRouter.put('/agents/:agent_id', async (ctx: Context) => {
 
   const body = ctx.request.body as Record<string, unknown>;
 
-  rejectUnknownFields({ method: 'put', path: '/agents/:agent_id', body });
-
   const result = await updateAgent({
     projectIds,
     id: ctx.params.agent_id,
@@ -276,8 +267,6 @@ agentsRouter.patch('/agents/:agent_id', async (ctx: Context) => {
   }
 
   const body = ctx.request.body as Record<string, unknown>;
-
-  rejectUnknownFields({ method: 'patch', path: '/agents/:agent_id', body });
 
   const result = await updateAgent({
     projectIds,

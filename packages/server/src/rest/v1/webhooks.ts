@@ -2,7 +2,6 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
-import { rejectUnknownFields } from 'src/lib/requestValidation';
 import {
   createWebhook,
   deleteWebhook,
@@ -55,12 +54,6 @@ webhooksRouter.get('/webhooks', async (ctx: Context) => {
 
 webhooksRouter.post('/webhooks', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
-
-  rejectUnknownFields({
-    method: 'post',
-    path: '/webhooks',
-    body: ctx.request.body as Record<string, unknown>,
-  });
 
   const body = ctx.request.body as {
     projectId?: string;
@@ -156,12 +149,6 @@ webhooksRouter.put('/webhooks/:webhook_id', async (ctx: Context) => {
     ctx.body = { error: 'Forbidden' };
     return;
   }
-
-  rejectUnknownFields({
-    method: 'put',
-    path: '/webhooks/:webhook_id',
-    body: ctx.request.body as Record<string, unknown>,
-  });
 
   const body = ctx.request.body as {
     name?: string;

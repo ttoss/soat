@@ -1,6 +1,5 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { rejectUnknownFields } from 'src/lib/requestValidation';
 import {
   createSecret,
   deleteSecret,
@@ -61,12 +60,6 @@ secretsRouter.get('/secrets/:secret_id', async (ctx: Context) => {
 secretsRouter.post('/secrets', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
-  rejectUnknownFields({
-    method: 'post',
-    path: '/secrets',
-    body: ctx.request.body as Record<string, unknown>,
-  });
-
   const body = ctx.request.body as {
     projectId?: string;
     name?: string;
@@ -114,12 +107,6 @@ secretsRouter.patch('/secrets/:secret_id', async (ctx: Context) => {
     ctx.body = { error: 'Forbidden' };
     return;
   }
-
-  rejectUnknownFields({
-    method: 'patch',
-    path: '/secrets/:secret_id',
-    body: ctx.request.body as Record<string, unknown>,
-  });
 
   const body = ctx.request.body as { name?: string; value?: string };
 

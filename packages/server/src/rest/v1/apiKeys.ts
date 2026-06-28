@@ -8,7 +8,6 @@ import {
   listApiKeys,
   updateApiKey,
 } from 'src/lib/apiKeys';
-import { rejectUnknownFields } from 'src/lib/requestValidation';
 
 const apiKeysRouter = new Router<Context>();
 
@@ -94,12 +93,6 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
     return;
   }
 
-  rejectUnknownFields({
-    method: 'post',
-    path: '/api-keys',
-    body: ctx.request.body as Record<string, unknown>,
-  });
-
   const { name, projectId, policyIds } = ctx.request.body as {
     name: string;
     projectId?: string;
@@ -169,12 +162,6 @@ apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
     ctx.body = { error: 'Unauthorized' };
     return;
   }
-
-  rejectUnknownFields({
-    method: 'put',
-    path: '/api-keys/:api_key_id',
-    body: ctx.request.body as Record<string, unknown>,
-  });
 
   const { name, projectId, policyIds } = ctx.request.body as {
     name?: string;
