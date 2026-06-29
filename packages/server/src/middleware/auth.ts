@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import type { Context } from '../Context';
 import type { PolicyDocument } from '../lib/iam';
 import { extractProjectIdsFromPolicies } from '../lib/iam';
+import { buildConsentPolicyFromScopeClaim } from '../lib/oauthConsent';
 import { createApiKeyIsAllowed, createJwtIsAllowed } from '../lib/permissions';
 
 export const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-secret';
@@ -197,6 +198,7 @@ const ADMIN_WILDCARD_POLICY: PolicyDocument = {
 const createApiKeyGetPolicies = (args: {
   apiKeyProjectPublicId: string | undefined;
   apiKeyPolicyIds: number[];
+  boundaryPolicyDocs?: PolicyDocument[];
   userPolicyIds: number[];
   role: 'admin' | 'user';
   db: Context['db'];
@@ -207,6 +209,11 @@ const createApiKeyGetPolicies = (args: {
       reqProjectPublicId !== args.apiKeyProjectPublicId
     ) {
       return [];
+    }
+    // Inline boundary (OAuth consent) is the effective policy set, mirroring how
+    // an API key's attached policies become the effective set below.
+    if (args.boundaryPolicyDocs) {
+      return args.boundaryPolicyDocs;
     }
     if (args.apiKeyPolicyIds.length > 0) {
       const keyPolicies = await args.db.Policy.findAll({
@@ -296,7 +303,7 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
 
 // eslint-disable-next-line max-lines-per-function
 const resolveJwt = async (ctx: Context, token: string) => {
-  let payload: { publicId: string; role: string; prj?: string };
+  let payload: { publicId: string; role: string; prj?: string; scope?: string };
 
   try {
     payload = jwt.verify(token, JWT_SECRET) as typeof payload;
@@ -316,12 +323,28 @@ const resolveJwt = async (ctx: Context, token: string) => {
   const jwtIsAllowed = createJwtIsAllowed({ role, userPolicyIds, db: ctx.db });
   const oauthProjectPublicId = payload.prj;
 
+  // An OAuth access token is a scoped credential: its consented scope (rebuilt
+  // from the `scope` claim) intersects the owning user's policies through the
+  // same evaluator used for API keys. This both confines the token to the
+  // consented project and enforces the consented actions.
+  const consentDocs = oauthProjectPublicId
+    ? [
+        buildConsentPolicyFromScopeClaim({
+          projectPublicId: oauthProjectPublicId,
+          scopeClaim: payload.scope,
+        }),
+      ]
+    : undefined;
+
   const isAllowed: IsAllowedFn = oauthProjectPublicId
-    ? (args) => {
-        return args.projectPublicId !== oauthProjectPublicId
-          ? Promise.resolve(false)
-          : jwtIsAllowed(args);
-      }
+    ? createApiKeyIsAllowed({
+        apiKeyProjectPublicId: oauthProjectPublicId,
+        userRole: role,
+        userPolicyIds,
+        apiKeyPolicyIds: [],
+        boundaryPolicyDocs: consentDocs,
+        db: ctx.db,
+      })
     : jwtIsAllowed;
 
   ctx.authUser = {
@@ -359,6 +382,7 @@ const resolveJwt = async (ctx: Context, token: string) => {
       ? createApiKeyGetPolicies({
           apiKeyProjectPublicId: oauthProjectPublicId,
           apiKeyPolicyIds: [],
+          boundaryPolicyDocs: consentDocs,
           userPolicyIds,
           role,
           db: ctx.db,

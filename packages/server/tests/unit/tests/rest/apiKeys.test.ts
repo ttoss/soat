@@ -62,6 +62,23 @@ describe('API Keys', () => {
       expect(response.status).toBe(400);
     });
 
+    test('missing project_id returns 400', async () => {
+      const response = await authenticatedTestClient(aliceToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'No Project Key' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toMatch(/project_id is required/i);
+    });
+
+    test('null project_id returns 400', async () => {
+      const response = await authenticatedTestClient(aliceToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Null Project Key', project_id: null });
+
+      expect(response.status).toBe(400);
+    });
+
     test('invalid project_id returns 400', async () => {
       const response = await authenticatedTestClient(aliceToken)
         .post('/api/v1/api-keys')
@@ -73,7 +90,11 @@ describe('API Keys', () => {
     test('invalid policy_ids returns 400', async () => {
       const response = await authenticatedTestClient(aliceToken)
         .post('/api/v1/api-keys')
-        .send({ name: 'Test', policy_ids: ['pol_nonexistent12345'] });
+        .send({
+          name: 'Test',
+          project_id: projectId,
+          policy_ids: ['pol_nonexistent12345'],
+        });
 
       expect(response.status).toBe(400);
     });
@@ -99,10 +120,10 @@ describe('API Keys', () => {
       expect(response.body.user_id).toBeUndefined();
     });
 
-    test('user can create a minimal API key without project or policies', async () => {
+    test('user can create a minimal API key with just name and project', async () => {
       const response = await authenticatedTestClient(aliceToken)
         .post('/api/v1/api-keys')
-        .send({ name: 'Minimal Key' });
+        .send({ name: 'Minimal Key', project_id: projectId });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toMatch(/^key_/);
@@ -207,7 +228,7 @@ describe('API Keys', () => {
     beforeAll(async () => {
       const res = await authenticatedTestClient(aliceToken)
         .post('/api/v1/api-keys')
-        .send({ name: 'Put Test Key' });
+        .send({ name: 'Put Test Key', project_id: projectId });
 
       keyId = res.body.id;
     });
@@ -256,22 +277,25 @@ describe('API Keys', () => {
       expect(response.body.policy_ids).toContain(policyId);
     });
 
-    test('owner can scope key to a project via update', async () => {
+    test('owner can re-scope key to a different project via update', async () => {
+      const otherProj = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Put Re-scope Project' });
+
       const response = await authenticatedTestClient(aliceToken)
         .put(`/api/v1/api-keys/${keyId}`)
-        .send({ project_id: projectId });
+        .send({ project_id: otherProj.body.id });
 
       expect(response.status).toBe(200);
-      expect(response.body.project_id).toBe(projectId);
+      expect(response.body.project_id).toBe(otherProj.body.id);
     });
 
-    test('owner can clear project scope by setting project_id to null', async () => {
+    test('clearing project scope with project_id null returns 400', async () => {
       const response = await authenticatedTestClient(aliceToken)
         .put(`/api/v1/api-keys/${keyId}`)
         .send({ project_id: null });
 
-      expect(response.status).toBe(200);
-      expect(response.body.project_id).toBeNull();
+      expect(response.status).toBe(400);
     });
   });
 
@@ -279,7 +303,7 @@ describe('API Keys', () => {
     test('unauthenticated request returns 401', async () => {
       const createRes = await authenticatedTestClient(aliceToken)
         .post('/api/v1/api-keys')
-        .send({ name: 'Delete Unauth' });
+        .send({ name: 'Delete Unauth', project_id: projectId });
 
       const response = await testClient.delete(
         `/api/v1/api-keys/${createRes.body.id}`
@@ -291,7 +315,7 @@ describe('API Keys', () => {
     test('other user returns 403', async () => {
       const createRes = await authenticatedTestClient(aliceToken)
         .post('/api/v1/api-keys')
-        .send({ name: 'Delete Other' });
+        .send({ name: 'Delete Other', project_id: projectId });
 
       const response = await authenticatedTestClient(bobToken).delete(
         `/api/v1/api-keys/${createRes.body.id}`
@@ -311,7 +335,7 @@ describe('API Keys', () => {
     test('owner can delete their key', async () => {
       const createRes = await authenticatedTestClient(aliceToken)
         .post('/api/v1/api-keys')
-        .send({ name: 'Delete Me' });
+        .send({ name: 'Delete Me', project_id: projectId });
 
       const keyId = createRes.body.id;
 
@@ -331,7 +355,7 @@ describe('API Keys', () => {
     test('admin can delete any key', async () => {
       const createRes = await authenticatedTestClient(aliceToken)
         .post('/api/v1/api-keys')
-        .send({ name: 'Admin Delete Me' });
+        .send({ name: 'Admin Delete Me', project_id: projectId });
 
       const keyId = createRes.body.id;
 
@@ -353,13 +377,13 @@ describe('API Keys', () => {
     beforeAll(async () => {
       const aliceKeyRes = await authenticatedTestClient(aliceToken)
         .post('/api/v1/api-keys')
-        .send({ name: 'Alice List Key' });
+        .send({ name: 'Alice List Key', project_id: projectId });
 
       aliceKeyId = aliceKeyRes.body.id;
 
       const bobKeyRes = await authenticatedTestClient(bobToken)
         .post('/api/v1/api-keys')
-        .send({ name: 'Bob List Key' });
+        .send({ name: 'Bob List Key', project_id: projectId });
 
       bobKeyId = bobKeyRes.body.id;
 

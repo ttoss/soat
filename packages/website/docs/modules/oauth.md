@@ -51,8 +51,26 @@ The permission catalog rendered on the screen is derived from
 API actions automatically.
 
 Whatever the tier, the grant is always scoped to the chosen project via the SRN
-`soat:<project_id>:*:*`. The selection is compiled into an IAM
-[policy document](./policies.md) carried by the issued token.
+`soat:<project_id>:*:*`. The selection is carried by the issued token as its
+`scope` claim and reconstructed into an IAM [policy document](./policies.md) on
+every request — see [Permission enforcement](#permission-enforcement).
+
+## Permission enforcement
+
+An OAuth access token is a **scoped credential**, authorized by the same IAM
+evaluator as [API keys](./api-keys.md#permission-inheritance). On each request
+the server rebuilds the consent policy from the token's `scope` claim (stripping
+the synthetic `mcp:access` and `prj:<id>` markers) and evaluates the
+**intersection** of:
+
+1. the owning user's policies (the ceiling — the token can never exceed them, not
+   even for an admin), and
+2. the consented scope (restricting to the actions the user approved, within the
+   single `soat:<project_id>:*:*` resource).
+
+Both must independently allow an action. A token whose consent carried no action
+scopes therefore grants nothing, and the `prj` claim hard-locks every request to
+the consented project.
 
 ## Design: one project per token
 

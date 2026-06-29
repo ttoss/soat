@@ -5,11 +5,69 @@ import {
   type PolicyDocument,
 } from './iam';
 
+/** Evaluates a policy set against either a single resource or a resource list. */
+const evalDocs = (args: {
+  policies: PolicyDocument[];
+  action: string;
+  resource?: string;
+  resources?: string[];
+  context?: Record<string, string>;
+}): boolean => {
+  if (args.resources && args.resources.length > 0) {
+    return evaluatePoliciesMultiResource({
+      policies: args.policies,
+      action: args.action,
+      resources: args.resources,
+      context: args.context,
+    });
+  }
+  return evaluatePolicies({
+    policies: args.policies,
+    action: args.action,
+    resource: args.resource,
+    context: args.context,
+  });
+};
+
+/**
+ * Resolves the credential boundary policy set: inline docs (OAuth consent) take
+ * precedence, otherwise the key's attached policies loaded by id. Returns `null`
+ * when there is no boundary (the credential inherits the user's permissions).
+ */
+const resolveBoundaryDocs = async (args: {
+  boundaryPolicyDocs?: PolicyDocument[];
+  apiKeyPolicyIds: number[];
+  db: DB;
+}): Promise<PolicyDocument[] | null> => {
+  if (args.boundaryPolicyDocs) return args.boundaryPolicyDocs;
+  if (args.apiKeyPolicyIds.length === 0) return null;
+  const keyPolicies = await args.db.Policy.findAll({
+    where: { id: args.apiKeyPolicyIds },
+  });
+  return keyPolicies.map((p: InstanceType<DB['Policy']>) => {
+    return p.document as PolicyDocument;
+  });
+};
+
+/**
+ * Authorizer for a "scoped credential" — an API key or an OAuth access token.
+ *
+ * Both are modelled the same way: the owning user's policies form the ceiling,
+ * and a per-credential boundary (the key's attached policies, or an OAuth
+ * token's consented scope) further restricts access via intersection — the
+ * credential can never exceed the user.
+ *
+ * The boundary policies are supplied either by id (`apiKeyPolicyIds`, loaded
+ * from the DB) or inline (`boundaryPolicyDocs`, e.g. an OAuth consent policy
+ * reconstructed from the token's scope claim). When neither is present the
+ * credential inherits the user's permissions unchanged.
+ */
 export const createApiKeyIsAllowed = (args: {
   apiKeyProjectPublicId?: string;
   userRole: 'admin' | 'user';
   userPolicyIds: number[];
   apiKeyPolicyIds: number[];
+  boundaryPolicyDocs?: PolicyDocument[];
   db: DB;
 }) => {
   return async (reqArgs: {
@@ -39,54 +97,38 @@ export const createApiKeyIsAllowed = (args: {
       return p.document as PolicyDocument;
     });
 
-    const evalUser = (resources?: string[], resource?: string) => {
-      // Admin role always satisfies the user boundary
+    // Admin role always satisfies the user boundary; otherwise evaluate the
+    // user's own policies.
+    const evalUser = (): boolean => {
       if (userIsAdmin) return true;
-      if (resources && resources.length > 0) {
-        return evaluatePoliciesMultiResource({
-          policies: userDocs,
-          action: reqArgs.action,
-          resources,
-          context: reqArgs.context,
-        });
-      }
-      return evaluatePolicies({
+      return evalDocs({
         policies: userDocs,
         action: reqArgs.action,
-        resource,
+        resource: reqArgs.resource,
+        resources: reqArgs.resources,
         context: reqArgs.context,
       });
     };
 
-    // No key policies: user policies alone determine access (key inherits user permissions)
-    if (args.apiKeyPolicyIds.length === 0) {
-      return evalUser(reqArgs.resources, reqArgs.resource);
-    }
-
-    // Intersection: both user policies AND key policies must allow
-    const userOk = evalUser(reqArgs.resources, reqArgs.resource);
-    if (!userOk) return false;
-
-    const keyPolicies = await args.db.Policy.findAll({
-      where: { id: args.apiKeyPolicyIds },
-    });
-    const keyDocs = keyPolicies.map((p: InstanceType<DB['Policy']>) => {
-      return p.document as PolicyDocument;
+    const keyDocs = await resolveBoundaryDocs({
+      boundaryPolicyDocs: args.boundaryPolicyDocs,
+      apiKeyPolicyIds: args.apiKeyPolicyIds,
+      db: args.db,
     });
 
-    if (reqArgs.resources && reqArgs.resources.length > 0) {
-      return evaluatePoliciesMultiResource({
-        policies: keyDocs,
-        action: reqArgs.action,
-        resources: reqArgs.resources,
-        context: reqArgs.context,
-      });
+    // No boundary: user policies alone determine access (inherit user permissions)
+    if (keyDocs === null) {
+      return evalUser();
     }
 
-    return evaluatePolicies({
+    // Intersection: both user policies AND the credential boundary must allow
+    if (!evalUser()) return false;
+
+    return evalDocs({
       policies: keyDocs,
       action: reqArgs.action,
       resource: reqArgs.resource,
+      resources: reqArgs.resources,
       context: reqArgs.context,
     });
   };

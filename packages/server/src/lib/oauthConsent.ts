@@ -86,6 +86,54 @@ export const buildConsentScopes = (selection: ConsentSelection): string[] => {
 };
 
 /**
+ * Synthetic scopes carried through the OAuth flow that are protocol markers,
+ * not IAM action patterns. They must be stripped before an access token's
+ * `scope` claim is turned back into a policy document.
+ *
+ * - `mcp:access` — marks the token as usable against the MCP endpoint.
+ * - `prj:<id>`   — carries the granted project (also surfaced as the `prj` claim).
+ */
+const SYNTHETIC_SCOPES = new Set(['mcp:access']);
+const SYNTHETIC_SCOPE_PREFIXES = ['prj:'];
+
+const isActionScope = (scope: string): boolean => {
+  if (SYNTHETIC_SCOPES.has(scope)) return false;
+  return !SYNTHETIC_SCOPE_PREFIXES.some((prefix) => {
+    return scope.startsWith(prefix);
+  });
+};
+
+/**
+ * Reconstructs the project-scoped IAM policy document from the `scope` claim of
+ * an issued access token. Synthetic scopes (`mcp:access`, `prj:<id>`) are
+ * stripped; the remaining action patterns become a single Allow statement
+ * scoped to the token's project (`soat:<project>:*:*`).
+ *
+ * An empty action list yields a statement that matches nothing — i.e. the token
+ * grants no access — which is the intended strict behaviour for a token whose
+ * consent carried no IAM actions.
+ */
+export const buildConsentPolicyFromScopeClaim = (args: {
+  projectPublicId: string;
+  scopeClaim: string | undefined;
+}): PolicyDocument => {
+  const action = (args.scopeClaim ?? '')
+    .split(' ')
+    .filter(Boolean)
+    .filter(isActionScope);
+
+  const resource = buildSrn({
+    projectPublicId: args.projectPublicId,
+    resourceType: '*',
+    resourceId: '*',
+  });
+
+  return {
+    statement: [{ effect: 'Allow', action, resource: [resource] }],
+  };
+};
+
+/**
  * Builds the project-scoped IAM policy document for a consent grant. The
  * actions come from {@link buildConsentScopes}; the resource is always the
  * single chosen project (`soat:<project>:*:*`).

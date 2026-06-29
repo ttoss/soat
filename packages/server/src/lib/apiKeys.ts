@@ -32,6 +32,8 @@ const mapApiKeyWithAssociations = async (
   projectId: string | null;
   policyIds: string[];
 }> => {
+  /* projectId is always set (keys are project-scoped), but the association can
+   * be null if the project row was removed; expose null in that edge case. */
   const policyPublicIds: string[] = [];
   const storedPolicyIds = apiKey.policyIds as number[];
   if (storedPolicyIds && storedPolicyIds.length > 0) {
@@ -56,7 +58,7 @@ const mapApiKeyWithAssociations = async (
 export const createApiKey = async (args: {
   userId: number;
   name: string;
-  projectId?: number;
+  projectId: number;
   policyIds?: number[];
 }) => {
   const random = crypto.randomBytes(32).toString('hex');
@@ -67,7 +69,7 @@ export const createApiKey = async (args: {
   const apiKey = await db.ApiKey.create({
     userId: args.userId,
     name: args.name,
-    projectId: args.projectId ?? null,
+    projectId: args.projectId,
     policyIds: args.policyIds ?? [],
     keyPrefix,
     keyHash,
@@ -98,7 +100,7 @@ export const getApiKey = async (args: { id: string }) => {
 export const updateApiKey = async (args: {
   id: string;
   name?: string;
-  projectId?: number | null;
+  projectId?: number;
   policyIds?: number[];
 }) => {
   const apiKey = await db.ApiKey.findOne({

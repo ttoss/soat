@@ -1,10 +1,44 @@
 import { DomainError } from '../../../../src/errors';
 import {
   buildConsentPolicy,
+  buildConsentPolicyFromScopeClaim,
   buildConsentScopes,
 } from '../../../../src/lib/oauthConsent';
 
 describe('oauthConsent', () => {
+  describe('buildConsentPolicyFromScopeClaim', () => {
+    test('strips synthetic scopes (mcp:access, prj:*) and keeps action patterns', () => {
+      const policy = buildConsentPolicyFromScopeClaim({
+        projectPublicId: 'proj_abc',
+        scopeClaim: 'agents:* mcp:access prj:proj_abc files:GetFile',
+      });
+      expect(policy.statement).toEqual([
+        {
+          effect: 'Allow',
+          action: ['agents:*', 'files:GetFile'],
+          resource: ['soat:proj_abc:*:*'],
+        },
+      ]);
+    });
+
+    test('an empty/synthetic-only scope claim grants no actions (matches nothing)', () => {
+      const policy = buildConsentPolicyFromScopeClaim({
+        projectPublicId: 'proj_abc',
+        scopeClaim: 'mcp:access prj:proj_abc',
+      });
+      expect(policy.statement[0].action).toEqual([]);
+      expect(policy.statement[0].resource).toEqual(['soat:proj_abc:*:*']);
+    });
+
+    test('a missing scope claim grants no actions', () => {
+      const policy = buildConsentPolicyFromScopeClaim({
+        projectPublicId: 'proj_abc',
+        scopeClaim: undefined,
+      });
+      expect(policy.statement[0].action).toEqual([]);
+    });
+  });
+
   describe('buildConsentScopes', () => {
     test('"all" selection grants the wildcard scope', () => {
       expect(buildConsentScopes({ kind: 'all' })).toEqual(['*']);

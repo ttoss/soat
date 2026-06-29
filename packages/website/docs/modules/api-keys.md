@@ -3,7 +3,7 @@ import TabItem from '@theme/TabItem';
 
 # API Keys
 
-The API Keys module provides long-lived programmatic credentials for users. An API key authenticates as its owning user and optionally restricts access to a single project and/or a subset of that user's policies.
+The API Keys module provides long-lived programmatic credentials for users. An API key authenticates as its owning user, is always scoped to a single project, and optionally restricts access to a subset of that user's policies.
 
 ## Overview
 
@@ -26,7 +26,7 @@ API keys use the standard `Authorization: Bearer <key>` header — the same as J
 | `name`       | string   | Human-readable label                                                          |
 | `key_prefix` | string   | First 8 characters of the raw key (for identification, never the full secret) |
 | `user_id`    | string   | Public ID of the owning user                                                  |
-| `project_id` | string   | Optional — restricts key to a single project                                  |
+| `project_id` | string   | Required — the single project this key is scoped to                           |
 | `policy_ids` | string[] | Optional — public IDs of policies that further restrict key permissions       |
 | `created_at` | string   | ISO 8601 creation timestamp                                                   |
 | `updated_at` | string   | ISO 8601 last-updated timestamp                                               |
@@ -35,20 +35,18 @@ API keys use the standard `Authorization: Bearer <key>` header — the same as J
 
 ### Permission Inheritance
 
-The effective permissions of an API key depend on what is attached to it:
+Every key is scoped to one project; `policy_ids` optionally narrow it further:
 
-| Configuration                      | Effective permissions                                                      |
-| ---------------------------------- | -------------------------------------------------------------------------- |
-| No `project_id`, no `policy_ids`   | Full user permissions across all projects                                  |
-| `project_id` only                  | User permissions, restricted to that project                               |
-| `policy_ids` only                  | Intersection of user policies and key policies, across all projects        |
-| Both `project_id` and `policy_ids` | Intersection of user policies and key policies, restricted to that project |
+| Configuration              | Effective permissions                                                       |
+| -------------------------- | -------------------------------------------------------------------------- |
+| `project_id` only          | User permissions, restricted to that project                               |
+| `project_id` + `policy_ids` | Intersection of user policies and key policies, restricted to that project |
 
 **Intersection semantics:** when a key has `policy_ids`, both the user's policies **and** the key's own policies must independently allow the requested action. The key can never exceed the permissions of the user who owns it. See this ceiling demonstrated end to end in [Permissions in Practice - Step 7 (Verify permissions)](/docs/tutorials/permissions#step-7--verify-permissions), where a key granted a full-access policy is still limited to its owner's read-only permissions.
 
 ### Project Scoping
 
-When `project_id` is set on a key, any request made with that key is hard-locked to that project. Attempts to access resources in any other project are denied regardless of what the policies say. For a worked example of creating project-scoped keys, see [Permissions in Practice - Step 6 (Create API keys)](/docs/tutorials/permissions#step-6--create-api-keys).
+`project_id` is **required** at creation — a key cannot span projects. Any request made with the key is hard-locked to its project; attempts to access resources in any other project are denied regardless of what the policies say. An update may re-scope a key to a different project but can never clear the scope. For a worked example of creating project-scoped keys, see [Permissions in Practice - Step 6 (Create API keys)](/docs/tutorials/permissions#step-6--create-api-keys).
 
 #### Implicit project id
 

@@ -92,7 +92,7 @@ In practice:
 - `resource: ["soat:*:document:*"]` — matches all documents across all projects.
 
 :::tip
-To give a user or API key access to a specific project without scoping the key via `project_id`, create a policy with `resource: ["soat:proj_ABC:*:*"]`. This achieves project-level scoping entirely through the policy engine, without creating a dedicated API key per project.
+To give a **user** (JWT) access to a specific project, create a policy with `resource: ["soat:proj_ABC:*:*"]`. This achieves project-level scoping entirely through the policy engine. API keys are always scoped to a single project via `project_id` (see [API Keys](./api-keys.md#project-scoping)).
 :::
 
 ### Resource Types
@@ -172,13 +172,15 @@ Authorization in SOAT is **policy-only** — there is no separate project member
 | ----------------------------- | --------------------------------------------------------------------------- |
 | **Admin (JWT)**               | Bypassed — admins have unrestricted access to all resources                 |
 | **Regular user (JWT)**        | All policies attached to the user (via `User.policyIds`)                    |
-| **API key (no policies)**     | Inherits the owning user's policies                                         |
+| **API key (no policies)**     | Inherits the owning user's policies, hard-locked to the key's project        |
 | **API key (with policies)**   | Intersection of user policies and key policies — both must allow the action |
-| **API key (with project_id)** | Same as above, but hard-locked to that project regardless of policy         |
+| **OAuth token**               | Intersection of user policies and the consented scope, hard-locked to the token's project |
+
+Every API key is hard-locked to its `project_id`, and every OAuth token to its `prj`; access to any other project is denied regardless of policy.
 
 ### Why Intersection Semantics Matter
 
-When an API key has policies attached, the key can **never exceed the permissions of the user who owns it**. Even if the key's policy is very permissive, the user's policies still apply as a ceiling. This allows safely delegating a scoped subset of permissions without risk of escalation.
+When an API key has policies attached — or an OAuth token carries a consented scope — the credential can **never exceed the permissions of the user who owns it**. Even if the key's policy or the consent is very permissive, the user's policies still apply as a ceiling. This is why both [API keys](./api-keys.md) and [OAuth tokens](./oauth.md#permission-enforcement) are safe to delegate. The same evaluator enforces all credential types.
 
 ### Authorization by Caller Type
 
