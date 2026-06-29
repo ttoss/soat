@@ -3,6 +3,34 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.9](https://127.0.0.1/41729/git/ttoss/compare/v0.13.8...v0.13.9) (2026-06-29)
+
+### Features
+
+* **formations:** support use_previous_value for parameters on update ([#301](https://127.0.0.1/41729/git/ttoss/issues/301)) ([d270478](https://127.0.0.1/41729/git/ttoss/commits/d2704787907f389e51786f6cd6f7de37456152b7))
+* **iam:** enforce OAuth consent and require single-project API keys ([#298](https://127.0.0.1/41729/git/ttoss/issues/298)) ([4a7090d](https://127.0.0.1/41729/git/ttoss/commits/4a7090d92606acdb1b96acc225bc73f266962669))
+
+### BREAKING CHANGES
+
+* **iam:** API keys now require `project_id`; global (all-project)
+keys can no longer be created, and an existing key's project scope cannot
+be cleared. OAuth access tokens now enforce the consented scope at
+request time, so a token may have fewer effective permissions than
+before (limited to what was consented, intersected with the user).
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01163By7fL9BGukpxNd3duHY
+
+* test(oauth): assert user-policy ceiling holds through an OAuth token
+
+A non-admin with a read-only policy and an OAuth token consented to all
+permissions (`*`) can still read but cannot delete a file — proving the
+consented scope cannot escalate beyond the owning user's policies, the
+same ceiling already verified for API keys.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01163By7fL9BGukpxNd3duHY
+
 ## [0.13.8](https://127.0.0.1/41729/git/ttoss/compare/v0.13.7...v0.13.8) (2026-06-28)
 
 ### Bug Fixes
