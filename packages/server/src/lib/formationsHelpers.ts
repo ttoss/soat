@@ -2,6 +2,7 @@ import { db } from 'src/db';
 
 import type {
   FormationTemplate,
+  ParameterDeclaration,
   ParamExpression,
   RefAttrExpression,
   RefExpression,
@@ -141,22 +142,32 @@ export const resolveParamExpressions = (
   resolvedParams: Map<string, string>
 ): unknown => {
   if (isParam(value)) {
-    const resolved = resolvedParams.get(value.param);
-    if (resolved === undefined) {
-      throw new Error(`Unresolved parameter: ${value.param}`);
-    }
-    return resolved;
+    // An unresolved param resolves to `undefined`, which drops the field from
+    // the resolved properties. Required params that are neither supplied nor
+    // kept are rejected upstream (`getMissingParams`), so the only way a param
+    // reaches here unresolved is an explicit "use previous value" request — the
+    // field is then intentionally omitted so the existing value is preserved.
+    return resolvedParams.get(value.param);
   }
   if (isSub(value)) {
-    return value.sub.replace(SUB_PARAM_RE, (original, name: string) => {
-      // body.xxx refs are resolved at tool-call time, not formation-apply time
-      if (name.startsWith('body.')) return original;
-      const resolved = resolvedParams.get(name);
-      if (resolved === undefined) {
-        throw new Error(`Unresolved parameter in sub expression: ${name}`);
+    let hasUnresolved = false;
+    const replaced = value.sub.replace(
+      SUB_PARAM_RE,
+      (original, name: string) => {
+        // body.xxx refs are resolved at tool-call time, not formation-apply time
+        if (name.startsWith('body.')) return original;
+        const resolved = resolvedParams.get(name);
+        if (resolved === undefined) {
+          hasUnresolved = true;
+          return original;
+        }
+        return resolved;
       }
-      return resolved;
-    });
+    );
+    // If any (non-body) param in the interpolation was kept/omitted, drop the
+    // whole value so the previous value is preserved rather than writing a
+    // partially-substituted string.
+    return hasUnresolved ? undefined : replaced;
   }
   if (Array.isArray(value)) {
     return value.map((item) => {
@@ -175,12 +186,18 @@ export const resolveParamExpressions = (
 
 export const buildResolvedParamsMap = (
   template: FormationTemplate,
-  provided?: Record<string, string>
+  provided?: Record<string, string>,
+  usePrevious?: string[]
 ): Map<string, string> => {
   const resolved = new Map<string, string>();
   if (!template.parameters) return resolved;
 
+  const keep = new Set(usePrevious ?? []);
+
   for (const [name, decl] of Object.entries(template.parameters)) {
+    // Params flagged "use previous value" are deliberately left unresolved so
+    // the field is dropped and the existing resource value is preserved.
+    if (keep.has(name)) continue;
     const providedValue = provided?.[name];
     if (providedValue !== undefined) {
       resolved.set(name, providedValue);
@@ -192,27 +209,60 @@ export const buildResolvedParamsMap = (
   return resolved;
 };
 
+// Build the template with param expressions resolved. Resolution runs whenever
+// the template declares parameters (not only when values resolved): a param
+// flagged "use previous value" yields an empty map, yet its `{ param: ... }`
+// expression must still be stripped to `undefined` so the existing value is
+// preserved rather than the raw expression being written as the new value.
+export const resolveWorkingTemplate = (args: {
+  template: FormationTemplate;
+  parameters?: Record<string, string>;
+  parametersUsePrevious?: string[];
+}): FormationTemplate => {
+  const { template, parameters, parametersUsePrevious } = args;
+  const resolvedParamsMap = buildResolvedParamsMap(
+    template,
+    parameters,
+    parametersUsePrevious
+  );
+  const hasParameters =
+    !!template.parameters && Object.keys(template.parameters).length > 0;
+  if (!hasParameters && resolvedParamsMap.size === 0) return template;
+  return resolveParamExpressions(
+    template,
+    resolvedParamsMap
+  ) as FormationTemplate;
+};
+
+const paramHasValue = (args: {
+  decl: ParameterDeclaration | undefined;
+  providedValue: string | undefined;
+}): boolean => {
+  const { decl, providedValue } = args;
+  if (providedValue !== undefined && providedValue !== '') return true;
+  return decl?.default !== undefined;
+};
+
 export const getMissingParams = (
   template: FormationTemplate,
-  provided?: Record<string, string>
+  provided?: Record<string, string>,
+  usePrevious?: string[]
 ): string[] => {
   const usedParams = new Set([
     ...collectParamRefs(template.resources),
     ...collectParamRefs(template.outputs ?? {}),
   ]);
 
-  const missing: string[] = [];
-  for (const name of usedParams) {
-    const decl = template.parameters?.[name];
-    const providedValue = provided?.[name];
-    const hasValue =
-      (providedValue !== undefined && providedValue !== '') ||
-      decl?.default !== undefined;
-    if (!hasValue) {
-      missing.push(name);
-    }
-  }
-  return missing;
+  const keep = new Set(usePrevious ?? []);
+
+  return [...usedParams].filter((name) => {
+    // A kept param reuses its stored value, so it is never "missing".
+    if (keep.has(name)) return false;
+    return !paramHasValue({
+      decl: template.parameters?.[name],
+      providedValue: provided?.[name],
+    });
+  });
 };
 
 // ── Dependency Graph ──────────────────────────────────────────────────────

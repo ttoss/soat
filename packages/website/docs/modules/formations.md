@@ -243,6 +243,36 @@ soat update-formation \
 
 **Lookup order:** `--env-file` variables are checked first; if not found there, `process.env` (the calling shell's exported variables) is checked. Missing variables cause the CLI to exit with an error before the API call is made.
 
+#### Reusing Previously Stored Values
+
+On **update**, a parameter can keep its previously stored value instead of being re-supplied — the equivalent of AWS CloudFormation's `UsePreviousValue: true`. This lets a deploy pipeline update part of a formation without holding every secret value.
+
+List the parameter names in `parameters_use_previous` (REST/SDK) or pass repeatable `--keep-parameter <name>` flags (CLI):
+
+```bash
+# First deploy — supply the secret value
+soat update-formation --formation-id af_xxx --template-file formation.yaml \
+  --parameter XaiApiKey=@XAI_API_KEY
+
+# Later deploys — keep the stored value, change only the rest of the stack
+soat update-formation --formation-id af_xxx --template-file formation.yaml \
+  --keep-parameter XaiApiKey
+```
+
+```json
+{
+  "template": { ... },
+  "parameters_use_previous": ["XaiApiKey"]
+}
+```
+
+Rules:
+
+- A name listed in `parameters_use_previous` **must not** also appear in `parameters` — supplying both returns `400` (mutual exclusivity, as in CloudFormation).
+- A kept parameter satisfies the required-parameter check without a value; a required parameter that is **neither** supplied **nor** kept still returns `400 Missing required parameters`.
+- `parameters_use_previous` applies to **update** and **plan** only; on create there is no previous value to reuse.
+- The previous value is reused only where the underlying resource retains it. A `secret` resource's encrypted value is preserved untouched (its plaintext is never stored). For other resources, the **last-applied** value of that field is reused; fields that were never stored (e.g. sanitized secrets in other resources) are simply dropped.
+
 ### Resource Declaration
 
 ```json

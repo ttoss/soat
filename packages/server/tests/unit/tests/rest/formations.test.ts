@@ -900,6 +900,125 @@ resources:
     });
   });
 
+  // ── use-previous-value for secret parameters ──────────────────────────────
+
+  describe('Formation parameters_use_previous (keep existing value)', () => {
+    let secretFormationId: string;
+
+    const secretTemplate = {
+      parameters: {
+        XaiApiKey: {
+          type: 'string',
+          no_echo: true,
+          description: 'X API key stored as a secret',
+        },
+      },
+      resources: {
+        XaiKey: {
+          type: 'secret',
+          properties: {
+            name: 'xai-api-key',
+            value: { param: 'XaiApiKey' },
+          },
+        },
+        KeepMemory: {
+          type: 'memory',
+          properties: { name: 'keep-mem-original' },
+        },
+      },
+    };
+
+    test('creates the formation supplying the secret value', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `keep-secret-${Date.now()}`,
+          template: secretTemplate,
+          parameters: { XaiApiKey: 'sk-original-value' },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      secretFormationId = res.body.id;
+    });
+
+    test('updates other resources while keeping the secret untouched', async () => {
+      const updatedTemplate = {
+        ...secretTemplate,
+        resources: {
+          ...secretTemplate.resources,
+          KeepMemory: {
+            type: 'memory',
+            properties: { name: 'keep-mem-updated' },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${secretFormationId}`)
+        .send({
+          template: updatedTemplate,
+          // XaiApiKey is intentionally omitted; reuse the stored value.
+          parameters_use_previous: ['XaiApiKey'],
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('active');
+
+      // The secret resource must be a no-op (its value was not re-applied),
+      // while the memory resource is updated.
+      const eventsRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${secretFormationId}/events`
+      );
+      expect(eventsRes.status).toBe(200);
+      const updateOp = eventsRes.body.find((op: { operation_type: string }) => {
+        return op.operation_type === 'update';
+      });
+      expect(updateOp).toBeDefined();
+      const secretEvent = updateOp.events.find((e: { logical_id: string }) => {
+        return e.logical_id === 'XaiKey';
+      });
+      expect(secretEvent.action).toBe('no-op');
+      const memoryEvent = updateOp.events.find((e: { logical_id: string }) => {
+        return e.logical_id === 'KeepMemory';
+      });
+      expect(memoryEvent.action).toBe('update');
+    });
+
+    test('returns 400 when a param is both supplied and kept', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${secretFormationId}`)
+        .send({
+          template: secretTemplate,
+          parameters: { XaiApiKey: 'sk-new' },
+          parameters_use_previous: ['XaiApiKey'],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/both/i);
+    });
+
+    test('still returns 400 when a required param is neither supplied nor kept', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${secretFormationId}`)
+        .send({
+          template: secretTemplate,
+          // XaiApiKey neither supplied nor kept.
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Missing required parameters');
+    });
+
+    test('deletes the secret formation', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${secretFormationId}`
+      );
+      expect(res.status).toBe(200);
+    });
+  });
+
   // ── tool resource type ───────────────────────────────────────────────
 
   describe('Formation with tool resources', () => {

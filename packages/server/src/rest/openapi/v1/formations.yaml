@@ -91,6 +91,18 @@ paths:
                     parameter defaults. Keys must match parameter names declared
                     in `template.parameters`.
                   nullable: true
+                parameters_use_previous:
+                  type: array
+                  items:
+                    type: string
+                  description: >
+                    Parameter names whose previously stored value should be
+                    reused instead of being supplied in `parameters` — the
+                    equivalent of CloudFormation's `UsePreviousValue: true`. A
+                    name listed here must not also appear in `parameters`.
+                    Useful when planning an update against an existing formation
+                    (`formation_id`) without re-passing secret values.
+                  nullable: true
       responses:
         '200':
           description: Plan result
@@ -252,7 +264,22 @@ paths:
                     Runtime parameter values that override or supply template
                     parameter defaults. Keys must match parameter names declared
                     in `template.parameters`. Required parameters (those without
-                    a default) must be provided here.
+                    a default) must be provided here, unless listed in
+                    `parameters_use_previous`.
+                  nullable: true
+                parameters_use_previous:
+                  type: array
+                  items:
+                    type: string
+                  description: >
+                    Parameter names whose previously stored value should be
+                    reused instead of being re-supplied — the equivalent of
+                    CloudFormation's `UsePreviousValue: true`. A name listed here
+                    must not also appear in `parameters`, and satisfies the
+                    required-parameter check without a value. The value is
+                    reused only where the underlying resource retains it (e.g. a
+                    secret's encrypted value); for other resources the
+                    last-applied value is reused.
                   nullable: true
                 metadata:
                   type: object
