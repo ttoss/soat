@@ -85,17 +85,11 @@ formationsRouter.post('/formations', async (ctx: Context) => {
 
   const body = ctx.request.body as {
     projectId?: string;
-    name?: string;
+    name: string;
     template?: unknown;
     metadata?: Record<string, unknown>;
     parameters?: Record<string, string>;
   };
-
-  if (!body.name) {
-    ctx.status = 400;
-    ctx.body = { error: 'name is required' };
-    return;
-  }
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,

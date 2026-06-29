@@ -58,7 +58,40 @@ describe('strictFieldsMiddleware', () => {
     ).toEqual(['bogus']);
   });
 
-  test('passes a body with only known fields', async () => {
+  test('rejects an unknown nested field with a dotted path', async () => {
+    const ctx = makeCtx({
+      method: 'POST',
+      path: '/api/v1/agents',
+      body: { aiProviderId: 'aip_1', knowledgeConfig: { bogus: true } },
+      authUser,
+    });
+
+    const { next, thrown } = await run(ctx);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(
+      (thrown as { meta?: { unknownFields?: string[] } }).meta?.unknownFields
+    ).toEqual(['knowledgeConfig.bogus']);
+  });
+
+  test('rejects a missing top-level required field', async () => {
+    const ctx = makeCtx({
+      method: 'POST',
+      path: '/api/v1/projects',
+      body: {},
+      authUser,
+    });
+
+    const { next, thrown } = await run(ctx);
+
+    expect(next).not.toHaveBeenCalled();
+    expect((thrown as { code?: string }).code).toBe('VALIDATION_FAILED');
+    expect(
+      (thrown as { meta?: { missingFields?: string[] } }).meta?.missingFields
+    ).toEqual(['name']);
+  });
+
+  test('passes a body with only known fields and required present', async () => {
     const ctx = makeCtx({
       method: 'POST',
       path: '/api/v1/projects',

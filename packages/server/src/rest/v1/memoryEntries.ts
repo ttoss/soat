@@ -111,7 +111,7 @@ memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {
 
   const body = ctx.request.body as {
     memoryId?: string;
-    content?: string;
+    content: string;
     sourceType?: string;
     duplicateThreshold?: number;
     updateThreshold?: number;
@@ -123,12 +123,6 @@ memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {
     'memories:CreateMemoryEntry'
   );
   if (memoryRowId === null) return;
-
-  if (!body.content) {
-    ctx.status = 400;
-    ctx.body = { error: 'content is required' };
-    return;
-  }
 
   const result = await writeMemoryEntry({
     memoryId: memoryRowId,

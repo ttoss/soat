@@ -88,12 +88,12 @@ export const getSecret = async (args: { id: string }) => {
 export const createSecret = async (args: {
   projectId: number;
   name: string;
-  value?: string;
+  value: string;
 }) => {
   const secret = await db.Secret.create({
     projectId: args.projectId,
     name: args.name,
-    encryptedValue: args.value ? encryptValue(args.value) : null,
+    encryptedValue: encryptValue(args.value),
   });
   const withProject = await db.Secret.findOne({
     where: { id: secret.id },

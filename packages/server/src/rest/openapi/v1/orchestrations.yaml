@@ -791,9 +791,6 @@ components:
 
     ValidateOrchestrationRequest:
       type: object
-      required:
-        - nodes
-        - edges
       properties:
         nodes:
           type: array

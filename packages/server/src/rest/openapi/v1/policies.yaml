@@ -215,6 +215,14 @@ components:
           items:
             type: string
           example: ['soat:proj_abc:files:*']
+        condition:
+          type: object
+          additionalProperties: true
+          description: >
+            Optional condition block. Keys are condition operators (e.g.
+            StringEquals) mapping to context-key/value maps; evaluated by the
+            policy compiler. Free-form — keys are dynamic, not validated.
+          example: { StringEquals: { 'soat:ResourceTag/env': 'prod' } }
     PolicyDocument:
       type: object
       required:

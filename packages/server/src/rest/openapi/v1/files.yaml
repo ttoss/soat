@@ -637,7 +637,6 @@ components:
     UploadFileBase64Request:
       type: object
       required:
-        - project_id
         - content
       properties:
         project_id:
@@ -706,12 +705,10 @@ components:
           description: Token expiration timestamp
     UploadFileWithTokenRequest:
       type: object
-      required:
-        - content
       properties:
         content:
           type: string
-          description: Base64-encoded file content
+          description: Base64-encoded file content (alternative to multipart `file`)
           example: 'SGVsbG8gV29ybGQ='
         filename:
           type: string

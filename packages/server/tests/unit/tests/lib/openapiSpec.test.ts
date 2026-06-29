@@ -21,6 +21,11 @@ type OpenapiSpecModule = {
     method: string;
     path: string;
   }) => RequestSchemaFields | null;
+  getRouteRequestSchema: (args: {
+    method: string;
+    path: string;
+  }) => Record<string, unknown> | null;
+  resolveSchemaRef: (schema: unknown) => Record<string, unknown> | null;
   matchOpenApiPath: (args: { path: string }) => string | null;
 };
 
@@ -294,6 +299,65 @@ describe('openapiSpec', () => {
     test('returns null for an unsupported method', () => {
       expect(
         getRouteRequestSchemaFields({ method: 'options', path: '/agents' })
+      ).toBeNull();
+    });
+  });
+
+  describe('getRouteRequestSchema', () => {
+    const { getRouteRequestSchema } = jest.requireActual(
+      'src/lib/openapiSpec'
+    ) as OpenapiSpecModule;
+
+    test('returns the resolved $ref schema object for a route', () => {
+      const schema = getRouteRequestSchema({ method: 'post', path: '/agents' });
+      expect(schema).not.toBeNull();
+      // resolved to CreateAgentRequest — has snake_case properties
+      expect(
+        (schema!.properties as Record<string, unknown>).ai_provider_id
+      ).toBeDefined();
+    });
+
+    test('returns an inline schema object for a route', () => {
+      const schema = getRouteRequestSchema({
+        method: 'post',
+        path: '/projects',
+      });
+      expect(
+        (schema!.properties as Record<string, unknown>).name
+      ).toBeDefined();
+    });
+
+    test('returns null for a route with no JSON body', () => {
+      expect(
+        getRouteRequestSchema({ method: 'get', path: '/agents' })
+      ).toBeNull();
+    });
+  });
+
+  describe('resolveSchemaRef', () => {
+    const { resolveSchemaRef } = jest.requireActual(
+      'src/lib/openapiSpec'
+    ) as OpenapiSpecModule;
+
+    test('follows a $ref to its named component schema', () => {
+      const resolved = resolveSchemaRef({
+        $ref: '#/components/schemas/CreateAgentRequest',
+      });
+      expect(resolved).not.toBeNull();
+      expect(
+        (resolved!.properties as Record<string, unknown>).ai_provider_id
+      ).toBeDefined();
+    });
+
+    test('returns an inline schema unchanged', () => {
+      const inline = { type: 'object', properties: { a: {} } };
+      expect(resolveSchemaRef(inline)).toBe(inline);
+    });
+
+    test('returns null for a non-object or unresolvable ref', () => {
+      expect(resolveSchemaRef(null)).toBeNull();
+      expect(
+        resolveSchemaRef({ $ref: '#/components/schemas/NoSuchSchema' })
       ).toBeNull();
     });
   });

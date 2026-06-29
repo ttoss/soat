@@ -422,7 +422,8 @@ describe('Files', () => {
         .send({ project_id: projectId, filename: 'missing-content.txt' });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('content is required (base64-encoded)');
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/content/);
     });
 
     test('returns 400 when project_id is missing', async () => {
@@ -504,7 +505,8 @@ describe('Files', () => {
         .send({ filename: 'no-project.txt' });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('projectId is required');
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/projectId/);
     });
 
     test('returns 403 when user has no upload permission', async () => {

@@ -68,7 +68,8 @@ describe('API Keys', () => {
         .send({ name: 'No Project Key' });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toMatch(/project_id is required/i);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/projectId/i);
     });
 
     test('null project_id returns 400', async () => {

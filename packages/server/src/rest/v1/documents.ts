@@ -180,12 +180,6 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     chunkOverlap?: number;
   };
 
-  if (!body.content) {
-    ctx.status = 400;
-    ctx.body = { error: 'content is required' };
-    return;
-  }
-
   const targetProjectId = await resolveWriteProjectId({
     ctx,
     projectPublicId: body.projectId,
@@ -381,7 +375,7 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    fileId?: string;
+    fileId: string;
     projectId?: string;
     pathPrefix?: string;
     tags?: Record<string, string>;
@@ -392,12 +386,6 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
 
   // Async by default; ?async=false runs synchronously and returns 201.
   const isAsync = ctx.query['async'] !== 'false';
-
-  if (!body.fileId) {
-    ctx.status = 400;
-    ctx.body = { error: 'fileId is required' };
-    return;
-  }
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,

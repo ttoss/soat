@@ -66,10 +66,6 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
     messageDelaySeconds?: number | null;
   };
 
-  if (!body.agentId) {
-    throw new DomainError('VALIDATION_FAILED', 'agent_id is required');
-  }
-
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'agents:CreateSession',
   });

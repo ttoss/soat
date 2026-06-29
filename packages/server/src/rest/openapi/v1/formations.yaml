@@ -38,8 +38,6 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - template
               properties:
                 template:
                   $ref: '#/components/schemas/FormationTemplateInput'
@@ -1035,13 +1033,13 @@ components:
       additionalProperties: false
       required:
         - name
+        - value
       properties:
         name:
           type: string
           description: Human-readable label for the secret
         value:
           type: string
-          nullable: true
           description: The secret value to encrypt and store
 
     SessionResourceProperties:

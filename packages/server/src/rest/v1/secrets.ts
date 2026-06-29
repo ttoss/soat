@@ -60,17 +60,13 @@ secretsRouter.get('/secrets/:secret_id', async (ctx: Context) => {
 secretsRouter.post('/secrets', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
+  // `name` and `value` are guaranteed present by the strict-field middleware
+  // (both are `required` in the OpenAPI request schema).
   const body = ctx.request.body as {
     projectId?: string;
-    name?: string;
-    value?: string;
+    name: string;
+    value: string;
   };
-
-  if (!body.name) {
-    ctx.status = 400;
-    ctx.body = { error: 'name is required' };
-    return;
-  }
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
