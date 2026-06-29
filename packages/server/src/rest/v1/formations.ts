@@ -20,9 +20,10 @@ export const formationsRouter = new Router<Context>();
 
 const buildMissingParamsError = (
   template: FormationTemplate,
-  provided: Record<string, string> | undefined
+  provided: Record<string, string> | undefined,
+  forUpdate = false
 ): { error: string; details: { path: string; message: string }[] } | null => {
-  const missing = getMissingParams(template, provided);
+  const missing = getMissingParams(template, provided, forUpdate);
   if (missing.length === 0) return null;
   return {
     error: 'Missing required parameters',
@@ -210,7 +211,8 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
 
     const missingParamsError = buildMissingParamsError(
       parsedTemplate as FormationTemplate,
-      body.parameters
+      body.parameters,
+      true
     );
     if (missingParamsError) {
       ctx.status = 400;

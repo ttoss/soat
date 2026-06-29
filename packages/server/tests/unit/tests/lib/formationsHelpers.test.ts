@@ -12,9 +12,9 @@ import {
   parseRefAttr,
   resolveParamExpressions,
   resolveRefs,
+  resolveWorkingTemplate,
   topologicalSort,
 } from 'src/lib/formationsHelpers';
-
 import type { FormationTemplate } from 'src/lib/formationsTypes';
 
 describe('formationsHelpers', () => {
@@ -58,9 +58,9 @@ describe('formationsHelpers', () => {
     });
 
     test('collects refs nested inside an object', () => {
-      expect(collectRefs({ agent_id: { ref: 'AgentA' }, name: 'fixed' })).toEqual(
-        ['AgentA']
-      );
+      expect(
+        collectRefs({ agent_id: { ref: 'AgentA' }, name: 'fixed' })
+      ).toEqual(['AgentA']);
     });
 
     test('returns empty for a plain string', () => {
@@ -90,7 +90,10 @@ describe('formationsHelpers', () => {
 
     test('resolves refs nested inside an object', () => {
       const map = new Map([['A', 'id_a']]);
-      const result = resolveRefs({ agent_id: { ref: 'A' }, name: 'fixed' }, map);
+      const result = resolveRefs(
+        { agent_id: { ref: 'A' }, name: 'fixed' },
+        map
+      );
       expect(result).toEqual({ agent_id: 'id_a', name: 'fixed' });
     });
 
@@ -217,9 +220,10 @@ describe('formationsHelpers', () => {
     });
 
     test('collects from an array', () => {
-      expect(
-        collectParamRefs([{ param: 'a' }, { param: 'b' }])
-      ).toEqual(['a', 'b']);
+      expect(collectParamRefs([{ param: 'a' }, { param: 'b' }])).toEqual([
+        'a',
+        'b',
+      ]);
     });
 
     test('collects from nested objects', () => {
@@ -241,7 +245,10 @@ describe('formationsHelpers', () => {
     });
 
     test('resolves placeholders in a sub expression', () => {
-      const map = new Map([['env', 'prod'], ['region', 'us-east-1']]);
+      const map = new Map([
+        ['env', 'prod'],
+        ['region', 'us-east-1'],
+      ]);
       expect(
         resolveParamExpressions({ sub: 'agent-${env}-${region}' }, map)
       ).toBe('agent-prod-us-east-1');
@@ -249,17 +256,16 @@ describe('formationsHelpers', () => {
 
     test('leaves body.xxx refs in sub expressions untouched', () => {
       const map = new Map([['env', 'prod']]);
-      expect(
-        resolveParamExpressions({ sub: '${env}-${body.name}' }, map)
-      ).toBe('prod-${body.name}');
+      expect(resolveParamExpressions({ sub: '${env}-${body.name}' }, map)).toBe(
+        'prod-${body.name}'
+      );
     });
 
     test('resolves inside an array', () => {
       const map = new Map([['x', 'val']]);
-      expect(resolveParamExpressions([{ param: 'x' }, 'literal'], map)).toEqual([
-        'val',
-        'literal',
-      ]);
+      expect(resolveParamExpressions([{ param: 'x' }, 'literal'], map)).toEqual(
+        ['val', 'literal']
+      );
     });
 
     test('resolves inside a nested object', () => {
@@ -277,19 +283,25 @@ describe('formationsHelpers', () => {
       expect(resolveParamExpressions(7, map)).toBe(7);
     });
 
-    test('throws for an unresolved param', () => {
-      expect(() => {
-        return resolveParamExpressions({ param: 'missing' }, new Map());
-      }).toThrow('Unresolved parameter: missing');
+    test('resolves an unresolved param to undefined (use previous value)', () => {
+      expect(
+        resolveParamExpressions({ param: 'missing' }, new Map())
+      ).toBeUndefined();
     });
 
-    test('throws for an unresolved sub placeholder', () => {
-      expect(() => {
-        return resolveParamExpressions(
-          { sub: '${missing}' },
-          new Map()
-        );
-      }).toThrow('Unresolved parameter in sub expression: missing');
+    test('resolves a sub with an unresolved placeholder to undefined', () => {
+      expect(
+        resolveParamExpressions({ sub: '${missing}' }, new Map())
+      ).toBeUndefined();
+    });
+
+    test('drops the property holding an unresolved param when serialized', () => {
+      const result = resolveParamExpressions(
+        { name: 'keep', value: { param: 'missing' } },
+        new Map()
+      );
+      expect(result).toEqual({ name: 'keep', value: undefined });
+      expect(JSON.stringify(result)).toBe('{"name":"keep"}');
     });
   });
 
@@ -327,6 +339,19 @@ describe('formationsHelpers', () => {
       const map = buildResolvedParamsMap(template);
       expect(map.has('required')).toBe(false);
     });
+
+    test('omits an unsupplied use_previous_value param (left unresolved)', () => {
+      const template: FormationTemplate = {
+        resources: {},
+        parameters: {
+          env: { default: 'dev' },
+          secret: { use_previous_value: true },
+        },
+      };
+      const map = buildResolvedParamsMap(template, { env: 'prod' });
+      expect(map.get('env')).toBe('prod');
+      expect(map.has('secret')).toBe(false);
+    });
   });
 
   // ── getMissingParams ──────────────────────────────────────────────────────
@@ -334,7 +359,9 @@ describe('formationsHelpers', () => {
   describe('getMissingParams', () => {
     test('returns empty when all used params are provided', () => {
       const template: FormationTemplate = {
-        resources: { A: { type: 'agents', properties: { name: { param: 'agentName' } } } },
+        resources: {
+          A: { type: 'agents', properties: { name: { param: 'agentName' } } },
+        },
         parameters: { agentName: {} },
       };
       const missing = getMissingParams(template, { agentName: 'my-agent' });
@@ -343,7 +370,9 @@ describe('formationsHelpers', () => {
 
     test('reports a missing required param', () => {
       const template: FormationTemplate = {
-        resources: { A: { type: 'agents', properties: { name: { param: 'agentName' } } } },
+        resources: {
+          A: { type: 'agents', properties: { name: { param: 'agentName' } } },
+        },
         parameters: { agentName: {} },
       };
       const missing = getMissingParams(template);
@@ -352,10 +381,79 @@ describe('formationsHelpers', () => {
 
     test('accepts a default as satisfying the requirement', () => {
       const template: FormationTemplate = {
-        resources: { A: { type: 'agents', properties: { name: { param: 'agentName' } } } },
+        resources: {
+          A: { type: 'agents', properties: { name: { param: 'agentName' } } },
+        },
         parameters: { agentName: { default: 'default-agent' } },
       };
       expect(getMissingParams(template)).toEqual([]);
+    });
+
+    test('treats a use_previous_value param as satisfied on update', () => {
+      const template: FormationTemplate = {
+        resources: {
+          A: { type: 'agents', properties: { name: { param: 'agentName' } } },
+        },
+        parameters: { agentName: { use_previous_value: true } },
+      };
+      expect(getMissingParams(template, undefined, true)).toEqual([]);
+    });
+
+    test('use_previous_value does not satisfy on create (no previous value)', () => {
+      const template: FormationTemplate = {
+        resources: {
+          A: { type: 'agents', properties: { name: { param: 'agentName' } } },
+        },
+        parameters: { agentName: { use_previous_value: true } },
+      };
+      expect(getMissingParams(template, undefined, false)).toContain(
+        'agentName'
+      );
+    });
+  });
+
+  // ── resolveWorkingTemplate ────────────────────────────────────────────────
+
+  describe('resolveWorkingTemplate', () => {
+    test('returns the template unchanged when it declares no parameters', () => {
+      const template: FormationTemplate = {
+        resources: { M: { type: 'memory', properties: { name: 'lit' } } },
+      };
+      expect(resolveWorkingTemplate({ template })).toBe(template);
+    });
+
+    test('substitutes provided parameter values', () => {
+      const template: FormationTemplate = {
+        parameters: { Name: {} },
+        resources: {
+          M: { type: 'memory', properties: { name: { param: 'Name' } } },
+        },
+      };
+      const result = resolveWorkingTemplate({
+        template,
+        parameters: { Name: 'resolved' },
+      });
+      expect(result.resources.M.properties.name).toBe('resolved');
+    });
+
+    test('strips an omitted use_previous_value param expression to undefined', () => {
+      const template: FormationTemplate = {
+        parameters: { Secret: { use_previous_value: true } },
+        resources: {
+          S: {
+            type: 'secret',
+            properties: { name: 'n', value: { param: 'Secret' } },
+          },
+        },
+      };
+      // No value supplied for Secret — it is declared use_previous_value.
+      const result = resolveWorkingTemplate({ template });
+      // The raw `{ param: ... }` must not survive — it resolves to undefined so
+      // the field is dropped and the stored value is preserved.
+      expect(result.resources.S.properties.value).toBeUndefined();
+      expect(JSON.stringify(result.resources.S.properties)).toBe(
+        '{"name":"n"}'
+      );
     });
   });
 

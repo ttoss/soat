@@ -155,12 +155,13 @@ Parameters make a template portable across environments by allowing deploy-time 
 
 | Field         | Required | Description                                                                            |
 | ------------- | -------- | -------------------------------------------------------------------------------------- |
-| `type`        | No       | Parameter type; currently only `"string"` is supported                                 |
-| `default`     | No       | Default value used when the parameter is not provided at deploy time                   |
-| `description` | No       | Human-readable description of the parameter's purpose                                  |
-| `no_echo`     | No       | When `true`, signals that the value is sensitive and should not be logged or displayed |
+| `type`               | No       | Parameter type; currently only `"string"` is supported                                                                  |
+| `default`            | No       | Default value used when the parameter is not provided at deploy time                                                    |
+| `description`        | No       | Human-readable description of the parameter's purpose                                                                   |
+| `no_echo`            | No       | When `true`, signals that the value is sensitive and should not be logged or displayed                                  |
+| `use_previous_value` | No       | When `true`, omitting the parameter **on update** reuses its previously stored value instead of failing as required     |
 
-Parameters without a `default` are **required** — they must be provided in the `parameters` field of the deploy request.
+Parameters without a `default` are **required** — they must be provided in the `parameters` field of the deploy request, unless declared with `use_previous_value: true` (see [Reusing Previously Stored Values](#reusing-previously-stored-values)).
 
 #### Parameter Expressions
 
@@ -190,8 +191,8 @@ Pass parameter values in the `parameters` field of the create or update request:
 
 - Values in `parameters` override any `default` declared in the template.
 - Parameters with a `default` are optional in the request.
-- Parameters without a `default` and not provided in the request cause a `400 Missing required parameters` error.
-- Parameter values are **never stored** in the database — provide them on every create/update call.
+- Parameters without a `default` and not provided in the request cause a `400 Missing required parameters` error — unless declared `use_previous_value: true`, which reuses the stored value on update (see [Reusing Previously Stored Values](#reusing-previously-stored-values)).
+- Parameter values are **never stored** in the database — provide them on every create/update call, except for `use_previous_value` parameters on update.
 
 #### Providing Parameter Values via the CLI
 
@@ -242,6 +243,44 @@ soat update-formation \
 ```
 
 **Lookup order:** `--env-file` variables are checked first; if not found there, `process.env` (the calling shell's exported variables) is checked. Missing variables cause the CLI to exit with an error before the API call is made.
+
+#### Reusing Previously Stored Values
+
+Declare a parameter with `use_previous_value: true` to let an **update** reuse its previously stored value instead of re-supplying it — the equivalent of AWS CloudFormation's `UsePreviousValue`, but declared in the template. This lets a deploy pipeline update part of a formation without holding every secret value.
+
+```yaml
+parameters:
+  XaiApiKey:
+    type: string
+    no_echo: true
+    use_previous_value: true # omit on update → reuse the stored value
+resources:
+  XaiKey:
+    type: secret
+    properties:
+      name: xai-api-key
+      value: { param: XaiApiKey }
+```
+
+```bash
+# First deploy — supply the value (create has no previous value to reuse)
+soat create-formation --project-id prj_xxx --name my-stack \
+  --template-file formation.yaml --parameter XaiApiKey=@XAI_API_KEY
+
+# Later deploys — omit it; the stored value is reused
+soat update-formation --formation-id af_xxx --template-file formation.yaml
+
+# Rotate it — supply a value; it overrides use_previous_value
+soat update-formation --formation-id af_xxx --template-file formation.yaml \
+  --parameter XaiApiKey=@XAI_API_KEY
+```
+
+Rules:
+
+- An explicitly supplied value **always overrides** `use_previous_value`, so rotation still works by passing the parameter.
+- `use_previous_value` only satisfies the required-parameter check **on update**. On create there is no previous value, so an omitted parameter still returns `400 Missing required parameters`.
+- A parameter **without** `use_previous_value` that is neither supplied nor defaulted still returns `400 Missing required parameters` — so a missing value fails loudly rather than silently freezing an unrelated parameter.
+- The previous value is reused only where the underlying resource retains it. A `secret` resource's encrypted value is preserved untouched (its plaintext is never stored), producing a no-op for that resource. For other resources, the **last-applied** value of that field is reused; fields that were never stored are simply dropped.
 
 ### Resource Declaration
 

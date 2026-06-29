@@ -8,11 +8,10 @@ import {
 } from './formationsApplyHelpers';
 import {
   buildDependencyGraph,
-  buildResolvedParamsMap,
   isRefAttr,
   parseRefAttr,
-  resolveParamExpressions,
   resolveRefs,
+  resolveWorkingTemplate,
   topologicalSort,
 } from './formationsHelpers';
 import { getFormationModule } from './formationsRegistry';
@@ -236,7 +235,6 @@ export const processResourceChange = async (args: {
   }
 };
 
-/* eslint-disable-next-line max-lines-per-function */
 export const applyFormationTemplate = async (args: {
   formation: InstanceType<(typeof db)['Formation']>;
   template: FormationTemplate;
@@ -253,14 +251,7 @@ export const applyFormationTemplate = async (args: {
     operation,
     parameters,
   } = args;
-  const resolvedParamsMap = buildResolvedParamsMap(template, parameters);
-  const workingTemplate =
-    resolvedParamsMap.size > 0
-      ? (resolveParamExpressions(
-          template,
-          resolvedParamsMap
-        ) as FormationTemplate)
-      : template;
+  const workingTemplate = resolveWorkingTemplate({ template, parameters });
 
   const graph = buildDependencyGraph(workingTemplate);
   const sortedOrder = topologicalSort(graph)!;

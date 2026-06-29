@@ -85,18 +85,30 @@ export const applyUpdateChange = async (args: {
     string,
     unknown
   >;
+  // A property resolving to `undefined` means its parameter was kept
+  // ("use previous value"). Reuse the last-applied value where we have one;
+  // otherwise drop the field entirely so the underlying resource preserves its
+  // current value (e.g. a secret's encrypted value is never re-applied).
+  const mergedProperties: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(resolvedProperties)) {
+    if (value === undefined) {
+      if (key in lastProps) mergedProperties[key] = lastProps[key];
+    } else {
+      mergedProperties[key] = value;
+    }
+  }
   const propertiesChanged =
-    JSON.stringify(lastProps) !== JSON.stringify(resolvedProperties);
+    JSON.stringify(lastProps) !== JSON.stringify(mergedProperties);
   resolvedIds.set(logicalId, existing.physicalResourceId);
   if (propertiesChanged) {
     await applyUpdateResource({
       resourceType,
       physicalResourceId: existing.physicalResourceId,
-      resolvedProperties,
+      resolvedProperties: mergedProperties,
     });
     await resourceRow.update({
       status: 'updated',
-      lastAppliedProperties: sanitize(resourceType, resolvedProperties),
+      lastAppliedProperties: sanitize(resourceType, mergedProperties),
     });
     events.push({
       timestamp: new Date().toISOString(),

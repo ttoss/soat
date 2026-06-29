@@ -143,6 +143,10 @@ export const planFormation = async (args: {
 
             const needsUpdate = Object.entries(resolvedProperties).some(
               ([key, value]) => {
+                // A `use_previous_value` param that was omitted resolves to
+                // undefined; it never counts as a change since the stored value
+                // is reused.
+                if (value === undefined) return false;
                 return !isDeepStrictEqual(liveProperties[key], value);
               }
             );

@@ -151,6 +151,78 @@ describe('formationsApplyHelpers', () => {
     });
   });
 
+  test('applyUpdateChange treats a dropped (use-previous) field as a no-op', async () => {
+    // A secret's value resolves to undefined when kept; lastApplied has no
+    // `value` (it is sanitized), so the merged props equal lastApplied.
+    const existing = db.FormationResource.build({
+      publicId: 'fmr_secret',
+      formationId: 1,
+      logicalId: 'secret',
+      resourceType: 'secret',
+      status: 'active',
+      physicalResourceId: 'sec_1',
+      lastAppliedProperties: { name: 'my-secret' },
+    });
+
+    const updateResource = jest.spyOn(resourceHandlers, 'applyUpdateResource');
+    const resourceUpdate = jest.spyOn(existing, 'update');
+
+    const events: FormationEvent[] = [];
+    await applyUpdateChange({
+      resourceRow: existing,
+      existing: existing as InstanceType<(typeof db)['FormationResource']> & {
+        physicalResourceId: string;
+      },
+      resourceType: 'secret',
+      resolvedProperties: { name: 'my-secret', value: undefined },
+      logicalId: 'secret',
+      resolvedIds: new Map<string, string>(),
+      events,
+    });
+
+    expect(updateResource).not.toHaveBeenCalled();
+    expect(resourceUpdate).not.toHaveBeenCalled();
+    expect(events[0]).toMatchObject({ action: 'no-op' });
+  });
+
+  test('applyUpdateChange reuses the last-applied value for a kept field when another field changes', async () => {
+    const existing = db.FormationResource.build({
+      publicId: 'fmr_tool',
+      formationId: 1,
+      logicalId: 'tool',
+      resourceType: 'tool',
+      status: 'active',
+      physicalResourceId: 'tool_1',
+      lastAppliedProperties: { name: 'old-name', url: 'https://kept.example' },
+    });
+
+    const updateResource = jest
+      .spyOn(resourceHandlers, 'applyUpdateResource')
+      .mockResolvedValue(undefined);
+    jest.spyOn(existing, 'update').mockResolvedValue(existing);
+
+    const events: FormationEvent[] = [];
+    await applyUpdateChange({
+      resourceRow: existing,
+      existing: existing as InstanceType<(typeof db)['FormationResource']> & {
+        physicalResourceId: string;
+      },
+      resourceType: 'tool',
+      // name changed; url's param was kept (resolves to undefined).
+      resolvedProperties: { name: 'new-name', url: undefined },
+      logicalId: 'tool',
+      resolvedIds: new Map<string, string>(),
+      events,
+    });
+
+    expect(updateResource).toHaveBeenCalledWith({
+      resourceType: 'tool',
+      physicalResourceId: 'tool_1',
+      resolvedProperties: { name: 'new-name', url: 'https://kept.example' },
+    });
+    expect(events[0]).toMatchObject({ action: 'update' });
+  });
+
   test('failFormationOperation records event and marks operation/formation as failed', async () => {
     const operation = {
       update: jest.fn().mockResolvedValue(undefined),
