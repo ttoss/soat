@@ -97,7 +97,6 @@ export const planFormation = async (args: {
   template: FormationTemplate;
   formationId?: string;
   parameters?: Record<string, string>;
-  parametersUsePrevious?: string[];
 }): Promise<PlanResult> => {
   const graph = buildDependencyGraph(args.template);
   const sortedOrder = topologicalSort(graph) ?? [];
@@ -120,11 +119,7 @@ export const planFormation = async (args: {
     }
   }
 
-  const resolvedParams = buildResolvedParamsMap(
-    args.template,
-    args.parameters,
-    args.parametersUsePrevious
-  );
+  const resolvedParams = buildResolvedParamsMap(args.template, args.parameters);
 
   const changes: PlanChange[] = await Promise.all(
     sortedOrder.map(async (logicalId): Promise<PlanChange> => {
@@ -148,8 +143,9 @@ export const planFormation = async (args: {
 
             const needsUpdate = Object.entries(resolvedProperties).some(
               ([key, value]) => {
-                // A kept ("use previous value") param resolves to undefined;
-                // it never counts as a change since the stored value is reused.
+                // A `use_previous_value` param that was omitted resolves to
+                // undefined; it never counts as a change since the stored value
+                // is reused.
                 if (value === undefined) return false;
                 return !isDeepStrictEqual(liveProperties[key], value);
               }
@@ -303,7 +299,6 @@ export const updateFormation = async (args: {
   template?: FormationTemplate;
   metadata?: Record<string, unknown> | null;
   parameters?: Record<string, string>;
-  parametersUsePrevious?: string[];
 }): Promise<MappedFormation> => {
   log(
     'updateFormation: formationId=%s updateTemplate=%s',
@@ -351,7 +346,6 @@ export const updateFormation = async (args: {
     projectId: formation.projectId,
     operation,
     parameters: args.parameters,
-    parametersUsePrevious: args.parametersUsePrevious,
   });
 
   const refreshed = await db.Formation.findOne({

@@ -235,7 +235,6 @@ export const processResourceChange = async (args: {
   }
 };
 
-/* eslint-disable-next-line max-lines-per-function */
 export const applyFormationTemplate = async (args: {
   formation: InstanceType<(typeof db)['Formation']>;
   template: FormationTemplate;
@@ -243,7 +242,6 @@ export const applyFormationTemplate = async (args: {
   projectId: number;
   operation: InstanceType<(typeof db)['FormationOperation']>;
   parameters?: Record<string, string>;
-  parametersUsePrevious?: string[];
 }): Promise<void> => {
   const {
     formation,
@@ -252,13 +250,8 @@ export const applyFormationTemplate = async (args: {
     projectId,
     operation,
     parameters,
-    parametersUsePrevious,
   } = args;
-  const workingTemplate = resolveWorkingTemplate({
-    template,
-    parameters,
-    parametersUsePrevious,
-  });
+  const workingTemplate = resolveWorkingTemplate({ template, parameters });
 
   const graph = buildDependencyGraph(workingTemplate);
   const sortedOrder = topologicalSort(graph)!;

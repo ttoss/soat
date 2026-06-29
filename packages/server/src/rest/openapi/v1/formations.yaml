@@ -89,19 +89,9 @@ paths:
                   description: >
                     Runtime parameter values that override or supply template
                     parameter defaults. Keys must match parameter names declared
-                    in `template.parameters`.
-                  nullable: true
-                parameters_use_previous:
-                  type: array
-                  items:
-                    type: string
-                  description: >
-                    Parameter names whose previously stored value should be
-                    reused instead of being supplied in `parameters` — the
-                    equivalent of CloudFormation's `UsePreviousValue: true`. A
-                    name listed here must not also appear in `parameters`.
-                    Useful when planning an update against an existing formation
-                    (`formation_id`) without re-passing secret values.
+                    in `template.parameters`. A parameter declared with
+                    `use_previous_value: true` may be omitted to reuse its
+                    stored value.
                   nullable: true
       responses:
         '200':
@@ -264,22 +254,9 @@ paths:
                     Runtime parameter values that override or supply template
                     parameter defaults. Keys must match parameter names declared
                     in `template.parameters`. Required parameters (those without
-                    a default) must be provided here, unless listed in
-                    `parameters_use_previous`.
-                  nullable: true
-                parameters_use_previous:
-                  type: array
-                  items:
-                    type: string
-                  description: >
-                    Parameter names whose previously stored value should be
-                    reused instead of being re-supplied — the equivalent of
-                    CloudFormation's `UsePreviousValue: true`. A name listed here
-                    must not also appear in `parameters`, and satisfies the
-                    required-parameter check without a value. The value is
-                    reused only where the underlying resource retains it (e.g. a
-                    secret's encrypted value); for other resources the
-                    last-applied value is reused.
+                    a default) must be provided here, unless the parameter is
+                    declared with `use_previous_value: true`, in which case
+                    omitting it reuses the previously stored value.
                   nullable: true
                 metadata:
                   type: object
@@ -438,6 +415,17 @@ components:
           description: >
             When true, the parameter value should be treated as sensitive and
             not echoed in logs or UI. Analogous to NoEcho in CloudFormation.
+          nullable: true
+        use_previous_value:
+          type: boolean
+          description: >
+            When true, omitting this parameter on update reuses its previously
+            stored value instead of failing the required-parameter check —
+            analogous to CloudFormation's UsePreviousValue, declared in the
+            template. An explicitly supplied value still overrides. Has no
+            effect on create (there is no previous value yet). The value is
+            reused only where the underlying resource retains it (e.g. a
+            secret's encrypted value); otherwise the last-applied value is used.
           nullable: true
 
     AgentResourceProperties:

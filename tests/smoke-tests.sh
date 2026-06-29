@@ -1940,9 +1940,9 @@ if ! printf '%s\n' "$FORMATION_UPDATE_RESP" | jq -e --arg id "$FORMATION_ID" '.i
 fi
 echo "Formation updated."
 
-# Update keeping a secret parameter's previous value (UsePreviousValue equivalent)
-echo "--- Creating formation with a secret parameter ---"
-KEEP_TEMPLATE='{"parameters":{"XaiApiKey":{"type":"string","no_echo":true}},"resources":{"keepSecret":{"type":"secret","properties":{"name":"smoke-keep-secret","value":{"param":"XaiApiKey"}}},"keepMemory":{"type":"memory","properties":{"name":"keep-mem-original"}}}}'
+# Update reusing a secret parameter's previous value (use_previous_value)
+echo "--- Creating formation with a use_previous_value secret parameter ---"
+KEEP_TEMPLATE='{"parameters":{"XaiApiKey":{"type":"string","no_echo":true,"use_previous_value":true}},"resources":{"keepSecret":{"type":"secret","properties":{"name":"smoke-keep-secret","value":{"param":"XaiApiKey"}}},"keepMemory":{"type":"memory","properties":{"name":"keep-mem-original"}}}}'
 KEEP_FORMATION_RESP=$($SOAT_CLI create-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-keep-formation" \
@@ -1956,18 +1956,18 @@ if [ -z "$KEEP_FORMATION_ID" ] || [ "$KEEP_FORMATION_ID" = "null" ]; then
 fi
 echo "Keep formation created: $KEEP_FORMATION_ID"
 
-echo "--- Updating formation while keeping the secret value ---"
-KEEP_UPDATE_TEMPLATE='{"parameters":{"XaiApiKey":{"type":"string","no_echo":true}},"resources":{"keepSecret":{"type":"secret","properties":{"name":"smoke-keep-secret","value":{"param":"XaiApiKey"}}},"keepMemory":{"type":"memory","properties":{"name":"keep-mem-updated"}}}}'
+echo "--- Updating formation while reusing the stored secret value ---"
+KEEP_UPDATE_TEMPLATE='{"parameters":{"XaiApiKey":{"type":"string","no_echo":true,"use_previous_value":true}},"resources":{"keepSecret":{"type":"secret","properties":{"name":"smoke-keep-secret","value":{"param":"XaiApiKey"}}},"keepMemory":{"type":"memory","properties":{"name":"keep-mem-updated"}}}}'
+# XaiApiKey is intentionally NOT passed — use_previous_value reuses the stored value.
 KEEP_UPDATE_RESP=$($SOAT_CLI update-formation \
   --formation_id "$KEEP_FORMATION_ID" \
-  --template "$KEEP_UPDATE_TEMPLATE" \
-  --keep-parameter XaiApiKey)
+  --template "$KEEP_UPDATE_TEMPLATE")
 if ! printf '%s\n' "$KEEP_UPDATE_RESP" | jq -e '.status == "active"' >/dev/null 2>&1; then
-  echo "ERROR: update-formation with --keep-parameter did not return active status" >&2
+  echo "ERROR: update-formation with use_previous_value did not return active status" >&2
   echo "$KEEP_UPDATE_RESP" >&2
   exit 1
 fi
-echo "Formation updated keeping the secret value."
+echo "Formation updated reusing the stored secret value."
 
 $SOAT_CLI delete-formation --formation_id "$KEEP_FORMATION_ID"
 echo "Keep formation deleted."

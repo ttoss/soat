@@ -13,6 +13,14 @@ export type ParameterDeclaration = {
   default?: string;
   description?: string;
   no_echo?: boolean;
+  /**
+   * When true, omitting this parameter on update reuses its previously stored
+   * value instead of failing the required-parameter check — analogous to
+   * CloudFormation's UsePreviousValue, but declared in the template. An
+   * explicitly supplied value still overrides. Has no effect on create (there
+   * is no previous value yet).
+   */
+  use_previous_value?: boolean;
 };
 
 export type ResourceDeclaration = {

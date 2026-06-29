@@ -136,33 +136,6 @@ describe('formation wrapper endpoint integration', () => {
     expect(body.template).toBeDefined();
   });
 
-  test('update-formation maps repeated --keep-parameter to parameters_use_previous', async () => {
-    const requests = await cliTestClient.call([
-      'update-formation',
-      '--formation-id',
-      'form_existing',
-      '--template-path',
-      templatePath,
-      '--parameter',
-      'appUrl=https://example.com',
-      '--keep-parameter',
-      'XaiApiKey',
-      '--keep-parameter',
-      'ToolsApiKey',
-    ]);
-
-    expect(cliTestClient.fetchMock).toHaveBeenCalledTimes(1);
-    expect(requests[0]?.method).toBe('PUT');
-    expect(requests[0]?.path).toBe('/api/v1/formations/form_existing');
-
-    const body = requests[0]?.body as {
-      parameters?: Record<string, string>;
-      parameters_use_previous?: string[];
-    };
-    expect(body.parameters?.appUrl).toBe('https://example.com');
-    expect(body.parameters_use_previous).toEqual(['XaiApiKey', 'ToolsApiKey']);
-  });
-
   test('--parameter Key=@ENV_VAR_NAME reads value from env file (shell-safe)', async () => {
     const requests = await cliTestClient.call([
       'create-formation',

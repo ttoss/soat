@@ -340,16 +340,15 @@ describe('formationsHelpers', () => {
       expect(map.has('required')).toBe(false);
     });
 
-    test('skips parameters listed in usePrevious even when provided', () => {
+    test('omits an unsupplied use_previous_value param (left unresolved)', () => {
       const template: FormationTemplate = {
         resources: {},
-        parameters: { env: { default: 'dev' }, secret: {} },
+        parameters: {
+          env: { default: 'dev' },
+          secret: { use_previous_value: true },
+        },
       };
-      const map = buildResolvedParamsMap(
-        template,
-        { env: 'prod', secret: 'sk-1' },
-        ['secret']
-      );
+      const map = buildResolvedParamsMap(template, { env: 'prod' });
       expect(map.get('env')).toBe('prod');
       expect(map.has('secret')).toBe(false);
     });
@@ -390,14 +389,26 @@ describe('formationsHelpers', () => {
       expect(getMissingParams(template)).toEqual([]);
     });
 
-    test('treats a kept (usePrevious) param as satisfied', () => {
+    test('treats a use_previous_value param as satisfied on update', () => {
       const template: FormationTemplate = {
         resources: {
           A: { type: 'agents', properties: { name: { param: 'agentName' } } },
         },
-        parameters: { agentName: {} },
+        parameters: { agentName: { use_previous_value: true } },
       };
-      expect(getMissingParams(template, undefined, ['agentName'])).toEqual([]);
+      expect(getMissingParams(template, undefined, true)).toEqual([]);
+    });
+
+    test('use_previous_value does not satisfy on create (no previous value)', () => {
+      const template: FormationTemplate = {
+        resources: {
+          A: { type: 'agents', properties: { name: { param: 'agentName' } } },
+        },
+        parameters: { agentName: { use_previous_value: true } },
+      };
+      expect(getMissingParams(template, undefined, false)).toContain(
+        'agentName'
+      );
     });
   });
 
@@ -425,9 +436,9 @@ describe('formationsHelpers', () => {
       expect(result.resources.M.properties.name).toBe('resolved');
     });
 
-    test('strips a kept param expression to undefined even when no value resolves', () => {
+    test('strips an omitted use_previous_value param expression to undefined', () => {
       const template: FormationTemplate = {
-        parameters: { Secret: {} },
+        parameters: { Secret: { use_previous_value: true } },
         resources: {
           S: {
             type: 'secret',
@@ -435,10 +446,8 @@ describe('formationsHelpers', () => {
           },
         },
       };
-      const result = resolveWorkingTemplate({
-        template,
-        parametersUsePrevious: ['Secret'],
-      });
+      // No value supplied for Secret — it is declared use_previous_value.
+      const result = resolveWorkingTemplate({ template });
       // The raw `{ param: ... }` must not survive — it resolves to undefined so
       // the field is dropped and the stored value is preserved.
       expect(result.resources.S.properties.value).toBeUndefined();

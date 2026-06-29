@@ -186,45 +186,38 @@ export const resolveParamExpressions = (
 
 export const buildResolvedParamsMap = (
   template: FormationTemplate,
-  provided?: Record<string, string>,
-  usePrevious?: string[]
+  provided?: Record<string, string>
 ): Map<string, string> => {
   const resolved = new Map<string, string>();
   if (!template.parameters) return resolved;
 
-  const keep = new Set(usePrevious ?? []);
-
   for (const [name, decl] of Object.entries(template.parameters)) {
-    // Params flagged "use previous value" are deliberately left unresolved so
-    // the field is dropped and the existing resource value is preserved.
-    if (keep.has(name)) continue;
     const providedValue = provided?.[name];
     if (providedValue !== undefined) {
       resolved.set(name, providedValue);
     } else if (decl.default !== undefined) {
       resolved.set(name, decl.default);
     }
+    // A parameter declared `use_previous_value` and not supplied is left
+    // unresolved on purpose: its `{ param: ... }` expression resolves to
+    // `undefined`, the field is dropped, and the existing value is preserved.
   }
 
   return resolved;
 };
 
 // Build the template with param expressions resolved. Resolution runs whenever
-// the template declares parameters (not only when values resolved): a param
-// flagged "use previous value" yields an empty map, yet its `{ param: ... }`
-// expression must still be stripped to `undefined` so the existing value is
-// preserved rather than the raw expression being written as the new value.
+// the template declares parameters (not only when values resolved): a
+// `use_previous_value` parameter that is omitted yields no entry in the map,
+// yet its `{ param: ... }` expression must still be stripped to `undefined` so
+// the existing value is preserved rather than the raw expression being written
+// as the new value.
 export const resolveWorkingTemplate = (args: {
   template: FormationTemplate;
   parameters?: Record<string, string>;
-  parametersUsePrevious?: string[];
 }): FormationTemplate => {
-  const { template, parameters, parametersUsePrevious } = args;
-  const resolvedParamsMap = buildResolvedParamsMap(
-    template,
-    parameters,
-    parametersUsePrevious
-  );
+  const { template, parameters } = args;
+  const resolvedParamsMap = buildResolvedParamsMap(template, parameters);
   const hasParameters =
     !!template.parameters && Object.keys(template.parameters).length > 0;
   if (!hasParameters && resolvedParamsMap.size === 0) return template;
@@ -237,30 +230,32 @@ export const resolveWorkingTemplate = (args: {
 const paramHasValue = (args: {
   decl: ParameterDeclaration | undefined;
   providedValue: string | undefined;
+  forUpdate: boolean;
 }): boolean => {
-  const { decl, providedValue } = args;
+  const { decl, providedValue, forUpdate } = args;
   if (providedValue !== undefined && providedValue !== '') return true;
-  return decl?.default !== undefined;
+  if (decl?.default !== undefined) return true;
+  // A `use_previous_value` parameter reuses its stored value, so it satisfies
+  // the requirement without an explicit value — but only on update, where a
+  // previous value exists. On create there is nothing to reuse.
+  return forUpdate && decl?.use_previous_value === true;
 };
 
 export const getMissingParams = (
   template: FormationTemplate,
   provided?: Record<string, string>,
-  usePrevious?: string[]
+  forUpdate = false
 ): string[] => {
   const usedParams = new Set([
     ...collectParamRefs(template.resources),
     ...collectParamRefs(template.outputs ?? {}),
   ]);
 
-  const keep = new Set(usePrevious ?? []);
-
   return [...usedParams].filter((name) => {
-    // A kept param reuses its stored value, so it is never "missing".
-    if (keep.has(name)) return false;
     return !paramHasValue({
       decl: template.parameters?.[name],
       providedValue: provided?.[name],
+      forUpdate,
     });
   });
 };

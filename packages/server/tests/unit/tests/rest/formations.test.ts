@@ -900,16 +900,19 @@ resources:
     });
   });
 
-  // ── use-previous-value for secret parameters ──────────────────────────────
+  // ── use_previous_value for secret parameters ──────────────────────────────
 
-  describe('Formation parameters_use_previous (keep existing value)', () => {
+  describe('Formation parameter use_previous_value', () => {
     let secretFormationId: string;
 
+    // XaiApiKey is declared use_previous_value: omitting it on update reuses the
+    // stored secret value. An explicit value still overrides (rotation).
     const secretTemplate = {
       parameters: {
         XaiApiKey: {
           type: 'string',
           no_echo: true,
+          use_previous_value: true,
           description: 'X API key stored as a secret',
         },
       },
@@ -928,6 +931,20 @@ resources:
       },
     };
 
+    test('use_previous_value does not satisfy a required param on create', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `keep-secret-create-${Date.now()}`,
+          template: secretTemplate,
+          // XaiApiKey omitted; on create there is no previous value to reuse.
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Missing required parameters');
+    });
+
     test('creates the formation supplying the secret value', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')
@@ -943,7 +960,7 @@ resources:
       secretFormationId = res.body.id;
     });
 
-    test('updates other resources while keeping the secret untouched', async () => {
+    test('omitting a use_previous_value param keeps the secret untouched on update', async () => {
       const updatedTemplate = {
         ...secretTemplate,
         resources: {
@@ -959,8 +976,7 @@ resources:
         .put(`/api/v1/formations/${secretFormationId}`)
         .send({
           template: updatedTemplate,
-          // XaiApiKey is intentionally omitted; reuse the stored value.
-          parameters_use_previous: ['XaiApiKey'],
+          // XaiApiKey intentionally omitted — reuse the stored value.
         });
 
       expect(res.status).toBe(200);
@@ -986,25 +1002,51 @@ resources:
       expect(memoryEvent.action).toBe('update');
     });
 
-    test('returns 400 when a param is both supplied and kept', async () => {
+    test('supplying a value still overrides use_previous_value (rotates the secret)', async () => {
       const res = await authenticatedTestClient(userToken)
         .put(`/api/v1/formations/${secretFormationId}`)
         .send({
           template: secretTemplate,
-          parameters: { XaiApiKey: 'sk-new' },
-          parameters_use_previous: ['XaiApiKey'],
+          parameters: { XaiApiKey: 'sk-rotated-value' },
         });
 
-      expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/both/i);
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('active');
+
+      const eventsRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${secretFormationId}/events`
+      );
+      const updateOps = eventsRes.body.filter(
+        (op: { operation_type: string }) => {
+          return op.operation_type === 'update';
+        }
+      );
+      const latest = updateOps[updateOps.length - 1];
+      const secretEvent = latest.events.find((e: { logical_id: string }) => {
+        return e.logical_id === 'XaiKey';
+      });
+      expect(secretEvent.action).toBe('update');
     });
 
-    test('still returns 400 when a required param is neither supplied nor kept', async () => {
+    test('still returns 400 when a required param without use_previous_value is omitted on update', async () => {
+      const requiredTemplate = {
+        parameters: { ToolUrl: { type: 'string' } },
+        resources: {
+          OnlyTool: {
+            type: 'tool',
+            properties: {
+              name: 'req-tool',
+              execute: { url: { sub: '${ToolUrl}/x' } },
+            },
+          },
+        },
+      };
+
       const res = await authenticatedTestClient(userToken)
         .put(`/api/v1/formations/${secretFormationId}`)
         .send({
-          template: secretTemplate,
-          // XaiApiKey neither supplied nor kept.
+          template: requiredTemplate,
+          // ToolUrl neither supplied nor declared use_previous_value.
         });
 
       expect(res.status).toBe(400);

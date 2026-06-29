@@ -15,10 +15,8 @@ const TEMPLATE_PATH_FLAG = 'template-path';
 const TEMPLATE_FILE_FLAG = 'template-file';
 const ENV_FILE_FLAG = 'env-file';
 const PARAMETER_FLAG = 'parameter';
-const KEEP_PARAMETER_FLAG = 'keep-parameter';
 const TEMPLATE_FIELD = 'template';
 const PARAMETERS_FIELD = 'parameters';
-const PARAMETERS_USE_PREVIOUS_FIELD = 'parameters_use_previous';
 
 // eslint-disable-next-line complexity
 const parseEnvFile = (args: { envPath: string }): Record<string, string> => {
@@ -189,13 +187,6 @@ export const formationsWrapper: Wrapper = {
       required: false,
       type: 'string',
     },
-    {
-      name: 'keep-parameter',
-      description:
-        "Parameter name to reuse its previously stored value instead of re-supplying it (repeatable) — the equivalent of CloudFormation's UsePreviousValue. Cannot be combined with a value for the same parameter. update-formation only.",
-      required: false,
-      type: 'string',
-    },
   ],
   // eslint-disable-next-line complexity
   apply: ({ context }) => {
@@ -210,7 +201,6 @@ export const formationsWrapper: Wrapper = {
     const templateInline = flags.single[TEMPLATE_FIELD];
     const parametersInline = flags.single[PARAMETERS_FIELD];
     const parameterValues = flags.repeated[PARAMETER_FLAG] ?? [];
-    const keepParameters = flags.repeated[KEEP_PARAMETER_FLAG] ?? [];
     const envFile = flags.single[ENV_FILE_FLAG];
 
     if (templatePath && templateFile) {
@@ -260,19 +250,11 @@ export const formationsWrapper: Wrapper = {
       forcedBody[PARAMETERS_FIELD] = resolvedParameters;
     }
 
-    if (keepParameters.length > 0) {
-      forcedBody[PARAMETERS_USE_PREVIOUS_FIELD] = keepParameters.map((name) => {
-        return name.trim();
-      });
-    }
-
     delete flags.single[TEMPLATE_PATH_FLAG];
     delete flags.single[TEMPLATE_FILE_FLAG];
     delete flags.single[ENV_FILE_FLAG];
     delete flags.single[PARAMETER_FLAG];
     delete flags.repeated[PARAMETER_FLAG];
-    delete flags.single[KEEP_PARAMETER_FLAG];
-    delete flags.repeated[KEEP_PARAMETER_FLAG];
 
     return {
       flags,
