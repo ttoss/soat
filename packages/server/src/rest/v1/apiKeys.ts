@@ -103,12 +103,6 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
     policyIds?: string[];
   };
 
-  if (!name) {
-    ctx.status = 400;
-    ctx.body = { error: 'name is required' };
-    return;
-  }
-
   if (!projectId) {
     ctx.status = 400;
     ctx.body = { error: 'project_id is required' };

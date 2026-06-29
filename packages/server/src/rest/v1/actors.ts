@@ -168,7 +168,6 @@ const performCreateActor = async (args: {
 };
 
 const validateCreateActorBody = (body: CreateActorBody): string | null => {
-  if (!body.name) return 'name is required';
   return validateActorExclusivity({
     agentId: body.agentId,
     chatId: body.chatId,

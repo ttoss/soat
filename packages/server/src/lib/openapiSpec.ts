@@ -4,7 +4,7 @@ import * as url from 'node:url';
 
 import yaml from 'js-yaml';
 
-import type { SchemaWithProperties } from './openapiSchemaFields';
+import type { SchemaFields, SchemaWithProperties } from './openapiSchemaFields';
 import {
   deriveSchemaFields,
   hasProperties,
@@ -87,21 +87,12 @@ export const getMergedOpenApiSpec = (): MergedSpec => {
   return cachedSpec;
 };
 
-export type RequestSchemaFields = {
-  /** Allowed body field names, converted to camelCase (internal convention). */
-  allowedFields: Set<string>;
-  /** Required body field names, converted to camelCase. */
-  requiredFields: Set<string>;
-};
+// Request bodies are compared in camelCase (after caseTransform), so the
+// kernel keys every set/spec by its camelCase name here.
+export type RequestSchemaFields = SchemaFields;
 
 const deriveFields = (schema: SchemaWithProperties): RequestSchemaFields => {
-  // Request bodies are compared in camelCase (after caseTransform); the
-  // per-field type specs the kernel also derives are unused here.
-  const { allowedFields, requiredFields } = deriveSchemaFields({
-    schema,
-    transformKey: snakeToCamel,
-  });
-  return { allowedFields, requiredFields };
+  return deriveSchemaFields({ schema, transformKey: snakeToCamel });
 };
 
 /**
@@ -189,6 +180,46 @@ const resolveJsonRequestSchema = (operation: unknown): unknown => {
 };
 
 /**
+ * Follows a single `$ref` to its named component schema; returns the schema
+ * object unchanged when it is inline (no `$ref`), or `null` when the ref cannot
+ * be resolved to an object schema. Used to walk nested request schemas.
+ */
+export const resolveSchemaRef = (
+  schema: unknown
+): Record<string, unknown> | null => {
+  if (!isObjectRecord(schema)) return null;
+  const ref = schema.$ref;
+  if (typeof ref !== 'string') return schema;
+  const schemaName = ref.split('/').pop();
+  if (!schemaName) return null;
+  const named = getMergedOpenApiSpec().components.schemas[schemaName];
+  return isObjectRecord(named) ? named : null;
+};
+
+/**
+ * Resolves a route's `application/json` request schema — following a top-level
+ * `$ref` to its named component schema, or returning the inline schema. Returns
+ * `null` when the route has no JSON object body. The result is the raw schema
+ * object (with its `properties`, `oneOf`, `additionalProperties`, …) so callers
+ * can walk it; use `getRouteRequestSchemaFields` for the derived field sets.
+ */
+export const getRouteRequestSchema = (args: {
+  method: string;
+  path: string;
+}): Record<string, unknown> | null => {
+  const method = args.method.toLowerCase();
+  if (!HTTP_METHODS.has(method)) return null;
+
+  const pathItem = getMergedOpenApiSpec().paths[normalizeRoutePath(args.path)];
+  if (!isObjectRecord(pathItem)) return null;
+
+  const schema = resolveJsonRequestSchema(pathItem[method]);
+  if (!isObjectRecord(schema)) return null;
+
+  return resolveSchemaRef(schema);
+};
+
+/**
  * Resolves the allowed/required body fields for a specific route's
  * `application/json` request schema — handling both inline schemas and `$ref`s
  * to named component schemas. Returns `null` when the route has no
@@ -199,23 +230,6 @@ export const getRouteRequestSchemaFields = (args: {
   method: string;
   path: string;
 }): RequestSchemaFields | null => {
-  const method = args.method.toLowerCase();
-  if (!HTTP_METHODS.has(method)) return null;
-
-  const spec = getMergedOpenApiSpec();
-  const pathItem = spec.paths[normalizeRoutePath(args.path)];
-  if (!isObjectRecord(pathItem)) return null;
-
-  const schema = resolveJsonRequestSchema(pathItem[method]);
-  if (!isObjectRecord(schema)) return null;
-
-  const ref = schema.$ref;
-  if (typeof ref === 'string') {
-    const schemaName = ref.split('/').pop();
-    if (!schemaName) return null;
-    const named = spec.components.schemas[schemaName];
-    return hasProperties(named) ? deriveFields(named) : null;
-  }
-
+  const schema = getRouteRequestSchema(args);
   return hasProperties(schema) ? deriveFields(schema) : null;
 };

@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import type { Context } from '../Context';
 import { matchOpenApiPath } from '../lib/openapiSpec';
-import { rejectUnknownFields } from '../lib/requestValidation';
+import { validateRequestBody } from '../lib/requestValidation';
 
 const log = createDebug('soat:strictFields');
 
@@ -44,17 +44,16 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
 };
 
 /**
- * Rejects request bodies with fields not declared in the route's OpenAPI
- * request schema — derived from the spec, the single source of truth for the
- * REST contract, SDK, CLI, and MCP surface — so an allowlist can never drift
- * from the schema.
+ * Validates request bodies against the route's OpenAPI request schema — derived
+ * from the spec, the single source of truth for the REST contract, SDK, CLI,
+ * and MCP surface — so an allowlist can never drift from the schema. Rejects
+ * unknown fields (at every nesting level) and missing top-level required fields
+ * with `VALIDATION_FAILED` (400); see `validateRequestBody`.
  *
  * Runs after `authMiddleware` and `caseTransformMiddleware`, so the body is
  * already camelCase and `ctx.authUser` is resolved. Validation is skipped for
- * unauthenticated requests, leaving the `401` to the route handler (so an
- * unknown field never preempts the auth error or leaks the schema pre-auth).
- *
- * Top-level keys only — nested object typos are not caught (PRD Phase 3).
+ * unauthenticated requests, leaving the `401` to the route handler (so a
+ * validation error never preempts the auth error or leaks the schema pre-auth).
  */
 export const strictFieldsMiddleware = async (ctx: Context, next: Next) => {
   if (
@@ -81,10 +80,11 @@ export const strictFieldsMiddleware = async (ctx: Context, next: Next) => {
     return;
   }
 
-  // `rejectUnknownFields` resolves the route's request schema and throws a
-  // `DomainError('VALIDATION_FAILED')` (400) on any unknown field; it no-ops
-  // when the route has no property-based body schema.
-  rejectUnknownFields({ method: ctx.method, path: template, body });
+  // `validateRequestBody` resolves the route's request schema and throws a
+  // `DomainError('VALIDATION_FAILED')` (400) on any unknown field (at any
+  // nesting level) or missing top-level required field; it no-ops when the
+  // route has no property-based body schema.
+  validateRequestBody({ method: ctx.method, path: template, body });
 
   await next();
 };

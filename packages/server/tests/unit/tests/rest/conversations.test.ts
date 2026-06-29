@@ -392,7 +392,8 @@ describe('Conversations', () => {
         .send({ message: 'role is required branch' });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('role is required');
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/role/);
     });
 
     test('returns 404 for non-existent conversation', async () => {

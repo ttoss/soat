@@ -28,14 +28,12 @@ type CreateAiProviderBody = {
 const validateCreateAiProviderBody = (
   body: CreateAiProviderBody
 ): string | null => {
-  if (!body.name) return 'name is required';
   if (
     !body.provider ||
     !AI_PROVIDER_SLUGS.includes(body.provider as AiProviderSlug)
   ) {
     return `provider must be one of: ${AI_PROVIDER_SLUGS.join(', ')}`;
   }
-  if (!body.defaultModel) return 'defaultModel is required';
   return null;
 };
 

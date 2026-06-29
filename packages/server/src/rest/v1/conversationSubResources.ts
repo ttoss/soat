@@ -81,18 +81,6 @@ conversationSubResourcesRouter.post(
       metadata?: Record<string, unknown>;
     };
 
-    if (!body.message) {
-      ctx.status = 400;
-      ctx.body = { error: 'message is required' };
-      return;
-    }
-
-    if (!body.role) {
-      ctx.status = 400;
-      ctx.body = { error: 'role is required' };
-      return;
-    }
-
     const conversation = await getConversation({
       id: ctx.params.conversation_id,
     });
@@ -311,12 +299,6 @@ conversationSubResourcesRouter.post(
       stream?: boolean;
       toolContext?: Record<string, string>;
     };
-
-    if (!body.agentId) {
-      ctx.status = 400;
-      ctx.body = { error: 'agentId is required' };
-      return;
-    }
 
     if (body.stream) {
       ctx.status = 501;

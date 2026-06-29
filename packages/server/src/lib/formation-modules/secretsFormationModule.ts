@@ -94,7 +94,8 @@ export const secretsFormationModule: FormationModule = {
     const result = await createSecret({
       projectId,
       name: properties.name as string,
-      value: toOptionalString(properties.value) ?? undefined,
+      // `value` is required by SecretResourceProperties and validated above.
+      value: properties.value as string,
     });
 
     log(

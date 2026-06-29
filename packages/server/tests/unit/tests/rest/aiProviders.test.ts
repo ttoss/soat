@@ -169,7 +169,11 @@ describe('AI Providers', () => {
     test('create with secretId from wrong project returns 400', async () => {
       const otherSecretRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/secrets')
-        .send({ project_id: otherProjectId, name: 'Other Project Secret' });
+        .send({
+          project_id: otherProjectId,
+          name: 'Other Project Secret',
+          value: 'sk-test',
+        });
       const otherSecretId = otherSecretRes.body.id;
 
       const response = await authenticatedTestClient(adminToken)

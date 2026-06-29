@@ -175,12 +175,6 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
     metadata?: string;
   };
 
-  if (!body.content) {
-    ctx.status = 400;
-    ctx.body = { error: 'content is required (base64-encoded)' };
-    return;
-  }
-
   const targetProjectId = await resolveWriteProjectId({
     ctx,
     projectPublicId: body.projectId,
@@ -216,12 +210,6 @@ filesRouter.post('/files/presigned-url', async (ctx: Context) => {
     filename?: string;
     contentType?: string;
   };
-
-  if (!body.projectId) {
-    ctx.status = 400;
-    ctx.body = { error: 'projectId is required' };
-    return;
-  }
 
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: body.projectId,

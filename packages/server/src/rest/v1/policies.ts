@@ -47,12 +47,6 @@ policiesRouter.post('/policies', async (ctx: Context) => {
     document?: object;
   };
 
-  if (!document) {
-    ctx.status = 400;
-    ctx.body = { error: 'document is required' };
-    return;
-  }
-
   const result = await createPolicy({
     name,
     description,
@@ -111,12 +105,6 @@ policiesRouter.put('/policies/:policy_id', async (ctx: Context) => {
     description?: string;
     document: object;
   };
-
-  if (!document) {
-    ctx.status = 400;
-    ctx.body = { error: 'document is required' };
-    return;
-  }
 
   const result = await updatePolicy({
     policyId: ctx.params.policy_id,

@@ -1,105 +1,219 @@
 import { DomainError } from '../../../../src/errors';
-import { rejectUnknownFields } from '../../../../src/lib/requestValidation';
+import { validateRequestBody } from '../../../../src/lib/requestValidation';
 
-describe('rejectUnknownFields', () => {
-  test('does not throw when every field is known (inline schema route)', () => {
-    expect(() => {
-      return rejectUnknownFields({
-        method: 'post',
-        path: '/projects',
-        body: { name: 'Acme' },
+const expectThrows = (fn: () => void): DomainError => {
+  let thrown: unknown;
+  try {
+    fn();
+  } catch (error) {
+    thrown = error;
+  }
+  expect(thrown).toBeInstanceOf(DomainError);
+  return thrown as DomainError;
+};
+
+describe('validateRequestBody', () => {
+  describe('unknown fields', () => {
+    test('passes when every top-level field is known (inline schema)', () => {
+      expect(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/projects',
+          body: { name: 'Acme' },
+        });
+      }).not.toThrow();
+    });
+
+    test('passes when every top-level field is known ($ref schema)', () => {
+      expect(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/agents',
+          body: { aiProviderId: 'aip_1', name: 'Alpha', maxSteps: 5 },
+        });
+      }).not.toThrow();
+    });
+
+    test('rejects an unknown top-level field with a bare path', () => {
+      const error = expectThrows(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/agents',
+          body: { aiProviderId: 'aip_1', prompt: 'oops', foo: 1 },
+        });
       });
-    }).not.toThrow();
+      expect(error.code).toBe('VALIDATION_FAILED');
+      expect(error.httpStatus).toBe(400);
+      expect(error.meta).toEqual({ unknownFields: ['prompt', 'foo'] });
+      expect(error.message).toMatch(/Unknown field/);
+    });
+
+    test('rejects an unknown nested field with a dotted path', () => {
+      const error = expectThrows(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/agents',
+          body: { aiProviderId: 'aip_1', knowledgeConfig: { bogus: true } },
+        });
+      });
+      expect(error.meta).toEqual({ unknownFields: ['knowledgeConfig.bogus'] });
+    });
+
+    test('rejects an unknown field inside an array item with an indexed path', () => {
+      const error = expectThrows(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/orchestrations',
+          body: {
+            name: 'flow',
+            nodes: [{ id: 'n1', type: 'agent', bogus: 1 }],
+            edges: [],
+          },
+        });
+      });
+      expect(error.meta).toEqual({ unknownFields: ['nodes.0.bogus'] });
+    });
+
+    test('compares in camelCase (snake_case top-level key is unknown)', () => {
+      const error = expectThrows(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/agents',
+          body: { ai_provider_id: 'aip_1' },
+        });
+      });
+      expect(error.message).toMatch(/ai_provider_id/);
+    });
   });
 
-  test('does not throw when every field is known ($ref schema route)', () => {
-    expect(() => {
-      return rejectUnknownFields({
-        method: 'post',
-        path: '/agents',
-        body: { aiProviderId: 'aip_1', name: 'Alpha', maxSteps: 5 },
-      });
-    }).not.toThrow();
+  describe('skipped (open / ambiguous) levels', () => {
+    test('no-ops for an open additionalProperties map route (tags)', () => {
+      expect(() => {
+        return validateRequestBody({
+          method: 'put',
+          path: '/actors/:actor_id/tags',
+          body: { anything: 'goes', another: 'tag' },
+        });
+      }).not.toThrow();
+    });
+
+    test('skips a nested additionalProperties map (orchestration input_mapping)', () => {
+      expect(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/orchestrations',
+          body: {
+            name: 'flow',
+            nodes: [{ id: 'n1', type: 'agent', inputMapping: { any: 1 } }],
+            edges: [],
+          },
+        });
+      }).not.toThrow();
+    });
+
+    test('skips a nested oneOf union (generation message content)', () => {
+      expect(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/agents/:agent_id/generate',
+          body: { messages: [{ role: 'user', content: { unusual: 'shape' } }] },
+        });
+      }).not.toThrow();
+    });
+
+    test('accepts a policy statement condition (open object) after the spec fix', () => {
+      expect(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/policies',
+          body: {
+            document: {
+              statement: [
+                {
+                  effect: 'Allow',
+                  action: ['files:GetFile'],
+                  condition: {
+                    StringEquals: { 'soat:ResourceTag/env': 'prod' },
+                  },
+                },
+              ],
+            },
+          },
+        });
+      }).not.toThrow();
+    });
+
+    test('no-ops for an unknown route with no spec entry', () => {
+      expect(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/this/route/does/not/exist',
+          body: { whatever: true },
+        });
+      }).not.toThrow();
+    });
   });
 
-  test('does not throw for an empty body', () => {
-    expect(() => {
-      return rejectUnknownFields({
-        method: 'post',
-        path: '/agents',
-        body: {},
+  describe('required fields (top level only)', () => {
+    test('rejects a missing top-level required field', () => {
+      const error = expectThrows(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/projects',
+          body: {},
+        });
       });
-    }).not.toThrow();
-  });
+      expect(error.code).toBe('VALIDATION_FAILED');
+      expect(error.meta).toEqual({ missingFields: ['name'] });
+      expect(error.message).toMatch(/Missing required field/);
+    });
 
-  test('throws a VALIDATION_FAILED DomainError listing unknown fields', () => {
-    let thrown: unknown;
-    try {
-      rejectUnknownFields({
-        method: 'post',
-        path: '/agents',
-        body: { aiProviderId: 'aip_1', prompt: 'oops', foo: 1 },
+    test('treats an empty string as missing for a required string field', () => {
+      const error = expectThrows(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/projects',
+          body: { name: '' },
+        });
       });
-    } catch (error) {
-      thrown = error;
-    }
+      expect(error.meta).toEqual({ missingFields: ['name'] });
+    });
 
-    expect(thrown).toBeInstanceOf(DomainError);
-    const domainError = thrown as DomainError;
-    expect(domainError.code).toBe('VALIDATION_FAILED');
-    expect(domainError.httpStatus).toBe(400);
-    expect(domainError.meta).toEqual({ unknownFields: ['prompt', 'foo'] });
-    expect(domainError.message).toMatch(/prompt/);
-    expect(domainError.message).toMatch(/foo/);
-    expect(domainError.message).toMatch(/Allowed:/);
-    expect(domainError.message).toMatch(/aiProviderId/);
-  });
+    test('does not enforce required fields nested inside objects', () => {
+      // OrchestrationNode requires id+type, but nested required is out of scope —
+      // only the unknown-field walk runs nested. A node missing `type` passes.
+      expect(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/orchestrations',
+          body: { name: 'flow', nodes: [{ id: 'n1' }], edges: [] },
+        });
+      }).not.toThrow();
+    });
 
-  test('resolves the route via the OpenAPI path key (param + prefix normalized)', () => {
-    expect(() => {
-      return rejectUnknownFields({
-        method: 'put',
-        path: '/agents/:agent_id',
-        body: { name: 'renamed' },
+    test('does not throw for a route with no required fields and an empty body', () => {
+      expect(() => {
+        return validateRequestBody({
+          method: 'patch',
+          path: '/agents/:agent_id',
+          body: {},
+        });
+      }).not.toThrow();
+    });
+
+    test('reports both unknown and missing fields together', () => {
+      const error = expectThrows(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/agents',
+          body: { ai_provider_id: 'aip_1' },
+        });
       });
-    }).not.toThrow();
-
-    expect(() => {
-      return rejectUnknownFields({
-        method: 'put',
-        path: '/agents/:agent_id',
-        body: { projectId: 'prj_1' }, // create-only field — not on UpdateAgentRequest
+      // snake_case key is unknown AND the camelCase required field is missing
+      expect(error.meta).toEqual({
+        unknownFields: ['ai_provider_id'],
+        missingFields: ['aiProviderId'],
       });
-    }).toThrow(/projectId/);
-  });
-
-  test('compares in camelCase (snake_case keys are treated as unknown)', () => {
-    expect(() => {
-      return rejectUnknownFields({
-        method: 'post',
-        path: '/agents',
-        body: { ai_provider_id: 'aip_1' },
-      });
-    }).toThrow(/ai_provider_id/);
-  });
-
-  test('no-ops for an open additionalProperties map route (tags)', () => {
-    expect(() => {
-      return rejectUnknownFields({
-        method: 'put',
-        path: '/actors/:actor_id/tags',
-        body: { anything: 'goes', another: 'tag' },
-      });
-    }).not.toThrow();
-  });
-
-  test('no-ops for an unknown route with no spec entry', () => {
-    expect(() => {
-      return rejectUnknownFields({
-        method: 'post',
-        path: '/this/route/does/not/exist',
-        body: { whatever: true },
-      });
-    }).not.toThrow();
+    });
   });
 });

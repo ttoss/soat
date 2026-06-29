@@ -1,7 +1,6 @@
 import { db } from 'src/db';
 import * as actorsModule from 'src/lib/actors';
 import * as agentsModule from 'src/lib/agents';
-import * as memoriesModule from 'src/lib/memories';
 import * as aiProvidersModule from 'src/lib/aiProviders';
 import * as apiKeysModule from 'src/lib/apiKeys';
 import * as chatsModule from 'src/lib/chats';
@@ -14,6 +13,7 @@ import {
   applyDeleteResource,
   applyUpdateResource,
 } from 'src/lib/formationsResourceHandlers';
+import * as memoriesModule from 'src/lib/memories';
 import * as policiesModule from 'src/lib/policies';
 import * as secretsModule from 'src/lib/secrets';
 import * as sessionsModule from 'src/lib/sessions';
@@ -682,15 +682,25 @@ describe('secretsFormationModule', () => {
       applyCreateResource({
         resourceType: 'secret',
         projectId: 5,
-        resolvedProperties: { name: 'my_secret' },
+        resolvedProperties: { name: 'my_secret', value: 'my_value' },
       })
     ).resolves.toBe('sec_1');
 
     expect(mockCreateSecret).toHaveBeenCalledWith({
       projectId: 5,
       name: 'my_secret',
-      value: undefined,
+      value: 'my_value',
     });
+  });
+
+  test('throws when secret create is missing required value', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'secret',
+        projectId: 5,
+        resolvedProperties: { name: 'my_secret' },
+      })
+    ).rejects.toThrow(/value/);
   });
 
   test('throws when secret create properties are not an object', async () => {
@@ -1090,12 +1100,20 @@ describe('webhooksFormationModule - camelCase key normalization', () => {
 
     // camelCase keys like 'webhookUrl' trigger the camelToSnakeKey replace callback
     const errors = module!.validateProperties!({
-      properties: { webhookUrl: 'http://example.com', events: ['*'], name: 'test' },
+      properties: {
+        webhookUrl: 'http://example.com',
+        events: ['*'],
+        name: 'test',
+      },
       basePath: 'resources.MyWebhook.properties',
     });
 
     // 'webhook_url' is not a valid field; validation reports unknown field
-    expect(errors.some((e) => e.message.includes('webhook_url'))).toBe(true);
+    expect(
+      errors.some((e) => {
+        return e.message.includes('webhook_url');
+      })
+    ).toBe(true);
   });
 });
 
@@ -1281,7 +1299,9 @@ describe('memoriesFormationModule - read', () => {
   });
 
   test('returns null when memory is not found (getMemory returns null)', async () => {
-    mockGetMemory.mockResolvedValueOnce(null as unknown as Awaited<ReturnType<typeof memoriesModule.getMemory>>);
+    mockGetMemory.mockResolvedValueOnce(
+      null as unknown as Awaited<ReturnType<typeof memoriesModule.getMemory>>
+    );
 
     const module = getFormationModule({ resourceType: 'memory' });
     const result = await module!.read!({ physicalResourceId: 'mem_missing' });
