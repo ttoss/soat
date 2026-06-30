@@ -9,15 +9,16 @@
 | Provider-native reasoning passthrough       | ✅ Implemented | `reasoning.effort` (low/medium/high) mapped to OpenAI reasoningEffort, Anthropic thinking budget, Google thinking budget in `reasoning.ts` |
 | Shared completion resolver                  | ✅ Implemented | `resolveCompletionModel()` in `completionModel.ts`; used by extraction and reasoning completions |
 | `reasoning` config (agent + per-generate)   | ✅ Implemented | `Agent.reasoningConfig` JSONB (`reasoning` on the wire) + per-generate override (object replace) |
-| Reflect mode (draft → critique → revise)    | ✅ Implemented | `applyReflection()` in `reasoning.ts`; APPROVED short-circuit; failures degrade to the draft     |
-| Debate mode (homogeneous + heterogeneous)   | ✅ Implemented | `runDebate()` in `deliberation.ts`; auto-personas or explicit `perspectives[]`; `maxRounds` (cap 3); `synthesis` override triple; perspective failures drop (quorum continues); full-failure/synthesis-failure degrade to draft |
-| `applyOrchestration` pipeline hook          | ✅ Implemented | Single hook dispatches to reflect or debate; wired into `resolveGenerationResult` in `agentNonStreamGeneration.ts` |
+| Reflect mode (draft → critique → revise)    | ✅ Implemented | Now expressed as a `pipeline` (draft → `completion` critique → `completion` revise); legacy `mode: "reflect"` is inert (degrades + fires fallback event) |
+| Debate mode (homogeneous + heterogeneous)   | ✅ Implemented | Now a `fanout` step — `runFanout()` in `reasoningPipeline.ts`; auto-personas or explicit `perspectives[]`; `rounds` (cap 3); per-perspective provider/model; perspective failures drop (quorum continues); full-failure/synthesis-failure degrade to draft; legacy `mode: "debate"` is inert |
+| **Reasoning pipeline generalization**       | ✅ Implemented | `mode: "pipeline"` with an ordered list of `completion` + `fanout` steps (`runReasoningPipeline()` in `reasoningPipeline.ts`); supersedes the discrete `reflect`/`debate` modes — both now compose as steps. Caps: `MAX_STEPS=8`, `MAX_FANOUT=5`, `MAX_ROUNDS=3`, `MAX_TOTAL_COMPLETIONS=24`, per-step/pipeline timeouts |
+| `applyReasoningPipeline` hook               | ✅ Implemented | Single hook in `reasoningPipelineHook.ts`; wired into `resolveGenerationResult` in `agentNonStreamGeneration.ts` |
 | Trace integration                           | ✅ Implemented | Each perspective turn + synthesis recorded as a child generation (shared `traceId`, `initiatorGenerationId`) tagged with perspective name + round + model |
 | `metadata.reasoning` telemetry summary      | ✅ Implemented | Parent generation summary enriched: debate adds `{ perspectives, rounds, dropped, fallback }`; reflect adds `{ fallback }` — `recordReasoningSummary()` in `reasoning.ts` |
 | Silent-degradation event                    | ✅ Implemented | `agents.reasoning.fallback` event emitted on debate fallback/synthesis_failed and reflect critique_failed/revision_failed — `emitReasoningFallbackEvent()` in `reasoning.ts` |
 | Async debate generate (`?async=true`)       | ❌ Not started | Larger effort; depends on the session async/poll mechanism (deferred)                            |
 | `reasoning.budget` guard                    | ❌ Not started | Optional cap on total internal completions per generation (deferred)                            |
-| Discussions resource module                 | ❌ Not started | Visible transcript, organizer-selected turns, human participants (original PRD, now Phase 4)    |
+| Discussions resource module                 | ❌ Not started | Visible transcript, organizer-selected turns, human participants (original PRD, now Phase 4). **Recommendation: build a thin MVP that delegates deliberation to the existing pipeline engine — see Phase 4.** |
 
 ## Implementation Phases
 
@@ -72,6 +73,18 @@
 
 **Unlocks:** "Deep thinking" as a per-agent or per-request knob; the engine that Phase 4 later exposes as a product.
 
+> **Post-PRD evolution — pipeline generalization (implemented).** Reflect and debate
+> converged into a single configurable **reasoning pipeline**: `mode: "pipeline"` runs an
+> ordered list of steps, where each step is a `completion` (single call — critique, revise,
+> synthesize) or a `fanout` (the debate primitive: N perspectives over M rounds). Reflect is
+> now a 3-step pipeline; debate is a `fanout` step + a `completion` synthesis. The discrete
+> `mode: "reflect"` / `mode: "debate"` values are retained only for back-compat and are
+> **inert** — they degrade to the draft and emit `agents.reasoning.fallback`. The engine lives
+> in `reasoningPipeline.ts` (`runReasoningPipeline`, `runFanout`, `runCompletion`), validated by
+> `validateReasoningConfig` in `reasoning.ts`, and is hooked via `applyReasoningPipeline` in
+> `reasoningPipelineHook.ts`. **Phase 4 layers on this pipeline engine, not on a separate debate
+> implementation.**
+
 ---
 
 ### Phase 3 — Observability & Async 🟡 Observability slice complete; async/budget deferred
@@ -90,19 +103,42 @@
 
 ---
 
-### Phase 4 — Discussions Resource (the visible surface) ❌ Not started
+### Phase 4 — Discussions Resource (the visible surface) ❌ Not started · **Recommendation: thin MVP**
 
-**Goal:** When the debate itself is the deliverable — brainstorming an idea, red-teaming a decision, expert-in-the-loop review — expose the same engine as a first-class resource. This is the original Discussions PRD, now explicitly layered on the Phase 2 engine.
+**Goal:** When the debate itself is the deliverable — brainstorming an idea, red-teaming a decision, expert-in-the-loop review — expose the same engine as a first-class resource. This is the original Discussions PRD, now explicitly layered on the pipeline engine (Phase 2 + the pipeline generalization above).
 
-**Summary of the original design (full details in the git history of this file):**
+#### Should we build it? — Recommendation
 
-- `Discussion` (`disc_`) + `DiscussionParticipant` (`dpt_`): topic, participants (agents with personas), organizer agent, `turn_policy: round_robin | organizer_selects`, `max_rounds`, status lifecycle `pending → running → paused → completed/failed/cancelled`
-- Transcript persisted as a real [Conversation](../packages/website/docs/modules/conversations.md) with [Actor](../packages/website/docs/modules/actors.md) authorship (escape hatch retained); outcome stored as a document
-- Organizer decision protocol (continue/end, next speaker) — prompt-based JSON with lenient parsing and safe fallback until agents support structured output
-- Human participants via `paused` + `required_action` (mirroring orchestration human nodes); webhooks; formation support; optional orchestration `discussion` node type
-- Differences from the Phase 2 engine: persistent transcript (Conversation vs trace), participant identity (Actors vs prompt personas), turn policies with an organizer, human-in-the-loop, async-first lifecycle
+The pipeline engine already delivers the *answer-quality* value of "multiple agents reasoning together" (multi-perspective `fanout` + synthesis, behind one `generate` call, observable in traces). **A Discussions resource is therefore only worth building when the transcript itself is the deliverable** — the one thing the engine deliberately refuses to do: a **persistent, attributed, inspectable transcript**. For pure answer quality, prefer a `reasoning` pipeline; do not stand up a resource.
 
-**Key decision deferred to this phase:** whether participants reference full Agents (tools enabled per turn) or the engine's tool-less perspective calls. The resource surface likely wants real Agents; the deep-thinking engine deliberately avoids tools.
+When that bar is met, build a **thin MVP** that *delegates deliberation to the existing pipeline engine* rather than re-implementing debate. Recommended scope:
+
+| Decision | Recommendation | Rationale |
+| --- | --- | --- |
+| Build the resource? | Yes — thin MVP only | Persistent attributed transcript is the sole capability the engine lacks |
+| Re-implement deliberation? | **No** — reuse `runFanout` / `runReasoningPipeline` | The fanout engine already does perspectives + rounds + synthesis + traces |
+| Participant identity (MVP) | **Engine perspectives (tool-less)** | Maximizes reuse; sidesteps the tools-per-turn decision; leaves a clean seam to real Agents |
+| Lifecycle (MVP) | **Synchronous** `pending → running → completed/failed` | Defer async/poll until the session async mechanism (Phase 3) lands |
+| Turn policy (MVP) | `round_robin` only | `organizer_selects` needs the organizer decision protocol — defer |
+| Human-in-the-loop (MVP) | Deferred | Reuses orchestration `requires_action` later; not MVP |
+
+#### Thin MVP design
+
+- **`Discussion` (`disc_`)**: `project_id`, `topic`, `status` (`pending|running|completed|failed`), `max_rounds` (cap 3), `conversation_id` (the persisted transcript), `outcome_document_id` (the synthesis), `synthesis` override triple, `tags`.
+- **`DiscussionParticipant` (`dpt_`)**: `discussion_id`, `actor_id`, `prompt` (persona), `position`.
+- **Transcript reuse** — persisted as a real [Conversation](../packages/website/docs/modules/conversations.md) with [Actor](../packages/website/docs/modules/actors.md) authorship (`addConversationMessage`), one Actor per participant; outcome stored as a Document. **No new transcript machinery.**
+- **`runDiscussion`** maps participants → the engine's `fanout` perspective list, calls `runReasoningPipeline`/`runFanout` (models resolved via `resolveCompletionModel`), then **persists each turn attributed to its Actor** and the synthesis as the outcome Document. Failure degrades gracefully (deep thinking must never make the resource *less* reliable).
+- Full module surface per `.claude/rules/modules.md`: REST + OpenAPI, permissions, formation module + `DiscussionResourceProperties`, SDK/CLI regen (MCP auto-derived), docs, tests (TDD), smoke steps.
+
+#### Deferred to a later Discussions phase (clean seams kept)
+
+- **Async run** (`?async=true`, `in_progress` + poll) — depends on the session async mechanism (Phase 3 deferred item).
+- **Human participants** via `paused` + `required_action`, mirroring `executeHumanNode` in `orchestrationNodeExecutors.ts`.
+- **`organizer_selects` turn policy** + organizer decision protocol (continue/end, next speaker) — prompt-based JSON with lenient parsing.
+- **Real Agents with tools as participants** — the resource surface likely wants real Agents; the engine deliberately avoids tools. The Actor→participant seam makes this a later swap.
+- **Orchestration `discussion` node type**; webhooks; cancellation/pause lifecycle states.
+
+> Original Phase 4 design (organizer agent, full async-first lifecycle, human-in-the-loop, formation, orchestration node) is preserved in the git history of this file and folded into the "deferred" list above.
 
 ---
 
@@ -116,42 +152,60 @@ All provider/model/prompt overrides in this PRD — `critique`, each `perspectiv
 | `model`          | chain below            | `model` → override provider's `default_model` (when `ai_provider_id` set) → agent's `model` → agent provider's `default_model` |
 | `prompt`         | built-in instructions  | Replaces task instructions only; engine-owned scaffolding (debate transcript framing, synthesis contract) is always appended |
 
-**Shared implementation:** extract the resolution + project-scope check currently in `memoryExtractionCompletion.ts` into a shared helper (e.g. `resolveCompletionModel({ agentId, projectIds, aiProviderId?, model? })`) used by extraction, reflect, debate, and synthesis — one source of truth for the security check.
+**Shared implementation (done):** `resolveCompletionModel({ agentId, projectIds, aiProviderId?, model? })` in `completionModel.ts` is the single source of truth for the resolution + project-scope security check, used by memory extraction and every reasoning step (completion + fanout perspectives + synthesis). Phase 4's `runDiscussion` reuses it unchanged.
 
 ## Reasoning Config Schema
 
 Stored as `reasoningConfig` JSONB on the `agents` table; per-generate `reasoning` body field overrides it (object replace, not deep merge). All snake_case on the wire per case convention.
 
-```jsonc
-// Agent-level default — cheap reflect everywhere
-{ "reasoning": { "mode": "reflect" } }
+The shipped engine uses **`mode: "pipeline"`** with an ordered list of `steps`. Each step is a `completion` (single call — critique, revise, synthesize) or a `fanout` (the debate primitive: N `perspectives` over `rounds`). `effort` composes with any mode. The legacy `mode: "reflect"` / `mode: "debate"` values are retained for back-compat only and are **inert** (they degrade to the draft and fire `agents.reasoning.fallback`).
 
-// Per-request escalation — heterogeneous debate for a hard question
+```jsonc
+// Provider-native reasoning only — no orchestration
+{ "reasoning": { "effort": "high" } }
+
+// Reflect, expressed as a pipeline — draft → critique → revise
 {
   "reasoning": {
-    "mode": "debate",
-    "max_rounds": 2,
-    "perspectives": [
-      { "name": "Skeptic",  "prompt": "Attack the strongest claim and surface hidden assumptions.", "ai_provider_id": "aip_anthropic", "model": "claude-sonnet-4-6" },
-      { "name": "Advocate", "prompt": "Steelman the proposal with concrete evidence.", "model": "gpt-4o-mini" },
-      { "name": "Pragmatist" }
-    ],
-    "synthesis": {
-      "ai_provider_id": "aip_flagship",
-      "prompt": "Weigh the arguments; commit to a single recommendation with rationale."
-    }
+    "mode": "pipeline",
+    "steps": [
+      { "name": "critique", "kind": "completion", "prompt": "Critique the draft; list concrete improvements or reply APPROVED." },
+      { "name": "revise",   "kind": "completion", "prompt": "Revise the draft using the critique.", "output": true, "halt_if_equals": "APPROVED" }
+    ]
+  }
+}
+
+// Debate, expressed as a pipeline — heterogeneous fanout → synthesis
+{
+  "reasoning": {
+    "mode": "pipeline",
+    "steps": [
+      {
+        "name": "debate", "kind": "fanout", "rounds": 2,
+        "perspectives": [
+          { "name": "Skeptic",  "prompt": "Attack the strongest claim and surface hidden assumptions.", "ai_provider_id": "aip_anthropic", "model": "claude-sonnet-4-6" },
+          { "name": "Advocate", "prompt": "Steelman the proposal with concrete evidence.", "model": "gpt-4o-mini" },
+          { "name": "Pragmatist" }
+        ]
+      },
+      {
+        "name": "synthesis", "kind": "completion", "output": true,
+        "ai_provider_id": "aip_flagship",
+        "prompt": "Weigh the arguments; commit to a single recommendation with rationale."
+      }
+    ]
   }
 }
 ```
 
-| Field          | Type                | Default  | Notes                                                          |
-| -------------- | ------------------- | -------- | --------------------------------------------------------------- |
-| `mode`         | string              | `"none"` | `none` \| `reflect` \| `debate`                                 |
-| `critique`     | object              | —        | Reflect only — override triple for the critique pass            |
-| `perspectives` | integer \| object[] | `3`      | Debate only — count (auto personas) or explicit perspective list |
-| `max_rounds`   | integer             | `1`      | Debate only — hard cap 3                                        |
-| `synthesis`    | object              | —        | Debate only — override triple + prompt for the final pass       |
-| `budget`       | integer             | —        | Phase 3 — max total internal completions                        |
+| Field          | Type                | Default  | Notes                                                                                  |
+| -------------- | ------------------- | -------- | -------------------------------------------------------------------------------------- |
+| `effort`       | string              | —        | `low` \| `medium` \| `high` — provider-native reasoning; composes with `mode`           |
+| `mode`         | string              | `"none"` | `none` \| `pipeline` (legacy `reflect` / `debate` accepted but inert)                   |
+| `steps`        | object[]            | —        | Pipeline only — ordered `completion` / `fanout` steps (`MAX_STEPS=8`)                   |
+| `budget`       | integer             | —        | Phase 3 — max total internal completions (`MAX_TOTAL_COMPLETIONS=24` cap today)         |
+
+**Step fields:** `name`, `kind` (`completion` \| `fanout`), `prompt`, `ai_provider_id?`, `model?`, `temperature?`, `output?` (this step's text becomes the answer), `halt_if_equals?`. Fanout adds `count?` (auto-personas) or `perspectives[]` (`{ name?, prompt?, ai_provider_id?, model? }`, 2–5) and `rounds?` (cap 3).
 
 ## Relationship to Other Modules
 
@@ -168,4 +222,4 @@ Stored as `reasoningConfig` JSONB on the `agents` table; per-generate `reasoning
 1. **Auto-escalation** — should a cheap triage step decide *when* to debate ("is this question contested/hard?") instead of a static config? Proposal: defer; per-request override covers it manually.
 2. **Knowledge injection in perspectives** — do perspective calls get the agent's `knowledge_config` context? Proposal: yes for the question context (it's the same question), but no self-retrieval tools.
 3. **Streaming** — debate mode can't stream the final answer until synthesis; stream synthesis tokens only, or emit per-round trace events? Proposal: Phase 3 decision.
-4. **Reflect + debate composition** — allow synthesis output to be reflected on? Proposal: no; keep modes exclusive until there's a proven need.
+4. **Reflect + debate composition** — ~~allow synthesis output to be reflected on?~~ **Resolved** by the pipeline generalization: both compose as `steps`, so a `fanout` synthesis can be followed by `completion` critique/revise steps in one pipeline.
