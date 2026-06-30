@@ -253,10 +253,8 @@ paths:
         Uploads file content authorized by a single-use token from
         `POST /api/v1/files/presigned-url`. No bearer credential is required —
         the token is the credential. Accepts either multipart/form-data (field
-        `file`) or JSON with a base64-encoded `content` field. Excluded from the
-        MCP tool surface; clients call it directly over HTTP.
+        `file`) or JSON with a base64-encoded `content` field.
       operationId: uploadFileWithToken
-      x-soat-mcp-exclude: true
       security: []
       parameters:
         - name: token
