@@ -88,9 +88,9 @@ The token is invalidated after a single successful upload. Subsequent uploads re
 
 #### Large files via MCP
 
-This flow is what makes large uploads possible through MCP. The `upload-file-base64` tool requires the full base64 content as a single tool-call parameter, and payloads larger than ~100 KB are truncated before they reach the agent's tool call. With upload tokens, only step 1 (`create-upload-token`) is exposed as an MCP tool — a small request and a small response that always fit.
+This flow is what makes large uploads possible through MCP. The `upload-file-base64` tool requires the full base64 content as a single tool-call parameter, and payloads larger than ~100 KB are truncated before they reach the agent's tool call. With upload tokens, step 1 (`create-presigned-url`) is a small request with a small response that always fits.
 
-The critical part is **step 2 is not an MCP tool**. The agent performs it out-of-band, using whatever non-MCP HTTP capability its runtime provides — **a shell (e.g. `curl`), a `fetch`/HTTP tool, or a direct SDK call**. The bytes travel over plain HTTP and never become a tool-call argument, so the MCP payload limit never applies.
+Both steps are exposed as MCP tools (`create-presigned-url` and `upload-file-with-token`). However, the MCP payload limit still applies to step 2 when the bytes travel as a tool-call argument — so for large files the agent should perform step 2 **out-of-band** instead, using whatever non-MCP HTTP capability its runtime provides — **a shell (e.g. `curl`), a `fetch`/HTTP tool, or a direct SDK call**. The bytes then travel over plain HTTP and never become a tool-call argument, so the MCP payload limit never applies.
 
 For large files, use `multipart/form-data` and stream the file straight from disk so it is never held as one big in-memory string — do **not** use the base64 `content` field, which would just reintroduce a large payload:
 

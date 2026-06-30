@@ -113,7 +113,7 @@ describe('MCP tools - happy path', () => {
 
   // ── Files ────────────────────────────────────────────────────────────────
 
-  test('create-presigned-url is exposed but upload-file-with-token is excluded', async () => {
+  test('create-presigned-url and upload-file-with-token are both exposed', async () => {
     const res = await listTools();
     expect(res.status).toBe(200);
     const names: string[] = (res.body.result?.tools ?? []).map(
@@ -122,7 +122,27 @@ describe('MCP tools - happy path', () => {
       }
     );
     expect(names).toContain('create-presigned-url');
-    expect(names).not.toContain('upload-file-with-token');
+    expect(names).toContain('upload-file-with-token');
+  });
+
+  test('upload-file-with-token uploads via a presigned token', async () => {
+    const presigned = parseResult(
+      await mcpCall('create-presigned-url', {
+        projectId,
+        prefix: '/mcp',
+        filename: 'mcp-token-upload.txt',
+      })
+    );
+    expect(presigned.uploadToken).toMatch(/^upt_/);
+
+    const res = await mcpCall('upload-file-with-token', {
+      token: presigned.uploadToken,
+      content: Buffer.from('uploaded via mcp token').toString('base64'),
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.id).toBeDefined();
+    expect(result.filename).toBe('mcp-token-upload.txt');
   });
 
   test('upload-file creates a file', async () => {
