@@ -149,16 +149,30 @@ export const uploadFile = async (args: {
   fs.mkdirSync(fileStorageDir, { recursive: true });
 
   // Create DB record first to get publicId for the filename
-  const file = await db.File.create({
-    projectId: args.projectId,
-    path: normalizedPath,
-    filename,
-    contentType: args.contentType,
-    size: args.fileBuffer.length,
-    storageType: 'local' as const,
-    storagePath: '', // filled in below after we know the publicId
-    metadata: args.metadata,
-  });
+  let file;
+  try {
+    file = await db.File.create({
+      projectId: args.projectId,
+      path: normalizedPath,
+      filename,
+      contentType: args.contentType,
+      size: args.fileBuffer.length,
+      storageType: 'local' as const,
+      storagePath: '', // filled in below after we know the publicId
+      metadata: args.metadata,
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.name === 'SequelizeUniqueConstraintError'
+    ) {
+      throw new DomainError(
+        'NAME_CONFLICT',
+        `A file already exists at that path in this project.`
+      );
+    }
+    throw error;
+  }
 
   const ext = filename ? path.extname(filename) : '';
   const storagePath = path.join(fileStorageDir, `${file.publicId}${ext}`);
@@ -341,16 +355,30 @@ export const createFile = async (args: {
     prefix: args.prefix,
     filename: args.filename,
   });
-  const file = await db.File.create({
-    projectId: args.projectId,
-    path: normalizedPath,
-    filename: args.filename ?? filenameFromPath(normalizedPath),
-    contentType: args.contentType,
-    size: args.size,
-    metadata: args.metadata,
-    storageType: 'local' as const,
-    storagePath: '',
-  });
+  let file;
+  try {
+    file = await db.File.create({
+      projectId: args.projectId,
+      path: normalizedPath,
+      filename: args.filename ?? filenameFromPath(normalizedPath),
+      contentType: args.contentType,
+      size: args.size,
+      metadata: args.metadata,
+      storageType: 'local' as const,
+      storagePath: '',
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.name === 'SequelizeUniqueConstraintError'
+    ) {
+      throw new DomainError(
+        'NAME_CONFLICT',
+        `A file already exists at that path in this project.`
+      );
+    }
+    throw error;
+  }
   const mapped = mapFile(file);
 
   resolveProjectPublicId({ projectId: args.projectId }).then(
