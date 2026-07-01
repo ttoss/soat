@@ -27,6 +27,16 @@ export default jestUnitConfig({
   setupFiles: ['<rootDir>/setupTests.ts'],
   setupFilesAfterEnv: ['<rootDir>/setupTestsAfterEnv.ts'],
   transformIgnorePatterns: getTransformIgnorePatterns({
-    esmModules: ['@ttoss/postgresdb', '@ttoss/http-server-mcp', 'nanoid'],
+    // AI SDK v7 packages (and their transitive deps) are ESM-only (no CJS
+    // `require` export condition).
+    esmModules: [
+      '@ttoss/postgresdb',
+      '@ttoss/http-server-mcp',
+      'nanoid',
+      'ai',
+      '@ai-sdk/.+',
+      '@workflow/.+',
+      '@vercel/oidc',
+    ],
   }),
 });

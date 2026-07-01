@@ -422,7 +422,7 @@ describe('runStreamGeneration', () => {
     }).toThrow();
   });
 
-  describe('onFinish callback and prepareStep via isolateModules', () => {
+  describe('onEnd callback and prepareStep via isolateModules', () => {
     // streamText is non-configurable so jest.spyOn can't override it, and
     // jest.mock at file scope won't intercept the already-loaded module.
     // jest.isolateModules reloads the module fresh inside the mock registry,
@@ -445,7 +445,7 @@ describe('runStreamGeneration', () => {
             streamText: (opts: any) => {
               return mockStreamTextFn(opts);
             },
-            stepCountIs: () => {
+            isStepCount: () => {
               return () => {
                 return false;
               };
@@ -470,7 +470,7 @@ describe('runStreamGeneration', () => {
       });
     });
 
-    test('onFinish callback invokes saveTrace and updateGenerationRecord', async () => {
+    test('onEnd callback invokes saveTrace and updateGenerationRecord', async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let capturedOpts: Record<string, any> | undefined;
       mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
@@ -488,8 +488,8 @@ describe('runStreamGeneration', () => {
         agentId: 'agt_onfinish',
       });
 
-      expect(capturedOpts?.onFinish).toBeDefined();
-      await capturedOpts?.onFinish({ steps: [], finishReason: 'stop' });
+      expect(capturedOpts?.onEnd).toBeDefined();
+      await capturedOpts?.onEnd({ steps: [], finishReason: 'stop' });
 
       expect(mockSaveTraceFn).toHaveBeenCalledTimes(1);
       expect(mockUpdateGenerationFn).toHaveBeenCalledTimes(1);

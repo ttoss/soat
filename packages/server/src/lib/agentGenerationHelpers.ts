@@ -1,5 +1,5 @@
 import type { LanguageModel, ModelMessage, Tool, ToolChoice } from 'ai';
-import { stepCountIs, streamText } from 'ai';
+import { isStepCount, streamText } from 'ai';
 import createDebug from 'debug';
 
 import { emitEvent } from './eventBus';
@@ -165,7 +165,7 @@ export const runStreamGeneration = (args: {
   log('runStreamGeneration: tools=%o', Object.keys(args.resolvedTools));
   const result = streamText({
     model: args.model,
-    system,
+    instructions: system,
     messages: nonSystemMessages as ModelMessage[],
     tools:
       Object.keys(args.resolvedTools).length > 0
@@ -178,11 +178,11 @@ export const runStreamGeneration = (args: {
         | { type: 'tool'; toolName: string }
         | undefined) ?? undefined,
     prepareStep,
-    stopWhen: stepCountIs((args.typedAgent.maxSteps as number) ?? 20),
+    stopWhen: isStepCount((args.typedAgent.maxSteps as number) ?? 20),
     temperature: (args.typedAgent.temperature as number) ?? undefined,
     providerOptions: args.providerOptions,
     maxOutputTokens: args.maxOutputTokens,
-    onFinish: ({ steps, finishReason }) => {
+    onEnd: ({ steps, finishReason }) => {
       saveTrace({
         traceId: args.traceId,
         projectId: args.typedAgent.project.id as number,
