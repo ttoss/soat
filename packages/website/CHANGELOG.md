@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.10](https://127.0.0.1/41729/git/ttoss/compare/v0.13.9...v0.13.10) (2026-07-01)
+
+### Bug Fixes
+
+* **files:** return 409 instead of 500 on duplicate path uploads ([#307](https://127.0.0.1/41729/git/ttoss/issues/307)) ([103a5b9](https://127.0.0.1/41729/git/ttoss/commits/103a5b9bc879478a7becf2844b817c52956603c2))
+* **formations:** treat already-gone resources as deleted during teardown ([#311](https://127.0.0.1/41729/git/ttoss/issues/311)) ([7a06f3c](https://127.0.0.1/41729/git/ttoss/commits/7a06f3c29f47bda6cb1822321d5c83598cbf4def))
+
+### Features
+
+* **agents:** add output_schema for structured output generation ([#309](https://127.0.0.1/41729/git/ttoss/issues/309)) ([15c4e53](https://127.0.0.1/41729/git/ttoss/commits/15c4e536fd90305198686bae7327b7812c1a91b5))
+* **files:** expose upload-file-with-token as an MCP tool ([#303](https://127.0.0.1/41729/git/ttoss/issues/303)) ([5c9796f](https://127.0.0.1/41729/git/ttoss/commits/5c9796f10c3a46d0d133b236eb0f976e6376a58d))
+
 ## [0.13.9](https://127.0.0.1/41729/git/ttoss/compare/v0.13.8...v0.13.9) (2026-06-29)
 
 ### Features
