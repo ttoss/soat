@@ -200,7 +200,7 @@ export const createChatCompletion = async (args: {
 
   const result = await generateText({
     model,
-    system,
+    instructions: system,
     messages: nonSystemMessages as ModelMessage[],
   });
 
@@ -230,7 +230,7 @@ export const streamChatCompletion = async (args: {
 
   const result = streamText({
     model,
-    system,
+    instructions: system,
     messages: nonSystemMessages as ModelMessage[],
   });
 
@@ -308,7 +308,7 @@ export const createChatCompletionForChat = async (args: {
 
   const result = await generateText({
     model,
-    system: systemMessage ?? undefined,
+    instructions: systemMessage ?? undefined,
     messages: finalMessages.filter((m) => {
       return m.role !== 'system';
     }) as ModelMessage[],
@@ -373,7 +373,7 @@ export const streamChatCompletionForChat = async (args: {
 
   const result = streamText({
     model,
-    system: systemMessage ?? undefined,
+    instructions: systemMessage ?? undefined,
     messages: userAssistantMessages as ModelMessage[],
   });
 

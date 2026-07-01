@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import type { LanguageModel, ModelMessage, Tool, ToolChoice } from 'ai';
-import { generateText, stepCountIs } from 'ai';
+import { generateText, isStepCount } from 'ai';
 import createDebug from 'debug';
 
 import {
@@ -90,7 +90,7 @@ const callGenerateText = async (args: {
   try {
     return await generateText({
       model: args.model,
-      system: args.system,
+      instructions: args.system,
       messages: args.nonSystemMessages as ModelMessage[],
       tools: hasTools ? args.resolvedTools : undefined,
       toolChoice:
@@ -100,7 +100,7 @@ const callGenerateText = async (args: {
           | { type: 'tool'; toolName: string }
           | undefined) ?? undefined,
       prepareStep: args.prepareStep,
-      stopWhen: stepCountIs((args.typedAgent.maxSteps as number) ?? 20),
+      stopWhen: isStepCount((args.typedAgent.maxSteps as number) ?? 20),
       temperature: (args.typedAgent.temperature as number) ?? undefined,
       abortSignal: args.abortSignal,
       providerOptions: args.providerOptions,
@@ -289,7 +289,7 @@ export const runToolOutputsGeneration = async (args: {
   try {
     return await generateText({
       model: args.pending.resolvedModel,
-      system: args.system,
+      instructions: args.system,
       messages: args.nonSystemMessages as ModelMessage[],
       tools:
         Object.keys(args.pending.resolvedTools).length > 0
@@ -299,7 +299,7 @@ export const runToolOutputsGeneration = async (args: {
         stepRules: args.pending.agentConfig.stepRules,
         logContext: 'non_stream',
       }),
-      stopWhen: stepCountIs(args.pending.agentConfig.maxSteps),
+      stopWhen: isStepCount(args.pending.agentConfig.maxSteps),
       temperature: args.pending.agentConfig.temperature ?? undefined,
     });
   } catch (error) {
