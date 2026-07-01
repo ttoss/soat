@@ -7,9 +7,9 @@ An Ingestion Rule routes a file `content_type` to a converter [Tool](./tools.md)
 
 ## Overview
 
-Native [file ingestion](./documents.md#file-ingestion-and-chunking) only extracts text from PDFs (text layer), `text/plain`, and `text/markdown`. Anything else fails with `FILE_PARSE_FAILED`. An Ingestion Rule fills that gap: it maps a `content_type` glob (e.g. `image/*`, `audio/mpeg`) to a **converter tool** — any `http`, `mcp`, `soat`, or `pipeline` [Tool](./tools.md) that calls an external OCR, speech-to-text, or vision service. When `POST /documents/ingest` receives a file whose type has no native extractor, it looks up the best-matching rule and invokes the tool to produce the document text; the existing chunk + embedding pipeline is unchanged.
+Native [file ingestion](./documents.md#file-ingestion-and-chunking) only extracts text from PDFs (text layer), `text/plain`, and `text/markdown`. Anything else fails with `FILE_PARSE_FAILED`. An Ingestion Rule fills that gap: it maps a `content_type` glob (e.g. `image/*`, `audio/mpeg`, `application/pdf`) to a **converter** — either a [Tool](./tools.md) (`http`/`mcp`/`soat`/`pipeline`) that calls an external OCR, speech-to-text, or vision service, or an [Agent](./agents.md) with a multimodal model. When `POST /documents/ingest` receives a file whose type has no native extractor — or a PDF whose native extraction yields no text — it looks up the best-matching rule and invokes the converter to produce the document text; the existing chunk + embedding pipeline is unchanged.
 
-Rules are per-project. SOAT does not perform OCR or transcription itself — the rule points at a tool you configure, so you can use any API you like.
+Rules are per-project. SOAT does not perform OCR or transcription itself — the rule points at a tool or agent you configure, so you can use any API or model you like.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -21,11 +21,12 @@ Rules are per-project. SOAT does not perform OCR or transcription itself — the
 |-------|------|-------------|
 | `id` | string | Public identifier prefixed with `igr_` |
 | `project_id` | string | ID of the owning project |
-| `content_type_glob` | string | Glob matched against the file's `content_type` (`image/*`, `image/png`, `audio/mpeg`) |
-| `tool_id` | string | Converter tool (`tol_…`). Must be a server-callable type: `http`, `mcp`, `soat`, or `pipeline`. `client` tools are rejected. |
-| `action` | string \| null | Operation id, required for `soat`/`mcp` tools |
-| `preset_parameters` | object \| null | Merged into the tool input before invocation |
-| `file_delivery` | string | How the file reaches the tool: `base64` (default) or `download_url` |
+| `content_type_glob` | string | Glob matched against the file's `content_type` (`image/*`, `image/png`, `audio/mpeg`, `application/pdf`) |
+| `tool_id` | string \| null | Converter tool (`tol_…`). Must be a server-callable type: `http`, `mcp`, `soat`, or `pipeline`. `client` tools are rejected. Mutually exclusive with `agent_id`. |
+| `agent_id` | string \| null | Converter agent (`agt_…`). The file is sent to the agent as multimodal input and its text output becomes the document content. Mutually exclusive with `tool_id`. |
+| `action` | string \| null | Operation id, required for `soat`/`mcp` tool converters |
+| `preset_parameters` | object \| null | Merged into the tool input before invocation (tool converters only) |
+| `file_delivery` | string | How the file reaches a tool converter: `base64` (default) or `download_url` |
 | `chunk_strategy` | string \| null | Optional default chunk strategy (`page`/`whole`/`size`), overridable per ingest request |
 | `chunk_size` | number \| null | Optional default for the `size` strategy |
 | `chunk_overlap` | number \| null | Optional default for the `size` strategy |
@@ -33,7 +34,7 @@ Rules are per-project. SOAT does not perform OCR or transcription itself — the
 | `created_at` | string | ISO 8601 creation timestamp |
 | `updated_at` | string | ISO 8601 last-updated timestamp |
 
-`project_id + content_type_glob` is unique within a project — one rule per glob.
+`project_id + content_type_glob` is unique within a project — one rule per glob. Exactly one of `tool_id` / `agent_id` must be set.
 
 ## Key Concepts
 
@@ -48,9 +49,16 @@ Rules are consulted in two cases:
 
 When no rule matches, behavior is unchanged: a non-native type is rejected with `UNSUPPORTED_FILE_TYPE` (`400`), and an empty native extraction fails the document with `FILE_PARSE_FAILED`.
 
+### Converter: Tool or Agent
+
+A rule's converter is either a [Tool](./tools.md) or an [Agent](./agents.md) (exactly one):
+
+- **Tool converter** (`tool_id`) — ingestion calls the tool with the JSON contract below and reads text from its response. Best for audio, specialized OCR APIs, and long async jobs (the tool can defer via the callback).
+- **Agent converter** (`agent_id`) — ingestion sends the file to the agent as multimodal input with a fixed "extract all text / transcribe" instruction; the agent's text output becomes the document content. Zero extra infrastructure, but the agent's model must support the file's modality (a **vision** model for images and scanned PDFs; an **audio-capable** model for audio). The generation is awaited inline — there is no deferral/callback for agent converters.
+
 ### Converter Tool Contract
 
-Ingestion calls the tool (via the same server-side path as any other tool call) with a fixed input shape and expects one of three output shapes.
+A **tool** converter is called via the same server-side path as any other tool call, with a fixed input shape, and must return one of three output shapes.
 
 **Input** built by ingestion:
 
@@ -162,6 +170,53 @@ curl -X POST https://api.example.com/api/v1/ingestion-rules \
     "content_type_glob": "image/*",
     "tool_id": "tol_ocr",
     "file_delivery": "base64",
+    "chunk_strategy": "whole"
+  }'
+```
+
+</TabItem>
+</Tabs>
+
+### OCR fallback for scanned PDFs (agent converter)
+
+A rule matching `application/pdf` fires only when the native extractor returns no text (a scanned PDF). Point it at a vision **agent** — no external adapter needed. Born-digital PDFs skip it.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-ingestion-rule \
+  --project-id proj_ABC \
+  --content-type-glob "application/pdf" \
+  --agent-id agt_vision \
+  --chunk-strategy whole
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+await soat.ingestionRules.createIngestionRule({
+  body: {
+    project_id: 'proj_ABC',
+    content_type_glob: 'application/pdf',
+    agent_id: 'agt_vision',
+    chunk_strategy: 'whole',
+  },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/ingestion-rules \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "content_type_glob": "application/pdf",
+    "agent_id": "agt_vision",
     "chunk_strategy": "whole"
   }'
 ```

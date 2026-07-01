@@ -44,7 +44,7 @@ extractSourcePages(file)
               └─ non-native type ──────────────► UNSUPPORTED_FILE_TYPE (unchanged)
 ```
 
-**Scanned PDFs** are handled by the same mechanism: the native `unpdf` extractor runs first, and only when it returns no text does ingestion fall back to a rule matching `application/pdf`. That rule's converter tool (an OCR service) produces the text. A born-digital PDF with a text layer never invokes the converter, so there is no added cost for the common case.
+**Scanned PDFs** are handled by the same mechanism: the native `unpdf` extractor runs first, and only when it returns no text does ingestion fall back to a rule matching `application/pdf`. That rule's converter — an OCR **tool** or a vision **agent** — produces the text. A born-digital PDF with a text layer never invokes the converter, so there is no added cost for the common case.
 
 ## Key Design Decisions
 
@@ -55,6 +55,7 @@ extractSourcePages(file)
 | 3 | Long-running conversions | **Async callback path built now.** Converter may return `{ status: "pending" }`; result is posted back to a callback endpoint. | Speech-to-text on long audio exceeds the 5-minute stall timeout; a callback decouples SOAT from holding the request open. |
 | 4 | Converter output contract | **Accept both** a plain string (wrapped as one page) and `{ pages: [{ text, page_number }] }`. | OCR naturally produces pages; transcription produces flat text. Supporting both avoids forcing transcription tools to fabricate page numbers. |
 | 5 | Chunking config on a rule | A rule **may** carry default `chunk_strategy` / `chunk_size` / `chunk_overlap`, overridable per ingest request. | Images suit `whole`; audio may suit `size`. Defaults keep callers from repeating chunk config on every ingest. |
+| 6 | Converter is a tool **or** an agent | A rule references exactly one of `tool_id` / `agent_id`. Agent converters send the file as multimodal input to `createGeneration`; the agent's text output becomes the document content. | A vision agent handles images and scanned PDFs with zero extra infra (no adapter). Tools remain best for audio, specialized OCR APIs, and long async jobs (the agent path is awaited inline, no callback). |
 
 ## Implementation Status
 
@@ -63,7 +64,7 @@ extractSourcePages(file)
 | `IngestionRule` model + migration | ❌ Planned | New table in `packages/postgresdb` |
 | `ingestionRules.ts` lib (CRUD + `resolveIngestionRule` + `validateIngestionRule`) | ❌ Planned | `packages/server/src/lib/ingestionRules.ts` |
 | `POST/GET/PATCH/DELETE /api/v1/ingestion-rules` | ❌ Planned | `packages/server/src/rest/v1/ingestionRules.ts` |
-| Converter invocation in `extractSourcePages` | ❌ Planned | `invokeConverter()` in `documentIngestion.ts` |
+| Converter invocation in `extractSourcePages` | ❌ Planned | `invokeConverter()` in `documentIngestion.ts` — tool (`callTool`) or agent (`createGeneration`) |
 | `POST /api/v1/documents/:id/ingestion-callback` | ❌ Planned | Token-authed async result callback |
 | Short-lived file download token util | ❌ Planned | For `file_delivery: download_url` |
 | OpenAPI (`ingestion-rules.yaml` + `documents.yaml` updates) | ❌ Planned | Then regenerate SDK + CLI |
@@ -83,7 +84,7 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
 - `IngestionRule` Sequelize model + migration (`packages/postgresdb`)
 - `ingestionRules.ts` lib: `createIngestionRule`, `getIngestionRule`, `listIngestionRules`, `updateIngestionRule`, `deleteIngestionRule`
 - `resolveIngestionRule({ projectId, contentType })` — most-specific match
-- `validateIngestionRule({ toolType, action, contentTypeGlob })` — **shared business rule** (per `.claude/rules/modules.md`), reused by the REST route and the formation module. Rejects `client` tools, malformed globs, and soat/mcp tools missing an `action`.
+- `validateIngestionRule({ toolId, agentId, toolType, action, contentTypeGlob })` — **shared business rule** (per `.claude/rules/modules.md`), reused by the REST route and the formation module. Enforces exactly-one-of `tool_id`/`agent_id`, rejects `client` tools, malformed globs, and soat/mcp tools missing an `action`.
 - Lib unit tests: CRUD, glob specificity ordering, validation failures
 
 ### Phase 2 — REST module + generated clients
@@ -101,11 +102,11 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
 
 **Deliverables:**
 
-- `invokeConverter()` in `documentIngestion.ts`: build tool input with `data_base64`, call `callTool`, interpret output (string | `{ pages }`)
-- `extractSourcePages` calls `resolveIngestionRule` for non-native content types **and** as a fallback when native extraction returns zero pages (scanned PDFs)
+- `invokeConverter()` in `documentIngestion.ts`: for a tool rule, build tool input with `data_base64` and call `callTool`; for an agent rule, call `createGeneration` with the file as multimodal input. Interpret output (string | `{ pages }`).
+- `extractSourcePages` calls `resolveIngestionRule` for non-native content types **and** as a PDF fallback when native extraction returns zero pages (scanned PDFs)
 - New failure reasons: `CONVERTER_FAILED`, `CONVERTER_OUTPUT_INVALID`
 - Rule-level chunk defaults applied, overridable per request (Decision #5)
-- Tests: image ingest via matching rule → `ready`; scanned-PDF fallback to an `application/pdf` rule → `ready`; non-native type with no rule → `UNSUPPORTED_FILE_TYPE`; empty native extraction with no rule → `FILE_PARSE_FAILED`; converter error → `failed` `CONVERTER_FAILED`; bad output → `failed` `CONVERTER_OUTPUT_INVALID`. `callTool` mocked via `jest.spyOn` (it is transitively loaded by `app.ts` — see `.claude/rules/tests.md`).
+- Tests: image ingest via matching tool rule → `ready`; scanned-PDF fallback to an `application/pdf` tool rule → `ready`; scanned-PDF fallback to an `application/pdf` **agent** rule → `ready`; non-native type with no rule → `UNSUPPORTED_FILE_TYPE`; empty native extraction with no rule → `FILE_PARSE_FAILED`; converter error → `failed` `CONVERTER_FAILED`; bad output → `failed` `CONVERTER_OUTPUT_INVALID`. `callTool` / `createGeneration` mocked via `jest.spyOn` (both are transitively loaded by `app.ts` — see `.claude/rules/tests.md`).
 
 ### Phase 4 — `download_url` delivery
 
@@ -141,10 +142,11 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
 |-------|------|-------------|
 | `id` | string | Public identifier prefixed with `igr_` |
 | `project_id` | string | Owning project |
-| `content_type_glob` | string | Glob matched against a file's `content_type` (e.g. `image/*`, `audio/mpeg`) |
-| `tool_id` | string | Converter tool (`tol_…`); must be a server-callable type (`http`, `mcp`, `soat`, `pipeline`) |
-| `action` | string \| null | Operation id for `soat`/`mcp` tools |
-| `preset_parameters` | object \| null | Merged into the tool input before invocation |
+| `content_type_glob` | string | Glob matched against a file's `content_type` (e.g. `image/*`, `audio/mpeg`, `application/pdf`) |
+| `tool_id` | string \| null | Converter tool (`tol_…`); must be a server-callable type (`http`, `mcp`, `soat`, `pipeline`). Mutually exclusive with `agent_id`. |
+| `agent_id` | string \| null | Converter agent (`agt_…`). The file is sent to the agent as multimodal input and its text output becomes the document content. Mutually exclusive with `tool_id`. |
+| `action` | string \| null | Operation id for `soat`/`mcp` tool converters |
+| `preset_parameters` | object \| null | Merged into the tool input before invocation (tool converters only) |
 | `file_delivery` | string | `base64` (default) or `download_url` |
 | `chunk_strategy` | string \| null | Optional default (`page`/`whole`/`size`), overridable per ingest request |
 | `chunk_size` | number \| null | Optional default for `size` strategy |
@@ -153,7 +155,9 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
 | `created_at` | string | ISO 8601 |
 | `updated_at` | string | ISO 8601 |
 
-`project_id + content_type_glob` is unique within a project.
+`project_id + content_type_glob` is unique within a project. Exactly one of `tool_id` / `agent_id` must be set — enforced by `validateIngestionRule` (shared with the formation module).
+
+The **PDF fallback** is just a rule with `content_type_glob: application/pdf`: because PDFs are extracted natively first, such a rule can only ever fire when native extraction yields no text, so it is by definition the scanned/image-only-PDF fallback. Point it at an OCR tool or a vision agent.
 
 ### Matching (most-specific wins)
 
@@ -166,9 +170,13 @@ Rules are consulted in two situations:
 
 When no rule matches, behavior is unchanged: a non-native type is rejected with `UNSUPPORTED_FILE_TYPE` (`400`) and an empty native extraction fails the document with `FILE_PARSE_FAILED`.
 
-## Converter Tool Contract
+## Converter Contract
 
-### Input (built by ingestion, passed to `callTool`)
+A converter is either a **tool** (JSON contract below) or an **agent**.
+
+**Agent converters.** Instead of the JSON contract, ingestion calls `createGeneration` on the agent with a fixed instruction ("Extract all text / transcribe this file") and the file attached as multimodal input (image/PDF page images for vision models; audio for audio-capable models). The agent's final text output becomes the source text, chunked per the rule's `chunk_strategy`. The generation is awaited inline (bounded by the agent's generation limits) — there is no `{ status: "pending" }` callback for agent converters. The agent's model must support the file's modality; otherwise the document fails with `CONVERTER_FAILED`.
+
+### Tool input (built by ingestion, passed to `callTool`)
 
 ```jsonc
 {
@@ -238,7 +246,7 @@ POST /api/v1/ingestion-rules
 
 The `ingestion-callback` endpoint is authorized by its single-use token, not an IAM action — the external converter is not a SOAT principal. The token is a signed JWT scoped to one document and one ingestion attempt, rejected once the document leaves `processing`.
 
-The caller creating a rule must have read access to the referenced tool; converter invocation at ingest time runs with the ingesting caller's authorization.
+The caller creating a rule must have read access to the referenced tool or agent; converter invocation at ingest time runs with the ingesting caller's authorization.
 
 ## Configuration
 
@@ -250,12 +258,12 @@ The caller creating a rule must have read access to the referenced tool; convert
 
 - **Callback token** — signed JWT, single-use, expiring, scoped to `{ documentId, attemptId, purpose: "ingestion-callback" }`; rejected once the document is no longer `processing`. Guards replay and sync+callback double-completion.
 - **Download URL** — short-lived signed token scoped to `GET /files/:id/download`, required because the file-download route is normally user-authed and an external API is not a SOAT user.
-- **Tool type restriction** — `client` tools are rejected at rule creation and at invocation; only `http`/`mcp`/`soat`/`pipeline` run server-side.
-- **No new outbound surface** — converters call external APIs through the existing `callTool` path and its policy checks.
+- **Tool type restriction** — `client` tools are rejected at rule creation and at invocation; only `http`/`mcp`/`soat`/`pipeline` tools (or an agent) run server-side.
+- **No new outbound surface** — tool converters call external APIs through the existing `callTool` path and its policy checks; agent converters run through the existing `createGeneration` path.
 
 ## Out of Scope
 
-- Building OCR/ASR into the server (converters are user-provided tools).
+- Building OCR/ASR into the server (converters are user-provided tools or agents).
 - Retry/backoff policies for failed converters (re-run via `POST /documents/:id/ingest`).
 - Multiple converter rules per content type with fallback chaining (uniqueness enforces one rule per glob).
 - Multimodal-native ingestion that skips text extraction (documents remain text + embeddings).
