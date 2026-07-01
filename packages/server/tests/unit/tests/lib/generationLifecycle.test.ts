@@ -46,6 +46,7 @@ describe('generationLifecycle', () => {
         activeToolIds: null,
         stepRules: null,
         temperature: null,
+        outputSchema: null,
       },
       resolvedTools: {},
       initiatorGenerationId: null,

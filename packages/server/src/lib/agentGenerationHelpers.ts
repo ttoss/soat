@@ -36,6 +36,7 @@ export type PendingGeneration = {
     activeToolIds: string[] | null;
     stepRules: unknown;
     temperature: number | null;
+    outputSchema: unknown;
   };
   resolvedTools: Record<string, Tool>;
   toolContext?: Record<string, string>;
@@ -51,6 +52,8 @@ export type GenerationResult = {
     finishReason: string;
     /** Full AI SDK response messages from this generation (tool calls, tool results, final text). */
     responseMessages?: Array<unknown>;
+    /** Structured object matching the agent's `outputSchema`, when configured. */
+    object?: unknown;
   };
   requiredAction?: {
     type: 'submit_tool_outputs';
@@ -75,6 +78,7 @@ export type TypedAgent = {
   temperature: unknown;
   knowledgeConfig: unknown;
   reasoningConfig: unknown;
+  outputSchema: unknown;
   project: { id: unknown; publicId: string };
   aiProvider: { publicId: string };
 };
@@ -263,6 +267,7 @@ const storePendingGenerationState = (args: {
       activeToolIds: args.typedAgent.activeToolIds as string[] | null,
       stepRules: args.typedAgent.stepRules,
       temperature: args.typedAgent.temperature as number | null,
+      outputSchema: args.typedAgent.outputSchema,
     },
     resolvedTools: args.resolvedTools,
     initiatorGenerationId: null,
@@ -357,6 +362,7 @@ export const buildCompletedGenerationResult = async (args: {
     response?: { modelId?: string; messages?: Array<unknown> };
     text: string;
     finishReason: string;
+    object?: unknown;
   };
   typedAgent: TypedAgent;
   agentId: string;
@@ -389,6 +395,9 @@ export const buildCompletedGenerationResult = async (args: {
       content: args.result.text,
       finishReason: args.result.finishReason,
       responseMessages: args.result.response?.messages,
+      ...(args.result.object !== undefined
+        ? { object: args.result.object }
+        : {}),
     },
   };
 

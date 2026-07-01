@@ -90,6 +90,7 @@ const mapAgentProperties = (properties: Record<string, unknown>) => {
     ),
     knowledgeConfig: toOptional(toNullableObject(properties.knowledge_config)),
     reasoningConfig: toOptional(toNullableObject(properties.reasoning)),
+    outputSchema: toOptional(toNullableObject(properties.output_schema)),
   };
 };
 
@@ -159,6 +160,7 @@ export const agentsFormationModule: FormationModule = {
       ),
       knowledgeConfig: toNullableObject(properties.knowledge_config),
       reasoningConfig: toNullableObject(properties.reasoning),
+      outputSchema: toNullableObject(properties.output_schema),
     });
   },
 
@@ -186,6 +188,7 @@ export const agentsFormationModule: FormationModule = {
         single_session_per_actor: agent.singleSessionPerActor,
         knowledge_config: agent.knowledgeConfig,
         reasoning: agent.reasoning,
+        output_schema: agent.outputSchema,
       };
     } catch {
       return null;

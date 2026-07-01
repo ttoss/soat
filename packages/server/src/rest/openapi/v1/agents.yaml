@@ -627,6 +627,10 @@ components:
                           type: string
                         model:
                           type: string
+        output_schema:
+          type: object
+          nullable: true
+          description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations use the AI SDK to constrain output to this schema; the parsed value is returned as `output.object` in the generation response. See the Structured Output section in the Agents module docs.'
         max_context_messages:
           type: integer
           nullable: true
@@ -809,6 +813,10 @@ components:
                           type: string
                         model:
                           type: string
+        output_schema:
+          type: object
+          nullable: true
+          description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations use the AI SDK to constrain output to this schema; the parsed value is returned as `output.object` in the generation response. See the Structured Output section in the Agents module docs.'
         max_context_messages:
           type: integer
           description: Maximum number of recent messages included in the context window. Null means no limit.
@@ -989,6 +997,10 @@ components:
                           type: string
                         model:
                           type: string
+        output_schema:
+          type: object
+          nullable: true
+          description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations use the AI SDK to constrain output to this schema; the parsed value is returned as `output.object` in the generation response. See the Structured Output section in the Agents module docs.'
         max_context_messages:
           type: integer
           nullable: true
@@ -1212,6 +1224,10 @@ components:
           type: string
           nullable: true
           description: Final text output (when completed)
+        object:
+          type: object
+          nullable: true
+          description: Structured object matching the agent's `output_schema` (when completed and `output_schema` is set)
         tool_calls:
           type: array
           nullable: true

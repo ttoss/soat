@@ -677,6 +677,10 @@ components:
                           type: string
                         model:
                           type: string
+        output_schema:
+          type: object
+          nullable: true
+          description: JSON Schema describing the structured object the model must return. Non-streaming generations are constrained to this schema; the parsed value is returned as `output.object`.
 
     ActorResourceProperties:
       description: >-
