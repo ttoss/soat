@@ -107,7 +107,7 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
 - `extractSourcePages` calls `resolveIngestionRule` for non-native content types, as a PDF fallback when native extraction returns zero pages (scanned PDFs), **and** before native extraction when the matching rule sets `native_extraction: skip` (bypass native, convert every PDF)
 - New failure reasons: `CONVERTER_FAILED`, `CONVERTER_OUTPUT_INVALID`
 - Rule-level chunk defaults applied, overridable per request (Decision #5)
-- Tests: image ingest via matching tool rule → `ready`; scanned-PDF fallback to an `application/pdf` tool rule → `ready`; scanned-PDF fallback to an `application/pdf` **agent** rule → `ready`; `native_extraction: skip` converts a text-layer PDF (native bypassed); `native_extraction: fallback` leaves a text-layer PDF on the native path (converter not called); non-native type with no rule → `UNSUPPORTED_FILE_TYPE`; empty native extraction with no rule → `FILE_PARSE_FAILED`; converter error → `failed` `CONVERTER_FAILED`; bad output → `failed` `CONVERTER_OUTPUT_INVALID`. `callTool` / `createGeneration` mocked via `jest.spyOn` (both are transitively loaded by `app.ts` — see `.claude/rules/tests.md`).
+- Tests: image ingest via matching tool rule → `ready`; scanned-PDF fallback to an `application/pdf` tool rule → `ready`; scanned-PDF fallback to an `application/pdf` **agent** rule → `ready`; `native_extraction: skip` converts a text-layer PDF (native bypassed); `native_extraction: first` leaves a text-layer PDF on the native path (converter not called); non-native type with no rule → `UNSUPPORTED_FILE_TYPE`; empty native extraction with no rule → `FILE_PARSE_FAILED`; converter error → `failed` `CONVERTER_FAILED`; bad output → `failed` `CONVERTER_OUTPUT_INVALID`. `callTool` / `createGeneration` mocked via `jest.spyOn` (both are transitively loaded by `app.ts` — see `.claude/rules/tests.md`).
 
 ### Phase 4 — `download_url` delivery
 
@@ -148,7 +148,7 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
 | `agent_id` | string \| null | Converter agent (`agt_…`). The file is sent to the agent as multimodal input and its text output becomes the document content. Mutually exclusive with `tool_id`. |
 | `action` | string \| null | Operation id for `soat`/`mcp` tool converters |
 | `preset_parameters` | object \| null | Merged into the tool input before invocation (tool converters only) |
-| `native_extraction` | string | For native types (PDF): `fallback` (default) — run the native extractor first, convert only when it yields no text; or `skip` — bypass the native extractor and always convert. Ignored for non-native types (no native extractor exists). |
+| `native_extraction` | string | For native types (PDF): `first` (default) — run the native extractor first, convert only when it yields no text; or `skip` — bypass the native extractor and always convert. Ignored for non-native types (no native extractor exists). |
 | `file_delivery` | string | `base64` (default) or `download_url` |
 | `chunk_strategy` | string \| null | Optional default (`page`/`whole`/`size`), overridable per ingest request |
 | `chunk_size` | number \| null | Optional default for `size` strategy |
@@ -161,7 +161,7 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
 
 The **PDF fallback** is just a rule with `content_type_glob: application/pdf`. Its `native_extraction` field decides when the converter runs:
 
-- `fallback` (default) — the native `unpdf` extractor runs first, and the converter fires only when it yields no text. Born-digital PDFs skip the converter; scanned/image-only PDFs go to it. No added cost for the common case.
+- `first` (default) — the native `unpdf` extractor runs first, and the converter fires only when it yields no text. Born-digital PDFs skip the converter; scanned/image-only PDFs go to it. No added cost for the common case.
 - `skip` — the native extractor is bypassed and **every** matching PDF goes to the converter. Use when the text layer is unreliable/garbled and you want OCR on all PDFs.
 
 Point either mode at an OCR tool or a vision agent.

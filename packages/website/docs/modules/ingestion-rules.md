@@ -26,7 +26,7 @@ Rules are per-project. SOAT does not perform OCR or transcription itself — the
 | `agent_id` | string \| null | Converter agent (`agt_…`). The file is sent to the agent as multimodal input and its text output becomes the document content. Mutually exclusive with `tool_id`. |
 | `action` | string \| null | Operation id, required for `soat`/`mcp` tool converters |
 | `preset_parameters` | object \| null | Merged into the tool input before invocation (tool converters only) |
-| `native_extraction` | string | For PDFs: `fallback` (default) converts only when native extraction yields no text; `skip` bypasses native extraction and converts every matching PDF. Ignored for non-native types. |
+| `native_extraction` | string | For PDFs: `first` (default) converts only when native extraction yields no text; `skip` bypasses native extraction and converts every matching PDF. Ignored for non-native types. |
 | `file_delivery` | string | How the file reaches a tool converter: `base64` (default) or `download_url` |
 | `chunk_strategy` | string \| null | Optional default chunk strategy (`page`/`whole`/`size`), overridable per ingest request |
 | `chunk_size` | number \| null | Optional default for the `size` strategy |
@@ -56,7 +56,7 @@ For PDFs, the `native_extraction` field on the matching `application/pdf` rule c
 
 | `native_extraction` | Behavior | Use when |
 |---------------------|----------|----------|
-| `fallback` (default) | Native `unpdf` extraction runs first; the converter fires only for PDFs with no text layer. | You only want to OCR scanned/image-only PDFs; born-digital PDFs stay on the fast native path. |
+| `first` (default) | Native `unpdf` extraction runs first; the converter fires only for PDFs with no text layer. | You only want to OCR scanned/image-only PDFs; born-digital PDFs stay on the fast native path. |
 | `skip` | Native extraction is bypassed; **every** matching PDF goes to the converter. | The PDFs' text layer is unreliable or garbled and you want OCR applied to all of them. |
 
 `native_extraction` has no effect on non-native types (images, audio) — there is no native extractor to skip, so their converter always runs.
