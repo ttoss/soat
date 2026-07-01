@@ -32,6 +32,7 @@ export const PUBLIC_ID_PREFIXES = {
   formationOperation: 'form_op_',
   documentChunk: 'dchunk_',
   uploadToken: 'upt_',
+  ingestionRule: 'igr_',
 } as const;
 
 /**

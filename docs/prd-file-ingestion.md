@@ -62,8 +62,10 @@ extractSourcePages(file)
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| `IngestionRule` model + migration | ❌ Planned | New table in `packages/postgresdb` |
-| `ingestionRules.ts` lib (CRUD + `resolveIngestionRule` + `validateIngestionRule`) | ❌ Planned | `packages/server/src/lib/ingestionRules.ts` |
+| `IngestionRule` model | ✅ Implemented | `packages/postgresdb/src/models/IngestionRule.ts`. Schema is sync-based in this repo (no migration files) — the table is created via `sequelize.sync()`. |
+| `ingestionRules.ts` lib (CRUD + `resolveIngestionRule`) | ✅ Implemented | `packages/server/src/lib/ingestionRules.ts` |
+| `validateIngestionRule` | ✅ Implemented | Extracted to `packages/server/src/lib/ingestionRuleValidation.ts` (pure function, no DB — reusable by the REST route and formation module) |
+| Content-type glob matching + specificity ranking | ✅ Implemented | Extracted to `packages/server/src/lib/ingestionRuleMatching.ts` |
 | `POST/GET/PATCH/DELETE /api/v1/ingestion-rules` | ❌ Planned | `packages/server/src/rest/v1/ingestionRules.ts` |
 | Converter invocation in `extractSourcePages` | ❌ Planned | `invokeConverter()` in `documentIngestion.ts` — tool (`callTool`) or agent (`createGeneration`) |
 | `POST /api/v1/documents/:id/ingestion-callback` | ❌ Planned | Token-authed async result callback |
@@ -78,15 +80,18 @@ extractSourcePages(file)
 
 Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is complete only when `pnpm typecheck`, `pnpm eslint --fix`, `pnpm test`, and `pnpm run -w smoke-tests` all pass.
 
-### Phase 1 — `IngestionRule` resource (data + lib)
+### Phase 1 — `IngestionRule` resource (data + lib) ✅ Complete
 
-**Deliverables:**
+**Deliverables (as implemented):**
 
-- `IngestionRule` Sequelize model + migration (`packages/postgresdb`)
+- `IngestionRule` Sequelize model (`packages/postgresdb/src/models/IngestionRule.ts`) — `igr_` public ID prefix, `project_id + content_type_glob` unique index, `tool_id`/`agent_id` nullable FKs (`RESTRICT` on delete, like `Document.fileId`), model-level `beforeValidate` guard backstopping the exactly-one-of-`toolId`/`agentId` rule
 - `ingestionRules.ts` lib: `createIngestionRule`, `getIngestionRule`, `listIngestionRules`, `updateIngestionRule`, `deleteIngestionRule`
-- `resolveIngestionRule({ projectId, contentType })` — most-specific match
-- `validateIngestionRule({ toolId, agentId, toolType, action, contentTypeGlob })` — **shared business rule** (per `.claude/rules/modules.md`), reused by the REST route and the formation module. Enforces exactly-one-of `tool_id`/`agent_id`, rejects `client` tools, malformed globs, and soat/mcp tools missing an `action`.
-- Lib unit tests: CRUD, glob specificity ordering, validation failures
+- `resolveIngestionRule({ projectId, contentType })` — most-specific match, backed by `ingestionRuleMatching.ts` (`matchesContentTypeGlob`, `compareGlobSpecificity`)
+- `validateIngestionRule({ toolId, agentId, toolType, action, contentTypeGlob })` in `ingestionRuleValidation.ts` — **shared business rule** (per `.claude/rules/modules.md`), pure and DB-free so it is reusable by the REST route (Phase 2) and the formation module (Phase 6). Enforces exactly-one-of `tool_id`/`agent_id`, rejects `client` tools, malformed globs, and soat/mcp tools missing an `action`.
+- New error codes: `TOOL_NOT_FOUND` (400), `INGESTION_RULE_VALIDATION_FAILED` (400), `INGESTION_RULE_GLOB_CONFLICT` (409)
+- Lib unit tests (`packages/server/tests/unit/tests/lib/ingestionRules.test.ts`, `ingestionRuleMatching.test.ts`): CRUD, glob specificity ordering, validation failures — 44 tests
+
+*(Design deviation: `validateIngestionRule` and the glob-matching helpers were factored into their own files, `ingestionRuleValidation.ts` and `ingestionRuleMatching.ts`, rather than living inline in `ingestionRules.ts` — keeps each file focused and under the project's `max-lines` lint limit, and lets Phase 2/6 import just the pure validator without pulling in DB-dependent CRUD code.)*
 
 ### Phase 2 — REST module + generated clients
 
