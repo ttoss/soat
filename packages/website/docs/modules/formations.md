@@ -338,6 +338,12 @@ The formation stack itself has these statuses:
 | `deleted`       | All resources removed                                    |
 | `delete_failed` | Stack teardown encountered failures                      |
 
+Deletion is idempotent: if a managed resource was already removed outside of
+the formation (for example, deleted directly through its own REST endpoint),
+teardown treats it as already gone rather than failing the stack. Only
+unexpected errors mark the operation `failed` and leave the stack in
+`delete_failed`.
+
 ### Operations and Event Log
 
 Every deploy (create, update, delete) creates a `FormationOperation` record with:
