@@ -25,7 +25,7 @@ Rules are per-project. SOAT does not perform OCR or transcription itself — the
 | `tool_id` | string \| null | Converter tool (`tol_…`). Must be a server-callable type: `http`, `mcp`, `soat`, or `pipeline`. `client` tools are rejected. Mutually exclusive with `agent_id`. |
 | `agent_id` | string \| null | Converter agent (`agt_…`). The file is sent to the agent as multimodal input and its text output becomes the document content. Mutually exclusive with `tool_id`. |
 | `action` | string \| null | Operation id, required for `soat`/`mcp` tool converters |
-| `preset_parameters` | object \| null | Merged into the tool input before invocation (tool converters only) |
+| `preset_parameters` | object \| null | Merged into the tool input before invocation (tool converters only). Cannot contain the reserved keys `file` or `callback`, which ingestion injects. |
 | `native_extraction` | string | For PDFs: `first` (default) converts only when native extraction yields no text; `skip` bypasses native extraction and converts every matching PDF. Ignored for non-native types. |
 | `file_delivery` | string | How the file reaches a tool converter: `base64` (default) or `download_url` |
 | `chunk_strategy` | string \| null | Optional default chunk strategy (`page`/`whole`/`size`), overridable per ingest request |
@@ -112,14 +112,14 @@ Any other shape fails the document with `CONVERTER_OUTPUT_INVALID`; a tool error
 
 | Mode | Behavior | Use when |
 |------|----------|----------|
-| `base64` (default) | Ingestion downloads the file and passes `data_base64` in the tool input | Small files; provider-agnostic; works with any storage backend |
-| `download_url` | Ingestion passes a short-lived signed `download_url`; the tool/API fetches it | Large files (e.g. long audio) where base64 is impractical |
+| `base64` (default) | Ingestion downloads the file and passes `data_base64` in the tool input | Small files; provider-agnostic; works with any storage backend. Note: the whole file is loaded into memory and the request body. |
+| `download_url` | Ingestion passes a short-lived signed `download_url`; the tool/API fetches it | Large files (long audio, high-resolution images/scans) where base64 is impractical, and providers that accept a remote URL |
 
 ### Synchronous vs Async (Callback) Conversion
 
 A converter tool that returns text (or `{ pages }`) directly is **synchronous** — ingestion continues to chunk and embed inline.
 
-A tool that returns `{ status: "pending" }` is **asynchronous**: the document stays in `processing` while the external job runs, then the tool (or the service it wires) posts the result to `POST /api/v1/documents/:id/ingestion-callback`. The callback is authorized by a single-use, signed token scoped to that document and ingestion attempt — not by an IAM action, since the external converter is not a SOAT user. Once the result arrives, ingestion runs the normal chunk + embed tail and marks the document `ready`.
+A tool that returns `{ status: "pending" }` is **asynchronous**: the document stays in `processing` while the external job runs, then the tool (or the service it wires) posts the result to `POST /api/v1/documents/:id/ingestion-callback`. The callback is authorized by a single-use, signed token scoped to that document and ingestion attempt — not by an IAM action, since the external converter is not a SOAT user. It is accepted only while that attempt is still `processing`, so a replayed callback, a callback for a superseded attempt (after re-ingest), or one that arrives after the stall timeout already failed the document is rejected. Once the result arrives, ingestion runs the normal chunk + embed tail and marks the document `ready`.
 
 A document awaiting a callback for longer than `CONVERSION_STALL_TIMEOUT_MS` is auto-failed with `CONVERSION_TIMEOUT` (see [Configuration](#configuration)). This is the converter-specific counterpart of the [stuck-ingestion recovery](./documents.md#stuck-ingestion-recovery) in the documents module.
 
@@ -249,7 +249,7 @@ Once a matching rule exists, ingest a non-native file exactly like any other —
 
 ```bash
 # Upload the image, then ingest — the image/* rule handles conversion
-FILE_ID=$(soat upload-file --project-id proj_ABC --file ./scan.png --jq '.id')
+FILE_ID=$(soat upload-file --project-id proj_ABC --file ./scan.png | jq -r '.id')
 
 soat ingest-document \
   --project-id proj_ABC \

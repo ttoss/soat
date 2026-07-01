@@ -87,8 +87,8 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
 - `IngestionRule` Sequelize model (`packages/postgresdb/src/models/IngestionRule.ts`) — `igr_` public ID prefix, `project_id + content_type_glob` unique index, `tool_id`/`agent_id` nullable FKs (`RESTRICT` on delete, like `Document.fileId`), model-level `beforeValidate` guard backstopping the exactly-one-of-`toolId`/`agentId` rule
 - `ingestionRules.ts` lib: `createIngestionRule`, `getIngestionRule`, `listIngestionRules`, `updateIngestionRule`, `deleteIngestionRule`
 - `resolveIngestionRule({ projectId, contentType })` — most-specific match, backed by `ingestionRuleMatching.ts` (`matchesContentTypeGlob`, `compareGlobSpecificity`)
-- `validateIngestionRule({ toolId, agentId, toolType, action, contentTypeGlob })` in `ingestionRuleValidation.ts` — **shared business rule** (per `.claude/rules/modules.md`), pure and DB-free so it is reusable by the REST route (Phase 2) and the formation module (Phase 6). Enforces exactly-one-of `tool_id`/`agent_id`, rejects `client` tools, malformed globs, and soat/mcp tools missing an `action`.
-- New error codes: `TOOL_NOT_FOUND` (400), `INGESTION_RULE_VALIDATION_FAILED` (400), `INGESTION_RULE_GLOB_CONFLICT` (409)
+- `validateIngestionRule({ toolId, agentId, toolType, action, contentTypeGlob, presetParameters })` in `ingestionRuleValidation.ts` — **shared business rule** (per `.claude/rules/modules.md`), pure and DB-free so it is reusable by the REST route (Phase 2) and the formation module (Phase 6). Enforces exactly-one-of `tool_id`/`agent_id`, rejects `client` tools, malformed globs, soat/mcp tools missing an `action`, and `preset_parameters` containing the reserved keys `file` or `callback` (which ingestion injects — see [Tool input](#tool-input-built-by-ingestion-passed-to-calltool)).
+- New error code: `INGESTION_RULE_VALIDATION_FAILED` (400). Glob-uniqueness conflicts surface as `INGESTION_RULE_GLOB_CONFLICT` (409). **Referenced-converter existence** is checked at the DB-aware create/update layer (Phase 2), not in `validateIngestionRule` (which is pure and cannot look up a row): a missing `tool_id` raises `TOOL_NOT_FOUND` (new, 400) and a missing `agent_id` raises `AGENT_NOT_FOUND` (existing, 400).
 - Lib unit tests (`packages/server/tests/unit/tests/lib/ingestionRules.test.ts`, `ingestionRuleMatching.test.ts`): CRUD, glob specificity ordering, validation failures — 44 tests
 
 *(Design deviation: `validateIngestionRule` and the glob-matching helpers were factored into their own files, `ingestionRuleValidation.ts` and `ingestionRuleMatching.ts`, rather than living inline in `ingestionRules.ts` — keeps each file focused and under the project's `max-lines` lint limit, and lets Phase 2/6 import just the pure validator without pulling in DB-dependent CRUD code.)*
@@ -126,11 +126,13 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
 
 **Deliverables:**
 
-- Converter returning `{ status: "pending" }` leaves the document `processing` and persists `metadata.conversion = { tool_id, callback_token_id, submitted_at }`
+- Converter returning `{ status: "pending" }` leaves the document `processing` and persists `metadata.conversion = { converter_id, attempt_id, submitted_at }`. `attempt_id` is a fresh identifier per ingestion attempt (a new one is minted on every `POST /documents/:id/ingest`) and is the same value carried in the callback token — so a stale callback from a previous attempt is distinguishable from the current one.
 - `POST /api/v1/documents/:id/ingestion-callback` — **token-authed** (single-use signed JWT scoped to `{ documentId, attemptId, purpose: "ingestion-callback" }`), accepts the same output contract, then runs the chunk + embed tail and marks `ready`
 - `CONVERSION_STALL_TIMEOUT_MS` (separate, longer than `INGESTION_STALL_TIMEOUT_MS`) so a document awaiting a converter is not prematurely failed; timeout → `failed` `CONVERSION_TIMEOUT`
-- State-machine guards: reject callback once the document has left `processing` (prevents replay and sync+callback double-completion)
-- Tests: async pending → callback → `ready`; replayed callback rejected; stale conversion → `CONVERSION_TIMEOUT`
+- **State-machine guards (single-writer via compare-and-set).** Both the callback handler and the timeout sweeper finish a conversion by an atomic conditional update — `UPDATE … WHERE status = 'processing' AND metadata.conversion.attempt_id = :attemptId` — so exactly one of them wins and the loser is a no-op:
+  - The callback is accepted only if the document is still `processing` **and** the token's `attemptId` matches the persisted `attempt_id`. This rejects (a) replays, (b) a late callback after the sweeper already failed the doc, and (c) a callback from a superseded attempt after re-ingest.
+  - The timeout sweeper transitions `processing → failed (CONVERSION_TIMEOUT)` under the same guard, so it cannot clobber a conversion that a callback has already completed. A callback that loses the race (doc no longer `processing`) is rejected with a clear `409`, never silently dropped.
+- Tests: async pending → callback → `ready`; replayed callback rejected; callback for a superseded attempt (after re-ingest) rejected; late callback after timeout rejected (and vice-versa: callback wins, sweeper no-ops); stale conversion → `CONVERSION_TIMEOUT`
 
 ### Phase 6 — Formations + smoke + docs polish
 
@@ -152,9 +154,9 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
 | `tool_id` | string \| null | Converter tool (`tol_…`); must be a server-callable type (`http`, `mcp`, `soat`, `pipeline`). Mutually exclusive with `agent_id`. |
 | `agent_id` | string \| null | Converter agent (`agt_…`). The file is sent to the agent as multimodal input and its text output becomes the document content. Mutually exclusive with `tool_id`. |
 | `action` | string \| null | Operation id for `soat`/`mcp` tool converters |
-| `preset_parameters` | object \| null | Merged into the tool input before invocation (tool converters only) |
-| `native_extraction` | string | For native types (PDF): `first` (default) — run the native extractor first, convert only when it yields no text; or `skip` — bypass the native extractor and always convert. Ignored for non-native types (no native extractor exists). |
-| `file_delivery` | string | `base64` (default) or `download_url` |
+| `preset_parameters` | object \| null | Merged into the tool input before invocation (tool converters only). May not contain the reserved keys `file` or `callback` — ingestion injects those and rejects a rule whose preset would collide with them. |
+| `native_extraction` | string | For a native type (PDF, `text/plain`, `text/markdown`): `first` (default) — run the native extractor first, convert only when it yields no text; or `skip` — bypass the native extractor and always convert. On non-native types (images, audio) there is no native extractor, so the converter always runs regardless of this value. |
+| `file_delivery` | string | `base64` (default — loads the file into the request body/memory; best for small files) or `download_url` (a short-lived signed URL the provider fetches; use for large audio/images) |
 | `chunk_strategy` | string \| null | Optional default (`page`/`whole`/`size`), overridable per ingest request |
 | `chunk_size` | number \| null | Optional default for `size` strategy |
 | `chunk_overlap` | number \| null | Optional default for `size` strategy |
@@ -163,6 +165,8 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
 | `updated_at` | string | ISO 8601 |
 
 `project_id + content_type_glob` is unique within a project. Exactly one of `tool_id` / `agent_id` must be set — enforced by `validateIngestionRule` (shared with the formation module).
+
+**Chunk-config precedence.** A `POST /documents/ingest` request overrides the rule's chunk defaults **field by field**: any of `chunk_strategy` / `chunk_size` / `chunk_overlap` present on the request wins; each absent field falls back to the rule, and each field still absent falls back to the ingest defaults (`page` strategy; `chunk_size` 1000 / `chunk_overlap` 200 when `strategy = size`). Setting `chunk_strategy: size` (on either the request or the rule) without a `chunk_size` therefore uses those defaults rather than erroring.
 
 The **PDF fallback** is just a rule with `content_type_glob: application/pdf`. Its `native_extraction` field decides when the converter runs:
 
@@ -173,7 +177,7 @@ Point either mode at an OCR tool or a vision agent.
 
 ### Matching (most-specific wins)
 
-Given a file's `content_type`, `resolveIngestionRule` selects the matching rule with the highest specificity score: an exact type (`image/png`) beats a subtype wildcard (`image/*`) beats a full wildcard (`*/*`). Ties are impossible because of the uniqueness constraint.
+Given a file's `content_type`, `resolveIngestionRule` selects the matching rule with the highest specificity score: an exact type (`image/png`) beats a subtype wildcard (`image/*`) beats a full wildcard (`*/*`). Two rules can never share the *same* glob within a project — a duplicate is rejected at create time with `INGESTION_RULE_GLOB_CONFLICT` (409) — so at resolve time distinct globs always have distinct specificity and there is no ambiguity about which rule wins.
 
 Rules are consulted in two situations:
 
@@ -202,7 +206,10 @@ The reshaping between ingestion's fixed converter contract (below) and a provide
   "execute": {
     "url": "https://api.openai.com/v1/chat/completions",
     "method": "POST",
-    "headers": { "Authorization": "Bearer sk-..." }
+    // NOTE: http tools do not resolve credentials from a Secret — this key is
+    // stored on the tool and readable by anyone who can read it. Use a scoped,
+    // rotatable key and restrict tool access with policies (see Security).
+    "headers": { "Authorization": "Bearer <provider-key>" }
   }
 }
 
@@ -236,6 +243,31 @@ The reshaping between ingestion's fixed converter contract (below) and a provide
 
 The `IngestionRule.tool_id` then points at the **pipeline** tool (`openai-vision-ocr`), not the raw `http` tool — `resolveConverterToolType` and `validateIngestionRule` already accept `pipeline` as a server-callable type (only `client` is rejected).
 
+The image example above uses `data_base64`, which is fine for small images but loads the whole file into the request body and SOAT's memory — for large images/scanned PDFs, pair the rule with `file_delivery: download_url` and a provider that accepts a URL. Audio is the canonical `download_url` case. A speech-to-text provider whose API takes a JSON body with a remote URL (e.g. [Deepgram](https://developers.deepgram.com/docs/pre-recorded-audio)) maps cleanly onto the contract with no multipart handling:
+
+```jsonc
+// Converter tool: pipeline around an http tool pointed at the STT provider
+{
+  "name": "deepgram-transcribe",
+  "type": "pipeline",
+  "pipeline": {
+    "steps": [{
+      "id": "call_stt",
+      "tool_id": "tool_deepgram_http",              // http tool → https://api.deepgram.com/v1/listen
+      "input": { "url": { "var": "input.file.download_url" } }
+    }],
+    "output": {
+      "pages": [{
+        "text": { "var": "steps.call_stt.results.channels.0.alternatives.0.transcript" },
+        "page_number": 1
+      }]
+    }
+  }
+}
+```
+
+For providers whose transcription endpoint expects a **multipart** file upload rather than a JSON URL, either choose a URL-based provider (as above) or add multipart support to the `http` tool — a JSON-Logic mapping alone cannot build a multipart body. This is why the demonstrated audio path uses `download_url` + a URL-accepting API.
+
 ### Tool input (built by ingestion, passed to `callTool`)
 
 ```jsonc
@@ -252,7 +284,9 @@ The `IngestionRule.tool_id` then points at the **pipeline** tool (`openai-vision
     "url": "https://…/api/v1/documents/doc_01/ingestion-callback",
     "token": "…"                           // single-use, scoped to this document + attempt
   }
-  // ...rule.preset_parameters merged in at the top level
+  // ...rule.preset_parameters merged in at the top level.
+  // `file` and `callback` are reserved and cannot be overridden by a preset
+  // (rejected at rule creation), so ingestion-injected fields always win.
 }
 ```
 
@@ -304,7 +338,7 @@ POST /api/v1/ingestion-rules
 | `ingestion-rules:UpdateIngestionRule` | `PATCH /api/v1/ingestion-rules/:id` |
 | `ingestion-rules:DeleteIngestionRule` | `DELETE /api/v1/ingestion-rules/:id` |
 
-The `ingestion-callback` endpoint is authorized by its single-use token, not an IAM action — the external converter is not a SOAT principal. The token is a signed JWT scoped to one document and one ingestion attempt, rejected once the document leaves `processing`.
+The `ingestion-callback` endpoint is authorized by its single-use token, not an IAM action — the external converter is not a SOAT principal. The token is a signed JWT scoped to one document and one ingestion attempt (`attemptId`), accepted only while that attempt is still `processing` (see the atomic guard in Phase 5).
 
 The caller creating a rule must have read access to the referenced tool or agent; converter invocation at ingest time runs with the ingesting caller's authorization.
 
@@ -316,8 +350,9 @@ The caller creating a rule must have read access to the referenced tool or agent
 
 ## Security
 
-- **Callback token** — signed JWT, single-use, expiring, scoped to `{ documentId, attemptId, purpose: "ingestion-callback" }`; rejected once the document is no longer `processing`. Guards replay and sync+callback double-completion.
+- **Callback token** — signed JWT, single-use, expiring, scoped to `{ documentId, attemptId, purpose: "ingestion-callback" }`. Accepted only while the document is `processing` **and** the token's `attemptId` matches the current attempt, applied as an atomic compare-and-set (see Phase 5). This guards replay, cross-attempt callbacks after re-ingest, and the callback-vs-timeout race — exactly one writer completes a conversion.
 - **Download URL** — short-lived signed token scoped to `GET /files/:id/download`, required because the file-download route is normally user-authed and an external API is not a SOAT user.
+- **Converter credentials** — an **agent** converter's provider key is stored as an encrypted Secret (referenced by the AI provider's `secret_id`). An **http tool** converter has no secret-reference mechanism today, so its key lives in the tool's `execute.headers` and is readable by anyone with read access to the tool — restrict with policies and use scoped, rotatable keys. (Secret references for tool headers are a candidate follow-up.)
 - **Tool type restriction** — `client` tools are rejected at rule creation and at invocation; only `http`/`mcp`/`soat`/`pipeline` tools (or an agent) run server-side.
 - **No new outbound surface** — tool converters call external APIs through the existing `callTool` path and its policy checks; agent converters run through the existing `createGeneration` path.
 
