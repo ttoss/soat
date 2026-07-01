@@ -23,6 +23,10 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'A referenced AI provider does not exist.',
   },
+  TOOL_NOT_FOUND: {
+    httpStatus: 400,
+    description: 'A referenced tool does not exist.',
+  },
   AI_PROVIDER_ERROR: {
     httpStatus: 502,
     description:
@@ -224,6 +228,26 @@ export const ERROR_CODES = {
     httpStatus: 422,
     description:
       'The pipeline tool exceeded the maximum nested execution depth (pipelines calling pipelines).',
+  },
+  INGESTION_RULE_VALIDATION_FAILED: {
+    httpStatus: 400,
+    description:
+      'The ingestion rule configuration is invalid (e.g. tool_id and agent_id are both set or both missing, the converter tool is a client tool, a soat/mcp converter tool is missing an action, or content_type_glob is not a valid MIME type glob).',
+  },
+  INGESTION_RULE_GLOB_CONFLICT: {
+    httpStatus: 409,
+    description:
+      'An ingestion rule for this content_type_glob already exists in the project.',
+  },
+  CONVERTER_FAILED: {
+    httpStatus: 422,
+    description:
+      'The ingestion converter (tool or agent) failed to run, or returned an async deferral that is not supported.',
+  },
+  CONVERTER_OUTPUT_INVALID: {
+    httpStatus: 422,
+    description:
+      'The ingestion converter returned an unrecognized output shape. Expected a string, `{ pages: [{ text, page_number }] }`, or `{ status: "pending" }`.',
   },
 } as const satisfies Record<
   string,

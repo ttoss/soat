@@ -11,6 +11,7 @@ import {
 
 import { db } from '../../db';
 import { canAccessFile } from '../../lib/fileAuthorization';
+import { verifyFileDownloadToken } from '../../lib/fileDownloadToken';
 
 const collectStreamToBuffer = async (args: {
   stream: AsyncIterable<unknown>;
@@ -129,17 +130,26 @@ const registerDeleteFileRoute = (args: { filesRouter: Router<Context> }) => {
 
 const registerDownloadRoutes = (args: { filesRouter: Router<Context> }) => {
   args.filesRouter.get('/files/:file_id/download', async (ctx: Context) => {
-    if (!ensureAuthenticated({ ctx })) return;
+    // A valid signed download token authorizes this one file without a SOAT
+    // session — used by ingestion-rule converters (see fileDownloadToken.ts).
+    const token = ctx.query.token as string | undefined;
+    const tokenValid =
+      typeof token === 'string' &&
+      verifyFileDownloadToken({ token, fileId: ctx.params.file_id });
 
-    const file = await ensureFileExists({ ctx });
-    if (!file) return;
+    if (!tokenValid) {
+      if (!ensureAuthenticated({ ctx })) return;
 
-    const allowed = await ensureAllowed({
-      ctx,
-      action: 'files:DownloadFile',
-      file,
-    });
-    if (!allowed) return;
+      const file = await ensureFileExists({ ctx });
+      if (!file) return;
+
+      const allowed = await ensureAllowed({
+        ctx,
+        action: 'files:DownloadFile',
+        file,
+      });
+      if (!allowed) return;
+    }
 
     const result = await downloadFile({ id: ctx.params.file_id });
     if (!result) {
