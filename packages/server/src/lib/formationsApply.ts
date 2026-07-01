@@ -1,5 +1,6 @@
 import createDebug from 'debug';
 import { db } from 'src/db';
+import { DomainError } from 'src/errors';
 
 import {
   applyCreateChange,
@@ -23,6 +24,26 @@ import type {
 } from './formationsTypes';
 
 const log = createDebug('soat:formations');
+
+const isResourceAlreadyGone = (error: unknown): boolean => {
+  return error instanceof DomainError && error.code === 'RESOURCE_NOT_FOUND';
+};
+
+const markResourceDeleted = async (args: {
+  resource: InstanceType<(typeof db)['FormationResource']>;
+  events: FormationEvent[];
+}): Promise<void> => {
+  const { resource, events } = args;
+  await resource.update({ status: 'deleted' });
+  events.push({
+    timestamp: new Date().toISOString(),
+    logicalId: resource.logicalId,
+    resourceType: resource.resourceType,
+    action: 'delete',
+    status: 'succeeded',
+    physicalResourceId: resource.physicalResourceId ?? undefined,
+  });
+};
 
 const resolveRefAttrOutput = async (
   refAttrStr: string,
@@ -111,32 +132,18 @@ export const handleOrphanedDeletes = async (args: {
   });
   for (const resource of toDelete) {
     try {
-      if (resource.deletionPolicy === 'retain') {
-        await resource.update({ status: 'deleted' });
-        events.push({
-          timestamp: new Date().toISOString(),
-          logicalId: resource.logicalId,
+      if (resource.deletionPolicy !== 'retain') {
+        await applyDeleteResource({
           resourceType: resource.resourceType,
-          action: 'delete',
-          status: 'succeeded',
-          physicalResourceId: resource.physicalResourceId ?? undefined,
+          physicalResourceId: resource.physicalResourceId!,
         });
+      }
+      await markResourceDeleted({ resource, events });
+    } catch (error) {
+      if (isResourceAlreadyGone(error)) {
+        await markResourceDeleted({ resource, events });
         continue;
       }
-      await applyDeleteResource({
-        resourceType: resource.resourceType,
-        physicalResourceId: resource.physicalResourceId!,
-      });
-      await resource.update({ status: 'deleted' });
-      events.push({
-        timestamp: new Date().toISOString(),
-        logicalId: resource.logicalId,
-        resourceType: resource.resourceType,
-        action: 'delete',
-        status: 'succeeded',
-        physicalResourceId: resource.physicalResourceId ?? undefined,
-      });
-    } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       events.push({
         timestamp: new Date().toISOString(),
@@ -357,32 +364,18 @@ export const performResourceDeletions = async (
   for (const resource of orderedResources) {
     if (!resource.physicalResourceId) continue;
     try {
-      if (resource.deletionPolicy === 'retain') {
-        await resource.update({ status: 'deleted' });
-        events.push({
-          timestamp: new Date().toISOString(),
-          logicalId: resource.logicalId,
+      if (resource.deletionPolicy !== 'retain') {
+        await applyDeleteResource({
           resourceType: resource.resourceType,
-          action: 'delete',
-          status: 'succeeded',
           physicalResourceId: resource.physicalResourceId,
         });
+      }
+      await markResourceDeleted({ resource, events });
+    } catch (error) {
+      if (isResourceAlreadyGone(error)) {
+        await markResourceDeleted({ resource, events });
         continue;
       }
-      await applyDeleteResource({
-        resourceType: resource.resourceType,
-        physicalResourceId: resource.physicalResourceId,
-      });
-      await resource.update({ status: 'deleted' });
-      events.push({
-        timestamp: new Date().toISOString(),
-        logicalId: resource.logicalId,
-        resourceType: resource.resourceType,
-        action: 'delete',
-        status: 'succeeded',
-        physicalResourceId: resource.physicalResourceId,
-      });
-    } catch (error) {
       hasError = true;
       const errorMsg = error instanceof Error ? error.message : String(error);
       events.push({

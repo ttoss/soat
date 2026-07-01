@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+import { DomainError } from 'src/errors';
 import {
   buildDeleteOrder,
   handleOrphanedDeletes,
@@ -181,6 +182,30 @@ describe('formationsApply', () => {
     expect(result.events[0].physicalResourceId).toBe('mem_1');
   });
 
+  test('performResourceDeletions treats an already-gone resource as deleted', async () => {
+    const alreadyGone = buildResource({
+      logicalId: 'gone',
+      resourceType: 'agent',
+      physicalResourceId: 'agt_1',
+    });
+
+    const update = jest
+      .spyOn(alreadyGone, 'update')
+      .mockResolvedValue(alreadyGone);
+    jest
+      .spyOn(resourceHandlers, 'applyDeleteResource')
+      .mockRejectedValueOnce(
+        new DomainError('RESOURCE_NOT_FOUND', "Agent 'agt_1' not found.")
+      );
+
+    const result = await performResourceDeletions([alreadyGone]);
+
+    expect(update).toHaveBeenCalledWith({ status: 'deleted' });
+    expect(result.hasError).toBe(false);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].status).toBe('succeeded');
+  });
+
   test('handleOrphanedDeletes records delete success and failure events', async () => {
     const retained = buildResource({
       logicalId: 'keep',
@@ -251,6 +276,33 @@ describe('formationsApply', () => {
     expect(events).toHaveLength(1);
     expect(events[0].status).toBe('succeeded');
     expect(events[0].physicalResourceId).toBe('mem_1');
+  });
+
+  test('handleOrphanedDeletes treats an already-gone orphan as deleted', async () => {
+    const alreadyGoneOrphan = buildResource({
+      logicalId: 'orphan',
+      resourceType: 'agent',
+      physicalResourceId: 'agt_1',
+    });
+    const update = jest
+      .spyOn(alreadyGoneOrphan, 'update')
+      .mockResolvedValue(alreadyGoneOrphan);
+    jest
+      .spyOn(resourceHandlers, 'applyDeleteResource')
+      .mockRejectedValueOnce(
+        new DomainError('RESOURCE_NOT_FOUND', "Agent 'agt_1' not found.")
+      );
+    const events: FormationEvent[] = [];
+
+    await handleOrphanedDeletes({
+      template: { resources: {} },
+      existingResources: [alreadyGoneOrphan],
+      events,
+    });
+
+    expect(update).toHaveBeenCalledWith({ status: 'deleted' });
+    expect(events).toHaveLength(1);
+    expect(events[0].status).toBe('succeeded');
   });
 
   test('processResourceChange marks resource as failed when create handler throws', async () => {
