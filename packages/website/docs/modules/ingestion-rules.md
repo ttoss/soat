@@ -26,6 +26,7 @@ Rules are per-project. SOAT does not perform OCR or transcription itself — the
 | `agent_id` | string \| null | Converter agent (`agt_…`). The file is sent to the agent as multimodal input and its text output becomes the document content. Mutually exclusive with `tool_id`. |
 | `action` | string \| null | Operation id, required for `soat`/`mcp` tool converters |
 | `preset_parameters` | object \| null | Merged into the tool input before invocation (tool converters only) |
+| `native_extraction` | string | For PDFs: `fallback` (default) converts only when native extraction yields no text; `skip` bypasses native extraction and converts every matching PDF. Ignored for non-native types. |
 | `file_delivery` | string | How the file reaches a tool converter: `base64` (default) or `download_url` |
 | `chunk_strategy` | string \| null | Optional default chunk strategy (`page`/`whole`/`size`), overridable per ingest request |
 | `chunk_size` | number \| null | Optional default for the `size` strategy |
@@ -48,6 +49,17 @@ Rules are consulted in two cases:
 2. **Empty native extraction** — a native type produced no text. In particular, a rule matching `application/pdf` acts as an **OCR fallback for scanned/image-only PDFs**: the built-in `unpdf` extractor runs first, and only when it returns no text does ingestion invoke the converter. Born-digital PDFs with a text layer skip the converter, so there is no added cost for the common case.
 
 When no rule matches, behavior is unchanged: a non-native type is rejected with `UNSUPPORTED_FILE_TYPE` (`400`), and an empty native extraction fails the document with `FILE_PARSE_FAILED`.
+
+### PDF Conversion Mode
+
+For PDFs, the `native_extraction` field on the matching `application/pdf` rule controls when the converter runs:
+
+| `native_extraction` | Behavior | Use when |
+|---------------------|----------|----------|
+| `fallback` (default) | Native `unpdf` extraction runs first; the converter fires only for PDFs with no text layer. | You only want to OCR scanned/image-only PDFs; born-digital PDFs stay on the fast native path. |
+| `skip` | Native extraction is bypassed; **every** matching PDF goes to the converter. | The PDFs' text layer is unreliable or garbled and you want OCR applied to all of them. |
+
+`native_extraction` has no effect on non-native types (images, audio) — there is no native extractor to skip, so their converter always runs.
 
 ### Converter: Tool or Agent
 

@@ -22,7 +22,7 @@ The maintainers do not want to build OCR or speech-to-text into the server. SOAT
 
 Introduce a new **Ingestion Rules** module: a per-project routing table mapping a `content_type` glob to a **converter tool**. When ingestion encounters a content type it cannot extract natively, it looks up the best-matching rule and invokes the tool, which calls whatever external API the user configured (OCR, ASR, vision LLM, …). The tool returns extracted text — either synchronously or, for long-running jobs, via an async callback — and the existing chunk + embed pipeline takes over unchanged.
 
-The converter is **always a tool**. Ingestion Rules only decide *which* tool runs for *which* content type, plus how the file is delivered to it and how the result is chunked.
+The converter is a **tool or an agent**. Ingestion Rules only decide *which* converter runs for *which* content type, whether to skip native extraction, how the file is delivered, and how the result is chunked.
 
 ```
 POST /documents/ingest (fl_… , content_type)
@@ -30,11 +30,12 @@ POST /documents/ingest (fl_… , content_type)
         ▼
 extractSourcePages(file)
   ├─ native type (pdf/text/markdown)
-  │     ├─ text extracted ─────────────────────► pages → chunk + embed → ready
-  │     └─ zero text (e.g. scanned PDF) ───────► fall back to matching rule ↓
-  └─ non-native type ──────────────────────────► matching rule ↓
+  │     ├─ matching rule w/ native_extraction=skip ─► invokeConverter (bypass native) ↓
+  │     ├─ text extracted ─────────────────────────► pages → chunk + embed → ready
+  │     └─ zero text (e.g. scanned PDF) ───────────► fall back to matching rule ↓
+  └─ non-native type ──────────────────────────────► matching rule ↓
         ├─ matching IngestionRule ─────────────► invokeConverter(rule, file)
-        │     ├─ tool → "text" | { pages:[…] }  (sync)  ─► chunk + embed → ready
+        │     ├─ tool/agent → "text" | { pages:[…] } (sync) ─► chunk + embed → ready
         │     └─ tool → { status: "pending" }  (async)  ─► doc stays `processing`
         │                                                   └─ external service calls
         │                                                      POST /documents/:id/ingestion-callback
@@ -103,10 +104,10 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
 **Deliverables:**
 
 - `invokeConverter()` in `documentIngestion.ts`: for a tool rule, build tool input with `data_base64` and call `callTool`; for an agent rule, call `createGeneration` with the file as multimodal input. Interpret output (string | `{ pages }`).
-- `extractSourcePages` calls `resolveIngestionRule` for non-native content types **and** as a PDF fallback when native extraction returns zero pages (scanned PDFs)
+- `extractSourcePages` calls `resolveIngestionRule` for non-native content types, as a PDF fallback when native extraction returns zero pages (scanned PDFs), **and** before native extraction when the matching rule sets `native_extraction: skip` (bypass native, convert every PDF)
 - New failure reasons: `CONVERTER_FAILED`, `CONVERTER_OUTPUT_INVALID`
 - Rule-level chunk defaults applied, overridable per request (Decision #5)
-- Tests: image ingest via matching tool rule → `ready`; scanned-PDF fallback to an `application/pdf` tool rule → `ready`; scanned-PDF fallback to an `application/pdf` **agent** rule → `ready`; non-native type with no rule → `UNSUPPORTED_FILE_TYPE`; empty native extraction with no rule → `FILE_PARSE_FAILED`; converter error → `failed` `CONVERTER_FAILED`; bad output → `failed` `CONVERTER_OUTPUT_INVALID`. `callTool` / `createGeneration` mocked via `jest.spyOn` (both are transitively loaded by `app.ts` — see `.claude/rules/tests.md`).
+- Tests: image ingest via matching tool rule → `ready`; scanned-PDF fallback to an `application/pdf` tool rule → `ready`; scanned-PDF fallback to an `application/pdf` **agent** rule → `ready`; `native_extraction: skip` converts a text-layer PDF (native bypassed); `native_extraction: fallback` leaves a text-layer PDF on the native path (converter not called); non-native type with no rule → `UNSUPPORTED_FILE_TYPE`; empty native extraction with no rule → `FILE_PARSE_FAILED`; converter error → `failed` `CONVERTER_FAILED`; bad output → `failed` `CONVERTER_OUTPUT_INVALID`. `callTool` / `createGeneration` mocked via `jest.spyOn` (both are transitively loaded by `app.ts` — see `.claude/rules/tests.md`).
 
 ### Phase 4 — `download_url` delivery
 
@@ -147,6 +148,7 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
 | `agent_id` | string \| null | Converter agent (`agt_…`). The file is sent to the agent as multimodal input and its text output becomes the document content. Mutually exclusive with `tool_id`. |
 | `action` | string \| null | Operation id for `soat`/`mcp` tool converters |
 | `preset_parameters` | object \| null | Merged into the tool input before invocation (tool converters only) |
+| `native_extraction` | string | For native types (PDF): `fallback` (default) — run the native extractor first, convert only when it yields no text; or `skip` — bypass the native extractor and always convert. Ignored for non-native types (no native extractor exists). |
 | `file_delivery` | string | `base64` (default) or `download_url` |
 | `chunk_strategy` | string \| null | Optional default (`page`/`whole`/`size`), overridable per ingest request |
 | `chunk_size` | number \| null | Optional default for `size` strategy |
@@ -157,7 +159,12 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
 
 `project_id + content_type_glob` is unique within a project. Exactly one of `tool_id` / `agent_id` must be set — enforced by `validateIngestionRule` (shared with the formation module).
 
-The **PDF fallback** is just a rule with `content_type_glob: application/pdf`: because PDFs are extracted natively first, such a rule can only ever fire when native extraction yields no text, so it is by definition the scanned/image-only-PDF fallback. Point it at an OCR tool or a vision agent.
+The **PDF fallback** is just a rule with `content_type_glob: application/pdf`. Its `native_extraction` field decides when the converter runs:
+
+- `fallback` (default) — the native `unpdf` extractor runs first, and the converter fires only when it yields no text. Born-digital PDFs skip the converter; scanned/image-only PDFs go to it. No added cost for the common case.
+- `skip` — the native extractor is bypassed and **every** matching PDF goes to the converter. Use when the text layer is unreliable/garbled and you want OCR on all PDFs.
+
+Point either mode at an OCR tool or a vision agent.
 
 ### Matching (most-specific wins)
 
