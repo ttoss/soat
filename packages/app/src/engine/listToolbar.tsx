@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 import { humanizeKey } from './specUtils';
-import { statusTone } from './statusBadge';
+import { statusTone } from './statusUtils';
 
 const ALL = '__all__';
 

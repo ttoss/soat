@@ -79,6 +79,7 @@ export const NavigationProvider = ({
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components -- consumer hook is intentionally colocated with its provider
 export const useNavigation = (): NavigationContextValue => {
   return React.useContext(NavigationContext);
 };

@@ -4,9 +4,8 @@ import { apiFetch } from '@/api/client';
 import { useAuth } from '@/auth/authContext';
 import { Button } from '@/components/ui/button';
 
-import { useRefResolver } from './crossRef';
 import { DetailSections } from './detailSections';
-import { findSubResources, SubResourceTabs } from './detailSubResources';
+import { SubResourceTabs } from './detailSubResources';
 import { useNavigation } from './navigationContext';
 import {
   actionLabel,
@@ -16,7 +15,9 @@ import {
   resolvableRefFields,
 } from './specUtils';
 import { StatusBadge } from './statusBadge';
+import { findSubResources } from './subResourceUtils';
 import type { JsonObject, ModuleInfo, OpenApiSpec } from './types';
+import { useRefResolver } from './useRefResolver';
 
 type DetailState =
   | { status: 'loading' }

@@ -430,14 +430,6 @@ components:
       description: JWT token or sk_ api key
 
   parameters:
-    AgentId:
-      name: agent_id
-      in: path
-      required: true
-      description: Agent public ID
-      schema:
-        type: string
-        example: agt_V1StGXR8Z5jdHi6B
     SessionId:
       name: session_id
       in: path
