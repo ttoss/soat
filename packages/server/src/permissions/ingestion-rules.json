@@ -1,0 +1,30 @@
+{
+  "module": "ingestion-rules",
+  "operations": [
+    {
+      "operationId": "listIngestionRules",
+      "action": "ingestion-rules:ListIngestionRules",
+      "description": "List ingestion rules in a project"
+    },
+    {
+      "operationId": "createIngestionRule",
+      "action": "ingestion-rules:CreateIngestionRule",
+      "description": "Create a new ingestion rule"
+    },
+    {
+      "operationId": "getIngestionRule",
+      "action": "ingestion-rules:GetIngestionRule",
+      "description": "Get an ingestion rule by ID"
+    },
+    {
+      "operationId": "updateIngestionRule",
+      "action": "ingestion-rules:UpdateIngestionRule",
+      "description": "Update an ingestion rule"
+    },
+    {
+      "operationId": "deleteIngestionRule",
+      "action": "ingestion-rules:DeleteIngestionRule",
+      "description": "Delete an ingestion rule"
+    }
+  ]
+}

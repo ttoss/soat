@@ -10,6 +10,7 @@ import {
   Documents as DocumentsSdk,
   Files as FilesSdk,
   Formations as FormationsSdk,
+  IngestionRules as IngestionRulesSdk,
   Knowledge as KnowledgeSdk,
   Memories as MemoriesSdk,
   MemoryEntries as MemoryEntriesSdk,
@@ -100,6 +101,7 @@ export class SoatClient {
   readonly documents: typeof DocumentsSdk;
   readonly files: typeof FilesSdk;
   readonly formations: typeof FormationsSdk;
+  readonly ingestionRules: typeof IngestionRulesSdk;
   readonly knowledge: typeof KnowledgeSdk;
   readonly memories: typeof MemoriesSdk;
   readonly memoryEntries: typeof MemoryEntriesSdk;
@@ -133,6 +135,7 @@ export class SoatClient {
     this.documents = bindResource(DocumentsSdk, httpClient);
     this.files = bindResource(FilesSdk, httpClient);
     this.formations = bindResource(FormationsSdk, httpClient);
+    this.ingestionRules = bindResource(IngestionRulesSdk, httpClient);
     this.knowledge = bindResource(KnowledgeSdk, httpClient);
     this.memories = bindResource(MemoriesSdk, httpClient);
     this.memoryEntries = bindResource(MemoryEntriesSdk, httpClient);

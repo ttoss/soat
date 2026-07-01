@@ -1,26 +1,18 @@
-import fs from 'node:fs';
-
 import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import {
-  chunkPages,
-  type ChunkStrategy,
-  persistChunks,
-  type SourcePage,
-} from './chunking';
+import { chunkPages, type ChunkStrategy, persistChunks } from './chunking';
 import { emitEvent } from './eventBus';
+import { resolveIngestionRule } from './ingestionRules';
 import { mapDocument } from './knowledge';
-import { extractPdfPages } from './pdf';
+import {
+  type ResolvedSourcePages,
+  resolveSourcePages,
+  SUPPORTED_CONTENT_TYPES,
+} from './sourcePageResolver';
 
 const log = createDebug('soat:documents');
-
-const SUPPORTED_CONTENT_TYPES = [
-  'application/pdf',
-  'text/plain',
-  'text/markdown',
-];
 
 // Files larger than this cannot be ingested synchronously (`?async=false`):
 // parsing + embedding a large file blocks the request long enough to time out
@@ -111,34 +103,19 @@ const loadIngestibleFile = async (fileId: string) => {
   }
 
   if (!SUPPORTED_CONTENT_TYPES.includes(file.contentType ?? '')) {
-    throw new DomainError(
-      'UNSUPPORTED_FILE_TYPE',
-      `File '${fileId}' has unsupported content type '${file.contentType ?? 'unknown'}'. Supported: ${SUPPORTED_CONTENT_TYPES.join(', ')}.`
-    );
+    const rule = await resolveIngestionRule({
+      projectId: file.projectId,
+      contentType: file.contentType ?? '',
+    });
+    if (!rule) {
+      throw new DomainError(
+        'UNSUPPORTED_FILE_TYPE',
+        `File '${fileId}' has unsupported content type '${file.contentType ?? 'unknown'}' and no matching ingestion rule. Natively supported: ${SUPPORTED_CONTENT_TYPES.join(', ')}.`
+      );
+    }
   }
 
   return file;
-};
-
-const extractSourcePages = async (
-  file: InstanceType<(typeof db)['File']>
-): Promise<SourcePage[]> => {
-  const buffer = fs.readFileSync(file.storagePath);
-
-  if (file.contentType === 'application/pdf') {
-    const rawPages = await extractPdfPages({ buffer });
-    return rawPages
-      .map((text, i) => {
-        return { text: text.trim(), pageNumber: i + 1 };
-      })
-      .filter((page) => {
-        return page.text.length > 0;
-      });
-  }
-
-  // text/plain, text/markdown
-  const text = buffer.toString('utf-8').trim();
-  return text.length > 0 ? [{ text, pageNumber: 1 }] : [];
 };
 
 type IngestionPipelineArgs = {
@@ -189,6 +166,20 @@ const persistChunksWithProgress = async (args: {
   });
 };
 
+// Per-request chunk config wins; otherwise fall back to the converter rule's
+// defaults, then to the pipeline default.
+const resolveChunkConfig = (
+  args: IngestionPipelineArgs,
+  rule: ResolvedSourcePages['rule']
+): { strategy: ChunkStrategy; chunkSize?: number; chunkOverlap?: number } => {
+  const strategy = args.chunkStrategy ?? rule?.chunkStrategy ?? 'page';
+  return {
+    strategy: strategy as ChunkStrategy,
+    chunkSize: args.chunkSize ?? rule?.chunkSize ?? undefined,
+    chunkOverlap: args.chunkOverlap ?? rule?.chunkOverlap ?? undefined,
+  };
+};
+
 const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
   const { doc } = args;
   const docId = doc.id as number;
@@ -212,7 +203,7 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
     return;
   }
 
-  const pages = await extractSourcePages(file);
+  const { pages, rule } = await resolveSourcePages(file);
 
   if (pages.length === 0) {
     await doc.update({
@@ -226,12 +217,7 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
     return;
   }
 
-  const chunks = chunkPages({
-    pages,
-    strategy: args.chunkStrategy ?? 'page',
-    chunkSize: args.chunkSize,
-    chunkOverlap: args.chunkOverlap,
-  });
+  const chunks = chunkPages({ pages, ...resolveChunkConfig(args, rule) });
 
   await persistChunksWithProgress({
     doc,

@@ -8,8 +8,3 @@
 
 index
 connect-third-party-llms
-# Mock providers + runner wiring are in place (tests/mocks/mock-providers.mjs,
-# docker-compose.tutorials.yml). Still ignored only because the Ingestion Rules
-# REST module + converter invocation are unimplemented (PRD Phases 2-3). Remove
-# this entry once those land — no other change needed to run it end-to-end.
-ingest-images-and-audio
