@@ -188,6 +188,54 @@ A converter is either a **tool** (JSON contract below) or an **agent**.
 
 **Agent converters.** Instead of the JSON contract, ingestion calls `createGeneration` on the agent with a fixed instruction ("Extract all text / transcribe this file") and the file attached as multimodal input (image/PDF page images for vision models; audio for audio-capable models). The agent's final text output becomes the source text, chunked per the rule's `chunk_strategy`. The generation is awaited inline (bounded by the agent's generation limits) — there is no `{ status: "pending" }` callback for agent converters. The agent's model must support the file's modality; otherwise the document fails with `CONVERTER_FAILED`.
 
+### Building a Tool Converter — No New Server Required
+
+A tool converter does **not** require standing up an external adapter service. A plain `http` tool can already point its `execute.url` directly at a third-party API (e.g. `https://api.openai.com/v1/chat/completions`, `https://api.x.ai/v1/audio/transcriptions`) — `callTool` sends the resolved input as the request body and returns the raw response verbatim, no SOAT endpoint in between.
+
+The reshaping between ingestion's fixed converter contract (below) and a provider's native request/response shape is handled by wrapping that `http` tool in a **`pipeline`** tool, using the existing JSON Logic mapping engine (`json-logic-engine`, already used for pipeline `input`/`output`) — `cat` for string concatenation (e.g. building a `data:` URI), `var` for extracting nested response paths. No new SOAT code, no externally hosted adapter:
+
+```jsonc
+// Step tool: a plain http tool pointed straight at the provider
+{
+  "name": "openai-chat-completions",
+  "type": "http",
+  "execute": {
+    "url": "https://api.openai.com/v1/chat/completions",
+    "method": "POST",
+    "headers": { "Authorization": "Bearer sk-..." }
+  }
+}
+
+// Converter tool: a pipeline reshaping in both directions
+{
+  "name": "openai-vision-ocr",
+  "type": "pipeline",
+  "pipeline": {
+    "steps": [{
+      "id": "call_openai",
+      "tool_id": "tool_openai_chat",
+      "input": {
+        "model": "gpt-4o-mini",
+        "messages": [{
+          "role": "user",
+          "content": [
+            { "type": "text", "text": "Extract all text from this image." },
+            { "type": "image_url", "image_url": { "url": {
+              "cat": ["data:", { "var": "input.file.content_type" }, ";base64,", { "var": "input.file.data_base64" }]
+            }}}
+          ]
+        }]
+      }
+    }],
+    "output": {
+      "pages": [{ "text": { "var": "steps.call_openai.choices.0.message.content" }, "page_number": 1 }]
+    }
+  }
+}
+```
+
+The `IngestionRule.tool_id` then points at the **pipeline** tool (`openai-vision-ocr`), not the raw `http` tool — `resolveConverterToolType` and `validateIngestionRule` already accept `pipeline` as a server-callable type (only `client` is rejected).
+
 ### Tool input (built by ingestion, passed to `callTool`)
 
 ```jsonc

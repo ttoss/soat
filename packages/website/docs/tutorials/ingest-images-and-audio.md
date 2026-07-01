@@ -10,25 +10,27 @@ import TabItem from '@theme/TabItem';
 Native [file ingestion](/docs/modules/documents#file-ingestion-and-chunking) turns
 PDFs and text files into searchable [Documents](/docs/modules/documents#examples).
 This tutorial extends it to **images and audio** by routing each unsupported
-`content_type` to a converter [Tool](/docs/modules/tools#examples) through an
+`content_type` to a converter tool through an
 [Ingestion Rule](/docs/modules/ingestion-rules#examples). The converters call
 third-party APIs — [OpenAI vision](https://developers.openai.com/api/docs/guides/images-vision)
 for image OCR and [xAI speech-to-text](https://docs.x.ai/developers/models/speech-to-text)
-for audio transcription — so SOAT itself never has to implement OCR or ASR.
+for audio transcription — using **only SOAT-native tools**: a plain
+[`http` tool](/docs/modules/tools#http) pointed directly at the provider's API, wrapped
+in a [`pipeline` tool](/docs/modules/tools#pipeline) that reshapes the request and
+response with [JSON Logic](https://jsonlogic.com). Nothing is hosted outside SOAT.
 
 It maps onto the feature's building blocks:
 
 | Building block | Where in this tutorial |
-| -------------- | ---------------------- |
-| **Converter contract** — how a tool receives the file and returns text | Step 3 |
-| **Converter tools** — `http` tools pointing at your adapter | Steps 5–6 |
-| **Ingestion rules** — `content_type` → tool routing | Steps 7–9 |
-| **Sync conversion** — image OCR inline | Step 10 |
-| **Async conversion** — long audio via callback | Step 11 |
+| -------------- | ----------------------- |
+| **`http` step tool** — calls the provider directly | Steps 3, 6 |
+| **`pipeline` converter tool** — reshapes request/response via JSON Logic | Steps 4, 7 |
+| **Ingestion rules** — `content_type` → tool routing | Steps 5, 8, 9 |
+| **Automatic routing** — ingest without passing a tool every time | Steps 10–11 |
 
 :::note Requires the Ingestion Rules feature
-The `ingestion-rules` module, the converter step in `POST /documents/ingest`, and
-the `POST /documents/:id/ingestion-callback` endpoint are described in
+The `ingestion-rules` module and the converter step in `POST /documents/ingest` are
+described in
 [`docs/prd-file-ingestion.md`](https://github.com/ttoss/soat/blob/main/docs/prd-file-ingestion.md)
 and are not yet implemented. Run this tutorial against a server that includes that
 change. The API shapes below match the PRD and the
@@ -39,12 +41,11 @@ change. The API shapes below match the PRD and the
 
 - SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide.
 - New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) first.
-- For production hardening (storing the adapter token as a secret), see
+- For production hardening (storing provider keys as secrets), see
   [Advanced Configuration](/docs/getting-started/advanced-config).
 - CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
 - An [OpenAI API key](https://platform.openai.com/docs) and an
-  [xAI API key](https://docs.x.ai) for the converter adapter.
-- A place to run a small HTTP adapter reachable by the SOAT server (any Node host).
+  [xAI API key](https://docs.x.ai) — no other infrastructure required.
 
 ```bash
 export SOAT_BASE_URL=http://localhost:5047   # CLI, SDK, and curl — do NOT append /api/v1
@@ -131,153 +132,55 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ---
 
-## Step 3 — Deploy the converter adapter
+## Step 3 — Create an `http` tool for OpenAI
 
-A converter is any server-callable [Tool](/docs/modules/tools#key-concepts). At
-ingest time, SOAT calls the tool with a fixed input and expects text back (the
-[converter contract](/docs/modules/ingestion-rules#converter-tool-contract)):
-
-```jsonc
-// Input SOAT sends to the tool
-{ "file": { "id": "fl_…", "content_type": "image/png",
-            "data_base64": "…", "download_url": "…" },
-  "callback": { "url": "https://…/ingestion-callback", "token": "…" } }
-
-// Output the tool must return
-"extracted text"                                   // one page
-{ "pages": [{ "text": "…", "page_number": 1 }] }   // paged
-{ "status": "pending" }                            // async — POST result to callback later
-```
-
-Third-party APIs like [OpenAI vision](https://developers.openai.com/api/docs/guides/images-vision)
-and [xAI speech-to-text](https://docs.x.ai/developers/models/speech-to-text) do not
-speak this contract, so a bare `http` tool cannot call them directly — a SOAT `http`
-tool forwards its input as the JSON body verbatim and returns the raw response. The
-adapter is the ~60-line bridge that translates in both directions. Deploy it anywhere
-the SOAT server can reach:
-
-```ts
-// converter-adapter.ts — run with: OPENAI_API_KEY=… XAI_API_KEY=… \
-//   ADAPTER_TOKEN=… XAI_STT_MODEL=… node converter-adapter.ts
-import express from 'express';
-
-const app = express();
-app.use(express.json({ limit: '25mb' }));
-
-// Shared secret so only SOAT can call the adapter.
-app.use((req, res, next) => {
-  if (req.get('authorization') !== `Bearer ${process.env.ADAPTER_TOKEN}`) {
-    return res.status(401).json({ error: 'unauthorized' });
-  }
-  next();
-});
-
-// ── Image OCR via OpenAI vision (synchronous) ────────────────────────────────
-app.post('/ocr', async (req, res) => {
-  const { file } = req.body;
-  const dataUri = `data:${file.content_type};base64,${file.data_base64}`;
-  const r = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: 'Extract all text from this image. Return plain text only.' },
-            { type: 'image_url', image_url: { url: dataUri } },
-          ],
-        },
-      ],
-    }),
-  });
-  const json = await r.json();
-  const text = json.choices?.[0]?.message?.content ?? '';
-  // Return the converter contract: a single page.
-  res.json({ pages: [{ text, page_number: 1 }] });
-});
-
-// ── Audio transcription via xAI (asynchronous) ───────────────────────────────
-app.post('/transcribe', async (req, res) => {
-  const { file, callback } = req.body;
-  // Long audio can exceed the sync timeout — acknowledge now, deliver via callback.
-  res.json({ status: 'pending' });
-
-  (async () => {
-    const audio = await fetch(file.download_url).then((x) => x.arrayBuffer());
-    const form = new FormData();
-    form.append('file', new Blob([audio], { type: file.content_type }), file.filename);
-    form.append('model', process.env.XAI_STT_MODEL); // e.g. the STT model from the xAI docs
-    const r = await fetch('https://api.x.ai/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${process.env.XAI_API_KEY}` },
-      body: form,
-    });
-    const { text } = await r.json();
-    // Deliver the result to SOAT's callback with the same output contract.
-    await fetch(callback.url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${callback.token}`,
-      },
-      body: JSON.stringify({ text }),
-    });
-  })().catch((err) => console.error('transcription failed', err));
-});
-
-app.listen(8787, () => console.log('converter adapter on :8787'));
-```
-
-The adapter holds the third-party keys; SOAT only knows the adapter's URL and shared
-`ADAPTER_TOKEN`. For the rest of the tutorial, assume it is reachable at
-`https://adapter.example.com` and export the shared token:
-
-```bash
-export ADAPTER_URL="https://adapter.example.com"
-export ADAPTER_TOKEN="choose-a-long-random-string"
-```
-
----
-
-## Step 4 — (Optional) Store the adapter token as a secret
-
-In production, keep the shared token out of the tool definition by storing it as a
-[Secret](/docs/modules/secrets#examples) and referencing it from the tool's headers,
-rather than pasting it inline as in the next steps.
+An [`http` tool](/docs/modules/tools#http) can point `execute.url` directly at any
+third-party API — its resolved input is sent as the request body and its raw
+response is returned, no SOAT endpoint in between. Store the API key in the tool's
+headers (or reference a [secret](/docs/modules/secrets#examples) in production).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-secret \
+OPENAI_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
-  --name "ADAPTER_TOKEN" \
-  --value "$ADAPTER_TOKEN" | jq '{id: .id, name: .name}'
+  --name "openai-chat-completions" \
+  --type "http" \
+  --execute '{"url":"https://api.openai.com/v1/chat/completions","method":"POST","headers":{"Authorization":"Bearer '"$OPENAI_API_KEY"'"}}' \
+  | jq -r '.id')
+echo "OPENAI_TOOL_ID: $OPENAI_TOOL_ID"
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-await adminSoat.secrets.createSecret({
-  body: { project_id: PROJECT_ID, name: 'ADAPTER_TOKEN', value: process.env.ADAPTER_TOKEN },
+const { data: openaiTool } = await adminSoat.tools.createTool({
+  body: {
+    project_id: PROJECT_ID,
+    name: 'openai-chat-completions',
+    type: 'http',
+    execute: {
+      url: 'https://api.openai.com/v1/chat/completions',
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+    },
+  },
 });
+const OPENAI_TOOL_ID = openaiTool.id;
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_BASE_URL/api/v1/secrets" \
+OPENAI_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"ADAPTER_TOKEN\",\"value\":\"$ADAPTER_TOKEN\"}" \
-  | jq '{id: .id, name: .name}'
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"openai-chat-completions\",\"type\":\"http\",\"execute\":{\"url\":\"https://api.openai.com/v1/chat/completions\",\"method\":\"POST\",\"headers\":{\"Authorization\":\"Bearer $OPENAI_API_KEY\"}}}" \
+  | jq -r '.id')
+echo "OPENAI_TOOL_ID: $OPENAI_TOOL_ID"
 ```
 
 </TabItem>
@@ -285,11 +188,14 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/secrets" \
 
 ---
 
-## Step 5 — Create the image converter tool
+## Step 4 — Wrap it in a `pipeline` tool that reshapes the request and response
 
-An `http` [Tool](/docs/modules/tools#examples) that points at the adapter's `/ocr`
-route. SOAT posts the converter input as the request body and returns the adapter's
-JSON response.
+A [`pipeline` tool](/docs/modules/tools#pipeline) calls the step above and maps
+between shapes using [JSON Logic](https://jsonlogic.com): `cat` concatenates the
+`data:` URI from the converter's `file.content_type` and `file.data_base64`; `var`
+extracts `choices[0].message.content` from OpenAI's response into the
+[converter output contract](/docs/modules/ingestion-rules#converter-tool-contract)
+(`{ pages: [...] }`). This is the entire "adapter" — no server to deploy.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -298,10 +204,28 @@ JSON response.
 OCR_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "openai-vision-ocr" \
-  --type "http" \
-  --description "Extracts text from an image using OpenAI vision" \
-  --execute '{"url":"'"$ADAPTER_URL"'/ocr","method":"POST","headers":{"Authorization":"Bearer '"$ADAPTER_TOKEN"'"}}' \
-  | jq -r '.id')
+  --type "pipeline" \
+  --pipeline '{
+    "steps": [{
+      "id": "call_openai",
+      "tool_id": "'"$OPENAI_TOOL_ID"'",
+      "input": {
+        "model": "gpt-4o-mini",
+        "messages": [{
+          "role": "user",
+          "content": [
+            { "type": "text", "text": "Extract all text from this image. Return plain text only." },
+            { "type": "image_url", "image_url": { "url": {
+              "cat": ["data:", { "var": "input.file.content_type" }, ";base64,", { "var": "input.file.data_base64" }]
+            }}}
+          ]
+        }]
+      }
+    }],
+    "output": {
+      "pages": [{ "text": { "var": "steps.call_openai.choices.0.message.content" }, "page_number": 1 }]
+    }
+  }' | jq -r '.id')
 echo "OCR_TOOL_ID: $OCR_TOOL_ID"
 ```
 
@@ -313,12 +237,36 @@ const { data: ocrTool } = await adminSoat.tools.createTool({
   body: {
     project_id: PROJECT_ID,
     name: 'openai-vision-ocr',
-    type: 'http',
-    description: 'Extracts text from an image using OpenAI vision',
-    execute: {
-      url: `${process.env.ADAPTER_URL}/ocr`,
-      method: 'POST',
-      headers: { Authorization: `Bearer ${process.env.ADAPTER_TOKEN}` },
+    type: 'pipeline',
+    pipeline: {
+      steps: [
+        {
+          id: 'call_openai',
+          tool_id: OPENAI_TOOL_ID,
+          input: {
+            model: 'gpt-4o-mini',
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: 'Extract all text from this image. Return plain text only.' },
+                  {
+                    type: 'image_url',
+                    image_url: {
+                      url: {
+                        cat: ['data:', { var: 'input.file.content_type' }, ';base64,', { var: 'input.file.data_base64' }],
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+      output: {
+        pages: [{ text: { var: 'steps.call_openai.choices.0.message.content' }, page_number: 1 }],
+      },
     },
   },
 });
@@ -329,12 +277,35 @@ const OCR_TOOL_ID = ocrTool.id;
 <TabItem value="curl" label="curl">
 
 ```bash
-OCR_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"openai-vision-ocr\",\"type\":\"http\",\"description\":\"Extracts text from an image using OpenAI vision\",\"execute\":{\"url\":\"$ADAPTER_URL/ocr\",\"method\":\"POST\",\"headers\":{\"Authorization\":\"Bearer $ADAPTER_TOKEN\"}}}" \
-  | jq -r '.id')
-echo "OCR_TOOL_ID: $OCR_TOOL_ID"
+  -d '{
+    "project_id": "'"$PROJECT_ID"'",
+    "name": "openai-vision-ocr",
+    "type": "pipeline",
+    "pipeline": {
+      "steps": [{
+        "id": "call_openai",
+        "tool_id": "'"$OPENAI_TOOL_ID"'",
+        "input": {
+          "model": "gpt-4o-mini",
+          "messages": [{
+            "role": "user",
+            "content": [
+              { "type": "text", "text": "Extract all text from this image. Return plain text only." },
+              { "type": "image_url", "image_url": { "url": {
+                "cat": ["data:", { "var": "input.file.content_type" }, ";base64,", { "var": "input.file.data_base64" }]
+              }}}
+            ]
+          }]
+        }
+      }],
+      "output": {
+        "pages": [{ "text": { "var": "steps.call_openai.choices.0.message.content" }, "page_number": 1 }]
+      }
+    }
+  }' | jq -r '.id'
 ```
 
 </TabItem>
@@ -342,69 +313,11 @@ echo "OCR_TOOL_ID: $OCR_TOOL_ID"
 
 ---
 
-## Step 6 — Create the audio converter tool
-
-Same idea, pointing at `/transcribe`. This tool returns `{ status: "pending" }` and
-delivers the transcript to the ingestion callback — see the
-[async conversion](/docs/modules/ingestion-rules#synchronous-vs-async-callback-conversion)
-concept.
-
-<Tabs groupId="client">
-<TabItem value="cli" label="CLI" default>
-
-```bash
-STT_TOOL_ID=$(soat create-tool \
-  --project-id "$PROJECT_ID" \
-  --name "xai-speech-to-text" \
-  --type "http" \
-  --description "Transcribes audio using xAI speech-to-text" \
-  --execute '{"url":"'"$ADAPTER_URL"'/transcribe","method":"POST","headers":{"Authorization":"Bearer '"$ADAPTER_TOKEN"'"}}' \
-  | jq -r '.id')
-echo "STT_TOOL_ID: $STT_TOOL_ID"
-```
-
-</TabItem>
-<TabItem value="sdk" label="SDK">
-
-```ts
-const { data: sttTool } = await adminSoat.tools.createTool({
-  body: {
-    project_id: PROJECT_ID,
-    name: 'xai-speech-to-text',
-    type: 'http',
-    description: 'Transcribes audio using xAI speech-to-text',
-    execute: {
-      url: `${process.env.ADAPTER_URL}/transcribe`,
-      method: 'POST',
-      headers: { Authorization: `Bearer ${process.env.ADAPTER_TOKEN}` },
-    },
-  },
-});
-const STT_TOOL_ID = sttTool.id;
-```
-
-</TabItem>
-<TabItem value="curl" label="curl">
-
-```bash
-STT_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"xai-speech-to-text\",\"type\":\"http\",\"description\":\"Transcribes audio using xAI speech-to-text\",\"execute\":{\"url\":\"$ADAPTER_URL/transcribe\",\"method\":\"POST\",\"headers\":{\"Authorization\":\"Bearer $ADAPTER_TOKEN\"}}}" \
-  | jq -r '.id')
-echo "STT_TOOL_ID: $STT_TOOL_ID"
-```
-
-</TabItem>
-</Tabs>
-
----
-
-## Step 7 — Route images to the OCR tool
+## Step 5 — Route images to the OCR pipeline tool
 
 Create an [Ingestion Rule](/docs/modules/ingestion-rules#examples) mapping `image/*`
-to the OCR tool. `file_delivery: base64` passes the image bytes inline (fine for
-typical images); `chunk_strategy: whole` keeps the extracted text as a single chunk.
+to the pipeline tool — the same converter mechanism regardless of whether `tool_id`
+points at a plain `http` tool or a `pipeline` tool.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -449,11 +362,156 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/ingestion-rules" \
 
 ---
 
-## Step 8 — Route audio to the transcription tool
+## Step 6 — Create an `http` tool for xAI
 
-Audio files are large and slow to process, so use `file_delivery: download_url` — the
-adapter fetches the bytes from a short-lived signed URL instead of receiving base64.
-See [file delivery](/docs/modules/ingestion-rules#file-delivery).
+Same pattern for transcription: an `http` tool pointed at xAI's speech-to-text
+endpoint. Like OpenAI's Whisper API, a single request returns the transcript
+directly in the response for typical audio lengths — no job polling needed.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+XAI_TOOL_ID=$(soat create-tool \
+  --project-id "$PROJECT_ID" \
+  --name "xai-speech-to-text" \
+  --type "http" \
+  --execute '{"url":"https://api.x.ai/v1/audio/transcriptions","method":"POST","headers":{"Authorization":"Bearer '"$XAI_API_KEY"'"}}' \
+  | jq -r '.id')
+echo "XAI_TOOL_ID: $XAI_TOOL_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: xaiTool } = await adminSoat.tools.createTool({
+  body: {
+    project_id: PROJECT_ID,
+    name: 'xai-speech-to-text',
+    type: 'http',
+    execute: {
+      url: 'https://api.x.ai/v1/audio/transcriptions',
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.XAI_API_KEY}` },
+    },
+  },
+});
+const XAI_TOOL_ID = xaiTool.id;
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+XAI_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"xai-speech-to-text\",\"type\":\"http\",\"execute\":{\"url\":\"https://api.x.ai/v1/audio/transcriptions\",\"method\":\"POST\",\"headers\":{\"Authorization\":\"Bearer $XAI_API_KEY\"}}}" \
+  | jq -r '.id')
+echo "XAI_TOOL_ID: $XAI_TOOL_ID"
+```
+
+</TabItem>
+</Tabs>
+
+:::note Long audio
+If a recording is long enough that transcription exceeds the sync ingestion
+timeout, the converter can instead submit a job and return
+`{ "status": "pending" }`; the transcript is then delivered later to
+`POST /api/v1/documents/:id/ingestion-callback` (see
+[Ingestion Rules — Synchronous vs Async Conversion](/docs/modules/ingestion-rules#synchronous-vs-async-callback-conversion)).
+That still needs no server of your own — whatever completes the job (a script, a
+provider-side webhook) makes one authenticated POST back to SOAT.
+:::
+
+---
+
+## Step 7 — Wrap it in a `pipeline` tool
+
+Map the converter's `file.download_url` into xAI's request and extract the
+transcript into the `{ pages: [...] }` contract.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+STT_TOOL_ID=$(soat create-tool \
+  --project-id "$PROJECT_ID" \
+  --name "xai-transcribe" \
+  --type "pipeline" \
+  --pipeline '{
+    "steps": [{
+      "id": "call_xai",
+      "tool_id": "'"$XAI_TOOL_ID"'",
+      "input": {
+        "model": "whisper-1",
+        "file_url": { "var": "input.file.download_url" }
+      }
+    }],
+    "output": {
+      "pages": [{ "text": { "var": "steps.call_xai.text" }, "page_number": 1 }]
+    }
+  }' | jq -r '.id')
+echo "STT_TOOL_ID: $STT_TOOL_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: sttTool } = await adminSoat.tools.createTool({
+  body: {
+    project_id: PROJECT_ID,
+    name: 'xai-transcribe',
+    type: 'pipeline',
+    pipeline: {
+      steps: [
+        {
+          id: 'call_xai',
+          tool_id: XAI_TOOL_ID,
+          input: { model: 'whisper-1', file_url: { var: 'input.file.download_url' } },
+        },
+      ],
+      output: { pages: [{ text: { var: 'steps.call_xai.text' }, page_number: 1 }] },
+    },
+  },
+});
+const STT_TOOL_ID = sttTool.id;
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "'"$PROJECT_ID"'",
+    "name": "xai-transcribe",
+    "type": "pipeline",
+    "pipeline": {
+      "steps": [{
+        "id": "call_xai",
+        "tool_id": "'"$XAI_TOOL_ID"'",
+        "input": { "model": "whisper-1", "file_url": { "var": "input.file.download_url" } }
+      }],
+      "output": { "pages": [{ "text": { "var": "steps.call_xai.text" }, "page_number": 1 }] }
+    }
+  }' | jq -r '.id'
+```
+
+</TabItem>
+</Tabs>
+
+---
+
+## Step 8 — Route audio to the transcription pipeline
+
+Audio files are larger than typical images, so use `file_delivery: download_url` —
+the pipeline's `http` step fetches the bytes itself instead of receiving base64. See
+[Ingestion Rules — File Delivery](/docs/modules/ingestion-rules#file-delivery).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -507,8 +565,9 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/ingestion-rules" \
 A scanned PDF has `content_type: application/pdf` but no text layer, so the native
 parser yields nothing. A rule matching `application/pdf` is used **only when native
 extraction returns no text** — see
-[content-type matching](/docs/modules/ingestion-rules#content-type-matching). Reusing
-the OCR tool makes it a scanned-PDF fallback; born-digital PDFs still skip the converter.
+[Ingestion Rules — Content-Type Matching](/docs/modules/ingestion-rules#content-type-matching).
+Reusing the OCR pipeline tool makes it a scanned-PDF fallback; born-digital PDFs
+still skip the converter.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -553,11 +612,12 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/ingestion-rules" \
 
 ---
 
-## Step 10 — Ingest an image (synchronous)
+## Step 10 — Ingest an image without specifying a converter
 
-Upload an image as a [File](/docs/modules/files#examples), then ingest it. Because the
-OCR tool returns text directly, `--async false` blocks until the document is `ready` —
-the `image/*` rule routed the file through OpenAI vision transparently.
+Upload an image as a [File](/docs/modules/files#examples), then ingest it exactly
+like a PDF or text file. Nothing about the call names OpenAI, the pipeline, or the
+rule — `POST /documents/ingest` resolves the matching rule from `content_type`
+automatically, every time, for every future image.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -612,12 +672,10 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/documents/ingest?async=false" \
 
 ---
 
-## Step 11 — Ingest audio (asynchronous via callback)
+## Step 11 — Ingest audio the same way
 
-Transcription is long-running, so the converter returns `{ status: "pending" }` and the
-document stays in `processing` until the adapter POSTs the transcript to the
-[ingestion callback](/docs/modules/documents#async-file-ingestion). Ingest with the
-default async mode (returns `202`) and poll until `ready`.
+Same call shape, different file. The `audio/*` rule from Step 8 routes it to the
+transcription pipeline — the caller never names a tool.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -627,18 +685,11 @@ AUDIO_FILE_ID=$(soat upload-file \
   --project-id "$PROJECT_ID" \
   --file ./meeting.mp3 | jq -r '.id')
 
-DOC_ID=$(soat ingest-document \
+soat ingest-document \
   --project-id "$PROJECT_ID" \
   --file-id "$AUDIO_FILE_ID" \
-  --path-prefix "/audio/" | jq -r '.id')
-
-# Poll the lightweight status endpoint until the callback completes the document.
-while true; do
-  STATUS=$(soat get-document-status --document-id "$DOC_ID" | jq -r '.status')
-  echo "status: $STATUS"
-  [ "$STATUS" = "ready" ] || [ "$STATUS" = "failed" ] && break
-  sleep 2
-done
+  --path-prefix "/audio/" \
+  --async false | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
 ```
 
 </TabItem>
@@ -651,18 +702,10 @@ audioForm.append('project_id', PROJECT_ID);
 const { data: audioFile } = await adminSoat.files.uploadFile({ body: audioForm });
 
 const { data: audioDoc } = await adminSoat.documents.ingestDocument({
+  query: { async: false },
   body: { project_id: PROJECT_ID, file_id: audioFile.id, path_prefix: '/audio/' },
 });
-
-let status = audioDoc.status;
-while (status === 'pending' || status === 'processing') {
-  await new Promise((r) => setTimeout(r, 2000));
-  const { data } = await adminSoat.documents.getDocumentStatus({
-    path: { document_id: audioDoc.id },
-  });
-  status = data.status;
-}
-console.log('final status:', status); // "ready"
+console.log(audioDoc.status, audioDoc.chunk_count);
 ```
 
 </TabItem>
@@ -674,19 +717,11 @@ AUDIO_FILE_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/files/upload" \
   -F "file=@meeting.mp3" \
   -F "project_id=$PROJECT_ID" | jq -r '.id')
 
-DOC_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/documents/ingest" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/documents/ingest?async=false" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$AUDIO_FILE_ID\",\"path_prefix\":\"/audio/\"}" \
-  | jq -r '.id')
-
-while true; do
-  STATUS=$(curl -s "$SOAT_BASE_URL/api/v1/documents/$DOC_ID/status" \
-    -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r '.status')
-  echo "status: $STATUS"
-  [ "$STATUS" = "ready" ] || [ "$STATUS" = "failed" ] && break
-  sleep 2
-done
+  | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
 ```
 
 </TabItem>
@@ -696,8 +731,8 @@ done
 
 ## Step 12 — Search the converted content
 
-Both documents are now chunked and embedded like any other. Query them through the
-[Knowledge](/docs/modules/knowledge#examples) layer — the OCR and transcript text is
+Both documents are chunked and embedded like any other. Query them through
+[Knowledge](/docs/modules/knowledge#examples) — the OCR and transcript text is
 fully searchable.
 
 <Tabs groupId="client">
@@ -744,15 +779,15 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/knowledge/search" \
 
 ## What you built
 
-- **A converter adapter** that bridges SOAT's converter contract to
-  [OpenAI vision](https://developers.openai.com/api/docs/guides/images-vision) and
-  [xAI speech-to-text](https://docs.x.ai/developers/models/speech-to-text).
-- **Two converter tools** and three **ingestion rules** routing `image/*`, `audio/*`,
-  and scanned `application/pdf` to them.
-- **Synchronous** image OCR and **asynchronous** audio transcription (via the ingestion
-  callback), both landing as searchable Documents.
+- **Two converters**, each a plain [`http` tool](/docs/modules/tools#http) calling
+  OpenAI/xAI directly, wrapped in a [`pipeline` tool](/docs/modules/tools#pipeline)
+  that reshapes request and response with JSON Logic. No adapter server, no code
+  outside SOAT.
+- **Three ingestion rules** routing `image/*`, `audio/*`, and scanned
+  `application/pdf` to those converters.
+- **Fully automatic ingestion** — `POST /documents/ingest` never names a tool; the
+  matching rule is resolved from `content_type` every time.
 
-To support another modality (e.g. video), add a route to the adapter, create one more
-`http` tool, and add an ingestion rule for its `content_type` — no server changes
-needed. Because converters are just tools, you can swap OpenAI or xAI for any provider
-by changing only the adapter.
+To support another modality (e.g. video) or swap providers, add one `http` tool, one
+`pipeline` tool with the right JSON Logic mapping, and one ingestion rule — no server
+changes, no new deployment, ever.

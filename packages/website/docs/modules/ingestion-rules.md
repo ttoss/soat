@@ -68,6 +68,10 @@ A rule's converter is either a [Tool](./tools.md) or an [Agent](./agents.md) (ex
 - **Tool converter** (`tool_id`) — ingestion calls the tool with the JSON contract below and reads text from its response. Best for audio, specialized OCR APIs, and long async jobs (the tool can defer via the callback).
 - **Agent converter** (`agent_id`) — ingestion sends the file to the agent as multimodal input with a fixed "extract all text / transcribe" instruction; the agent's text output becomes the document content. Zero extra infrastructure, but the agent's model must support the file's modality (a **vision** model for images and scanned PDFs; an **audio-capable** model for audio). The generation is awaited inline — there is no deferral/callback for agent converters.
 
+### Building a Tool Converter for a Third-Party API
+
+A tool converter does not require hosting a separate adapter service. An [`http` tool](./tools.md#http) can point its `execute.url` directly at a third-party API (OpenAI, xAI, …); a [`pipeline` tool](./tools.md#pipeline) wrapping it reshapes the request and response using the same [JSON Logic](https://jsonlogic.com) mapping every other pipeline step uses — `cat` to build values like a base64 `data:` URI, `var` to extract a nested response field into the shape below. Point `IngestionRule.tool_id` at the pipeline tool. See [Tools — pipeline](./tools.md#pipeline) for the mapping syntax.
+
 ### Converter Tool Contract
 
 A **tool** converter is called via the same server-side path as any other tool call, with a fixed input shape, and must return one of three output shapes.
