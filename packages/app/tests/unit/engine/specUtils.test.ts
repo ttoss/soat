@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'vitest';
 
+import { getOpRequestSchema } from '@/engine/formHelpers';
 import {
   actionLabel,
   buildListRequestUrl,
   buildRefDescriptor,
   buildUrl,
-  opAcceptsProjectIdQuery,
   extractItems,
   extractPathParams,
   extractRefFields,
@@ -16,26 +16,28 @@ import {
   getResponseItemSchema,
   humanizeKey,
   isSensitiveKey,
+  opAcceptsProjectIdQuery,
   parseModules,
   resolvableRefFields,
   resolveSchema,
 } from '@/engine/specUtils';
 import type { ModuleInfo, ModuleOp, OpenApiSpec } from '@/engine/types';
-import { getOpRequestSchema } from '@/engine/formHelpers';
 
 import { testSpec } from '../fixtures/spec';
 
 const byTag = (modules: ModuleInfo[], tag: string): ModuleInfo => {
-  const m = modules.find((x) => x.tag === tag);
+  const m = modules.find((x) => {
+    return x.tag === tag;
+  });
   if (!m) throw new Error(`module ${tag} not found`);
   return m;
 };
 
 describe('buildUrl', () => {
   test('substitutes and encodes path params', () => {
-    expect(
-      buildUrl('/api/v1/agents/{agent_id}', { agent_id: 'a b/c' })
-    ).toBe('/api/v1/agents/a%20b%2Fc');
+    expect(buildUrl('/api/v1/agents/{agent_id}', { agent_id: 'a b/c' })).toBe(
+      '/api/v1/agents/a%20b%2Fc'
+    );
   });
 
   test('leaves the template untouched when no params match', () => {
@@ -114,6 +116,79 @@ describe('parseModules', () => {
     expect(webhooks.actions).toBeUndefined();
   });
 
+  test('prefers a multipart upload sibling over a plain collection POST as the create op', () => {
+    // Mirrors the Files module: POST /files creates a metadata-only record
+    // (JSON body, no bytes), while POST /files/upload actually carries file
+    // content via a `format: binary` field. The generic form only ever
+    // renders a file picker for the operation wired to createOp, so that one
+    // must win — otherwise "Create" produces a form with no way to attach a
+    // file at all.
+    const spec: OpenApiSpec = {
+      paths: {
+        '/api/v1/files': {
+          get: { operationId: 'listFiles', tags: ['Files'] },
+          post: {
+            operationId: 'createFile',
+            tags: ['Files'],
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: { filename: { type: 'string' } },
+                  },
+                },
+              },
+            },
+          },
+        },
+        '/api/v1/files/upload': {
+          post: {
+            operationId: 'uploadFile',
+            tags: ['Files'],
+            requestBody: {
+              content: {
+                'multipart/form-data': {
+                  schema: {
+                    type: 'object',
+                    required: ['file'],
+                    properties: {
+                      file: { type: 'string', format: 'binary' },
+                      filename: { type: 'string' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        '/api/v1/files/upload/base64': {
+          post: {
+            operationId: 'uploadFileBase64',
+            tags: ['Files'],
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: { content: { type: 'string' } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    const files = byTag(parseModules(spec), 'Files');
+    expect(files.createOp?.operation.operationId).toBe('uploadFile');
+    const actionIds = (files.actions ?? []).map((a) => {
+      return a.operation.operationId;
+    });
+    expect(actionIds).toContain('createFile');
+    expect(actionIds).toContain('uploadFileBase64');
+  });
+
   test('skips operations without an operationId and skipped tags', () => {
     const spec: OpenApiSpec = {
       paths: {
@@ -158,7 +233,9 @@ describe('parseModules', () => {
       },
     } as OpenApiSpec;
     const modules = parseModules(spec);
-    const label = (tag: string) => byTag(modules, tag).label;
+    const label = (tag: string) => {
+      return byTag(modules, tag).label;
+    };
     expect(label('AI Providers')).toBe('AI Providers');
     expect(label('API Keys')).toBe('API Keys');
     expect(label('MemoryEntries')).toBe('Memory Entries');
@@ -174,9 +251,9 @@ describe('parseModules', () => {
 
 describe('getIdParamName', () => {
   test('returns the extra brace param present on the get path', () => {
-    expect(
-      getIdParamName('/api/v1/agents/{agent_id}', '/api/v1/agents')
-    ).toBe('agent_id');
+    expect(getIdParamName('/api/v1/agents/{agent_id}', '/api/v1/agents')).toBe(
+      'agent_id'
+    );
   });
 
   test('defaults to "id" when no extra segment is found', () => {
@@ -265,9 +342,15 @@ describe('formatValue', () => {
 });
 
 describe('x-soat-ref cross-references', () => {
-  const agents = (): ModuleInfo => byTag(parseModules(testSpec), 'Agents');
-  const projects = (): ModuleInfo => byTag(parseModules(testSpec), 'Projects');
-  const sessions = (): ModuleInfo => byTag(parseModules(testSpec), 'Sessions');
+  const agents = (): ModuleInfo => {
+    return byTag(parseModules(testSpec), 'Agents');
+  };
+  const projects = (): ModuleInfo => {
+    return byTag(parseModules(testSpec), 'Projects');
+  };
+  const sessions = (): ModuleInfo => {
+    return byTag(parseModules(testSpec), 'Sessions');
+  };
 
   test('getResponseItemSchema unwraps an array response to its item schema', () => {
     const schema = getResponseItemSchema(agents().listOp, testSpec);
@@ -305,11 +388,15 @@ describe('x-soat-ref cross-references', () => {
 
   test('buildRefDescriptor returns null without an id or a detail op', () => {
     expect(buildRefDescriptor(projects(), '')).toBeNull();
-    expect(buildRefDescriptor({ ...projects(), getOp: undefined }, 'x')).toBeNull();
+    expect(
+      buildRefDescriptor({ ...projects(), getOp: undefined }, 'x')
+    ).toBeNull();
   });
 
   test('buildRefDescriptor fills parent params for a nested target from context', () => {
-    expect(buildRefDescriptor(sessions(), 'ses_1', { agent_id: 'agt_1' })).toEqual({
+    expect(
+      buildRefDescriptor(sessions(), 'ses_1', { agent_id: 'agt_1' })
+    ).toEqual({
       tag: 'Sessions',
       operationId: 'getAgentSession',
       pathParams: { agent_id: 'agt_1', session_id: 'ses_1' },
@@ -372,7 +459,9 @@ describe('parseModules — snake_cased served spec', () => {
   );
 
   test('normalises operation_id and request_body so the create schema resolves', () => {
-    const projects = parseModules(snakeSpec).find((m) => m.tag === 'Projects')!;
+    const projects = parseModules(snakeSpec).find((m) => {
+      return m.tag === 'Projects';
+    })!;
 
     expect(projects.createOp?.operation.operationId).toBe('createProject');
     const schema = getOpRequestSchema(projects.createOp, snakeSpec);
@@ -383,8 +472,12 @@ describe('parseModules — snake_cased served spec', () => {
 });
 
 describe('project scoping via query param', () => {
-  const agents = (): ModuleInfo => byTag(parseModules(testSpec), 'Agents');
-  const tools = (): ModuleInfo => byTag(parseModules(testSpec), 'Tools');
+  const agents = (): ModuleInfo => {
+    return byTag(parseModules(testSpec), 'Agents');
+  };
+  const tools = (): ModuleInfo => {
+    return byTag(parseModules(testSpec), 'Tools');
+  };
 
   test('opAcceptsProjectIdQuery detects the project_id query parameter', () => {
     expect(opAcceptsProjectIdQuery(agents().listOp)).toBe(true);
@@ -454,7 +547,9 @@ describe('getListItemSchema — record from list responses', () => {
         },
       })
     );
-    const actors = parseModules(spec).find((m) => m.tag === 'Actors')!;
+    const actors = parseModules(spec).find((m) => {
+      return m.tag === 'Actors';
+    })!;
     const item = getListItemSchema(actors.listOp, spec);
 
     expect(item?.properties && Object.keys(item.properties)).toEqual([
@@ -519,7 +614,9 @@ describe('resolveSchema — snake_cased component keys (served spec)', () => {
         },
       })
     );
-    const actors = parseModules(spec).find((m) => m.tag === 'Actors')!;
+    const actors = parseModules(spec).find((m) => {
+      return m.tag === 'Actors';
+    })!;
     const item = getListItemSchema(actors.listOp, spec);
     expect(extractRefFields(item, spec)).toEqual({ project_id: 'projects' });
   });

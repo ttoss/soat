@@ -12,13 +12,17 @@ import { server } from '../msw/server';
 import { NavProbe, renderWithAuth } from '../testUtils';
 
 const agentsModule = (): ModuleInfo => {
-  const m = parseModules(testSpec).find((x) => x.tag === 'Agents');
+  const m = parseModules(testSpec).find((x) => {
+    return x.tag === 'Agents';
+  });
   if (!m) throw new Error('Agents module missing');
   return m;
 };
 
 const apiKeysModule = (): ModuleInfo => {
-  const m = parseModules(testSpec).find((x) => x.tag === 'Api Keys');
+  const m = parseModules(testSpec).find((x) => {
+    return x.tag === 'Api Keys';
+  });
   if (!m) throw new Error('Api Keys module missing');
   return m;
 };
@@ -72,12 +76,12 @@ describe('FormView (create)', () => {
 
   test('reveals a one-time secret from the create response instead of navigating away', async () => {
     server.use(
-      http.post('*/api/v1/agents', () =>
-        HttpResponse.json(
+      http.post('*/api/v1/agents', () => {
+        return HttpResponse.json(
           { id: 'agt_9', name: 'Gamma', api_key: 'sk_live_secret123' },
           { status: 201 }
-        )
-      )
+        );
+      })
     );
 
     renderWithAuth(
@@ -106,9 +110,12 @@ describe('FormView (create)', () => {
 
   test('does not reveal anything when the create response carries no secret', async () => {
     server.use(
-      http.post('*/api/v1/agents', () =>
-        HttpResponse.json({ id: 'agt_9', name: 'Gamma' }, { status: 201 })
-      )
+      http.post('*/api/v1/agents', () => {
+        return HttpResponse.json(
+          { id: 'agt_9', name: 'Gamma' },
+          { status: 201 }
+        );
+      })
     );
 
     renderWithAuth(
@@ -136,9 +143,9 @@ describe('FormView (create)', () => {
 
   test('shows the server error and stays on the form on failure', async () => {
     server.use(
-      http.post('*/api/v1/agents', () =>
-        HttpResponse.json({ error: 'name taken' }, { status: 409 })
-      )
+      http.post('*/api/v1/agents', () => {
+        return HttpResponse.json({ error: 'name taken' }, { status: 409 });
+      })
     );
 
     renderWithAuth(
@@ -158,12 +165,12 @@ describe('FormView (create)', () => {
 
   test('renders a project selector populated from the API for x-soat-ref fields', async () => {
     server.use(
-      http.get('*/api/v1/projects', () =>
-        HttpResponse.json([
+      http.get('*/api/v1/projects', () => {
+        return HttpResponse.json([
           { id: 'proj_1', name: 'Alpha Project' },
           { id: 'proj_2', name: 'Beta Project' },
-        ])
-      )
+        ]);
+      })
     );
 
     renderWithAuth(
@@ -198,12 +205,12 @@ describe('FormView (create)', () => {
 });
 
 describe('FormView — array x-soat-ref field (multi-select picker)', () => {
-  const policyHandler = http.get('*/api/v1/policies', () =>
-    HttpResponse.json([
+  const policyHandler = http.get('*/api/v1/policies', () => {
+    return HttpResponse.json([
       { id: 'pol_1', name: 'Read Only' },
       { id: 'pol_2', name: 'Admin' },
-    ])
-  );
+    ]);
+  });
 
   test('renders policy_ids as a picker populated from the API, not a textarea', async () => {
     server.use(policyHandler);
@@ -231,10 +238,16 @@ describe('FormView — array x-soat-ref field (multi-select picker)', () => {
     let received: JsonObject | undefined;
     server.use(
       policyHandler,
-      http.post('*/api/v1/projects/:project_id/api-keys', async ({ request }) => {
-        received = (await request.json()) as JsonObject;
-        return HttpResponse.json({ id: 'key_1', ...received }, { status: 201 });
-      })
+      http.post(
+        '*/api/v1/projects/:project_id/api-keys',
+        async ({ request }) => {
+          received = (await request.json()) as JsonObject;
+          return HttpResponse.json(
+            { id: 'key_1', ...received },
+            { status: 201 }
+          );
+        }
+      )
     );
 
     renderWithAuth(
@@ -265,10 +278,16 @@ describe('FormView — array x-soat-ref field (multi-select picker)', () => {
     let received: JsonObject | undefined;
     server.use(
       policyHandler,
-      http.post('*/api/v1/projects/:project_id/api-keys', async ({ request }) => {
-        received = (await request.json()) as JsonObject;
-        return HttpResponse.json({ id: 'key_1', ...received }, { status: 201 });
-      })
+      http.post(
+        '*/api/v1/projects/:project_id/api-keys',
+        async ({ request }) => {
+          received = (await request.json()) as JsonObject;
+          return HttpResponse.json(
+            { id: 'key_1', ...received },
+            { status: 201 }
+          );
+        }
+      )
     );
 
     renderWithAuth(
@@ -291,14 +310,23 @@ describe('FormView — array x-soat-ref field (multi-select picker)', () => {
   });
 });
 
-describe('FormView (multipart/upload action)', () => {
+describe('FormView (create, multipart upload)', () => {
   const filesModule = () => {
-    const m = parseModules(testSpec).find((x) => x.tag === 'Files');
+    const m = parseModules(testSpec).find((x) => {
+      return x.tag === 'Files';
+    });
     if (!m) throw new Error('Files module missing');
     return m;
   };
 
-  test('renders a file input for binary format fields', () => {
+  test('the multipart upload endpoint becomes the module create op', () => {
+    // POST /files/upload is the only POST on the Files module and carries a
+    // `format: binary` field, so it must win the create-op slot — otherwise
+    // the module would have no way to create a file with real content.
+    expect(filesModule().createOp?.operation.operationId).toBe('uploadFile');
+  });
+
+  test('renders a native file input for the binary field', () => {
     renderWithAuth(
       <FormView
         module={filesModule()}
@@ -307,43 +335,48 @@ describe('FormView (multipart/upload action)', () => {
         mode="create"
       />
     );
-    // The Files module has no JSON createOp, so "No form schema available" renders.
-    // The upload action is accessed via ActionView, not FormView.
-    // This test validates the module parses correctly with the upload action.
-    expect(filesModule().actions?.find((a) => a.operation.operationId === 'uploadFile')).toBeDefined();
+    expect(screen.getByText('Create Files')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^file/i)).toHaveAttribute('type', 'file');
   });
 
-  test('upload action calls the upload endpoint and shows the result', async () => {
+  test('submitting posts multipart form data to the upload endpoint', async () => {
     let handlerCalled = false;
     server.use(
       http.post('*/api/v1/files/upload', () => {
         handlerCalled = true;
-        return HttpResponse.json({ id: 'fil_1', filename: 'test.txt' }, { status: 201 });
+        return HttpResponse.json(
+          { id: 'fil_1', filename: 'test.txt' },
+          { status: 201 }
+        );
       })
     );
 
-    const { ActionView } = await import('@/engine/actionView');
     renderWithAuth(
-      <ActionView
-        module={filesModule()}
-        spec={testSpec}
-        pathParams={{}}
-        operationId="uploadFile"
-      />
+      <>
+        <FormView
+          module={filesModule()}
+          spec={testSpec}
+          pathParams={{}}
+          mode="create"
+        />
+        <NavProbe />
+      </>
     );
 
-    const fileInput = screen.getByLabelText(/file/i);
+    const fileInput = screen.getByLabelText(/^file/i);
     const file = new File(['hello world'], 'test.txt', { type: 'text/plain' });
     await userEvent.upload(fileInput, file);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
 
     // The upload endpoint was hit (proves the multipart code path, not the JSON path).
     await waitFor(() => {
       expect(handlerCalled).toBe(true);
     });
-    // The result panel shows the response — no error was shown.
-    expect(screen.getByText('fil_1')).toBeInTheDocument();
+    // A successful create with no revealed secret navigates back.
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-probe')).toHaveTextContent('null');
+    });
   });
 });
 
