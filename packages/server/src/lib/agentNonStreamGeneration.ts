@@ -15,6 +15,7 @@ import {
   fireCompletionSideEffects,
   recordGenerationFailure,
 } from './generationLifecycle';
+import { buildStructuredOutput } from './outputSchema';
 import { toProviderDomainError } from './providerError';
 import { type ProviderOptionsMap, type ReasoningConfig } from './reasoning';
 import { applyReasoningPipeline } from './reasoningPipelineHook';
@@ -105,6 +106,7 @@ const callGenerateText = async (args: {
       abortSignal: args.abortSignal,
       providerOptions: args.providerOptions,
       maxOutputTokens: args.maxOutputTokens,
+      output: buildStructuredOutput(args.typedAgent.outputSchema),
     });
   } catch (error) {
     log(
@@ -123,6 +125,7 @@ type GenerateTextResult = {
   response?: { messages?: unknown[]; modelId?: string };
   text: string;
   finishReason: string;
+  output?: unknown;
 };
 
 const resolveGenerationResult = async (args: {
@@ -202,6 +205,7 @@ const resolveGenerationResult = async (args: {
       finishReason: args.result.finishReason,
       text: mutableResult.text,
       response: mutableResult.response,
+      object: args.typedAgent.outputSchema ? args.result.output : undefined,
     },
     typedAgent: args.typedAgent,
     agentId: args.agentId,
@@ -301,6 +305,7 @@ export const runToolOutputsGeneration = async (args: {
       }),
       stopWhen: stepCountIs(args.pending.agentConfig.maxSteps),
       temperature: args.pending.agentConfig.temperature ?? undefined,
+      output: buildStructuredOutput(args.pending.agentConfig.outputSchema),
     });
   } catch (error) {
     throw await recordGenerationFailure({
@@ -316,6 +321,7 @@ type ToolOutputsGenerationResult = {
   response?: { messages?: unknown[]; modelId?: string };
   text: string;
   finishReason: string;
+  output?: unknown;
 };
 
 const buildTypedAgentFromPending = (pending: PendingGeneration): TypedAgent => {
@@ -332,6 +338,7 @@ const buildTypedAgentFromPending = (pending: PendingGeneration): TypedAgent => {
     temperature: pending.agentConfig.temperature,
     knowledgeConfig: null,
     reasoningConfig: null,
+    outputSchema: pending.agentConfig.outputSchema,
     project: { id: pending.projectId, publicId: pending.projectPublicId },
     aiProvider: { publicId: '' },
   };
@@ -397,6 +404,9 @@ export const resolveToolOutputsResult = (args: {
       responseMessages: args.result.response?.messages as
         | Array<unknown>
         | undefined,
+      ...(args.pending.agentConfig.outputSchema
+        ? { object: args.result.output }
+        : {}),
     },
   };
 

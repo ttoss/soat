@@ -910,6 +910,10 @@ describe('agentsFormationModule - read', () => {
       boundaryPolicy: null,
       temperature: 0.5,
       knowledgeConfig: null,
+      outputSchema: {
+        type: 'object',
+        properties: { summary: { type: 'string' } },
+      },
       createdAt: new Date(),
       updatedAt: new Date(),
     } as unknown as Awaited<ReturnType<typeof agentsModule.getAgent>>);
@@ -927,6 +931,10 @@ describe('agentsFormationModule - read', () => {
       tool_ids: ['tool_1'],
       max_steps: 10,
       tool_choice: 'auto',
+      output_schema: {
+        type: 'object',
+        properties: { summary: { type: 'string' } },
+      },
     });
   });
 

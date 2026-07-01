@@ -143,6 +143,7 @@ const buildPendingFromState = async (args: {
       activeToolIds: args.typedAgent.activeToolIds as string[] | null,
       stepRules: args.typedAgent.stepRules,
       temperature: args.typedAgent.temperature as number | null,
+      outputSchema: args.typedAgent.outputSchema,
     },
     resolvedTools,
     initiatorGenerationId: null,

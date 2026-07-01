@@ -171,6 +171,7 @@ describe('submitToolOutputs', () => {
         activeToolIds: null,
         stepRules: null,
         temperature: null,
+        outputSchema: null,
       },
       resolvedTools: { 'send-reply': sendReplyClientTool as never },
     };
@@ -265,6 +266,7 @@ describe('submitToolOutputs', () => {
         activeToolIds: null,
         stepRules: null,
         temperature: null,
+        outputSchema: null,
       },
       resolvedTools: {},
     };

@@ -196,6 +196,16 @@ export const ERROR_CODES = {
     description:
       'The agent reasoning config is invalid (e.g. an unknown mode, no pipeline steps, too many steps, a duplicate or unnamed step, a step missing a prompt, an unknown step kind, or a fanout count/rounds out of range).',
   },
+  INVALID_OUTPUT_SCHEMA: {
+    httpStatus: 400,
+    description:
+      'The agent output_schema is invalid — it must be a JSON Schema object.',
+  },
+  OUTPUT_SCHEMA_STREAMING_UNSUPPORTED: {
+    httpStatus: 400,
+    description:
+      'Streaming generation does not support output_schema. Set stream to false, or remove output_schema from the agent/request.',
+  },
   FILE_TOO_LARGE_FOR_SYNC: {
     httpStatus: 413,
     description:

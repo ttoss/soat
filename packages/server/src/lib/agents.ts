@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { validateOutputSchema } from './outputSchema';
 import { validateReasoningConfig } from './reasoning';
 
 // Re-export symbols that callers expect from this module.
@@ -30,6 +31,7 @@ export type MappedAgent = {
   temperature: number | null;
   knowledgeConfig: object | null;
   reasoning: object | null;
+  outputSchema: object | null;
   maxContextMessages: number | null;
   singleSessionPerActor: boolean;
   createdAt: Date;
@@ -68,6 +70,7 @@ const mapAgent = (
     temperature: agent.temperature,
     knowledgeConfig: agent.knowledgeConfig,
     reasoning: agent.reasoningConfig,
+    outputSchema: agent.outputSchema,
     maxContextMessages: agent.maxContextMessages,
     singleSessionPerActor: agent.singleSessionPerActor,
     createdAt: agent.createdAt,
@@ -92,6 +95,7 @@ type AgentUpdateFields = {
   temperature?: number | null;
   knowledgeConfig?: object | null;
   reasoningConfig?: object | null;
+  outputSchema?: object | null;
   maxContextMessages?: number | null;
   singleSessionPerActor?: boolean;
 };
@@ -110,6 +114,7 @@ const AGENT_SCALAR_FIELDS = [
   'temperature',
   'knowledgeConfig',
   'reasoningConfig',
+  'outputSchema',
   'maxContextMessages',
   'singleSessionPerActor',
 ] as const;
@@ -149,10 +154,12 @@ export const createAgent = async (args: {
   temperature?: number;
   knowledgeConfig?: object;
   reasoningConfig?: object;
+  outputSchema?: object;
   maxContextMessages?: number;
   singleSessionPerActor?: boolean;
 }): Promise<MappedAgent> => {
   validateReasoningConfig(args.reasoningConfig);
+  validateOutputSchema(args.outputSchema);
 
   const aiProviderId = await resolveAiProviderDbId(args.aiProviderId);
   if (!aiProviderId)
@@ -244,6 +251,7 @@ export const updateAgent = async (
   } & AgentUpdateFields
 ): Promise<MappedAgent> => {
   validateReasoningConfig(args.reasoningConfig);
+  validateOutputSchema(args.outputSchema);
 
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) where.projectId = args.projectIds;

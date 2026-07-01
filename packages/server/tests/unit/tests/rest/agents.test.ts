@@ -466,6 +466,47 @@ describe('Agents', () => {
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
       expect(response.body.error.message).toMatch(/prompt/);
     });
+
+    test('creates an agent with output_schema', async () => {
+      const outputSchema = {
+        type: 'object',
+        properties: { summary: { type: 'string' } },
+        required: ['summary'],
+      };
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          output_schema: outputSchema,
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.output_schema).toEqual(outputSchema);
+    });
+
+    test('output_schema defaults to null when not specified', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
+
+      expect(response.status).toBe(201);
+      expect(response.body.output_schema).toBeNull();
+    });
+
+    test('rejects a non-object output_schema', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          output_schema: 'not-an-object',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('INVALID_OUTPUT_SCHEMA');
+    });
   });
 
   describe('GET /api/v1/agents', () => {
@@ -608,6 +649,29 @@ describe('Agents', () => {
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
       expect(response.body.error.message).toMatch(/prompt/);
+    });
+
+    test('can update output_schema', async () => {
+      const outputSchema = {
+        type: 'object',
+        properties: { answer: { type: 'string' } },
+      };
+
+      const response = await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agentId}`)
+        .send({ output_schema: outputSchema });
+
+      expect(response.status).toBe(200);
+      expect(response.body.output_schema).toEqual(outputSchema);
+    });
+
+    test('can clear output_schema by setting it to null', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agentId}`)
+        .send({ output_schema: null });
+
+      expect(response.status).toBe(200);
+      expect(response.body.output_schema).toBeNull();
     });
   });
 
@@ -854,6 +918,57 @@ describe('Agents', () => {
         });
       expect(genRes.status).not.toBe(400);
       expect(genRes.status).not.toBe(404);
+    });
+
+    test('agent with output_schema runs a non-streaming generation', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Structured Output Agent',
+          output_schema: {
+            type: 'object',
+            properties: { summary: { type: 'string' } },
+            required: ['summary'],
+          },
+        });
+      expect(createRes.status).toBe(201);
+      const structuredAgentId = createRes.body.id;
+
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${structuredAgentId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'Summarize this.' }] });
+
+      // Generation dispatches (the underlying model call may still fail since
+      // no live provider is available in tests).
+      expect(genRes.status).not.toBe(400);
+      expect(genRes.status).not.toBe(404);
+    });
+
+    test('agent with output_schema rejects stream:true with 400', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Structured Output Streaming Agent',
+          output_schema: { type: 'object' },
+        });
+      expect(createRes.status).toBe(201);
+      const structuredAgentId = createRes.body.id;
+
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${structuredAgentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: 'Hello' }],
+          stream: true,
+        });
+
+      expect(genRes.status).toBe(400);
+      expect(genRes.body.error.code).toBe(
+        'OUTPUT_SCHEMA_STREAMING_UNSUPPORTED'
+      );
     });
   });
 

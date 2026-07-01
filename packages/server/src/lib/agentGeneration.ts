@@ -32,6 +32,7 @@ import {
 } from './generationInputMessages';
 import { recordGenerationFailure } from './generationLifecycle';
 import { createGenerationRecord } from './generations';
+import { assertStreamingSupportsOutputSchema } from './outputSchema';
 import {
   type ProviderOptionsMap,
   type ReasoningConfig,
@@ -221,6 +222,7 @@ const dispatchGeneration = (args: {
   abortSignal?: AbortSignal;
 }): Promise<GenerationResult | ReadableStream> => {
   if (args.stream) {
+    assertStreamingSupportsOutputSchema(args.ctx.typedAgent.outputSchema);
     const stream = runStreamGeneration({
       model: args.ctx.model,
       allMessages: args.ctx.allMessages,

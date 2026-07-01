@@ -39,6 +39,7 @@ Agents differ from [Chats](./chats.md) in that they can call tools, observe resu
 | `temperature`              | number        | Sampling temperature                                                                                                             |
 | `knowledge_config`         | object        | Knowledge retrieval config injected before every generation — see [Knowledge Config](#knowledge-config)                          |
 | `reasoning`                | object        | Deep-thinking configuration (provider-native effort and/or a reasoning step pipeline) — see [Reasoning (Deep Thinking)](#reasoning-deep-thinking) |
+| `output_schema`            | object        | JSON Schema constraining the model's final answer to a structured object — see [Structured Output](#structured-output)          |
 | `max_context_messages`     | number        | Maximum number of recent messages sent to the model per generation — see [Context Window Limiting](#context-window-limiting)     |
 | `single_session_per_actor` | boolean       | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)         |
 | `created_at`               | string        | ISO 8601 creation timestamp                                                                                                      |
@@ -407,6 +408,39 @@ Each step (and each fanout perspective turn) creates a child [generation](./gene
 **Silent-degradation events** — deep thinking never fails a request: when a step fails or the output step produces nothing, the engine falls back to the plain draft. Because that fallback is otherwise invisible, it emits an `agents.reasoning.fallback` [webhook event](./webhooks.md) (`data: { mode, reason, stepsRun, dropped }`) and sets `metadata.reasoning.fallback: true`. Subscribe to it to detect when an agent is paying for deep thinking but receiving the plain draft. An intentional `halt_if_equals` short-circuit is **not** a degradation — it keeps the draft on purpose, so it does not emit the event nor set the flag. An agent still stored with a removed legacy mode (`reflect`/`debate`) is inert and returns the plain draft, and also emits the event (`data: { legacyMode: true }`) so the migration gap is visible.
 
 Failure semantics: a pipeline never makes a generation worse. A failed non-output step is dropped and the pipeline continues; if the output step fails or nothing produces text, the initial draft is returned. Pipelines skip streaming generations and `requires_action` (client-tool) turns; `effort` applies to streaming as well.
+
+### Structured Output
+
+Set `output_schema` to a JSON Schema object to constrain the model's final answer to a structured object instead of free-form text. The server passes the schema to the AI SDK alongside any configured tools, so the agent can still call tools across steps — the schema only constrains the last step's answer.
+
+```json
+{
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "summary": { "type": "string" },
+      "sentiment": { "type": "string", "enum": ["positive", "neutral", "negative"] }
+    },
+    "required": ["summary", "sentiment"]
+  }
+}
+```
+
+When set, a completed non-streaming generation returns the parsed value as `output.object`, alongside the existing `output.content` text:
+
+```json
+{
+  "status": "completed",
+  "output": {
+    "content": "{\"summary\":\"...\",\"sentiment\":\"positive\"}",
+    "object": { "summary": "...", "sentiment": "positive" }
+  }
+}
+```
+
+**Streaming is not supported.** Setting `stream: true` on a generation for an agent with `output_schema` returns `400` with error code `OUTPUT_SCHEMA_STREAMING_UNSUPPORTED`. Use non-streaming generation when structured output is required.
+
+`output_schema` must be a plain object (validated at agent create/update time as `INVALID_OUTPUT_SCHEMA`); the shape of the schema itself is validated by the model provider at generation time.
 
 ### SOAT Action Permissions
 
