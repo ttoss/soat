@@ -630,7 +630,7 @@ components:
         output_schema:
           type: object
           nullable: true
-          description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations use the AI SDK to constrain output to this schema; the parsed value is returned as `output.object` in the generation response. See [Structured Output](../modules/agents.md#structured-output).'
+          description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations use the AI SDK to constrain output to this schema; the parsed value is returned as `output.object` in the generation response. See the Structured Output section in the Agents module docs.'
         max_context_messages:
           type: integer
           nullable: true
@@ -816,7 +816,7 @@ components:
         output_schema:
           type: object
           nullable: true
-          description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations use the AI SDK to constrain output to this schema; the parsed value is returned as `output.object` in the generation response. See [Structured Output](../modules/agents.md#structured-output).'
+          description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations use the AI SDK to constrain output to this schema; the parsed value is returned as `output.object` in the generation response. See the Structured Output section in the Agents module docs.'
         max_context_messages:
           type: integer
           description: Maximum number of recent messages included in the context window. Null means no limit.
@@ -1000,7 +1000,7 @@ components:
         output_schema:
           type: object
           nullable: true
-          description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations use the AI SDK to constrain output to this schema; the parsed value is returned as `output.object` in the generation response. See [Structured Output](../modules/agents.md#structured-output).'
+          description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations use the AI SDK to constrain output to this schema; the parsed value is returned as `output.object` in the generation response. See the Structured Output section in the Agents module docs.'
         max_context_messages:
           type: integer
           nullable: true
