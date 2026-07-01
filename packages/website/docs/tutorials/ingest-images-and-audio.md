@@ -63,9 +63,24 @@ needs external provider keys.
 
 ```bash
 export SOAT_BASE_URL=http://localhost:5047   # CLI, SDK, and curl — do NOT append /api/v1
-export OPENAI_API_KEY=sk-...
-export DEEPGRAM_API_KEY=...
+
+# Provider endpoints and keys. The defaults are the real providers; each is
+# overridable so the tutorial can also run against local mocks (see below).
+export OPENAI_BASE_URL="${OPENAI_BASE_URL:-https://api.openai.com/v1}"
+export OPENAI_API_KEY="${OPENAI_API_KEY:-sk-your-openai-key}"
+export STT_URL="${STT_URL:-https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true}"
+export DEEPGRAM_API_KEY="${DEEPGRAM_API_KEY:-your-deepgram-key}"
 ```
+
+:::tip Run it without provider keys
+Every provider call goes through `$OPENAI_BASE_URL` and `$STT_URL`, so you can point
+them at stand-in servers instead of the real APIs. The tutorials test runner does
+exactly this: `tests/docker-compose.tutorials.yml` starts a `mock-providers` service
+(`tests/mocks/mock-providers.mjs`) that answers the OpenAI-compatible vision endpoint
+and the Deepgram-compatible transcription endpoint with canned text, and sets
+`OPENAI_BASE_URL` / `STT_URL` to it — so the whole ingest → convert → search flow is
+validated end-to-end with no external keys.
+:::
 
 ---
 
@@ -219,6 +234,7 @@ AI_PROVIDER_ID=$(soat create-ai-provider \
   --name "OpenAI Vision" \
   --provider "openai" \
   --default-model "gpt-4o" \
+  --base-url "$OPENAI_BASE_URL" \
   --secret-id "$OPENAI_SECRET_ID" | jq -r '.id')
 echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 ```
@@ -233,6 +249,7 @@ const { data: aiProvider } = await adminSoat.aiProviders.createAiProvider({
     name: 'OpenAI Vision',
     provider: 'openai',
     default_model: 'gpt-4o',
+    base_url: process.env.OPENAI_BASE_URL,
     secret_id: OPENAI_SECRET_ID,
   },
 });
@@ -246,7 +263,7 @@ const AI_PROVIDER_ID = aiProvider.id;
 AI_PROVIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/ai-providers" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"OpenAI Vision\",\"provider\":\"openai\",\"default_model\":\"gpt-4o\",\"secret_id\":\"$OPENAI_SECRET_ID\"}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"OpenAI Vision\",\"provider\":\"openai\",\"default_model\":\"gpt-4o\",\"base_url\":\"$OPENAI_BASE_URL\",\"secret_id\":\"$OPENAI_SECRET_ID\"}" \
   | jq -r '.id')
 echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 ```
@@ -522,7 +539,7 @@ DEEPGRAM_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "deepgram-listen" \
   --type "http" \
-  --execute '{"url":"https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true","method":"POST","headers":{"Authorization":"Token '"$DEEPGRAM_API_KEY"'","Content-Type":"application/json"}}' \
+  --execute '{"url":"'"$STT_URL"'","method":"POST","headers":{"Authorization":"Token '"$DEEPGRAM_API_KEY"'","Content-Type":"application/json"}}' \
   | jq -r '.id')
 echo "DEEPGRAM_TOOL_ID: $DEEPGRAM_TOOL_ID"
 ```
@@ -537,7 +554,7 @@ const { data: deepgramTool } = await adminSoat.tools.createTool({
     name: 'deepgram-listen',
     type: 'http',
     execute: {
-      url: 'https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true',
+      url: process.env.STT_URL,
       method: 'POST',
       headers: {
         Authorization: `Token ${process.env.DEEPGRAM_API_KEY}`,
@@ -556,7 +573,7 @@ const DEEPGRAM_TOOL_ID = deepgramTool.id;
 DEEPGRAM_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"deepgram-listen\",\"type\":\"http\",\"execute\":{\"url\":\"https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true\",\"method\":\"POST\",\"headers\":{\"Authorization\":\"Token $DEEPGRAM_API_KEY\",\"Content-Type\":\"application/json\"}}}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"deepgram-listen\",\"type\":\"http\",\"execute\":{\"url\":\"$STT_URL\",\"method\":\"POST\",\"headers\":{\"Authorization\":\"Token $DEEPGRAM_API_KEY\",\"Content-Type\":\"application/json\"}}}" \
   | jq -r '.id')
 echo "DEEPGRAM_TOOL_ID: $DEEPGRAM_TOOL_ID"
 ```
