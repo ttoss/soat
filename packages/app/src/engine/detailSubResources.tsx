@@ -16,20 +16,6 @@ const SubCell = ({ colKey, value }: { colKey: string; value: JsonValue }) => {
   return <span>{String(value ?? '')}</span>;
 };
 
-export const findSubResources = (
-  parent: ModuleInfo,
-  modules: ModuleInfo[]
-): ModuleInfo[] => {
-  if (!parent.getOp) return [];
-  const parentPath = parent.getOp.pathTemplate;
-  return modules.filter((m) => {
-    return (
-      m !== parent &&
-      Boolean(m.listOp?.pathTemplate.startsWith(parentPath + '/'))
-    );
-  });
-};
-
 type TabState =
   | { status: 'idle' }
   | { status: 'loading' }

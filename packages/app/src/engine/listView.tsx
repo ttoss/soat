@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 
 import { CellValue } from './cellValue';
 import type { RefResolver } from './crossRef';
-import { useRefResolver } from './crossRef';
 import { ALL_STATUSES, EmptyState, ListToolbar } from './listToolbar';
 import { useNavigation } from './navigationContext';
 import {
@@ -20,6 +19,7 @@ import {
   resolvableRefFields,
 } from './specUtils';
 import type { JsonObject, JsonValue, ModuleInfo, OpenApiSpec } from './types';
+import { useRefResolver } from './useRefResolver';
 
 const PER_PAGE = 15;
 

@@ -1,7 +1,8 @@
 import type * as React from 'react';
 
 import type { RefResolver } from './crossRef';
-import { RefButton, renderRefLink } from './crossRef';
+import { RefButton } from './crossRef';
+import { renderRefLink } from './refLink';
 import { formatValue, isSensitiveKey } from './specUtils';
 import { StatusBadge } from './statusBadge';
 import type { JsonValue } from './types';

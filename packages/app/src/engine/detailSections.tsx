@@ -1,7 +1,7 @@
 import type * as React from 'react';
 
 import type { RefResolver } from './crossRef';
-import { renderRefLink } from './crossRef';
+import { renderRefLink } from './refLink';
 import {
   formatValue,
   humanizeKey,

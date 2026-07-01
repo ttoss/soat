@@ -770,38 +770,6 @@ components:
           type: string
           nullable: true
           description: Full text content of the message
-    ConversationActorRecord:
-      type: object
-      properties:
-        id:
-          type: string
-          description: Actor ID
-          example: 'act_V1StGXR8Z5jdHi6B'
-        project_id:
-          x-soat-ref: projects
-          type: string
-          description: Project ID
-          example: 'proj_V1StGXR8Z5jdHi6B'
-        name:
-          type: string
-          description: Actor name
-          example: 'Alice'
-        type:
-          type: string
-          description: Actor type
-          example: 'human'
-        external_id:
-          type: string
-          description: External identifier
-          example: 'ext_123'
-        created_at:
-          type: string
-          format: date-time
-          description: Creation timestamp
-        updated_at:
-          type: string
-          format: date-time
-          description: Last update timestamp
     GenerateConversationMessageCompleted:
       type: object
       required: [status, content, message, generation_id, trace_id]
