@@ -1127,6 +1127,66 @@ describe('MCP tools - happy path', () => {
       expect(result.errors.length).toBeGreaterThan(0);
     });
   });
+
+  // ── Ingestion Rules ────────────────────────────────────────────────────────
+  describe('Ingestion Rules tools', () => {
+    let ruleToolId: string;
+    let ruleId: string;
+
+    test('create-tool creates a converter tool', async () => {
+      const res = await mcpCall('create-tool', {
+        projectId,
+        name: 'mcp-ocr-http',
+        type: 'http',
+        execute: { url: 'https://example.test/ocr', method: 'POST' },
+      });
+      expect(res.status).toBe(200);
+      ruleToolId = parseResult(res).id;
+    });
+
+    test('create-ingestion-rule creates a rule', async () => {
+      const res = await mcpCall('create-ingestion-rule', {
+        projectId,
+        contentTypeGlob: 'image/*',
+        toolId: ruleToolId,
+        fileDelivery: 'base64',
+        chunkStrategy: 'whole',
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.id).toMatch(/^igr_/);
+      expect(result.contentTypeGlob).toBe('image/*');
+      expect(result.toolId).toBe(ruleToolId);
+      ruleId = result.id;
+    });
+
+    test('list-ingestion-rules returns the rule', async () => {
+      const res = await mcpCall('list-ingestion-rules', { projectId });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(Array.isArray(result)).toBe(true);
+      expect(
+        result.some((r: { id: string }) => {
+          return r.id === ruleId;
+        })
+      ).toBe(true);
+    });
+
+    test('get-ingestion-rule returns the rule', async () => {
+      const res = await mcpCall('get-ingestion-rule', {
+        ingestionRuleId: ruleId,
+      });
+      expect(res.status).toBe(200);
+      expect(parseResult(res).id).toBe(ruleId);
+    });
+
+    test('delete-ingestion-rule removes the rule', async () => {
+      const res = await mcpCall('delete-ingestion-rule', {
+        ingestionRuleId: ruleId,
+      });
+      expect(res.status).toBe(200);
+    });
+  });
 });
 
 describe('MCP OAuth discovery (RFC 9728)', () => {

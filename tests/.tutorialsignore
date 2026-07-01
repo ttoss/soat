@@ -8,5 +8,3 @@
 
 index
 connect-third-party-llms
-# Requires the unimplemented Ingestion Rules feature (see docs/prd-file-ingestion.md)
-ingest-images-and-audio

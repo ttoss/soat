@@ -229,6 +229,16 @@ export const ERROR_CODES = {
     description:
       'An ingestion rule for this content_type_glob already exists in the project.',
   },
+  CONVERTER_FAILED: {
+    httpStatus: 422,
+    description:
+      'The ingestion converter (tool or agent) failed to run, or returned an async deferral that is not supported.',
+  },
+  CONVERTER_OUTPUT_INVALID: {
+    httpStatus: 422,
+    description:
+      'The ingestion converter returned an unrecognized output shape. Expected a string, `{ pages: [{ text, page_number }] }`, or `{ status: "pending" }`.',
+  },
 } as const satisfies Record<
   string,
   { httpStatus: number; description: string }
