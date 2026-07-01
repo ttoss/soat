@@ -115,6 +115,28 @@ describe('Files', () => {
 
       expect(response.status).toBe(400);
     });
+
+    test('uploading to an existing key returns 409, not 500', async () => {
+      const first = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', Buffer.from('first'), {
+          filename: 'dup-upload.txt',
+          contentType: 'text/plain',
+        })
+        .field('project_id', projectId);
+      expect(first.status).toBe(201);
+
+      const second = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', Buffer.from('second'), {
+          filename: 'dup-upload.txt',
+          contentType: 'text/plain',
+        })
+        .field('project_id', projectId);
+
+      expect(second.status).toBe(409);
+      expect(second.body.error.code).toBe('NAME_CONFLICT');
+    });
   });
 
   describe('GET /api/v1/files/:id', () => {
@@ -446,6 +468,32 @@ describe('Files', () => {
 
       expect(response.status).toBe(403);
     });
+
+    test('uploading to an existing key returns 409, not 500', async () => {
+      const content = Buffer.from('data').toString('base64');
+
+      const first = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload/base64')
+        .send({
+          project_id: projectId,
+          content,
+          prefix: '/uploads',
+          filename: 'dup-base64.txt',
+        });
+      expect(first.status).toBe(201);
+
+      const second = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload/base64')
+        .send({
+          project_id: projectId,
+          content,
+          prefix: '/uploads',
+          filename: 'dup-base64.txt',
+        });
+
+      expect(second.status).toBe(409);
+      expect(second.body.error.code).toBe('NAME_CONFLICT');
+    });
   });
 
   describe('POST /api/v1/files/presigned-url', () => {
@@ -707,6 +755,28 @@ describe('Files', () => {
 
       expect(response.status).toBe(403);
       expect(response.body.error).toBe('Forbidden');
+    });
+
+    test('creating a metadata record at an existing key returns 409, not 500', async () => {
+      const first = await authenticatedTestClient(userToken)
+        .post('/api/v1/files')
+        .send({
+          project_id: projectId,
+          prefix: '/dup-create',
+          filename: 'dup.txt',
+        });
+      expect(first.status).toBe(201);
+
+      const second = await authenticatedTestClient(userToken)
+        .post('/api/v1/files')
+        .send({
+          project_id: projectId,
+          prefix: '/dup-create',
+          filename: 'dup.txt',
+        });
+
+      expect(second.status).toBe(409);
+      expect(second.body.error.code).toBe('NAME_CONFLICT');
     });
   });
 
