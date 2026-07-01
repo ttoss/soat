@@ -8,6 +8,7 @@ import type {
   OpenApiSpec,
   ViewDescriptor,
 } from './types';
+import { findUploadCreatePath } from './uploadCreateOp';
 
 type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
@@ -156,8 +157,9 @@ const buildModule = (tag: string, ops: ModuleOp[]): ModuleInfo => {
   const detail = sorted.find((op) => {
     return !isCollectionPath(op.pathTemplate);
   })?.pathTemplate;
+  const createPath = findUploadCreatePath(sorted, collection) ?? collection;
   for (const op of sorted) {
-    classifyInto(module, op, collection, detail);
+    classifyInto(module, op, createPath, detail);
   }
   return module;
 };
