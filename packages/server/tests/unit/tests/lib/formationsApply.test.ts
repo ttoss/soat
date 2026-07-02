@@ -347,4 +347,44 @@ describe('formationsApply', () => {
 
     expect(updateSpy).toHaveBeenCalledWith({ status: 'failed' });
   });
+
+  test('processResourceChange treats a deleted logical id as a fresh create, not an update', async () => {
+    const resourceRow = db.FormationResource.build({
+      publicId: 'fmr_theme',
+      formationId: 1,
+      logicalId: 'CreateTheme',
+      resourceType: 'memory',
+      status: 'deleted',
+      physicalResourceId: 'mem_stale',
+      lastAppliedProperties: null,
+    });
+    jest.spyOn(resourceRow, 'update').mockResolvedValue(resourceRow);
+
+    const createSpy = jest
+      .spyOn(resourceHandlers, 'applyCreateResource')
+      .mockResolvedValue('mem_new');
+    const updateResourceSpy = jest.spyOn(
+      resourceHandlers,
+      'applyUpdateResource'
+    );
+
+    const events: FormationEvent[] = [];
+
+    await processResourceChange({
+      logicalId: 'CreateTheme',
+      decl: {
+        type: 'memory',
+        properties: { name: 'theme' },
+      },
+      existing: resourceRow,
+      resolvedIds: new Map<string, string>(),
+      events,
+      projectId: 1,
+      formationId: 1,
+    });
+
+    expect(createSpy).toHaveBeenCalled();
+    expect(updateResourceSpy).not.toHaveBeenCalled();
+    expect(events[0].action).toBe('create');
+  });
 });
