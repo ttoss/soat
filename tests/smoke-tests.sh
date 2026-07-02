@@ -2168,6 +2168,18 @@ if ! printf '%s\n' "$VALIDATE_RESP" | jq -e '.valid == true' >/dev/null 2>&1; th
 fi
 echo "Formation template validated."
 
+# Validate template with a --parameter override (regression: issue #319)
+echo "--- Validating formation template with a --parameter override ---"
+VALIDATE_PARAM_RESP=$($SOAT_CLI validate-formation \
+  --template '{"parameters":{"MemoryName":{"type":"string"}},"resources":{"myMemory":{"type":"memory","properties":{"name":{"param":"MemoryName"}}}}}' \
+  --parameter MemoryName=SmokeParamMemory)
+if ! printf '%s\n' "$VALIDATE_PARAM_RESP" | jq -e '.valid == true' >/dev/null 2>&1; then
+  echo "ERROR: validate-formation with --parameter did not return valid=true" >&2
+  echo "$VALIDATE_PARAM_RESP" >&2
+  exit 1
+fi
+echo "Formation template with parameter validated."
+
 # Plan
 echo "--- Planning formation ---"
 PLAN_RESP=$($SOAT_CLI plan-formation \

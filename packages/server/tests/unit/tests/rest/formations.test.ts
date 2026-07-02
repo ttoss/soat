@@ -710,6 +710,34 @@ resources:
         expect(res.body.valid).toBe(false);
         expect(res.body.errors.length).toBeGreaterThan(0);
       });
+
+      test('accepts a parameters field alongside the template', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/formations/validate')
+          .send({
+            template: templateWithParams,
+            parameters: { ToolUrl: 'https://example.com', ApiKey: 'secret' },
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.valid).toBe(true);
+        expect(res.body.errors).toHaveLength(0);
+      });
+
+      test('returns invalid when a required parameter without default is missing', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/formations/validate')
+          .send({ template: templateWithParams, parameters: {} });
+
+        expect(res.status).toBe(200);
+        expect(res.body.valid).toBe(false);
+        expect(res.body.errors).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ path: 'parameters.ToolUrl' }),
+            expect.objectContaining({ path: 'parameters.ApiKey' }),
+          ])
+        );
+      });
     });
 
     describe('POST /api/v1/formations', () => {

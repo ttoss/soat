@@ -18,6 +18,17 @@ import { checkAuth, resolveWriteProjectId } from './helpers';
 
 export const formationsRouter = new Router<Context>();
 
+const missingParamsToErrors = (
+  missing: string[]
+): { path: string; message: string }[] => {
+  return missing.map((name) => {
+    return {
+      path: `parameters.${name}`,
+      message: `Parameter '${name}' is required and cannot be empty`,
+    };
+  });
+};
+
 const buildMissingParamsError = (
   template: FormationTemplate,
   provided: Record<string, string> | undefined,
@@ -27,12 +38,7 @@ const buildMissingParamsError = (
   if (missing.length === 0) return null;
   return {
     error: 'Missing required parameters',
-    details: missing.map((name) => {
-      return {
-        path: `parameters.${name}`,
-        message: `Parameter '${name}' is required and cannot be empty`,
-      };
-    }),
+    details: missingParamsToErrors(missing),
   };
 };
 
@@ -43,9 +49,25 @@ formationsRouter.post('/formations/validate', async (ctx: Context) => {
     return;
   }
 
-  const body = ctx.request.body as { template?: unknown };
+  const body = ctx.request.body as {
+    template?: unknown;
+    parameters?: Record<string, string>;
+  };
   const parsedTemplate = parseFormationTemplateInput(body.template);
-  ctx.body = validateFormationTemplate(parsedTemplate);
+  const validation = validateFormationTemplate(parsedTemplate);
+
+  if (validation.valid && body.parameters !== undefined) {
+    const missing = getMissingParams(
+      parsedTemplate as FormationTemplate,
+      body.parameters
+    );
+    if (missing.length > 0) {
+      validation.valid = false;
+      validation.errors.push(...missingParamsToErrors(missing));
+    }
+  }
+
+  ctx.body = validation;
 });
 
 formationsRouter.post('/formations/plan', async (ctx: Context) => {

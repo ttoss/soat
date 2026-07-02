@@ -176,7 +176,7 @@ A `${Name}` token inside a `sub` may also name a resource logical ID, which reso
 
 #### Providing Parameter Values
 
-Pass parameter values in the `parameters` field of the create or update request:
+Pass parameter values in the `parameters` field of the validate, plan, create, or update request:
 
 ```json
 {
@@ -195,6 +195,7 @@ Pass parameter values in the `parameters` field of the create or update request:
 - Parameters with a `default` are optional in the request.
 - Parameters without a `default` and not provided in the request cause a `400 Missing required parameters` error — unless declared `use_previous_value: true`, which reuses the stored value on update (see [Reusing Previously Stored Values](#reusing-previously-stored-values)).
 - Parameter values are **never stored** in the database — provide them on every create/update call, except for `use_previous_value` parameters on update.
+- On `validate-formation`, passing `parameters` is optional. When omitted, validation only checks the template's structure, so a required parameter without a default does not make the template invalid. When `parameters` is provided (even as an empty object), the validation result also reports any required parameter still missing after applying those values, as an entry in `errors`.
 
 #### Providing Parameter Values via the CLI
 
