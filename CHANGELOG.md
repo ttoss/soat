@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.11](https://github.com/ttoss/soat/compare/v0.13.10...v0.13.11) (2026-07-02)
+
+### Bug Fixes
+
+* **app:** render a file picker on the Files create form ([#314](https://github.com/ttoss/soat/issues/314)) ([b62d307](https://github.com/ttoss/soat/commit/b62d3079fe62fca8d3ec08aa661ebb04807fcb47))
+* resolve CI build warnings in openapi specs and app engine files ([#313](https://github.com/ttoss/soat/issues/313)) ([ff0f362](https://github.com/ttoss/soat/commit/ff0f362345a755faddd9210b2b7382f083d826bc))
+
 ## [0.13.10](https://github.com/ttoss/soat/compare/v0.13.9...v0.13.10) (2026-07-01)
 
 ### Bug Fixes
