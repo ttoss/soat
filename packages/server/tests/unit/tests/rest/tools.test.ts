@@ -1,3 +1,6 @@
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
+
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Tools', () => {
@@ -352,7 +355,12 @@ describe('Tools', () => {
           },
           pipeline: {
             steps: [
-              { id: 'first', tool_id: soatToolId, action: 'list-tools', input: {} },
+              {
+                id: 'first',
+                tool_id: soatToolId,
+                action: 'list-tools',
+                input: {},
+              },
               {
                 id: 'second',
                 tool_id: soatToolId,
@@ -430,7 +438,11 @@ describe('Tools', () => {
           type: 'pipeline',
           pipeline: {
             steps: [
-              { id: 'a', tool_id: soatToolId, input: { x: { var: 'steps.b.v' } } },
+              {
+                id: 'a',
+                tool_id: soatToolId,
+                input: { x: { var: 'steps.b.v' } },
+              },
               { id: 'b', tool_id: soatToolId },
             ],
           },
@@ -481,6 +493,200 @@ describe('Tools', () => {
         .post(`/api/v1/tools/${pipelineToolId}/call`)
         .send({ input: {} });
       expect([403, 404]).toContain(res.status);
+    });
+  });
+
+  describe('Secret references ({{secret:...}}) in tool configs', () => {
+    let secretId: string;
+    let otherProjectSecretId: string;
+    let echoServer: http.Server;
+    let echoServerUrl: string;
+    let lastRequest: {
+      url: string | undefined;
+      authorization: string | undefined;
+      apiKey: string | undefined;
+    };
+
+    beforeAll(async () => {
+      const secretRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/secrets')
+        .send({
+          project_id: projectId,
+          name: 'third-party-api-key',
+          value: 'sk-live-topsecret',
+        });
+      expect(secretRes.status).toBe(201);
+      secretId = secretRes.body.id;
+
+      const otherProjectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Other Secrets Project' });
+      const otherSecretRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/secrets')
+        .send({
+          project_id: otherProjectRes.body.id,
+          name: 'other-project-key',
+          value: 'other-value',
+        });
+      expect(otherSecretRes.status).toBe(201);
+      otherProjectSecretId = otherSecretRes.body.id;
+
+      echoServer = http.createServer((req, res) => {
+        lastRequest = {
+          url: req.url,
+          authorization: req.headers.authorization,
+          apiKey:
+            typeof req.headers['x-api-key'] === 'string'
+              ? req.headers['x-api-key']
+              : undefined,
+        };
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ ok: true }));
+      });
+      await new Promise<void>((resolve) => {
+        echoServer.listen(0, '127.0.0.1', resolve);
+      });
+      const { port } = echoServer.address() as AddressInfo;
+      echoServerUrl = `http://127.0.0.1:${port}`;
+    });
+
+    afterAll(async () => {
+      await new Promise<void>((resolve) => {
+        echoServer.close(() => {
+          resolve();
+        });
+      });
+    });
+
+    test('creating an http tool with a valid secret ref stores and echoes the raw token', async () => {
+      const token = `Bearer {{secret:${secretId}}}`;
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'secret-ref-echo-tool',
+          type: 'http',
+          execute: {
+            url: `${echoServerUrl}/convert`,
+            method: 'POST',
+            headers: { Authorization: token },
+          },
+        });
+
+      expect(createRes.status).toBe(201);
+      expect(createRes.body.execute.headers.Authorization).toBe(token);
+
+      const getRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/tools/${createRes.body.id}`
+      );
+      expect(getRes.status).toBe(200);
+      // The stored reference — never the resolved value — is echoed back.
+      expect(getRes.body.execute.headers.Authorization).toBe(token);
+    });
+
+    test('creating an http tool referencing a nonexistent secret returns 400', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'secret-ref-missing-tool',
+          type: 'http',
+          execute: {
+            url: `${echoServerUrl}/convert`,
+            headers: { Authorization: 'Bearer {{secret:sec_doesnotexist00}}' },
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('SECRET_NOT_FOUND');
+    });
+
+    test('creating an http tool referencing a secret from another project returns 400', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'secret-ref-cross-project-tool',
+          type: 'http',
+          execute: {
+            url: `${echoServerUrl}/convert`,
+            headers: {
+              Authorization: `Bearer {{secret:${otherProjectSecretId}}}`,
+            },
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('SECRET_NOT_FOUND');
+    });
+
+    test('updating a tool with an invalid secret ref returns 400', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'secret-ref-update-tool',
+          type: 'http',
+          execute: { url: `${echoServerUrl}/convert` },
+        });
+      expect(createRes.status).toBe(201);
+
+      const res = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/tools/${createRes.body.id}`)
+        .send({
+          execute: {
+            url: `${echoServerUrl}/convert`,
+            headers: { Authorization: 'Bearer {{secret:sec_doesnotexist00}}' },
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('SECRET_NOT_FOUND');
+    });
+
+    test('creating an mcp tool with an invalid secret ref in mcp.headers returns 400', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'secret-ref-mcp-tool',
+          type: 'mcp',
+          mcp: {
+            url: 'https://mcp.example.com/sse',
+            headers: { Authorization: 'Bearer {{secret:sec_doesnotexist00}}' },
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('SECRET_NOT_FOUND');
+    });
+
+    test('calling an http tool resolves secret refs in headers and url at call time', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'secret-ref-call-tool',
+          type: 'http',
+          execute: {
+            url: `${echoServerUrl}/convert?key={{secret:${secretId}}}`,
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer {{secret:${secretId}}}`,
+              'X-Api-Key': `{{secret:${secretId}}}`,
+            },
+          },
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ input: { q: 'hello' } });
+
+      expect(callRes.status).toBe(200);
+      expect(lastRequest.authorization).toBe('Bearer sk-live-topsecret');
+      expect(lastRequest.apiKey).toBe('sk-live-topsecret');
+      expect(lastRequest.url).toContain('key=sk-live-topsecret');
     });
   });
 });

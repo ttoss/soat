@@ -13,6 +13,10 @@ import {
   resolveMcpTools,
   resolveSoatTools,
 } from './agentToolResolverExternalTools';
+import {
+  resolveSecretRefsInRecord,
+  resolveSecretRefsInString,
+} from './secrets';
 
 const log = createDebug('soat:toolResolver');
 
@@ -113,6 +117,7 @@ export const isSoatActionAllowedByBoundary = (args: {
 
 type TypedHttpTool = {
   name: string;
+  projectId: number;
   description: string | null;
   parameters: Record<string, unknown> | null;
   execute:
@@ -129,6 +134,7 @@ export type HttpExecuteConfig = {
   url: string;
   method?: string;
   headers?: Record<string, string>;
+  bodyMode?: 'json' | 'multipart';
 };
 
 const isErrorLoggingEnabled = () => {
@@ -201,10 +207,15 @@ export const parseHttpExecuteConfig = (
 
   const method = parsedExecute.method;
 
+  // `body_mode` (snake_case) arrives verbatim from formation templates, while
+  // the REST caseTransform middleware rewrites it to `bodyMode` — accept both.
+  const rawBodyMode = parsedExecute.bodyMode ?? parsedExecute.body_mode;
+
   return {
     url,
     method: typeof method === 'string' ? method : undefined,
     headers: parseHeaders({ value: parsedExecute.headers }),
+    bodyMode: rawBodyMode === 'multipart' ? 'multipart' : 'json',
   };
 };
 
@@ -284,10 +295,131 @@ export class HttpToolError extends Error {
   }
 }
 
+// Resolves {{secret:...}} tokens in the request url and headers at the point
+// of use — the stored config (and anything echoed back by GET/LIST) keeps the
+// reference.
+const resolveHttpRequestSecrets = async (args: {
+  url: string;
+  headers?: Record<string, string>;
+  projectId: number;
+}) => {
+  return {
+    fetchUrl: await resolveSecretRefsInString({
+      value: args.url,
+      projectId: args.projectId,
+    }),
+    headers: await resolveSecretRefsInRecord({
+      record: args.headers,
+      projectId: args.projectId,
+    }),
+  };
+};
+
+// ── Multipart Body Construction ───────────────────────────────────────────
+
+const firstString = (...values: unknown[]): string | undefined => {
+  for (const value of values) {
+    if (typeof value === 'string' && value) return value;
+  }
+  return undefined;
+};
+
+// A file-shaped field carries base64 data plus optional filename/content-type
+// hints — matching the ingestion converter's `file` input shape.
+const extractFilePart = (
+  value: unknown
+): { base64: string; filename: string; contentType: string } | null => {
+  if (!isPlainObject(value)) return null;
+  const base64 = firstString(value.data_base64, value.dataBase64);
+  if (base64 === undefined) return null;
+  return {
+    base64,
+    filename: firstString(value.filename) ?? 'file',
+    contentType:
+      firstString(value.content_type, value.contentType) ??
+      'application/octet-stream',
+  };
+};
+
+const appendMultipartField = (
+  form: FormData,
+  key: string,
+  value: unknown
+): void => {
+  const filePart = extractFilePart(value);
+  if (filePart) {
+    const buffer = Buffer.from(filePart.base64, 'base64');
+    form.append(
+      key,
+      new Blob([buffer], { type: filePart.contentType }),
+      filePart.filename
+    );
+    return;
+  }
+  if (value === undefined || value === null) return;
+  form.append(
+    key,
+    typeof value === 'object' ? JSON.stringify(value) : String(value)
+  );
+};
+
+const buildMultipartBody = (
+  remainingArgs: Record<string, unknown>
+): FormData => {
+  const form = new FormData();
+  for (const [key, value] of Object.entries(remainingArgs)) {
+    appendMultipartField(form, key, value);
+  }
+  return form;
+};
+
+// A caller-set Content-Type would clobber the multipart boundary `fetch`
+// generates, so drop it in multipart mode and let `fetch` set it.
+const withoutContentType = (
+  headers?: Record<string, string>
+): Record<string, string> | undefined => {
+  if (!headers) return undefined;
+  return Object.fromEntries(
+    Object.entries(headers).filter(([key]) => {
+      return key.toLowerCase() !== 'content-type';
+    })
+  );
+};
+
+// Builds the fetch RequestInit, selecting JSON or multipart body encoding.
+// `resolvedHeaders` are the execute headers after {{secret:...}} resolution.
+const buildHttpRequestInit = (args: {
+  method: string;
+  hasBody: boolean;
+  bodyMode?: HttpExecuteConfig['bodyMode'];
+  resolvedHeaders?: Record<string, string>;
+  remainingArgs: Record<string, unknown>;
+  toolContext?: Record<string, string>;
+}): RequestInit => {
+  const isMultipart = args.hasBody && args.bodyMode === 'multipart';
+  const headers: Record<string, string> = {
+    ...(args.hasBody && !isMultipart
+      ? { 'Content-Type': 'application/json' }
+      : {}),
+    ...(isMultipart
+      ? withoutContentType(args.resolvedHeaders)
+      : args.resolvedHeaders),
+    ...buildContextHeaders(args.toolContext),
+  };
+  const init: RequestInit = { method: args.method, headers };
+  if (args.hasBody) {
+    init.body = isMultipart
+      ? buildMultipartBody(args.remainingArgs)
+      : JSON.stringify(args.remainingArgs);
+  }
+  return init;
+};
+
 export const buildHttpToolExecute = (
   args: {
     toolName: string;
     execute: HttpExecuteConfig;
+    projectId: number;
   },
   toolContext?: Record<string, string>
 ) => {
@@ -324,15 +456,22 @@ export const buildHttpToolExecute = (
         remainingArgs,
         hasBody,
       });
-      const response = await fetch(url, {
-        method,
-        headers: {
-          ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
-          ...args.execute.headers,
-          ...buildContextHeaders(toolContext),
-        },
-        ...(hasBody ? { body: JSON.stringify(remainingArgs) } : {}),
+      const resolved = await resolveHttpRequestSecrets({
+        url,
+        headers: args.execute.headers,
+        projectId: args.projectId,
       });
+      const response = await fetch(
+        resolved.fetchUrl,
+        buildHttpRequestInit({
+          method,
+          hasBody,
+          bodyMode: args.execute.bodyMode,
+          resolvedHeaders: resolved.headers,
+          remainingArgs,
+          toolContext,
+        })
+      );
       if (!response.ok) {
         const body = await response.text();
         throw new HttpToolError(
@@ -376,7 +515,14 @@ const resolveHttpTool = (
     description: typedTool.description ?? undefined,
     inputSchema: jsonSchema(parameters ?? { type: 'object', properties: {} }),
     execute: execute
-      ? buildHttpToolExecute({ toolName: typedTool.name, execute }, toolContext)
+      ? buildHttpToolExecute(
+          {
+            toolName: typedTool.name,
+            execute,
+            projectId: typedTool.projectId,
+          },
+          toolContext
+        )
       : buildInvalidHttpToolExecute({
           toolName: typedTool.name,
           rawExecute: typedTool.execute,
@@ -402,6 +548,7 @@ const resolveClientTool = (typedTool: {
 
 type AgentToolRow = {
   publicId: string;
+  projectId: number;
   type: string;
   name: string;
   description: string | null;
@@ -481,10 +628,20 @@ const resolveToolByType = async (
     case 'mcp': {
       if (!typedTool.mcp?.url) return {};
       try {
+        // Resolve {{secret:...}} tokens right before connecting to the MCP
+        // server — the stored config keeps the reference.
+        const mcp = {
+          url: await resolveSecretRefsInString({
+            value: typedTool.mcp.url,
+            projectId: typedTool.projectId,
+          }),
+          headers: await resolveSecretRefsInRecord({
+            record: typedTool.mcp.headers,
+            projectId: typedTool.projectId,
+          }),
+        };
         return await resolveMcpTools({
-          typedTool: typedTool as {
-            mcp: { url: string; headers?: Record<string, string> };
-          },
+          typedTool: { mcp },
           toolContext: args.toolContext,
           buildContextHeaders,
           logToolCallingError,

@@ -172,6 +172,8 @@ Use these expressions anywhere in `properties` or `outputs` to reference a param
 | `{ "param": "ParamName" }`       | Replaced with the parameter's value as-is                                |
 | `{ "sub": "text ${ParamName}" }` | String interpolation — embeds the parameter value inside a larger string |
 
+A `${Name}` token inside a `sub` may also name a resource logical ID, which resolves to the resource's physical public ID at apply time — see [Sub Expressions](#sub-expressions).
+
 #### Providing Parameter Values
 
 Pass parameter values in the `parameters` field of the create or update request:
@@ -310,9 +312,48 @@ Use `{ "ref": "LogicalId" }` anywhere in a `properties` value (or in `outputs`) 
 
 Refs create implicit dependencies — no need to repeat them in `depends_on`.
 
+### Sub Expressions
+
+`{ "sub": "..." }` interpolates values **inside** a string. A `${Name}` token inside a sub resolves to:
+
+- the parameter's value, when `Name` is declared in `parameters`;
+- the **physical public ID** of another resource, when `Name` is a resource logical ID (resolved at apply time, like a `ref`);
+- itself (left literal), when `Name` starts with `body.` — those are [tool-argument interpolations](./tools.md#http) resolved at tool-call time.
+
+Resource logical IDs inside subs create implicit dependencies, exactly like `ref` expressions.
+
+The main use case is embedding a [secret reference](./secrets.md#secret-references-secret) for a secret created in the same template — the sub resolves the logical ID to the `sec_...` physical ID, producing a stored `{{secret:sec_...}}` token that the tool resolves at call time:
+
+```json
+{
+  "resources": {
+    "ApiSecret": {
+      "type": "secret",
+      "properties": { "name": "third-party-api-key", "value": "sk-live-..." }
+    },
+    "ConvertTool": {
+      "type": "tool",
+      "properties": {
+        "name": "convert-document",
+        "type": "http",
+        "execute": {
+          "url": "https://api.example.com/convert",
+          "method": "POST",
+          "headers": {
+            "Authorization": { "sub": "Bearer {{secret:${ApiSecret}}}" }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+After deployment the tool's stored header is `Bearer {{secret:sec_01HXYZ}}` — the decrypted value is only substituted server-side when the tool is called, and is never echoed back by any API response.
+
 ### Topological Ordering
 
-SOAT builds a dependency graph from both explicit `depends_on` entries and implicit `ref` expressions, then uses topological sort (Kahn's algorithm) to determine the creation order. A template with a cycle fails validation.
+SOAT builds a dependency graph from explicit `depends_on` entries, implicit `ref` expressions, and resource logical IDs referenced inside `sub` strings, then uses topological sort (Kahn's algorithm) to determine the creation order. A template with a cycle fails validation.
 
 ### Resource Lifecycle
 

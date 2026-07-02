@@ -159,6 +159,16 @@ export const handleOrphanedDeletes = async (args: {
 
 type ResourceRow = InstanceType<(typeof db)['FormationResource']>;
 
+// A logical id that was previously deleted must be treated as a fresh
+// create, even though its FormationResource row (and stale
+// physicalResourceId) still exists — otherwise it would be diffed as an
+// update against a physical resource that no longer exists.
+const isCreateChange = (existing: ResourceRow | undefined): boolean => {
+  return (
+    !existing || existing.status === 'deleted' || !existing.physicalResourceId
+  );
+};
+
 export const processResourceChange = async (args: {
   logicalId: string;
   decl: ResourceDeclaration;
@@ -204,7 +214,7 @@ export const processResourceChange = async (args: {
   }
 
   try {
-    if (!existing || !existing.physicalResourceId) {
+    if (isCreateChange(existing)) {
       await applyCreateChange({
         resourceRow,
         resourceType: decl.type,
@@ -271,8 +281,8 @@ export const applyFormationTemplate = async (args: {
   const formationId = (formation as unknown as { id: number }).id;
 
   for (const [lid, existing] of existingMap.entries())
-    if (existing.physicalResourceId && workingTemplate.resources[lid])
-      resolvedIds.set(lid, existing.physicalResourceId);
+    if (!isCreateChange(existing) && workingTemplate.resources[lid])
+      resolvedIds.set(lid, existing.physicalResourceId!);
 
   const events: FormationEvent[] = [];
   log(

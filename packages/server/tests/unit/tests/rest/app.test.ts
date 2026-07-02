@@ -55,6 +55,15 @@ describe('SPA static serving at /app', () => {
     expect(res.type).not.toMatch(/html/);
   });
 
+  test('an unmatched non-/app path falls through the SPA middleware to a 404', async () => {
+    // Unlike /health (handled earlier by addHealthCheck), this path isn't
+    // matched by any router, so it reaches the SPA middleware's own
+    // `!ctx.path.startsWith('/app')` fallthrough before Koa's default 404.
+    const res = await testClient.get('/this-path-does-not-exist-anywhere');
+    expect(res.status).toBe(404);
+    expect(res.type).not.toMatch(/html/);
+  });
+
   test('GET /app returns 404 when dist dir does not exist', async () => {
     const saved = process.env.APP_DIST_PATH;
     process.env.APP_DIST_PATH = '/tmp/soat-nonexistent-dist-xyz';

@@ -31,9 +31,11 @@ const mockLookupPolicyInternalIds = jest.spyOn(
 const mockCreateApiKey = jest.spyOn(apiKeysModule, 'createApiKey');
 const mockUpdateApiKey = jest.spyOn(apiKeysModule, 'updateApiKey');
 const mockDeleteApiKey = jest.spyOn(apiKeysModule, 'deleteApiKey');
+const mockGetApiKey = jest.spyOn(apiKeysModule, 'getApiKey');
 
 const mockCreateChat = jest.spyOn(chatsModule, 'createChat');
 const mockDeleteChat = jest.spyOn(chatsModule, 'deleteChat');
+const mockGetChat = jest.spyOn(chatsModule, 'getChat');
 
 const mockCreateConversation = jest.spyOn(
   conversationsModule,
@@ -47,6 +49,7 @@ const mockDeleteConversation = jest.spyOn(
   conversationsModule,
   'deleteConversation'
 );
+const mockGetConversation = jest.spyOn(conversationsModule, 'getConversation');
 const mockLookupActorInternalId = jest.spyOn(
   helpersModule,
   'lookupActorInternalId'
@@ -55,10 +58,12 @@ const mockLookupActorInternalId = jest.spyOn(
 const mockCreateFile = jest.spyOn(filesModule, 'createFile');
 const mockUpdateFileMetadata = jest.spyOn(filesModule, 'updateFileMetadata');
 const mockDeleteFile = jest.spyOn(filesModule, 'deleteFile');
+const mockGetFile = jest.spyOn(filesModule, 'getFile');
 
 const mockCreatePolicy = jest.spyOn(policiesModule, 'createPolicy');
 const mockUpdatePolicy = jest.spyOn(policiesModule, 'updatePolicy');
 const mockDeletePolicy = jest.spyOn(policiesModule, 'deletePolicy');
+const mockGetPolicy = jest.spyOn(policiesModule, 'getPolicy');
 
 const mockCreateSecret = jest.spyOn(secretsModule, 'createSecret');
 const mockUpdateSecret = jest.spyOn(secretsModule, 'updateSecret');
@@ -67,6 +72,7 @@ const mockDeleteSecret = jest.spyOn(secretsModule, 'deleteSecret');
 const mockCreateSession = jest.spyOn(sessionsModule, 'createSession');
 const mockUpdateSession = jest.spyOn(sessionsModule, 'updateSession');
 const mockDeleteSession = jest.spyOn(sessionsModule, 'deleteSession');
+const mockGetSession = jest.spyOn(sessionsModule, 'getSession');
 const mockLookupAgentInternalId = jest.spyOn(
   helpersModule,
   'lookupAgentInternalId'
@@ -245,6 +251,50 @@ describe('apiKeysFormationModule', () => {
 
     expect(mockDeleteApiKey).toHaveBeenCalledWith({ id: 'ak_1' });
   });
+
+  test('reads api_key', async () => {
+    mockGetApiKey.mockResolvedValueOnce({
+      name: 'My Key',
+      policyIds: ['pol_1'],
+    } as unknown as Awaited<ReturnType<typeof apiKeysModule.getApiKey>>);
+
+    const module = getFormationModule({ resourceType: 'api_key' });
+    await expect(
+      module?.read?.({ physicalResourceId: 'ak_1' })
+    ).resolves.toEqual({
+      name: 'My Key',
+      policy_ids: ['pol_1'],
+    });
+  });
+
+  test('read returns null when getApiKey throws', async () => {
+    mockGetApiKey.mockRejectedValueOnce(new Error('not found'));
+
+    const module = getFormationModule({ resourceType: 'api_key' });
+    await expect(
+      module?.read?.({ physicalResourceId: 'ak_missing' })
+    ).resolves.toBeNull();
+  });
+
+  test('creates api_key normalizing a camelCase property key', async () => {
+    mockLookupProjectOwnerUserId.mockResolvedValueOnce(1);
+    mockLookupPolicyInternalIds.mockResolvedValueOnce([10]);
+    mockCreateApiKey.mockResolvedValueOnce({ id: 'ak_3' } as Awaited<
+      ReturnType<typeof apiKeysModule.createApiKey>
+    >);
+
+    await expect(
+      applyCreateResource({
+        resourceType: 'api_key',
+        projectId: 5,
+        // camelCase key (as stored via the case-transform middleware) must be
+        // normalized back to snake_case (policy_ids) before validation.
+        resolvedProperties: { name: 'Camel Key', policyIds: ['pol_1'] },
+      })
+    ).resolves.toBe('ak_3');
+
+    expect(mockLookupPolicyInternalIds).toHaveBeenCalledWith(['pol_1']);
+  });
 });
 
 describe('webhooksFormationModule - validation errors', () => {
@@ -376,6 +426,70 @@ describe('chatsFormationModule', () => {
 
     expect(mockDeleteChat).toHaveBeenCalledWith({ id: 'chat_1' });
   });
+
+  test('validateProperties wrapper delegates to the internal validator', () => {
+    const module = getFormationModule({ resourceType: 'chat' });
+    const errors = module?.validateProperties?.({
+      properties: null,
+      basePath: 'resources.<chat>.properties',
+    });
+    expect(errors).toEqual([
+      {
+        path: 'resources.<chat>.properties',
+        message: 'Chat `properties` must be an object',
+      },
+    ]);
+  });
+
+  test('reads chat', async () => {
+    mockGetChat.mockResolvedValueOnce({
+      aiProviderId: 'prov_1',
+      name: 'My Chat',
+      systemMessage: null,
+      model: null,
+    } as unknown as Awaited<ReturnType<typeof chatsModule.getChat>>);
+
+    const module = getFormationModule({ resourceType: 'chat' });
+    await expect(
+      module?.read?.({ physicalResourceId: 'chat_1' })
+    ).resolves.toEqual({
+      ai_provider_id: 'prov_1',
+      name: 'My Chat',
+      system_message: null,
+      model: null,
+    });
+  });
+
+  test('read returns null when the chat is not found', async () => {
+    mockGetChat.mockRejectedValueOnce(new Error('not found'));
+
+    const module = getFormationModule({ resourceType: 'chat' });
+    await expect(
+      module?.read?.({ physicalResourceId: 'chat_missing' })
+    ).resolves.toBeNull();
+  });
+
+  test('creates chat normalizing a camelCase property key', async () => {
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat_2' } as Awaited<
+      ReturnType<typeof chatsModule.createChat>
+    >);
+
+    await expect(
+      applyCreateResource({
+        resourceType: 'chat',
+        projectId: 5,
+        resolvedProperties: { aiProviderId: 'prov_2' },
+      })
+    ).resolves.toBe('chat_2');
+
+    expect(mockCreateChat).toHaveBeenCalledWith({
+      projectId: 5,
+      aiProviderId: 'prov_2',
+      name: undefined,
+      systemMessage: undefined,
+      model: undefined,
+    });
+  });
 });
 
 describe('conversationsFormationModule', () => {
@@ -482,6 +596,65 @@ describe('conversationsFormationModule', () => {
 
     expect(mockDeleteConversation).toHaveBeenCalledWith({ id: 'conv_1' });
   });
+
+  test('validateProperties wrapper delegates to the internal validator', () => {
+    const module = getFormationModule({ resourceType: 'conversation' });
+    const errors = module?.validateProperties?.({
+      properties: null,
+      basePath: 'resources.<conversation>.properties',
+    });
+    expect(errors).toEqual([
+      {
+        path: 'resources.<conversation>.properties',
+        message: 'Conversation `properties` must be an object',
+      },
+    ]);
+  });
+
+  test('reads conversation', async () => {
+    mockGetConversation.mockResolvedValueOnce({
+      name: 'My Conversation',
+      status: 'open',
+      actorId: 'actor_1',
+    } as unknown as Awaited<
+      ReturnType<typeof conversationsModule.getConversation>
+    >);
+
+    const module = getFormationModule({ resourceType: 'conversation' });
+    await expect(
+      module?.read?.({ physicalResourceId: 'conv_1' })
+    ).resolves.toEqual({
+      name: 'My Conversation',
+      status: 'open',
+      actor_id: 'actor_1',
+    });
+  });
+
+  test('read returns null when the conversation is not found', async () => {
+    mockGetConversation.mockResolvedValueOnce(null);
+
+    const module = getFormationModule({ resourceType: 'conversation' });
+    await expect(
+      module?.read?.({ physicalResourceId: 'conv_missing' })
+    ).resolves.toBeNull();
+  });
+
+  test('creates conversation normalizing a camelCase property key', async () => {
+    mockLookupActorInternalId.mockResolvedValueOnce(42);
+    mockCreateConversation.mockResolvedValueOnce({ id: 'conv_3' } as Awaited<
+      ReturnType<typeof conversationsModule.createConversation>
+    >);
+
+    await expect(
+      applyCreateResource({
+        resourceType: 'conversation',
+        projectId: 5,
+        resolvedProperties: { actorId: 'actor_1' },
+      })
+    ).resolves.toBe('conv_3');
+
+    expect(mockLookupActorInternalId).toHaveBeenCalledWith('actor_1');
+  });
 });
 
 describe('filesFormationModule', () => {
@@ -508,6 +681,32 @@ describe('filesFormationModule', () => {
       filename: 'file.txt',
       contentType: undefined,
       size: undefined,
+      metadata: undefined,
+    });
+  });
+
+  test('creates file without a prefix and with a numeric size', async () => {
+    mockCreateFile.mockResolvedValueOnce({ id: 'file_2' } as Awaited<
+      ReturnType<typeof filesModule.createFile>
+    >);
+
+    await expect(
+      applyCreateResource({
+        resourceType: 'file',
+        projectId: 5,
+        resolvedProperties: {
+          filename: 'no-prefix.txt',
+          size: 1024,
+        },
+      })
+    ).resolves.toBe('file_2');
+
+    expect(mockCreateFile).toHaveBeenCalledWith({
+      projectId: 5,
+      prefix: undefined,
+      filename: 'no-prefix.txt',
+      contentType: undefined,
+      size: 1024,
       metadata: undefined,
     });
   });
@@ -579,6 +778,76 @@ describe('filesFormationModule', () => {
     ).resolves.toBeUndefined();
 
     expect(mockDeleteFile).toHaveBeenCalledWith({ id: 'file_1' });
+  });
+
+  test('validateProperties wrapper delegates to the internal validator', () => {
+    const module = getFormationModule({ resourceType: 'file' });
+    const errors = module?.validateProperties?.({
+      properties: null,
+      basePath: 'resources.<file>.properties',
+    });
+    expect(errors).toEqual([
+      {
+        path: 'resources.<file>.properties',
+        message: 'File `properties` must be an object',
+      },
+    ]);
+  });
+
+  test('reads file', async () => {
+    mockGetFile.mockResolvedValueOnce({
+      prefix: '/docs',
+      filename: 'file.txt',
+      contentType: 'text/plain',
+      size: 123,
+      metadata: null,
+    } as unknown as Awaited<ReturnType<typeof filesModule.getFile>>);
+
+    const module = getFormationModule({ resourceType: 'file' });
+    await expect(
+      module?.read?.({ physicalResourceId: 'file_1' })
+    ).resolves.toEqual({
+      prefix: '/docs',
+      filename: 'file.txt',
+      content_type: 'text/plain',
+      size: 123,
+      metadata: null,
+    });
+  });
+
+  test('read returns null when the file is not found', async () => {
+    mockGetFile.mockResolvedValueOnce(null);
+
+    const module = getFormationModule({ resourceType: 'file' });
+    await expect(
+      module?.read?.({ physicalResourceId: 'file_missing' })
+    ).resolves.toBeNull();
+  });
+
+  test('creates file normalizing a camelCase property key', async () => {
+    mockCreateFile.mockResolvedValueOnce({ id: 'file_3' } as Awaited<
+      ReturnType<typeof filesModule.createFile>
+    >);
+
+    await expect(
+      applyCreateResource({
+        resourceType: 'file',
+        projectId: 5,
+        resolvedProperties: {
+          filename: 'camel.txt',
+          contentType: 'text/plain',
+        },
+      })
+    ).resolves.toBe('file_3');
+
+    expect(mockCreateFile).toHaveBeenCalledWith({
+      projectId: 5,
+      prefix: undefined,
+      filename: 'camel.txt',
+      contentType: 'text/plain',
+      size: undefined,
+      metadata: undefined,
+    });
   });
 });
 
@@ -692,6 +961,47 @@ describe('policiesFormationModule', () => {
 
     expect(mockDeletePolicy).toHaveBeenCalledWith({ policyId: 'pol_1' });
   });
+
+  test('validateProperties wrapper delegates to the internal validator', () => {
+    const module = getFormationModule({ resourceType: 'policy' });
+    const errors = module?.validateProperties?.({
+      properties: null,
+      basePath: 'resources.<policy>.properties',
+    });
+    expect(errors).toEqual([
+      {
+        path: 'resources.<policy>.properties',
+        message: 'Policy `properties` must be an object',
+      },
+    ]);
+  });
+
+  test('reads policy', async () => {
+    const doc = { statements: [] };
+    mockGetPolicy.mockResolvedValueOnce({
+      name: 'My Policy',
+      description: 'A policy',
+      document: doc,
+    } as unknown as Awaited<ReturnType<typeof policiesModule.getPolicy>>);
+
+    const module = getFormationModule({ resourceType: 'policy' });
+    await expect(
+      module?.read?.({ physicalResourceId: 'pol_1' })
+    ).resolves.toEqual({
+      name: 'My Policy',
+      description: 'A policy',
+      document: doc,
+    });
+  });
+
+  test('read returns null when the policy is not found', async () => {
+    mockGetPolicy.mockResolvedValueOnce(null);
+
+    const module = getFormationModule({ resourceType: 'policy' });
+    await expect(
+      module?.read?.({ physicalResourceId: 'pol_missing' })
+    ).resolves.toBeNull();
+  });
 });
 
 describe('secretsFormationModule', () => {
@@ -782,6 +1092,23 @@ describe('secretsFormationModule', () => {
     ).resolves.toBeUndefined();
 
     expect(mockDeleteSecret).toHaveBeenCalledWith({ id: 'sec_1', force: true });
+  });
+
+  test('read always returns null (secrets are write-only)', async () => {
+    const module = getFormationModule({ resourceType: 'secret' });
+    await expect(
+      module?.read?.({ physicalResourceId: 'sec_1' })
+    ).resolves.toBeNull();
+  });
+
+  test('rejects an unknown camelCase property key after normalization', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'secret',
+        projectId: 5,
+        resolvedProperties: { value: 'x', someUnknownKey: 'y' },
+      })
+    ).rejects.toThrow(/some_unknown_key/);
   });
 });
 
@@ -903,6 +1230,79 @@ describe('sessionsFormationModule', () => {
         physicalResourceId: 'sess_notfound',
       })
     ).rejects.toThrow('Session not found: sess_notfound');
+  });
+
+  test('validateProperties wrapper delegates to the internal validator', () => {
+    const module = getFormationModule({ resourceType: 'session' });
+    const errors = module?.validateProperties?.({
+      properties: null,
+      basePath: 'resources.<session>.properties',
+    });
+    expect(errors).toEqual([
+      {
+        path: 'resources.<session>.properties',
+        message: 'Session `properties` must be an object',
+      },
+    ]);
+  });
+
+  test('reads session', async () => {
+    const sessionInstance = db.Session.build({ publicId: 'sess_1' });
+    (sessionInstance as unknown as { agentId: number }).agentId = 10;
+    jest.spyOn(db.Session, 'findOne').mockResolvedValueOnce(sessionInstance);
+    mockGetSession.mockResolvedValueOnce({
+      agentId: 'agent_1',
+      name: 'My Session',
+      actorId: null,
+      autoGenerate: true,
+      inactivityTtlSeconds: 0,
+      toolContext: null,
+    } as unknown as Awaited<ReturnType<typeof sessionsModule.getSession>>);
+
+    const module = getFormationModule({ resourceType: 'session' });
+    await expect(
+      module?.read?.({ physicalResourceId: 'sess_1' })
+    ).resolves.toEqual({
+      agent_id: 'agent_1',
+      name: 'My Session',
+      actor_id: null,
+      auto_generate: true,
+      inactivity_ttl_seconds: 0,
+      tool_context: null,
+    });
+  });
+
+  test('read returns null when the session is not found', async () => {
+    jest.spyOn(db.Session, 'findOne').mockResolvedValueOnce(null);
+
+    const module = getFormationModule({ resourceType: 'session' });
+    await expect(
+      module?.read?.({ physicalResourceId: 'sess_missing' })
+    ).resolves.toBeNull();
+  });
+
+  test('creates session normalizing a camelCase property key', async () => {
+    mockLookupAgentInternalId.mockResolvedValueOnce(10);
+    mockCreateSession.mockResolvedValueOnce({ id: 'sess_2' } as Awaited<
+      ReturnType<typeof sessionsModule.createSession>
+    >);
+
+    await expect(
+      applyCreateResource({
+        resourceType: 'session',
+        projectId: 5,
+        resolvedProperties: { agentId: 'agent_1', autoGenerate: true },
+      })
+    ).resolves.toBe('sess_2');
+
+    expect(mockCreateSession).toHaveBeenCalledWith({
+      projectId: 5,
+      agentId: 10,
+      name: undefined,
+      actorId: undefined,
+      autoGenerate: true,
+      toolContext: undefined,
+    });
   });
 });
 

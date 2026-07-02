@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.13](https://127.0.0.1/41729/git/ttoss/compare/v0.13.12...v0.13.13) (2026-07-02)
+
+### Bug Fixes
+
+* **server:** treat a deleted formation logical id as a fresh create ([#327](https://127.0.0.1/41729/git/ttoss/issues/327)) ([7f56f30](https://127.0.0.1/41729/git/ttoss/commits/7f56f30f739547f1773e99e5cd12cc42e1675358)), closes [#326](https://127.0.0.1/41729/git/ttoss/issues/326)
+
+### Features
+
+* **secrets:** generic {{secret:...}} reference syntax for tool configs and formation sub support ([#331](https://127.0.0.1/41729/git/ttoss/issues/331)) ([7dcf51f](https://127.0.0.1/41729/git/ttoss/commits/7dcf51f56b7ea05ad9940e89c2b4d0188ab02982))
+* **tools:** support multipart/form-data requests in http tools ([#332](https://127.0.0.1/41729/git/ttoss/issues/332)) ([690e54b](https://127.0.0.1/41729/git/ttoss/commits/690e54b02e30e18d644afb5316aeb4f1165308ae)), closes [#329](https://127.0.0.1/41729/git/ttoss/issues/329)
+
 ## [0.13.12](https://127.0.0.1/41729/git/ttoss/compare/v0.13.11...v0.13.12) (2026-07-02)
 
 ### Bug Fixes

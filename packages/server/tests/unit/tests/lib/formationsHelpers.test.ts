@@ -1,3 +1,4 @@
+import { db } from 'src/db';
 import {
   buildDependencyGraph,
   buildResolvedParamsMap,
@@ -9,6 +10,11 @@ import {
   isRef,
   isRefAttr,
   isSub,
+  lookupActorInternalId,
+  lookupAgentInternalId,
+  lookupChatInternalId,
+  lookupPolicyInternalIds,
+  lookupToolInternalId,
   parseRefAttr,
   resolveParamExpressions,
   resolveRefs,
@@ -305,6 +311,127 @@ describe('formationsHelpers', () => {
     });
   });
 
+  // ── sub expressions referencing resource logical ids ─────────────────────
+
+  describe('sub expressions with resource refs', () => {
+    test('resolveParamExpressions keeps a sub referencing a resource logical id', () => {
+      const result = resolveParamExpressions(
+        { sub: 'Bearer {{secret:${MySecret}}}' },
+        new Map(),
+        new Set(['MySecret'])
+      );
+      expect(result).toEqual({ sub: 'Bearer {{secret:${MySecret}}}' });
+    });
+
+    test('resolveParamExpressions resolves params while keeping resource tokens', () => {
+      const result = resolveParamExpressions(
+        { sub: '${stage}-{{secret:${MySecret}}}' },
+        new Map([['stage', 'prod']]),
+        new Set(['MySecret'])
+      );
+      expect(result).toEqual({ sub: 'prod-{{secret:${MySecret}}}' });
+    });
+
+    test('resolveRefs substitutes resource physical ids inside sub strings', () => {
+      const resolved = resolveRefs(
+        {
+          headers: { Authorization: { sub: 'Bearer {{secret:${MySecret}}}' } },
+        },
+        new Map([['MySecret', 'sec_abc123']])
+      );
+      expect(resolved).toEqual({
+        headers: { Authorization: 'Bearer {{secret:sec_abc123}}' },
+      });
+    });
+
+    test('resolveRefs leaves body.* tokens in sub strings untouched', () => {
+      const resolved = resolveRefs(
+        { sub: '${MySecret}/${body.name}' },
+        new Map([['MySecret', 'sec_abc123']])
+      );
+      expect(resolved).toBe('sec_abc123/${body.name}');
+    });
+
+    test('buildDependencyGraph adds implicit deps for sub resource tokens', () => {
+      const template = {
+        resources: {
+          MySecret: {
+            type: 'secret',
+            properties: { name: 's', value: 'v' },
+          },
+          MyTool: {
+            type: 'tool',
+            properties: {
+              name: 't',
+              execute: {
+                headers: {
+                  Authorization: { sub: 'Bearer {{secret:${MySecret}}}' },
+                },
+              },
+            },
+          },
+        },
+      } as unknown as FormationTemplate;
+      const graph = buildDependencyGraph(template);
+      expect(graph.get('MyTool')).toEqual(new Set(['MySecret']));
+    });
+
+    test('getMissingParams does not report resource logical ids as missing', () => {
+      const template = {
+        resources: {
+          MySecret: {
+            type: 'secret',
+            properties: { name: 's', value: 'v' },
+          },
+          MyTool: {
+            type: 'tool',
+            properties: {
+              name: 't',
+              execute: {
+                headers: {
+                  Authorization: { sub: 'Bearer {{secret:${MySecret}}}' },
+                },
+              },
+            },
+          },
+        },
+      } as unknown as FormationTemplate;
+      expect(getMissingParams(template)).toEqual([]);
+    });
+
+    test('resolveWorkingTemplate preserves subs with resource tokens while resolving params', () => {
+      const template = {
+        parameters: { stage: { default: 'prod' } },
+        resources: {
+          MySecret: {
+            type: 'secret',
+            properties: { name: 's', value: 'v' },
+          },
+          MyTool: {
+            type: 'tool',
+            properties: {
+              name: { sub: 'tool-${stage}' },
+              execute: {
+                headers: {
+                  Authorization: { sub: 'Bearer {{secret:${MySecret}}}' },
+                },
+              },
+            },
+          },
+        },
+      } as unknown as FormationTemplate;
+      const resolved = resolveWorkingTemplate({ template });
+      const toolProps = resolved.resources.MyTool.properties as {
+        name: unknown;
+        execute: { headers: { Authorization: unknown } };
+      };
+      expect(toolProps.name).toBe('tool-prod');
+      expect(toolProps.execute.headers.Authorization).toEqual({
+        sub: 'Bearer {{secret:${MySecret}}}',
+      });
+    });
+  });
+
   // ── buildResolvedParamsMap ────────────────────────────────────────────────
 
   describe('buildResolvedParamsMap', () => {
@@ -539,6 +666,100 @@ describe('formationsHelpers', () => {
 
     test('handles an empty graph', () => {
       expect(topologicalSort(new Map())).toEqual([]);
+    });
+  });
+
+  describe('lookup*InternalId helpers', () => {
+    let projectId: number;
+    let aiProviderId: number;
+
+    beforeAll(async () => {
+      const project = await db.Project.create({
+        name: 'formationsHelpers Lookup Test',
+      });
+      projectId = project.id;
+
+      const aiProvider = await db.AiProvider.create({
+        projectId,
+        name: 'Lookup Test Provider',
+        provider: 'openai',
+        defaultModel: 'gpt-4o-mini',
+        baseUrl: null,
+        config: null,
+        secretId: null,
+      });
+      aiProviderId = aiProvider.id;
+    });
+
+    test('lookupActorInternalId resolves a public id to its internal id', async () => {
+      const actor = await db.Actor.create({
+        projectId,
+        name: 'Lookup Test Actor',
+      });
+
+      await expect(lookupActorInternalId(actor.publicId)).resolves.toBe(
+        actor.id
+      );
+    });
+
+    test('lookupActorInternalId throws for an unknown public id', async () => {
+      await expect(
+        lookupActorInternalId('actor_doesnotexist000')
+      ).rejects.toThrow('Actor not found: actor_doesnotexist000');
+    });
+
+    test('lookupAgentInternalId resolves a public id to its internal id', async () => {
+      const agent = await db.Agent.create({
+        projectId,
+        aiProviderId,
+        name: 'Lookup Test Agent',
+      });
+
+      await expect(lookupAgentInternalId(agent.publicId)).resolves.toBe(
+        agent.id
+      );
+    });
+
+    test('lookupToolInternalId resolves a public id to its internal id', async () => {
+      const tool = await db.Tool.create({
+        projectId,
+        type: 'client',
+        name: 'lookup-test-tool',
+      });
+
+      await expect(lookupToolInternalId(tool.publicId)).resolves.toBe(tool.id);
+    });
+
+    test('lookupChatInternalId resolves a public id to its internal id', async () => {
+      const chat = await db.Chat.create({
+        projectId,
+        aiProviderId,
+      });
+
+      await expect(lookupChatInternalId(chat.publicId)).resolves.toBe(chat.id);
+    });
+
+    test('lookupChatInternalId throws for an unknown public id', async () => {
+      await expect(
+        lookupChatInternalId('chat_doesnotexist000')
+      ).rejects.toThrow('Chat not found: chat_doesnotexist000');
+    });
+
+    test('lookupPolicyInternalIds resolves multiple public ids to internal ids', async () => {
+      const policyA = await db.Policy.create({ document: { statement: [] } });
+      const policyB = await db.Policy.create({ document: { statement: [] } });
+
+      await expect(
+        lookupPolicyInternalIds([policyA.publicId, policyB.publicId])
+      ).resolves.toEqual([policyA.id, policyB.id]);
+    });
+
+    test('lookupPolicyInternalIds throws when one public id is missing', async () => {
+      const policyA = await db.Policy.create({ document: { statement: [] } });
+
+      await expect(
+        lookupPolicyInternalIds([policyA.publicId, 'pol_doesnotexist000'])
+      ).rejects.toThrow('Policy not found: pol_doesnotexist000');
     });
   });
 });

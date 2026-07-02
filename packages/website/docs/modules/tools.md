@@ -30,10 +30,11 @@ Five tool types are supported: `http` (calls an external HTTP endpoint), `client
 | `type`              | `"http"` \| `"client"` \| `"mcp"` \| `"soat"` \| `"pipeline"` | Tool type — determines execution behaviour                                                          |
 | `description`       | `string \| null`                                | Human-readable description sent to the model for tool selection                                                   |
 | `parameters`        | `object \| null`                                | JSON Schema describing the tool's input. Required for `http` and `client` types.                                  |
-| `execute`           | `object \| null`                                | HTTP execution config (`url`, `method`, `headers`). Required for `http` type.                                     |
+| `execute`           | `object \| null`                                | HTTP execution config (`url`, `method`, `headers`, `body_mode`). Required for `http` type.                        |
 | `execute.url`       | `string`                                        | HTTP endpoint. Supports `{paramName}` and `${body.fieldName}` path placeholders replaced at call time with URL-encoded argument values.   |
 | `execute.method`    | `string`                                        | HTTP method (default: `POST`). For `GET`, `HEAD`, `DELETE` the arguments become query-string parameters.          |
 | `execute.headers`   | `object`                                        | Additional headers sent with the execution request.                                                               |
+| `execute.body_mode` | `"json" \| "multipart"`                         | How the request body is encoded for `POST`/`PUT`/`PATCH` (default: `json`). Use `multipart` for APIs that require `multipart/form-data`. |
 | `mcp`               | `object \| null`                                | MCP server config (`url`, `headers`). Required for `mcp` type.                                                    |
 | `mcp.url`           | `string`                                        | URL of the MCP server (SSE or Streamable HTTP transport).                                                         |
 | `mcp.headers`       | `object`                                        | Additional headers sent when connecting to the MCP server.                                                        |
@@ -133,6 +134,54 @@ PATCH https://api.example.com/finance/recurring-expenses/exp_abc
 Body: { "amount": 42 }
 ```
 
+#### Secret references in `execute`
+
+Never paste raw credentials into `execute.headers` — `GET /tools/{id}` echoes the config back verbatim to anyone with read access. Embed a [secret reference](./secrets.md#secret-references-secret) instead:
+
+```json
+{
+  "name": "convert-document",
+  "type": "http",
+  "execute": {
+    "url": "https://api.example.com/convert",
+    "method": "POST",
+    "headers": { "Authorization": "Bearer {{secret:sec_01HXYZ}}" }
+  }
+}
+```
+
+`{{secret:...}}` tokens are supported in `execute.url` (e.g. for APIs that take a key as a query parameter) and in `execute.headers` values. The token is resolved to the decrypted secret value right before the outbound request; the stored tool — and everything returned by `GET`/`LIST` — keeps the reference. The referenced secret must exist in the same project, validated at tool create/update time (`400 SECRET_NOT_FOUND` otherwise).
+
+#### Request body encoding (`body_mode`)
+
+For `POST`, `PUT`, and `PATCH`, the request body defaults to JSON (`Content-Type: application/json`). Set `execute.body_mode` to `"multipart"` for APIs that require `multipart/form-data` (many audio, OCR, and file-upload endpoints reject JSON outright). In multipart mode:
+
+- Scalar fields (string, number, boolean) become plain form fields.
+- A field shaped like `{ content_type, filename, data_base64 }` — the shape an [ingestion rule](./ingestion-rules.md) passes for the uploaded file — is base64-decoded and attached as a file part with the given filename and content type.
+- The `Content-Type` header is left unset so `fetch` generates the `multipart/form-data` boundary itself (any `Content-Type` in `execute.headers` is dropped).
+
+```json
+{
+  "name": "transcribe-audio",
+  "type": "http",
+  "execute": {
+    "url": "https://api.x.ai/v1/stt",
+    "method": "POST",
+    "body_mode": "multipart",
+    "headers": { "Authorization": "Bearer {{secret:sec_01HXYZ}}" }
+  },
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "model": { "type": "string" },
+      "file": { "type": "object" }
+    }
+  }
+}
+```
+
+When called with `{ "model": "grok-stt", "file": { "filename": "audio.mp3", "content_type": "audio/mpeg", "data_base64": "..." } }`, the server sends a `multipart/form-data` request with a `model` text field and a decoded binary `file` part.
+
 ### client
 
 Client tools have no server-side `execute`. When the model calls a `client` tool, the generation **pauses** and returns the pending tool calls to the API caller. The caller executes the tool locally, then submits the results via `POST /agents/{agent_id}/generate/{generation_id}/tool-outputs` to resume the loop.
@@ -187,6 +236,8 @@ The response has the same shape as a normal generation — either a final result
 An `mcp` tool represents a connection to a [Model Context Protocol](https://modelcontextprotocol.io/) server. At generation time, the SOAT server connects to the MCP endpoint, discovers all available tools, and registers them with the AI model. One `mcp` tool ID provides **many** tool names — you configure only the connection; each discovered tool's name, description, and parameters come from the MCP server.
 
 The SOAT server acts as a proxy: it receives the model's tool call, forwards it to the MCP server, and feeds the result back into the loop.
+
+`mcp.url` and `mcp.headers` values support [secret references](./secrets.md#secret-references-secret) — e.g. `{"Authorization": "Bearer {{secret:sec_01HXYZ}}"}` — resolved right before the MCP server is contacted, exactly like [`http` tool headers](#secret-references-in-execute).
 
 ### soat
 

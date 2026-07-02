@@ -1,3 +1,4 @@
+import { db } from 'src/db';
 import { emitEvent } from 'src/lib/eventBus';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -317,7 +318,8 @@ describe('webhookDispatcher', () => {
 
     const denyCalls = fetchMock.mock.calls.filter(([url]) => {
       return (
-        typeof url === 'string' && url === 'https://example.com/hook-policy-deny'
+        typeof url === 'string' &&
+        url === 'https://example.com/hook-policy-deny'
       );
     });
 
@@ -360,5 +362,50 @@ describe('webhookDispatcher', () => {
 
     // Should retry up to MAX_ATTEMPTS since status is not ok
     expect(nonOkCalls.length).toBe(3);
+  });
+
+  test('a delivery-record creation failure does not crash event dispatch', async () => {
+    await authenticatedTestClient(adminToken)
+      .post(`/api/v1/webhooks`)
+      .send({
+        project_id: projectId,
+        name: 'Delivery Create Failure Webhook',
+        url: 'https://example.com/hook-delivery-create-fails',
+        events: ['files.created'],
+      });
+
+    // Other webhooks created by earlier tests in this file may also match
+    // 'files.created', so reject every create() call during this test
+    // (not just the first) to deterministically starve our target webhook's
+    // delivery of a chance to reach fetch, regardless of processing order.
+    const createSpy = jest
+      .spyOn(db.WebhookDelivery, 'create')
+      .mockRejectedValue(new Error('db unavailable'));
+
+    emitEvent({
+      type: 'files.created',
+      projectId: projectInternalId ?? 1,
+      projectPublicId: projectId,
+      resourceType: 'file',
+      resourceId: 'fil_delivery_create_fails',
+      data: {},
+      timestamp: new Date().toISOString(),
+    });
+
+    // The rejection is swallowed by handleEvent's .catch(); give it a tick.
+    await new Promise((resolve) => {
+      return setTimeout(resolve, 200);
+    });
+
+    const failedCalls = fetchMock.mock.calls.filter(([url]) => {
+      return (
+        typeof url === 'string' &&
+        url === 'https://example.com/hook-delivery-create-fails'
+      );
+    });
+    // fetch is never reached since the delivery record couldn't be created.
+    expect(failedCalls).toHaveLength(0);
+
+    createSpy.mockRestore();
   });
 });

@@ -226,6 +226,39 @@ fi
 
 $SOAT_CLI update-secret --secret-id "$SECRET_ID" --name smoke-secret-updated --value updatedvalue
 
+# Secret references ({{secret:...}}) in tool configs: the stored token is
+# echoed back verbatim (never the decrypted value), and a token referencing a
+# nonexistent secret fails fast at create time.
+SECRET_REF_TOKEN="Bearer {{secret:$SECRET_ID}}"
+SECRET_REF_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-secret-ref-tool \
+  --type http \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"$SECRET_REF_TOKEN\"}}")
+SECRET_REF_TOOL_ID=$(echo "$SECRET_REF_TOOL_RESP" | jq -r '.id')
+if [ -z "$SECRET_REF_TOOL_ID" ] || [ "$SECRET_REF_TOOL_ID" = "null" ]; then
+  echo "ERROR: Failed to create tool with a {{secret:...}} reference" >&2
+  echo "$SECRET_REF_TOOL_RESP" >&2
+  exit 1
+fi
+
+SECRET_REF_TOOL_GET=$($SOAT_CLI get-tool --tool-id "$SECRET_REF_TOOL_ID")
+STORED_AUTH_HEADER=$(echo "$SECRET_REF_TOOL_GET" | jq -r '.execute.headers.Authorization')
+if [ "$STORED_AUTH_HEADER" != "$SECRET_REF_TOKEN" ]; then
+  echo "ERROR: Expected stored header to echo the {{secret:...}} token, got '$STORED_AUTH_HEADER'" >&2
+  echo "$SECRET_REF_TOOL_GET" >&2
+  exit 1
+fi
+
+expect_cli_error_status 400 create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-secret-ref-bad-tool \
+  --type http \
+  --execute '{"url":"https://api.example.com/convert","headers":{"Authorization":"Bearer {{secret:sec_doesnotexist00}}"}}'
+
+$SOAT_CLI delete-tool --tool-id "$SECRET_REF_TOOL_ID"
+echo "Secret reference coverage: OK"
+
 $SOAT_CLI delete-secret --secret-id "$SECRET_ID"
 
 expect_cli_error_status 404 get-secret --secret-id "$SECRET_ID"
@@ -1266,6 +1299,45 @@ echo "Pipeline call OK (nested JSON Logic resolution verified)"
 # 19d. Cleanup — delete the pipeline tool (keep list-projects for the agent below)
 $SOAT_CLI delete-tool --tool-id "$PIPELINE_TOOL_ID"
 
+# 19e. Multipart http tool (issue #329) — body_mode:multipart must build a real
+# multipart/form-data body with a base64 file field decoded into a file part.
+# The tool uploads a file to the SOAT server's multipart endpoint; a returned
+# file id proves the multipart request reached and was parsed by the server.
+echo "--- Creating multipart HTTP tool (upload-file) ---"
+MULTIPART_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name upload-file-multipart \
+  --type http \
+  --description "Uploads a file via multipart/form-data." \
+  --parameters '{"type":"object","properties":{"project_id":{"type":"string"},"file":{"type":"object"}},"required":["file"]}' \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/files/upload\",\"method\":\"POST\",\"body_mode\":\"multipart\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+MULTIPART_TOOL_ID=$(echo "$MULTIPART_TOOL_RESP" | jq -r '.id')
+if [ -z "$MULTIPART_TOOL_ID" ] || [ "$MULTIPART_TOOL_ID" = "null" ]; then
+  echo "FAIL: could not create multipart http tool"
+  echo "$MULTIPART_TOOL_RESP"
+  exit 1
+fi
+# body_mode must round-trip verbatim (snake_case) on the stored tool.
+if [ "$(echo "$MULTIPART_TOOL_RESP" | jq -r '.execute.body_mode')" != "multipart" ]; then
+  echo "FAIL: stored tool did not persist execute.body_mode=multipart"
+  echo "$MULTIPART_TOOL_RESP"
+  exit 1
+fi
+echo "Multipart tool id: $MULTIPART_TOOL_ID"
+
+MULTIPART_FILE_B64=$(printf '%s' 'smoke multipart file body 329' | base64 | tr -d '\n')
+echo "--- Calling multipart http tool ---"
+MULTIPART_CALL_RESP=$($SOAT_CLI call-tool --tool-id "$MULTIPART_TOOL_ID" \
+  --input "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"file\":{\"filename\":\"smoke.txt\",\"content_type\":\"text/plain\",\"data_base64\":\"$MULTIPART_FILE_B64\"}}")
+printf '%s\n' "$MULTIPART_CALL_RESP" | jq .
+if [ "$(printf '%s\n' "$MULTIPART_CALL_RESP" | jq -r '.id')" = "null" ]; then
+  echo "FAIL: multipart tool call did not return an uploaded file id"
+  echo "$MULTIPART_CALL_RESP"
+  exit 1
+fi
+echo "Multipart http tool call OK (file uploaded via multipart/form-data)"
+$SOAT_CLI delete-tool --tool-id "$MULTIPART_TOOL_ID"
+
 # 20. Create an agent with the list-projects tool
 echo "--- Creating agent ---"
 AGENT_RESP=$($SOAT_CLI create-agent \
@@ -2242,12 +2314,13 @@ echo "Policy formation created: $POLICY_FORMATION_ID"
 $SOAT_CLI delete-formation --formation_id "$POLICY_FORMATION_ID"
 echo "Policy formation deleted."
 
-# secret formation
+# secret formation — includes a tool referencing the formation-created secret
+# through a sub expression, which resolves to a {{secret:sec_...}} token.
 echo "--- Formation: secret resource type ---"
 SECRET_FORMATION_RESP=$($SOAT_CLI create-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-formation-secret" \
-  --template '{"resources":{"mySecret":{"type":"secret","properties":{"name":"smoke-formation-secret","value":"smoke-secret-value"}}},"outputs":{"secretId":{"ref":"mySecret"}}}')
+  --template '{"resources":{"mySecret":{"type":"secret","properties":{"name":"smoke-formation-secret","value":"smoke-secret-value"}},"myTool":{"type":"tool","properties":{"name":"smoke-formation-secret-ref-tool","type":"http","execute":{"url":"https://api.example.com/convert","method":"POST","headers":{"Authorization":{"sub":"Bearer {{secret:${mySecret}}}"}}}}}},"outputs":{"secretId":{"ref":"mySecret"}}}')
 SECRET_FORMATION_ID=$(printf '%s\n' "$SECRET_FORMATION_RESP" | jq -r '.id')
 if [ -z "$SECRET_FORMATION_ID" ] || [ "$SECRET_FORMATION_ID" = "null" ]; then
   echo "ERROR: create-formation (secret) did not return an id" >&2
@@ -2255,6 +2328,18 @@ if [ -z "$SECRET_FORMATION_ID" ] || [ "$SECRET_FORMATION_ID" = "null" ]; then
   exit 1
 fi
 echo "Secret formation created: $SECRET_FORMATION_ID"
+
+FORMATION_SECRET_PHYSICAL_ID=$(printf '%s\n' "$SECRET_FORMATION_RESP" | jq -r '.resources[] | select(.logical_id == "mySecret") | .physical_resource_id')
+FORMATION_TOOL_PHYSICAL_ID=$(printf '%s\n' "$SECRET_FORMATION_RESP" | jq -r '.resources[] | select(.logical_id == "myTool") | .physical_resource_id')
+FORMATION_TOOL_GET=$($SOAT_CLI get-tool --tool-id "$FORMATION_TOOL_PHYSICAL_ID")
+FORMATION_TOOL_AUTH=$(printf '%s\n' "$FORMATION_TOOL_GET" | jq -r '.execute.headers.Authorization')
+if [ "$FORMATION_TOOL_AUTH" != "Bearer {{secret:$FORMATION_SECRET_PHYSICAL_ID}}" ]; then
+  echo "ERROR: Expected formation tool header 'Bearer {{secret:$FORMATION_SECRET_PHYSICAL_ID}}', got '$FORMATION_TOOL_AUTH'" >&2
+  printf '%s\n' "$FORMATION_TOOL_GET" >&2
+  exit 1
+fi
+echo "Formation secret reference resolved into tool header: OK"
+
 $SOAT_CLI delete-formation --formation_id "$SECRET_FORMATION_ID"
 echo "Secret formation deleted."
 
