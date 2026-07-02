@@ -11,16 +11,16 @@ export default jestUnitConfig({
   ],
   coverageThreshold: {
     global: {
-      branches: 84,
+      branches: 90,
       functions: 95,
-      lines: 92,
-      statements: 91,
+      lines: 90,
+      statements: 90,
     },
     './src/**/*.ts': {
       branches: 75,
-      functions: 70,
-      lines: 76,
-      statements: 76,
+      functions: 85,
+      lines: 80,
+      statements: 80,
     },
   },
   maxWorkers: 4,
