@@ -1296,6 +1296,35 @@ if [ "$(printf '%s\n' "$PIPELINE_CALL_RESP" | jq -r '.echoed.container')" != "he
 fi
 echo "Pipeline call OK (nested JSON Logic resolution verified)"
 
+# 19c2. A pipeline `output` that is itself a bare JSON Logic expression (e.g.
+# `{"var": "steps.a.count"}`) must resolve to a bare scalar, not the literal
+# unevaluated expression object (see issue #335).
+echo "--- Creating pipeline tool with a bare-scalar output mapping ---"
+BARE_OUTPUT_PIPELINE_RESP=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name list-projects-first-id \
+  --type pipeline \
+  --description "Returns a bare scalar extracted from a step output" \
+  --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}}],\"output\":{\"var\":\"steps.a.0.id\"}}")
+BARE_OUTPUT_PIPELINE_ID=$(echo "$BARE_OUTPUT_PIPELINE_RESP" | jq -r '.id')
+if [ -z "$BARE_OUTPUT_PIPELINE_ID" ] || [ "$BARE_OUTPUT_PIPELINE_ID" = "null" ]; then
+  echo "FAIL: could not create bare-scalar-output pipeline tool"
+  echo "$BARE_OUTPUT_PIPELINE_RESP"
+  exit 1
+fi
+echo "Bare-scalar-output pipeline tool id: $BARE_OUTPUT_PIPELINE_ID"
+
+echo "--- Calling pipeline tool with a bare-scalar output mapping ---"
+BARE_OUTPUT_CALL_RESP=$($SOAT_CLI call-tool --tool-id "$BARE_OUTPUT_PIPELINE_ID" --input '{}')
+printf '%s\n' "$BARE_OUTPUT_CALL_RESP" | jq .
+if printf '%s\n' "$BARE_OUTPUT_CALL_RESP" | jq -e 'type != "string"' > /dev/null; then
+  echo "FAIL: pipeline output mapping did not resolve to a bare scalar"
+  echo "$BARE_OUTPUT_CALL_RESP"
+  exit 1
+fi
+echo "Bare-scalar pipeline output OK"
+$SOAT_CLI delete-tool --tool-id "$BARE_OUTPUT_PIPELINE_ID"
+
 # 19d. Cleanup — delete the pipeline tool (keep list-projects for the agent below)
 $SOAT_CLI delete-tool --tool-id "$PIPELINE_TOOL_ID"
 
@@ -2138,6 +2167,18 @@ if ! printf '%s\n' "$VALIDATE_RESP" | jq -e '.valid == true' >/dev/null 2>&1; th
   exit 1
 fi
 echo "Formation template validated."
+
+# Validate template with a --parameter override (regression: issue #319)
+echo "--- Validating formation template with a --parameter override ---"
+VALIDATE_PARAM_RESP=$($SOAT_CLI validate-formation \
+  --template '{"parameters":{"MemoryName":{"type":"string"}},"resources":{"myMemory":{"type":"memory","properties":{"name":{"param":"MemoryName"}}}}}' \
+  --parameter MemoryName=SmokeParamMemory)
+if ! printf '%s\n' "$VALIDATE_PARAM_RESP" | jq -e '.valid == true' >/dev/null 2>&1; then
+  echo "ERROR: validate-formation with --parameter did not return valid=true" >&2
+  echo "$VALIDATE_PARAM_RESP" >&2
+  exit 1
+fi
+echo "Formation template with parameter validated."
 
 # Plan
 echo "--- Planning formation ---"

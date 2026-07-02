@@ -81,6 +81,21 @@ An agent whose [AI provider](./ai-providers.md) uses the `openai` provider slug 
 
 A tool converter does not require hosting a separate adapter service. An [`http` tool](./tools.md#http) can point its `execute.url` directly at a third-party API (OpenAI, xAI, …); a [`pipeline` tool](./tools.md#pipeline) wrapping it reshapes the request and response using the same [JSON Logic](https://jsonlogic.com) mapping every other pipeline step uses — `cat` to build values like a base64 `data:` URI, `var` to extract a nested response field into the shape below. Point `IngestionRule.tool_id` at the pipeline tool. See [Tools — pipeline](./tools.md#pipeline) for the mapping syntax.
 
+Since the [Converter Tool Contract](#converter-tool-contract) accepts a bare string as its simplest output shape, the wrapping pipeline's `output` can be a single `var` expression rather than an object — it resolves directly to that scalar:
+
+```jsonc
+{
+  "steps": [
+    {
+      "id": "call",
+      "tool_id": "tol_stt_http",
+      "input": { "file": { "var": "input.file" } }
+    }
+  ],
+  "output": { "var": "steps.call.text" } // resolves to a bare string, e.g. "All the extracted text"
+}
+```
+
 Hold the third-party API key in a [Secret](./secrets.md) and embed a [secret reference](./secrets.md#secret-references-secret) in the `http` tool's `execute.headers` — e.g. `{"Authorization": "Bearer {{secret:sec_01HXYZ}}"}`. Never paste the raw key into the tool config: the config is echoed back by `GET /tools/{id}`, while the `{{secret:...}}` token resolves only at call time and the raw value is never returned by any API response.
 
 Not every third-party API accepts JSON. Many audio (speech-to-text) and specialized OCR endpoints require `multipart/form-data` and reject a JSON body outright (e.g. xAI's `POST /v1/stt`). For those, set [`execute.body_mode: "multipart"`](./tools.md#request-body-encoding-body_mode) on the `http` tool: pass the file through as the `{ content_type, filename, data_base64 }` shape ingestion already provides and it is decoded and attached as a real file part, alongside any scalar fields (model name, language, …). This keeps the "no separate adapter service" property — the `http` tool calls the multipart API directly.

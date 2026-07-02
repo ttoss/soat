@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { applyInputMapping } from './jsonLogicMapping';
+import { applyInputMapping, applyOutputMapping } from './jsonLogicMapping';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -314,5 +314,7 @@ export const runPipeline = async (args: {
     stepOutputs[step.id] = lastOutput;
   }
 
-  return config.output ? applyInputMapping(config.output, context) : lastOutput;
+  return config.output
+    ? applyOutputMapping(config.output, context)
+    : lastOutput;
 };

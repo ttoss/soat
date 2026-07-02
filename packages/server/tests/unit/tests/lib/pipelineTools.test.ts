@@ -205,6 +205,32 @@ describe('runPipeline', () => {
     expect(result).toEqual({ total: 100, echo: 7 });
   });
 
+  test('resolves a bare top-level var output mapping to a scalar, not the literal expression', async () => {
+    const result = await runPipeline({
+      pipeline: {
+        steps: [{ id: 'call', toolId: 'tool_a' }],
+        output: { var: 'steps.call.text' },
+      },
+      callStep: async () => {
+        return { text: 'Hi!', language: 'en' };
+      },
+    });
+    expect(result).toBe('Hi!');
+  });
+
+  test('resolves a bare top-level cat output mapping to a scalar', async () => {
+    const result = await runPipeline({
+      pipeline: {
+        steps: [{ id: 'call', toolId: 'tool_a' }],
+        output: { cat: [{ var: 'steps.call.text' }] },
+      },
+      callStep: async () => {
+        return { text: 'Hi!' };
+      },
+    });
+    expect(result).toBe('Hi!');
+  });
+
   test('merges presetParameters into the input context (caller wins on conflict)', async () => {
     let received: Record<string, unknown> | undefined;
     await runPipeline({

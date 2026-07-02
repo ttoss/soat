@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.14](https://github.com/ttoss/soat/compare/v0.13.13...v0.13.14) (2026-07-02)
+
+### Bug Fixes
+
+* **formations:** accept parameters on validate-formation ([#338](https://github.com/ttoss/soat/issues/338)) ([dcd0cd5](https://github.com/ttoss/soat/commit/dcd0cd56f4a128bc923b4325c115c3acb5a94f36)), closes [#319](https://github.com/ttoss/soat/issues/319)
+* **tools:** resolve a bare-scalar pipeline output mapping ([#335](https://github.com/ttoss/soat/issues/335)) ([#337](https://github.com/ttoss/soat/issues/337)) ([91e74c9](https://github.com/ttoss/soat/commit/91e74c90601b55bd1a5909732696f8e1d432569b))
+
 ## [0.13.13](https://github.com/ttoss/soat/compare/v0.13.12...v0.13.13) (2026-07-02)
 
 ### Bug Fixes

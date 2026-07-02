@@ -55,6 +55,28 @@ describe('formation wrapper endpoint integration', () => {
     expect(body.template?.resources).toBeDefined();
   });
 
+  test('validate-formation forwards --parameter values in the request body', async () => {
+    const requests = await cliTestClient.call([
+      'validate-formation',
+      '--template-path',
+      templatePath,
+      '--parameter',
+      'appUrl=https://example.com',
+    ]);
+
+    expect(cliTestClient.fetchMock).toHaveBeenCalledTimes(1);
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.method).toBe('POST');
+    expect(requests[0]?.path).toBe('/api/v1/formations/validate');
+
+    const body = requests[0]?.body as {
+      template?: { resources?: unknown };
+      parameters?: Record<string, string>;
+    };
+    expect(body.template?.resources).toBeDefined();
+    expect(body.parameters?.appUrl).toBe('https://example.com');
+  });
+
   test('plan-formation hits plan endpoint and resolves env-backed parameter', async () => {
     const requests = await cliTestClient.call([
       'plan-formation',
