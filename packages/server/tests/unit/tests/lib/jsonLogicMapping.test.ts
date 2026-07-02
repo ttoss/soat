@@ -41,6 +41,14 @@ describe('jsonLogicMapping', () => {
     test('returns false for undefined', () => {
       expect(isLogic(undefined)).toBe(false);
     });
+
+    test('returns false for a single-key object whose key is not a registered operator', () => {
+      expect(isLogic({ nestedTitle: { var: 'input.title' } })).toBe(false);
+    });
+
+    test('returns true for the preserve operator', () => {
+      expect(isLogic({ preserve: { var: 'x' } })).toBe(true);
+    });
   });
 
   describe('evaluateLogic', () => {
@@ -60,14 +68,14 @@ describe('jsonLogicMapping', () => {
       expect(evaluateLogic(42, {})).toBe(42);
     });
 
-    test('passes through a multi-key object unchanged', () => {
+    test('passes through a multi-key object unchanged (recursed, not the same reference)', () => {
       const obj = { a: 1, b: 2 };
-      expect(evaluateLogic(obj, {})).toBe(obj);
+      expect(evaluateLogic(obj, {})).toEqual(obj);
     });
 
-    test('passes through an array unchanged', () => {
+    test('passes through an array unchanged (recursed, not the same reference)', () => {
       const arr = [1, 2, 3];
-      expect(evaluateLogic(arr, {})).toBe(arr);
+      expect(evaluateLogic(arr, {})).toEqual(arr);
     });
 
     test('passes through null unchanged', () => {
@@ -76,6 +84,28 @@ describe('jsonLogicMapping', () => {
 
     test('evaluates an arithmetic expression', () => {
       expect(evaluateLogic({ '+': [1, 2] }, {})).toBe(3);
+    });
+
+    test('recurses into a single-key object whose key is not a registered operator', () => {
+      expect(
+        evaluateLogic(
+          { nestedTitle: { var: 'input.title' } },
+          { input: { title: 'ok' } }
+        )
+      ).toEqual({ nestedTitle: 'ok' });
+    });
+
+    test('recurses into nested objects and arrays without mutating the original value', () => {
+      const value = { a: { var: 'x' }, b: [{ var: 'y' }, 'literal'] };
+      const result = evaluateLogic(value, { x: 1, y: 2 });
+      expect(result).toEqual({ a: 1, b: [2, 'literal'] });
+      expect(value).toEqual({ a: { var: 'x' }, b: [{ var: 'y' }, 'literal'] });
+    });
+
+    test('preserve returns its argument unevaluated', () => {
+      expect(evaluateLogic({ preserve: { var: 'x' } }, { x: 1 })).toEqual({
+        var: 'x',
+      });
     });
   });
 
@@ -110,6 +140,65 @@ describe('jsonLogicMapping', () => {
 
     test('returns empty object for an empty inputMapping', () => {
       expect(applyInputMapping({}, { x: 1 })).toEqual({});
+    });
+
+    test('resolves a var nested inside a multi-key object', () => {
+      const result = applyInputMapping(
+        {
+          locale: 'pt-BR',
+          data: {
+            title: { var: 'input.title' },
+            theme: { var: 'input.theme' },
+          },
+        },
+        { input: { title: 'Hello', theme: 'dark' } }
+      );
+      expect(result).toEqual({
+        locale: 'pt-BR',
+        data: { title: 'Hello', theme: 'dark' },
+      });
+    });
+
+    test('resolves a var nested inside a single-key non-operator object', () => {
+      const result = applyInputMapping(
+        { metadata: { nestedTitle: { var: 'input.title' } } },
+        { input: { title: 'Nested Var Test 123' } }
+      );
+      expect(result).toEqual({
+        metadata: { nestedTitle: 'Nested Var Test 123' },
+      });
+    });
+
+    test('resolves vars nested inside arrays', () => {
+      const result = applyInputMapping(
+        { items: [{ var: 'input.a' }, { var: 'input.b' }] },
+        { input: { a: 1, b: 2 } }
+      );
+      expect(result).toEqual({ items: [1, 2] });
+    });
+
+    test('resolves vars nested multiple levels deep', () => {
+      const result = applyInputMapping(
+        { a: { b: { c: { var: 'input.x' } } } },
+        { input: { x: 'deep' } }
+      );
+      expect(result).toEqual({ a: { b: { c: 'deep' } } });
+    });
+
+    test('preserve returns a literal var-shaped object unevaluated at the top level', () => {
+      const result = applyInputMapping(
+        { raw: { preserve: { var: 'input.title' } } },
+        { input: { title: 'ignored' } }
+      );
+      expect(result).toEqual({ raw: { var: 'input.title' } });
+    });
+
+    test('preserve returns a literal var-shaped object unevaluated when nested', () => {
+      const result = applyInputMapping(
+        { data: { raw: { preserve: { var: 'input.title' } } } },
+        { input: { title: 'ignored' } }
+      );
+      expect(result).toEqual({ data: { raw: { var: 'input.title' } } });
     });
   });
 });

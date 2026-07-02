@@ -1225,14 +1225,17 @@ echo "Agent Tool id: $TOOL_ID"
 
 # 19b. Create a pipeline tool that chains the list-projects HTTP tool twice and
 # maps both step outputs. Exercises deterministic multi-step execution and JSON
-# Logic output mapping over { input, steps } as a single callable unit.
+# Logic output mapping over { input, steps } as a single callable unit. Step
+# `b`'s input and the pipeline `output` both nest a `var` marker inside a plain
+# object (e.g. `note.wrapped`, `echoed.container`) to exercise recursive JSON
+# Logic resolution at any depth, not just at the top level (see issue #321).
 echo "--- Creating pipeline tool ---"
 PIPELINE_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name compute-and-list \
   --type pipeline \
   --description "Runs list-projects twice and maps both step outputs" \
-  --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}},{\"id\":\"b\",\"tool_id\":\"$TOOL_ID\",\"input\":{\"note\":{\"var\":\"steps.a\"}}}],\"output\":{\"from_a\":{\"var\":\"steps.a\"},\"from_b\":{\"var\":\"steps.b\"}}}")
+  --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}},{\"id\":\"b\",\"tool_id\":\"$TOOL_ID\",\"input\":{\"note\":{\"wrapped\":{\"var\":\"steps.a\"}}}}],\"output\":{\"from_a\":{\"var\":\"steps.a\"},\"from_b\":{\"var\":\"steps.b\"},\"echoed\":{\"container\":{\"var\":\"input.tag\"}}}}")
 PIPELINE_TOOL_ID=$(echo "$PIPELINE_TOOL_RESP" | jq -r '.id')
 if [ -z "$PIPELINE_TOOL_ID" ] || [ "$PIPELINE_TOOL_ID" = "null" ]; then
   echo "FAIL: could not create pipeline tool"
@@ -1242,16 +1245,23 @@ fi
 echo "Pipeline tool id: $PIPELINE_TOOL_ID"
 
 # 19c. Call the pipeline — both steps hit GET /projects on the live server and
-# the output mapping returns from_a / from_b.
+# the output mapping returns from_a / from_b / echoed.container (the latter
+# resolved from a `var` nested inside a plain object, at both the step-input
+# and pipeline-output level).
 echo "--- Calling pipeline tool ---"
-PIPELINE_CALL_RESP=$($SOAT_CLI call-tool --tool-id "$PIPELINE_TOOL_ID" --input '{}')
+PIPELINE_CALL_RESP=$($SOAT_CLI call-tool --tool-id "$PIPELINE_TOOL_ID" --input '{"tag":"hello-nested"}')
 printf '%s\n' "$PIPELINE_CALL_RESP" | jq .
 if ! printf '%s\n' "$PIPELINE_CALL_RESP" | jq -e 'has("from_a") and has("from_b")' > /dev/null; then
   echo "FAIL: pipeline output missing mapped keys from_a/from_b"
   echo "$PIPELINE_CALL_RESP"
   exit 1
 fi
-echo "Pipeline call OK"
+if [ "$(printf '%s\n' "$PIPELINE_CALL_RESP" | jq -r '.echoed.container')" != "hello-nested" ]; then
+  echo "FAIL: pipeline output did not resolve the nested var (echoed.container)"
+  echo "$PIPELINE_CALL_RESP"
+  exit 1
+fi
+echo "Pipeline call OK (nested JSON Logic resolution verified)"
 
 # 19d. Cleanup — delete the pipeline tool (keep list-projects for the agent below)
 $SOAT_CLI delete-tool --tool-id "$PIPELINE_TOOL_ID"

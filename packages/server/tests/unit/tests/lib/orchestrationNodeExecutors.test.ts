@@ -94,6 +94,19 @@ describe('applyInputMapping', () => {
     ).toEqual({ isLong: true });
   });
 
+  test('resolves a var nested inside a plain object', () => {
+    const state = { title: 'Hello', theme: 'dark' };
+    expect(
+      applyInputMapping(
+        {
+          locale: 'pt-BR',
+          data: { title: { var: 'title' }, theme: { var: 'theme' } },
+        },
+        state
+      )
+    ).toEqual({ locale: 'pt-BR', data: { title: 'Hello', theme: 'dark' } });
+  });
+
   test('passes a multi-key object through as a literal (not a JSON Logic rule)', () => {
     const literal = { a: 1, b: 2 };
     expect(applyInputMapping({ config: literal }, {})).toEqual({
@@ -202,7 +215,10 @@ describe('executeAgentNode', () => {
       node: makeNode({
         type: 'agent',
         agentId: 'agt_test',
-        outputSchema: { type: 'object', properties: { answer: { type: 'string' } } },
+        outputSchema: {
+          type: 'object',
+          properties: { answer: { type: 'string' } },
+        },
       }),
       state: {},
       projectIds: [1],
@@ -239,7 +255,10 @@ describe('executeAgentNode', () => {
       traceId: null,
     });
 
-    expect(result).toEqual({ kind: 'artifact', artifact: { content: 'not valid json' } });
+    expect(result).toEqual({
+      kind: 'artifact',
+      artifact: { content: 'not valid json' },
+    });
     spy.mockRestore();
   });
 });

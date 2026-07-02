@@ -54,6 +54,25 @@ const parseOptionalRecord = (
   throw new DomainError('PIPELINE_INVALID_STEP', errorMessage);
 };
 
+/**
+ * Renders a caught value as a readable string for error messages. `Error`
+ * instances use their `message`; plain objects/arrays (e.g. a thrown
+ * `{ type: 'Unknown Operator', key }` from json-logic-engine) are JSON-encoded
+ * instead of falling through to `String()`, which would otherwise stringify
+ * any object as the unhelpful `[object Object]`.
+ */
+const formatStepError = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null) {
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
+  }
+  return String(error);
+};
+
 const addVarStepRef = (
   varObject: Record<string, unknown>,
   refs: Set<string>
@@ -246,7 +265,7 @@ const executeStep = async (args: {
     ) {
       throw error;
     }
-    const message = error instanceof Error ? error.message : String(error);
+    const message = formatStepError(error);
     throw new DomainError(
       'PIPELINE_STEP_FAILED',
       `Pipeline step '${step.id}' failed: ${message}`,
