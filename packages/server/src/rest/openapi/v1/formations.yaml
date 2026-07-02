@@ -1090,6 +1090,65 @@ components:
           nullable: true
           description: Optional context object passed to tool calls
 
+    IngestionRuleResourceProperties:
+      description: >-
+        Routes a file content_type to a converter (tool or agent) so
+        ingestion can turn non-native files (images, audio, scanned PDFs)
+        into Documents. See the Ingestion Rules module docs for the matching
+        and converter-invocation model.
+      type: object
+      additionalProperties: false
+      required:
+        - content_type_glob
+      properties:
+        content_type_glob:
+          type: string
+          description: MIME type glob matched against a file's content_type (e.g. image/*, audio/mpeg, application/pdf)
+        tool_id:
+          x-soat-ref: tools
+          type: string
+          nullable: true
+          description: Converter tool ID (mutually exclusive with agent_id)
+        agent_id:
+          x-soat-ref: agents
+          type: string
+          nullable: true
+          description: Converter agent ID (mutually exclusive with tool_id)
+        action:
+          type: string
+          nullable: true
+          description: Operation id, required for soat/mcp tool converters
+        preset_parameters:
+          type: object
+          nullable: true
+          description: Merged into the tool input before invocation (tool converters only)
+        native_extraction:
+          type: string
+          nullable: true
+          description: >-
+            For native types (PDF/text): `first` (default) converts only
+            when native extraction yields no text; `skip` always converts.
+        file_delivery:
+          type: string
+          nullable: true
+          description: How the file reaches a tool converter — base64 (default) or download_url
+        chunk_strategy:
+          type: string
+          nullable: true
+          description: Default chunk strategy (page/whole/size), overridable per ingest request
+        chunk_size:
+          type: integer
+          nullable: true
+          description: Default window size in characters for the size strategy
+        chunk_overlap:
+          type: integer
+          nullable: true
+          description: Default overlap in characters for the size strategy
+        metadata:
+          type: object
+          nullable: true
+          description: Arbitrary JSON metadata
+
     ResourceDeclaration:
       type: object
       required:
@@ -1108,6 +1167,7 @@ components:
             - conversation
             - document
             - file
+            - ingestion_rule
             - memory
             - memory_entry
             - policy
@@ -1126,6 +1186,7 @@ components:
             - $ref: '#/components/schemas/ConversationResourceProperties'
             - $ref: '#/components/schemas/DocumentResourceProperties'
             - $ref: '#/components/schemas/FileResourceProperties'
+            - $ref: '#/components/schemas/IngestionRuleResourceProperties'
             - $ref: '#/components/schemas/MemoryResourceProperties'
             - $ref: '#/components/schemas/MemoryEntryResourceProperties'
             - $ref: '#/components/schemas/PolicyResourceProperties'

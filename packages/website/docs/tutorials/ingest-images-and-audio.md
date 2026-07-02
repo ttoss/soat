@@ -38,15 +38,18 @@ It maps onto the feature's building blocks:
 | **`http` + `pipeline` tool converter** — call a dedicated API, reshape with JSON Logic | Part B (Steps 9–11) |
 | **Ingestion rules** — `content_type` → converter routing | Steps 6, 7, 11 |
 | **Automatic routing** — ingest without naming a converter | Steps 8, 12 |
+| **Provisioning as code** — declare the pipeline in a Formation template | Part C (Step 14) |
 
-:::note Requires the Ingestion Rules feature
-The `ingestion-rules` module and the converter step in `POST /documents/ingest` are
-specified in
-[`docs/prd-file-ingestion.md`](https://github.com/ttoss/soat/blob/main/docs/prd-file-ingestion.md)
-and are not yet fully implemented (Phase 1 — the data model and lib — has landed; the
-REST surface and converter invocation are planned). Run this tutorial against a server
-that includes those phases. It is excluded from automated tutorial runs because it
-needs external provider keys.
+:::note Async conversion is not yet implemented
+Every converter in this tutorial responds synchronously. A tool converter may in
+principle return `{ "status": "pending" }` to defer a long-running job to a callback,
+but that callback path (`POST /api/v1/documents/:id/ingestion-callback` and
+`CONVERSION_STALL_TIMEOUT_MS`) is not shipped yet — see
+[Ingestion Rules — Synchronous vs Async Conversion](/docs/modules/ingestion-rules#synchronous-vs-async-callback-conversion).
+Everything else in this tutorial (rules, both converter types, `native_extraction`,
+`file_delivery`, chunk config, and formation provisioning) is fully implemented. This
+tutorial is still excluded from automated tutorial runs because it needs external
+provider keys.
 :::
 
 ## Prerequisites
@@ -853,6 +856,282 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/knowledge/search" \
 
 ---
 
+## Part C — Provision the pipeline with a Formation
+
+Steps 3–7 created five resources — a secret, a provider, an agent, and two rules —
+with five separate API calls, copying each ID into the next. A
+[Formation](/docs/modules/formations#key-concepts) collapses that into one declarative
+template: SOAT resolves `{ "ref": ... }` cross-references and provisions everything in
+dependency order in a single call. The `ingestion_rule` resource type
+([reference](/docs/formations-types/ingestion-rule)) points its `agent_id` (or
+`tool_id`) at another resource in the same template with a `ref`, exactly like every
+other cross-reference field.
+
+This section reproduces the Part A pipeline as a formation, using new resource names
+so it does not collide with the resources Steps 3–7 already created. For the deeper
+mechanics — validating and previewing a template, updating a deployed formation,
+inspecting operation events, and tearing it down — see
+[Deploy a Multi-Agent App with Agent Formation](/docs/tutorials/formations).
+
+## Step 14 — Write and deploy the formation
+
+The template below declares a secret, a vision provider, an OCR agent, and two
+ingestion rules (`image/*` and the scanned-PDF `application/pdf` fallback) that both
+route to that agent — the same shape as Steps 3–7, in one document.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+cat > ingestion-formation.json << 'EOF'
+{
+  "resources": {
+    "formationSecret": {
+      "type": "secret",
+      "properties": { "name": "openai-api-key-formation", "value": "PLACEHOLDER" }
+    },
+    "formationProvider": {
+      "type": "ai_provider",
+      "properties": {
+        "name": "OpenAI Vision (Formation)",
+        "provider": "openai",
+        "default_model": "gpt-4o",
+        "base_url": "PLACEHOLDER",
+        "secret_id": { "ref": "formationSecret" }
+      }
+    },
+    "formationOcrAgent": {
+      "type": "agent",
+      "properties": {
+        "name": "OCR Agent (Formation)",
+        "ai_provider_id": { "ref": "formationProvider" },
+        "instructions": "Extract all text from the provided file verbatim. Return plain text only — no commentary, no summary, no markdown fences."
+      }
+    },
+    "formationImageRule": {
+      "type": "ingestion_rule",
+      "properties": {
+        "content_type_glob": "image/*",
+        "agent_id": { "ref": "formationOcrAgent" },
+        "chunk_strategy": "whole"
+      }
+    },
+    "formationPdfRule": {
+      "type": "ingestion_rule",
+      "properties": {
+        "content_type_glob": "application/pdf",
+        "agent_id": { "ref": "formationOcrAgent" },
+        "chunk_strategy": "whole"
+      }
+    }
+  },
+  "outputs": {
+    "agent_id": { "ref": "formationOcrAgent" },
+    "image_rule_id": { "ref": "formationImageRule" },
+    "pdf_rule_id": { "ref": "formationPdfRule" }
+  }
+}
+EOF
+
+# Inject the real secret value and base URL — kept out of the template body so
+# the file above stays copy-pasteable without leaking a key.
+TEMPLATE=$(jq \
+  --arg key "$OPENAI_API_KEY" \
+  --arg baseUrl "$OPENAI_BASE_URL" \
+  '.resources.formationSecret.properties.value = $key
+   | .resources.formationProvider.properties.base_url = $baseUrl' \
+  ingestion-formation.json)
+
+FORMATION=$(soat create-formation \
+  --project-id "$PROJECT_ID" \
+  --name "ingestion-pipeline" \
+  --template "$TEMPLATE")
+
+FORMATION_ID=$(printf '%s' "$FORMATION" | jq -r '.id')
+FORMATION_IMAGE_RULE_ID=$(printf '%s' "$FORMATION" | jq -r '.outputs.image_rule_id')
+echo "FORMATION_ID: $FORMATION_ID"
+echo "FORMATION_IMAGE_RULE_ID: $FORMATION_IMAGE_RULE_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const template = {
+  resources: {
+    formationSecret: {
+      type: 'secret',
+      properties: {
+        name: 'openai-api-key-formation',
+        value: process.env.OPENAI_API_KEY!,
+      },
+    },
+    formationProvider: {
+      type: 'ai_provider',
+      properties: {
+        name: 'OpenAI Vision (Formation)',
+        provider: 'openai',
+        default_model: 'gpt-4o',
+        base_url: process.env.OPENAI_BASE_URL,
+        secret_id: { ref: 'formationSecret' },
+      },
+    },
+    formationOcrAgent: {
+      type: 'agent',
+      properties: {
+        name: 'OCR Agent (Formation)',
+        ai_provider_id: { ref: 'formationProvider' },
+        instructions:
+          'Extract all text from the provided file verbatim. Return plain text only — no commentary, no summary, no markdown fences.',
+      },
+    },
+    formationImageRule: {
+      type: 'ingestion_rule',
+      properties: {
+        content_type_glob: 'image/*',
+        agent_id: { ref: 'formationOcrAgent' },
+        chunk_strategy: 'whole',
+      },
+    },
+    formationPdfRule: {
+      type: 'ingestion_rule',
+      properties: {
+        content_type_glob: 'application/pdf',
+        agent_id: { ref: 'formationOcrAgent' },
+        chunk_strategy: 'whole',
+      },
+    },
+  },
+  outputs: {
+    agent_id: { ref: 'formationOcrAgent' },
+    image_rule_id: { ref: 'formationImageRule' },
+    pdf_rule_id: { ref: 'formationPdfRule' },
+  },
+};
+
+const { data: formation } = await adminSoat.formations.createFormation({
+  body: { project_id: PROJECT_ID, name: 'ingestion-pipeline', template },
+});
+const FORMATION_ID = formation.id;
+const FORMATION_IMAGE_RULE_ID = formation.outputs?.image_rule_id as string;
+console.log('Formation:', FORMATION_ID);
+console.log('Image rule:', FORMATION_IMAGE_RULE_ID);
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+cat > ingestion-formation.json << 'EOF'
+{
+  "resources": {
+    "formationSecret": {
+      "type": "secret",
+      "properties": { "name": "openai-api-key-formation", "value": "PLACEHOLDER" }
+    },
+    "formationProvider": {
+      "type": "ai_provider",
+      "properties": {
+        "name": "OpenAI Vision (Formation)",
+        "provider": "openai",
+        "default_model": "gpt-4o",
+        "base_url": "PLACEHOLDER",
+        "secret_id": { "ref": "formationSecret" }
+      }
+    },
+    "formationOcrAgent": {
+      "type": "agent",
+      "properties": {
+        "name": "OCR Agent (Formation)",
+        "ai_provider_id": { "ref": "formationProvider" },
+        "instructions": "Extract all text from the provided file verbatim. Return plain text only — no commentary, no summary, no markdown fences."
+      }
+    },
+    "formationImageRule": {
+      "type": "ingestion_rule",
+      "properties": {
+        "content_type_glob": "image/*",
+        "agent_id": { "ref": "formationOcrAgent" },
+        "chunk_strategy": "whole"
+      }
+    },
+    "formationPdfRule": {
+      "type": "ingestion_rule",
+      "properties": {
+        "content_type_glob": "application/pdf",
+        "agent_id": { "ref": "formationOcrAgent" },
+        "chunk_strategy": "whole"
+      }
+    }
+  },
+  "outputs": {
+    "agent_id": { "ref": "formationOcrAgent" },
+    "image_rule_id": { "ref": "formationImageRule" },
+    "pdf_rule_id": { "ref": "formationPdfRule" }
+  }
+}
+EOF
+
+TEMPLATE=$(jq \
+  --arg key "$OPENAI_API_KEY" \
+  --arg baseUrl "$OPENAI_BASE_URL" \
+  '.resources.formationSecret.properties.value = $key
+   | .resources.formationProvider.properties.base_url = $baseUrl' \
+  ingestion-formation.json)
+
+FORMATION=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/formations" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\": \"$PROJECT_ID\", \"name\": \"ingestion-pipeline\", \"template\": $TEMPLATE}")
+
+FORMATION_ID=$(printf '%s' "$FORMATION" | jq -r '.id')
+FORMATION_IMAGE_RULE_ID=$(printf '%s' "$FORMATION" | jq -r '.outputs.image_rule_id')
+echo "FORMATION_ID: $FORMATION_ID"
+echo "FORMATION_IMAGE_RULE_ID: $FORMATION_IMAGE_RULE_ID"
+```
+
+</TabItem>
+</Tabs>
+
+The formation record lists every resource it provisioned, each with its physical ID:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat get-formation --formation_id "$FORMATION_ID" | jq '.resources[] | {logical_id, resource_type, physical_resource_id}'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: f } = await adminSoat.formations.getFormation({
+  path: { formation_id: FORMATION_ID },
+});
+for (const r of f.resources ?? []) {
+  console.log(r.logical_id, r.resource_type, r.physical_resource_id);
+}
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s "$SOAT_BASE_URL/api/v1/formations/$FORMATION_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '.resources[] | {logical_id, resource_type, physical_resource_id}'
+```
+
+</TabItem>
+</Tabs>
+
+Ingesting a file against `formationImageRule` works exactly like Step 8 — nothing
+about `POST /documents/ingest` changes based on how a rule was created; formation- and
+API-provisioned rules are both regular `IngestionRule` rows resolved the same way.
+
+---
+
 ## What you built
 
 - **An agent converter** — a vision agent (its key stored as a
@@ -867,9 +1146,14 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/knowledge/search" \
   `application/pdf` to those converters, and **fully automatic ingestion** —
   `POST /documents/ingest` never names a converter; the matching rule is resolved from
   `content_type` every time.
+- **The same pipeline as a [Formation](/docs/modules/formations#key-concepts)** — a
+  secret, provider, agent, and two ingestion rules declared in one template and
+  deployed with a single call, with `ingestion_rule.agent_id` wired to the agent via a
+  `ref` like any other cross-resource reference.
 
 Reach for an **agent converter** first — it is simpler and keeps credentials in a
 secret. Drop to a **tool converter** when you need a specific external API, an async
 job, or a provider an agent's model can't reach. To support another modality (e.g.
 video), add one rule pointing at an agent, or one `http` + `pipeline` pair — no server
-changes, no new deployment, ever.
+changes, no new deployment, ever. Once the shape is right, provisioning it as a
+Formation makes it reproducible across projects and environments.
