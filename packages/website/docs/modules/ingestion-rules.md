@@ -13,6 +13,12 @@ Rules are per-project. SOAT does not perform OCR or transcription itself — the
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Ingest Images and Audio with Converters - Step 6 (Route images to the agent)](/docs/tutorials/ingest-images-and-audio#step-6--route-images-to-the-agent)
+- [Ingest Images and Audio with Converters - Step 11 (Route audio to the transcription pipeline)](/docs/tutorials/ingest-images-and-audio#step-11--route-audio-to-the-transcription-pipeline)
+- [Ingest Images and Audio with Converters - Step 14 (Write and deploy the formation)](/docs/tutorials/ingest-images-and-audio#step-14--write-and-deploy-the-formation)
+
 ## Data Model
 
 ### IngestionRule
