@@ -1299,6 +1299,45 @@ echo "Pipeline call OK (nested JSON Logic resolution verified)"
 # 19d. Cleanup — delete the pipeline tool (keep list-projects for the agent below)
 $SOAT_CLI delete-tool --tool-id "$PIPELINE_TOOL_ID"
 
+# 19e. Multipart http tool (issue #329) — body_mode:multipart must build a real
+# multipart/form-data body with a base64 file field decoded into a file part.
+# The tool uploads a file to the SOAT server's multipart endpoint; a returned
+# file id proves the multipart request reached and was parsed by the server.
+echo "--- Creating multipart HTTP tool (upload-file) ---"
+MULTIPART_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name upload-file-multipart \
+  --type http \
+  --description "Uploads a file via multipart/form-data." \
+  --parameters '{"type":"object","properties":{"project_id":{"type":"string"},"file":{"type":"object"}},"required":["file"]}' \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/files/upload\",\"method\":\"POST\",\"body_mode\":\"multipart\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+MULTIPART_TOOL_ID=$(echo "$MULTIPART_TOOL_RESP" | jq -r '.id')
+if [ -z "$MULTIPART_TOOL_ID" ] || [ "$MULTIPART_TOOL_ID" = "null" ]; then
+  echo "FAIL: could not create multipart http tool"
+  echo "$MULTIPART_TOOL_RESP"
+  exit 1
+fi
+# body_mode must round-trip verbatim (snake_case) on the stored tool.
+if [ "$(echo "$MULTIPART_TOOL_RESP" | jq -r '.execute.body_mode')" != "multipart" ]; then
+  echo "FAIL: stored tool did not persist execute.body_mode=multipart"
+  echo "$MULTIPART_TOOL_RESP"
+  exit 1
+fi
+echo "Multipart tool id: $MULTIPART_TOOL_ID"
+
+MULTIPART_FILE_B64=$(printf '%s' 'smoke multipart file body 329' | base64 | tr -d '\n')
+echo "--- Calling multipart http tool ---"
+MULTIPART_CALL_RESP=$($SOAT_CLI call-tool --tool-id "$MULTIPART_TOOL_ID" \
+  --input "{\"project_id\":\"$PROJECT_PUBLIC_ID\",\"file\":{\"filename\":\"smoke.txt\",\"content_type\":\"text/plain\",\"data_base64\":\"$MULTIPART_FILE_B64\"}}")
+printf '%s\n' "$MULTIPART_CALL_RESP" | jq .
+if [ "$(printf '%s\n' "$MULTIPART_CALL_RESP" | jq -r '.id')" = "null" ]; then
+  echo "FAIL: multipart tool call did not return an uploaded file id"
+  echo "$MULTIPART_CALL_RESP"
+  exit 1
+fi
+echo "Multipart http tool call OK (file uploaded via multipart/form-data)"
+$SOAT_CLI delete-tool --tool-id "$MULTIPART_TOOL_ID"
+
 # 20. Create an agent with the list-projects tool
 echo "--- Creating agent ---"
 AGENT_RESP=$($SOAT_CLI create-agent \

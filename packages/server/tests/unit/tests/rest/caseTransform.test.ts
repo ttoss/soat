@@ -83,6 +83,37 @@ describe('caseTransform middleware', () => {
     }
   });
 
+  test('execute config inner keys are preserved verbatim (not case-transformed)', async () => {
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'execute-passthrough-project' });
+    const projectId = projectRes.body.id;
+
+    const toolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'multipart-passthrough-tool',
+        type: 'http',
+        parameters: { type: 'object', properties: {} },
+        execute: {
+          url: 'https://api.example.com/v1/stt',
+          method: 'POST',
+          body_mode: 'multipart',
+        },
+      });
+
+    expect(toolRes.status).toBe(201);
+    // `execute` is a pass-through config: its snake_case inner keys must
+    // survive the round-trip unchanged in both directions.
+    expect(toolRes.body.execute.body_mode).toBe('multipart');
+    expect(toolRes.body.execute.bodyMode).toBeUndefined();
+
+    await authenticatedTestClient(adminToken).delete(
+      `/api/v1/projects/${projectId}`
+    );
+  });
+
   test('non /api/v1 paths are not transformed', async () => {
     // The health or root endpoint should not be transformed
     const response = await testClient.get('/');

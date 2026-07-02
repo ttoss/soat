@@ -134,6 +134,7 @@ export type HttpExecuteConfig = {
   url: string;
   method?: string;
   headers?: Record<string, string>;
+  bodyMode?: 'json' | 'multipart';
 };
 
 const isErrorLoggingEnabled = () => {
@@ -206,10 +207,15 @@ export const parseHttpExecuteConfig = (
 
   const method = parsedExecute.method;
 
+  // `body_mode` (snake_case) arrives verbatim from formation templates, while
+  // the REST caseTransform middleware rewrites it to `bodyMode` — accept both.
+  const rawBodyMode = parsedExecute.bodyMode ?? parsedExecute.body_mode;
+
   return {
     url,
     method: typeof method === 'string' ? method : undefined,
     headers: parseHeaders({ value: parsedExecute.headers }),
+    bodyMode: rawBodyMode === 'multipart' ? 'multipart' : 'json',
   };
 };
 
@@ -309,6 +315,106 @@ const resolveHttpRequestSecrets = async (args: {
   };
 };
 
+// ── Multipart Body Construction ───────────────────────────────────────────
+
+const firstString = (...values: unknown[]): string | undefined => {
+  for (const value of values) {
+    if (typeof value === 'string' && value) return value;
+  }
+  return undefined;
+};
+
+// A file-shaped field carries base64 data plus optional filename/content-type
+// hints — matching the ingestion converter's `file` input shape.
+const extractFilePart = (
+  value: unknown
+): { base64: string; filename: string; contentType: string } | null => {
+  if (!isPlainObject(value)) return null;
+  const base64 = firstString(value.data_base64, value.dataBase64);
+  if (base64 === undefined) return null;
+  return {
+    base64,
+    filename: firstString(value.filename) ?? 'file',
+    contentType:
+      firstString(value.content_type, value.contentType) ??
+      'application/octet-stream',
+  };
+};
+
+const appendMultipartField = (
+  form: FormData,
+  key: string,
+  value: unknown
+): void => {
+  const filePart = extractFilePart(value);
+  if (filePart) {
+    const buffer = Buffer.from(filePart.base64, 'base64');
+    form.append(
+      key,
+      new Blob([buffer], { type: filePart.contentType }),
+      filePart.filename
+    );
+    return;
+  }
+  if (value === undefined || value === null) return;
+  form.append(
+    key,
+    typeof value === 'object' ? JSON.stringify(value) : String(value)
+  );
+};
+
+const buildMultipartBody = (
+  remainingArgs: Record<string, unknown>
+): FormData => {
+  const form = new FormData();
+  for (const [key, value] of Object.entries(remainingArgs)) {
+    appendMultipartField(form, key, value);
+  }
+  return form;
+};
+
+// A caller-set Content-Type would clobber the multipart boundary `fetch`
+// generates, so drop it in multipart mode and let `fetch` set it.
+const withoutContentType = (
+  headers?: Record<string, string>
+): Record<string, string> | undefined => {
+  if (!headers) return undefined;
+  return Object.fromEntries(
+    Object.entries(headers).filter(([key]) => {
+      return key.toLowerCase() !== 'content-type';
+    })
+  );
+};
+
+// Builds the fetch RequestInit, selecting JSON or multipart body encoding.
+// `resolvedHeaders` are the execute headers after {{secret:...}} resolution.
+const buildHttpRequestInit = (args: {
+  method: string;
+  hasBody: boolean;
+  bodyMode?: HttpExecuteConfig['bodyMode'];
+  resolvedHeaders?: Record<string, string>;
+  remainingArgs: Record<string, unknown>;
+  toolContext?: Record<string, string>;
+}): RequestInit => {
+  const isMultipart = args.hasBody && args.bodyMode === 'multipart';
+  const headers: Record<string, string> = {
+    ...(args.hasBody && !isMultipart
+      ? { 'Content-Type': 'application/json' }
+      : {}),
+    ...(isMultipart
+      ? withoutContentType(args.resolvedHeaders)
+      : args.resolvedHeaders),
+    ...buildContextHeaders(args.toolContext),
+  };
+  const init: RequestInit = { method: args.method, headers };
+  if (args.hasBody) {
+    init.body = isMultipart
+      ? buildMultipartBody(args.remainingArgs)
+      : JSON.stringify(args.remainingArgs);
+  }
+  return init;
+};
+
 export const buildHttpToolExecute = (
   args: {
     toolName: string;
@@ -355,15 +461,17 @@ export const buildHttpToolExecute = (
         headers: args.execute.headers,
         projectId: args.projectId,
       });
-      const response = await fetch(resolved.fetchUrl, {
-        method,
-        headers: {
-          ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
-          ...resolved.headers,
-          ...buildContextHeaders(toolContext),
-        },
-        ...(hasBody ? { body: JSON.stringify(remainingArgs) } : {}),
-      });
+      const response = await fetch(
+        resolved.fetchUrl,
+        buildHttpRequestInit({
+          method,
+          hasBody,
+          bodyMode: args.execute.bodyMode,
+          resolvedHeaders: resolved.headers,
+          remainingArgs,
+          toolContext,
+        })
+      );
       if (!response.ok) {
         const body = await response.text();
         throw new HttpToolError(

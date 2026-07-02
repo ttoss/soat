@@ -63,10 +63,13 @@ export const caseTransformMiddleware = async (ctx: Context, next: Next) => {
 
   // Transform incoming request body from snake_case to camelCase
   // The 'template' key is a pass-through user document (formation templates),
-  // and 'presetParameters' (the camelCase form of the request's
-  // preset_parameters field) is verbatim converter-tool input — both must not
-  // have their inner keys transformed.
-  const BODY_SKIP_KEYS = new Set(['template', 'presetParameters']);
+  // 'presetParameters' (the camelCase form of the request's preset_parameters
+  // field) is verbatim converter-tool input, and 'execute' is a pass-through
+  // tool execute config whose inner keys (HTTP header names, `body_mode`, …)
+  // must be preserved verbatim — none may have their inner keys transformed.
+  // This mirrors the outbound RESPONSE_SKIP_KEYS below so execute round-trips
+  // unchanged in snake_case.
+  const BODY_SKIP_KEYS = new Set(['template', 'presetParameters', 'execute']);
   if (isPlainObject(ctx.request.body) || Array.isArray(ctx.request.body)) {
     ctx.request.body = transformKeys(
       ctx.request.body,
