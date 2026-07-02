@@ -17,7 +17,6 @@ Rules are per-project. SOAT does not perform OCR or transcription itself — the
 
 - [Ingest Images and Audio with Converters - Step 6 (Route images to the agent)](/docs/tutorials/ingest-images-and-audio#step-6--route-images-to-the-agent)
 - [Ingest Images and Audio with Converters - Step 11 (Route audio to the transcription pipeline)](/docs/tutorials/ingest-images-and-audio#step-11--route-audio-to-the-transcription-pipeline)
-- [Ingest Images and Audio with Converters - Step 14 (Write and deploy the formation)](/docs/tutorials/ingest-images-and-audio#step-14--write-and-deploy-the-formation)
 
 ## Data Model
 
@@ -107,10 +106,10 @@ A **tool** converter is called via the same server-side path as any other tool c
 ```jsonc
 "All the extracted text"                              // wrapped as a single page
 { "pages": [{ "text": "page 1", "page_number": 1 }] } // paged (e.g. OCR per page)
-{ "status": "pending" }                                // long-running deferral — not yet supported, see below
+{ "status": "pending" }                                // long-running deferral — see below
 ```
 
-Any other shape fails the document with `CONVERTER_OUTPUT_INVALID`; a tool error fails it with `CONVERTER_FAILED`. A tool that returns `{ "status": "pending" }` today also fails with `CONVERTER_FAILED` — see [Synchronous vs Async (Callback) Conversion](#synchronous-vs-async-callback-conversion).
+Any other shape fails the document with `CONVERTER_OUTPUT_INVALID`; a tool error fails it with `CONVERTER_FAILED`. `{ "status": "pending" }` is only honored for a tool converter ingested in the default **async** mode (see [Synchronous vs Async (Callback) Conversion](#synchronous-vs-async-callback-conversion)) — an agent converter, or a synchronous ingest request (`?async=false`), fails with `CONVERTER_FAILED` instead, since neither can wait for a later callback.
 
 ### File Delivery
 
@@ -123,13 +122,22 @@ Any other shape fails the document with `CONVERTER_OUTPUT_INVALID`; a tool error
 
 ### Synchronous vs Async (Callback) Conversion
 
-A converter tool that returns text (or `{ pages }`) directly is **synchronous** — ingestion continues to chunk and embed inline. This is the only path implemented today; every converter call is awaited inline, whether it is a tool or an agent.
+A converter tool that returns text (or `{ pages }`) directly is **synchronous** — ingestion continues to chunk and embed inline. An agent converter is always synchronous: its generation is awaited inline and it has no deferral path.
 
-> **Not yet implemented.** The async callback path described below — `{ status: "pending" }`, `POST /api/v1/documents/:id/ingestion-callback`, and `CONVERSION_STALL_TIMEOUT_MS` — is planned but not shipped. A tool that returns `{ status: "pending" }` currently fails the document with `CONVERTER_FAILED` rather than deferring. Design long-running converters (e.g. speech-to-text on long audio) to poll the provider and return the final result synchronously until this lands.
+A tool that returns `{ status: "pending" }` is **asynchronous** — but only when the document is being ingested in the default async mode (`POST /documents/ingest` without `?async=false`). The document stays in `processing` while the external job runs, then the tool (or the service it wires) posts the result to:
 
-A tool that returns `{ status: "pending" }` is **asynchronous**: the document stays in `processing` while the external job runs, then the tool (or the service it wires) posts the result to `POST /api/v1/documents/:id/ingestion-callback`. The callback is authorized by a single-use, signed token scoped to that document and ingestion attempt — not by an IAM action, since the external converter is not a SOAT user. It is accepted only while that attempt is still `processing`, so a replayed callback, a callback for a superseded attempt (after re-ingest), or one that arrives after the stall timeout already failed the document is rejected. Once the result arrives, ingestion runs the normal chunk + embed tail and marks the document `ready`.
+```
+POST /api/v1/documents/{document_id}/ingestion-callback?token={token}
+{ "text": "..." }                                      // or { "pages": [...] }
+```
 
-A document awaiting a callback for longer than `CONVERSION_STALL_TIMEOUT_MS` is auto-failed with `CONVERSION_TIMEOUT` (see [Configuration](#configuration)). This is the converter-specific counterpart of the [stuck-ingestion recovery](./documents.md#stuck-ingestion-recovery) in the documents module.
+`{document_id}` and `token` come from the `callback` block ingestion injected into the tool's input (see [Converter Tool Contract](#converter-tool-contract)); the request body uses the same output contract as a synchronous converter, adapted for a JSON body (a single page is `{ "text": "..." }` rather than a bare string, since a top-level JSON string is not a valid HTTP JSON body).
+
+The callback is authorized by a single-use, signed token scoped to that document and ingestion attempt — not by an IAM action, since the external converter is not a SOAT user. It is accepted (`204`) only while that attempt is still `processing`; a replayed callback, a callback for a superseded attempt (after re-ingest), or one that arrives after the stall timeout already failed the document is rejected with `409 INGESTION_CALLBACK_CONFLICT`. An invalid or mismatched token is rejected with `401 INGESTION_CALLBACK_INVALID_TOKEN`. Once a valid result arrives, ingestion runs the normal chunk + embed tail and marks the document `ready`.
+
+If a synchronous ingest request (`?async=false`) or an agent converter encounters `{ status: "pending" }`, the document fails immediately with `CONVERTER_FAILED` — neither can wait for a callback that may arrive arbitrarily later. Design a tool that might defer to only do so under async ingestion.
+
+A document awaiting a callback for longer than `CONVERSION_STALL_TIMEOUT_MS` is auto-failed with `CONVERSION_TIMEOUT` (see [Configuration](#configuration)). This is the converter-specific counterpart of the [stuck-ingestion recovery](./documents.md#stuck-ingestion-recovery) in the documents module — both use the same lazy "recover on next read" mechanism (checked whenever the document is fetched, not a background cron), but the callback path additionally guards against a callback racing the timeout sweeper: the two finish a conversion via an atomic compare-and-set that only one can win, so a legitimate callback that arrives just as the sweeper fires is never silently dropped — it either wins outright or, if the sweeper already won, is rejected with a clear `409` rather than corrupting the failed state.
 
 ### Failure Reasons
 
@@ -137,17 +145,15 @@ Converter-related `failure_reason` values that can appear on a failed document (
 
 | `failure_reason` | Meaning |
 |------------------|---------|
-| `CONVERTER_FAILED` | The converter tool/agent call errored, or returned an async deferral (`{ status: "pending" }`) that is not yet supported |
-| `CONVERTER_OUTPUT_INVALID` | The tool returned an unrecognized output shape |
-| `CONVERSION_TIMEOUT` | *(planned)* An async conversion did not call back within `CONVERSION_STALL_TIMEOUT_MS` |
+| `CONVERTER_FAILED` | The converter tool/agent call errored, an agent converter returned an async deferral (unsupported), or a tool converter returned an async deferral during synchronous ingestion (`?async=false`) |
+| `CONVERTER_OUTPUT_INVALID` | The tool (or callback) returned an unrecognized output shape |
+| `CONVERSION_TIMEOUT` | An async conversion did not call back within `CONVERSION_STALL_TIMEOUT_MS` |
 
 ## Configuration
 
-The async callback path is not yet implemented (see [Synchronous vs Async (Callback) Conversion](#synchronous-vs-async-callback-conversion)), so no ingestion-rules environment variables are read today. Once implemented:
-
 | Environment Variable | Required | Description |
 |----------------------|----------|-------------|
-| `CONVERSION_STALL_TIMEOUT_MS` | No | *(planned)* How long (ms) a document may await an async converter callback before being auto-failed with `CONVERSION_TIMEOUT`. Separate from, and typically longer than, `INGESTION_STALL_TIMEOUT_MS`. |
+| `CONVERSION_STALL_TIMEOUT_MS` | No | How long (ms) a document may await an async converter callback before being auto-failed with `CONVERSION_TIMEOUT`. Defaults to 30 minutes. Separate from, and typically longer than, `INGESTION_STALL_TIMEOUT_MS` (default 5 minutes). |
 
 ## Examples
 

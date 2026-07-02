@@ -232,7 +232,7 @@ export const ERROR_CODES = {
   CONVERTER_FAILED: {
     httpStatus: 422,
     description:
-      'The ingestion converter (tool or agent) failed to run, or returned an async deferral that is not supported.',
+      'The ingestion converter (tool or agent) failed to run, an agent converter returned an async deferral (unsupported — agent converters are always awaited inline), or a tool converter returned an async deferral during synchronous ingestion (`?async=false`, which cannot wait for a callback).',
   },
   CONVERTER_OUTPUT_INVALID: {
     httpStatus: 422,
@@ -243,6 +243,16 @@ export const ERROR_CODES = {
     httpStatus: 500,
     description:
       'An ingestion rule with file_delivery: download_url requires SOAT_BASE_URL to be set — the URL is fetched by an external converter that cannot resolve a relative or localhost address.',
+  },
+  INGESTION_CALLBACK_INVALID_TOKEN: {
+    httpStatus: 401,
+    description:
+      'The ingestion-callback token is missing, malformed, expired, or does not match the target document.',
+  },
+  INGESTION_CALLBACK_CONFLICT: {
+    httpStatus: 409,
+    description:
+      'The document is no longer awaiting this conversion attempt — it already completed, timed out, or was superseded by a re-ingest.',
   },
 } as const satisfies Record<
   string,

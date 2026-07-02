@@ -506,6 +506,95 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/documents/{document_id}/ingestion-callback:
+    post:
+      tags:
+        - Documents
+      summary: Deliver an async converter result
+      description: |
+        Token-authed callback for a tool converter that deferred conversion by
+        returning `{ "status": "pending" }` (see the Ingestion Rules module
+        docs). Not IAM-gated — the external converter is not a SOAT principal,
+        so it authenticates with the single-use token minted for this
+        document and ingestion attempt (delivered as `callback.token` /
+        embedded in `callback.url` in the original converter invocation).
+        Accepted only while the document is still awaiting that exact
+        attempt; rejected with `409` if the attempt already completed, timed
+        out, or was superseded by a re-ingest.
+      operationId: completeIngestionCallback
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          description: Document ID
+          schema:
+            type: string
+            example: 'doc_V1StGXR8Z5jdHi6B'
+        - name: token
+          in: query
+          required: true
+          description: Single-use signed token from the original `callback.token`
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: >-
+          The converter output contract, adapted for a JSON request body: a
+          single page as `{ text }`, or `{ pages: [{ text, page_number }] }`
+          for multiple pages.
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [text]
+                  properties:
+                    text:
+                      type: string
+                - type: object
+                  required: [pages]
+                  properties:
+                    pages:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          text:
+                            type: string
+                          page_number:
+                            type: integer
+      responses:
+        '204':
+          description: >-
+            Conversion completed — the document was chunked and marked
+            `ready` (or `failed` with `FILE_PARSE_FAILED` if the output
+            produced no text).
+        '401':
+          description: The token is missing, invalid, or does not match this document.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            The document is no longer awaiting this conversion attempt
+            (already completed, timed out, or superseded by a re-ingest).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: The output shape is unrecognized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/documents/{document_id}/tags:
     get:
       tags:
