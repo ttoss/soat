@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.11](https://127.0.0.1/41729/git/ttoss/compare/v0.13.10...v0.13.11) (2026-07-02)
+
+### Bug Fixes
+
+* resolve CI build warnings in openapi specs and app engine files ([#313](https://127.0.0.1/41729/git/ttoss/issues/313)) ([ff0f362](https://127.0.0.1/41729/git/ttoss/commits/ff0f362345a755faddd9210b2b7382f083d826bc))
+
 ## [0.13.10](https://127.0.0.1/41729/git/ttoss/compare/v0.13.9...v0.13.10) (2026-07-01)
 
 ### Bug Fixes
