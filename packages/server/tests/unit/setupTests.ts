@@ -11,4 +11,5 @@ process.env.EMBEDDING_PROVIDER = 'ollama';
 process.env.EMBEDDING_MODEL = 'qwen3-embedding:0.6b';
 process.env.EMBEDDING_DIMENSIONS = '1024';
 process.env.SECRETS_ENCRYPTION_KEY = '0'.repeat(64);
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret';
 process.env.PORT = process.env.PORT || '15047';

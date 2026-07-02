@@ -222,7 +222,7 @@ export const ERROR_CODES = {
   INGESTION_RULE_VALIDATION_FAILED: {
     httpStatus: 400,
     description:
-      'The ingestion rule configuration is invalid (e.g. tool_id and agent_id are both set or both missing, the converter tool is a client tool, a soat/mcp converter tool is missing an action, or content_type_glob is not a valid MIME type glob).',
+      'The ingestion rule configuration is invalid (e.g. tool_id and agent_id are both set or both missing, the converter tool is a client tool, a soat/mcp converter tool is missing an action, content_type_glob is not a valid MIME type glob, or preset_parameters contains the reserved key "file" or "callback").',
   },
   INGESTION_RULE_GLOB_CONFLICT: {
     httpStatus: 409,
@@ -238,6 +238,11 @@ export const ERROR_CODES = {
     httpStatus: 422,
     description:
       'The ingestion converter returned an unrecognized output shape. Expected a string, `{ pages: [{ text, page_number }] }`, or `{ status: "pending" }`.',
+  },
+  FILE_DOWNLOAD_URL_NOT_CONFIGURED: {
+    httpStatus: 500,
+    description:
+      'An ingestion rule with file_delivery: download_url requires SOAT_BASE_URL to be set — the URL is fetched by an external converter that cannot resolve a relative or localhost address.',
   },
 } as const satisfies Record<
   string,

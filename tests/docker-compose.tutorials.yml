@@ -80,6 +80,7 @@ services:
       DATABASE_USER: soat_user
       DATABASE_PASSWORD: soat_password
       SECRETS_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      JWT_SECRET: tutorials-test-jwt-secret
       FILES_STORAGE_DIR: /data/files
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_MODEL: qwen3-embedding:0.6b

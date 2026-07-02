@@ -92,6 +92,32 @@ const fetchIngestedDocById = (id: number): Promise<IngestedDoc | null> => {
   }) as Promise<IngestedDoc | null>;
 };
 
+/**
+ * Admission gate shared by first-time ingestion and re-ingestion: a content
+ * type is ingestible either natively (SUPPORTED_CONTENT_TYPES) or via a
+ * matching project IngestionRule (converter). Keeping this in one place means
+ * a document ingested through a converter rule can always be re-ingested the
+ * same way.
+ */
+const assertFileTypeIngestible = async (args: {
+  fileId: string;
+  projectId: number;
+  contentType: string | null | undefined;
+}): Promise<void> => {
+  if (SUPPORTED_CONTENT_TYPES.includes(args.contentType ?? '')) return;
+
+  const rule = await resolveIngestionRule({
+    projectId: args.projectId,
+    contentType: args.contentType ?? '',
+  });
+  if (!rule) {
+    throw new DomainError(
+      'UNSUPPORTED_FILE_TYPE',
+      `File '${args.fileId}' has unsupported content type '${args.contentType ?? 'unknown'}' and no matching ingestion rule. Natively supported: ${SUPPORTED_CONTENT_TYPES.join(', ')}.`
+    );
+  }
+};
+
 const loadIngestibleFile = async (fileId: string) => {
   const file = await db.File.findOne({
     where: { publicId: fileId },
@@ -102,18 +128,11 @@ const loadIngestibleFile = async (fileId: string) => {
     throw new DomainError('FILE_NOT_FOUND', `File '${fileId}' not found.`);
   }
 
-  if (!SUPPORTED_CONTENT_TYPES.includes(file.contentType ?? '')) {
-    const rule = await resolveIngestionRule({
-      projectId: file.projectId,
-      contentType: file.contentType ?? '',
-    });
-    if (!rule) {
-      throw new DomainError(
-        'UNSUPPORTED_FILE_TYPE',
-        `File '${fileId}' has unsupported content type '${file.contentType ?? 'unknown'}' and no matching ingestion rule. Natively supported: ${SUPPORTED_CONTENT_TYPES.join(', ')}.`
-      );
-    }
-  }
+  await assertFileTypeIngestible({
+    fileId,
+    projectId: file.projectId,
+    contentType: file.contentType,
+  });
 
   return file;
 };
@@ -404,10 +423,10 @@ export const recoverStaleDocument = async (
   return true;
 };
 
-const ensureReingestibleFile = (args: {
+const ensureReingestibleFile = async (args: {
   id: string;
   file?: IngestedDoc['file'];
-}): NonNullable<IngestedDoc['file']> => {
+}): Promise<NonNullable<IngestedDoc['file']>> => {
   const { file } = args;
   if (!file) {
     throw new DomainError(
@@ -415,12 +434,13 @@ const ensureReingestibleFile = (args: {
       `Document '${args.id}' has no underlying file to re-ingest.`
     );
   }
-  if (!SUPPORTED_CONTENT_TYPES.includes(file.contentType ?? '')) {
-    throw new DomainError(
-      'UNSUPPORTED_FILE_TYPE',
-      `File '${file.publicId}' has unsupported content type '${file.contentType ?? 'unknown'}'. Supported: ${SUPPORTED_CONTENT_TYPES.join(', ')}.`
-    );
-  }
+
+  await assertFileTypeIngestible({
+    fileId: file.publicId,
+    projectId: file.projectId,
+    contentType: file.contentType,
+  });
+
   return file;
 };
 
@@ -445,7 +465,7 @@ export const reingestDocument = async (args: {
 
   if (!doc) return null;
 
-  const file = ensureReingestibleFile({ id: args.id, file: doc.file });
+  const file = await ensureReingestibleFile({ id: args.id, file: doc.file });
 
   const runAsync = args.async !== false;
   if (!runAsync) {

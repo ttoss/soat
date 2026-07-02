@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 
+import { DomainError } from '../errors';
 import { JWT_SECRET } from '../middleware/auth';
 
 // Short-lived, single-purpose token that lets an external converter (which is
@@ -42,13 +43,20 @@ export const verifyFileDownloadToken = (args: {
 };
 
 /**
- * Absolute, token-authenticated download URL for a file. Uses `SOAT_BASE_URL`
- * when set (so the URL is reachable by an external provider), falling back to
- * the local server address for in-cluster/self calls.
+ * Absolute, token-authenticated download URL for a file, fetched by an
+ * external converter (`file_delivery: download_url`). Requires `SOAT_BASE_URL`
+ * — unlike an in-cluster/self URL, a relative path or `localhost` address is
+ * meaningless to a third-party provider, so an unset base URL fails loudly
+ * here rather than silently handing the converter an unreachable address.
  */
 export const buildFileDownloadUrl = (args: { fileId: string }): string => {
-  const base =
-    process.env.SOAT_BASE_URL ?? `http://localhost:${process.env.PORT ?? 5047}`;
+  const base = process.env.SOAT_BASE_URL;
+  if (!base) {
+    throw new DomainError(
+      'FILE_DOWNLOAD_URL_NOT_CONFIGURED',
+      'SOAT_BASE_URL must be set to use file_delivery: download_url — the URL is fetched by an external converter.'
+    );
+  }
   const token = signFileDownloadToken({ fileId: args.fileId });
   return `${base.replace(/\/$/, '')}/api/v1/files/${args.fileId}/download?token=${token}`;
 };

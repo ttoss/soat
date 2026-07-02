@@ -66,15 +66,15 @@ extractSourcePages(file)
 | `ingestionRules.ts` lib (CRUD + `resolveIngestionRule`) | ✅ Implemented | `packages/server/src/lib/ingestionRules.ts` |
 | `validateIngestionRule` | ✅ Implemented | Extracted to `packages/server/src/lib/ingestionRuleValidation.ts` (pure function, no DB — reusable by the REST route and formation module) |
 | Content-type glob matching + specificity ranking | ✅ Implemented | Extracted to `packages/server/src/lib/ingestionRuleMatching.ts` |
-| `POST/GET/PATCH/DELETE /api/v1/ingestion-rules` | ❌ Planned | `packages/server/src/rest/v1/ingestionRules.ts` |
-| Converter invocation in `extractSourcePages` | ❌ Planned | `invokeConverter()` in `documentIngestion.ts` — tool (`callTool`) or agent (`createGeneration`) |
-| `POST /api/v1/documents/:id/ingestion-callback` | ❌ Planned | Token-authed async result callback |
-| Short-lived file download token util | ❌ Planned | For `file_delivery: download_url` |
-| OpenAPI (`ingestion-rules.yaml` + `documents.yaml` updates) | ❌ Planned | Then regenerate SDK + CLI |
-| Permissions (`ingestion-rules.json`) | ❌ Planned | Regenerate permissions page |
+| `POST/GET/PATCH/DELETE /api/v1/ingestion-rules` | ✅ Implemented | `packages/server/src/rest/v1/ingestionRules.ts` |
+| Converter invocation (sync, base64 + download_url) | ✅ Implemented | `invokeConverter()` in `converterInvocation.ts` — tool (`callTool`) or agent (`createGeneration`) |
+| `POST /api/v1/documents/:id/ingestion-callback` | ❌ Planned | Token-authed async result callback (Phase 5) |
+| Short-lived file download token util | ✅ Implemented | `fileDownloadToken.ts`, for `file_delivery: download_url` |
+| OpenAPI (`ingestion-rules.yaml`) | ✅ Implemented | SDK + CLI regenerated |
+| Permissions (`ingestion-rules.json`) | ✅ Implemented | Permissions page regenerated |
 | Formation module (`ingestionRulesFormationModule.ts` + `formations.yaml`) | ❌ Planned | Phase 6 — provision rules as code |
-| Module docs (`modules/ingestion-rules.md` + `documents.md` update) | ❌ Planned | |
-| Tests (REST + documents ingest + mcp + smoke) | ❌ Planned | |
+| Module docs (`modules/ingestion-rules.md` + `documents.md` update) | ✅ Implemented | |
+| Tests (REST + documents ingest + mcp) | ✅ Implemented | End-to-end smoke steps for the converter flow added |
 
 ## Implementation Phases
 
@@ -93,7 +93,7 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
 
 *(Design deviation: `validateIngestionRule` and the glob-matching helpers were factored into their own files, `ingestionRuleValidation.ts` and `ingestionRuleMatching.ts`, rather than living inline in `ingestionRules.ts` — keeps each file focused and under the project's `max-lines` lint limit, and lets Phase 2/6 import just the pure validator without pulling in DB-dependent CRUD code.)*
 
-### Phase 2 — REST module + generated clients
+### Phase 2 — REST module + generated clients ✅ Complete
 
 **Deliverables:**
 
@@ -104,7 +104,7 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
 - REST tests: CRUD happy path, `401`, `403`, validation (`400`), most-specific resolution, `404`
 - `mcp.test.ts`: ingestion-rules tools appear and round-trip
 
-### Phase 3 — Synchronous converter path (base64 delivery)
+### Phase 3 — Synchronous converter path (base64 delivery) ✅ Complete
 
 **Deliverables:**
 
@@ -114,7 +114,7 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
 - Rule-level chunk defaults applied, overridable per request (Decision #5)
 - Tests: image ingest via matching tool rule → `ready`; scanned-PDF fallback to an `application/pdf` tool rule → `ready`; scanned-PDF fallback to an `application/pdf` **agent** rule → `ready`; `native_extraction: skip` converts a text-layer PDF (native bypassed); `native_extraction: first` leaves a text-layer PDF on the native path (converter not called); non-native type with no rule → `UNSUPPORTED_FILE_TYPE`; empty native extraction with no rule → `FILE_PARSE_FAILED`; converter error → `failed` `CONVERTER_FAILED`; bad output → `failed` `CONVERTER_OUTPUT_INVALID`. `callTool` / `createGeneration` mocked via `jest.spyOn` (both are transitively loaded by `app.ts` — see `.claude/rules/tests.md`).
 
-### Phase 4 — `download_url` delivery
+### Phase 4 — `download_url` delivery ✅ Complete
 
 **Deliverables:**
 
@@ -134,7 +134,7 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
   - The timeout sweeper transitions `processing → failed (CONVERSION_TIMEOUT)` under the same guard, so it cannot clobber a conversion that a callback has already completed. A callback that loses the race (doc no longer `processing`) is rejected with a clear `409`, never silently dropped.
 - Tests: async pending → callback → `ready`; replayed callback rejected; callback for a superseded attempt (after re-ingest) rejected; late callback after timeout rejected (and vice-versa: callback wins, sweeper no-ops); stale conversion → `CONVERSION_TIMEOUT`
 
-### Phase 6 — Formations + smoke + docs polish
+### Phase 6 — Formations + smoke + docs polish (smoke steps landed early; formations + docs polish remain)
 
 **Deliverables:**
 

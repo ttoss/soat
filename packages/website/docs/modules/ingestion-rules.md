@@ -101,10 +101,10 @@ A **tool** converter is called via the same server-side path as any other tool c
 ```jsonc
 "All the extracted text"                              // wrapped as a single page
 { "pages": [{ "text": "page 1", "page_number": 1 }] } // paged (e.g. OCR per page)
-{ "status": "pending" }                                // long-running — result via callback
+{ "status": "pending" }                                // long-running deferral — not yet supported, see below
 ```
 
-Any other shape fails the document with `CONVERTER_OUTPUT_INVALID`; a tool error fails it with `CONVERTER_FAILED`.
+Any other shape fails the document with `CONVERTER_OUTPUT_INVALID`; a tool error fails it with `CONVERTER_FAILED`. A tool that returns `{ "status": "pending" }` today also fails with `CONVERTER_FAILED` — see [Synchronous vs Async (Callback) Conversion](#synchronous-vs-async-callback-conversion).
 
 ### File Delivery
 
@@ -117,7 +117,9 @@ Any other shape fails the document with `CONVERTER_OUTPUT_INVALID`; a tool error
 
 ### Synchronous vs Async (Callback) Conversion
 
-A converter tool that returns text (or `{ pages }`) directly is **synchronous** — ingestion continues to chunk and embed inline.
+A converter tool that returns text (or `{ pages }`) directly is **synchronous** — ingestion continues to chunk and embed inline. This is the only path implemented today; every converter call is awaited inline, whether it is a tool or an agent.
+
+> **Not yet implemented.** The async callback path described below — `{ status: "pending" }`, `POST /api/v1/documents/:id/ingestion-callback`, and `CONVERSION_STALL_TIMEOUT_MS` — is planned but not shipped. A tool that returns `{ status: "pending" }` currently fails the document with `CONVERTER_FAILED` rather than deferring. Design long-running converters (e.g. speech-to-text on long audio) to poll the provider and return the final result synchronously until this lands.
 
 A tool that returns `{ status: "pending" }` is **asynchronous**: the document stays in `processing` while the external job runs, then the tool (or the service it wires) posts the result to `POST /api/v1/documents/:id/ingestion-callback`. The callback is authorized by a single-use, signed token scoped to that document and ingestion attempt — not by an IAM action, since the external converter is not a SOAT user. It is accepted only while that attempt is still `processing`, so a replayed callback, a callback for a superseded attempt (after re-ingest), or one that arrives after the stall timeout already failed the document is rejected. Once the result arrives, ingestion runs the normal chunk + embed tail and marks the document `ready`.
 
@@ -129,15 +131,17 @@ Converter-related `failure_reason` values that can appear on a failed document (
 
 | `failure_reason` | Meaning |
 |------------------|---------|
-| `CONVERTER_FAILED` | The converter tool call errored |
+| `CONVERTER_FAILED` | The converter tool/agent call errored, or returned an async deferral (`{ status: "pending" }`) that is not yet supported |
 | `CONVERTER_OUTPUT_INVALID` | The tool returned an unrecognized output shape |
-| `CONVERSION_TIMEOUT` | An async conversion did not call back within `CONVERSION_STALL_TIMEOUT_MS` |
+| `CONVERSION_TIMEOUT` | *(planned)* An async conversion did not call back within `CONVERSION_STALL_TIMEOUT_MS` |
 
 ## Configuration
 
+The async callback path is not yet implemented (see [Synchronous vs Async (Callback) Conversion](#synchronous-vs-async-callback-conversion)), so no ingestion-rules environment variables are read today. Once implemented:
+
 | Environment Variable | Required | Description |
 |----------------------|----------|-------------|
-| `CONVERSION_STALL_TIMEOUT_MS` | No | How long (ms) a document may await an async converter callback before being auto-failed with `CONVERSION_TIMEOUT`. Separate from, and typically longer than, `INGESTION_STALL_TIMEOUT_MS`. |
+| `CONVERSION_STALL_TIMEOUT_MS` | No | *(planned)* How long (ms) a document may await an async converter callback before being auto-failed with `CONVERSION_TIMEOUT`. Separate from, and typically longer than, `INGESTION_STALL_TIMEOUT_MS`. |
 
 ## Examples
 
