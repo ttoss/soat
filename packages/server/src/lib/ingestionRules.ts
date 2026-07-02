@@ -6,6 +6,7 @@ import {
   compareGlobSpecificity,
   matchesContentTypeGlob,
 } from './ingestionRuleMatching';
+import { resolveConverterToolType } from './ingestionRuleRefs';
 import { validateIngestionRule } from './ingestionRuleValidation';
 
 const log = createDebug('soat:ingestionRules');
@@ -69,41 +70,6 @@ const mapIngestionRule = (
     createdAt: rule.createdAt,
     updatedAt: rule.updatedAt,
   };
-};
-
-/**
- * Looks up the converter's tool type (needed by `validateIngestionRule`) and
- * confirms the referenced tool/agent exists in the project.
- */
-const resolveConverterToolType = async (args: {
-  projectId: number;
-  toolId?: number | null;
-  agentId?: number | null;
-}): Promise<string | null> => {
-  if (args.toolId) {
-    const tool = await db.Tool.findOne({
-      where: { id: args.toolId, projectId: args.projectId },
-    });
-    if (!tool) {
-      throw new DomainError(
-        'TOOL_NOT_FOUND',
-        `Tool '${args.toolId}' not found in this project.`
-      );
-    }
-    return tool.type;
-  }
-  if (args.agentId) {
-    const agent = await db.Agent.findOne({
-      where: { id: args.agentId, projectId: args.projectId },
-    });
-    if (!agent) {
-      throw new DomainError(
-        'AGENT_NOT_FOUND',
-        `Agent '${args.agentId}' not found in this project.`
-      );
-    }
-  }
-  return null;
 };
 
 const throwOnGlobConflict = (args: {
@@ -239,6 +205,8 @@ export const createIngestionRule = async (args: {
     toolType,
     action: args.action,
     contentTypeGlob: args.contentTypeGlob,
+    presetParameters: args.presetParameters,
+    chunkStrategy: args.chunkStrategy,
   });
   if (validationError) {
     throw new DomainError('INGESTION_RULE_VALIDATION_FAILED', validationError);
@@ -257,10 +225,22 @@ export const createIngestionRule = async (args: {
   return mapIngestionRule(created as Parameters<typeof mapIngestionRule>[0]);
 };
 
+const LIST_DEFAULT_LIMIT = 25;
+const LIST_DEFAULT_OFFSET = 0;
+
 export const listIngestionRules = async (args: {
   projectIds?: number[];
+  limit?: number;
+  offset?: number;
 }): Promise<MappedIngestionRule[]> => {
-  log('listIngestionRules: projectIds=%o', args.projectIds);
+  const limit = args.limit ?? LIST_DEFAULT_LIMIT;
+  const offset = args.offset ?? LIST_DEFAULT_OFFSET;
+  log(
+    'listIngestionRules: projectIds=%o limit=%d offset=%d',
+    args.projectIds,
+    limit,
+    offset
+  );
 
   const where: Record<string, unknown> = {};
   if (args.projectIds !== undefined) {
@@ -271,6 +251,8 @@ export const listIngestionRules = async (args: {
     where,
     include: ingestionRuleIncludes(),
     order: [['createdAt', 'DESC']],
+    limit,
+    offset,
   });
 
   return rules.map((rule) => {
@@ -369,6 +351,12 @@ export const updateIngestionRule = async (args: {
   const finalAgentId = args.agentId !== undefined ? args.agentId : rule.agentId;
   const finalAction = args.action !== undefined ? args.action : rule.action;
   const finalContentTypeGlob = args.contentTypeGlob ?? rule.contentTypeGlob;
+  const finalPresetParameters =
+    args.presetParameters !== undefined
+      ? args.presetParameters
+      : (rule.presetParameters as object | null);
+  const finalChunkStrategy =
+    args.chunkStrategy !== undefined ? args.chunkStrategy : rule.chunkStrategy;
 
   const toolType = await resolveConverterToolType({
     projectId: rule.projectId,
@@ -382,6 +370,8 @@ export const updateIngestionRule = async (args: {
     toolType,
     action: finalAction,
     contentTypeGlob: finalContentTypeGlob,
+    presetParameters: finalPresetParameters,
+    chunkStrategy: finalChunkStrategy,
   });
   if (validationError) {
     throw new DomainError('INGESTION_RULE_VALIDATION_FAILED', validationError);

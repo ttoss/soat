@@ -198,13 +198,17 @@ paths:
                 tool_id:
                   x-soat-ref: tools
                   type: string
+                  nullable: true
                 agent_id:
                   x-soat-ref: agents
                   type: string
+                  nullable: true
                 action:
                   type: string
+                  nullable: true
                 preset_parameters:
                   type: object
+                  nullable: true
                 native_extraction:
                   type: string
                   enum: [first, skip]
@@ -214,12 +218,16 @@ paths:
                 chunk_strategy:
                   type: string
                   enum: [page, whole, size]
+                  nullable: true
                 chunk_size:
                   type: integer
+                  nullable: true
                 chunk_overlap:
                   type: integer
+                  nullable: true
                 metadata:
                   type: object
+                  nullable: true
       responses:
         '200':
           description: Ingestion rule updated

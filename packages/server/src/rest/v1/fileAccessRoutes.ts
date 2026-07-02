@@ -128,28 +128,47 @@ const registerDeleteFileRoute = (args: { filesRouter: Router<Context> }) => {
   });
 };
 
+const hasValidDownloadToken = (ctx: Context): boolean => {
+  const token = ctx.query.token as string | undefined;
+  return (
+    typeof token === 'string' &&
+    verifyFileDownloadToken({ token, fileId: ctx.params.file_id })
+  );
+};
+
+/**
+ * A valid signed download token authorizes this one file without a SOAT
+ * session — used by ingestion-rule converters (see fileDownloadToken.ts).
+ * Otherwise falls back to the normal authenticated + policy-checked path.
+ */
+const ensureDownloadAuthorized = async (args: {
+  ctx: Context;
+  tokenValid: boolean;
+}) => {
+  if (args.tokenValid) {
+    return ensureFileExists({ ctx: args.ctx });
+  }
+
+  if (!ensureAuthenticated({ ctx: args.ctx })) return null;
+
+  const file = await ensureFileExists({ ctx: args.ctx });
+  if (!file) return null;
+
+  const allowed = await ensureAllowed({
+    ctx: args.ctx,
+    action: 'files:DownloadFile',
+    file,
+  });
+  return allowed ? file : null;
+};
+
 const registerDownloadRoutes = (args: { filesRouter: Router<Context> }) => {
   args.filesRouter.get('/files/:file_id/download', async (ctx: Context) => {
-    // A valid signed download token authorizes this one file without a SOAT
-    // session — used by ingestion-rule converters (see fileDownloadToken.ts).
-    const token = ctx.query.token as string | undefined;
-    const tokenValid =
-      typeof token === 'string' &&
-      verifyFileDownloadToken({ token, fileId: ctx.params.file_id });
-
-    if (!tokenValid) {
-      if (!ensureAuthenticated({ ctx })) return;
-
-      const file = await ensureFileExists({ ctx });
-      if (!file) return;
-
-      const allowed = await ensureAllowed({
-        ctx,
-        action: 'files:DownloadFile',
-        file,
-      });
-      if (!allowed) return;
-    }
+    const file = await ensureDownloadAuthorized({
+      ctx,
+      tokenValid: hasValidDownloadToken(ctx),
+    });
+    if (!file) return;
 
     const result = await downloadFile({ id: ctx.params.file_id });
     if (!result) {

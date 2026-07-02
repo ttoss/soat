@@ -9,7 +9,11 @@ import {
   updateIngestionRule,
 } from 'src/lib/ingestionRules';
 
-import { checkAuth, resolveWriteProjectId } from './helpers';
+import {
+  checkAuth,
+  resolveProjectIdsWithAction,
+  resolveWriteProjectId,
+} from './helpers';
 
 const ingestionRulesRouter = new Router<Context>();
 
@@ -33,50 +37,45 @@ type UpdateBody = Partial<Omit<CreateBody, 'projectId' | 'contentTypeGlob'>> & {
 };
 
 ingestionRulesRouter.get('/ingestion-rules', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  if (!checkAuth(ctx)) return;
 
   const projectPublicId = ctx.query.projectId as string | undefined;
+  const limit = ctx.query.limit
+    ? parseInt(ctx.query.limit as string, 10)
+    : undefined;
+  const offset = ctx.query.offset
+    ? parseInt(ctx.query.offset as string, 10)
+    : undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'ingestion-rules:ListIngestionRules',
   });
+  if (projectIds === null) return;
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  ctx.body = await listIngestionRules({ projectIds });
+  ctx.body = await listIngestionRules({ projectIds, limit, offset });
 });
 
 ingestionRulesRouter.get(
   '/ingestion-rules/:ingestion_rule_id',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    if (!checkAuth(ctx)) return;
 
-    const rule = await getIngestionRule({ id: ctx.params.ingestion_rule_id });
-
-    const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: rule.projectId,
+    const projectIds = await resolveProjectIdsWithAction({
+      ctx,
       action: 'ingestion-rules:GetIngestionRule',
     });
-    if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
+    if (projectIds === null) return;
 
-    ctx.body = rule;
+    // Scoping the fetch by projectIds (rather than checking permission after
+    // an unscoped lookup) converges "doesn't exist" and "exists in a project
+    // the caller cannot access" into the same 404 — a cross-project id must
+    // not be distinguishable from a nonexistent one.
+    ctx.body = await getIngestionRule({
+      projectIds,
+      id: ctx.params.ingestion_rule_id,
+    });
   }
 );
 
@@ -120,30 +119,18 @@ ingestionRulesRouter.post('/ingestion-rules', async (ctx: Context) => {
 ingestionRulesRouter.patch(
   '/ingestion-rules/:ingestion_rule_id',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    if (!checkAuth(ctx)) return;
 
-    const existing = await getIngestionRule({
-      id: ctx.params.ingestion_rule_id,
-    });
-
-    const projectIds = await ctx.authUser.resolveProjectIds({
-      projectPublicId: existing.projectId,
+    const projectIds = await resolveProjectIdsWithAction({
+      ctx,
       action: 'ingestion-rules:UpdateIngestionRule',
     });
-    if (projectIds === null) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
+    if (projectIds === null) return;
 
     const body = ctx.request.body as UpdateBody;
 
     const refs = await resolveConverterRefs({
-      projectIds: projectIds ?? [],
+      projectIds,
       toolId: body.toolId,
       agentId: body.agentId,
     });
@@ -169,25 +156,13 @@ ingestionRulesRouter.patch(
 ingestionRulesRouter.delete(
   '/ingestion-rules/:ingestion_rule_id',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    if (!checkAuth(ctx)) return;
 
-    const existing = await getIngestionRule({
-      id: ctx.params.ingestion_rule_id,
-    });
-
-    const projectIds = await ctx.authUser.resolveProjectIds({
-      projectPublicId: existing.projectId,
+    const projectIds = await resolveProjectIdsWithAction({
+      ctx,
       action: 'ingestion-rules:DeleteIngestionRule',
     });
-    if (projectIds === null) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
+    if (projectIds === null) return;
 
     await deleteIngestionRule({ id: ctx.params.ingestion_rule_id, projectIds });
     ctx.status = 204;

@@ -19,8 +19,13 @@ describe('IngestionRules', () => {
   let projectId: string;
   let httpToolId: string;
   let agentId: string;
+  const originalSoatBaseUrl = process.env.SOAT_BASE_URL;
 
   beforeAll(async () => {
+    // file_delivery: download_url builds an absolute URL for an external
+    // converter — buildFileDownloadUrl requires SOAT_BASE_URL to be set.
+    process.env.SOAT_BASE_URL = 'https://soat.example.test';
+
     await testClient
       .post('/api/v1/users/bootstrap')
       .send({ username: 'admin', password: 'supersecret' });
@@ -68,6 +73,11 @@ describe('IngestionRules', () => {
 
   afterAll(() => {
     fs.rmSync(storageDir, { recursive: true, force: true });
+    if (originalSoatBaseUrl === undefined) {
+      delete process.env.SOAT_BASE_URL;
+    } else {
+      process.env.SOAT_BASE_URL = originalSoatBaseUrl;
+    }
   });
 
   describe('POST /api/v1/ingestion-rules', () => {
@@ -104,6 +114,31 @@ describe('IngestionRules', () => {
       expect(res.body.tool_id).toBeNull();
     });
 
+    test('preserves preset_parameters keys verbatim through create and read (not camelCased)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ingestion-rules')
+        .send({
+          project_id: projectId,
+          content_type_glob: 'audio/wav',
+          tool_id: httpToolId,
+          preset_parameters: { smart_format: true, detect_language: true },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.preset_parameters).toEqual({
+        smart_format: true,
+        detect_language: true,
+      });
+
+      const getRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/ingestion-rules/${res.body.id as string}`
+      );
+      expect(getRes.body.preset_parameters).toEqual({
+        smart_format: true,
+        detect_language: true,
+      });
+    });
+
     test('rejects a rule with both tool_id and agent_id (400)', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
@@ -122,6 +157,48 @@ describe('IngestionRules', () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/ingestion-rules')
         .send({ project_id: projectId, content_type_glob: 'image/bmp' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INGESTION_RULE_VALIDATION_FAILED');
+    });
+
+    test('rejects preset_parameters containing the reserved key "file" (400)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ingestion-rules')
+        .send({
+          project_id: projectId,
+          content_type_glob: 'image/webp',
+          tool_id: httpToolId,
+          preset_parameters: { file: { data_base64: 'attacker-controlled' } },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INGESTION_RULE_VALIDATION_FAILED');
+    });
+
+    test('rejects preset_parameters containing the reserved key "callback" (400)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ingestion-rules')
+        .send({
+          project_id: projectId,
+          content_type_glob: 'image/avif',
+          tool_id: httpToolId,
+          preset_parameters: { callback: { url: 'https://evil.example' } },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INGESTION_RULE_VALIDATION_FAILED');
+    });
+
+    test('rejects an invalid chunk_strategy (400)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ingestion-rules')
+        .send({
+          project_id: projectId,
+          content_type_glob: 'image/heic',
+          tool_id: httpToolId,
+          chunk_strategy: 'sentence',
+        });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INGESTION_RULE_VALIDATION_FAILED');
@@ -198,6 +275,26 @@ describe('IngestionRules', () => {
       expect(res.body.length).toBeGreaterThan(0);
     });
 
+    test('list honors limit and offset', async () => {
+      const full = await authenticatedTestClient(adminToken).get(
+        `/api/v1/ingestion-rules?project_id=${projectId}`
+      );
+      expect(full.body.length).toBeGreaterThan(1);
+
+      const limited = await authenticatedTestClient(adminToken).get(
+        `/api/v1/ingestion-rules?project_id=${projectId}&limit=1`
+      );
+      expect(limited.status).toBe(200);
+      expect(limited.body.length).toBe(1);
+
+      const paged = await authenticatedTestClient(adminToken).get(
+        `/api/v1/ingestion-rules?project_id=${projectId}&limit=1&offset=1`
+      );
+      expect(paged.status).toBe(200);
+      expect(paged.body.length).toBe(1);
+      expect(paged.body[0].id).not.toBe(limited.body[0].id);
+    });
+
     test('list is unauthorized without a token (401)', async () => {
       const res = await testClient.get(
         `/api/v1/ingestion-rules?project_id=${projectId}`
@@ -228,6 +325,32 @@ describe('IngestionRules', () => {
       expect(res.status).toBe(200);
       expect(res.body.native_extraction).toBe('skip');
       expect(res.body.chunk_strategy).toBe('whole');
+    });
+
+    test('admin can switch a rule from a tool to an agent converter via PATCH', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ingestion-rules')
+        .send({
+          project_id: projectId,
+          content_type_glob: 'text/x-switch-converter',
+          tool_id: httpToolId,
+        });
+      const switchRuleId = createRes.body.id as string;
+
+      // Admin's resolveProjectIds({ action }) with no target project resolves
+      // to `undefined` (unrestricted) — this exercises resolveConverterRefs'
+      // unrestricted-lookup path, not just the single-project array path.
+      const res = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/ingestion-rules/${switchRuleId}`)
+        .send({ tool_id: null, agent_id: agentId });
+
+      expect(res.status).toBe(200);
+      expect(res.body.tool_id).toBeNull();
+      expect(res.body.agent_id).toBe(agentId);
+
+      await authenticatedTestClient(adminToken).delete(
+        `/api/v1/ingestion-rules/${switchRuleId}`
+      );
     });
 
     test('deletes a rule', async () => {
@@ -360,6 +483,32 @@ describe('IngestionRules', () => {
       expect(joined).toContain('Total amount: 11.50');
     });
 
+    test('a converter-ingested document can be re-ingested (not UNSUPPORTED_FILE_TYPE)', async () => {
+      ocrGeneration();
+
+      const fileId = await uploadFile({
+        buffer: Buffer.from('fake-tiff-bytes'),
+        filename: 'receipt-reingest.tiff',
+        contentType: 'image/tiff',
+      });
+
+      const ingestRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/documents/ingest?async=false')
+        .send({ project_id: projectId, file_id: fileId });
+      expect(ingestRes.status).toBe(201);
+      expect(ingestRes.body.status).toBe('ready');
+      const docId = ingestRes.body.id as string;
+
+      ocrGeneration();
+      const reRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/documents/${docId}/ingest?async=false`)
+        .send({});
+
+      expect(reRes.status).toBe(201);
+      expect(reRes.body.status).toBe('ready');
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(2);
+    });
+
     test('audio routes to the tool converter (download_url) and becomes ready', async () => {
       callToolSpy = jest.spyOn(toolsModule, 'callTool').mockResolvedValue({
         pages: [
@@ -390,6 +539,37 @@ describe('IngestionRules', () => {
       };
       expect(input.file.download_url).toContain('/download?token=');
       expect(input.file.data_base64).toBeUndefined();
+    });
+
+    test('preset_parameters reach the converter tool with snake_case keys intact', async () => {
+      // audio/wav is an exact match, so it wins over the audio/* rule above
+      // and carries the preset_parameters created in the CRUD block's
+      // "preserves preset_parameters keys verbatim" test.
+      callToolSpy = jest.spyOn(toolsModule, 'callTool').mockResolvedValue({
+        pages: [{ text: 'Transcribed with presets.', page_number: 1 }],
+      });
+
+      const fileId = await uploadFile({
+        buffer: Buffer.from('fake-wav-bytes'),
+        filename: 'presets.wav',
+        contentType: 'audio/wav',
+      });
+
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/documents/ingest?async=false')
+        .send({ project_id: projectId, file_id: fileId });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('ready');
+      expect(callToolSpy).toHaveBeenCalledTimes(1);
+      const input = callToolSpy.mock.calls[0][0].input as Record<
+        string,
+        unknown
+      >;
+      expect(input.smart_format).toBe(true);
+      expect(input.detect_language).toBe(true);
+      expect(input.smartFormat).toBeUndefined();
+      expect(input.detectLanguage).toBeUndefined();
     });
 
     test('an unrecognized converter output fails the document (CONVERTER_OUTPUT_INVALID)', async () => {
@@ -567,6 +747,28 @@ describe('IngestionRules', () => {
       ).toBeGreaterThanOrEqual(1);
     });
 
+    test('a non-numeric page_number fails the document (CONVERTER_OUTPUT_INVALID)', async () => {
+      callToolSpy = jest.spyOn(toolsModule, 'callTool').mockResolvedValue({
+        pages: [{ text: 'bad page number', page_number: 'one' }],
+      });
+
+      const fileId = await uploadFile({
+        buffer: Buffer.from('bytes'),
+        filename: 'bad-page-number.mp3',
+        contentType: 'audio/mpeg',
+      });
+
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/documents/ingest?async=false')
+        .send({ project_id: projectId, file_id: fileId });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('failed');
+      expect(
+        (res.body.metadata as Record<string, unknown>).failure_reason
+      ).toBe('CONVERTER_OUTPUT_INVALID');
+    });
+
     test('a native text file with no rule uses native extraction', async () => {
       const fileId = await uploadFile({
         buffer: Buffer.from('Plain native text, no converter involved.'),
@@ -669,20 +871,23 @@ describe('IngestionRules', () => {
       expect(res.status).toBe(403);
     });
 
-    test('get is 401 unauthenticated and 403 without permission', async () => {
+    test('get is 401 unauthenticated and 404 without permission (no accessible projects)', async () => {
       expect(
         (await testClient.get(`/api/v1/ingestion-rules/${ruleId}`)).status
       ).toBe(401);
+      // noPermToken has no policies → projectIds=[] → rule not found in empty
+      // scope. This also means a cross-project id and a nonexistent id are
+      // indistinguishable to a caller without access — no existence oracle.
       expect(
         (
           await authenticatedTestClient(noPermToken).get(
             `/api/v1/ingestion-rules/${ruleId}`
           )
         ).status
-      ).toBe(403);
+      ).toBe(404);
     });
 
-    test('patch is 401 unauthenticated and 403 without permission', async () => {
+    test('patch is 401 unauthenticated and 404 without permission (no accessible projects)', async () => {
       expect(
         (
           await testClient
@@ -696,10 +901,10 @@ describe('IngestionRules', () => {
             .patch(`/api/v1/ingestion-rules/${ruleId}`)
             .send({ chunk_strategy: 'whole' })
         ).status
-      ).toBe(403);
+      ).toBe(404);
     });
 
-    test('delete is 401 unauthenticated and 403 without permission', async () => {
+    test('delete is 401 unauthenticated and 404 without permission (no accessible projects)', async () => {
       expect(
         (await testClient.delete(`/api/v1/ingestion-rules/${ruleId}`)).status
       ).toBe(401);
@@ -709,7 +914,79 @@ describe('IngestionRules', () => {
             `/api/v1/ingestion-rules/${ruleId}`
           )
         ).status
-      ).toBe(403);
+      ).toBe(404);
+    });
+  });
+
+  describe('cross-project access does not leak resource existence', () => {
+    let otherProjectUserToken: string;
+    let ruleInProjectId: string;
+
+    beforeAll(async () => {
+      const otherProjectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Ingestion Rules Other Project' });
+      const otherProjectId = otherProjectRes.body.id as string;
+
+      const userRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'ir-other-project', password: 'nopassword' });
+
+      // A policy scoped to otherProjectId only, via a resource SRN — this
+      // caller has the ingestion-rules actions, just not on `projectId`.
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: [
+                  'ingestion-rules:GetIngestionRule',
+                  'ingestion-rules:UpdateIngestionRule',
+                  'ingestion-rules:DeleteIngestionRule',
+                ],
+                resource: [`soat:${otherProjectId}:*:*`],
+              },
+            ],
+          },
+        });
+
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${userRes.body.id as string}/policies`)
+        .send({ policy_ids: [policyRes.body.id] });
+
+      otherProjectUserToken = await loginAs('ir-other-project', 'nopassword');
+
+      const ruleRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ingestion-rules')
+        .send({
+          project_id: projectId,
+          content_type_glob: 'text/x-cross-project',
+          tool_id: httpToolId,
+        });
+      ruleInProjectId = ruleRes.body.id;
+    });
+
+    test('get on a rule from an inaccessible project returns 404, not 403', async () => {
+      const res = await authenticatedTestClient(otherProjectUserToken).get(
+        `/api/v1/ingestion-rules/${ruleInProjectId}`
+      );
+      expect(res.status).toBe(404);
+    });
+
+    test('patch on a rule from an inaccessible project returns 404, not 403', async () => {
+      const res = await authenticatedTestClient(otherProjectUserToken)
+        .patch(`/api/v1/ingestion-rules/${ruleInProjectId}`)
+        .send({ chunk_strategy: 'whole' });
+      expect(res.status).toBe(404);
+    });
+
+    test('delete on a rule from an inaccessible project returns 404, not 403', async () => {
+      const res = await authenticatedTestClient(otherProjectUserToken).delete(
+        `/api/v1/ingestion-rules/${ruleInProjectId}`
+      );
+      expect(res.status).toBe(404);
     });
   });
 
@@ -737,6 +1014,23 @@ describe('IngestionRules', () => {
       expect(url).toContain('/api/v1/files/fl_xyz/download?token=');
       const token = url.split('token=')[1];
       expect(verifyFileDownloadToken({ token, fileId: 'fl_xyz' })).toBe(true);
+    });
+
+    test('buildFileDownloadUrl throws when SOAT_BASE_URL is unset (no unreachable localhost fallback)', () => {
+      const original = process.env.SOAT_BASE_URL;
+      delete process.env.SOAT_BASE_URL;
+
+      try {
+        expect(() => {
+          return buildFileDownloadUrl({ fileId: 'fl_xyz' });
+        }).toThrow(/SOAT_BASE_URL/);
+      } finally {
+        if (original === undefined) {
+          delete process.env.SOAT_BASE_URL;
+        } else {
+          process.env.SOAT_BASE_URL = original;
+        }
+      }
     });
   });
 });

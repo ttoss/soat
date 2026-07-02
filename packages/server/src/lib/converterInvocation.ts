@@ -51,9 +51,15 @@ const parseConverterOutput = (raw: unknown): SourcePage[] => {
         .map((page, index) => {
           const record = isRecord(page) ? page : {};
           const text = String(record['text'] ?? '').trim();
-          const pageNumber = Number(
-            record['page_number'] ?? record['pageNumber'] ?? index + 1
-          );
+          const rawPageNumber =
+            record['page_number'] ?? record['pageNumber'] ?? index + 1;
+          const pageNumber = Number(rawPageNumber);
+          if (!Number.isFinite(pageNumber)) {
+            throw new DomainError(
+              'CONVERTER_OUTPUT_INVALID',
+              `Converter page ${index} has a non-numeric page_number: ${JSON.stringify(rawPageNumber)}.`
+            );
+          }
           return { text, pageNumber };
         })
         .filter((page) => {
