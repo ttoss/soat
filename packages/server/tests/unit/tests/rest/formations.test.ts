@@ -1112,6 +1112,23 @@ resources:
       agentToolFormationId = res.body.id;
     });
 
+    test('plan reports no-op for an unchanged tool resource', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: agentToolFormationId,
+          template: agentToolTemplate,
+        });
+
+      expect(res.status).toBe(200);
+      const toolChange = res.body.changes.find((c: { logical_id: string }) => {
+        return c.logical_id === 'MyTool';
+      });
+      expect(toolChange).toBeDefined();
+      expect(toolChange.action).toBe('no-op');
+    });
+
     test('updates the tool resource in the formation', async () => {
       const updatedTemplate = {
         resources: {

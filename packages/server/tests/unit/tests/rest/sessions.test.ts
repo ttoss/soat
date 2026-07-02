@@ -2361,6 +2361,35 @@ describe('Sessions', () => {
 
         expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
       });
+
+      test('a delayed generation failure is swallowed instead of crashing', async () => {
+        let signalGenerationStarted!: () => void;
+        const generationStarted = new Promise<void>((r) => {
+          signalGenerationStarted = r;
+        });
+
+        mockCreateGeneration.mockImplementationOnce(() => {
+          signalGenerationStarted();
+          return Promise.reject(new Error('boom during delayed generation'));
+        });
+
+        const res = await authenticatedTestClient(userToken)
+          .post(`/api/v1/sessions/${delaySessionId}/messages`)
+          .send({ message: 'this delayed generation will fail' });
+        expect(res.status).toBe(201);
+
+        await generationStarted;
+        // Give the rejected promise's .catch(() => {}) a tick to run.
+        await new Promise((resolve) => {
+          return setTimeout(resolve, 200);
+        });
+
+        // The session must still be usable afterwards (not left stuck).
+        const statusRes = await authenticatedTestClient(userToken).get(
+          `/api/v1/sessions/${delaySessionId}`
+        );
+        expect(statusRes.status).toBe(200);
+      });
     });
   });
 });

@@ -434,6 +434,31 @@ describe('Orchestrations', () => {
       expect([400, 403, 404]).toContain(response.status);
     });
 
+    test('project-scoped API key without StartRun permission returns 403', async () => {
+      const restrictedPolicyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['orchestrations:GetRun'] }],
+          },
+        });
+
+      const keyRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({
+          name: 'No StartRun Key',
+          project_id: projectId,
+          policy_ids: [restrictedPolicyRes.body.id],
+        });
+      expect(keyRes.status).toBe(201);
+      const rawKey = keyRes.body.key as string;
+
+      const response = await authenticatedTestClient(rawKey)
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: orchestrationId, input: {} });
+      expect(response.status).toBe(403);
+    });
+
     test('authenticated user can start a run and it completes', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestration-runs')

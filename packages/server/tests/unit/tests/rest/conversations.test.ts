@@ -8,6 +8,7 @@ describe('Conversations', () => {
   let projectId: string;
   let policyId: string;
   let actorId: string;
+  let noPermToken: string;
 
   beforeAll(async () => {
     await testClient
@@ -64,6 +65,12 @@ describe('Conversations', () => {
       .post('/api/v1/actors')
       .send({ project_id: projectId, name: 'ConvoActor' });
     actorId = actorRes.body.id;
+
+    const noPermRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'convonoperm', password: 'nopassword' });
+    expect(noPermRes.status).toBe(201);
+    noPermToken = await loginAs('convonoperm', 'nopassword');
   });
 
   describe('POST /api/v1/conversations', () => {
@@ -330,6 +337,14 @@ describe('Conversations', () => {
 
       expect(response.status).toBe(404);
     });
+
+    test('returns 403 for a user without conversation permission', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/conversations/${conversationId}/messages`
+      );
+
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('POST /api/v1/conversations/:id/messages', () => {
@@ -402,6 +417,27 @@ describe('Conversations', () => {
         .send({ message: 'Hello world', role: 'user', actor_id: actorId });
 
       expect(response.status).toBe(404);
+    });
+
+    test('returns 403 for a user without conversation permission', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .post(`/api/v1/conversations/${conversationId}/messages`)
+        .send({ message: 'Hello world', role: 'user' });
+
+      expect(response.status).toBe(403);
+    });
+
+    test('returns 404 when actor_id does not exist', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${conversationId}/messages`)
+        .send({
+          message: 'Hello world',
+          role: 'user',
+          actor_id: 'actor_doesnotexist000',
+        });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe('Conversation or actor not found');
     });
 
     test('stores metadata and returns it in the response', async () => {
@@ -514,6 +550,14 @@ describe('Conversations', () => {
 
       expect(response.status).toBe(404);
       expect(response.body.error).toBe('Conversation not found');
+    });
+
+    test('returns 403 for a user without conversation permission', async () => {
+      const response = await authenticatedTestClient(noPermToken).delete(
+        `/api/v1/conversations/${conversationId}/messages/doc_nonexistent`
+      );
+
+      expect(response.status).toBe(403);
     });
   });
 
@@ -768,6 +812,13 @@ describe('Conversations', () => {
       expect(res.status).toBe(404);
     });
 
+    test('returns 403 for a user without conversation permission', async () => {
+      const res = await authenticatedTestClient(noPermToken)
+        .post(`/api/v1/conversations/${convId}/generate`)
+        .send({ agent_id: 'agt_test' });
+      expect(res.status).toBe(403);
+    });
+
     test('returns 401 when unauthenticated', async () => {
       const res = await testClient
         .post(`/api/v1/conversations/${convId}/generate`)
@@ -869,6 +920,13 @@ describe('Conversations', () => {
       );
       expect(response.status).toBe(404);
     });
+
+    test('returns 403 for a user without conversation permission', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/conversations/${conversationId}/tags`
+      );
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('PUT /api/v1/conversations/:id/tags', () => {
@@ -901,6 +959,13 @@ describe('Conversations', () => {
         .send({ env: 'prod' });
       expect(response.status).toBe(404);
     });
+
+    test('returns 403 for a user without conversation permission', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .put(`/api/v1/conversations/${conversationId}/tags`)
+        .send({ env: 'prod' });
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('PATCH /api/v1/conversations/:id/tags', () => {
@@ -928,6 +993,20 @@ describe('Conversations', () => {
         .patch(`/api/v1/conversations/${conversationId}/tags`)
         .send({});
       expect(response.status).toBe(401);
+    });
+
+    test('returns 404 for non-existent conversation', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch('/api/v1/conversations/conv_nonexistent/tags')
+        .send({ source: 'api' });
+      expect(response.status).toBe(404);
+    });
+
+    test('returns 403 for a user without conversation permission', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .patch(`/api/v1/conversations/${conversationId}/tags`)
+        .send({ source: 'api' });
+      expect(response.status).toBe(403);
     });
   });
 
