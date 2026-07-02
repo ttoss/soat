@@ -35,66 +35,72 @@ describe('validatePipelineConfig', () => {
   });
 
   test('throws when pipeline is not an object', () => {
-    expect(() => validatePipelineConfig(undefined)).toThrow(DomainError);
-    expect(() => validatePipelineConfig('nope')).toThrow(/pipeline/i);
+    expect(() => {
+      return validatePipelineConfig(undefined);
+    }).toThrow(DomainError);
+    expect(() => {
+      return validatePipelineConfig('nope');
+    }).toThrow(/pipeline/i);
   });
 
   test('throws when steps is empty', () => {
-    expect(() => validatePipelineConfig({ steps: [] })).toThrow(/non-empty/i);
+    expect(() => {
+      return validatePipelineConfig({ steps: [] });
+    }).toThrow(/non-empty/i);
   });
 
   test('throws on duplicate step id', () => {
-    expect(() =>
-      validatePipelineConfig({
+    expect(() => {
+      return validatePipelineConfig({
         steps: [
           { id: 'a', toolId: 't1' },
           { id: 'a', toolId: 't2' },
         ],
-      })
-    ).toThrow(/duplicate/i);
+      });
+    }).toThrow(/duplicate/i);
   });
 
   test('throws on an invalid step id', () => {
-    expect(() =>
-      validatePipelineConfig({ steps: [{ id: 'a b', toolId: 't1' }] })
-    ).toThrow(DomainError);
+    expect(() => {
+      return validatePipelineConfig({ steps: [{ id: 'a b', toolId: 't1' }] });
+    }).toThrow(DomainError);
   });
 
   test('throws when a step is missing tool_id', () => {
-    expect(() =>
-      validatePipelineConfig({ steps: [{ id: 'a' }] })
-    ).toThrow(/tool_id/i);
+    expect(() => {
+      return validatePipelineConfig({ steps: [{ id: 'a' }] });
+    }).toThrow(/tool_id/i);
   });
 
   test('throws on a forward reference to a later step', () => {
-    expect(() =>
-      validatePipelineConfig({
+    expect(() => {
+      return validatePipelineConfig({
         steps: [
           { id: 'a', toolId: 't1', input: { x: { var: 'steps.b.v' } } },
           { id: 'b', toolId: 't2' },
         ],
-      })
-    ).toThrow(/not an earlier step/i);
+      });
+    }).toThrow(/not an earlier step/i);
   });
 
   test('allows a backward reference to an earlier step', () => {
-    expect(() =>
-      validatePipelineConfig({
+    expect(() => {
+      return validatePipelineConfig({
         steps: [
           { id: 'a', toolId: 't1' },
           { id: 'b', toolId: 't2', input: { x: { var: 'steps.a.v' } } },
         ],
-      })
-    ).not.toThrow();
+      });
+    }).not.toThrow();
   });
 
   test('throws when output is not an object', () => {
-    expect(() =>
-      validatePipelineConfig({
+    expect(() => {
+      return validatePipelineConfig({
         steps: [{ id: 'a', toolId: 't1' }],
         output: 'nope',
-      })
-    ).toThrow(/output/i);
+      });
+    }).toThrow(/output/i);
   });
 });
 
@@ -121,6 +127,55 @@ describe('runPipeline', () => {
     expect(calls[1]).toEqual({ toolId: 'tool_b', input: { y: 42 } });
     // No output mapping → returns the last step's raw output.
     expect(result).toEqual({ done: true });
+  });
+
+  test('resolves vars nested inside a plain object in step input', async () => {
+    const calls: Array<{ toolId: string; input: Record<string, unknown> }> = [];
+    await runPipeline({
+      pipeline: {
+        steps: [
+          {
+            id: 'a',
+            toolId: 'tool_a',
+            input: {
+              locale: 'pt-BR',
+              data: {
+                title: { var: 'input.title' },
+                theme: { var: 'input.theme' },
+              },
+            },
+          },
+        ],
+      },
+      input: { title: 'Hello', theme: 'dark' },
+      callStep: async (call) => {
+        calls.push({ toolId: call.toolId, input: call.input });
+        return {};
+      },
+    });
+
+    expect(calls[0]).toEqual({
+      toolId: 'tool_a',
+      input: { locale: 'pt-BR', data: { title: 'Hello', theme: 'dark' } },
+    });
+  });
+
+  test('wraps a non-Error step failure with a readable message, not [object Object]', async () => {
+    let error: unknown;
+    try {
+      await runPipeline({
+        pipeline: { steps: [{ id: 'a', toolId: 'tool_a' }] },
+        callStep: async () => {
+          throw { type: 'Unknown Operator', key: 'nestedTitle' };
+        },
+      });
+    } catch (error_) {
+      error = error_;
+    }
+    expect(error).toBeInstanceOf(DomainError);
+    expect((error as DomainError).code).toBe('PIPELINE_STEP_FAILED');
+    expect((error as DomainError).message).not.toMatch(/\[object Object\]/);
+    expect((error as DomainError).message).toMatch(/Unknown Operator/);
   });
 
   test('decrements remainingDepth for nested calls', async () => {
@@ -192,8 +247,8 @@ describe('runPipeline', () => {
           return {};
         },
       });
-    } catch (e) {
-      error = e;
+    } catch (error_) {
+      error = error_;
     }
     expect(error).toBeInstanceOf(DomainError);
     expect((error as DomainError).code).toBe('PIPELINE_STEP_FAILED');
@@ -212,8 +267,8 @@ describe('runPipeline', () => {
           return {};
         },
       });
-    } catch (e) {
-      error = e;
+    } catch (error_) {
+      error = error_;
     }
     expect(error).toBeInstanceOf(DomainError);
     expect((error as DomainError).code).toBe('PIPELINE_DEPTH_EXCEEDED');

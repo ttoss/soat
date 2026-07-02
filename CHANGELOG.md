@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.12](https://github.com/ttoss/soat/compare/v0.13.11...v0.13.12) (2026-07-02)
+
+### Bug Fixes
+
+* **server:** resolve JSON Logic markers recursively in pipeline and orchestration input mappings ([#324](https://github.com/ttoss/soat/issues/324)) ([7f6e0cb](https://github.com/ttoss/soat/commit/7f6e0cbccda7e24a300a7f5514c4a39fa20c777c))
+
 ## [0.13.11](https://github.com/ttoss/soat/compare/v0.13.10...v0.13.11) (2026-07-02)
 
 ### Bug Fixes

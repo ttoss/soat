@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { JWT_SECRET } from 'src/middleware/auth';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -201,7 +202,7 @@ describe('Projects', () => {
             scope: `* mcp:access prj:${oauthScopedProjectId}`,
             prj: oauthScopedProjectId,
           },
-          'dev-secret',
+          JWT_SECRET,
           { expiresIn: '1h' }
         );
       });

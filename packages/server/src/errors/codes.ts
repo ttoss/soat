@@ -23,6 +23,10 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'A referenced AI provider does not exist.',
   },
+  TOOL_NOT_FOUND: {
+    httpStatus: 400,
+    description: 'A referenced tool does not exist.',
+  },
   AI_PROVIDER_ERROR: {
     httpStatus: 502,
     description:
@@ -224,6 +228,41 @@ export const ERROR_CODES = {
     httpStatus: 422,
     description:
       'The pipeline tool exceeded the maximum nested execution depth (pipelines calling pipelines).',
+  },
+  INGESTION_RULE_VALIDATION_FAILED: {
+    httpStatus: 400,
+    description:
+      'The ingestion rule configuration is invalid (e.g. tool_id and agent_id are both set or both missing, the converter tool is a client tool, a soat/mcp converter tool is missing an action, content_type_glob is not a valid MIME type glob, or preset_parameters contains the reserved key "file" or "callback").',
+  },
+  INGESTION_RULE_GLOB_CONFLICT: {
+    httpStatus: 409,
+    description:
+      'An ingestion rule for this content_type_glob already exists in the project.',
+  },
+  CONVERTER_FAILED: {
+    httpStatus: 422,
+    description:
+      'The ingestion converter (tool or agent) failed to run, an agent converter returned an async deferral (unsupported — agent converters are always awaited inline), or a tool converter returned an async deferral during synchronous ingestion (`?async=false`, which cannot wait for a callback).',
+  },
+  CONVERTER_OUTPUT_INVALID: {
+    httpStatus: 422,
+    description:
+      'The ingestion converter returned an unrecognized output shape. Expected a string, `{ pages: [{ text, page_number }] }`, or `{ status: "pending" }`.',
+  },
+  FILE_DOWNLOAD_URL_NOT_CONFIGURED: {
+    httpStatus: 500,
+    description:
+      'An ingestion rule with file_delivery: download_url requires SOAT_BASE_URL to be set — the URL is fetched by an external converter that cannot resolve a relative or localhost address.',
+  },
+  INGESTION_CALLBACK_INVALID_TOKEN: {
+    httpStatus: 401,
+    description:
+      'The ingestion-callback token is missing, malformed, expired, or does not match the target document.',
+  },
+  INGESTION_CALLBACK_CONFLICT: {
+    httpStatus: 409,
+    description:
+      'The document is no longer awaiting this conversion attempt — it already completed, timed out, or was superseded by a re-ingest.',
   },
 } as const satisfies Record<
   string,

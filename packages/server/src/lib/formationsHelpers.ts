@@ -340,6 +340,14 @@ export const lookupAgentInternalId = async (
   return (agent as unknown as { id: number }).id;
 };
 
+export const lookupToolInternalId = async (
+  publicId: string
+): Promise<number> => {
+  const tool = await db.Tool.findOne({ where: { publicId } });
+  if (!tool) throw new Error(`Tool not found: ${publicId}`);
+  return (tool as unknown as { id: number }).id;
+};
+
 export const lookupChatInternalId = async (
   publicId: string
 ): Promise<number> => {

@@ -16,6 +16,7 @@ import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
 
 import { checkAuth, resolveWriteProjectId } from './helpers';
+import { registerIngestionCallbackRoute } from './ingestionCallbackRoute';
 
 const documentsRouter = new Router<Context>();
 
@@ -447,5 +448,7 @@ documentsRouter.post('/documents/:document_id/ingest', async (ctx: Context) => {
   ctx.status = isAsync ? 202 : 201;
   ctx.body = result;
 });
+
+registerIngestionCallbackRoute({ documentsRouter });
 
 export { documentsRouter };

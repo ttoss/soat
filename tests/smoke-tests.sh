@@ -544,6 +544,191 @@ if [ "$REINGEST_STATUS" != "ready" ]; then
 fi
 echo "Re-ingest: OK"
 
+# 12f. Ingestion Rules — route a non-native content type to a converter.
+# The converter is a deterministic stub: a pipeline tool wrapping an http tool
+# that calls the SOAT server's own GET /projects (no external provider
+# needed), with its output mapped to a fixed extracted-text page.
+echo "--- Creating converter tool chain (http + pipeline) ---"
+CONVERTER_HTTP_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name ingestion-converter-stub-http \
+  --type http \
+  --description "Deterministic stub call used as an ingestion-rule converter step." \
+  --parameters '{"type":"object","properties":{},"required":[]}' \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+CONVERTER_HTTP_TOOL_ID=$(echo "$CONVERTER_HTTP_TOOL_RESP" | jq -r '.id')
+echo "Converter http tool id: $CONVERTER_HTTP_TOOL_ID"
+
+CONVERTER_TOOL_TEXT="Ingestion rule smoke test converter output."
+CONVERTER_PIPELINE_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name ingestion-converter-stub \
+  --type pipeline \
+  --description "Wraps the stub http call and returns fixed extracted text." \
+  --pipeline "{\"steps\":[{\"id\":\"call\",\"tool_id\":\"$CONVERTER_HTTP_TOOL_ID\",\"input\":{}}],\"output\":{\"pages\":[{\"text\":\"$CONVERTER_TOOL_TEXT\",\"page_number\":1}]}}")
+CONVERTER_TOOL_ID=$(echo "$CONVERTER_PIPELINE_TOOL_RESP" | jq -r '.id')
+echo "Converter pipeline tool id: $CONVERTER_TOOL_ID"
+
+echo "--- Creating an ingestion rule for image/x-smoke-test ---"
+INGESTION_RULE_RESP=$($SOAT_CLI create-ingestion-rule \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --content-type-glob "image/x-smoke-test" \
+  --tool-id "$CONVERTER_TOOL_ID" \
+  --file-delivery base64 \
+  --chunk-strategy whole)
+INGESTION_RULE_ID=$(echo "$INGESTION_RULE_RESP" | jq -r '.id')
+echo "Ingestion rule id: $INGESTION_RULE_ID"
+if [ -z "$INGESTION_RULE_ID" ] || [ "$INGESTION_RULE_ID" = "null" ]; then
+  echo "ERROR: create-ingestion-rule did not return a rule id" >&2
+  echo "$INGESTION_RULE_RESP" >&2
+  exit 1
+fi
+
+echo "--- Listing ingestion rules ---"
+INGESTION_RULE_LIST_RESP=$($SOAT_CLI list-ingestion-rules --project-id "$PROJECT_PUBLIC_ID")
+if ! printf '%s\n' "$INGESTION_RULE_LIST_RESP" | jq -e --arg id "$INGESTION_RULE_ID" 'map(.id) | index($id) != null' > /dev/null; then
+  echo "ERROR: list-ingestion-rules did not include the created rule" >&2
+  echo "$INGESTION_RULE_LIST_RESP" >&2
+  exit 1
+fi
+echo "Ingestion rule list: OK"
+
+echo "--- Ingesting a non-native file routed through the converter ---"
+SMOKE_IMAGE_BASE64=$(printf 'fake-smoke-test-image-bytes' | base64 | tr -d '\n')
+CONVERTER_UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --filename smoke-test-image.smk \
+  --content "$SMOKE_IMAGE_BASE64" \
+  --content_type image/x-smoke-test)
+CONVERTER_FILE_ID=$(echo "$CONVERTER_UPLOAD_RESP" | jq -r '.id')
+
+CONVERTER_DOC_RESP=$($SOAT_CLI ingest-document \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --file-id "$CONVERTER_FILE_ID" \
+  --path-prefix /smoke/ \
+  --async false)
+CONVERTER_DOC_ID=$(echo "$CONVERTER_DOC_RESP" | jq -r '.id')
+CONVERTER_DOC_STATUS=$(echo "$CONVERTER_DOC_RESP" | jq -r '.status')
+echo "Converter-ingested document id: $CONVERTER_DOC_ID status: $CONVERTER_DOC_STATUS"
+if [ "$CONVERTER_DOC_STATUS" != "ready" ]; then
+  echo "ERROR: converter ingestion expected status 'ready', got '$CONVERTER_DOC_STATUS'" >&2
+  echo "$CONVERTER_DOC_RESP" >&2
+  exit 1
+fi
+
+CONVERTER_DOC_CONTENT=$($SOAT_CLI get-document --document-id "$CONVERTER_DOC_ID" | jq -r '.content')
+if [ "$CONVERTER_DOC_CONTENT" != "$CONVERTER_TOOL_TEXT" ]; then
+  echo "ERROR: converter-ingested document content mismatch" >&2
+  echo "expected: $CONVERTER_TOOL_TEXT" >&2
+  echo "got: $CONVERTER_DOC_CONTENT" >&2
+  exit 1
+fi
+echo "Ingestion rule converter flow: OK"
+
+echo "--- Cleaning up ingestion rule resources ---"
+$SOAT_CLI delete-document --document-id "$CONVERTER_DOC_ID"
+$SOAT_CLI delete-ingestion-rule --ingestion-rule-id "$INGESTION_RULE_ID"
+$SOAT_CLI delete-tool --tool-id "$CONVERTER_TOOL_ID"
+$SOAT_CLI delete-tool --tool-id "$CONVERTER_HTTP_TOOL_ID"
+echo "Ingestion rule resources cleaned up."
+
+# 12g. Async conversion — a converter deferring with { status: "pending" }
+# leaves the document `processing` instead of failing, and the new
+# ingestion-callback endpoint is live (a bad token is rejected with 401).
+# The pipeline's fixed `output` always returns the deferral, regardless of
+# the wrapped http call's real response (same deterministic-stub pattern as
+# the sync converter above) — no external provider needed.
+echo "--- Creating an async (pending) converter tool chain ---"
+ASYNC_HTTP_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name ingestion-converter-async-stub-http \
+  --type http \
+  --description "Deterministic stub call used as an async ingestion-rule converter step." \
+  --parameters '{"type":"object","properties":{},"required":[]}' \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+ASYNC_HTTP_TOOL_ID=$(echo "$ASYNC_HTTP_TOOL_RESP" | jq -r '.id')
+
+ASYNC_PIPELINE_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name ingestion-converter-async-stub \
+  --type pipeline \
+  --description "Wraps the stub http call but always defers with status: pending." \
+  --pipeline "{\"steps\":[{\"id\":\"call\",\"tool_id\":\"$ASYNC_HTTP_TOOL_ID\",\"input\":{}}],\"output\":{\"status\":\"pending\"}}")
+ASYNC_TOOL_ID=$(echo "$ASYNC_PIPELINE_TOOL_RESP" | jq -r '.id')
+echo "Async converter pipeline tool id: $ASYNC_TOOL_ID"
+
+ASYNC_RULE_RESP=$($SOAT_CLI create-ingestion-rule \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --content-type-glob "image/x-smoke-test-async" \
+  --tool-id "$ASYNC_TOOL_ID" \
+  --file-delivery base64 \
+  --chunk-strategy whole)
+ASYNC_RULE_ID=$(echo "$ASYNC_RULE_RESP" | jq -r '.id')
+if [ -z "$ASYNC_RULE_ID" ] || [ "$ASYNC_RULE_ID" = "null" ]; then
+  echo "ERROR: create-ingestion-rule (async) did not return a rule id" >&2
+  echo "$ASYNC_RULE_RESP" >&2
+  exit 1
+fi
+
+echo "--- Ingesting a file that defers via the async converter ---"
+ASYNC_IMAGE_BASE64=$(printf 'fake-smoke-test-async-image-bytes' | base64 | tr -d '\n')
+ASYNC_UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --filename smoke-test-async-image.smk \
+  --content "$ASYNC_IMAGE_BASE64" \
+  --content_type image/x-smoke-test-async)
+ASYNC_FILE_ID=$(echo "$ASYNC_UPLOAD_RESP" | jq -r '.id')
+
+# Async by default (no --async false) — the request returns immediately.
+ASYNC_DOC_RESP=$($SOAT_CLI ingest-document \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --file-id "$ASYNC_FILE_ID" \
+  --path-prefix /smoke/)
+ASYNC_DOC_ID=$(echo "$ASYNC_DOC_RESP" | jq -r '.id')
+echo "Async document id: $ASYNC_DOC_ID"
+
+echo "--- Polling until the converter's deferral is recorded (status: processing) ---"
+ASYNC_ATTEMPTS=0
+ASYNC_STATUS="pending"
+while [ "$ASYNC_STATUS" != "processing" ]; do
+  ASYNC_ATTEMPTS=$((ASYNC_ATTEMPTS + 1))
+  if [ "$ASYNC_ATTEMPTS" -gt 30 ]; then
+    echo "ERROR: document never reached status 'processing' (async deferral)" >&2
+    $SOAT_CLI get-document-status --document-id "$ASYNC_DOC_ID" >&2
+    exit 1
+  fi
+  ASYNC_STATUS=$($SOAT_CLI get-document-status --document-id "$ASYNC_DOC_ID" | jq -r '.status')
+  [ "$ASYNC_STATUS" = "processing" ] || sleep 1
+done
+echo "Async document deferred to: $ASYNC_STATUS"
+
+echo "--- A bad callback token is rejected (401) ---"
+set +e
+BAD_CALLBACK_RESP=$($SOAT_CLI complete-ingestion-callback \
+  --document-id "$ASYNC_DOC_ID" \
+  --token not-a-real-token \
+  --text "should be rejected" 2>&1)
+BAD_CALLBACK_EXIT=$?
+set -e
+if [ "$BAD_CALLBACK_EXIT" -eq 0 ]; then
+  echo "ERROR: expected complete-ingestion-callback to fail for an invalid token" >&2
+  echo "$BAD_CALLBACK_RESP" >&2
+  exit 1
+fi
+if ! echo "$BAD_CALLBACK_RESP" | grep -q 'INGESTION_CALLBACK_INVALID_TOKEN'; then
+  echo "ERROR: expected INGESTION_CALLBACK_INVALID_TOKEN for a bad token" >&2
+  echo "$BAD_CALLBACK_RESP" >&2
+  exit 1
+fi
+echo "Async conversion + ingestion-callback wiring: OK"
+
+echo "--- Cleaning up async ingestion rule resources ---"
+$SOAT_CLI delete-document --document-id "$ASYNC_DOC_ID"
+$SOAT_CLI delete-ingestion-rule --ingestion-rule-id "$ASYNC_RULE_ID"
+$SOAT_CLI delete-tool --tool-id "$ASYNC_TOOL_ID"
+$SOAT_CLI delete-tool --tool-id "$ASYNC_HTTP_TOOL_ID"
+echo "Async ingestion rule resources cleaned up."
+
 # 13. Delete documents
 echo "--- Deleting documents ---"
 $SOAT_CLI delete-document --document-id "$DOC1_ID"
@@ -1040,14 +1225,17 @@ echo "Agent Tool id: $TOOL_ID"
 
 # 19b. Create a pipeline tool that chains the list-projects HTTP tool twice and
 # maps both step outputs. Exercises deterministic multi-step execution and JSON
-# Logic output mapping over { input, steps } as a single callable unit.
+# Logic output mapping over { input, steps } as a single callable unit. Step
+# `b`'s input and the pipeline `output` both nest a `var` marker inside a plain
+# object (e.g. `note.wrapped`, `echoed.container`) to exercise recursive JSON
+# Logic resolution at any depth, not just at the top level (see issue #321).
 echo "--- Creating pipeline tool ---"
 PIPELINE_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name compute-and-list \
   --type pipeline \
   --description "Runs list-projects twice and maps both step outputs" \
-  --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}},{\"id\":\"b\",\"tool_id\":\"$TOOL_ID\",\"input\":{\"note\":{\"var\":\"steps.a\"}}}],\"output\":{\"from_a\":{\"var\":\"steps.a\"},\"from_b\":{\"var\":\"steps.b\"}}}")
+  --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}},{\"id\":\"b\",\"tool_id\":\"$TOOL_ID\",\"input\":{\"note\":{\"wrapped\":{\"var\":\"steps.a\"}}}}],\"output\":{\"from_a\":{\"var\":\"steps.a\"},\"from_b\":{\"var\":\"steps.b\"},\"echoed\":{\"container\":{\"var\":\"input.tag\"}}}}")
 PIPELINE_TOOL_ID=$(echo "$PIPELINE_TOOL_RESP" | jq -r '.id')
 if [ -z "$PIPELINE_TOOL_ID" ] || [ "$PIPELINE_TOOL_ID" = "null" ]; then
   echo "FAIL: could not create pipeline tool"
@@ -1057,16 +1245,23 @@ fi
 echo "Pipeline tool id: $PIPELINE_TOOL_ID"
 
 # 19c. Call the pipeline — both steps hit GET /projects on the live server and
-# the output mapping returns from_a / from_b.
+# the output mapping returns from_a / from_b / echoed.container (the latter
+# resolved from a `var` nested inside a plain object, at both the step-input
+# and pipeline-output level).
 echo "--- Calling pipeline tool ---"
-PIPELINE_CALL_RESP=$($SOAT_CLI call-tool --tool-id "$PIPELINE_TOOL_ID" --input '{}')
+PIPELINE_CALL_RESP=$($SOAT_CLI call-tool --tool-id "$PIPELINE_TOOL_ID" --input '{"tag":"hello-nested"}')
 printf '%s\n' "$PIPELINE_CALL_RESP" | jq .
 if ! printf '%s\n' "$PIPELINE_CALL_RESP" | jq -e 'has("from_a") and has("from_b")' > /dev/null; then
   echo "FAIL: pipeline output missing mapped keys from_a/from_b"
   echo "$PIPELINE_CALL_RESP"
   exit 1
 fi
-echo "Pipeline call OK"
+if [ "$(printf '%s\n' "$PIPELINE_CALL_RESP" | jq -r '.echoed.container')" != "hello-nested" ]; then
+  echo "FAIL: pipeline output did not resolve the nested var (echoed.container)"
+  echo "$PIPELINE_CALL_RESP"
+  exit 1
+fi
+echo "Pipeline call OK (nested JSON Logic resolution verified)"
 
 # 19d. Cleanup — delete the pipeline tool (keep list-projects for the agent below)
 $SOAT_CLI delete-tool --tool-id "$PIPELINE_TOOL_ID"

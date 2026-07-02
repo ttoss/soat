@@ -12,7 +12,7 @@ A Document is backed by a [File](./files.md) and associated with a project. When
 Documents can be created in two ways:
 
 - **Plain text** (`POST /documents`) — content is supplied inline. By default it is stored as a single chunk; pass `chunk_strategy` to split it. The response is `201 Created`. See it end to end in [Orchestrate a Sonnet — Step 4 (Create the poem document)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool).
-- **File ingestion** (`POST /documents/ingest`) — an already-uploaded file is parsed and chunked **asynchronously**. The endpoint returns `202 Accepted` immediately with the new document in `status: pending`. Chunk extraction and embedding run in the background; poll `GET /documents/:id` until `status` is `ready` or `failed`. The source format is detected from the file's content type: PDFs are parsed page by page (`application/pdf`); `text/plain` and `text/markdown` files are read as a single source. How the source is chunked is controlled by `chunk_strategy`.
+- **File ingestion** (`POST /documents/ingest`) — an already-uploaded file is parsed and chunked **asynchronously**. The endpoint returns `202 Accepted` immediately with the new document in `status: pending`. Chunk extraction and embedding run in the background; poll `GET /documents/:id` until `status` is `ready` or `failed`. The source format is detected from the file's content type: PDFs are parsed page by page (`application/pdf`); `text/plain` and `text/markdown` files are read as a single source. Other content types (images, audio) — and scanned PDFs that yield no text — are handled by a converter tool when a matching [Ingestion Rule](./ingestion-rules.md) is configured. How the source is chunked is controlled by `chunk_strategy`.
 
 Documents are identified by an `id` prefixed with `doc_`. The internal database primary key is never returned.
 
@@ -124,7 +124,7 @@ If an ingestion worker dies mid-processing, a document can be left in `processin
 | `ready`      | Fully indexed; content and chunk embeddings are available for search              |
 | `failed`     | Processing encountered an error. The `metadata.failure_reason` field describes it |
 
-Common `failure_reason` values: `FILE_PARSE_FAILED` (no extractable text), `FILE_NOT_FOUND`, `INGESTION_TIMEOUT` (ingestion stalled and was auto-recovered — see [Stuck Ingestion Recovery](#stuck-ingestion-recovery)).
+Common `failure_reason` values: `FILE_PARSE_FAILED` (no extractable text and no matching converter rule), `FILE_NOT_FOUND`, `INGESTION_TIMEOUT` (ingestion stalled and was auto-recovered — see [Stuck Ingestion Recovery](#stuck-ingestion-recovery)). When conversion via an [Ingestion Rule](./ingestion-rules.md) is involved, `CONVERTER_FAILED`, `CONVERTER_OUTPUT_INVALID`, and `CONVERSION_TIMEOUT` may also appear.
 
 Embedding concurrency is bounded (default: 5 simultaneous requests) to avoid overwhelming the embedding service on large documents.
 
@@ -134,11 +134,12 @@ Embedding concurrency is bounded (default: 5 simultaneous requests) to avoid ove
 
 | Content type     | How the source text is extracted |
 | ---------------- | -------------------------------- |
-| `application/pdf`| Parsed page-by-page; blank pages are dropped |
+| `application/pdf`| Parsed page-by-page; blank pages are dropped. If no text is extracted (e.g. a scanned PDF), ingestion falls back to a converter tool when an [Ingestion Rule](./ingestion-rules.md) matches `application/pdf`. |
 | `text/plain`     | Read as a single source page     |
 | `text/markdown`  | Read as a single source page     |
+| other (`image/*`, `audio/*`, …) | Converted to text by the tool named in the matching [Ingestion Rule](./ingestion-rules.md), then chunked normally |
 
-Any other content type is rejected with `UNSUPPORTED_FILE_TYPE` (`400`).
+A content type with no built-in extractor and no matching [Ingestion Rule](./ingestion-rules.md) is rejected with `UNSUPPORTED_FILE_TYPE` (`400`).
 
 The extracted text is then split into one or more DocumentChunks according to `chunk_strategy`:
 

@@ -8,7 +8,15 @@ import { extractProjectIdsFromPolicies } from '../lib/iam';
 import { buildConsentPolicyFromScopeClaim } from '../lib/oauthConsent';
 import { createApiKeyIsAllowed, createJwtIsAllowed } from '../lib/permissions';
 
-export const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-secret';
+const requireJwtSecret = () => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is not set');
+  }
+  return secret;
+};
+
+export const JWT_SECRET = requireJwtSecret();
 
 export const BCRYPT_SALT_ROUNDS = 12;
 
@@ -310,6 +318,8 @@ const resolveJwt = async (ctx: Context, token: string) => {
   } catch {
     return;
   }
+
+  if (typeof payload.publicId !== 'string') return;
 
   const user = await ctx.db.User.findOne({
     where: { publicId: payload.publicId },

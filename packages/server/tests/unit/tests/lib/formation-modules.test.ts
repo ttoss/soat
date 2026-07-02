@@ -13,6 +13,7 @@ import {
   applyDeleteResource,
   applyUpdateResource,
 } from 'src/lib/formationsResourceHandlers';
+import * as ingestionRulesModule from 'src/lib/ingestionRules';
 import * as memoriesModule from 'src/lib/memories';
 import * as policiesModule from 'src/lib/policies';
 import * as secretsModule from 'src/lib/secrets';
@@ -69,6 +70,27 @@ const mockDeleteSession = jest.spyOn(sessionsModule, 'deleteSession');
 const mockLookupAgentInternalId = jest.spyOn(
   helpersModule,
   'lookupAgentInternalId'
+);
+const mockLookupToolInternalId = jest.spyOn(
+  helpersModule,
+  'lookupToolInternalId'
+);
+
+const mockCreateIngestionRule = jest.spyOn(
+  ingestionRulesModule,
+  'createIngestionRule'
+);
+const mockUpdateIngestionRule = jest.spyOn(
+  ingestionRulesModule,
+  'updateIngestionRule'
+);
+const mockDeleteIngestionRule = jest.spyOn(
+  ingestionRulesModule,
+  'deleteIngestionRule'
+);
+const mockGetIngestionRule = jest.spyOn(
+  ingestionRulesModule,
+  'getIngestionRule'
 );
 
 afterEach(() => {
@@ -907,6 +929,286 @@ describe('sessionsFormationModule', () => {
         physicalResourceId: 'sess_notfound',
       })
     ).rejects.toThrow('Session not found: sess_notfound');
+  });
+});
+
+describe('ingestionRulesFormationModule', () => {
+  test('creates ingestion rule with tool_id', async () => {
+    mockLookupToolInternalId.mockResolvedValueOnce(42);
+    mockCreateIngestionRule.mockResolvedValueOnce({
+      id: 'igr_1',
+    } as Awaited<ReturnType<typeof ingestionRulesModule.createIngestionRule>>);
+
+    await expect(
+      applyCreateResource({
+        resourceType: 'ingestion_rule',
+        projectId: 5,
+        resolvedProperties: {
+          content_type_glob: 'image/*',
+          tool_id: 'tol_1',
+          native_extraction: 'skip',
+          file_delivery: 'download_url',
+        },
+      })
+    ).resolves.toBe('igr_1');
+
+    expect(mockLookupToolInternalId).toHaveBeenCalledWith('tol_1');
+    expect(mockLookupAgentInternalId).not.toHaveBeenCalled();
+    expect(mockCreateIngestionRule).toHaveBeenCalledWith({
+      projectId: 5,
+      contentTypeGlob: 'image/*',
+      toolId: 42,
+      agentId: undefined,
+      action: undefined,
+      presetParameters: undefined,
+      nativeExtraction: 'skip',
+      fileDelivery: 'download_url',
+      chunkStrategy: undefined,
+      chunkSize: undefined,
+      chunkOverlap: undefined,
+      metadata: undefined,
+    });
+  });
+
+  test('creates ingestion rule with agent_id', async () => {
+    mockLookupAgentInternalId.mockResolvedValueOnce(7);
+    mockCreateIngestionRule.mockResolvedValueOnce({
+      id: 'igr_2',
+    } as Awaited<ReturnType<typeof ingestionRulesModule.createIngestionRule>>);
+
+    await expect(
+      applyCreateResource({
+        resourceType: 'ingestion_rule',
+        projectId: 5,
+        resolvedProperties: {
+          content_type_glob: 'audio/*',
+          agent_id: 'agt_1',
+        },
+      })
+    ).resolves.toBe('igr_2');
+
+    expect(mockLookupAgentInternalId).toHaveBeenCalledWith('agt_1');
+    expect(mockLookupToolInternalId).not.toHaveBeenCalled();
+    expect(mockCreateIngestionRule).toHaveBeenCalledWith({
+      projectId: 5,
+      contentTypeGlob: 'audio/*',
+      toolId: undefined,
+      agentId: 7,
+      action: undefined,
+      presetParameters: undefined,
+      nativeExtraction: undefined,
+      fileDelivery: undefined,
+      chunkStrategy: undefined,
+      chunkSize: undefined,
+      chunkOverlap: undefined,
+      metadata: undefined,
+    });
+  });
+
+  test('throws when ingestion rule create properties are not an object', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'ingestion_rule',
+        projectId: 5,
+        resolvedProperties: null as unknown as Record<string, unknown>,
+      })
+    ).rejects.toThrow('Ingestion rule `properties` must be an object');
+  });
+
+  test('throws when both tool_id and agent_id are set', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'ingestion_rule',
+        projectId: 5,
+        resolvedProperties: {
+          content_type_glob: 'image/*',
+          tool_id: 'tol_1',
+          agent_id: 'agt_1',
+        },
+      })
+    ).rejects.toThrow('tool_id and agent_id are mutually exclusive');
+  });
+
+  test('throws when neither tool_id nor agent_id is set', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'ingestion_rule',
+        projectId: 5,
+        resolvedProperties: { content_type_glob: 'image/*' },
+      })
+    ).rejects.toThrow('exactly one of tool_id or agent_id is required');
+  });
+
+  test('throws for an unknown field', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'ingestion_rule',
+        projectId: 5,
+        resolvedProperties: {
+          content_type_glob: 'image/*',
+          tool_id: 'tol_1',
+          bogus_field: 'nope',
+        },
+      })
+    ).rejects.toThrow("Unknown ingestion rule field 'bogus_field'");
+  });
+
+  test('updates ingestion rule, allowing tool_id/agent_id to be omitted', async () => {
+    mockUpdateIngestionRule.mockResolvedValueOnce({
+      id: 'igr_1',
+    } as Awaited<ReturnType<typeof ingestionRulesModule.updateIngestionRule>>);
+
+    await expect(
+      applyUpdateResource({
+        resourceType: 'ingestion_rule',
+        physicalResourceId: 'igr_1',
+        resolvedProperties: { chunk_strategy: 'whole' },
+      })
+    ).resolves.toBeUndefined();
+
+    expect(mockLookupToolInternalId).not.toHaveBeenCalled();
+    expect(mockLookupAgentInternalId).not.toHaveBeenCalled();
+    expect(mockUpdateIngestionRule).toHaveBeenCalledWith({
+      id: 'igr_1',
+      contentTypeGlob: undefined,
+      toolId: undefined,
+      agentId: undefined,
+      action: undefined,
+      presetParameters: undefined,
+      nativeExtraction: undefined,
+      fileDelivery: undefined,
+      chunkStrategy: 'whole',
+      chunkSize: undefined,
+      chunkOverlap: undefined,
+      metadata: undefined,
+    });
+  });
+
+  test('updates ingestion rule switching converter to agent_id (clears tool_id)', async () => {
+    mockLookupAgentInternalId.mockResolvedValueOnce(9);
+    mockUpdateIngestionRule.mockResolvedValueOnce({
+      id: 'igr_1',
+    } as Awaited<ReturnType<typeof ingestionRulesModule.updateIngestionRule>>);
+
+    await expect(
+      applyUpdateResource({
+        resourceType: 'ingestion_rule',
+        physicalResourceId: 'igr_1',
+        resolvedProperties: { agent_id: 'agt_2', tool_id: null },
+      })
+    ).resolves.toBeUndefined();
+
+    expect(mockLookupAgentInternalId).toHaveBeenCalledWith('agt_2');
+    expect(mockLookupToolInternalId).not.toHaveBeenCalled();
+    expect(mockUpdateIngestionRule).toHaveBeenCalledWith({
+      id: 'igr_1',
+      contentTypeGlob: undefined,
+      toolId: null,
+      agentId: 9,
+      action: undefined,
+      presetParameters: undefined,
+      nativeExtraction: undefined,
+      fileDelivery: undefined,
+      chunkStrategy: undefined,
+      chunkSize: undefined,
+      chunkOverlap: undefined,
+      metadata: undefined,
+    });
+  });
+
+  test('throws when ingestion rule update sets both tool_id and agent_id', async () => {
+    await expect(
+      applyUpdateResource({
+        resourceType: 'ingestion_rule',
+        physicalResourceId: 'igr_1',
+        resolvedProperties: { tool_id: 'tol_1', agent_id: 'agt_1' },
+      })
+    ).rejects.toThrow('tool_id and agent_id are mutually exclusive');
+  });
+
+  test('throws when ingestion rule update properties are not an object', async () => {
+    await expect(
+      applyUpdateResource({
+        resourceType: 'ingestion_rule',
+        physicalResourceId: 'igr_1',
+        resolvedProperties: null as unknown as Record<string, unknown>,
+      })
+    ).rejects.toThrow('Ingestion rule `properties` must be an object');
+  });
+
+  test('deletes ingestion rule', async () => {
+    mockDeleteIngestionRule.mockResolvedValueOnce(
+      undefined as unknown as Awaited<
+        ReturnType<typeof ingestionRulesModule.deleteIngestionRule>
+      >
+    );
+
+    await expect(
+      applyDeleteResource({
+        resourceType: 'ingestion_rule',
+        physicalResourceId: 'igr_1',
+      })
+    ).resolves.toBeUndefined();
+
+    expect(mockDeleteIngestionRule).toHaveBeenCalledWith({ id: 'igr_1' });
+  });
+});
+
+// ── ingestionRulesFormationModule.read ────────────────────────────────────
+
+describe('ingestionRulesFormationModule - read', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('returns snake_case properties matching live ingestion rule state', async () => {
+    mockGetIngestionRule.mockResolvedValueOnce({
+      id: 'igr_1',
+      projectId: 'prj_1',
+      contentTypeGlob: 'image/*',
+      toolId: 'tol_1',
+      agentId: null,
+      action: null,
+      presetParameters: null,
+      nativeExtraction: 'first',
+      fileDelivery: 'base64',
+      chunkStrategy: 'whole',
+      chunkSize: null,
+      chunkOverlap: null,
+      metadata: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as unknown as Awaited<
+      ReturnType<typeof ingestionRulesModule.getIngestionRule>
+    >);
+
+    const module = getFormationModule({ resourceType: 'ingestion_rule' });
+    expect(module?.read).toBeDefined();
+
+    const result = await module!.read!({ physicalResourceId: 'igr_1' });
+
+    expect(result).toEqual({
+      content_type_glob: 'image/*',
+      tool_id: 'tol_1',
+      agent_id: null,
+      action: null,
+      preset_parameters: null,
+      native_extraction: 'first',
+      file_delivery: 'base64',
+      chunk_strategy: 'whole',
+      chunk_size: null,
+      chunk_overlap: null,
+      metadata: null,
+    });
+  });
+
+  test('returns null when ingestion rule is not found', async () => {
+    mockGetIngestionRule.mockRejectedValueOnce(new Error('RESOURCE_NOT_FOUND'));
+
+    const module = getFormationModule({ resourceType: 'ingestion_rule' });
+    const result = await module!.read!({ physicalResourceId: 'igr_missing' });
+
+    expect(result).toBeNull();
   });
 });
 

@@ -162,9 +162,9 @@ Each `inputMapping` value is evaluated as [JSON Logic](https://jsonlogic.com) ag
 
 | Value | Behaviour |
 | ----- | --------- |
-| String, number, boolean, array, multi-key object | Passed through as a literal |
-| `{"var": "key"}` | Resolved from state — `state.key` (a missing key yields `null`) |
-| Any other single-key JSON Logic object | Evaluated against state (`cat`, `>`, `if`, arithmetic, …) |
+| String, number, boolean | Passed through as a literal |
+| A single-key object whose key names a JSON Logic operator (`var`, `cat`, `if`, `>`, arithmetic, …) | Evaluated against state |
+| Any other object or array | Passed through as a literal, but recursed into — a JSON Logic marker nested inside it (at any depth) is still resolved |
 
 ```json
 "input_mapping": {
@@ -172,11 +172,14 @@ Each `inputMapping` value is evaluated as [JSON Logic](https://jsonlogic.com) ag
   "threshold": 0.8,
   "documentId": { "var": "temaDocumentId" },
   "label": { "cat": ["Tema: ", { "var": "titulo" }] },
-  "isLong": { ">": [{ "var": "wordCount" }, 500] }
+  "isLong": { ">": [{ "var": "wordCount" }, 500] },
+  "data": { "title": { "var": "titulo" }, "theme": { "var": "tema" } }
 }
 ```
 
 Values passed to [`start-orchestration-run`](#examples) via `input` become the initial state, so a node can reference them directly with `{"var": "key"}`.
+
+To pass a literal object that happens to look like a JSON Logic expression — e.g. the JSON Logic object `{"var": "x"}` itself, as data rather than an expression to evaluate — wrap it in `preserve`, which returns its argument unevaluated: `{"preserve": {"var": "x"}}`.
 
 > **Breaking change:** `inputMapping` values are no longer `state.<key>` path strings. A bare string is now a literal; use `{"var": "key"}` to read from state.
 
