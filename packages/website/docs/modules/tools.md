@@ -18,6 +18,7 @@ Five tool types are supported: `http` (calls an external HTTP endpoint), `client
 - [Agent SOAT Tools and Preset Parameters - Step 6 (Create soat tools)](/docs/tutorials/agent-soat-tools#step-6--create-soat-tools)
 - [Orchestrate a Sonnet - Step 4 (Create the fixed write tool)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool)
 - [Multi-Agent Sonnet with Nested Agent Calls - Step 5 (Create fixed SOAT tools)](/docs/tutorials/multi-agent-orchestration#step-5--create-fixed-soat-tools-for-stanza-agents)
+- [Agent over a Library of PDFs - Step 12 (Give the agent a knowledge tool)](/docs/tutorials/agent-with-pdfs#step-12--give-the-agent-a-knowledge-tool-plan-d)
 
 ## Data Model
 
