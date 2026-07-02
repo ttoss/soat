@@ -1,5 +1,6 @@
 import {
   applyInputMapping,
+  applyOutputMapping,
   evaluateLogic,
   isLogic,
 } from 'src/lib/jsonLogicMapping';
@@ -199,6 +200,44 @@ describe('jsonLogicMapping', () => {
         { input: { title: 'ignored' } }
       );
       expect(result).toEqual({ data: { raw: { var: 'input.title' } } });
+    });
+  });
+
+  describe('applyOutputMapping', () => {
+    test('returns empty object when outputMapping is undefined', () => {
+      expect(applyOutputMapping(undefined, {})).toEqual({});
+    });
+
+    test('evaluates a bare top-level var expression to a scalar', () => {
+      const result = applyOutputMapping(
+        { var: 'steps.call.text' },
+        { steps: { call: { text: 'Hi!' } } }
+      );
+      expect(result).toBe('Hi!');
+    });
+
+    test('evaluates a bare top-level cat expression to a scalar', () => {
+      const result = applyOutputMapping(
+        { cat: [{ var: 'steps.call.text' }] },
+        { steps: { call: { text: 'Hi!' } } }
+      );
+      expect(result).toBe('Hi!');
+    });
+
+    test('still resolves a genuine object mapping with nested expressions', () => {
+      const result = applyOutputMapping(
+        { saved_id: { var: 'steps.persist.id' } },
+        { steps: { persist: { id: 'doc_1' } } }
+      );
+      expect(result).toEqual({ saved_id: 'doc_1' });
+    });
+
+    test('mixes literals and var expressions in an object mapping', () => {
+      const result = applyOutputMapping(
+        { total: { var: 'steps.a.sum' }, echo: { var: 'input.n' } },
+        { steps: { a: { sum: 100 } }, input: { n: 7 } }
+      );
+      expect(result).toEqual({ total: 100, echo: 7 });
     });
   });
 });

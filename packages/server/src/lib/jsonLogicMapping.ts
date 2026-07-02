@@ -74,3 +74,18 @@ export const applyInputMapping = (
   }
   return result;
 };
+
+/**
+ * Like {@link applyInputMapping}, but for mappings that may themselves be a
+ * single JSON Logic expression rather than an object of keyed expressions —
+ * e.g. a pipeline `output: { "var": "steps.call.text" }` that should resolve
+ * to a bare scalar. Checks `isLogic` on the mapping as a whole first via
+ * {@link evaluateLogic}; falls back to the per-key object behavior otherwise.
+ */
+export const applyOutputMapping = (
+  outputMapping: Record<string, unknown> | undefined,
+  context: Record<string, unknown>
+): unknown => {
+  if (!outputMapping) return {};
+  return evaluateLogic(outputMapping, context);
+};
