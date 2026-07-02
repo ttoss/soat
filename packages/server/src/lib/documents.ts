@@ -5,8 +5,8 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { chunkPages, type ChunkStrategy, persistChunks } from './chunking';
-import { recoverStaleDocument } from './documentIngestion';
 import { emitEvent } from './eventBus';
+import { recoverStaleDocument } from './ingestionCallback';
 import { mapDocument } from './knowledge';
 import { registerResourceFieldMap } from './policyCompiler';
 
@@ -14,6 +14,7 @@ export {
   enqueueDocumentIngestion,
   reingestDocument,
 } from './documentIngestion';
+export { completeIngestionCallback } from './ingestionCallback';
 export type { DocumentQueryConfig, QueryDocumentResult } from './knowledge';
 export { resolveDocumentSearch } from './knowledge';
 

@@ -6,6 +6,7 @@ import { DomainError } from '../errors';
 import { createGeneration } from './agents';
 import type { SourcePage } from './chunking';
 import { buildFileDownloadUrl } from './fileDownloadToken';
+import { buildIngestionCallbackBlock } from './ingestionCallbackToken';
 import type { MappedIngestionRule } from './ingestionRules';
 import { callTool } from './tools';
 
@@ -23,6 +24,24 @@ export type ConverterFile = {
   storagePath: string;
 };
 
+/**
+ * The outcome of parsing a converter's raw output: either the extracted
+ * pages, or a `{ status: "pending" }` deferral (Phase 5 — the converter will
+ * deliver the result later via the ingestion-callback endpoint).
+ */
+export type ConverterOutcome =
+  | { status: 'ready'; pages: SourcePage[] }
+  | { status: 'pending' };
+
+/**
+ * A tool converter's `{ status: "pending" }` deferral, enriched with the
+ * bookkeeping the ingestion pipeline persists to `Document.metadata` while it
+ * awaits the callback.
+ */
+export type InvokeConverterResult =
+  | { status: 'ready'; pages: SourcePage[] }
+  | { status: 'pending'; converterId: string; submittedAt: string };
+
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
@@ -30,41 +49,45 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
 /**
  * Normalizes a converter's output into source pages. Accepts the three shapes
  * of the converter contract: a bare string (one page), `{ pages: [...] }`, or
- * `{ status: "pending" }` (async — not supported without the callback path).
+ * `{ status: "pending" }` (async — the caller decides whether pending is
+ * acceptable in its context; see invokeToolConverter/invokeAgentConverter).
  */
-const parseConverterOutput = (raw: unknown): SourcePage[] => {
+export const parseConverterOutput = (raw: unknown): ConverterOutcome => {
   if (typeof raw === 'string') {
     const text = raw.trim();
-    return text.length > 0 ? [{ text, pageNumber: 1 }] : [];
+    return {
+      status: 'ready',
+      pages: text.length > 0 ? [{ text, pageNumber: 1 }] : [],
+    };
   }
 
   if (isRecord(raw)) {
     if (raw['status'] === 'pending') {
-      throw new DomainError(
-        'CONVERTER_FAILED',
-        'Converter returned an async deferral ({ status: "pending" }), but the ingestion-callback path is not implemented.'
-      );
+      return { status: 'pending' };
     }
     const pages = raw['pages'];
     if (Array.isArray(pages)) {
-      return pages
-        .map((page, index) => {
-          const record = isRecord(page) ? page : {};
-          const text = String(record['text'] ?? '').trim();
-          const rawPageNumber =
-            record['page_number'] ?? record['pageNumber'] ?? index + 1;
-          const pageNumber = Number(rawPageNumber);
-          if (!Number.isFinite(pageNumber)) {
-            throw new DomainError(
-              'CONVERTER_OUTPUT_INVALID',
-              `Converter page ${index} has a non-numeric page_number: ${JSON.stringify(rawPageNumber)}.`
-            );
-          }
-          return { text, pageNumber };
-        })
-        .filter((page) => {
-          return page.text.length > 0;
-        });
+      return {
+        status: 'ready',
+        pages: pages
+          .map((page, index) => {
+            const record = isRecord(page) ? page : {};
+            const text = String(record['text'] ?? '').trim();
+            const rawPageNumber =
+              record['page_number'] ?? record['pageNumber'] ?? index + 1;
+            const pageNumber = Number(rawPageNumber);
+            if (!Number.isFinite(pageNumber)) {
+              throw new DomainError(
+                'CONVERTER_OUTPUT_INVALID',
+                `Converter page ${index} has a non-numeric page_number: ${JSON.stringify(rawPageNumber)}.`
+              );
+            }
+            return { text, pageNumber };
+          })
+          .filter((page) => {
+            return page.text.length > 0;
+          }),
+      };
     }
   }
 
@@ -77,6 +100,8 @@ const parseConverterOutput = (raw: unknown): SourcePage[] => {
 const buildToolConverterInput = (args: {
   file: ConverterFile;
   rule: MappedIngestionRule;
+  documentId: string;
+  attemptId: string;
 }): Record<string, unknown> => {
   const fileInput: Record<string, unknown> = {
     id: args.file.publicId,
@@ -95,16 +120,33 @@ const buildToolConverterInput = (args: {
       .toString('base64');
   }
 
-  // `preset_parameters` merge at the top level; `file` is reserved and wins.
-  return { ...(args.rule.presetParameters ?? {}), file: fileInput };
+  const input: Record<string, unknown> = {
+    // `preset_parameters` merge at the top level; `file`/`callback` are
+    // reserved and win (enforced at rule creation — see
+    // ingestionRuleValidation.ts).
+    ...(args.rule.presetParameters ?? {}),
+    file: fileInput,
+  };
+
+  const callback = buildIngestionCallbackBlock({
+    documentId: args.documentId,
+    attemptId: args.attemptId,
+  });
+  if (callback) {
+    input['callback'] = callback;
+  }
+
+  return input;
 };
 
 const invokeToolConverter = async (args: {
   file: ConverterFile;
   rule: MappedIngestionRule;
   projectId: number;
-}): Promise<SourcePage[]> => {
-  const input = buildToolConverterInput({ file: args.file, rule: args.rule });
+  documentId: string;
+  attemptId: string;
+}): Promise<InvokeConverterResult> => {
+  const input = buildToolConverterInput(args);
   let raw: unknown;
   try {
     raw = await callTool({
@@ -120,7 +162,22 @@ const invokeToolConverter = async (args: {
       `Converter tool '${args.rule.toolId}' failed: ${message}`
     );
   }
-  return parseConverterOutput(raw);
+
+  const outcome = parseConverterOutput(raw);
+  if (outcome.status === 'pending') {
+    log(
+      'invokeToolConverter: deferred (pending) toolId=%s documentId=%s attemptId=%s',
+      args.rule.toolId,
+      args.documentId,
+      args.attemptId
+    );
+    return {
+      status: 'pending',
+      converterId: args.rule.toolId!,
+      submittedAt: new Date().toISOString(),
+    };
+  }
+  return outcome;
 };
 
 const buildAgentContentParts = (args: {
@@ -139,7 +196,7 @@ const invokeAgentConverter = async (args: {
   file: ConverterFile;
   rule: MappedIngestionRule;
   projectId: number;
-}): Promise<SourcePage[]> => {
+}): Promise<InvokeConverterResult> => {
   let result: Awaited<ReturnType<typeof createGeneration>>;
   try {
     result = await createGeneration({
@@ -168,19 +225,34 @@ const invokeAgentConverter = async (args: {
     );
   }
 
-  return parseConverterOutput(result.output.content);
+  // Agent converters are always awaited inline — there is no callback path
+  // for them, so a `{ status: "pending" }`-shaped string is treated as a
+  // failure rather than a deferral. Structurally unreachable today (LLM
+  // output is always plain text), but guards intent if that ever changes.
+  const outcome = parseConverterOutput(result.output.content);
+  if (outcome.status === 'pending') {
+    throw new DomainError(
+      'CONVERTER_FAILED',
+      `Converter agent '${args.rule.agentId}' returned an async deferral, which agent converters do not support.`
+    );
+  }
+  return outcome;
 };
 
 /**
- * Runs the converter referenced by an ingestion rule against a file and returns
- * the extracted source pages. Dispatches to the agent or tool path per the
- * rule's `agentId`/`toolId` (exactly one is set — enforced at rule creation).
+ * Runs the converter referenced by an ingestion rule against a file and
+ * returns either the extracted source pages or a `{ status: 'pending' }`
+ * deferral (tool converters only — Phase 5). Dispatches to the agent or tool
+ * path per the rule's `agentId`/`toolId` (exactly one is set — enforced at
+ * rule creation).
  */
 export const invokeConverter = async (args: {
   file: ConverterFile;
   rule: MappedIngestionRule;
   projectId: number;
-}): Promise<SourcePage[]> => {
+  documentId: string;
+  attemptId: string;
+}): Promise<InvokeConverterResult> => {
   log(
     'invokeConverter: file=%s glob=%s toolId=%s agentId=%s delivery=%s',
     args.file.publicId,

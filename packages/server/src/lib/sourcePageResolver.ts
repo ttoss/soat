@@ -18,10 +18,14 @@ export const SUPPORTED_CONTENT_TYPES = [
 
 type IngestedFile = InstanceType<(typeof db)['File']>;
 
-export type ResolvedSourcePages = {
-  pages: SourcePage[];
-  rule: MappedIngestionRule | null;
-};
+export type ResolvedSourcePages =
+  | { status: 'ready'; pages: SourcePage[]; rule: MappedIngestionRule | null }
+  | {
+      status: 'pending';
+      rule: MappedIngestionRule;
+      converterId: string;
+      submittedAt: string;
+    };
 
 const extractNativePages = async (
   file: IngestedFile
@@ -44,11 +48,29 @@ const extractNativePages = async (
   return text.length > 0 ? [{ text, pageNumber: 1 }] : [];
 };
 
-const convertWithRule = (
-  file: IngestedFile,
-  rule: MappedIngestionRule
-): Promise<SourcePage[]> => {
-  return invokeConverter({ file, rule, projectId: file.projectId });
+const convertWithRule = async (args: {
+  file: IngestedFile;
+  rule: MappedIngestionRule;
+  documentId: string;
+  attemptId: string;
+}): Promise<ResolvedSourcePages> => {
+  const outcome = await invokeConverter({
+    file: args.file,
+    rule: args.rule,
+    projectId: args.file.projectId,
+    documentId: args.documentId,
+    attemptId: args.attemptId,
+  });
+
+  if (outcome.status === 'pending') {
+    return {
+      status: 'pending',
+      rule: args.rule,
+      converterId: outcome.converterId,
+      submittedAt: outcome.submittedAt,
+    };
+  }
+  return { status: 'ready', pages: outcome.pages, rule: args.rule };
 };
 
 /**
@@ -59,25 +81,32 @@ const convertWithRule = (
  */
 const resolveNativeSourcePages = async (
   file: IngestedFile,
-  rule: MappedIngestionRule | null
+  rule: MappedIngestionRule | null,
+  documentId: string,
+  attemptId: string
 ): Promise<ResolvedSourcePages> => {
   if (rule && rule.nativeExtraction === 'skip') {
-    return { pages: await convertWithRule(file, rule), rule };
+    return convertWithRule({ file, rule, documentId, attemptId });
   }
   const pages = await extractNativePages(file);
-  if (pages.length > 0) return { pages, rule: null };
-  if (rule) return { pages: await convertWithRule(file, rule), rule };
-  return { pages: [], rule: null };
+  if (pages.length > 0) return { status: 'ready', pages, rule: null };
+  if (rule) return convertWithRule({ file, rule, documentId, attemptId });
+  return { status: 'ready', pages: [], rule: null };
 };
 
 /**
  * Produces the source pages for a file, routing through an ingestion-rule
  * converter when needed (non-native types, scanned-PDF fallback, or a rule
  * with `native_extraction: skip`). Returns the matched rule when a converter
- * ran, so the caller can apply the rule's default chunk config.
+ * ran, so the caller can apply the rule's default chunk config. A tool
+ * converter may defer with `status: 'pending'` (Phase 5) instead of returning
+ * pages immediately — the caller is responsible for persisting that state and
+ * finishing the document later via the ingestion-callback endpoint.
  */
 export const resolveSourcePages = async (
-  file: IngestedFile
+  file: IngestedFile,
+  documentId: string,
+  attemptId: string
 ): Promise<ResolvedSourcePages> => {
   const contentType = file.contentType ?? '';
   const rule = await resolveIngestionRule({
@@ -86,10 +115,10 @@ export const resolveSourcePages = async (
   });
 
   if (SUPPORTED_CONTENT_TYPES.includes(contentType)) {
-    return resolveNativeSourcePages(file, rule);
+    return resolveNativeSourcePages(file, rule, documentId, attemptId);
   }
 
-  if (rule) return { pages: await convertWithRule(file, rule), rule };
+  if (rule) return convertWithRule({ file, rule, documentId, attemptId });
 
   throw new DomainError(
     'UNSUPPORTED_FILE_TYPE',

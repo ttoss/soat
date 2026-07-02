@@ -1,16 +1,28 @@
+import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { chunkPages, type ChunkStrategy, persistChunks } from './chunking';
-import { emitEvent } from './eventBus';
+import type { ChunkStrategy } from './chunking';
+import {
+  type ChunkConfigInput,
+  fetchIngestedDocById,
+  fileProjectInclude,
+  finalizeIngestedPages,
+  type IngestedDoc,
+  resolveChunkConfig,
+} from './documentIngestionCore';
 import { resolveIngestionRule } from './ingestionRules';
 import { mapDocument } from './knowledge';
 import {
-  type ResolvedSourcePages,
   resolveSourcePages,
   SUPPORTED_CONTENT_TYPES,
 } from './sourcePageResolver';
+
+export {
+  finalizeIngestedPages,
+  parseDocMetadata,
+} from './documentIngestionCore';
 
 const log = createDebug('soat:documents');
 
@@ -19,12 +31,6 @@ const log = createDebug('soat:documents');
 // behind most proxies. Configurable via SYNC_INGESTION_MAX_BYTES.
 const SYNC_INGESTION_DEFAULT_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
-// A document left in `pending`/`processing` with no progress for longer than
-// this is considered abandoned (e.g. the process crashed mid-ingestion) and is
-// marked `failed` on the next read so callers can recover. Configurable via
-// INGESTION_STALL_TIMEOUT_MS.
-const INGESTION_STALL_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-
 const getSyncIngestionMaxBytes = (): number => {
   const raw = process.env.SYNC_INGESTION_MAX_BYTES;
   if (!raw) return SYNC_INGESTION_DEFAULT_MAX_BYTES;
@@ -32,15 +38,6 @@ const getSyncIngestionMaxBytes = (): number => {
   return Number.isFinite(parsed) && parsed > 0
     ? parsed
     : SYNC_INGESTION_DEFAULT_MAX_BYTES;
-};
-
-const getStallTimeoutMs = (): number => {
-  const raw = process.env.INGESTION_STALL_TIMEOUT_MS;
-  if (!raw) return INGESTION_STALL_DEFAULT_TIMEOUT_MS;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed >= 0
-    ? parsed
-    : INGESTION_STALL_DEFAULT_TIMEOUT_MS;
 };
 
 /**
@@ -66,30 +63,6 @@ const assertSyncIngestible = (
       `File is ${size} bytes, which exceeds the ${max}-byte synchronous ingestion limit. Retry in async mode (omit ?async=false) and poll GET /documents/{id}/status.`
     );
   }
-};
-
-type IngestedDoc = InstanceType<(typeof db)['Document']> & {
-  file?: InstanceType<(typeof db)['File']> & {
-    project?: InstanceType<(typeof db)['Project']>;
-  };
-};
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const fileProjectInclude = (): any[] => {
-  return [
-    {
-      model: db.File,
-      as: 'file',
-      include: [{ model: db.Project, as: 'project' }],
-    },
-  ];
-};
-
-const fetchIngestedDocById = (id: number): Promise<IngestedDoc | null> => {
-  return db.Document.findOne({
-    where: { id },
-    include: fileProjectInclude(),
-  }) as Promise<IngestedDoc | null>;
 };
 
 /**
@@ -137,70 +110,16 @@ const loadIngestibleFile = async (fileId: string) => {
   return file;
 };
 
-type IngestionPipelineArgs = {
+type IngestionPipelineArgs = ChunkConfigInput & {
   doc: InstanceType<(typeof db)['Document']>;
+  attemptId: string;
   fileId: string;
   docPath: string;
-  chunkStrategy?: ChunkStrategy;
-  chunkSize?: number;
-  chunkOverlap?: number;
-};
-
-/**
- * Persist chunks while keeping the document's progress metadata current.
- * Records the totals up front (so the status endpoint has a denominator) and
- * periodically rewrites `indexed_chunks`, which also bumps `updatedAt` to keep
- * a long-running ingestion from looking stalled (issue #4).
- */
-const persistChunksWithProgress = async (args: {
-  doc: InstanceType<(typeof db)['Document']>;
-  docId: number;
-  fileId: string;
-  totalPages: number;
-  chunks: { content: string; chunkIndex: number; pageNumber?: number }[];
-}): Promise<void> => {
-  const writeProgress = (indexed: number) => {
-    return args.doc.update({
-      metadata: JSON.stringify({
-        source_file_id: args.fileId,
-        total_pages: args.totalPages,
-        total_chunks: args.chunks.length,
-        indexed_chunks: indexed,
-      }),
-    });
-  };
-
-  await writeProgress(0);
-
-  let lastTouch = Date.now();
-  await persistChunks({
-    documentId: args.docId,
-    chunks: args.chunks,
-    onProgress: async (indexed) => {
-      const now = Date.now();
-      if (now - lastTouch < 10_000 && indexed < args.chunks.length) return;
-      lastTouch = now;
-      await writeProgress(indexed);
-    },
-  });
-};
-
-// Per-request chunk config wins; otherwise fall back to the converter rule's
-// defaults, then to the pipeline default.
-const resolveChunkConfig = (
-  args: IngestionPipelineArgs,
-  rule: ResolvedSourcePages['rule']
-): { strategy: ChunkStrategy; chunkSize?: number; chunkOverlap?: number } => {
-  const strategy = args.chunkStrategy ?? rule?.chunkStrategy ?? 'page';
-  return {
-    strategy: strategy as ChunkStrategy,
-    chunkSize: args.chunkSize ?? rule?.chunkSize ?? undefined,
-    chunkOverlap: args.chunkOverlap ?? rule?.chunkOverlap ?? undefined,
-  };
+  isAsync: boolean;
 };
 
 const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
-  const { doc } = args;
+  const { doc, attemptId } = args;
   const docId = doc.id as number;
 
   const file = (await db.File.findByPk(doc.fileId, {
@@ -222,59 +141,53 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
     return;
   }
 
-  const { pages, rule } = await resolveSourcePages(file);
+  const resolved = await resolveSourcePages(file, doc.publicId, attemptId);
 
-  if (pages.length === 0) {
+  if (resolved.status === 'pending') {
+    if (!args.isAsync) {
+      // Synchronous ingestion (?async=false) cannot wait for a callback that
+      // may arrive arbitrarily later — the converter must respond inline.
+      throw new DomainError(
+        'CONVERTER_FAILED',
+        `Converter '${resolved.converterId}' deferred with { status: "pending" }, which synchronous ingestion (?async=false) cannot wait for. Retry without ?async=false.`
+      );
+    }
+
+    const chunkConfig = resolveChunkConfig(args, resolved.rule);
     await doc.update({
-      status: 'failed',
+      conversionAttemptId: attemptId,
       metadata: JSON.stringify({
         source_file_id: args.fileId,
-        failure_reason: 'FILE_PARSE_FAILED',
+        doc_path: args.docPath,
+        conversion: {
+          converter_id: resolved.converterId,
+          attempt_id: attemptId,
+          submitted_at: resolved.submittedAt,
+          chunk_strategy: chunkConfig.strategy,
+          chunk_size: chunkConfig.chunkSize ?? null,
+          chunk_overlap: chunkConfig.chunkOverlap ?? null,
+        },
       }),
     });
-    log('runIngestionPipeline: no extractable text docId=%d', docId);
+    log(
+      'runIngestionPipeline: awaiting async conversion docId=%d attemptId=%s',
+      docId,
+      attemptId
+    );
     return;
   }
 
-  const chunks = chunkPages({ pages, ...resolveChunkConfig(args, rule) });
-
-  await persistChunksWithProgress({
+  await finalizeIngestedPages({
     doc,
     docId,
     fileId: args.fileId,
-    totalPages: pages.length,
-    chunks,
+    docPath: args.docPath,
+    pages: resolved.pages,
+    rule: resolved.rule,
+    chunkStrategy: args.chunkStrategy,
+    chunkSize: args.chunkSize,
+    chunkOverlap: args.chunkOverlap,
   });
-
-  await file.update({ path: args.docPath });
-  await doc.update({
-    status: 'ready',
-    metadata: JSON.stringify({
-      source_file_id: args.fileId,
-      total_pages: pages.length,
-      total_chunks: chunks.length,
-      chunk_count: chunks.length,
-    }),
-  });
-
-  log('runIngestionPipeline: ready docId=%d chunks=%d', docId, chunks.length);
-
-  const fetched = await fetchIngestedDocById(docId);
-  const project = fetched?.file?.project;
-  if (fetched && project) {
-    emitEvent({
-      type: 'documents.created',
-      projectId: project.id,
-      projectPublicId: project.publicId,
-      resourceType: 'document',
-      resourceId: fetched.publicId,
-      data: {
-        ...(mapDocument(fetched) as unknown as Record<string, unknown>),
-        chunkCount: chunks.length,
-      },
-      timestamp: new Date().toISOString(),
-    });
-  }
 };
 
 const processDocumentIngestion = async (args: {
@@ -284,6 +197,7 @@ const processDocumentIngestion = async (args: {
   chunkStrategy?: ChunkStrategy;
   chunkSize?: number;
   chunkOverlap?: number;
+  isAsync: boolean;
 }): Promise<void> => {
   log('processDocumentIngestion: docId=%d fileId=%s', args.docId, args.fileId);
 
@@ -292,8 +206,10 @@ const processDocumentIngestion = async (args: {
 
   await doc.update({ status: 'processing' });
 
+  const attemptId = generatePublicId(PUBLIC_ID_PREFIXES.ingestionAttempt);
+
   try {
-    await runIngestionPipeline({ doc, ...args });
+    await runIngestionPipeline({ doc, attemptId, ...args });
   } catch (error) {
     log(
       'processDocumentIngestion: failed docId=%d error=%o',
@@ -303,6 +219,7 @@ const processDocumentIngestion = async (args: {
     try {
       await doc.update({
         status: 'failed',
+        conversionAttemptId: null,
         metadata: JSON.stringify({
           source_file_id: args.fileId,
           failure_reason: describeError(error),
@@ -368,6 +285,7 @@ export const enqueueDocumentIngestion = async (args: {
     chunkStrategy: args.chunkStrategy,
     chunkSize: args.chunkSize,
     chunkOverlap: args.chunkOverlap,
+    isAsync: runAsync,
   };
 
   if (runAsync) {
@@ -380,47 +298,6 @@ export const enqueueDocumentIngestion = async (args: {
 
   const fetched = await fetchIngestedDocById(docId);
   return mapDocument(fetched!);
-};
-
-/**
- * True when a document is in a non-terminal ingestion state (`pending` or
- * `processing`) but has not been touched within the stall timeout — i.e. the
- * ingestion was abandoned (issue #4).
- */
-export const isIngestionStale = (
-  doc: InstanceType<(typeof db)['Document']>
-): boolean => {
-  if (doc.status !== 'pending' && doc.status !== 'processing') return false;
-  const updatedAt = doc.updatedAt ? new Date(doc.updatedAt).getTime() : 0;
-  return Date.now() - updatedAt > getStallTimeoutMs();
-};
-
-/**
- * If a document's ingestion has stalled, transition it to `failed` with a
- * `INGESTION_TIMEOUT` reason so callers get a terminal state to act on instead
- * of polling forever. Mutates `doc` in place and returns whether it recovered.
- */
-export const recoverStaleDocument = async (
-  doc: InstanceType<(typeof db)['Document']>
-): Promise<boolean> => {
-  if (!isIngestionStale(doc)) return false;
-
-  let meta: Record<string, unknown> = {};
-  try {
-    meta = doc.metadata ? JSON.parse(doc.metadata) : {};
-  } catch {
-    meta = {};
-  }
-
-  await doc.update({
-    status: 'failed',
-    metadata: JSON.stringify({ ...meta, failure_reason: 'INGESTION_TIMEOUT' }),
-  });
-  log(
-    'recoverStaleDocument: marked stalled ingestion failed id=%s',
-    doc.publicId
-  );
-  return true;
 };
 
 const ensureReingestibleFile = async (args: {
@@ -485,6 +362,7 @@ export const reingestDocument = async (args: {
   await db.DocumentChunk.destroy({ where: { documentId: docId } });
   await doc.update({
     status: 'pending',
+    conversionAttemptId: null,
     metadata: JSON.stringify({ source_file_id: file.publicId }),
   });
 
@@ -496,6 +374,7 @@ export const reingestDocument = async (args: {
     chunkStrategy: args.chunkStrategy,
     chunkSize: args.chunkSize,
     chunkOverlap: args.chunkOverlap,
+    isAsync: runAsync,
   };
 
   if (runAsync) {

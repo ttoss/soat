@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 
+import { db } from 'src/db';
 import {
   buildFileDownloadUrl,
   signFileDownloadToken,
@@ -847,6 +848,204 @@ describe('IngestionRules', () => {
       expect(res.body.status).toBe('ready');
       // The converter ran (native extraction was bypassed).
       expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+    });
+
+    describe('async conversion via ingestion-callback (Phase 5)', () => {
+      const waitForConversionAttempt = async (
+        docId: string,
+        timeout = 5000
+      ): Promise<string> => {
+        const deadline = Date.now() + timeout;
+        while (Date.now() < deadline) {
+          const row = await db.Document.findOne({ where: { publicId: docId } });
+          if (row?.conversionAttemptId) return row.conversionAttemptId;
+          await new Promise((r) => {
+            return setTimeout(r, 20);
+          });
+        }
+        throw new Error(
+          `Timed out waiting for document ${docId} to record a conversion attempt`
+        );
+      };
+
+      const waitForTerminalStatus = async (
+        docId: string,
+        timeout = 5000
+      ): Promise<Record<string, unknown>> => {
+        const deadline = Date.now() + timeout;
+        while (Date.now() < deadline) {
+          const res = await authenticatedTestClient(adminToken).get(
+            `/api/v1/documents/${docId}/status`
+          );
+          if (res.body.status === 'ready' || res.body.status === 'failed') {
+            return res.body as Record<string, unknown>;
+          }
+          await new Promise((r) => {
+            return setTimeout(r, 20);
+          });
+        }
+        throw new Error(`Timed out waiting for document ${docId} to finish`);
+      };
+
+      const ingestPendingAudio = async (filename: string) => {
+        callToolSpy = jest
+          .spyOn(toolsModule, 'callTool')
+          .mockResolvedValue({ status: 'pending' });
+
+        const fileId = await uploadFile({
+          buffer: Buffer.from('async-bytes'),
+          filename,
+          contentType: 'audio/mpeg',
+        });
+        const ingestRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/documents/ingest')
+          .send({ project_id: projectId, file_id: fileId });
+        expect(ingestRes.status).toBe(202);
+
+        const docId = ingestRes.body.id as string;
+        await waitForConversionAttempt(docId);
+        return docId;
+      };
+
+      const latestCallbackToken = (): string => {
+        const calls = callToolSpy.mock.calls;
+        const input = calls[calls.length - 1][0].input as {
+          callback?: { url: string; token: string };
+        };
+        expect(input.callback?.url).toContain('/ingestion-callback?token=');
+        return input.callback!.token;
+      };
+
+      test('a pending tool converter leaves the document processing; a callback completes it and it becomes searchable', async () => {
+        const docId = await ingestPendingAudio('callback-success.mp3');
+
+        const processingRes = await authenticatedTestClient(adminToken).get(
+          `/api/v1/documents/${docId}/status`
+        );
+        expect(processingRes.body.status).toBe('processing');
+
+        const callbackRes = await testClient
+          .post(
+            `/api/v1/documents/${docId}/ingestion-callback?token=${latestCallbackToken()}`
+          )
+          .send({ text: 'Async transcript delivered later.' });
+        expect(callbackRes.status).toBe(204);
+
+        const finalStatus = await waitForTerminalStatus(docId);
+        expect(finalStatus.status).toBe('ready');
+        expect(finalStatus.chunk_count).toBe(1);
+
+        const getRes = await authenticatedTestClient(adminToken).get(
+          `/api/v1/documents/${docId}`
+        );
+        expect(getRes.body.content).toBe('Async transcript delivered later.');
+      });
+
+      test('a replayed callback is rejected with 409 INGESTION_CALLBACK_CONFLICT', async () => {
+        const docId = await ingestPendingAudio('callback-replay.mp3');
+        const token = latestCallbackToken();
+
+        const first = await testClient
+          .post(`/api/v1/documents/${docId}/ingestion-callback?token=${token}`)
+          .send({ text: 'First delivery.' });
+        expect(first.status).toBe(204);
+
+        const replay = await testClient
+          .post(`/api/v1/documents/${docId}/ingestion-callback?token=${token}`)
+          .send({ text: 'Replayed delivery.' });
+        expect(replay.status).toBe(409);
+        expect(replay.body.error.code).toBe('INGESTION_CALLBACK_CONFLICT');
+      });
+
+      test('a callback for an attempt superseded by re-ingest is rejected, but the fresh attempt still works', async () => {
+        const docId = await ingestPendingAudio('callback-superseded.mp3');
+        const staleToken = latestCallbackToken();
+
+        // Re-ingest mints a fresh attempt; the converter defers again.
+        const reingestRes = await authenticatedTestClient(adminToken)
+          .post(`/api/v1/documents/${docId}/ingest`)
+          .send({});
+        expect(reingestRes.status).toBe(202);
+        await waitForConversionAttempt(docId);
+        const freshToken = latestCallbackToken();
+        expect(freshToken).not.toBe(staleToken);
+
+        const staleCallback = await testClient
+          .post(
+            `/api/v1/documents/${docId}/ingestion-callback?token=${staleToken}`
+          )
+          .send({ text: 'Stale delivery.' });
+        expect(staleCallback.status).toBe(409);
+
+        const freshCallback = await testClient
+          .post(
+            `/api/v1/documents/${docId}/ingestion-callback?token=${freshToken}`
+          )
+          .send({ text: 'Fresh delivery.' });
+        expect(freshCallback.status).toBe(204);
+      });
+
+      test('an invalid token is rejected with 401 INGESTION_CALLBACK_INVALID_TOKEN', async () => {
+        const docId = await ingestPendingAudio('callback-invalid-token.mp3');
+
+        const res = await testClient
+          .post(`/api/v1/documents/${docId}/ingestion-callback?token=garbage`)
+          .send({ text: 'x' });
+        expect(res.status).toBe(401);
+        expect(res.body.error.code).toBe('INGESTION_CALLBACK_INVALID_TOKEN');
+      });
+
+      test('a callback that itself defers with { status: "pending" } is rejected', async () => {
+        const docId = await ingestPendingAudio('callback-nested-pending.mp3');
+
+        const res = await testClient
+          .post(
+            `/api/v1/documents/${docId}/ingestion-callback?token=${latestCallbackToken()}`
+          )
+          .send({ status: 'pending' });
+        expect(res.status).toBe(422);
+        expect(res.body.error.code).toBe('CONVERTER_OUTPUT_INVALID');
+      });
+
+      test('missing document returns 404', async () => {
+        const res = await testClient
+          .post(
+            '/api/v1/documents/doc_nonexistent/ingestion-callback?token=garbage'
+          )
+          .send({ text: 'x' });
+        expect(res.status).toBe(404);
+        expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      });
+
+      test('a stale conversion times out with CONVERSION_TIMEOUT, and a late callback then loses the race', async () => {
+        const docId = await ingestPendingAudio('callback-timeout.mp3');
+        const token = latestCallbackToken();
+
+        // Simulate a converter that never called back: push updatedAt beyond
+        // the (default 30-minute) conversion stall timeout. `status` must be
+        // included alongside `updatedAt` — Sequelize's bulk `update()` with
+        // `silent: true` and only a timestamp field in the values set is a
+        // no-op (0 rows affected), even though the row matches the `where`.
+        const stale = new Date(Date.now() - 60 * 60 * 1000);
+        await db.Document.update(
+          { status: 'processing', updatedAt: stale },
+          { where: { publicId: docId }, silent: true }
+        );
+
+        const res = await authenticatedTestClient(adminToken).get(
+          `/api/v1/documents/${docId}/status`
+        );
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('failed');
+        expect(res.body.error).toBe('CONVERSION_TIMEOUT');
+
+        // The sweeper already cleared conversionAttemptId, so a late callback
+        // loses the race and is rejected — never silently dropped.
+        const lateCallback = await testClient
+          .post(`/api/v1/documents/${docId}/ingestion-callback?token=${token}`)
+          .send({ text: 'Too late.' });
+        expect(lateCallback.status).toBe(409);
+      });
     });
   });
 
