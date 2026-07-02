@@ -72,7 +72,7 @@ extractSourcePages(file)
 | Short-lived file download token util | ✅ Implemented | `fileDownloadToken.ts`, for `file_delivery: download_url` |
 | OpenAPI (`ingestion-rules.yaml`) | ✅ Implemented | SDK + CLI regenerated |
 | Permissions (`ingestion-rules.json`) | ✅ Implemented | Permissions page regenerated |
-| Formation module (`ingestionRulesFormationModule.ts` + `formations.yaml`) | ❌ Planned | Phase 6 — provision rules as code |
+| Formation module (`ingestionRulesFormationModule.ts` + `formations.yaml`) | ✅ Implemented | Phase 6 — provision rules as code |
 | Module docs (`modules/ingestion-rules.md` + `documents.md` update) | ✅ Implemented | |
 | Tests (REST + documents ingest + mcp) | ✅ Implemented | End-to-end smoke steps for the converter flow added |
 
@@ -134,13 +134,16 @@ Each phase follows red/green TDD per `.claude/rules/quality-assurance.md` and is
   - The timeout sweeper transitions `processing → failed (CONVERSION_TIMEOUT)` under the same guard, so it cannot clobber a conversion that a callback has already completed. A callback that loses the race (doc no longer `processing`) is rejected with a clear `409`, never silently dropped.
 - Tests: async pending → callback → `ready`; replayed callback rejected; callback for a superseded attempt (after re-ingest) rejected; late callback after timeout rejected (and vice-versa: callback wins, sweeper no-ops); stale conversion → `CONVERSION_TIMEOUT`
 
-### Phase 6 — Formations + smoke + docs polish (smoke steps landed early; formations + docs polish remain)
+### Phase 6 — Formations + smoke + docs polish ✅ Complete
 
-**Deliverables:**
+**Deliverables (as implemented):**
 
-- `IngestionRuleResourceProperties` in `formations.yaml` + `ingestionRulesFormationModule.ts` (reuses `validateIngestionRule`)
-- Smoke steps in `tests/smoke-tests.sh` (via `$SOAT_CLI`): create a converter tool (deterministic stub `http` tool), create a rule, ingest a non-native file, poll to `ready`. Add `CONVERSION_STALL_TIMEOUT_MS` to `tests/docker-compose.smoke.yml`.
-- Module docs finalized
+- `IngestionRuleResourceProperties` in `formations.yaml` + `ingestionRulesFormationModule.ts` (reuses `validateIngestionRule`, with `toolType: null` at the pure, DB-free `validateProperties` stage — the client-tool/soat-mcp-action checks that need the resolved tool type run inside `create`/`update` once refs are resolved). Registered in `formationsRegistry.ts`; `ingestion_rule` added to `SUPPORTED_RESOURCE_TYPES` and the `ResourceDeclaration.type` enum.
+- Formation module unit tests (`formation-modules.test.ts`): create with `tool_id`, create with `agent_id`, mutual-exclusivity and "exactly one required" validation errors (the latter relaxed on update, where omitting both means "leave the converter unchanged"), unknown-field rejection, update (including switching converter type), delete, and `read` round-trip.
+- Smoke steps in `tests/smoke-tests.sh` (via `$SOAT_CLI`): create a converter tool (deterministic stub `http` + `pipeline` tool), create a rule, ingest a non-native file, poll to `ready` — landed in the Phase 3/review pass ahead of this phase.
+- Module docs finalized: `ingestion_rule` added to the resource-type list in `modules/formations.md`; `IngestionRuleResourceProperties` documented at `/docs/formations-types/ingestion-rule` (auto-generated from `formations.yaml`).
+
+**Deferred to Phase 5:** `CONVERSION_STALL_TIMEOUT_MS` is not yet added to `tests/docker-compose.smoke.yml` — the async callback path it configures is not implemented yet (see Phase 5 above and the module doc's "Not yet implemented" callout). Add it alongside the callback route when Phase 5 lands.
 
 ## Data Model
 
