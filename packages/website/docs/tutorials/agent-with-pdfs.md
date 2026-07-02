@@ -19,7 +19,7 @@ It maps directly onto the build plan:
 | --------- | ---------------------- |
 | **A. Ingest the PDFs** (organize with a path prefix) | Steps 5–7 |
 | **B. Create the agent** scoped with `knowledge_config` | Step 9 |
-| **C. Retrieval** — automatic and agent-driven | Steps 10–11 |
+| **C. Retrieval** — automatic, agent-driven via API, and agent-driven via tool | Steps 10–12 |
 | **D. Citations** — `page` + `document_id` per result | Step 8 |
 
 :::note Requires native file ingestion
@@ -674,13 +674,188 @@ question needs the agent to break it down and search in its own words.
 
 ---
 
+## Step 12 — Give the agent a knowledge tool (Plan D)
+
+Step 11 reformulated the query, but *you* still made the call — the agent never saw
+`search-knowledge`. This step wraps the same operation as a
+[`soat` tool](/docs/modules/tools#soat) and attaches it directly to an agent, so the
+model decides for itself, mid-reasoning, when to search and what query to write.
+
+`preset_parameters` locks the tool to this project and to the `/manuals/` subtree —
+those fields are hidden from the model — leaving only `query` (and optionally `limit`)
+for it to fill in. Without a preset `projectId`, a tool-driven search runs with the
+caller's own scope instead of the agent's, so pinning it here keeps retrieval bounded to
+the manuals library no matter who talks to the agent.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+KNOWLEDGE_TOOL_ID=$(soat create-tool \
+  --project-id "$PROJECT_ID" \
+  --name "manuals" \
+  --type soat \
+  --description "Searches the ingested product manuals for relevant passages" \
+  --actions '["search-knowledge"]' \
+  --preset-parameters '{"projectId": "'"$PROJECT_ID"'", "documentPaths": ["/manuals/"]}' \
+  | jq -r '.id')
+echo "KNOWLEDGE_TOOL_ID: $KNOWLEDGE_TOOL_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: knowledgeTool } = await adminSoat.tools.createTool({
+  body: {
+    project_id: PROJECT_ID,
+    name: 'manuals',
+    type: 'soat',
+    description: 'Searches the ingested product manuals for relevant passages',
+    actions: ['search-knowledge'],
+    preset_parameters: { projectId: PROJECT_ID, documentPaths: ['/manuals/'] },
+  },
+});
+const KNOWLEDGE_TOOL_ID = knowledgeTool.id;
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+KNOWLEDGE_TOOL_ID=$(curl -s -X POST "$SOAT_URL/api/v1/tools" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"manuals\",\"type\":\"soat\",\"description\":\"Searches the ingested product manuals for relevant passages\",\"actions\":[\"search-knowledge\"],\"preset_parameters\":{\"projectId\":\"$PROJECT_ID\",\"documentPaths\":[\"/manuals/\"]}}" \
+  | jq -r '.id')
+echo "KNOWLEDGE_TOOL_ID: $KNOWLEDGE_TOOL_ID"
+```
+
+</TabItem>
+</Tabs>
+
+Attach it to a new [agent](/docs/modules/agents#examples) — this one has no
+`knowledge_config`, so the tool call is the *only* path to the manuals. The model will
+see the tool as `manuals_search-knowledge` (the tool's `name` plus the action, per
+[Tool Name Resolution](/docs/modules/tools#tool-name-resolution)):
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+TOOL_AGENT_ID=$(soat create-agent \
+  --project-id "$PROJECT_ID" \
+  --ai-provider-id "$AI_PROVIDER_ID" \
+  --name "Manuals Agent (Tool-Driven)" \
+  --instructions "You are a product support assistant. Always call the manuals_search-knowledge tool with a short search query before answering a product question. Be concise and cite the document and page when possible." \
+  --tool-ids '["'"$KNOWLEDGE_TOOL_ID"'"]' \
+  | jq -r '.id')
+echo "TOOL_AGENT_ID: $TOOL_AGENT_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: toolAgent } = await adminSoat.agents.createAgent({
+  body: {
+    project_id: PROJECT_ID,
+    ai_provider_id: AI_PROVIDER_ID,
+    name: 'Manuals Agent (Tool-Driven)',
+    instructions:
+      'You are a product support assistant. Always call the manuals_search-knowledge tool with a short search query before answering a product question. Be concise and cite the document and page when possible.',
+    tool_ids: [KNOWLEDGE_TOOL_ID],
+  },
+});
+const TOOL_AGENT_ID = toolAgent.id;
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+TOOL_AGENT_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Manuals Agent (Tool-Driven)\",\"instructions\":\"You are a product support assistant. Always call the manuals_search-knowledge tool with a short search query before answering a product question. Be concise and cite the document and page when possible.\",\"tool_ids\":[\"$KNOWLEDGE_TOOL_ID\"]}" \
+  | jq -r '.id')
+echo "TOOL_AGENT_ID: $TOOL_AGENT_ID"
+```
+
+</TabItem>
+</Tabs>
+
+Ask the same kind of question as Step 10. This time the model itself decides to call
+`manuals_search-knowledge`, the server executes it in-process and feeds the results
+back into the loop, and the final response comes back `completed` with no extra
+round-trip on your side — `soat` tools run server-side, unlike `client` tools, which
+would pause the generation with `requires_action`:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-agent-generation \
+  --agent-id "$TOOL_AGENT_ID" \
+  --messages '[{"role":"user","content":"How many devices can the R200 router support?"}]' \
+  | jq '{status: .status, output: .output.content}'
+```
+
+Expected shape (exact wording varies by model):
+
+```json
+{
+  "status": "completed",
+  "output": "The R200 router supports up to 32 connected devices."
+}
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: toolGeneration } = await adminSoat.agents.createAgentGeneration({
+  path: { agent_id: TOOL_AGENT_ID },
+  body: {
+    messages: [
+      {
+        role: 'user',
+        content: 'How many devices can the R200 router support?',
+      },
+    ],
+  },
+});
+console.log(toolGeneration.status); // "completed"
+console.log(toolGeneration.output.content); // "...32 connected devices..."
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s -X POST "$SOAT_URL/api/v1/agents/$TOOL_AGENT_ID/generate" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"How many devices can the R200 router support?"}]}' \
+  | jq '{status: .status, output: .output.content}'
+```
+
+</TabItem>
+</Tabs>
+
+`knowledge_config` (Step 9) and a `soat` knowledge tool are not mutually exclusive — an
+agent can carry both: automatic context on every turn, plus a tool it can call again
+mid-reasoning with a sharper, self-written query when the first pass wasn't enough.
+
+---
+
 ## What you built
 
 - **A. Ingested** two PDFs into chunked, embedded Documents under `/manuals/`, with a
   choice of `page` (citations) or `size` (sharper recall) chunking.
 - **B. Scoped** an agent to that subtree with one `knowledge_config` prefix.
-- **C. Retrieved** both ways — automatic injection and an explicit, reformulated
-  `search-knowledge` query.
+- **C. Retrieved** three ways — automatic injection, an explicit reformulated
+  `search-knowledge` query, and a `soat` tool the agent calls itself mid-reasoning.
 - **D. Cited** answers down to `document_id` + `page`.
 
 To grow the library, upload more PDFs and ingest them under the same `/manuals/` prefix
