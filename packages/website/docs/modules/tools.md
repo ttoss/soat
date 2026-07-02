@@ -202,6 +202,17 @@ The `pipeline` config has a `steps` array and an optional `output`:
   - `{ "var": "input.<field>" }` reads the pipeline tool's own input.
   - `{ "var": "steps.<id>.<path>" }` reads an earlier step's output.
   - Literals pass through; transforms (`cat`, `+`, `if`, `map`, `filter`, `reduce`, …) are supported.
+  - Expressions are resolved **recursively at any nesting depth** — a `var` (or any other operator) buried inside a plain object or array, such as `data.title` below, is evaluated just like a top-level one:
+    ```json
+    {
+      "locale": "pt-BR",
+      "data": {
+        "title": { "var": "input.title" },
+        "theme": { "var": "input.theme" }
+      }
+    }
+    ```
+  - A value is treated as an expression only when it is a single-key object whose key names a real JSON Logic operator (`var`, `cat`, `if`, …). To pass a **literal** object that happens to look like one — e.g. the actual JSON Logic object `{ "var": "some.var" }` as data, not as an expression — wrap it in `preserve`, which returns its argument unevaluated: `{ "preserve": { "var": "some.var" } }`.
 - **`output`** (optional) — a mapping object that builds the return value. When omitted, the last step's raw output is returned.
 
 Each step's full output is captured under `steps.<id>`. A step may reference only **earlier** steps — forward references are rejected at create time — which keeps the sequence linear and deterministic. Execution is **fail-fast**: the first failing step aborts the pipeline with `PIPELINE_STEP_FAILED`. A step that targets another `pipeline` tool is bounded by a maximum nesting depth (`PIPELINE_DEPTH_EXCEEDED`). Steps cannot target `client` tools, which cannot run server-side.
