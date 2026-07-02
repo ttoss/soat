@@ -264,7 +264,9 @@ The `pipeline` config has a `steps` array and an optional `output`:
     }
     ```
   - A value is treated as an expression only when it is a single-key object whose key names a real JSON Logic operator (`var`, `cat`, `if`, …). To pass a **literal** object that happens to look like one — e.g. the actual JSON Logic object `{ "var": "some.var" }` as data, not as an expression — wrap it in `preserve`, which returns its argument unevaluated: `{ "preserve": { "var": "some.var" } }`.
-- **`output`** (optional) — a mapping object that builds the return value. When omitted, the last step's raw output is returned.
+- **`output`** (optional) — a [JSON Logic](https://jsonlogic.com) expression, evaluated the same way as a step's `input`, that builds the return value. When omitted, the last step's raw output is returned. `output` is also checked as a whole for being a single expression before falling back to per-key evaluation, so it can resolve to a bare scalar (not just an object):
+  - `{ "var": "steps.<id>.<path>" }` returns that field's value directly, e.g. a bare string.
+  - `{ "<key>": { "var": "steps.<id>.<path>" } }` returns an object, resolving the expression nested under `<key>`.
 
 Each step's full output is captured under `steps.<id>`. A step may reference only **earlier** steps — forward references are rejected at create time — which keeps the sequence linear and deterministic. Execution is **fail-fast**: the first failing step aborts the pipeline with `PIPELINE_STEP_FAILED`. A step that targets another `pipeline` tool is bounded by a maximum nesting depth (`PIPELINE_DEPTH_EXCEEDED`). Steps cannot target `client` tools, which cannot run server-side.
 
