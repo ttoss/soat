@@ -37,8 +37,11 @@ services:
       start_period: 60s
 
   # Deterministic stand-ins for the external provider APIs the converter tutorial
-  # calls (OpenAI-compatible vision chat-completions + Deepgram-compatible
-  # transcription). Lets the flow run without real keys. See tests/mocks/mock-providers.mjs.
+  # calls: an OpenAI-compatible chat-completions endpoint for the vision agent
+  # converter (image → OCR text via the Responses API) and an xAI-compatible
+  # chat-completions endpoint for the audio agent converter (audio → transcript).
+  # Both share the same OpenAI wire protocol, so one service serves both. Lets the
+  # flow run without real keys. See tests/mocks/mock-providers.mjs.
   mock-providers:
     image: node:22-alpine
     volumes:
@@ -130,8 +133,8 @@ services:
       # compose network; dummy keys are ignored by the mocks.
       OPENAI_BASE_URL: 'http://mock-providers:8090/v1'
       OPENAI_API_KEY: 'test-openai-key'
-      STT_URL: 'http://mock-providers:8090/v1/listen'
-      DEEPGRAM_API_KEY: 'test-deepgram-key'
+      XAI_BASE_URL: 'http://mock-providers:8090/v1'
+      XAI_API_KEY: 'test-xai-key'
     volumes:
       - ../packages/website/docs/tutorials:/tutorials:ro
       - ./tutorials-tests.sh:/tutorials-tests.sh:ro
