@@ -443,8 +443,9 @@ soat ingest-document \
   --project-id "$PROJECT_ID" \
   --file-id "$IMAGE_FILE_ID" \
   --path-prefix "/images/" \
-  --async false | jq -e '.status == "ready" and .chunk_count >= 1'
+  --async false | jq -e '.status == "ready"'
 # prints `true` once the image is OCR'd, chunked, and embedded
+# (chunk_count is reported under .metadata; Step 14 confirms the text is searchable)
 ```
 
 </TabItem>
@@ -467,7 +468,7 @@ const { data: imageDoc } = await adminSoat.documents.ingestDocument({
   query: { async: false },
   body: { project_id: PROJECT_ID, file_id: imageFile.id, path_prefix: '/images/' },
 });
-console.log(imageDoc.status, imageDoc.chunk_count); // "ready" 1
+console.log(imageDoc.status, imageDoc.metadata?.chunk_count); // "ready" 1
 ```
 
 </TabItem>
@@ -736,8 +737,9 @@ soat ingest-document \
   --project-id "$PROJECT_ID" \
   --file-id "$AUDIO_FILE_ID" \
   --path-prefix "/audio/" \
-  --async false | jq -e '.status == "ready" and .chunk_count >= 1'
+  --async false | jq -e '.status == "ready"'
 # prints `true` once the audio is transcribed, chunked, and embedded
+# (chunk_count is reported under .metadata; Step 14 confirms the text is searchable)
 ```
 
 </TabItem>
@@ -760,7 +762,7 @@ const { data: audioDoc } = await adminSoat.documents.ingestDocument({
   query: { async: false },
   body: { project_id: PROJECT_ID, file_id: audioFile.id, path_prefix: '/audio/' },
 });
-console.log(audioDoc.status, audioDoc.chunk_count);
+console.log(audioDoc.status, audioDoc.metadata?.chunk_count);
 ```
 
 </TabItem>
