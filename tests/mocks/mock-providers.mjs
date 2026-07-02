@@ -3,44 +3,58 @@
 // tutorial, so the converter flow can be validated in the tutorials runner
 // without external API keys.
 //
-// Serves two shapes:
-//   POST /v1/chat/completions  — OpenAI-compatible; used by the vision *agent*
-//                                converter (the AI provider's base_url points here).
-//                                Returns canned OCR text. Supports streaming (SSE)
-//                                and non-streaming, keyed on the request's `stream`.
-//   POST /v1/listen            — Deepgram-compatible; used by the audio *http tool*
-//                                converter. Returns a canned transcript.
+// Both converters are agents backed by an OpenAI-compatible provider:
+//   * the image OCR agent → OpenAI (native `openai` provider → Responses API)
+//   * the audio agent      → xAI, registered as an OpenAI-compatible provider
+//                            (`custom` provider → Chat Completions API)
+//
+// So the mock answers both OpenAI wire protocols:
+//   POST /v1/responses         — Responses API (native OpenAI provider). Used by
+//                                the vision OCR agent; returns canned OCR text.
+//   POST /v1/chat/completions  — Chat Completions API (OpenAI-compatible custom
+//                                provider). Used by the xAI audio agent; returns
+//                                a canned transcript when the request carries
+//                                audio, else canned OCR text. Supports streaming
+//                                (SSE) and non-streaming, keyed on `stream`.
 //   GET  /health               — readiness probe for docker-compose.
 //
-// NOTE: the exact OpenAI wire protocol the server uses for agent generation
-// (chat/completions vs responses API, streaming or not) is defined by the
-// server's LLM client. This mock covers chat/completions in both modes; if the
-// converter path (PRD Phase 3) uses a different endpoint, extend the routes here.
+// The wire protocol a provider uses is decided by the server's LLM client
+// (@ai-sdk/openai): the native `openai` provider calls the Responses API, while
+// the `custom` OpenAI-compatible provider calls Chat Completions.
 
 import http from 'node:http';
 
 const PORT = Number(process.env.PORT || 8090);
 
-// Canned content — kept searchable so the tutorial's knowledge query hits.
+// Canned content — kept searchable so the tutorial's knowledge queries hit.
 const OCR_TEXT =
   'Receipt — Corner Cafe\nCoffee 3.50\nSandwich 8.00\nTotal amount: 11.50';
 const TRANSCRIPT_TEXT =
   'Thanks everyone for joining. The launch is scheduled for next Tuesday and the budget was approved.';
 
-const readBody = (req) =>
+const readRaw = (req) =>
   new Promise((resolve) => {
     let data = '';
     req.on('data', (chunk) => {
       data += chunk;
     });
-    req.on('end', () => {
-      try {
-        resolve(data ? JSON.parse(data) : {});
-      } catch {
-        resolve({});
-      }
-    });
+    req.on('end', () => resolve(data));
   });
+
+const parseJson = (raw) => {
+  try {
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+// Decide the modality from the raw request body. An audio request carries an
+// `input_audio` part (Chat Completions / Responses) or a file part with an
+// `audio/*` media type (the AI SDK's representation of an audio file). Scanning
+// the raw JSON keeps this robust across both wire protocols.
+const isAudioRequest = (raw) =>
+  /"input_audio"/.test(raw) || /"(?:media_?type|type)"\s*:\s*"audio\//.test(raw);
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -52,10 +66,44 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // OpenAI-compatible chat completions (vision OCR agent converter).
+  // Responses API (native OpenAI provider) — the vision OCR agent lands here.
+  if (req.method === 'POST' && pathname.endsWith('/responses')) {
+    const raw = await readRaw(req);
+    const body = parseJson(raw);
+    const model = body.model || 'mock-model';
+    const text = isAudioRequest(raw) ? TRANSCRIPT_TEXT : OCR_TEXT;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify({
+        id: 'resp_mock',
+        object: 'response',
+        created_at: 0,
+        model,
+        status: 'completed',
+        error: null,
+        incomplete_details: null,
+        output: [
+          {
+            id: 'msg_mock',
+            type: 'message',
+            role: 'assistant',
+            status: 'completed',
+            content: [{ type: 'output_text', text, annotations: [] }],
+          },
+        ],
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      })
+    );
+    return;
+  }
+
+  // Chat Completions API (OpenAI-compatible custom provider) — the xAI audio
+  // agent lands here. Audio → transcript, anything else → OCR text.
   if (req.method === 'POST' && pathname.endsWith('/chat/completions')) {
-    const body = await readBody(req);
-    const model = body.model || 'mock-vision';
+    const raw = await readRaw(req);
+    const body = parseJson(raw);
+    const model = body.model || 'mock-model';
+    const text = isAudioRequest(raw) ? TRANSCRIPT_TEXT : OCR_TEXT;
 
     if (body.stream) {
       res.writeHead(200, {
@@ -72,7 +120,7 @@ const server = http.createServer(async (req, res) => {
           choices: [{ index: 0, delta, finish_reason: finishReason }],
         })}\n\n`;
       res.write(chunk({ role: 'assistant' }, null));
-      res.write(chunk({ content: OCR_TEXT }, null));
+      res.write(chunk({ content: text }, null));
       res.write(chunk({}, 'stop'));
       res.write('data: [DONE]\n\n');
       res.end();
@@ -89,29 +137,11 @@ const server = http.createServer(async (req, res) => {
         choices: [
           {
             index: 0,
-            message: { role: 'assistant', content: OCR_TEXT },
+            message: { role: 'assistant', content: text },
             finish_reason: 'stop',
           },
         ],
         usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
-      })
-    );
-    return;
-  }
-
-  // Deepgram-compatible pre-recorded transcription (audio http tool converter).
-  if (req.method === 'POST' && pathname.endsWith('/listen')) {
-    await readBody(req);
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(
-      JSON.stringify({
-        results: {
-          channels: [
-            {
-              alternatives: [{ transcript: TRANSCRIPT_TEXT, confidence: 0.99 }],
-            },
-          ],
-        },
       })
     );
     return;

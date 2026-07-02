@@ -10,22 +10,23 @@ import TabItem from '@theme/TabItem';
 Native [file ingestion](/docs/modules/documents#file-ingestion-and-chunking) turns
 PDFs and text files into searchable [Documents](/docs/modules/documents#examples).
 This tutorial extends it to **images and audio** by routing each unsupported
-`content_type` to a **converter** through an
+`content_type` to an **agent converter** through an
 [Ingestion Rule](/docs/modules/ingestion-rules#examples).
 
-A converter is a resource you already know:
+An agent converter is a resource you already know — an
+[Agent](/docs/modules/agents#examples) backed by a multimodal model. SOAT feeds
+the uploaded file to the model with a fixed "extract all text" instruction and
+stores the model's text output as the document. **Zero plumbing**: no
+request/response mapping to write, and the provider key lives in a
+[Secret](/docs/modules/secrets#examples), encrypted at rest.
 
-- **An [Agent](/docs/modules/agents#examples)** with a multimodal model — SOAT feeds
-  the file to the model and stores its text output. **Zero plumbing**, and the
-  provider key lives in a [Secret](/docs/modules/secrets#examples). This is the
-  simplest path, and it is what we use for **images and scanned PDFs**.
-- **A [Tool](/docs/modules/tools#examples)** — a plain [`http` tool](/docs/modules/tools#http)
-  pointed at a specialized external API, wrapped in a
-  [`pipeline` tool](/docs/modules/tools#pipeline) that reshapes the request and
-  response with [JSON Logic](https://jsonlogic.com). Use this when you want a
-  dedicated OCR/speech-to-text provider or an async job. We use it for **audio**
-  (a [Deepgram](https://developers.deepgram.com/docs/pre-recorded-audio)
-  speech-to-text call).
+We wire up two of them, one per modality — using the providers each is best at:
+
+- **Images and scanned PDFs → [OpenAI](https://platform.openai.com/docs)** vision
+  model (OCR).
+- **Audio → [xAI](https://docs.x.ai/docs/overview)** (speech-to-text). xAI exposes
+  an OpenAI-compatible API, so we register it as an OpenAI-compatible provider and
+  point its `base_url` at xAI.
 
 Both routes reuse the same chunk + embed pipeline, so the converted text ends up
 searchable like any other document, and nothing is hosted outside SOAT either way.
@@ -34,15 +35,20 @@ It maps onto the feature's building blocks:
 
 | Building block | Where in this tutorial |
 | -------------- | ----------------------- |
-| **Agent converter** — a multimodal model does OCR, no plumbing | Part A (Steps 3–8) |
-| **`http` + `pipeline` tool converter** — call a dedicated API, reshape with JSON Logic | Part B (Steps 9–11) |
-| **Ingestion rules** — `content_type` → converter routing | Steps 6, 7, 11 |
-| **Automatic routing** — ingest without naming a converter | Steps 8, 12 |
-| **Async callback conversion** — a tool defers with `{ status: "pending" }` and delivers the result later | Step 11 note |
+| **Agent converter** — a multimodal model extracts text, no plumbing | Parts A & B |
+| **Ingestion rules** — `content_type` → converter routing | Steps 6, 7, 12 |
+| **Automatic routing** — ingest without naming a converter | Steps 8, 13 |
+| **Provider-agnostic converters** — OpenAI for vision, xAI for audio | Steps 4, 10 |
 
-:::note Requires external provider keys
-This tutorial calls real OpenAI and Deepgram endpoints (or local mocks — see below),
-so it is excluded from automated tutorial runs.
+:::tip Runs against mock providers — no keys needed
+Every provider call is directed at the `base_url` you configure on each AI
+provider, so the flow can run against stand-in servers instead of the real APIs.
+The tutorials test runner does exactly this: `tests/docker-compose.tutorials.yml`
+starts a `mock-providers` service (`tests/mocks/mock-providers.mjs`) that answers
+the OpenAI Responses API (vision OCR) and the OpenAI-compatible Chat Completions
+API (xAI transcription) with canned text, and sets `OPENAI_BASE_URL` /
+`XAI_BASE_URL` to it — so the whole ingest → convert → search flow is validated
+end-to-end in CI with no external keys.
 :::
 
 ## Prerequisites
@@ -52,31 +58,23 @@ so it is excluded from automated tutorial runs.
 - For production hardening (storing provider keys as secrets), see
   [Advanced Configuration](/docs/getting-started/advanced-config).
 - CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- An [OpenAI API key](https://platform.openai.com/docs) with access to a **vision**
-  model (for the image/PDF agent converter) and a
-  [Deepgram API key](https://developers.deepgram.com/docs/pre-recorded-audio) (for the
-  audio tool converter). No other infrastructure required.
+- Provider credentials for **real** runs: an
+  [OpenAI API key](https://platform.openai.com/docs) with access to a **vision**
+  model, and an [xAI API key](https://docs.x.ai/docs/overview). For provider setup
+  patterns see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+  No other infrastructure required — and neither key is needed when running against
+  the mock providers described above.
 
 ```bash
 export SOAT_BASE_URL=http://localhost:5047   # CLI, SDK, and curl — do NOT append /api/v1
 
 # Provider endpoints and keys. The defaults are the real providers; each is
-# overridable so the tutorial can also run against local mocks (see below).
+# overridable so the tutorial can also run against local mocks (see the tip above).
 export OPENAI_BASE_URL="${OPENAI_BASE_URL:-https://api.openai.com/v1}"
 export OPENAI_API_KEY="${OPENAI_API_KEY:-sk-your-openai-key}"
-export STT_URL="${STT_URL:-https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true}"
-export DEEPGRAM_API_KEY="${DEEPGRAM_API_KEY:-your-deepgram-key}"
+export XAI_BASE_URL="${XAI_BASE_URL:-https://api.x.ai/v1}"
+export XAI_API_KEY="${XAI_API_KEY:-xai-your-key}"
 ```
-
-:::tip Run it without provider keys
-Every provider call goes through `$OPENAI_BASE_URL` and `$STT_URL`, so you can point
-them at stand-in servers instead of the real APIs. The tutorials test runner does
-exactly this: `tests/docker-compose.tutorials.yml` starts a `mock-providers` service
-(`tests/mocks/mock-providers.mjs`) that answers the OpenAI-compatible vision endpoint
-and the Deepgram-compatible transcription endpoint with canned text, and sets
-`OPENAI_BASE_URL` / `STT_URL` to it — so the whole ingest → convert → search flow is
-validated end-to-end with no external keys.
-:::
 
 ---
 
@@ -159,13 +157,12 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ---
 
-## Part A — Images and scanned PDFs via an agent converter
+## Part A — Images and scanned PDFs via an OpenAI agent
 
-The simplest converter is an **agent** whose model can read the file. You point an
-[Ingestion Rule](/docs/modules/ingestion-rules#converter-tool-or-agent) at the agent
-and SOAT sends the file as multimodal input with a fixed "extract all text"
-instruction — no request/response mapping to write. For images and scanned PDFs, a
-vision model does OCR directly.
+You point an [Ingestion Rule](/docs/modules/ingestion-rules#converter-tool-or-agent)
+at an agent and SOAT sends the file to it as multimodal input with a fixed "extract
+all text" instruction — no request/response mapping to write. For images and scanned
+PDFs, an OpenAI vision model does OCR directly.
 
 ## Step 3 — Store the OpenAI key as a secret
 
@@ -219,27 +216,28 @@ echo "OPENAI_SECRET_ID: $OPENAI_SECRET_ID"
 ## Step 4 — Create a vision AI provider
 
 Create an [AI provider](/docs/modules/ai-providers#examples) backed by OpenAI with a
-vision-capable `default_model`, reading its key from the secret above.
+vision-capable `default_model`, reading its key from the secret above. `base_url`
+points at OpenAI (overridden to the mock in CI).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-AI_PROVIDER_ID=$(soat create-ai-provider \
+OPENAI_PROVIDER_ID=$(soat create-ai-provider \
   --project-id "$PROJECT_ID" \
   --name "OpenAI Vision" \
   --provider "openai" \
   --default-model "gpt-4o" \
   --base-url "$OPENAI_BASE_URL" \
   --secret-id "$OPENAI_SECRET_ID" | jq -r '.id')
-echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
+echo "OPENAI_PROVIDER_ID: $OPENAI_PROVIDER_ID"
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: aiProvider } = await adminSoat.aiProviders.createAiProvider({
+const { data: openaiProvider } = await adminSoat.aiProviders.createAiProvider({
   body: {
     project_id: PROJECT_ID,
     name: 'OpenAI Vision',
@@ -249,19 +247,19 @@ const { data: aiProvider } = await adminSoat.aiProviders.createAiProvider({
     secret_id: OPENAI_SECRET_ID,
   },
 });
-const AI_PROVIDER_ID = aiProvider.id;
+const OPENAI_PROVIDER_ID = openaiProvider.id;
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-AI_PROVIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/ai-providers" \
+OPENAI_PROVIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/ai-providers" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"OpenAI Vision\",\"provider\":\"openai\",\"default_model\":\"gpt-4o\",\"base_url\":\"$OPENAI_BASE_URL\",\"secret_id\":\"$OPENAI_SECRET_ID\"}" \
   | jq -r '.id')
-echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
+echo "OPENAI_PROVIDER_ID: $OPENAI_PROVIDER_ID"
 ```
 
 </TabItem>
@@ -269,7 +267,7 @@ echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 
 ---
 
-## Step 5 — Create the converter agent
+## Step 5 — Create the OCR agent
 
 Create an [agent](/docs/modules/agents#examples) whose only job is to transcribe what
 it sees. The instructions matter most here: keep the model from summarizing or
@@ -281,7 +279,7 @@ commenting, so the document text is the raw extracted content.
 ```bash
 OCR_AGENT_ID=$(soat create-agent \
   --project-id "$PROJECT_ID" \
-  --ai-provider-id "$AI_PROVIDER_ID" \
+  --ai-provider-id "$OPENAI_PROVIDER_ID" \
   --name "OCR Agent" \
   --instructions "Extract all text from the provided file verbatim. Return plain text only — no commentary, no summary, no markdown fences." \
   | jq -r '.id')
@@ -295,7 +293,7 @@ echo "OCR_AGENT_ID: $OCR_AGENT_ID"
 const { data: ocrAgent } = await adminSoat.agents.createAgent({
   body: {
     project_id: PROJECT_ID,
-    ai_provider_id: AI_PROVIDER_ID,
+    ai_provider_id: OPENAI_PROVIDER_ID,
     name: 'OCR Agent',
     instructions:
       'Extract all text from the provided file verbatim. Return plain text only — no commentary, no summary, no markdown fences.',
@@ -311,7 +309,7 @@ const OCR_AGENT_ID = ocrAgent.id;
 OCR_AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"OCR Agent\",\"instructions\":\"Extract all text from the provided file verbatim. Return plain text only — no commentary, no summary, no markdown fences.\"}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$OPENAI_PROVIDER_ID\",\"name\":\"OCR Agent\",\"instructions\":\"Extract all text from the provided file verbatim. Return plain text only — no commentary, no summary, no markdown fences.\"}" \
   | jq -r '.id')
 echo "OCR_AGENT_ID: $OCR_AGENT_ID"
 ```
@@ -424,38 +422,46 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/ingestion-rules" \
 Upload an image as a [File](/docs/modules/files#examples), then ingest it exactly like
 a PDF or text file. Nothing about the call names the agent or the rule —
 `POST /documents/ingest` resolves the matching rule from the file's `content_type`
-automatically. That routing hinges on the stored `content_type`, so confirm the upload
-recorded `image/png` (set it explicitly via base64 upload if your client does not infer
-it).
+automatically. Uploading via base64 lets us set `content_type` explicitly to
+`image/png`, which is what drives routing. (`RECEIPT_PNG_B64` below is a tiny
+placeholder PNG; the OCR model returns the same canned text against the mock.)
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-IMAGE_FILE_ID=$(soat upload-file \
-  --project-id "$PROJECT_ID" \
-  --file ./receipt.png | jq -r '.id')
+RECEIPT_PNG_B64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
-# The stored content_type is what drives routing — confirm it
-soat get-file --file-id "$IMAGE_FILE_ID" | jq '{id, content_type}'
-# → { "id": "fl_...", "content_type": "image/png" }
+IMAGE_FILE_ID=$(soat upload-file-base64 \
+  --project-id "$PROJECT_ID" \
+  --filename "receipt.png" \
+  --content-type "image/png" \
+  --content "$RECEIPT_PNG_B64" | jq -r '.id')
+echo "IMAGE_FILE_ID: $IMAGE_FILE_ID"
 
 soat ingest-document \
   --project-id "$PROJECT_ID" \
   --file-id "$IMAGE_FILE_ID" \
   --path-prefix "/images/" \
-  --async false | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
-# → { "id": "doc_...", "status": "ready", "chunk_count": 1 }
+  --async false | jq -e '.status == "ready" and .chunk_count >= 1'
+# prints `true` once the image is OCR'd, chunked, and embedded
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const form = new FormData();
-form.append('file', imageBlob, 'receipt.png');
-form.append('project_id', PROJECT_ID);
-const { data: imageFile } = await adminSoat.files.uploadFile({ body: form });
+const RECEIPT_PNG_B64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+const { data: imageFile } = await adminSoat.files.uploadFileBase64({
+  body: {
+    project_id: PROJECT_ID,
+    filename: 'receipt.png',
+    content_type: 'image/png',
+    content: RECEIPT_PNG_B64,
+  },
+});
 
 const { data: imageDoc } = await adminSoat.documents.ingestDocument({
   query: { async: false },
@@ -468,10 +474,13 @@ console.log(imageDoc.status, imageDoc.chunk_count); // "ready" 1
 <TabItem value="curl" label="curl">
 
 ```bash
-IMAGE_FILE_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/files/upload" \
+RECEIPT_PNG_B64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+IMAGE_FILE_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/files/upload/base64" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -F "file=@receipt.png" \
-  -F "project_id=$PROJECT_ID" | jq -r '.id')
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"filename\":\"receipt.png\",\"content_type\":\"image/png\",\"content\":\"$RECEIPT_PNG_B64\"}" \
+  | jq -r '.id')
 
 curl -s -X POST "$SOAT_BASE_URL/api/v1/documents/ingest?async=false" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
@@ -489,89 +498,55 @@ need.
 
 ---
 
-## Part B — Audio via an `http` + `pipeline` tool converter
+## Part B — Audio via an xAI agent
 
-When you want a **dedicated** external API rather than a general multimodal model — a
-speech-to-text service, a specialized OCR engine, or a long-running async job — use a
-**tool** converter. This is where the pipeline's request/response mapping earns its
-keep. Before writing it, note the contract both ends of a tool converter must satisfy.
+Audio is exactly the same shape as images, with a different provider. xAI exposes an
+[OpenAI-compatible API](https://docs.x.ai/docs/overview), so we register it as an
+OpenAI-compatible provider (`provider: custom`) whose `base_url` points at xAI, then
+route `audio/*` at an agent backed by it. No pipeline, no request mapping — SOAT hands
+the audio file to the model and stores its transcript.
 
-:::info Tool converter contract
-Ingestion calls the tool with a fixed **input** and expects a fixed **output** — see
-[Ingestion Rules — Converter Tool Contract](/docs/modules/ingestion-rules#converter-tool-contract).
+## Step 9 — Store the xAI key as a secret
 
-```jsonc
-// input (built by ingestion)
-{ "file": { "content_type": "…", "data_base64": "…", "download_url": "…" },
-  "callback": { "url": "…", "token": "…" } }
-
-// output (returned by the tool)
-{ "pages": [{ "text": "…", "page_number": 1 }] }   // or a plain string, or { "status": "pending" }
-```
-
-Your `pipeline` tool's only job is to map the provider's request/response shape onto
-this contract with JSON Logic — `var` to read a field, `cat` to concatenate.
-:::
-
-## Step 9 — Create an `http` tool for Deepgram
-
-An [`http` tool](/docs/modules/tools#http) points `execute.url` directly at
-[Deepgram's pre-recorded endpoint](https://developers.deepgram.com/docs/pre-recorded-audio) —
-its resolved input becomes the request body and the raw response is returned, no SOAT
-endpoint in between.
-
-:::warning Provider key exposure
-Unlike AI providers (Step 3), `http` tools do **not** resolve credentials from a
-[Secret](/docs/modules/secrets#examples) — the key is stored in the tool's
-`execute.headers` and is readable by anyone who can read the tool. Restrict access with
-[Policies](/docs/modules/policies#examples) and prefer a scoped, rotatable key.
-:::
+Same pattern as Step 3, for the [xAI](https://docs.x.ai/docs/overview) key. Keeping it
+in a [Secret](/docs/modules/secrets#examples) means it is encrypted at rest and never
+echoed back in API responses.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-DEEPGRAM_TOOL_ID=$(soat create-tool \
+XAI_SECRET_ID=$(soat create-secret \
   --project-id "$PROJECT_ID" \
-  --name "deepgram-listen" \
-  --type "http" \
-  --execute '{"url":"'"$STT_URL"'","method":"POST","headers":{"Authorization":"Token '"$DEEPGRAM_API_KEY"'","Content-Type":"application/json"}}' \
-  | jq -r '.id')
-echo "DEEPGRAM_TOOL_ID: $DEEPGRAM_TOOL_ID"
+  --name "xai-api-key" \
+  --value "$XAI_API_KEY" | jq -r '.id')
+echo "XAI_SECRET_ID: $XAI_SECRET_ID"
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: deepgramTool } = await adminSoat.tools.createTool({
+const { data: xaiSecret } = await adminSoat.secrets.createSecret({
   body: {
     project_id: PROJECT_ID,
-    name: 'deepgram-listen',
-    type: 'http',
-    execute: {
-      url: process.env.STT_URL,
-      method: 'POST',
-      headers: {
-        Authorization: `Token ${process.env.DEEPGRAM_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-    },
+    name: 'xai-api-key',
+    value: process.env.XAI_API_KEY!,
   },
 });
-const DEEPGRAM_TOOL_ID = deepgramTool.id;
+const XAI_SECRET_ID = xaiSecret.id;
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-DEEPGRAM_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
+XAI_SECRET_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/secrets" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"deepgram-listen\",\"type\":\"http\",\"execute\":{\"url\":\"$STT_URL\",\"method\":\"POST\",\"headers\":{\"Authorization\":\"Token $DEEPGRAM_API_KEY\",\"Content-Type\":\"application/json\"}}}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"xai-api-key\",\"value\":\"$XAI_API_KEY\"}" \
   | jq -r '.id')
-echo "DEEPGRAM_TOOL_ID: $DEEPGRAM_TOOL_ID"
+echo "XAI_SECRET_ID: $XAI_SECRET_ID"
 ```
 
 </TabItem>
@@ -579,98 +554,55 @@ echo "DEEPGRAM_TOOL_ID: $DEEPGRAM_TOOL_ID"
 
 ---
 
-## Step 10 — Wrap it in a `pipeline` tool
+## Step 10 — Create an xAI AI provider
 
-A [`pipeline` tool](/docs/modules/tools#pipeline) calls the step above and maps between
-shapes with [JSON Logic](https://jsonlogic.com): `var` reads the converter's
-`file.download_url` into Deepgram's `{ "url": … }` request body, and `var` again
-extracts the transcript from Deepgram's response
-(`results.channels[0].alternatives[0].transcript`) into the
-[converter output contract](/docs/modules/ingestion-rules#converter-tool-contract)
-(`{ pages: [...] }`). This is the entire adapter — no server to deploy.
+Create an [AI provider](/docs/modules/ai-providers#examples) for xAI. Because xAI
+speaks the OpenAI wire protocol, we use `provider: custom` (an OpenAI-compatible
+provider) and set `base_url` to xAI's endpoint (overridden to the mock in CI). See
+[Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms) for other
+providers and credential options.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-STT_TOOL_ID=$(soat create-tool \
+XAI_PROVIDER_ID=$(soat create-ai-provider \
   --project-id "$PROJECT_ID" \
-  --name "deepgram-transcribe" \
-  --type "pipeline" \
-  --pipeline '{
-    "steps": [{
-      "id": "call_deepgram",
-      "tool_id": "'"$DEEPGRAM_TOOL_ID"'",
-      "input": { "url": { "var": "input.file.download_url" } }
-    }],
-    "output": {
-      "pages": [{
-        "text": { "var": "steps.call_deepgram.results.channels.0.alternatives.0.transcript" },
-        "page_number": 1
-      }]
-    }
-  }' | jq -r '.id')
-echo "STT_TOOL_ID: $STT_TOOL_ID"
+  --name "xAI Audio" \
+  --provider "custom" \
+  --default-model "grok-4" \
+  --base-url "$XAI_BASE_URL" \
+  --secret-id "$XAI_SECRET_ID" | jq -r '.id')
+echo "XAI_PROVIDER_ID: $XAI_PROVIDER_ID"
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: sttTool } = await adminSoat.tools.createTool({
+const { data: xaiProvider } = await adminSoat.aiProviders.createAiProvider({
   body: {
     project_id: PROJECT_ID,
-    name: 'deepgram-transcribe',
-    type: 'pipeline',
-    pipeline: {
-      steps: [
-        {
-          id: 'call_deepgram',
-          tool_id: DEEPGRAM_TOOL_ID,
-          input: { url: { var: 'input.file.download_url' } },
-        },
-      ],
-      output: {
-        pages: [
-          {
-            text: {
-              var: 'steps.call_deepgram.results.channels.0.alternatives.0.transcript',
-            },
-            page_number: 1,
-          },
-        ],
-      },
-    },
+    name: 'xAI Audio',
+    provider: 'custom',
+    default_model: 'grok-4',
+    base_url: process.env.XAI_BASE_URL,
+    secret_id: XAI_SECRET_ID,
   },
 });
-const STT_TOOL_ID = sttTool.id;
+const XAI_PROVIDER_ID = xaiProvider.id;
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
+XAI_PROVIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/ai-providers" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "project_id": "'"$PROJECT_ID"'",
-    "name": "deepgram-transcribe",
-    "type": "pipeline",
-    "pipeline": {
-      "steps": [{
-        "id": "call_deepgram",
-        "tool_id": "'"$DEEPGRAM_TOOL_ID"'",
-        "input": { "url": { "var": "input.file.download_url" } }
-      }],
-      "output": {
-        "pages": [{
-          "text": { "var": "steps.call_deepgram.results.channels.0.alternatives.0.transcript" },
-          "page_number": 1
-        }]
-      }
-    }
-  }' | jq -r '.id'
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"xAI Audio\",\"provider\":\"custom\",\"default_model\":\"grok-4\",\"base_url\":\"$XAI_BASE_URL\",\"secret_id\":\"$XAI_SECRET_ID\"}" \
+  | jq -r '.id')
+echo "XAI_PROVIDER_ID: $XAI_PROVIDER_ID"
 ```
 
 </TabItem>
@@ -678,14 +610,62 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
 
 ---
 
-## Step 11 — Route audio to the transcription pipeline
+## Step 11 — Create the transcription agent
 
-Audio files are larger than typical images, so use `file_delivery: download_url` — the
-pipeline's `http` step hands Deepgram a short-lived signed URL to fetch the bytes
-itself, instead of loading the whole file into the request as base64. See
-[Ingestion Rules — File Delivery](/docs/modules/ingestion-rules#file-delivery). A
-transcript is one long block of text, so chunk it with the `size` strategy for sharper
-retrieval.
+Create an [agent](/docs/modules/agents#examples) backed by the xAI provider whose job
+is to transcribe audio verbatim.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+STT_AGENT_ID=$(soat create-agent \
+  --project-id "$PROJECT_ID" \
+  --ai-provider-id "$XAI_PROVIDER_ID" \
+  --name "Transcription Agent" \
+  --instructions "Transcribe the provided audio verbatim. Return plain text only — no commentary, no summary, no timestamps." \
+  | jq -r '.id')
+echo "STT_AGENT_ID: $STT_AGENT_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: sttAgent } = await adminSoat.agents.createAgent({
+  body: {
+    project_id: PROJECT_ID,
+    ai_provider_id: XAI_PROVIDER_ID,
+    name: 'Transcription Agent',
+    instructions:
+      'Transcribe the provided audio verbatim. Return plain text only — no commentary, no summary, no timestamps.',
+  },
+});
+const STT_AGENT_ID = sttAgent.id;
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+STT_AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$XAI_PROVIDER_ID\",\"name\":\"Transcription Agent\",\"instructions\":\"Transcribe the provided audio verbatim. Return plain text only — no commentary, no summary, no timestamps.\"}" \
+  | jq -r '.id')
+echo "STT_AGENT_ID: $STT_AGENT_ID"
+```
+
+</TabItem>
+</Tabs>
+
+---
+
+## Step 12 — Route audio to the transcription agent
+
+Map `audio/*` to the transcription agent. A transcript is one long block of text, so
+chunk it with the `size` strategy for sharper retrieval — see
+[Documents — File Ingestion and Chunking](/docs/modules/documents#file-ingestion-and-chunking).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -694,8 +674,7 @@ retrieval.
 soat create-ingestion-rule \
   --project-id "$PROJECT_ID" \
   --content-type-glob "audio/*" \
-  --tool-id "$STT_TOOL_ID" \
-  --file-delivery "download_url" \
+  --agent-id "$STT_AGENT_ID" \
   --chunk-strategy "size" \
   --chunk-size 1000 \
   --chunk-overlap 200 | jq '{id: .id, content_type_glob: .content_type_glob}'
@@ -709,8 +688,7 @@ await adminSoat.ingestionRules.createIngestionRule({
   body: {
     project_id: PROJECT_ID,
     content_type_glob: 'audio/*',
-    tool_id: STT_TOOL_ID,
-    file_delivery: 'download_url',
+    agent_id: STT_AGENT_ID,
     chunk_strategy: 'size',
     chunk_size: 1000,
     chunk_overlap: 200,
@@ -725,82 +703,58 @@ await adminSoat.ingestionRules.createIngestionRule({
 curl -s -X POST "$SOAT_BASE_URL/api/v1/ingestion-rules" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"content_type_glob\":\"audio/*\",\"tool_id\":\"$STT_TOOL_ID\",\"file_delivery\":\"download_url\",\"chunk_strategy\":\"size\",\"chunk_size\":1000,\"chunk_overlap\":200}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"content_type_glob\":\"audio/*\",\"agent_id\":\"$STT_AGENT_ID\",\"chunk_strategy\":\"size\",\"chunk_size\":1000,\"chunk_overlap\":200}" \
   | jq '{id: .id, content_type_glob: .content_type_glob}'
 ```
 
 </TabItem>
 </Tabs>
 
-:::info Long audio — deferring with the async callback
-If a recording is long enough that transcription exceeds the ingestion stall window,
-the pipeline's `output` can return `{ "status": "pending" }` instead of `{ pages }`.
-Deepgram's pre-recorded endpoint used above responds synchronously for typical
-lengths, so this tutorial's own pipeline never takes this branch — but the mechanism
-is fully implemented, and this is the exact contract a batch/job-based provider (or a
-very long file) would use:
-
-1. **Ingestion injects a callback** into every tool converter's input, alongside `file`:
-   ```jsonc
-   { "file": { /* … */ }, "callback": { "url": "https://…/ingestion-callback?token=…", "token": "…" } }
-   ```
-2. **The pipeline returns the deferral** instead of text:
-   ```jsonc
-   { "status": "pending" }
-   ```
-   The document stays in `status: "processing"`; `POST /documents/ingest` still returns
-   immediately (`202`, async mode — this only works when the caller did **not** pass
-   `?async=false`, since a synchronous request can't wait for a callback).
-3. **When the job finishes**, whatever process is watching it (the provider's own
-   webhook, or a poller your pipeline kicks off) delivers the transcript:
-   ```bash
-   curl -X POST "https://…/api/v1/documents/$DOC_ID/ingestion-callback?token=$CALLBACK_TOKEN" \
-     -H "Content-Type: application/json" \
-     -d '{"text": "The finished transcript."}'
-   ```
-   This call needs no SOAT session — the token is the only credential, scoped to this
-   one document and ingestion attempt. It is accepted once; a replay, a callback for an
-   attempt superseded by a re-ingest, or one that arrives after
-   `CONVERSION_STALL_TIMEOUT_MS` already failed the document all get `409`.
-4. **Ingestion resumes** on a valid callback: the transcript is chunked and embedded
-   exactly like a synchronous result, and the document becomes `ready`.
-
-See [Ingestion Rules — Synchronous vs Async Conversion](/docs/modules/ingestion-rules#synchronous-vs-async-callback-conversion)
-for the full contract, including the `CONVERSION_TIMEOUT` failure reason and the
-`CONVERSION_STALL_TIMEOUT_MS` configuration variable.
-:::
-
 ---
 
-## Step 12 — Ingest audio the same way
+## Step 13 — Ingest audio the same way
 
-Same call shape as the image, different file. The `audio/*` rule from Step 11 routes it
-to the transcription pipeline via `POST /documents/ingest` — the caller never names a
-tool. See [Documents](/docs/modules/documents#examples).
+Same call shape as the image, different file. The `audio/*` rule from Step 12 routes it
+to the transcription agent via `POST /documents/ingest` — the caller never names an
+agent. See [Documents](/docs/modules/documents#examples). (`MEETING_WAV_B64` is a tiny
+placeholder WAV; the model returns the same canned transcript against the mock.)
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-AUDIO_FILE_ID=$(soat upload-file \
+MEETING_WAV_B64="UklGRjQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YRAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+AUDIO_FILE_ID=$(soat upload-file-base64 \
   --project-id "$PROJECT_ID" \
-  --file ./meeting.mp3 | jq -r '.id')
+  --filename "meeting.wav" \
+  --content-type "audio/wav" \
+  --content "$MEETING_WAV_B64" | jq -r '.id')
+echo "AUDIO_FILE_ID: $AUDIO_FILE_ID"
 
 soat ingest-document \
   --project-id "$PROJECT_ID" \
   --file-id "$AUDIO_FILE_ID" \
   --path-prefix "/audio/" \
-  --async false | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
+  --async false | jq -e '.status == "ready" and .chunk_count >= 1'
+# prints `true` once the audio is transcribed, chunked, and embedded
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const audioForm = new FormData();
-audioForm.append('file', audioBlob, 'meeting.mp3');
-audioForm.append('project_id', PROJECT_ID);
-const { data: audioFile } = await adminSoat.files.uploadFile({ body: audioForm });
+const MEETING_WAV_B64 =
+  'UklGRjQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YRAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
+const { data: audioFile } = await adminSoat.files.uploadFileBase64({
+  body: {
+    project_id: PROJECT_ID,
+    filename: 'meeting.wav',
+    content_type: 'audio/wav',
+    content: MEETING_WAV_B64,
+  },
+});
 
 const { data: audioDoc } = await adminSoat.documents.ingestDocument({
   query: { async: false },
@@ -813,10 +767,13 @@ console.log(audioDoc.status, audioDoc.chunk_count);
 <TabItem value="curl" label="curl">
 
 ```bash
-AUDIO_FILE_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/files/upload" \
+MEETING_WAV_B64="UklGRjQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YRAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+AUDIO_FILE_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/files/upload/base64" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -F "file=@meeting.mp3" \
-  -F "project_id=$PROJECT_ID" | jq -r '.id')
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"filename\":\"meeting.wav\",\"content_type\":\"audio/wav\",\"content\":\"$MEETING_WAV_B64\"}" \
+  | jq -r '.id')
 
 curl -s -X POST "$SOAT_BASE_URL/api/v1/documents/ingest?async=false" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
@@ -830,7 +787,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/documents/ingest?async=false" \
 
 ---
 
-## Step 13 — Search the converted content
+## Step 14 — Search the converted content
 
 Both documents are chunked and embedded like any other. Query them through
 [Knowledge](/docs/modules/knowledge#examples) — the OCR and transcript text is fully
@@ -840,18 +797,26 @@ searchable.
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+# The OCR'd receipt text is retrievable
 soat search-knowledge \
   --project-id "$PROJECT_ID" \
   --query "total amount on the receipt" \
   --document-paths '["/images/"]' \
-  --limit 3 | jq '[.results[] | {document_id, score, content}]'
+  --limit 3 | jq -e '[.results[].content] | join(" ") | test("Total amount")'
+
+# The transcribed audio is retrievable
+soat search-knowledge \
+  --project-id "$PROJECT_ID" \
+  --query "when is the launch scheduled" \
+  --document-paths '["/audio/"]' \
+  --limit 3 | jq -e '[.results[].content] | join(" ") | test("launch is scheduled")'
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: search } = await adminSoat.knowledge.searchKnowledge({
+const { data: imageSearch } = await adminSoat.knowledge.searchKnowledge({
   body: {
     project_id: PROJECT_ID,
     query: 'total amount on the receipt',
@@ -859,7 +824,17 @@ const { data: search } = await adminSoat.knowledge.searchKnowledge({
     limit: 3,
   },
 });
-for (const r of search.results) console.log(r.document_id, r.score);
+for (const r of imageSearch.results) console.log(r.document_id, r.score);
+
+const { data: audioSearch } = await adminSoat.knowledge.searchKnowledge({
+  body: {
+    project_id: PROJECT_ID,
+    query: 'when is the launch scheduled',
+    document_paths: ['/audio/'],
+    limit: 3,
+  },
+});
+for (const r of audioSearch.results) console.log(r.document_id, r.score);
 ```
 
 </TabItem>
@@ -871,6 +846,12 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/knowledge/search" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"query\":\"total amount on the receipt\",\"document_paths\":[\"/images/\"],\"limit\":3}" \
   | jq '[.results[] | {document_id, score, content}]'
+
+curl -s -X POST "$SOAT_BASE_URL/api/v1/knowledge/search" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"query\":\"when is the launch scheduled\",\"document_paths\":[\"/audio/\"],\"limit\":3}" \
+  | jq '[.results[] | {document_id, score, content}]'
 ```
 
 </TabItem>
@@ -880,27 +861,27 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/knowledge/search" \
 
 ## What you built
 
-- **An agent converter** — a vision agent (its key stored as a
-  [Secret](/docs/modules/secrets#examples)) routed to by `image/*` and scanned
-  `application/pdf` rules. No JSON Logic, no request mapping: the highest-level way to
-  OCR images and scanned PDFs.
-- **A tool converter** — a plain [`http` tool](/docs/modules/tools#http) calling
-  Deepgram, wrapped in a [`pipeline` tool](/docs/modules/tools#pipeline) that reshapes
-  request and response with JSON Logic against the converter contract. The right choice
-  when you need a dedicated provider or an async job.
+- **Two agent converters** — an OpenAI vision agent routed to by `image/*` and scanned
+  `application/pdf` rules, and an xAI agent (registered as an OpenAI-compatible
+  provider) routed to by `audio/*`. Each key is stored as a
+  [Secret](/docs/modules/secrets#examples). No JSON Logic, no request mapping: the
+  highest-level way to OCR images and transcribe audio.
 - **Three ingestion rules** routing `image/*`, `audio/*`, and scanned
-  `application/pdf` to those converters, and **fully automatic ingestion** —
+  `application/pdf` to those agents, and **fully automatic ingestion** —
   `POST /documents/ingest` never names a converter; the matching rule is resolved from
   `content_type` every time.
-- **The async callback contract** (Step 11 note) — a tool converter can defer with
-  `{ status: "pending" }` under async ingestion and deliver its result later to
-  `POST /documents/:id/ingestion-callback`, for providers that run as background jobs
-  rather than answering inline.
 
-Reach for an **agent converter** first — it is simpler and keeps credentials in a
-secret. Drop to a **tool converter** when you need a specific external API, an async
-job, or a provider an agent's model can't reach. To support another modality (e.g.
-video), add one rule pointing at an agent, or one `http` + `pipeline` pair — no server
+Reach for an **agent converter** first — it is the simplest path and keeps credentials
+in a secret. When you instead need a dedicated non-LLM API (a specialized OCR/STT
+engine) or an async job, SOAT also supports **tool converters** — a plain
+[`http` tool](/docs/modules/tools#http) wrapped in a
+[`pipeline` tool](/docs/modules/tools#pipeline), including a
+[`{ status: "pending" }` async-callback](/docs/modules/ingestion-rules#synchronous-vs-async-callback-conversion)
+contract for background jobs. See
+[Ingestion Rules — Converter (tool or agent)](/docs/modules/ingestion-rules#converter-tool-or-agent)
+for the full contract.
+
+To support another modality (e.g. video), add one rule pointing at an agent — no server
 changes, no new deployment, ever. To provision this whole pipeline declaratively
 instead of one API call at a time, see
 [Deploy a Multi-Agent App with Agent Formation](/docs/tutorials/formations) — the
