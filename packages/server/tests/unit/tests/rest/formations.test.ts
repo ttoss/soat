@@ -75,6 +75,7 @@ describe('Formations', () => {
                 'memories:CreateMemoryEntry',
                 'memories:UpdateMemoryEntry',
                 'memories:DeleteMemoryEntry',
+                'documents:DeleteDocument',
               ],
             },
           ],
@@ -1403,6 +1404,81 @@ resources:
       expect(res.status).toBe(200);
       expect(res.body.valid).toBe(false);
       expect(res.body.errors.length).toBeGreaterThan(0);
+    });
+
+    test('validates template with document properties that are not an object', async () => {
+      const invalidTemplate = {
+        resources: {
+          BadDoc: {
+            type: 'document',
+            properties: 'not-an-object',
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: invalidTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: expect.stringContaining(
+              'Document `properties` must be an object'
+            ),
+          }),
+        ])
+      );
+    });
+
+    test('plan reports no-op for an unchanged document resource', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: documentFormationId,
+          template: documentTemplate,
+        });
+
+      expect(res.status).toBe(200);
+      const docChange = res.body.changes.find((c: { logical_id: string }) => {
+        return c.logical_id === 'MyDoc';
+      });
+      expect(docChange).toBeDefined();
+      expect(docChange.action).toBe('no-op');
+    });
+
+    test('plan reports update when the underlying document was deleted externally', async () => {
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${documentFormationId}`
+      );
+      const physicalDocumentId = getRes.body.resources.find(
+        (r: { logical_id: string }) => {
+          return r.logical_id === 'MyDoc';
+        }
+      ).physical_resource_id;
+
+      const deleteRes = await authenticatedTestClient(userToken).delete(
+        `/api/v1/documents/${physicalDocumentId}`
+      );
+      expect(deleteRes.status).toBe(204);
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: documentFormationId,
+          template: documentTemplate,
+        });
+
+      expect(res.status).toBe(200);
+      const docChange = res.body.changes.find((c: { logical_id: string }) => {
+        return c.logical_id === 'MyDoc';
+      });
+      expect(docChange).toBeDefined();
+      expect(docChange.action).toBe('update');
     });
 
     test('deletes formation and cleans up document resource', async () => {
