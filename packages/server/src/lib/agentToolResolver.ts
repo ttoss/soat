@@ -13,6 +13,10 @@ import {
   resolveMcpTools,
   resolveSoatTools,
 } from './agentToolResolverExternalTools';
+import {
+  resolveSecretRefsInRecord,
+  resolveSecretRefsInString,
+} from './secrets';
 
 const log = createDebug('soat:toolResolver');
 
@@ -113,6 +117,7 @@ export const isSoatActionAllowedByBoundary = (args: {
 
 type TypedHttpTool = {
   name: string;
+  projectId: number;
   description: string | null;
   parameters: Record<string, unknown> | null;
   execute:
@@ -284,10 +289,31 @@ export class HttpToolError extends Error {
   }
 }
 
+// Resolves {{secret:...}} tokens in the request url and headers at the point
+// of use — the stored config (and anything echoed back by GET/LIST) keeps the
+// reference.
+const resolveHttpRequestSecrets = async (args: {
+  url: string;
+  headers?: Record<string, string>;
+  projectId: number;
+}) => {
+  return {
+    fetchUrl: await resolveSecretRefsInString({
+      value: args.url,
+      projectId: args.projectId,
+    }),
+    headers: await resolveSecretRefsInRecord({
+      record: args.headers,
+      projectId: args.projectId,
+    }),
+  };
+};
+
 export const buildHttpToolExecute = (
   args: {
     toolName: string;
     execute: HttpExecuteConfig;
+    projectId: number;
   },
   toolContext?: Record<string, string>
 ) => {
@@ -324,11 +350,16 @@ export const buildHttpToolExecute = (
         remainingArgs,
         hasBody,
       });
-      const response = await fetch(url, {
+      const resolved = await resolveHttpRequestSecrets({
+        url,
+        headers: args.execute.headers,
+        projectId: args.projectId,
+      });
+      const response = await fetch(resolved.fetchUrl, {
         method,
         headers: {
           ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
-          ...args.execute.headers,
+          ...resolved.headers,
           ...buildContextHeaders(toolContext),
         },
         ...(hasBody ? { body: JSON.stringify(remainingArgs) } : {}),
@@ -376,7 +407,14 @@ const resolveHttpTool = (
     description: typedTool.description ?? undefined,
     inputSchema: jsonSchema(parameters ?? { type: 'object', properties: {} }),
     execute: execute
-      ? buildHttpToolExecute({ toolName: typedTool.name, execute }, toolContext)
+      ? buildHttpToolExecute(
+          {
+            toolName: typedTool.name,
+            execute,
+            projectId: typedTool.projectId,
+          },
+          toolContext
+        )
       : buildInvalidHttpToolExecute({
           toolName: typedTool.name,
           rawExecute: typedTool.execute,
@@ -402,6 +440,7 @@ const resolveClientTool = (typedTool: {
 
 type AgentToolRow = {
   publicId: string;
+  projectId: number;
   type: string;
   name: string;
   description: string | null;
@@ -481,10 +520,20 @@ const resolveToolByType = async (
     case 'mcp': {
       if (!typedTool.mcp?.url) return {};
       try {
+        // Resolve {{secret:...}} tokens right before connecting to the MCP
+        // server — the stored config keeps the reference.
+        const mcp = {
+          url: await resolveSecretRefsInString({
+            value: typedTool.mcp.url,
+            projectId: typedTool.projectId,
+          }),
+          headers: await resolveSecretRefsInRecord({
+            record: typedTool.mcp.headers,
+            projectId: typedTool.projectId,
+          }),
+        };
         return await resolveMcpTools({
-          typedTool: typedTool as {
-            mcp: { url: string; headers?: Record<string, string> };
-          },
+          typedTool: { mcp },
           toolContext: args.toolContext,
           buildContextHeaders,
           logToolCallingError,

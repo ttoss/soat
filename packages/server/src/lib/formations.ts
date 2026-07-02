@@ -14,6 +14,7 @@ import {
   buildDependencyGraph,
   buildResolvedParamsMap,
   resolveParamExpressions,
+  resolveRefs,
   topologicalSort,
 } from './formationsHelpers';
 import { getFormationModule } from './formationsRegistry';
@@ -136,10 +137,23 @@ export const planFormation = async (args: {
         try {
           const liveProperties = await module.read({ physicalResourceId });
           if (liveProperties !== null) {
-            const resolvedProperties = resolveParamExpressions(
+            let resolvedProperties = resolveParamExpressions(
               decl.properties ?? {},
-              resolvedParams
+              resolvedParams,
+              new Set(Object.keys(args.template.resources))
             ) as Record<string, unknown>;
+            try {
+              // Substitute physical ids of already-created resources so an
+              // unchanged ref/sub property diffs as a no-op.
+              resolvedProperties = resolveRefs(
+                resolvedProperties,
+                existingMap
+              ) as Record<string, unknown>;
+            } catch {
+              // A ref to a not-yet-created resource stays unresolved — the
+              // raw expression never equals the live value, so this reports
+              // 'update', which is the conservative answer.
+            }
 
             const needsUpdate = Object.entries(resolvedProperties).some(
               ([key, value]) => {
