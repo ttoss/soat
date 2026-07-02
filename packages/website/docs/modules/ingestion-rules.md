@@ -16,7 +16,7 @@ Rules are per-project. SOAT does not perform OCR or transcription itself — the
 ## Related Tutorials
 
 - [Ingest Images and Audio with Converters - Step 6 (Route images to the agent)](/docs/tutorials/ingest-images-and-audio#step-6--route-images-to-the-agent)
-- [Ingest Images and Audio with Converters - Step 11 (Route audio to the transcription pipeline)](/docs/tutorials/ingest-images-and-audio#step-11--route-audio-to-the-transcription-pipeline)
+- [Ingest Images and Audio with Converters - Step 12 (Route audio to the transcription agent)](/docs/tutorials/ingest-images-and-audio#step-12--route-audio-to-the-transcription-agent)
 
 ## Data Model
 
