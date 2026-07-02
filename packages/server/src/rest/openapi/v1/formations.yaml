@@ -41,6 +41,17 @@ paths:
               properties:
                 template:
                   $ref: '#/components/schemas/FormationTemplateInput'
+                parameters:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: >
+                    Runtime parameter values that override or supply template
+                    parameter defaults. Keys must match parameter names declared
+                    in `template.parameters`. When provided, the validation
+                    result also reports required parameters that are still
+                    missing after applying these values.
+                  nullable: true
       responses:
         '200':
           description: Validation result
