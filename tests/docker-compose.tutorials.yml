@@ -133,8 +133,6 @@ services:
       # compose network; dummy keys are ignored by the mocks.
       OPENAI_BASE_URL: 'http://mock-providers:8090/v1'
       OPENAI_API_KEY: 'test-openai-key'
-      XAI_BASE_URL: 'http://mock-providers:8090/v1'
-      XAI_API_KEY: 'test-xai-key'
     volumes:
       - ../packages/website/docs/tutorials:/tutorials:ro
       - ./tutorials-tests.sh:/tutorials-tests.sh:ro

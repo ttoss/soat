@@ -3,16 +3,23 @@
 // tutorial, so the converter flow can be validated in the tutorials runner
 // without external API keys.
 //
-// Both converters are agents backed by an OpenAI-compatible provider:
-//   * the image OCR agent → OpenAI (native `openai` provider → Responses API)
-//   * the audio agent      → xAI, registered as an OpenAI-compatible provider
-//                            (`custom` provider → Chat Completions API)
+// Both converters are agents on the same OpenAI account, registered with two
+// different provider slugs so they use two different wire protocols:
+//   * the image OCR agent → native `openai` provider → Responses API
+//   * the audio agent      → `custom` provider (base_url pointed at OpenAI
+//                            itself) → Chat Completions API
+//
+// The audio agent must use the `custom` slug: SOAT's native `openai` slug talks
+// to the Responses API, whose @ai-sdk/openai converter does not support audio
+// input at all (throws `AI_UnsupportedFunctionalityError`), while the Chat
+// Completions API converter does (via `input_audio`). See "Ingestion Rules —
+// Converter (tool or agent)" in the module docs for the full explanation.
 //
 // So the mock answers both OpenAI wire protocols:
 //   POST /v1/responses         — Responses API (native OpenAI provider). Used by
 //                                the vision OCR agent; returns canned OCR text.
 //   POST /v1/chat/completions  — Chat Completions API (OpenAI-compatible custom
-//                                provider). Used by the xAI audio agent; returns
+//                                provider). Used by the audio agent; returns
 //                                a canned transcript when the request carries
 //                                audio, else canned OCR text. Supports streaming
 //                                (SSE) and non-streaming, keyed on `stream`.

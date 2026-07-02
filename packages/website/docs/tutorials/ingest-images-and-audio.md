@@ -20,25 +20,41 @@ stores the model's text output as the document. **Zero plumbing**: no
 request/response mapping to write, and the provider key lives in a
 [Secret](/docs/modules/secrets#examples), encrypted at rest.
 
-We wire up two of them, one per modality — using the providers each is best at:
+We wire up two of them, one per modality — both backed by OpenAI, but through two
+different wire protocols:
 
 - **Images and scanned PDFs → [OpenAI](https://platform.openai.com/docs)** vision
-  model (OCR).
-- **Audio → [xAI](https://docs.x.ai/docs/overview)** (speech-to-text). xAI exposes
-  an OpenAI-compatible API, so we register it as an OpenAI-compatible provider and
-  point its `base_url` at xAI.
+  model (OCR), registered with the native `openai` provider slug.
+- **Audio → [OpenAI](https://platform.openai.com/docs)** audio-capable model
+  (speech-to-text), registered with the **`custom`** provider slug pointed at
+  OpenAI's own `base_url`.
 
 Both routes reuse the same chunk + embed pipeline, so the converted text ends up
 searchable like any other document, and nothing is hosted outside SOAT either way.
+
+:::caution Why audio uses the `custom` provider slug, not `openai`
+SOAT's native `openai` provider slug talks to OpenAI's **Responses API**, which
+does not accept audio input — an audio file routed to an `openai`-slug agent
+fails with `CONVERTER_FAILED` (`file part media type audio/... not supported`).
+The `custom` provider slug talks to the **Chat Completions API** instead, which
+does support audio via `input_audio` content. Part B therefore registers the
+same OpenAI account through `provider: custom` with `base_url` pointed at
+`https://api.openai.com/v1`. Vision (image) agent converters are unaffected —
+Part A uses the native `openai` slug throughout. See
+[Ingestion Rules — Converter (tool or agent)](/docs/modules/ingestion-rules#converter-tool-or-agent)
+for the underlying constraint. (xAI's real API does not accept audio input at
+all today, via either wire protocol — that is why this tutorial uses OpenAI for
+both modalities rather than xAI for audio.)
+:::
 
 It maps onto the feature's building blocks:
 
 | Building block | Where in this tutorial |
 | -------------- | ----------------------- |
 | **Agent converter** — a multimodal model extracts text, no plumbing | Parts A & B |
-| **Ingestion rules** — `content_type` → converter routing | Steps 6, 7, 12 |
-| **Automatic routing** — ingest without naming a converter | Steps 8, 13 |
-| **Provider-agnostic converters** — OpenAI for vision, xAI for audio | Steps 4, 10 |
+| **Ingestion rules** — `content_type` → converter routing | Steps 6, 7, 11 |
+| **Automatic routing** — ingest without naming a converter | Steps 8, 12 |
+| **Provider wire protocol** — native `openai` slug (Responses API) for vision, `custom` slug (Chat Completions API) for audio | Steps 4, 9 |
 
 :::tip Runs against mock providers — no keys needed
 Every provider call is directed at the `base_url` you configure on each AI
@@ -46,8 +62,8 @@ provider, so the flow can run against stand-in servers instead of the real APIs.
 The tutorials test runner does exactly this: `tests/docker-compose.tutorials.yml`
 starts a `mock-providers` service (`tests/mocks/mock-providers.mjs`) that answers
 the OpenAI Responses API (vision OCR) and the OpenAI-compatible Chat Completions
-API (xAI transcription) with canned text, and sets `OPENAI_BASE_URL` /
-`XAI_BASE_URL` to it — so the whole ingest → convert → search flow is validated
+API (audio transcription) with canned text, and sets `OPENAI_BASE_URL` to it for
+both agents — so the whole ingest → convert → search flow is validated
 end-to-end in CI with no external keys.
 :::
 
@@ -58,22 +74,21 @@ end-to-end in CI with no external keys.
 - For production hardening (storing provider keys as secrets), see
   [Advanced Configuration](/docs/getting-started/advanced-config).
 - CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- Provider credentials for **real** runs: an
+- Provider credentials for **real** runs: one
   [OpenAI API key](https://platform.openai.com/docs) with access to a **vision**
-  model, and an [xAI API key](https://docs.x.ai/docs/overview). For provider setup
-  patterns see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
-  No other infrastructure required — and neither key is needed when running against
-  the mock providers described above.
+  model (`gpt-4o` or similar) and an **audio-capable** model (`gpt-audio-mini` or
+  similar) covers both parts of this tutorial. For provider setup patterns see
+  [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms). No other
+  infrastructure required — and no key is needed when running against the mock
+  providers described above.
 
 ```bash
 export SOAT_BASE_URL=http://localhost:5047   # CLI, SDK, and curl — do NOT append /api/v1
 
-# Provider endpoints and keys. The defaults are the real providers; each is
-# overridable so the tutorial can also run against local mocks (see the tip above).
+# Provider endpoint and key. The default is the real provider; overridable so
+# the tutorial can also run against a local mock (see the tip above).
 export OPENAI_BASE_URL="${OPENAI_BASE_URL:-https://api.openai.com/v1}"
 export OPENAI_API_KEY="${OPENAI_API_KEY:-sk-your-openai-key}"
-export XAI_BASE_URL="${XAI_BASE_URL:-https://api.x.ai/v1}"
-export XAI_API_KEY="${XAI_API_KEY:-xai-your-key}"
 ```
 
 ---
@@ -499,67 +514,22 @@ need.
 
 ---
 
-## Part B — Audio via an xAI agent
+## Part B — Audio via an OpenAI agent
 
-Audio is exactly the same shape as images, with a different provider. xAI exposes an
-[OpenAI-compatible API](https://docs.x.ai/docs/overview), so we register it as an
-OpenAI-compatible provider (`provider: custom`) whose `base_url` points at xAI, then
-route `audio/*` at an agent backed by it. No pipeline, no request mapping — SOAT hands
-the audio file to the model and stores its transcript.
+Audio is exactly the same shape as images, with a different wire protocol. We reuse
+the OpenAI [Secret](/docs/modules/secrets#examples) from Step 3, but register a
+**second** [AI provider](/docs/modules/ai-providers#examples) for it with the
+`custom` slug and `base_url` pointed at OpenAI's own endpoint — see the callout
+above for why. No pipeline, no request mapping — SOAT hands the audio file to the
+model and stores its transcript.
 
-## Step 9 — Store the xAI key as a secret
+## Step 9 — Create an OpenAI provider for audio
 
-Same pattern as Step 3, for the [xAI](https://docs.x.ai/docs/overview) key. Keeping it
-in a [Secret](/docs/modules/secrets#examples) means it is encrypted at rest and never
-echoed back in API responses.
-
-<Tabs groupId="client">
-<TabItem value="cli" label="CLI" default>
-
-```bash
-XAI_SECRET_ID=$(soat create-secret \
-  --project-id "$PROJECT_ID" \
-  --name "xai-api-key" \
-  --value "$XAI_API_KEY" | jq -r '.id')
-echo "XAI_SECRET_ID: $XAI_SECRET_ID"
-```
-
-</TabItem>
-<TabItem value="sdk" label="SDK">
-
-```ts
-const { data: xaiSecret } = await adminSoat.secrets.createSecret({
-  body: {
-    project_id: PROJECT_ID,
-    name: 'xai-api-key',
-    value: process.env.XAI_API_KEY!,
-  },
-});
-const XAI_SECRET_ID = xaiSecret.id;
-```
-
-</TabItem>
-<TabItem value="curl" label="curl">
-
-```bash
-XAI_SECRET_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/secrets" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"xai-api-key\",\"value\":\"$XAI_API_KEY\"}" \
-  | jq -r '.id')
-echo "XAI_SECRET_ID: $XAI_SECRET_ID"
-```
-
-</TabItem>
-</Tabs>
-
----
-
-## Step 10 — Create an xAI AI provider
-
-Create an [AI provider](/docs/modules/ai-providers#examples) for xAI. Because xAI
-speaks the OpenAI wire protocol, we use `provider: custom` (an OpenAI-compatible
-provider) and set `base_url` to xAI's endpoint (overridden to the mock in CI). See
+Create a **second** AI provider on the same OpenAI account, this time with
+`provider: custom` and an audio-capable `default_model`. This is the workaround
+described above: the native `openai` slug talks to the Responses API, which
+[does not support audio input](/docs/modules/ingestion-rules#converter-tool-or-agent);
+`custom` talks to the Chat Completions API, which does. See
 [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms) for other
 providers and credential options.
 
@@ -567,43 +537,43 @@ providers and credential options.
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-XAI_PROVIDER_ID=$(soat create-ai-provider \
+OPENAI_AUDIO_PROVIDER_ID=$(soat create-ai-provider \
   --project-id "$PROJECT_ID" \
-  --name "xAI Audio" \
+  --name "OpenAI Audio" \
   --provider "custom" \
-  --default-model "grok-4" \
-  --base-url "$XAI_BASE_URL" \
-  --secret-id "$XAI_SECRET_ID" | jq -r '.id')
-echo "XAI_PROVIDER_ID: $XAI_PROVIDER_ID"
+  --default-model "gpt-audio-mini" \
+  --base-url "$OPENAI_BASE_URL" \
+  --secret-id "$OPENAI_SECRET_ID" | jq -r '.id')
+echo "OPENAI_AUDIO_PROVIDER_ID: $OPENAI_AUDIO_PROVIDER_ID"
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: xaiProvider } = await adminSoat.aiProviders.createAiProvider({
+const { data: openaiAudioProvider } = await adminSoat.aiProviders.createAiProvider({
   body: {
     project_id: PROJECT_ID,
-    name: 'xAI Audio',
+    name: 'OpenAI Audio',
     provider: 'custom',
-    default_model: 'grok-4',
-    base_url: process.env.XAI_BASE_URL,
-    secret_id: XAI_SECRET_ID,
+    default_model: 'gpt-audio-mini',
+    base_url: process.env.OPENAI_BASE_URL,
+    secret_id: OPENAI_SECRET_ID,
   },
 });
-const XAI_PROVIDER_ID = xaiProvider.id;
+const OPENAI_AUDIO_PROVIDER_ID = openaiAudioProvider.id;
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-XAI_PROVIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/ai-providers" \
+OPENAI_AUDIO_PROVIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/ai-providers" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"xAI Audio\",\"provider\":\"custom\",\"default_model\":\"grok-4\",\"base_url\":\"$XAI_BASE_URL\",\"secret_id\":\"$XAI_SECRET_ID\"}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"OpenAI Audio\",\"provider\":\"custom\",\"default_model\":\"gpt-audio-mini\",\"base_url\":\"$OPENAI_BASE_URL\",\"secret_id\":\"$OPENAI_SECRET_ID\"}" \
   | jq -r '.id')
-echo "XAI_PROVIDER_ID: $XAI_PROVIDER_ID"
+echo "OPENAI_AUDIO_PROVIDER_ID: $OPENAI_AUDIO_PROVIDER_ID"
 ```
 
 </TabItem>
@@ -611,10 +581,10 @@ echo "XAI_PROVIDER_ID: $XAI_PROVIDER_ID"
 
 ---
 
-## Step 11 — Create the transcription agent
+## Step 10 — Create the transcription agent
 
-Create an [agent](/docs/modules/agents#examples) backed by the xAI provider whose job
-is to transcribe audio verbatim.
+Create an [agent](/docs/modules/agents#examples) backed by the audio provider whose
+job is to transcribe audio verbatim.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -622,7 +592,7 @@ is to transcribe audio verbatim.
 ```bash
 STT_AGENT_ID=$(soat create-agent \
   --project-id "$PROJECT_ID" \
-  --ai-provider-id "$XAI_PROVIDER_ID" \
+  --ai-provider-id "$OPENAI_AUDIO_PROVIDER_ID" \
   --name "Transcription Agent" \
   --instructions "Transcribe the provided audio verbatim. Return plain text only — no commentary, no summary, no timestamps." \
   | jq -r '.id')
@@ -636,7 +606,7 @@ echo "STT_AGENT_ID: $STT_AGENT_ID"
 const { data: sttAgent } = await adminSoat.agents.createAgent({
   body: {
     project_id: PROJECT_ID,
-    ai_provider_id: XAI_PROVIDER_ID,
+    ai_provider_id: OPENAI_AUDIO_PROVIDER_ID,
     name: 'Transcription Agent',
     instructions:
       'Transcribe the provided audio verbatim. Return plain text only — no commentary, no summary, no timestamps.',
@@ -652,7 +622,7 @@ const STT_AGENT_ID = sttAgent.id;
 STT_AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$XAI_PROVIDER_ID\",\"name\":\"Transcription Agent\",\"instructions\":\"Transcribe the provided audio verbatim. Return plain text only — no commentary, no summary, no timestamps.\"}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$OPENAI_AUDIO_PROVIDER_ID\",\"name\":\"Transcription Agent\",\"instructions\":\"Transcribe the provided audio verbatim. Return plain text only — no commentary, no summary, no timestamps.\"}" \
   | jq -r '.id')
 echo "STT_AGENT_ID: $STT_AGENT_ID"
 ```
@@ -662,7 +632,7 @@ echo "STT_AGENT_ID: $STT_AGENT_ID"
 
 ---
 
-## Step 12 — Route audio to the transcription agent
+## Step 11 — Route audio to the transcription agent
 
 Map `audio/*` to the transcription agent. A transcript is one long block of text, so
 chunk it with the `size` strategy for sharper retrieval — see
@@ -713,12 +683,15 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/ingestion-rules" \
 
 ---
 
-## Step 13 — Ingest audio the same way
+## Step 12 — Ingest audio the same way
 
-Same call shape as the image, different file. The `audio/*` rule from Step 12 routes it
+Same call shape as the image, different file. The `audio/*` rule from Step 11 routes it
 to the transcription agent via `POST /documents/ingest` — the caller never names an
 agent. See [Documents](/docs/modules/documents#examples). (`MEETING_WAV_B64` is a tiny
-placeholder WAV; the model returns the same canned transcript against the mock.)
+placeholder WAV; the model returns the same canned transcript against the mock. Against
+a **real** OpenAI account the model occasionally needs a retry — like any LLM call, an
+agent converter generation can intermittently return a non-answer instead of acting on
+the input; re-ingest with `soat reingest-document` if `.status` comes back `failed`.)
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -739,7 +712,7 @@ soat ingest-document \
   --path-prefix "/audio/" \
   --async false | jq -e '.status == "ready"'
 # prints `true` once the audio is transcribed, chunked, and embedded
-# (chunk_count is reported under .metadata; Step 14 confirms the text is searchable)
+# (chunk_count is reported under .metadata; Step 13 confirms the text is searchable)
 ```
 
 </TabItem>
@@ -789,7 +762,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/documents/ingest?async=false" \
 
 ---
 
-## Step 14 — Search the converted content
+## Step 13 — Search the converted content
 
 Both documents are chunked and embedded like any other. Query them through
 [Knowledge](/docs/modules/knowledge#examples) — the OCR and transcript text is fully
@@ -863,11 +836,13 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/knowledge/search" \
 
 ## What you built
 
-- **Two agent converters** — an OpenAI vision agent routed to by `image/*` and scanned
-  `application/pdf` rules, and an xAI agent (registered as an OpenAI-compatible
-  provider) routed to by `audio/*`. Each key is stored as a
-  [Secret](/docs/modules/secrets#examples). No JSON Logic, no request mapping: the
-  highest-level way to OCR images and transcribe audio.
+- **Two agent converters on the same OpenAI account** — a vision agent (native
+  `openai` slug, Responses API) routed to by `image/*` and scanned `application/pdf`
+  rules, and an audio agent (`custom` slug, Chat Completions API) routed to by
+  `audio/*`. The key is stored once as a [Secret](/docs/modules/secrets#examples)
+  and reused by both [AI providers](/docs/modules/ai-providers#examples). No JSON
+  Logic, no request mapping: the highest-level way to OCR images and transcribe
+  audio.
 - **Three ingestion rules** routing `image/*`, `audio/*`, and scanned
   `application/pdf` to those agents, and **fully automatic ingestion** —
   `POST /documents/ingest` never names a converter; the matching rule is resolved from
