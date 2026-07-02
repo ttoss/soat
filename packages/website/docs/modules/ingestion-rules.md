@@ -77,6 +77,8 @@ A rule's converter is either a [Tool](./tools.md) or an [Agent](./agents.md) (ex
 
 A tool converter does not require hosting a separate adapter service. An [`http` tool](./tools.md#http) can point its `execute.url` directly at a third-party API (OpenAI, xAI, …); a [`pipeline` tool](./tools.md#pipeline) wrapping it reshapes the request and response using the same [JSON Logic](https://jsonlogic.com) mapping every other pipeline step uses — `cat` to build values like a base64 `data:` URI, `var` to extract a nested response field into the shape below. Point `IngestionRule.tool_id` at the pipeline tool. See [Tools — pipeline](./tools.md#pipeline) for the mapping syntax.
 
+Hold the third-party API key in a [Secret](./secrets.md) and embed a [secret reference](./secrets.md#secret-references-secret) in the `http` tool's `execute.headers` — e.g. `{"Authorization": "Bearer {{secret:sec_01HXYZ}}"}`. Never paste the raw key into the tool config: the config is echoed back by `GET /tools/{id}`, while the `{{secret:...}}` token resolves only at call time and the raw value is never returned by any API response.
+
 ### Converter Tool Contract
 
 A **tool** converter is called via the same server-side path as any other tool call, with a fixed input shape, and must return one of three output shapes.

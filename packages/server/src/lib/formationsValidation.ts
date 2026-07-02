@@ -127,10 +127,13 @@ const validateResourceProperties = (args: {
   for (const ref of collectParamRefs(properties)) {
     // body.xxx refs are runtime tool-argument interpolations, not formation params
     if (ref.startsWith('body.')) continue;
+    // A sub token may also name a resource logical id (resolved to the
+    // physical id at apply time).
+    if (logicalIds.has(ref)) continue;
     if (!paramNames.has(ref)) {
       errors.push({
         path: `${basePath}.properties`,
-        message: `Parameter '${ref}' is not defined in the parameters section`,
+        message: `'${ref}' is neither a parameter nor a resource logical id`,
       });
     }
   }
@@ -236,10 +239,11 @@ const validateOutputRefs = (
       }
     }
     for (const ref of collectParamRefs(outputValue)) {
+      if (logicalIds.has(ref)) continue;
       if (!paramNames.has(ref)) {
         errors.push({
           path: `outputs.${outputName}`,
-          message: `Parameter '${ref}' is not defined in the parameters section`,
+          message: `'${ref}' is neither a parameter nor a resource logical id`,
         });
       }
     }

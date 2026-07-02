@@ -72,6 +72,11 @@ export const ERROR_CODES = {
     description:
       'A resource with this name already exists in the project. Use a different name.',
   },
+  SECRET_NOT_FOUND: {
+    httpStatus: 400,
+    description:
+      'A secret referenced by a {{secret:...}} token does not exist in this project.',
+  },
   SECRET_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:

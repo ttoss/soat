@@ -31,6 +31,19 @@ export const collectRefs = (value: unknown): string[] => {
   return [];
 };
 
+export const isSub = (value: unknown): value is SubExpression => {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.keys(value).length === 1 &&
+    'sub' in value &&
+    typeof (value as Record<string, unknown>).sub === 'string'
+  );
+};
+
+const SUB_PARAM_RE = /\$\{([^}]+)\}/g;
+
 export const resolveRefs = (
   value: unknown,
   resolvedIds: Map<string, string>
@@ -41,6 +54,14 @@ export const resolveRefs = (
       throw new Error(`Unresolved ref: ${value.ref}`);
     }
     return physicalId;
+  }
+  if (isSub(value)) {
+    // A sub surviving param resolution only carries resource logical ids and
+    // `body.*` tokens. Substitute physical ids; leave `body.*` (resolved at
+    // tool-call time) intact.
+    return value.sub.replace(SUB_PARAM_RE, (original, name: string) => {
+      return resolvedIds.get(name) ?? original;
+    });
   }
   if (Array.isArray(value)) {
     return value.map((item) => {
@@ -107,18 +128,29 @@ export const isParam = (value: unknown): value is ParamExpression => {
   );
 };
 
-export const isSub = (value: unknown): value is SubExpression => {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    Object.keys(value).length === 1 &&
-    'sub' in value &&
-    typeof (value as Record<string, unknown>).sub === 'string'
-  );
+/**
+ * Collects every `${Name}` token found inside sub expressions, excluding
+ * `body.*` tokens (which are resolved at tool-call time). A token may name a
+ * template parameter or a resource logical id — callers disambiguate.
+ */
+export const collectSubTokens = (value: unknown): string[] => {
+  if (isSub(value)) {
+    return [...value.sub.matchAll(SUB_PARAM_RE)]
+      .map((m) => {
+        return m[1];
+      })
+      .filter((name) => {
+        return !name.startsWith('body.');
+      });
+  }
+  if (Array.isArray(value)) return value.flatMap(collectSubTokens);
+  if (typeof value === 'object' && value !== null) {
+    return Object.values(value as Record<string, unknown>).flatMap(
+      collectSubTokens
+    );
+  }
+  return [];
 };
-
-const SUB_PARAM_RE = /\$\{([^}]+)\}/g;
 
 export const collectParamRefs = (value: unknown): string[] => {
   if (isParam(value)) return [value.param];
@@ -139,7 +171,8 @@ export const collectParamRefs = (value: unknown): string[] => {
 
 export const resolveParamExpressions = (
   value: unknown,
-  resolvedParams: Map<string, string>
+  resolvedParams: Map<string, string>,
+  resourceLogicalIds?: Set<string>
 ): unknown => {
   if (isParam(value)) {
     // An unresolved param resolves to `undefined`, which drops the field from
@@ -151,11 +184,18 @@ export const resolveParamExpressions = (
   }
   if (isSub(value)) {
     let hasUnresolved = false;
+    let hasResourceRef = false;
     const replaced = value.sub.replace(
       SUB_PARAM_RE,
       (original, name: string) => {
         // body.xxx refs are resolved at tool-call time, not formation-apply time
         if (name.startsWith('body.')) return original;
+        // Resource logical ids are resolved to physical ids later, by
+        // resolveRefs at apply time — keep the token and the sub wrapper.
+        if (resourceLogicalIds?.has(name)) {
+          hasResourceRef = true;
+          return original;
+        }
         const resolved = resolvedParams.get(name);
         if (resolved === undefined) {
           hasUnresolved = true;
@@ -167,17 +207,22 @@ export const resolveParamExpressions = (
     // If any (non-body) param in the interpolation was kept/omitted, drop the
     // whole value so the previous value is preserved rather than writing a
     // partially-substituted string.
-    return hasUnresolved ? undefined : replaced;
+    if (hasUnresolved) return undefined;
+    return hasResourceRef ? { sub: replaced } : replaced;
   }
   if (Array.isArray(value)) {
     return value.map((item) => {
-      return resolveParamExpressions(item, resolvedParams);
+      return resolveParamExpressions(item, resolvedParams, resourceLogicalIds);
     });
   }
   if (typeof value === 'object' && value !== null) {
     const result: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      result[k] = resolveParamExpressions(v, resolvedParams);
+      result[k] = resolveParamExpressions(
+        v,
+        resolvedParams,
+        resourceLogicalIds
+      );
     }
     return result;
   }
@@ -223,7 +268,8 @@ export const resolveWorkingTemplate = (args: {
   if (!hasParameters && resolvedParamsMap.size === 0) return template;
   return resolveParamExpressions(
     template,
-    resolvedParamsMap
+    resolvedParamsMap,
+    new Set(Object.keys(template.resources))
   ) as FormationTemplate;
 };
 
@@ -246,10 +292,16 @@ export const getMissingParams = (
   provided?: Record<string, string>,
   forUpdate = false
 ): string[] => {
-  const usedParams = new Set([
-    ...collectParamRefs(template.resources),
-    ...collectParamRefs(template.outputs ?? {}),
-  ]);
+  const logicalIds = new Set(Object.keys(template.resources));
+  const usedParams = new Set(
+    [
+      ...collectParamRefs(template.resources),
+      ...collectParamRefs(template.outputs ?? {}),
+    ].filter((name) => {
+      // A sub token naming a resource logical id is a resource ref, not a param.
+      return !logicalIds.has(name);
+    })
+  );
 
   return [...usedParams].filter((name) => {
     return !paramHasValue({
@@ -266,10 +318,15 @@ export const buildDependencyGraph = (
   template: FormationTemplate
 ): Map<string, Set<string>> => {
   const graph = new Map<string, Set<string>>();
+  const logicalIds = new Set(Object.keys(template.resources));
   for (const [logicalId, decl] of Object.entries(template.resources)) {
     const deps = new Set<string>();
     for (const ref of collectRefs(decl.properties)) {
       if (ref !== logicalId) deps.add(ref);
+    }
+    for (const token of collectSubTokens(decl.properties)) {
+      // Sub tokens naming other resources are implicit dependencies.
+      if (token !== logicalId && logicalIds.has(token)) deps.add(token);
     }
     for (const dep of decl.depends_on ?? []) {
       if (dep !== logicalId) deps.add(dep);

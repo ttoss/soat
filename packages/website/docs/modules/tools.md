@@ -133,6 +133,24 @@ PATCH https://api.example.com/finance/recurring-expenses/exp_abc
 Body: { "amount": 42 }
 ```
 
+#### Secret references in `execute`
+
+Never paste raw credentials into `execute.headers` — `GET /tools/{id}` echoes the config back verbatim to anyone with read access. Embed a [secret reference](./secrets.md#secret-references-secret) instead:
+
+```json
+{
+  "name": "convert-document",
+  "type": "http",
+  "execute": {
+    "url": "https://api.example.com/convert",
+    "method": "POST",
+    "headers": { "Authorization": "Bearer {{secret:sec_01HXYZ}}" }
+  }
+}
+```
+
+`{{secret:...}}` tokens are supported in `execute.url` (e.g. for APIs that take a key as a query parameter) and in `execute.headers` values. The token is resolved to the decrypted secret value right before the outbound request; the stored tool — and everything returned by `GET`/`LIST` — keeps the reference. The referenced secret must exist in the same project, validated at tool create/update time (`400 SECRET_NOT_FOUND` otherwise).
+
 ### client
 
 Client tools have no server-side `execute`. When the model calls a `client` tool, the generation **pauses** and returns the pending tool calls to the API caller. The caller executes the tool locally, then submits the results via `POST /agents/{agent_id}/generate/{generation_id}/tool-outputs` to resume the loop.
@@ -187,6 +205,8 @@ The response has the same shape as a normal generation — either a final result
 An `mcp` tool represents a connection to a [Model Context Protocol](https://modelcontextprotocol.io/) server. At generation time, the SOAT server connects to the MCP endpoint, discovers all available tools, and registers them with the AI model. One `mcp` tool ID provides **many** tool names — you configure only the connection; each discovered tool's name, description, and parameters come from the MCP server.
 
 The SOAT server acts as a proxy: it receives the model's tool call, forwards it to the MCP server, and feeds the result back into the loop.
+
+`mcp.url` and `mcp.headers` values support [secret references](./secrets.md#secret-references-secret) — e.g. `{"Authorization": "Bearer {{secret:sec_01HXYZ}}"}` — resolved right before the MCP server is contacted, exactly like [`http` tool headers](#secret-references-in-execute).
 
 ### soat
 

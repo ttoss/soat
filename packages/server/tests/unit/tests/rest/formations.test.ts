@@ -2066,4 +2066,116 @@ resources:
       expect(agentRes.body.knowledge_config.extraction).toBe(true);
     });
   });
+
+  // ── secret references via sub expressions ────────────────────────────────
+
+  describe('Formation tool referencing a formation-created secret via sub', () => {
+    let secretRefFormationId: string;
+
+    const secretRefTemplate = {
+      resources: {
+        ApiSecret: {
+          type: 'secret',
+          properties: {
+            name: 'formation-api-key',
+            value: 'sk-live-formation-secret',
+          },
+        },
+        ApiTool: {
+          type: 'tool',
+          properties: {
+            name: 'formation-secret-ref-tool',
+            type: 'http',
+            execute: {
+              url: 'https://api.example.com/convert',
+              method: 'POST',
+              headers: {
+                Authorization: { sub: 'Bearer {{secret:${ApiSecret}}}' },
+              },
+            },
+          },
+        },
+      },
+    };
+
+    test('validate accepts a sub expression referencing a resource logical id', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: secretRefTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(true);
+    });
+
+    test('validate rejects a sub token that is neither a parameter nor a resource', async () => {
+      const badTemplate = {
+        resources: {
+          ApiTool: {
+            type: 'tool',
+            properties: {
+              name: 'bad-sub-tool',
+              type: 'http',
+              execute: {
+                url: 'https://api.example.com/convert',
+                headers: {
+                  Authorization: { sub: 'Bearer {{secret:${Unknown}}}' },
+                },
+              },
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: badTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+    });
+
+    test('deploy resolves the sub to the secret physical id inside the header string', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `secret-ref-formation-${Date.now()}`,
+          template: secretRefTemplate,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      secretRefFormationId = res.body.id;
+
+      const resources = res.body.resources as Array<{
+        logical_id: string;
+        physical_resource_id: string;
+      }>;
+      const secretResource = resources.find((r) => {
+        return r.logical_id === 'ApiSecret';
+      });
+      const toolResource = resources.find((r) => {
+        return r.logical_id === 'ApiTool';
+      });
+      expect(secretResource?.physical_resource_id).toMatch(/^sec_/);
+      expect(toolResource?.physical_resource_id).toMatch(/^tool_/);
+
+      const toolRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/tools/${toolResource!.physical_resource_id}`
+      );
+      expect(toolRes.status).toBe(200);
+      // The tool stores the {{secret:...}} reference with the physical secret
+      // id substituted — never the decrypted value.
+      expect(toolRes.body.execute.headers.Authorization).toBe(
+        `Bearer {{secret:${secretResource!.physical_resource_id}}}`
+      );
+    });
+
+    test('cleanup deletes the formation and its resources', async () => {
+      const res = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/formations/${secretRefFormationId}`
+      );
+      expect(res.status).toBe(200);
+    });
+  });
 });

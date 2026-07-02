@@ -13,6 +13,11 @@ import {
   runPipeline,
   validatePipelineConfig,
 } from './pipelineTools';
+import {
+  assertSecretRefsExist,
+  resolveSecretRefsInRecord,
+  resolveSecretRefsInString,
+} from './secrets';
 import { soatTools } from './soatTools';
 
 // ── Mapped Types ─────────────────────────────────────────────────────────
@@ -83,6 +88,13 @@ export const createTool = async (args: {
     });
   }
 
+  // Fail fast on {{secret:...}} tokens referencing nonexistent or
+  // out-of-project secrets, instead of failing at first call.
+  await assertSecretRefsExist({
+    value: { execute: args.execute, mcp: args.mcp },
+    projectId: args.projectId,
+  });
+
   const tool = await db.Tool.create({
     projectId: args.projectId,
     type: args.type ?? 'http',
@@ -123,10 +135,10 @@ export const listTools = async (args: {
   });
 };
 
-export const getTool = async (args: {
+const findToolInstance = async (args: {
   projectIds?: number[];
   id: string;
-}): Promise<MappedTool> => {
+}) => {
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) {
     where.projectId = args.projectIds;
@@ -140,6 +152,14 @@ export const getTool = async (args: {
   if (!tool)
     throw new DomainError('RESOURCE_NOT_FOUND', `Tool '${args.id}' not found.`);
 
+  return tool;
+};
+
+export const getTool = async (args: {
+  projectIds?: number[];
+  id: string;
+}): Promise<MappedTool> => {
+  const tool = await findToolInstance(args);
   return mapTool(tool as unknown as Parameters<typeof mapTool>[0]);
 };
 
@@ -203,6 +223,13 @@ export const updateTool = async (args: {
   if (!tool)
     throw new DomainError('RESOURCE_NOT_FOUND', `Tool '${args.id}' not found.`);
 
+  if (args.execute !== undefined || args.mcp !== undefined) {
+    await assertSecretRefsExist({
+      value: { execute: args.execute, mcp: args.mcp },
+      projectId: tool.projectId,
+    });
+  }
+
   await tool.update(buildToolUpdates(args));
 
   const updated = await db.Tool.findOne({
@@ -236,7 +263,8 @@ const noopLogToolCallingError = () => {};
 
 const callHttpTool = (
   tool: MappedTool,
-  mergedInput: Record<string, unknown>
+  mergedInput: Record<string, unknown>,
+  projectId: number
 ): Promise<unknown> => {
   const executeConfig = parseHttpExecuteConfig(
     (tool.execute as
@@ -250,9 +278,11 @@ const callHttpTool = (
       'HTTP tool has an invalid execute configuration.'
     );
   }
-  return buildHttpToolExecute({ toolName: tool.name, execute: executeConfig })(
-    mergedInput
-  );
+  return buildHttpToolExecute({
+    toolName: tool.name,
+    execute: executeConfig,
+    projectId,
+  })(mergedInput);
 };
 
 const callSoatTool = (
@@ -307,10 +337,11 @@ const callSoatTool = (
   });
 };
 
-const callMcpTool = (
+const callMcpTool = async (
   tool: MappedTool,
   action: string | undefined,
-  mergedInput: Record<string, unknown>
+  mergedInput: Record<string, unknown>,
+  projectId: number
 ): Promise<unknown> => {
   if (!action) {
     throw new DomainError(
@@ -328,12 +359,22 @@ const callMcpTool = (
       'MCP tool has an invalid mcp configuration.'
     );
   }
+  // {{secret:...}} tokens resolve at the point of use, right before the
+  // outbound MCP request — the stored config keeps the reference.
+  const mcpUrl = await resolveSecretRefsInString({
+    value: mcpConfig.url,
+    projectId,
+  });
+  const mcpHeaders = await resolveSecretRefsInRecord({
+    record: mcpConfig.headers,
+    projectId,
+  });
   return buildMcpToolExecute({
-    mcpUrl: mcpConfig.url,
+    mcpUrl,
     mcpHeaders: {
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
-      ...(mcpConfig.headers ?? {}),
+      ...(mcpHeaders ?? {}),
     },
     mcpToolName: action,
     logToolCallingError: noopLogToolCallingError,
@@ -348,7 +389,14 @@ export const callTool = async (args: {
   authHeader?: string;
   remainingDepth?: number;
 }): Promise<unknown> => {
-  const foundTool = await getTool({ projectIds: args.projectIds, id: args.id });
+  const toolInstance = await findToolInstance({
+    projectIds: args.projectIds,
+    id: args.id,
+  });
+  const foundTool = mapTool(
+    toolInstance as unknown as Parameters<typeof mapTool>[0]
+  );
+  const toolProjectId = toolInstance.projectId;
 
   if (foundTool.type === 'pipeline') {
     return runPipeline({
@@ -374,7 +422,8 @@ export const callTool = async (args: {
     ...(args.input ?? {}),
   };
 
-  if (foundTool.type === 'http') return callHttpTool(foundTool, mergedInput);
+  if (foundTool.type === 'http')
+    return callHttpTool(foundTool, mergedInput, toolProjectId);
   if (foundTool.type === 'soat')
     return callSoatTool(foundTool, {
       action: args.action,
@@ -382,7 +431,7 @@ export const callTool = async (args: {
       authHeader: args.authHeader,
     });
   if (foundTool.type === 'mcp')
-    return callMcpTool(foundTool, args.action, mergedInput);
+    return callMcpTool(foundTool, args.action, mergedInput, toolProjectId);
 
   // client tools (and any unknown type) cannot be invoked server-side
   throw new DomainError(
