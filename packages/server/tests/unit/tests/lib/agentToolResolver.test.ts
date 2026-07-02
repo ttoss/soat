@@ -1063,6 +1063,93 @@ describe('resolveAgentTools - mcp and soat types', () => {
       expect.objectContaining({ method: 'GET' })
     );
   });
+
+  test('resolves pipeline tool and returns tool with execute function', async () => {
+    const soatToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'pipelineStepSoatTool',
+        type: 'soat',
+        actions: ['list-files'],
+      });
+
+    const pipelineToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'myPipelineTool',
+        type: 'pipeline',
+        pipeline: {
+          steps: [
+            {
+              id: 'first',
+              tool_id: soatToolRes.body.id,
+              action: 'list-files',
+              input: {},
+            },
+          ],
+          output: { result: { var: 'steps.first' } },
+        },
+      });
+
+    const tools = await resolveAgentTools({
+      toolIds: [pipelineToolRes.body.id],
+    });
+
+    expect(tools).toHaveProperty('myPipelineTool');
+    const pipelineTool = tools.myPipelineTool;
+    expect('execute' in pipelineTool && typeof pipelineTool.execute).toBe(
+      'function'
+    );
+  });
+
+  test('mcp tool with no url configured is skipped instead of throwing', async () => {
+    const brokenMcpRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'brokenMcpServer',
+        type: 'mcp',
+        mcp: {},
+      });
+
+    const tools = await resolveAgentTools({ toolIds: [brokenMcpRes.body.id] });
+
+    expect(tools).toEqual({});
+  });
+
+  test('http tool execute JSON-stringifies an object-typed query argument', async () => {
+    const getToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'objectQueryArgTool',
+        type: 'http',
+        parameters: { type: 'object', properties: {} },
+        execute: { url: 'https://example.com/objects', method: 'GET' },
+      });
+
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ results: [] }), { status: 200 })
+      );
+
+    const tools = await resolveAgentTools({ toolIds: [getToolRes.body.id] });
+    const httpTool = tools.objectQueryArgTool;
+
+    if ('execute' in httpTool && typeof httpTool.execute === 'function') {
+      await httpTool.execute({ filters: { status: 'active' } }, {} as never);
+    }
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(
+        encodeURIComponent(JSON.stringify({ status: 'active' }))
+      ),
+      expect.anything()
+    );
+  });
 });
 
 describe('buildMcpToolExecute', () => {
@@ -1101,27 +1188,33 @@ describe('resolveMcpTools - direct', () => {
   });
 
   test('returns empty result when list response has no result field', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce(
-      new Response(JSON.stringify({}), { status: 200 })
-    );
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }));
     const result = await resolveMcpTools({
       typedTool: { mcp: { url: 'http://localhost:19999/mcp' } },
-      buildContextHeaders: () => ({}),
+      buildContextHeaders: () => {
+        return {};
+      },
       logToolCallingError: jest.fn(),
     });
     expect(Object.keys(result)).toHaveLength(0);
   });
 
   test('uses default empty schema when tool has no inputSchema', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({ result: { tools: [{ name: 'noschema_tool' }] } }),
-        { status: 200 }
-      )
-    );
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ result: { tools: [{ name: 'noschema_tool' }] } }),
+          { status: 200 }
+        )
+      );
     const result = await resolveMcpTools({
       typedTool: { mcp: { url: 'http://localhost:19999/mcp' } },
-      buildContextHeaders: () => ({}),
+      buildContextHeaders: () => {
+        return {};
+      },
       logToolCallingError: jest.fn(),
     });
     expect(result).toHaveProperty('noschema_tool');
@@ -1134,13 +1227,17 @@ describe('executeSoatTool - direct', () => {
   });
 
   test('exercises body/context/trace/depth branches when POST def with body fn is provided', async () => {
-    const postDef = soatTools.find((t) => typeof t.body === 'function');
+    const postDef = soatTools.find((t) => {
+      return typeof t.body === 'function';
+    });
     if (!postDef) {
       return;
     }
-    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValueOnce(
-      new Response(JSON.stringify({ id: 'new-1' }), { status: 201 })
-    );
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'new-1' }), { status: 201 })
+      );
     await executeSoatTool({
       toolName: 'test',
       def: postDef,
@@ -1150,14 +1247,18 @@ describe('executeSoatTool - direct', () => {
       traceId: 'trc_123',
       rootTraceId: null,
       remainingDepth: 3,
-      buildContextHeaders: () => ({}),
+      buildContextHeaders: () => {
+        return {};
+      },
       logToolCallingError: jest.fn(),
     });
     expect(fetchMock).toHaveBeenCalled();
   });
 
   test('calls logToolCallingError and rethrows when fetch throws', async () => {
-    const listDef = soatTools.find((t) => t.method === 'GET');
+    const listDef = soatTools.find((t) => {
+      return t.method === 'GET';
+    });
     if (!listDef) {
       return;
     }
@@ -1170,7 +1271,9 @@ describe('executeSoatTool - direct', () => {
         def: listDef,
         rawArgs: {},
         base: 'http://localhost:5047',
-        buildContextHeaders: () => ({}),
+        buildContextHeaders: () => {
+          return {};
+        },
         logToolCallingError,
       })
     ).rejects.toThrow('SOAT network failure');
@@ -1187,8 +1290,12 @@ describe('resolveSoatTools - direct', () => {
         actions: null,
         presetParameters: null,
       },
-      buildContextHeaders: () => ({}),
-      isSoatActionAllowedByBoundary: () => true,
+      buildContextHeaders: () => {
+        return {};
+      },
+      isSoatActionAllowedByBoundary: () => {
+        return true;
+      },
       logToolCallingError: jest.fn(),
     });
     expect(Object.keys(result)).toHaveLength(0);
@@ -1202,8 +1309,12 @@ describe('resolveSoatTools - direct', () => {
         actions: ['completely-unknown-action-xyz'],
         presetParameters: null,
       },
-      buildContextHeaders: () => ({}),
-      isSoatActionAllowedByBoundary: () => true,
+      buildContextHeaders: () => {
+        return {};
+      },
+      isSoatActionAllowedByBoundary: () => {
+        return true;
+      },
       logToolCallingError: jest.fn(),
     });
     expect(Object.keys(result)).toHaveLength(0);

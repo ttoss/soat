@@ -533,6 +533,15 @@ describe('Agents', () => {
       expect(response.body.length).toBeGreaterThanOrEqual(1);
       expect(response.body[0].id).toMatch(/^agent_/);
     });
+
+    test('admin can list agents across all projects without a project_id filter', async () => {
+      const response =
+        await authenticatedTestClient(adminToken).get('/api/v1/agents');
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBeGreaterThanOrEqual(1);
+    });
   });
 
   describe('GET /api/v1/agents/:agentId', () => {

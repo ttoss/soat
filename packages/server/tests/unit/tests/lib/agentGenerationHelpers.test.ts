@@ -496,6 +496,39 @@ describe('runStreamGeneration', () => {
       expect(mockUpdateGenerationFn).toHaveBeenCalledTimes(1);
     });
 
+    test('onEnd callback swallows saveTrace and updateGenerationRecord failures', async () => {
+      mockSaveTraceFn.mockRejectedValueOnce(new Error('saveTrace failed'));
+      mockUpdateGenerationFn.mockRejectedValueOnce(
+        new Error('updateGenerationRecord failed')
+      );
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let capturedOpts: Record<string, any> | undefined;
+      mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+        return { textStream: new ReadableStream() };
+      });
+
+      isolatedRunStreamGeneration({
+        model: {},
+        allMessages: [{ role: 'user', content: 'Hi' }],
+        resolvedTools: {},
+        typedAgent: mockAgent,
+        generationId: 'gen_onfinish_fail',
+        traceId: 'trc_onfinish_fail',
+        agentId: 'agt_onfinish_fail',
+      });
+
+      expect(capturedOpts?.onEnd).toBeDefined();
+      // Must not throw or produce an unhandled rejection.
+      await capturedOpts?.onEnd({ steps: [], finishReason: 'stop' });
+
+      // Give the fire-and-forget rejected promises a tick to settle.
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 0);
+      });
+    });
+
     test('prepareStep returns toolChoice override when a matching step rule matches', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let capturedOpts: Record<string, any> | undefined;

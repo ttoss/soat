@@ -931,6 +931,68 @@ describe('Documents', () => {
         else process.env.SYNC_INGESTION_MAX_BYTES = prev;
       }
     });
+
+    test('an unparseable SYNC_INGESTION_MAX_BYTES falls back to the default limit', async () => {
+      const prev = process.env.SYNC_INGESTION_MAX_BYTES;
+      process.env.SYNC_INGESTION_MAX_BYTES = 'not-a-number';
+
+      try {
+        const fileId = await uploadFile({
+          buffer: Buffer.from('small text file'),
+          filename: 'invalid-limit-env.txt',
+          contentType: 'text/plain',
+        });
+
+        const ingestRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/documents/ingest?async=false')
+          .send({ file_id: fileId, project_id: projectId });
+
+        // A garbage env override must not block sync ingestion of a small file.
+        expect(ingestRes.status).toBe(201);
+        expect(ingestRes.body.status).toBe('ready');
+      } finally {
+        if (prev === undefined) delete process.env.SYNC_INGESTION_MAX_BYTES;
+        else process.env.SYNC_INGESTION_MAX_BYTES = prev;
+      }
+    });
+
+    test('path_prefix is prepended to the stored document path', async () => {
+      const fileId = await uploadFile({
+        buffer: Buffer.from('content for prefixed path'),
+        filename: 'prefixed.txt',
+        contentType: 'text/plain',
+      });
+
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest?async=false')
+        .send({
+          file_id: fileId,
+          project_id: projectId,
+          path_prefix: 'archive/2024',
+        });
+
+      expect(ingestRes.status).toBe(201);
+      expect(ingestRes.body.status).toBe('ready');
+      expect(ingestRes.body.path).toBe('archive/2024/prefixed.txt');
+    });
+
+    test('a whitespace-only text file fails ingestion with no extractable text', async () => {
+      const fileId = await uploadFile({
+        buffer: Buffer.from('   \n\t  '),
+        filename: 'blank.txt',
+        contentType: 'text/plain',
+      });
+
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest?async=false')
+        .send({ file_id: fileId, project_id: projectId });
+
+      expect(ingestRes.status).toBe(201);
+      expect(ingestRes.body.status).toBe('failed');
+      expect(
+        (ingestRes.body.metadata as Record<string, unknown>).failure_reason
+      ).toBe('FILE_PARSE_FAILED');
+    });
   });
 
   describe('GET /api/v1/documents/:id/status (issues #5, #6)', () => {

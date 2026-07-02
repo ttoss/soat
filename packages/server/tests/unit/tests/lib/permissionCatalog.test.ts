@@ -4,6 +4,27 @@ import {
 } from '../../../../src/lib/permissionCatalog';
 
 describe('permissionCatalog', () => {
+  describe('when the permissions directory cannot be found', () => {
+    test('returns an empty catalog instead of throwing', () => {
+      jest.isolateModules(() => {
+        jest.doMock('node:fs', () => {
+          return {
+            ...jest.requireActual('node:fs'),
+            existsSync: () => {
+              return false;
+            },
+          };
+        });
+
+        // jest.isolateModules requires require() for synchronous module loading
+        // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+        const isolated: any = require('../../../../src/lib/permissionCatalog');
+
+        expect(isolated.getPermissionCatalog()).toEqual({ modules: [] });
+      });
+    });
+  });
+
   describe('getPermissionCatalog', () => {
     test('loads modules with their actions from permissions/*.json', () => {
       const catalog = getPermissionCatalog();

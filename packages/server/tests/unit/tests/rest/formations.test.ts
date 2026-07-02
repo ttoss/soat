@@ -75,6 +75,7 @@ describe('Formations', () => {
                 'memories:CreateMemoryEntry',
                 'memories:UpdateMemoryEntry',
                 'memories:DeleteMemoryEntry',
+                'documents:DeleteDocument',
               ],
             },
           ],
@@ -1111,6 +1112,23 @@ resources:
       agentToolFormationId = res.body.id;
     });
 
+    test('plan reports no-op for an unchanged tool resource', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: agentToolFormationId,
+          template: agentToolTemplate,
+        });
+
+      expect(res.status).toBe(200);
+      const toolChange = res.body.changes.find((c: { logical_id: string }) => {
+        return c.logical_id === 'MyTool';
+      });
+      expect(toolChange).toBeDefined();
+      expect(toolChange.action).toBe('no-op');
+    });
+
     test('updates the tool resource in the formation', async () => {
       const updatedTemplate = {
         resources: {
@@ -1305,6 +1323,35 @@ resources:
       expect(res.body.errors.length).toBeGreaterThan(0);
     });
 
+    test('updates the ai_provider resource with an explicit null secret_id', async () => {
+      const updatedTemplate = {
+        resources: {
+          MyProvider: {
+            type: 'ai_provider',
+            properties: {
+              name: 'my-openai-provider-no-secret',
+              provider: 'openai',
+              default_model: 'gpt-4o-mini',
+              secret_id: null,
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${aiProviderFormationId}`)
+        .send({ template: updatedTemplate });
+
+      expect(res.status).toBe(200);
+      const providerResource = res.body.resources.find(
+        (r: { logical_id: string }) => {
+          return r.logical_id === 'MyProvider';
+        }
+      );
+      expect(providerResource).toBeDefined();
+      expect(providerResource.status).toBe('updated');
+    });
+
     test('deletes formation and cleans up ai_provider resource', async () => {
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${aiProviderFormationId}`
@@ -1405,6 +1452,81 @@ resources:
       expect(res.body.errors.length).toBeGreaterThan(0);
     });
 
+    test('validates template with document properties that are not an object', async () => {
+      const invalidTemplate = {
+        resources: {
+          BadDoc: {
+            type: 'document',
+            properties: 'not-an-object',
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: invalidTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: expect.stringContaining(
+              'Document `properties` must be an object'
+            ),
+          }),
+        ])
+      );
+    });
+
+    test('plan reports no-op for an unchanged document resource', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: documentFormationId,
+          template: documentTemplate,
+        });
+
+      expect(res.status).toBe(200);
+      const docChange = res.body.changes.find((c: { logical_id: string }) => {
+        return c.logical_id === 'MyDoc';
+      });
+      expect(docChange).toBeDefined();
+      expect(docChange.action).toBe('no-op');
+    });
+
+    test('plan reports update when the underlying document was deleted externally', async () => {
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${documentFormationId}`
+      );
+      const physicalDocumentId = getRes.body.resources.find(
+        (r: { logical_id: string }) => {
+          return r.logical_id === 'MyDoc';
+        }
+      ).physical_resource_id;
+
+      const deleteRes = await authenticatedTestClient(userToken).delete(
+        `/api/v1/documents/${physicalDocumentId}`
+      );
+      expect(deleteRes.status).toBe(204);
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: documentFormationId,
+          template: documentTemplate,
+        });
+
+      expect(res.status).toBe(200);
+      const docChange = res.body.changes.find((c: { logical_id: string }) => {
+        return c.logical_id === 'MyDoc';
+      });
+      expect(docChange).toBeDefined();
+      expect(docChange.action).toBe('update');
+    });
+
     test('deletes formation and cleans up document resource', async () => {
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${documentFormationId}`
@@ -1470,6 +1592,35 @@ resources:
       memoryEntryFormationId = res.body.id;
     });
 
+    test('plan reports no-op for an unchanged memory_entry resource', async () => {
+      const template = {
+        resources: {
+          MyEntry: {
+            type: 'memory_entry',
+            properties: {
+              memory_id: standaloneMemoryId,
+              content: 'Initial entry content from formation',
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: memoryEntryFormationId,
+          template,
+        });
+
+      expect(res.status).toBe(200);
+      const entryChange = res.body.changes.find((c: { logical_id: string }) => {
+        return c.logical_id === 'MyEntry';
+      });
+      expect(entryChange).toBeDefined();
+      expect(entryChange.action).toBe('no-op');
+    });
+
     test('updates the memory_entry content in the formation', async () => {
       const updatedTemplate = {
         resources: {
@@ -1496,6 +1647,47 @@ resources:
       );
       expect(entryResource).toBeDefined();
       expect(entryResource.status).toBe('updated');
+    });
+
+    test('plan reports update when the underlying memory_entry was deleted externally', async () => {
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${memoryEntryFormationId}`
+      );
+      const physicalEntryId = getRes.body.resources.find(
+        (r: { logical_id: string }) => {
+          return r.logical_id === 'MyEntry';
+        }
+      ).physical_resource_id;
+
+      const deleteRes = await authenticatedTestClient(userToken).delete(
+        `/api/v1/memory-entries/${physicalEntryId}`
+      );
+      expect(deleteRes.status).toBe(204);
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: memoryEntryFormationId,
+          template: {
+            resources: {
+              MyEntry: {
+                type: 'memory_entry',
+                properties: {
+                  memory_id: standaloneMemoryId,
+                  content: 'Updated entry content from formation',
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      const entryChange = res.body.changes.find((c: { logical_id: string }) => {
+        return c.logical_id === 'MyEntry';
+      });
+      expect(entryChange).toBeDefined();
+      expect(entryChange.action).toBe('update');
     });
 
     test('validates template with memory_entry missing required fields', async () => {

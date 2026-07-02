@@ -142,6 +142,82 @@ describe('resolveMessageContent', () => {
     });
   });
 
+  test('stringifies a non-string outputPath result via JSON.stringify', async () => {
+    jest.spyOn(toolsModule, 'getTool').mockResolvedValue({
+      id: 'tool_counter',
+      projectId: 'proj_123',
+      type: 'http',
+      name: 'counter',
+      description: 'Counter',
+      parameters: null,
+      execute: null,
+      mcp: null,
+      actions: null,
+      presetParameters: null,
+      pipeline: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    jest.spyOn(toolsModule, 'callTool').mockResolvedValue({
+      data: { count: 42 },
+    });
+    const { resolveMessageContent } = await loadMessageContentModule();
+    const authUser = createAuthUser();
+
+    const result = await resolveMessageContent({
+      projectIds: [1],
+      authHeader: 'Bearer token',
+      authUser,
+      allowedToolIds: ['tool_counter'],
+      content: {
+        type: 'tool_output',
+        toolId: 'tool_counter',
+        input: {},
+        outputPath: 'data.count',
+      },
+    });
+
+    expect(result).toEqual({ content: '42' });
+  });
+
+  test('resolves an outputPath that indexes into an array', async () => {
+    jest.spyOn(toolsModule, 'getTool').mockResolvedValue({
+      id: 'tool_list',
+      projectId: 'proj_123',
+      type: 'http',
+      name: 'list',
+      description: 'List',
+      parameters: null,
+      execute: null,
+      mcp: null,
+      actions: null,
+      presetParameters: null,
+      pipeline: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    jest.spyOn(toolsModule, 'callTool').mockResolvedValue({
+      data: { items: ['first', 'second', 'third'] },
+    });
+    const { resolveMessageContent } = await loadMessageContentModule();
+    const authUser = createAuthUser();
+
+    const result = await resolveMessageContent({
+      projectIds: [1],
+      authHeader: 'Bearer token',
+      authUser,
+      allowedToolIds: ['tool_list'],
+      content: {
+        type: 'tool_output',
+        toolId: 'tool_list',
+        input: {},
+        outputPath: 'data.items.1',
+      },
+    });
+
+    expect(result).toEqual({ content: 'second' });
+  });
+
   test('rejects document content when caller lacks document permission', async () => {
     jest
       .spyOn(documentsModule, 'getDocument')
