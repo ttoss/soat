@@ -252,6 +252,23 @@ describe('Admin user operations', () => {
       expect(response.status).toBe(401);
     });
 
+    test('a token issued to a since-deleted user is rejected as unauthenticated', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'ghostuser', password: 'ghostpass' });
+      const ghostId = createRes.body.id;
+      const ghostToken = await loginAs('ghostuser', 'ghostpass');
+
+      await authenticatedTestClient(adminToken).delete(
+        `/api/v1/users/${ghostId}`
+      );
+
+      const response =
+        await authenticatedTestClient(ghostToken).get('/api/v1/users/me');
+
+      expect(response.status).toBe(401);
+    });
+
     test('non-admin user cannot delete a user', async () => {
       const aliceToken = await loginAs('alice', 'alicepass');
       const listRes =

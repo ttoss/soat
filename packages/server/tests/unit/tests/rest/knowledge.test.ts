@@ -188,6 +188,40 @@ describe('Knowledge', () => {
       expect(Array.isArray(response.body.results)).toBe(true);
     });
 
+    test('an admin-owned, policy-less project API key gets the admin wildcard policy', async () => {
+      const keyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Admin Wildcard Key', project_id: projectId });
+      expect(keyRes.status).toBe(201);
+      const rawKey = keyRes.body.key as string;
+
+      const response = await authenticatedTestClient(rawKey)
+        .post('/api/v1/knowledge/search')
+        .send({ project_id: projectId, document_paths: ['/docs/'] });
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.results)).toBe(true);
+    });
+
+    test('applies min_score to a semantic memory search', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          project_id: projectId,
+          query: 'sky',
+          memory_ids: [memoryId],
+          min_score: -1,
+        });
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.results)).toBe(true);
+      const memResult = response.body.results.find(
+        (r: { source_type: string }) => {
+          return r.source_type === 'memory';
+        }
+      );
+      expect(memResult).toBeDefined();
+    });
+
     test('returns empty array when memory_ids has no matching entries', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')

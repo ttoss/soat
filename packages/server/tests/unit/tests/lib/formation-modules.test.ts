@@ -490,6 +490,32 @@ describe('filesFormationModule', () => {
     });
   });
 
+  test('creates file without a prefix and with a numeric size', async () => {
+    mockCreateFile.mockResolvedValueOnce({ id: 'file_2' } as Awaited<
+      ReturnType<typeof filesModule.createFile>
+    >);
+
+    await expect(
+      applyCreateResource({
+        resourceType: 'file',
+        projectId: 5,
+        resolvedProperties: {
+          filename: 'no-prefix.txt',
+          size: 1024,
+        },
+      })
+    ).resolves.toBe('file_2');
+
+    expect(mockCreateFile).toHaveBeenCalledWith({
+      projectId: 5,
+      prefix: undefined,
+      filename: 'no-prefix.txt',
+      contentType: undefined,
+      size: 1024,
+      metadata: undefined,
+    });
+  });
+
   test('throws when file create properties are not an object', async () => {
     await expect(
       applyCreateResource({

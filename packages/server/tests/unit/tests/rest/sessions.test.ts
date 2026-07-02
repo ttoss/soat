@@ -59,6 +59,7 @@ describe('Sessions', () => {
                 'agents:SendSessionMessage',
                 'agents:SubmitSessionToolOutputs',
                 'conversations:GetConversation',
+                'conversations:UpdateConversation',
                 'documents:GetDocument',
               ],
             },
@@ -660,6 +661,43 @@ describe('Sessions', () => {
       expect(nonSystemMessages).toHaveLength(2);
       expect(nonSystemMessages[0].content).toContain('Message 3');
       expect(nonSystemMessages[1].content).toContain('Message 4');
+    });
+
+    test('a message with non-responseMessages metadata is annotated in model history', async () => {
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: contextAgentId, name: 'Metadata Annotation Test' });
+      const metadataSessionId = sessionRes.body.id;
+      const conversationId = sessionRes.body.conversation_id;
+
+      const msgRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${conversationId}/messages`)
+        .send({
+          role: 'user',
+          message: 'Message with metadata',
+          metadata: { channel: 'slack' },
+        });
+      expect(msgRes.status).toBe(201);
+
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_meta_01',
+        traceId: 'trc_meta_01',
+        status: 'completed',
+        output: { model: 'test-model', content: 'Reply', finishReason: 'stop' },
+      });
+
+      const response = await authenticatedTestClient(userToken).post(
+        `/api/v1/sessions/${metadataSessionId}/generate`
+      );
+
+      expect(response.status).toBe(200);
+      const callArgs = mockCreateGeneration.mock.calls[0][0] as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      const annotated = callArgs.messages.find((m) => {
+        return m.content.includes('channel: slack');
+      });
+      expect(annotated).toBeDefined();
     });
   });
 
@@ -1752,6 +1790,14 @@ describe('Sessions', () => {
 
       expect(genRes.status).toBe(410);
       expect(genRes.body.error.code).toBe('SESSION_EXPIRED');
+
+      // Once marked expired in the DB, posting a message must also be rejected.
+      const msgRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/sessions/${sessionId}/messages`)
+        .send({ message: 'still trying after expiry' });
+
+      expect(msgRes.status).toBe(410);
+      expect(msgRes.body.error.code).toBe('SESSION_EXPIRED');
     });
 
     test('generate succeeds when within TTL window', async () => {
