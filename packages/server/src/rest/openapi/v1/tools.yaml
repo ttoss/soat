@@ -419,11 +419,18 @@ components:
           nullable: true
           description: >
             Execution config for http tools. Supported fields: `url` (required),
-            `method` (default `POST`), and `headers`. The `url` may contain
-            `{paramName}` placeholders (e.g. `/users/{userId}`) that are
-            replaced at call time with the corresponding tool argument value
-            (URL-encoded). Arguments consumed as path parameters are excluded
-            from the query string and request body.
+            `method` (default `POST`), `headers`, and `body_mode`. The `url`
+            may contain `{paramName}` placeholders (e.g. `/users/{userId}`)
+            that are replaced at call time with the corresponding tool argument
+            value (URL-encoded). Arguments consumed as path parameters are
+            excluded from the query string and request body. `body_mode` is
+            `json` (default) or `multipart`. In `multipart` mode the merged tool
+            arguments are sent as a `multipart/form-data` body: scalar fields
+            become plain form fields and a field shaped like
+            `{ content_type, filename, data_base64 }` is decoded from base64
+            and attached as a file part (the hardcoded
+            `Content-Type: application/json` is dropped so `fetch` sets the
+            multipart boundary itself).
         mcp:
           type: object
           nullable: true
@@ -487,11 +494,18 @@ components:
           type: object
           description: >
             Execution config for http tools. Supported fields: `url` (required),
-            `method` (default `POST`), and `headers`. The `url` may contain
-            `{paramName}` placeholders (e.g. `/users/{userId}`) that are
-            replaced at call time with the corresponding tool argument value
-            (URL-encoded). Arguments consumed as path parameters are excluded
-            from the query string and request body.
+            `method` (default `POST`), `headers`, and `body_mode`. The `url`
+            may contain `{paramName}` placeholders (e.g. `/users/{userId}`)
+            that are replaced at call time with the corresponding tool argument
+            value (URL-encoded). Arguments consumed as path parameters are
+            excluded from the query string and request body. `body_mode` is
+            `json` (default) or `multipart`. In `multipart` mode the merged tool
+            arguments are sent as a `multipart/form-data` body: scalar fields
+            become plain form fields and a field shaped like
+            `{ content_type, filename, data_base64 }` is decoded from base64
+            and attached as a file part (the hardcoded
+            `Content-Type: application/json` is dropped so `fetch` sets the
+            multipart boundary itself).
         mcp:
           type: object
           description: MCP server config (url, headers)
@@ -536,11 +550,18 @@ components:
           nullable: true
           description: >
             Execution config for http tools. Supported fields: `url` (required),
-            `method` (default `POST`), and `headers`. The `url` may contain
-            `{paramName}` placeholders (e.g. `/users/{userId}`) that are
-            replaced at call time with the corresponding tool argument value
-            (URL-encoded). Arguments consumed as path parameters are excluded
-            from the query string and request body.
+            `method` (default `POST`), `headers`, and `body_mode`. The `url`
+            may contain `{paramName}` placeholders (e.g. `/users/{userId}`)
+            that are replaced at call time with the corresponding tool argument
+            value (URL-encoded). Arguments consumed as path parameters are
+            excluded from the query string and request body. `body_mode` is
+            `json` (default) or `multipart`. In `multipart` mode the merged tool
+            arguments are sent as a `multipart/form-data` body: scalar fields
+            become plain form fields and a field shaped like
+            `{ content_type, filename, data_base64 }` is decoded from base64
+            and attached as a file part (the hardcoded
+            `Content-Type: application/json` is dropped so `fetch` sets the
+            multipart boundary itself).
         mcp:
           type: object
           nullable: true
