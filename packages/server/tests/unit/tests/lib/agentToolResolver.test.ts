@@ -160,6 +160,52 @@ describe('resolveAgentTools', () => {
     fetchMock.mockRestore();
   });
 
+  test('http tool execute forwards every top-level input field in the JSON body, not just nested ones', async () => {
+    const siblingToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'mySiblingFieldsHttpTool',
+        type: 'http',
+        description: 'Test HTTP tool with sibling top-level fields',
+        parameters: { type: 'object', properties: {} },
+        execute: {
+          url: 'https://example.com/api/create',
+          method: 'POST',
+        },
+      });
+
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'new-item' }), { status: 201 })
+      );
+
+    const tools = await resolveAgentTools({
+      toolIds: [siblingToolRes.body.id],
+    });
+    const siblingTool = tools.mySiblingFieldsHttpTool;
+
+    if ('execute' in siblingTool && typeof siblingTool.execute === 'function') {
+      await siblingTool.execute(
+        { locale: 'pt-BR', data: { title: 'Hello', theme: 'test' } },
+        {} as never
+      );
+    }
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://example.com/api/create',
+      expect.objectContaining({
+        body: JSON.stringify({
+          locale: 'pt-BR',
+          data: { title: 'Hello', theme: 'test' },
+        }),
+      })
+    );
+
+    fetchMock.mockRestore();
+  });
+
   test('http tool execute with body_mode multipart sends a real multipart request with a decoded file part', async () => {
     // Capture the raw request the tool sends by pointing execute.url at a
     // local server that echoes back the content-type header and raw body.
