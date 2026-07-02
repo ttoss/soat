@@ -38,10 +38,10 @@ services:
 
   # Deterministic stand-ins for the external provider APIs the converter tutorial
   # calls: an OpenAI-compatible chat-completions endpoint for the vision agent
-  # converter (image → OCR text) and an xAI-compatible chat-completions endpoint
-  # for the audio tool converter (audio → transcript). Both share the same
-  # OpenAI wire protocol, so one endpoint serves both. Lets the flow run without
-  # real keys. See tests/mocks/mock-providers.mjs.
+  # converter (image → OCR text via the Responses API) and an xAI-compatible
+  # chat-completions endpoint for the audio agent converter (audio → transcript).
+  # Both share the same OpenAI wire protocol, so one service serves both. Lets the
+  # flow run without real keys. See tests/mocks/mock-providers.mjs.
   mock-providers:
     image: node:22-alpine
     volumes:
