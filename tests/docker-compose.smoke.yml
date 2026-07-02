@@ -55,6 +55,7 @@ services:
       DATABASE_USER: soat_user
       DATABASE_PASSWORD: soat_password
       SECRETS_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      JWT_SECRET: smoke-test-jwt-secret
       FILES_STORAGE_DIR: /data/files
       OLLAMA_BASE_URL: http://ollama:11434
       EMBEDDING_PROVIDER: ollama

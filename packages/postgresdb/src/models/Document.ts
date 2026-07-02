@@ -67,6 +67,18 @@ export class Document extends Model {
   })
   declare status: 'pending' | 'processing' | 'ready' | 'failed';
 
+  /**
+   * Set while `status = 'processing'` and a converter has deferred with
+   * `{ status: "pending" }`. Cleared (to `null`) by whichever of the
+   * ingestion-callback handler or the stall-timeout sweeper wins the atomic
+   * compare-and-set race to finish the conversion — see documentIngestion.ts.
+   */
+  @Column({
+    type: DataType.STRING(32),
+    allowNull: true,
+  })
+  declare conversionAttemptId: string | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 
 import { db } from 'src/db';
+import { signFileDownloadToken } from 'src/lib/fileDownloadToken';
 
 import { storageDir } from '../../setupTests';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -210,6 +211,46 @@ describe('Files', () => {
 
     test('unauthenticated request cannot download a file', async () => {
       const response = await testClient.get(`/api/v1/files/${fileId}/download`);
+
+      expect(response.status).toBe(401);
+    });
+
+    test('a valid download token authorizes the download without a session', async () => {
+      const token = signFileDownloadToken({ fileId });
+
+      const response = await testClient.get(
+        `/api/v1/files/${fileId}/download?token=${token}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.text).toBe(originalContent);
+    });
+
+    test('a valid download token for a nonexistent file returns 404', async () => {
+      const token = signFileDownloadToken({ fileId: 'nonexistent-file-id' });
+
+      const response = await testClient.get(
+        `/api/v1/files/nonexistent-file-id/download?token=${token}`
+      );
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe('File not found');
+    });
+
+    test('a malformed token falls back to session auth and returns 401', async () => {
+      const response = await testClient.get(
+        `/api/v1/files/${fileId}/download?token=not-a-jwt`
+      );
+
+      expect(response.status).toBe(401);
+    });
+
+    test('a token scoped to a different file does not authorize this download', async () => {
+      const token = signFileDownloadToken({ fileId: 'some-other-file-id' });
+
+      const response = await testClient.get(
+        `/api/v1/files/${fileId}/download?token=${token}`
+      );
 
       expect(response.status).toBe(401);
     });

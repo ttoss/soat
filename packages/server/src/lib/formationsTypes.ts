@@ -157,6 +157,7 @@ export const SUPPORTED_RESOURCE_TYPES = new Set([
   'conversation',
   'document',
   'file',
+  'ingestion_rule',
   'memory',
   'memory_entry',
   'policy',

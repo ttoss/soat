@@ -62,9 +62,11 @@ export const caseTransformMiddleware = async (ctx: Context, next: Next) => {
   }
 
   // Transform incoming request body from snake_case to camelCase
-  // The 'template' key is a pass-through user document (formation templates)
-  // whose inner keys must not be transformed.
-  const BODY_SKIP_KEYS = new Set(['template']);
+  // The 'template' key is a pass-through user document (formation templates),
+  // and 'presetParameters' (the camelCase form of the request's
+  // preset_parameters field) is verbatim converter-tool input — both must not
+  // have their inner keys transformed.
+  const BODY_SKIP_KEYS = new Set(['template', 'presetParameters']);
   if (isPlainObject(ctx.request.body) || Array.isArray(ctx.request.body)) {
     ctx.request.body = transformKeys(
       ctx.request.body,
@@ -84,8 +86,10 @@ export const caseTransformMiddleware = async (ctx: Context, next: Next) => {
   // Transform outgoing response body from camelCase to snake_case.
   // The 'execute' key is a pass-through user document (tool execute configs)
   // whose inner keys (e.g. HTTP headers like Content-Type) must not be
-  // transformed — they are arbitrary user-defined strings, not camelCase fields.
-  const RESPONSE_SKIP_KEYS = new Set(['execute']);
+  // transformed — they are arbitrary user-defined strings, not camelCase
+  // fields. 'preset_parameters' (the snake_case form of the response's
+  // presetParameters field) is the same verbatim converter-tool input.
+  const RESPONSE_SKIP_KEYS = new Set(['execute', 'preset_parameters']);
   if (isPlainObject(ctx.body) || Array.isArray(ctx.body)) {
     ctx.body = transformKeys(ctx.body, camelToSnake, RESPONSE_SKIP_KEYS);
   }
