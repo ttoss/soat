@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { db } from 'src/db';
 import { JWT_SECRET } from 'src/middleware/auth';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -489,6 +490,146 @@ describe('Projects', () => {
       );
 
       expect(getKeyRes.status).toBe(404);
+    });
+
+    test('returns 409 PROJECT_HAS_DEPENDENTS when the project has dependent resources', async () => {
+      const projRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Blocked Delete Project' });
+      const blockedProjectId = projRes.body.id;
+
+      const aiProviderRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: blockedProjectId,
+          name: 'Blocked Delete Provider',
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        });
+      expect(aiProviderRes.status).toBe(201);
+
+      const agentRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderRes.body.id,
+          project_id: blockedProjectId,
+          name: 'Blocked Delete Agent',
+        });
+      expect(agentRes.status).toBe(201);
+
+      const response = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/projects/${blockedProjectId}`
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('PROJECT_HAS_DEPENDENTS');
+
+      const getProjectRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${blockedProjectId}`
+      );
+      expect(getProjectRes.status).toBe(200);
+    });
+
+    test('force=true deletes a project along with its dependent resources', async () => {
+      const projRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Force Delete Project' });
+      const forceProjectId = projRes.body.id;
+
+      const secretRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/secrets')
+        .send({
+          project_id: forceProjectId,
+          name: 'Force Delete Secret',
+          value: 'supersecretvalue',
+        });
+      expect(secretRes.status).toBe(201);
+
+      const aiProviderRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: forceProjectId,
+          name: 'Force Delete Provider',
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        });
+      expect(aiProviderRes.status).toBe(201);
+
+      const agentRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderRes.body.id,
+          project_id: forceProjectId,
+          name: 'Force Delete Agent',
+        });
+      expect(agentRes.status).toBe(201);
+
+      const toolRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: forceProjectId,
+          name: 'force-delete-tool',
+          type: 'soat',
+          description: 'A tool scoped to the project being force-deleted',
+          actions: ['list-tools'],
+        });
+      expect(toolRes.status).toBe(201);
+
+      const memoryRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/memories')
+        .send({ project_id: forceProjectId, name: 'Force Delete Memory' });
+      expect(memoryRes.status).toBe(201);
+
+      const blockedResponse = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/projects/${forceProjectId}`
+      );
+      expect(blockedResponse.status).toBe(409);
+
+      const forcedResponse = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/projects/${forceProjectId}?force=true`
+      );
+      expect(forcedResponse.status).toBe(204);
+
+      const getProjectRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${forceProjectId}`
+      );
+      expect(getProjectRes.status).toBe(404);
+
+      expect(
+        await db.Agent.findOne({ where: { publicId: agentRes.body.id } })
+      ).toBeNull();
+      expect(
+        await db.AiProvider.findOne({
+          where: { publicId: aiProviderRes.body.id },
+        })
+      ).toBeNull();
+      expect(
+        await db.Tool.findOne({ where: { publicId: toolRes.body.id } })
+      ).toBeNull();
+      expect(
+        await db.Memory.findOne({ where: { publicId: memoryRes.body.id } })
+      ).toBeNull();
+      expect(
+        await db.Secret.findOne({ where: { publicId: secretRes.body.id } })
+      ).toBeNull();
+    });
+
+    test('force=true on a project without dependents just deletes it', async () => {
+      const projRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Force Delete Empty Project' });
+      const emptyProjectId = projRes.body.id;
+
+      const response = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/projects/${emptyProjectId}?force=true`
+      );
+
+      expect(response.status).toBe(204);
+
+      const getProjectRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${emptyProjectId}`
+      );
+      expect(getProjectRes.status).toBe(404);
     });
   });
 });
