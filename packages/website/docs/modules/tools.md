@@ -242,7 +242,9 @@ The SOAT server acts as a proxy: it receives the model's tool call, forwards it 
 
 ### soat
 
-A `soat` tool exposes actions from the SOAT platform itself (documents, conversations, files, secrets, etc.). Instead of pointing to an external endpoint, you list the platform actions the agent is allowed to use via the `actions` array. Each action name corresponds to an MCP tool registered on the platform (e.g., `get-document`, `search-documents`, `create-file`). The server executes these actions in-process, applying the same permission checks as the REST API. For a worked example of a fixed `soat` write tool, see [Orchestrate a Sonnet - Step 4 (Create the fixed write tool)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool).
+A `soat` tool exposes actions from the SOAT platform itself (documents, conversations, files, secrets, etc.). Instead of pointing to an external endpoint, you list the platform actions the agent is allowed to use via the `actions` array. Each action name corresponds to an MCP tool registered on the platform (e.g., `get-document`, `search-documents`, `create-file`) — **not** the REST operationId (e.g. use `search-knowledge`, not `searchKnowledge`). The server executes these actions in-process, applying the same permission checks as the REST API. For a worked example of a fixed `soat` write tool, see [Orchestrate a Sonnet - Step 4 (Create the fixed write tool)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool).
+
+Creating or updating a `soat` tool validates every entry in `actions` against the platform's action registry. An unrecognized action name returns `400 VALIDATION_FAILED` immediately; if the name looks like an operationId (camelCase) that matches a known action once converted to kebab-case, the error message includes a suggestion (e.g. `"searchKnowledge" (did you mean "search-knowledge"?)`).
 
 ### pipeline
 
