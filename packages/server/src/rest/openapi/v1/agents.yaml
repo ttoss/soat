@@ -248,7 +248,10 @@ paths:
       tags:
         - Agents
       summary: Delete an agent
-      description: Deletes an agent by ID.
+      description: >
+        Deletes an agent by ID. Fails with `409` if the agent has dependent
+        generations or traces, unless `force=true` is passed, in which case
+        those generations and traces are deleted along with the agent.
       operationId: deleteAgent
       parameters:
         - name: agent_id
@@ -256,6 +259,15 @@ paths:
           required: true
           schema:
             type: string
+        - name: force
+          in: query
+          required: false
+          description: >
+            When `true`, deletes the agent's dependent generations and traces
+            instead of returning `409 AGENT_HAS_DEPENDENTS`.
+          schema:
+            type: boolean
+            default: false
       responses:
         '204':
           description: Deleted
@@ -273,6 +285,12 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Agent has dependent generations or traces (pass `force=true` to delete anyway)
           content:
             application/json:
               schema:

@@ -1,8 +1,12 @@
+import createDebug from 'debug';
+
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { validateOutputSchema } from './outputSchema';
 import { validateReasoningConfig } from './reasoning';
+
+const log = createDebug('soat:agents');
 
 // Re-export symbols that callers expect from this module.
 export {
@@ -298,10 +302,76 @@ export const updateAgent = async (
   return mapped;
 };
 
+const findDependentIds = async (args: {
+  agentId: number;
+}): Promise<{ generationIds: number[]; traceIds: number[] }> => {
+  const [generationRows, traceRows] = await Promise.all([
+    db.Generation.findAll({
+      where: { agentId: args.agentId },
+      attributes: ['id'],
+    }),
+    db.Trace.findAll({
+      where: { agentId: args.agentId },
+      attributes: ['id'],
+    }),
+  ]);
+
+  return {
+    generationIds: generationRows.map((row) => {
+      return (row as unknown as { id: number }).id;
+    }),
+    traceIds: traceRows.map((row) => {
+      return (row as unknown as { id: number }).id;
+    }),
+  };
+};
+
+// Deletes an agent's generations/traces along with it. Cross-references from
+// OTHER agents' rows into the ones being deleted (self-referencing FKs on
+// Generation.initiatorGenerationId and Trace.parentTraceId/rootTraceId) are
+// nulled out first, since those FKs are RESTRICT.
+const forceDeleteAgentWithDependents = async (args: {
+  agent: InstanceType<typeof db.Agent>;
+  agentId: number;
+}): Promise<void> => {
+  const { generationIds, traceIds } = await findDependentIds({
+    agentId: args.agentId,
+  });
+
+  await db.sequelize.transaction(async (transaction) => {
+    if (generationIds.length > 0) {
+      await db.Generation.update(
+        { initiatorGenerationId: null },
+        { where: { initiatorGenerationId: generationIds }, transaction }
+      );
+    }
+    if (traceIds.length > 0) {
+      await db.Trace.update(
+        { parentTraceId: null },
+        { where: { parentTraceId: traceIds }, transaction }
+      );
+      await db.Trace.update(
+        { rootTraceId: null },
+        { where: { rootTraceId: traceIds }, transaction }
+      );
+    }
+
+    await db.Generation.destroy({
+      where: { agentId: args.agentId },
+      transaction,
+    });
+    await db.Trace.destroy({ where: { agentId: args.agentId }, transaction });
+    await args.agent.destroy({ transaction });
+  });
+};
+
 export const deleteAgent = async (args: {
   projectIds?: number[];
   id: string;
+  force?: boolean;
 }): Promise<void> => {
+  log('deleteAgent: id=%s force=%s', args.id, Boolean(args.force));
+
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
 
@@ -320,14 +390,25 @@ export const deleteAgent = async (args: {
   ]);
 
   if (generationCount > 0 || traceCount > 0) {
-    throw new DomainError(
-      'AGENT_HAS_DEPENDENTS',
-      `Agent '${args.id}' has dependent generations or traces and cannot be deleted.`
-    );
-  }
+    if (!args.force) {
+      throw new DomainError(
+        'AGENT_HAS_DEPENDENTS',
+        `Agent '${args.id}' has dependent generations or traces and cannot be deleted.`
+      );
+    }
 
-  // Actor.agentId is cleared automatically by the DB via onDelete: 'SET NULL' on the FK.
-  await agent.destroy();
+    log(
+      'deleteAgent: force-cascading id=%s generations=%d traces=%d',
+      args.id,
+      generationCount,
+      traceCount
+    );
+
+    await forceDeleteAgentWithDependents({ agent, agentId });
+  } else {
+    // Actor.agentId is cleared automatically by the DB via onDelete: 'SET NULL' on the FK.
+    await agent.destroy();
+  }
 
   const agentProjectId = (agent as unknown as { projectId: number }).projectId;
 

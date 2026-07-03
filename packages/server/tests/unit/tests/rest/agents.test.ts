@@ -799,6 +799,237 @@ describe('Agents', () => {
       );
       expect(response.status).toBe(404);
     });
+
+    test('returns 409 when the agent has dependent generations', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Agent With Generation',
+        });
+      const blockedAgentId = createRes.body.id as string;
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      const agent = await db.Agent.findOne({
+        where: { publicId: blockedAgentId },
+      });
+
+      const traceId = `trc_del_gen_${Date.now()}`;
+      await saveTrace({
+        traceId,
+        projectId: project!.id as number,
+        projectPublicId: projectId,
+        agentId: blockedAgentId,
+        steps: [{ type: 'text-delta', text: 'hello' }],
+      });
+      const trace = await db.Trace.findOne({ where: { publicId: traceId } });
+
+      await db.Generation.create({
+        publicId: `gen_del_${Date.now()}`,
+        projectId: project!.id as number,
+        agentId: agent!.id as number,
+        traceId: trace!.id as number,
+        initiatorGenerationId: null,
+        startedByActorId: null,
+        startedByPrincipalType: null,
+        startedByPrincipalId: null,
+        status: 'completed',
+        startedAt: new Date(),
+        completedAt: new Date(),
+        lastActivityAt: new Date(),
+        stopReason: 'stop',
+        metadata: null,
+      });
+
+      const response = await authenticatedTestClient(userToken).delete(
+        `/api/v1/agents/${blockedAgentId}`
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('AGENT_HAS_DEPENDENTS');
+    });
+
+    test('force=true deletes an agent along with its dependent generations and traces', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Agent Force Delete',
+        });
+      const forceAgentId = createRes.body.id as string;
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      const agent = await db.Agent.findOne({
+        where: { publicId: forceAgentId },
+      });
+
+      const traceId = `trc_frc_${Date.now()}`;
+      await saveTrace({
+        traceId,
+        projectId: project!.id as number,
+        projectPublicId: projectId,
+        agentId: forceAgentId,
+        steps: [{ type: 'text-delta', text: 'hello' }],
+      });
+      const trace = await db.Trace.findOne({ where: { publicId: traceId } });
+
+      const generationId = `gen_frc_${Date.now()}`;
+      await db.Generation.create({
+        publicId: generationId,
+        projectId: project!.id as number,
+        agentId: agent!.id as number,
+        traceId: trace!.id as number,
+        initiatorGenerationId: null,
+        startedByActorId: null,
+        startedByPrincipalType: null,
+        startedByPrincipalId: null,
+        status: 'completed',
+        startedAt: new Date(),
+        completedAt: new Date(),
+        lastActivityAt: new Date(),
+        stopReason: 'stop',
+        metadata: null,
+      });
+
+      const blockedResponse = await authenticatedTestClient(userToken).delete(
+        `/api/v1/agents/${forceAgentId}`
+      );
+      expect(blockedResponse.status).toBe(409);
+
+      const forcedResponse = await authenticatedTestClient(userToken).delete(
+        `/api/v1/agents/${forceAgentId}?force=true`
+      );
+      expect(forcedResponse.status).toBe(204);
+
+      expect(
+        await db.Trace.findOne({ where: { publicId: traceId } })
+      ).toBeNull();
+      expect(
+        await db.Generation.findOne({ where: { publicId: generationId } })
+      ).toBeNull();
+      expect(
+        await db.Agent.findOne({ where: { publicId: forceAgentId } })
+      ).toBeNull();
+    });
+
+    test('force=true preserves unrelated agents while nulling cross-agent trace/generation references', async () => {
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+
+      const agentARes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Agent Force Parent',
+        });
+      const agentAId = agentARes.body.id as string;
+      const agentA = await db.Agent.findOne({ where: { publicId: agentAId } });
+
+      const agentBRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Agent Force Child',
+        });
+      const agentBId = agentBRes.body.id as string;
+      const agentB = await db.Agent.findOne({ where: { publicId: agentBId } });
+
+      const traceAId = `trc_frc_a_${Date.now()}`;
+      await saveTrace({
+        traceId: traceAId,
+        projectId: project!.id as number,
+        projectPublicId: projectId,
+        agentId: agentAId,
+        steps: [{ type: 'text-delta', text: 'parent' }],
+      });
+      const traceA = await db.Trace.findOne({ where: { publicId: traceAId } });
+
+      const traceBId = `trc_frc_b_${Date.now()}`;
+      await saveTrace({
+        traceId: traceBId,
+        projectId: project!.id as number,
+        projectPublicId: projectId,
+        agentId: agentBId,
+        steps: [{ type: 'text-delta', text: 'child' }],
+        parentTraceId: traceAId,
+        rootTraceId: traceAId,
+      });
+      const traceB = await db.Trace.findOne({ where: { publicId: traceBId } });
+
+      const generationAId = `gen_frc_a_${Date.now()}`;
+      const generationA = await db.Generation.create({
+        publicId: generationAId,
+        projectId: project!.id as number,
+        agentId: agentA!.id as number,
+        traceId: traceA!.id as number,
+        initiatorGenerationId: null,
+        startedByActorId: null,
+        startedByPrincipalType: null,
+        startedByPrincipalId: null,
+        status: 'completed',
+        startedAt: new Date(),
+        completedAt: new Date(),
+        lastActivityAt: new Date(),
+        stopReason: 'stop',
+        metadata: null,
+      });
+
+      const generationBId = `gen_frc_b_${Date.now()}`;
+      await db.Generation.create({
+        publicId: generationBId,
+        projectId: project!.id as number,
+        agentId: agentB!.id as number,
+        traceId: traceB!.id as number,
+        initiatorGenerationId: generationA.id as number,
+        startedByActorId: null,
+        startedByPrincipalType: null,
+        startedByPrincipalId: null,
+        status: 'completed',
+        startedAt: new Date(),
+        completedAt: new Date(),
+        lastActivityAt: new Date(),
+        stopReason: 'stop',
+        metadata: null,
+      });
+
+      const response = await authenticatedTestClient(userToken).delete(
+        `/api/v1/agents/${agentAId}?force=true`
+      );
+      expect(response.status).toBe(204);
+
+      expect(
+        await db.Trace.findOne({ where: { publicId: traceAId } })
+      ).toBeNull();
+      expect(
+        await db.Generation.findOne({ where: { publicId: generationAId } })
+      ).toBeNull();
+
+      const remainingTraceB = await db.Trace.findOne({
+        where: { publicId: traceBId },
+      });
+      expect(remainingTraceB).not.toBeNull();
+      expect(remainingTraceB!.parentTraceId).toBeNull();
+      expect(remainingTraceB!.rootTraceId).toBeNull();
+
+      const remainingGenerationB = await db.Generation.findOne({
+        where: { publicId: generationBId },
+      });
+      expect(remainingGenerationB).not.toBeNull();
+      expect(remainingGenerationB!.initiatorGenerationId).toBeNull();
+
+      expect(
+        await db.Agent.findOne({ where: { publicId: agentBId } })
+      ).not.toBeNull();
+    });
   });
 
   // ── Generation ───────────────────────────────────────────────────────────
