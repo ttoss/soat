@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
+import { buildSrn } from 'src/lib/iam';
 import { getMemory } from 'src/lib/memories';
 import {
   deleteMemoryEntry,
@@ -39,6 +40,11 @@ const resolveMemoryForAction = async (
   const allowed = await ctx.authUser!.isAllowed({
     projectPublicId: memory.projectId!,
     action,
+    resource: buildSrn({
+      projectPublicId: memory.projectId!,
+      resourceType: 'memory',
+      resourceId: memory.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -76,6 +82,11 @@ const resolveEntryForAction = async (
   const allowed = await ctx.authUser!.isAllowed({
     projectPublicId: memory.projectId!,
     action,
+    resource: buildSrn({
+      projectPublicId: memory.projectId!,
+      resourceType: 'memoryEntry',
+      resourceId: entry.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;

@@ -10,6 +10,7 @@ import {
   listAiProviders,
   updateAiProvider,
 } from 'src/lib/aiProviders';
+import { buildSrn } from 'src/lib/iam';
 
 import { checkAuth, resolveWriteProjectId } from './helpers';
 
@@ -77,6 +78,11 @@ aiProvidersRouter.get('/ai-providers/:ai_provider_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: provider.projectId!,
     action: 'aiProviders:GetAiProvider',
+    resource: buildSrn({
+      projectPublicId: provider.projectId!,
+      resourceType: 'aiProvider',
+      resourceId: provider.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -152,6 +158,11 @@ aiProvidersRouter.patch(
     const allowed = await ctx.authUser.isAllowed({
       projectPublicId: existing.projectId!,
       action: 'aiProviders:UpdateAiProvider',
+      resource: buildSrn({
+        projectPublicId: existing.projectId!,
+        resourceType: 'aiProvider',
+        resourceId: existing.id,
+      }),
     });
     if (!allowed) {
       ctx.status = 403;
@@ -217,6 +228,11 @@ aiProvidersRouter.delete(
     const allowed = await ctx.authUser.isAllowed({
       projectPublicId: existing.projectId!,
       action: 'aiProviders:DeleteAiProvider',
+      resource: buildSrn({
+        projectPublicId: existing.projectId!,
+        resourceType: 'aiProvider',
+        resourceId: existing.id,
+      }),
     });
     if (!allowed) {
       ctx.status = 403;

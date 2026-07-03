@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { buildSrn } from 'src/lib/iam';
 import {
   createMemory,
   deleteMemory,
@@ -59,6 +60,11 @@ memoriesRouter.get('/memories/:memory_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: memory.projectId!,
     action: 'memories:GetMemory',
+    resource: buildSrn({
+      projectPublicId: memory.projectId!,
+      resourceType: 'memory',
+      resourceId: memory.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -114,6 +120,11 @@ memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: memory.projectId!,
     action: 'memories:UpdateMemory',
+    resource: buildSrn({
+      projectPublicId: memory.projectId!,
+      resourceType: 'memory',
+      resourceId: memory.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -154,6 +165,11 @@ memoriesRouter.delete('/memories/:memory_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: memory.projectId!,
     action: 'memories:DeleteMemory',
+    resource: buildSrn({
+      projectPublicId: memory.projectId!,
+      resourceType: 'memory',
+      resourceId: memory.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
