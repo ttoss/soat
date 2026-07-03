@@ -13,6 +13,8 @@ Use orchestrations when you know the exact steps in advance and want determinist
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+An orchestration can also be declared as a [Formation](./formations.md) resource, letting you deploy a team of agents together with the flow that coordinates them as a single stack — see [Agent Squads](./formations.md#agent-squads).
+
 ## Related Tutorials
 
 - [Orchestration Control Flow: Delay, Poll, and Loop](/docs/tutorials/orchestration-control-flow) — the `delay`, `poll`, `loop`, and `condition` nodes in one deterministic run, with a reference table for every node type

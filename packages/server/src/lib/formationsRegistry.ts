@@ -9,6 +9,7 @@ import { filesFormationModule } from './formation-modules/filesFormationModule';
 import { ingestionRulesFormationModule } from './formation-modules/ingestionRulesFormationModule';
 import { memoriesFormationModule } from './formation-modules/memoriesFormationModule';
 import { memoryEntriesFormationModule } from './formation-modules/memoryEntriesFormationModule';
+import { orchestrationsFormationModule } from './formation-modules/orchestrationsFormationModule';
 import { policiesFormationModule } from './formation-modules/policiesFormationModule';
 import { secretsFormationModule } from './formation-modules/secretsFormationModule';
 import { sessionsFormationModule } from './formation-modules/sessionsFormationModule';
@@ -45,6 +46,7 @@ registerFormationModule({ module: ingestionRulesFormationModule });
 registerFormationModule({ module: policiesFormationModule });
 registerFormationModule({ module: secretsFormationModule });
 registerFormationModule({ module: sessionsFormationModule });
+registerFormationModule({ module: orchestrationsFormationModule });
 
 export const getFormationModule = (args: {
   resourceType: string;
