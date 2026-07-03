@@ -62,8 +62,10 @@ When you call `POST /api/v1/memory-entries` (with `memory_id` in the body), the 
 | Similarity range        | Decision   | What happens                                                               |
 | ----------------------- | ---------- | -------------------------------------------------------------------------- |
 | ≥ `duplicate_threshold` | **Skip**   | The fact is already known. Returns the existing entry unchanged.           |
-| ≥ `update_threshold`    | **Merge**  | The fact overlaps. The incoming content is appended to the existing entry. |
+| ≥ `update_threshold`    | **Merge**  | The fact overlaps. The two facts are consolidated into the existing entry (see below).      |
 | < `update_threshold`    | **Create** | The fact is new. A new entry is created.                                   |
+
+On **Merge**, writes made during a generation (the `write_memory` tool and automatic extraction) consolidate the existing and incoming facts into a **single atomic fact** using the agent's LLM — contradictions resolve in favour of the new fact. Writes without an agent context (the manual `POST /api/v1/memory-entries` endpoint) append the incoming content instead. Consolidation is best-effort: if the completion fails, the write falls back to appending, so a merge never loses content.
 
 See all three outcomes in action in [Agent with Persistent Memory - Step 5 (Write memory entries)](/docs/tutorials/memories-agent#step-5--write-memory-entries).
 

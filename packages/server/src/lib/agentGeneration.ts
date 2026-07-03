@@ -17,7 +17,7 @@ import {
   recoverPendingFromDb,
   resolveAgentForGeneration,
 } from './agentGenerationRecovery';
-import { buildKnowledgeMessages, buildWriteMemoryTool } from './agentKnowledge';
+import { buildKnowledgeMessages, buildKnowledgeTools } from './agentKnowledge';
 import { buildModel } from './agentModel';
 import {
   buildToolResultMessages as buildToolResultMessagesFromOutputs,
@@ -56,21 +56,6 @@ type GenerationContext = {
   reasoningConfig?: ReasoningConfig | null;
   providerOptions?: ProviderOptionsMap;
   maxOutputTokens?: number;
-};
-
-const buildKnowledgeTools = (args: {
-  typedAgent: TypedAgent;
-  resolvedTools: Record<string, unknown>;
-}): void => {
-  const knowledgeConfig = args.typedAgent.knowledgeConfig as
-    | { writeMemoryId?: string }
-    | null
-    | undefined;
-  if (knowledgeConfig?.writeMemoryId) {
-    args.resolvedTools['write_memory'] = buildWriteMemoryTool({
-      writeMemoryId: knowledgeConfig.writeMemoryId,
-    });
-  }
 };
 
 const resolveGenerationModel = async (args: {
@@ -187,7 +172,12 @@ const buildGenerationContext = async (args: {
       })
     : {};
 
-  buildKnowledgeTools({ typedAgent, resolvedTools });
+  buildKnowledgeTools({
+    agentId: args.agentId,
+    projectIds: args.projectIds,
+    typedAgent,
+    resolvedTools,
+  });
 
   const allMessages = await assembleContextMessages({
     agentId: args.agentId,

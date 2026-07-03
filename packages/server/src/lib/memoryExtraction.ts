@@ -199,8 +199,11 @@ const resolveExtractionTarget = async (args: {
 
 const writeCandidates = async (args: {
   agentId: string;
+  projectIds?: number[];
   memoryId: number;
   candidates: string[];
+  aiProviderId?: string;
+  model?: string;
 }): Promise<ExtractionSummary> => {
   const summary: ExtractionSummary = {
     candidates: args.candidates.length,
@@ -215,6 +218,14 @@ const writeCandidates = async (args: {
         memoryId: args.memoryId,
         content,
         sourceType: 'extraction',
+        // Extraction has an agent context, so merges consolidate via the LLM
+        // (reusing any extraction provider/model override).
+        consolidation: {
+          agentId: args.agentId,
+          projectIds: args.projectIds,
+          aiProviderId: args.aiProviderId,
+          model: args.model,
+        },
       });
       summary[result.action] += 1;
     } catch (error) {
@@ -283,8 +294,11 @@ export const runMemoryExtraction = async (args: {
 
   const summary = await writeCandidates({
     agentId: args.agentId,
+    projectIds: args.projectIds,
     memoryId: memory.id as number,
     candidates: parseFactCandidates(completionText),
+    aiProviderId: extraction.aiProviderId,
+    model: extraction.model,
   });
 
   log(
