@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.18](https://127.0.0.1/41729/git/ttoss/compare/v0.13.17...v0.13.18) (2026-07-03)
+
+### Bug Fixes
+
+* resolve six orchestration/MCP/formations bugs via red-green TDD ([#381](https://127.0.0.1/41729/git/ttoss/issues/381)) ([10edd2c](https://127.0.0.1/41729/git/ttoss/commits/10edd2c7563b7f2a12d778910c5209576b20624d))
+
 ## [0.13.17](https://127.0.0.1/41729/git/ttoss/compare/v0.13.16...v0.13.17) (2026-07-03)
 
 ### Bug Fixes
