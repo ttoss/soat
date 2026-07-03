@@ -1156,3 +1156,138 @@ describe('Group 12: Admin API key with full-access policy is not 403', () => {
     expect(response.status).toBe(204);
   });
 });
+
+// ─── Group 13: Regression — https://github.com/ttoss/soat/issues/355 ─────
+//
+// A project-scoped API key with a policy whose resource SRN is scoped to the
+// project (e.g. `soat:{projectId}:*:*`), the same pattern proven to work for
+// files in Group 11, returned 403 for memories, ai-providers, and
+// memory-entries single-resource routes (get/update/delete), because those
+// route handlers called `isAllowed` without a `resource`/`resources` field —
+// unlike files, which build an explicit SRN via `canAccessFile`.
+
+describe('Group 13: API key with project-scoped SRN policy — memories, ai-providers, memory-entries', () => {
+  let adminToken: string;
+  let projectId: string;
+  let apiKey: string;
+
+  beforeAll(async () => {
+    await testClient
+      .post('/api/v1/users/bootstrap')
+      .send({ username: 'admin', password: 'supersecret' });
+
+    adminToken = await loginAs('admin', 'supersecret');
+
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'SRN Scoped Memories Project' });
+    projectId = projectRes.body.id;
+
+    const userRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'oscar', password: 'oscarpass' });
+
+    const userPolicyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: {
+          statement: [{ effect: 'Allow', action: ['*'] }],
+        },
+      });
+
+    await authenticatedTestClient(adminToken)
+      .put(`/api/v1/users/${userRes.body.id}/policies`)
+      .send({ policy_ids: [userPolicyRes.body.id] });
+
+    const userToken = await loginAs('oscar', 'oscarpass');
+
+    // Key policy targets the project via an explicit resource SRN, like
+    // Group 11 does for files — the pattern that already works there.
+    const keyPolicyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['memories:*', 'aiProviders:*'],
+              resource: [`soat:${projectId}:*:*`],
+            },
+          ],
+        },
+      });
+
+    const apiKeyRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/api-keys')
+      .send({
+        project_id: projectId,
+        policy_ids: [keyPolicyRes.body.id],
+        name: 'SRN scoped key',
+      });
+
+    apiKey = apiKeyRes.body.key;
+  });
+
+  test('API key can get a memory when the key policy SRN matches the project', async () => {
+    const createRes = await testClient
+      .post('/api/v1/memories')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({ project_id: projectId, name: 'SRN Memory' });
+    expect(createRes.status).toBe(201);
+    const memoryId = createRes.body.id;
+
+    const getRes = await testClient
+      .get(`/api/v1/memories/${memoryId}`)
+      .set('Authorization', `Bearer ${apiKey}`);
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.id).toBe(memoryId);
+
+    const updateRes = await testClient
+      .put(`/api/v1/memories/${memoryId}`)
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({ name: 'Updated SRN Memory' });
+    expect(updateRes.status).toBe(200);
+
+    const entryCreateRes = await testClient
+      .post('/api/v1/memory-entries')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({ memory_id: memoryId, content: 'SRN entry content' });
+    expect(entryCreateRes.status).toBe(201);
+    const entryId = entryCreateRes.body.id;
+
+    const entryGetRes = await testClient
+      .get(`/api/v1/memory-entries/${entryId}`)
+      .set('Authorization', `Bearer ${apiKey}`);
+    expect(entryGetRes.status).toBe(200);
+
+    const deleteRes = await testClient
+      .delete(`/api/v1/memories/${memoryId}`)
+      .set('Authorization', `Bearer ${apiKey}`);
+    expect(deleteRes.status).toBe(204);
+  });
+
+  test('API key can get and delete an ai-provider when the key policy SRN matches the project', async () => {
+    const createRes = await testClient
+      .post('/api/v1/ai-providers')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({
+        project_id: projectId,
+        name: 'SRN AI Provider',
+        provider: 'openai',
+        default_model: 'gpt-4o',
+      });
+    expect(createRes.status).toBe(201);
+    const providerId = createRes.body.id;
+
+    const getRes = await testClient
+      .get(`/api/v1/ai-providers/${providerId}`)
+      .set('Authorization', `Bearer ${apiKey}`);
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.id).toBe(providerId);
+
+    const deleteRes = await testClient
+      .delete(`/api/v1/ai-providers/${providerId}`)
+      .set('Authorization', `Bearer ${apiKey}`);
+    expect(deleteRes.status).toBe(204);
+  });
+});
