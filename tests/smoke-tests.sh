@@ -2559,6 +2559,34 @@ echo "Duplicate call with idempotency_key returns original message: OK"
 echo "add-session-message idempotency_key: OK"
 
 echo ""
+echo "--- Project delete-block and force-delete ---"
+DEL_PROJECT_RESP=$($SOAT_CLI create-project --name smoke-delete-project)
+DEL_PROJECT_ID=$(echo "$DEL_PROJECT_RESP" | jq -r '.id')
+
+DEL_AI_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
+  --project_id "$DEL_PROJECT_ID" \
+  --name smoke-delete-provider \
+  --provider ollama \
+  --default_model "qwen2.5:0.5b" \
+  --base_url "http://ollama:11434")
+DEL_AI_PROVIDER_ID=$(echo "$DEL_AI_PROVIDER_RESP" | jq -r '.id')
+
+DEL_AGENT_RESP=$($SOAT_CLI create-agent \
+  --project_id "$DEL_PROJECT_ID" \
+  --ai_provider_id "$DEL_AI_PROVIDER_ID" \
+  --name smoke-delete-agent)
+DEL_AGENT_ID=$(echo "$DEL_AGENT_RESP" | jq -r '.id')
+
+expect_cli_error_status 409 delete-project --project-id "$DEL_PROJECT_ID"
+echo "Project delete-block: OK (409 PROJECT_HAS_DEPENDENTS as expected)"
+
+$SOAT_CLI delete-project --project-id "$DEL_PROJECT_ID" --force true
+expect_cli_error_status 404 get-project --project-id "$DEL_PROJECT_ID"
+expect_cli_error_status 404 get-agent --agent-id "$DEL_AGENT_ID"
+expect_cli_error_status 404 get-ai-provider --ai-provider-id "$DEL_AI_PROVIDER_ID"
+echo "Project force-delete: OK (project and dependents removed)"
+
+echo ""
 echo "--- Smoke: GET /app returns HTML ---"
 APP_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/app")
 if [ "$APP_HTTP_CODE" != "200" ]; then
