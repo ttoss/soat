@@ -664,6 +664,11 @@ one step and its `output` resolves straight to `steps.call.text` — a single `v
 expression as the whole `output` mapping resolves to that bare scalar directly, per
 [Ingestion Rules — Building a Tool Converter for a Third-Party API](/docs/modules/ingestion-rules#building-a-tool-converter-for-a-third-party-api).
 
+> An `http` tool's [`output_mapping`](/docs/modules/tools#output-mapping) field can express this
+> same `{ "var": "output.text" }` extraction directly on the `xai-stt` tool from Step 10, without
+> a separate `pipeline` tool. The two-tool version below is kept as the illustration of chaining
+> multiple tools together, which `output_mapping` alone cannot do.
+
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 

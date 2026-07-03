@@ -77,6 +77,34 @@ describe('agentNonStreamGeneration', () => {
     expect(messages[1].content[0].toolName).toBe('toolTwo');
   });
 
+  test('buildToolResultMessages applies a client tool output_mapping keyed by tool name', async () => {
+    const { buildToolResultMessages } = await loadNonStreamModule();
+    const messages = buildToolResultMessages({
+      toolOutputs: [
+        { toolCallId: 'tc_1', output: { text: 'Hi!', language: 'en' } },
+      ],
+      pendingToolCalls: [
+        { toolCallId: 'tc_1', toolName: 'transcribe', args: {} },
+      ],
+      outputMappingsByToolName: {
+        transcribe: { var: 'output.text' },
+      },
+    });
+
+    expect(messages[0].content[0].output.value).toBe('Hi!');
+  });
+
+  test('buildToolResultMessages leaves output unchanged for tools without an output_mapping', async () => {
+    const { buildToolResultMessages } = await loadNonStreamModule();
+    const messages = buildToolResultMessages({
+      toolOutputs: [{ toolCallId: 'tc_1', output: { ok: true } }],
+      pendingToolCalls: [{ toolCallId: 'tc_1', toolName: 'toolOne', args: {} }],
+      outputMappingsByToolName: { otherTool: { var: 'output.text' } },
+    });
+
+    expect(messages[0].content[0].output.value).toBe('{"ok":true}');
+  });
+
   test('runNonStreamGeneration returns requires_action result when pending client tools exist', async () => {
     jest.doMock('ai', () => {
       const actual = jest.requireActual('ai');

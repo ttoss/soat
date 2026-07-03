@@ -1,6 +1,7 @@
 import {
   applyInputMapping,
   applyOutputMapping,
+  applyToolOutputMapping,
   evaluateLogic,
   isLogic,
 } from 'src/lib/jsonLogicMapping';
@@ -238,6 +239,37 @@ describe('jsonLogicMapping', () => {
         { steps: { a: { sum: 100 } }, input: { n: 7 } }
       );
       expect(result).toEqual({ total: 100, echo: 7 });
+    });
+  });
+
+  describe('applyToolOutputMapping', () => {
+    test('returns the raw result unchanged when outputMapping is undefined', () => {
+      const rawResult = { text: 'Hi!', language: 'en' };
+      expect(applyToolOutputMapping(undefined, rawResult)).toBe(rawResult);
+    });
+
+    test('returns the raw result unchanged when outputMapping is null', () => {
+      const rawResult = { text: 'Hi!' };
+      expect(applyToolOutputMapping(null, rawResult)).toBe(rawResult);
+    });
+
+    test('extracts a bare scalar field from the raw result via a var expression', () => {
+      const result = applyToolOutputMapping(
+        { var: 'output.text' },
+        { text: 'Hi!', language: 'en' }
+      );
+      expect(result).toBe('Hi!');
+    });
+
+    test('reshapes the raw result into an object mapping', () => {
+      const result = applyToolOutputMapping(
+        {
+          transcript: { var: 'output.text' },
+          lang: { var: 'output.language' },
+        },
+        { text: 'Hi!', language: 'en' }
+      );
+      expect(result).toEqual({ transcript: 'Hi!', lang: 'en' });
     });
   });
 });

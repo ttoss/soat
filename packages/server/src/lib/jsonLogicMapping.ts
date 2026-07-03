@@ -89,3 +89,17 @@ export const applyOutputMapping = (
   if (!outputMapping) return {};
   return evaluateLogic(outputMapping, context);
 };
+
+/**
+ * Reshapes a tool's raw result via its `outputMapping` (JSON Logic evaluated
+ * over `{ output: rawResult }`), e.g. `{ var: "output.text" }` extracts a bare
+ * scalar field. When no mapping is configured, the raw result is returned
+ * untouched — unlike {@link applyOutputMapping}, which defaults to `{}`.
+ */
+export const applyToolOutputMapping = (
+  outputMapping: Record<string, unknown> | null | undefined,
+  rawResult: unknown
+): unknown => {
+  if (!outputMapping) return rawResult;
+  return evaluateLogic(outputMapping, { output: rawResult });
+};

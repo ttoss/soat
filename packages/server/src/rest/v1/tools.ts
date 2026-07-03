@@ -115,6 +115,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
     actions,
     presetParameters,
     pipeline,
+    outputMapping,
     projectId: projectPublicId,
   } = (ctx.request.body ?? {}) as {
     name?: unknown;
@@ -126,6 +127,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
     actions?: unknown;
     presetParameters?: unknown;
     pipeline?: unknown;
+    outputMapping?: unknown;
     projectId?: string;
   };
 
@@ -147,6 +149,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
   let parsedMcp: object | undefined;
   let parsedPresetParameters: object | undefined;
   let parsedPipeline: object | undefined;
+  let parsedOutputMapping: object | undefined;
   try {
     parsedParameters = coerceToJsonObject(parameters) as object | undefined;
     parsedExecute = coerceToJsonObject(execute) as object | undefined;
@@ -155,11 +158,14 @@ toolsRouter.post('/tools', async (ctx: Context) => {
       | object
       | undefined;
     parsedPipeline = coerceToJsonObject(pipeline) as object | undefined;
+    parsedOutputMapping = coerceToJsonObject(outputMapping) as
+      | object
+      | undefined;
   } catch {
     ctx.status = 400;
     ctx.body = {
       error:
-        'parameters, execute, mcp, preset_parameters, and pipeline must be JSON objects',
+        'parameters, execute, mcp, preset_parameters, pipeline, and output_mapping must be JSON objects',
     };
     return;
   }
@@ -175,6 +181,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
     actions: Array.isArray(actions) ? actions : undefined,
     presetParameters: parsedPresetParameters,
     pipeline: parsedPipeline,
+    outputMapping: parsedOutputMapping,
   });
 
   ctx.status = 201;
@@ -261,6 +268,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     actions,
     presetParameters,
     pipeline,
+    outputMapping,
   } = (ctx.request.body ?? {}) as Record<string, unknown>;
 
   let parsedParameters: object | null | undefined;
@@ -268,17 +276,19 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
   let parsedMcp: object | null | undefined;
   let parsedPresetParameters: object | null | undefined;
   let parsedPipeline: object | null | undefined;
+  let parsedOutputMapping: object | null | undefined;
   try {
     parsedParameters = coerceToJsonObject(parameters);
     parsedExecute = coerceToJsonObject(execute);
     parsedMcp = coerceToJsonObject(mcp);
     parsedPresetParameters = coerceToJsonObject(presetParameters);
     parsedPipeline = coerceToJsonObject(pipeline);
+    parsedOutputMapping = coerceToJsonObject(outputMapping);
   } catch {
     ctx.status = 400;
     ctx.body = {
       error:
-        'parameters, execute, mcp, preset_parameters, and pipeline must be JSON objects',
+        'parameters, execute, mcp, preset_parameters, pipeline, and output_mapping must be JSON objects',
     };
     return;
   }
@@ -295,6 +305,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     actions: parseNullableArray(actions),
     presetParameters: parsedPresetParameters,
     pipeline: parsedPipeline,
+    outputMapping: parsedOutputMapping,
   });
 
   ctx.body = result;
@@ -330,6 +341,23 @@ toolsRouter.delete('/tools/:tool_id', async (ctx: Context) => {
 
   ctx.status = 204;
 });
+
+/**
+ * A tool's `output_mapping` can resolve to a bare scalar (e.g. a string
+ * extracted via `{ var: "output.text" }`). Koa infers a `text/plain` content
+ * type for raw string/number/boolean bodies, so those are explicitly
+ * serialized as JSON to honor the endpoint's declared `application/json`
+ * contract. Object/array results are left as-is so the caseTransform
+ * middleware can still convert their keys to snake_case.
+ */
+const setCallToolResponseBody = (ctx: Context, result: unknown): void => {
+  if (result !== null && typeof result === 'object') {
+    ctx.body = result;
+  } else {
+    ctx.type = 'application/json';
+    ctx.body = JSON.stringify(result);
+  }
+};
 
 /**
  * @openapi
@@ -377,5 +405,5 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
     authHeader,
   });
 
-  ctx.body = result;
+  setCallToolResponseBody(ctx, result);
 });

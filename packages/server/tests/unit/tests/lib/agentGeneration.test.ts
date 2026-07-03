@@ -86,6 +86,12 @@ describe('submitToolOutputs', () => {
   });
 
   test('returns requires_action when continuation produces a new client tool call', async () => {
+    jest.doMock('src/db', () => {
+      return {
+        db: { Tool: { findAll: jest.fn().mockResolvedValue([]) } },
+        models: {},
+      };
+    });
     jest.doMock('ai', () => {
       const actual = jest.requireActual('ai');
       return {
@@ -202,6 +208,12 @@ describe('submitToolOutputs', () => {
   });
 
   test('processes pending tool outputs and returns completed result', async () => {
+    jest.doMock('src/db', () => {
+      return {
+        db: { Tool: { findAll: jest.fn().mockResolvedValue([]) } },
+        models: {},
+      };
+    });
     jest.doMock('ai', () => {
       const actual = jest.requireActual('ai');
       return {

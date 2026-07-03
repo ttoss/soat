@@ -66,6 +66,9 @@ export class Tool extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare pipeline: object | null;
 
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare outputMapping: object | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

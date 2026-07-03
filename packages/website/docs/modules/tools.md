@@ -41,6 +41,7 @@ Five tool types are supported: `http` (calls an external HTTP endpoint), `client
 | `actions`           | `string[] \| null`                              | SOAT platform actions to expose (e.g. `["search-documents"]`). Required for `soat` type.                         |
 | `preset_parameters` | `object \| null`                                | Fixed parameter values merged into every call. Keys are hidden from the model and injected automatically.         |
 | `pipeline`          | `object \| null`                                | Pipeline definition (`steps`, optional `output`). Required for `pipeline` type. See [pipeline](#pipeline).         |
+| `output_mapping`    | `object \| null`                                | JSON Logic mapping applied to the tool's raw result, for every tool type. See [output mapping](#output-mapping).   |
 | `created_at`        | `string`                                        | ISO 8601 creation timestamp                                                                                       |
 | `updated_at`        | `string`                                        | ISO 8601 last-updated timestamp                                                                                   |
 
@@ -274,6 +275,30 @@ Each step's full output is captured under `steps.<id>`. A step may reference onl
 
 For LLM-decided (rather than fixed) multi-step flows, see [Orchestrations](./orchestrations.md), which share the same JSON Logic mapping model.
 
+### Output Mapping
+
+`output_mapping` is a universal [JSON Logic](https://jsonlogic.com) mapping applied to a tool's raw result, for **every** tool type (`http`, `mcp`, `soat`, `pipeline`, `client`). It's evaluated over `{ "output": <raw result> }`, so `{ "var": "output.text" }` extracts a bare scalar field without needing a wrapping `pipeline` tool just to reshape a response:
+
+```json
+{
+  "type": "http",
+  "execute": { "url": "https://api.x.ai/v1/stt", "method": "POST", "body_mode": "multipart" },
+  "output_mapping": { "var": "output.text" }
+}
+```
+
+An object mapping reshapes the result instead of extracting a single field, the same way pipeline `output` does:
+
+```json
+{ "transcript": { "var": "output.text" }, "language": { "var": "output.language" } }
+```
+
+**Ordering for `pipeline` tools.** A pipeline already has its own `output` mapping over the pipeline's internal `steps.*` context. The tool's top-level `output_mapping` runs *after* that — over the pipeline's final result, wrapped as `{ "output": <pipeline result> }`. In practice a pipeline author can do all the reshaping in `output` directly, but `output_mapping` composes on top when needed (e.g. a shared pipeline tool whose result a specific caller wants to reshape further).
+
+**`client` tools.** Since client tools are executed by the calling application rather than resolved server-side, `output_mapping` is applied when the submitted tool output is materialized back into the generation, keyed by tool name.
+
+When no `output_mapping` is configured, a tool's raw result is returned unchanged.
+
 ### Preset Parameters
 
 `preset_parameters` lets you bake fixed values into a `soat` (or any) tool definition. When a key in `preset_parameters` matches a field in the action's input schema:
@@ -307,7 +332,7 @@ The model calls `public_doc_update-document` with only the fields it needs to su
 
 ### Calling a Tool Directly
 
-Tools can be invoked independently of an agent via `POST /api/v1/tools/{tool_id}/call`. The request body accepts `action` (required for `soat` and `mcp` types) and `input` (key-value arguments). For `pipeline` tools, `input` is the pipeline input, `action` is ignored, and the response is the mapped `output`.
+Tools can be invoked independently of an agent via `POST /api/v1/tools/{tool_id}/call`. The request body accepts `action` (required for `soat` and `mcp` types) and `input` (key-value arguments). For `pipeline` tools, `input` is the pipeline input, `action` is ignored, and the response is the mapped `output`. When the tool has an `output_mapping`, the response is that mapping's result instead of the raw output — see [Output Mapping](#output-mapping).
 
 ## Examples
 

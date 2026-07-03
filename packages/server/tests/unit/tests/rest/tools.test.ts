@@ -689,4 +689,333 @@ describe('Tools', () => {
       expect(lastRequest.url).toContain('key=sk-live-topsecret');
     });
   });
+
+  describe('Tool call validation and MCP calling', () => {
+    let mcpServer: http.Server;
+    let mcpServerUrl: string;
+
+    beforeAll(async () => {
+      mcpServer = http.createServer((req, res) => {
+        let body = '';
+        req.on('data', (chunk) => {
+          body += chunk;
+        });
+        req.on('end', () => {
+          const parsed = JSON.parse(body) as { method: string };
+          res.setHeader('Content-Type', 'application/json');
+          if (parsed.method === 'tools/call') {
+            res.end(
+              JSON.stringify({
+                jsonrpc: '2.0',
+                id: 2,
+                result: { content: [{ text: JSON.stringify({ ok: true }) }] },
+              })
+            );
+            return;
+          }
+          res.end(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }));
+        });
+      });
+      await new Promise<void>((resolve) => {
+        mcpServer.listen(0, '127.0.0.1', resolve);
+      });
+      const { port } = mcpServer.address() as AddressInfo;
+      mcpServerUrl = `http://127.0.0.1:${port}`;
+    });
+
+    afterAll(async () => {
+      await new Promise<void>((resolve) => {
+        mcpServer.close(() => {
+          resolve();
+        });
+      });
+    });
+
+    test('calling an http tool with no execute config returns 400', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'no-execute-http-tool',
+          type: 'http',
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ input: {} });
+
+      expect(callRes.status).toBe(400);
+      expect(callRes.body.error.code).toBe('VALIDATION_FAILED');
+      expect(callRes.body.error.message).toMatch(
+        /invalid execute configuration/i
+      );
+    });
+
+    test('calling a soat tool with an action not on the tool returns 400', async () => {
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${soatToolId}/call`)
+        .send({ action: 'delete-everything' });
+
+      expect(callRes.status).toBe(400);
+      expect(callRes.body.error.code).toBe('VALIDATION_FAILED');
+      expect(callRes.body.error.message).toMatch(/not available on this tool/i);
+    });
+
+    test('calling a soat tool with an action unknown to the SOAT registry returns 400', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'unknown-soat-action-tool',
+          type: 'soat',
+          actions: ['not-a-real-soat-action'],
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ action: 'not-a-real-soat-action' });
+
+      expect(callRes.status).toBe(400);
+      expect(callRes.body.error.code).toBe('VALIDATION_FAILED');
+      expect(callRes.body.error.message).toMatch(/not a known SOAT action/i);
+    });
+
+    test('calling an mcp tool without an action returns 400', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'no-action-mcp-tool',
+          type: 'mcp',
+          mcp: { url: mcpServerUrl },
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ input: {} });
+
+      expect(callRes.status).toBe(400);
+      expect(callRes.body.error.code).toBe('VALIDATION_FAILED');
+      expect(callRes.body.error.message).toMatch(
+        /action is required for mcp tools/i
+      );
+    });
+
+    test('calling an mcp tool with no mcp.url configured returns 400', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'invalid-mcp-config-tool',
+          type: 'mcp',
+          mcp: {},
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ action: 'anything' });
+
+      expect(callRes.status).toBe(400);
+      expect(callRes.body.error.code).toBe('VALIDATION_FAILED');
+      expect(callRes.body.error.message).toMatch(/invalid mcp configuration/i);
+    });
+
+    test('calling an mcp tool invokes the MCP server and returns its result', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'working-mcp-tool',
+          type: 'mcp',
+          mcp: { url: mcpServerUrl },
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ action: 'some-remote-tool', input: {} });
+
+      expect(callRes.status).toBe(200);
+      expect(callRes.body).toEqual({ ok: true });
+    });
+  });
+
+  describe('output_mapping', () => {
+    let jsonServer: http.Server;
+    let jsonServerUrl: string;
+
+    beforeAll(async () => {
+      jsonServer = http.createServer((_req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ text: 'Hi!', language: 'en' }));
+      });
+      await new Promise<void>((resolve) => {
+        jsonServer.listen(0, '127.0.0.1', resolve);
+      });
+      const { port } = jsonServer.address() as AddressInfo;
+      jsonServerUrl = `http://127.0.0.1:${port}`;
+    });
+
+    afterAll(async () => {
+      await new Promise<void>((resolve) => {
+        jsonServer.close(() => {
+          resolve();
+        });
+      });
+    });
+
+    test('create/read/update round-trip preserves output_mapping (snake_case)', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'transcribe-tool',
+          type: 'http',
+          execute: { url: `${jsonServerUrl}/stt`, method: 'POST' },
+          output_mapping: { var: 'output.text' },
+        });
+      expect(createRes.status).toBe(201);
+      expect(createRes.body.output_mapping).toEqual({ var: 'output.text' });
+
+      const getRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/tools/${createRes.body.id}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.output_mapping).toEqual({ var: 'output.text' });
+
+      const updateRes = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/tools/${createRes.body.id}`)
+        .send({ output_mapping: { transcript: { var: 'output.text' } } });
+      expect(updateRes.status).toBe(200);
+      expect(updateRes.body.output_mapping).toEqual({
+        transcript: { var: 'output.text' },
+      });
+    });
+
+    test('output_mapping must be a JSON object (400)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'invalid-output-mapping-tool',
+          type: 'http',
+          execute: { url: `${jsonServerUrl}/stt` },
+          output_mapping: 'not-an-object',
+        });
+      expect(res.status).toBe(400);
+    });
+
+    test('calling an http tool with output_mapping returns the reshaped result, not the raw one', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'call-with-output-mapping-tool',
+          type: 'http',
+          execute: { url: `${jsonServerUrl}/stt`, method: 'POST' },
+          output_mapping: { var: 'output.text' },
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ input: {} });
+
+      expect(callRes.status).toBe(200);
+      expect(callRes.body).toBe('Hi!');
+    });
+
+    test('calling an http tool without output_mapping returns the raw result unchanged', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'call-without-output-mapping-tool',
+          type: 'http',
+          execute: { url: `${jsonServerUrl}/stt`, method: 'POST' },
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ input: {} });
+
+      expect(callRes.status).toBe(200);
+      expect(callRes.body).toEqual({ text: 'Hi!', language: 'en' });
+    });
+
+    test("a pipeline tool output_mapping runs after the pipeline's own output mapping", async () => {
+      const stepToolRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'output-mapping-pipeline-step',
+          type: 'http',
+          execute: { url: `${jsonServerUrl}/stt`, method: 'POST' },
+        });
+      expect(stepToolRes.status).toBe(201);
+
+      const pipelineRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'output-mapping-pipeline',
+          type: 'pipeline',
+          pipeline: {
+            steps: [{ id: 'call', tool_id: stepToolRes.body.id, input: {} }],
+            output: { transcript: { var: 'steps.call.text' } },
+          },
+          output_mapping: { var: 'output.transcript' },
+        });
+      expect(pipelineRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${pipelineRes.body.id}/call`)
+        .send({ input: {} });
+
+      expect(callRes.status).toBe(200);
+      expect(callRes.body).toBe('Hi!');
+    });
+
+    test('a formation applying output_mapping to a tool resource round-trips it', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `output-mapping-formation-${Date.now()}`,
+          template: {
+            resources: {
+              stt: {
+                type: 'tool',
+                properties: {
+                  name: 'formation-output-mapping-tool',
+                  type: 'http',
+                  execute: { url: `${jsonServerUrl}/stt`, method: 'POST' },
+                  output_mapping: { var: 'output.text' },
+                },
+              },
+            },
+          },
+        });
+      expect(createRes.status).toBe(201);
+
+      const toolResource = createRes.body.resources.find(
+        (r: { logical_id: string }) => {
+          return r.logical_id === 'stt';
+        }
+      );
+      const toolPublicId = toolResource?.physical_resource_id;
+      expect(toolPublicId).toBeDefined();
+
+      const getRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/tools/${toolPublicId}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.output_mapping).toEqual({ var: 'output.text' });
+    });
+  });
 });

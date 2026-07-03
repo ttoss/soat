@@ -85,6 +85,7 @@ export const toolsFormationModule: FormationModule = {
       presetParameters:
         toNullableObject(properties.preset_parameters) ?? undefined,
       pipeline: toNullableObject(properties.pipeline) ?? undefined,
+      outputMapping: toNullableObject(properties.output_mapping) ?? undefined,
     });
 
     log(
@@ -116,6 +117,7 @@ export const toolsFormationModule: FormationModule = {
       actions: toNullableArray<string>(properties.actions),
       presetParameters: toNullableObject(properties.preset_parameters),
       pipeline: toNullableObject(properties.pipeline),
+      outputMapping: toNullableObject(properties.output_mapping),
     });
   },
 
@@ -136,6 +138,7 @@ export const toolsFormationModule: FormationModule = {
         actions: tool.actions,
         preset_parameters: tool.presetParameters,
         pipeline: tool.pipeline,
+        output_mapping: tool.outputMapping,
       };
     } catch {
       return null;
