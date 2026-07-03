@@ -95,3 +95,14 @@ export const initializeOrchestrationScheduler = (args?: {
   }, resolvedInterval);
   timer.unref?.();
 };
+
+/**
+ * Stops the background scheduler loop if it is running. Used for graceful
+ * shutdown and to tear the timer down in tests.
+ */
+export const stopOrchestrationScheduler = (): void => {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+  }
+};
