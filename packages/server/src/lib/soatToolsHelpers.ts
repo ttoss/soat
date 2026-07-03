@@ -11,6 +11,7 @@ import {
   buildBodyFn,
   buildPathFn,
   buildQueryFn,
+  dereferenceSchema,
   resolveParameter as resolveOpenApiParameter,
   resolveSchema as resolveOpenApiSchema,
 } from './soatToolsSchemaHelpers';
@@ -289,7 +290,8 @@ export const extractBodyProps = (args: {
   items?: unknown;
 }> => {
   const rawBodySchema = args.requestBody?.content?.['application/json']?.schema;
-  const bodySchema = resolveSchema(rawBodySchema, args.spec);
+  const dereferencedBodySchema = dereferenceSchema(rawBodySchema, args.spec);
+  const bodySchema = resolveSchema(dereferencedBodySchema, args.spec);
   if (!bodySchema?.properties) return [];
   const allEntries = Object.entries(bodySchema.properties);
   const filtered = allEntries.filter(([, value]: [string, unknown]) => {

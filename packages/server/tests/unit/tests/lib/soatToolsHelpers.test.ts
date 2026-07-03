@@ -235,4 +235,81 @@ describe('extractBodyProps', () => {
       })?.required
     ).toBe(false);
   });
+
+  test('deep-resolves $refs nested inside array item properties (issue #344)', () => {
+    // Reproduces the create-agent-generation bug: messages[].content is a
+    // oneOf containing $refs to components/schemas. Those refs must be
+    // inlined before the schema reaches an LLM provider as a tool
+    // definition, since the provider-facing schema has no `components`
+    // section to resolve against.
+    const spec = {
+      components: {
+        schemas: {
+          ToolOutputMessageContent: {
+            type: 'object',
+            required: ['type', 'tool_id'],
+            properties: {
+              type: { type: 'string', enum: ['tool_output'] },
+              tool_id: { type: 'string' },
+            },
+          },
+        },
+      },
+    };
+
+    const result = extractBodyProps({
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['messages'],
+              properties: {
+                messages: {
+                  type: 'array',
+                  description: 'Conversation messages',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      role: { type: 'string' },
+                      content: {
+                        oneOf: [
+                          { type: 'string' },
+                          {
+                            $ref: '#/components/schemas/ToolOutputMessageContent',
+                          },
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      spec,
+    });
+
+    const messagesProp = result.find((p) => {
+      return p.snakeName === 'messages';
+    });
+
+    expect(messagesProp).toBeDefined();
+    expect(JSON.stringify(messagesProp?.items)).not.toContain('$ref');
+
+    const resolvedAlternative = (
+      messagesProp?.items as {
+        properties: {
+          content: {
+            oneOf: Array<{
+              properties?: { tool_id?: { type?: string } };
+            }>;
+          };
+        };
+      }
+    ).properties.content.oneOf[1];
+
+    expect(resolvedAlternative.properties?.tool_id?.type).toBe('string');
+  });
 });

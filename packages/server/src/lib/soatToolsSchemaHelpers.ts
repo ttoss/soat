@@ -57,6 +57,63 @@ const mergeResolvedSchemas = (
   };
 };
 
+const dereferenceValue = (args: {
+  value: unknown;
+  spec: OpenApiSpec;
+  seenRefs: Set<string>;
+}): unknown => {
+  const { value, spec, seenRefs } = args;
+
+  if (Array.isArray(value)) {
+    return value.map((item) => {
+      return dereferenceValue({ value: item, spec, seenRefs });
+    });
+  }
+
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+
+    if (typeof obj.$ref === 'string') {
+      const refName = obj.$ref.replace('#/components/schemas/', '');
+      // Guard against circular $refs: if already resolving this ref, stop
+      // recursing and return an empty schema rather than looping forever.
+      if (seenRefs.has(refName)) return {};
+      const resolved = spec.components?.schemas?.[refName];
+      return dereferenceValue({
+        value: resolved,
+        spec,
+        seenRefs: new Set(seenRefs).add(refName),
+      });
+    }
+
+    const result: Record<string, unknown> = {};
+    for (const [key, entryValue] of Object.entries(obj)) {
+      result[key] = dereferenceValue({ value: entryValue, spec, seenRefs });
+    }
+    return result;
+  }
+
+  return value;
+};
+
+/**
+ * Recursively inlines every `$ref` in a schema (including refs nested inside
+ * `properties`, `items`, `oneOf`, `anyOf`, etc.), producing a self-contained
+ * schema safe to hand to an LLM provider as a tool definition — provider
+ * tool schemas have no `components` section to resolve refs against.
+ */
+export const dereferenceSchema = (
+  schema: Record<string, unknown> | undefined,
+  spec: OpenApiSpec
+): Record<string, unknown> | undefined => {
+  if (!schema) return schema;
+  return dereferenceValue({
+    value: schema,
+    spec,
+    seenRefs: new Set(),
+  }) as Record<string, unknown>;
+};
+
 export const resolveSchema = (
   schema: Record<string, unknown> | undefined,
   spec: OpenApiSpec
