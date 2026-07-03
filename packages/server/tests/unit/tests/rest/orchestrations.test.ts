@@ -1,3 +1,4 @@
+import * as agentGenerationModule from 'src/lib/agentGeneration';
 import * as toolsModule from 'src/lib/tools';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -823,6 +824,81 @@ describe('Orchestrations', () => {
       expect(nodeB.output).toEqual({ result: 43 });
     });
 
+    // Regression: https://github.com/ttoss/soat/issues/378 — an agent node's
+    // generation call creates a real trace, but the run's own `trace_id`
+    // column was never populated from it.
+    test('run with an agent node has a non-null trace_id captured from the generation', async () => {
+      const aiProviderRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'Orchestration Trace Provider',
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        });
+      expect(aiProviderRes.status).toBe(201);
+
+      const agentRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          name: 'Orchestration Trace Agent',
+          ai_provider_id: aiProviderRes.body.id,
+        });
+      expect(agentRes.status).toBe(201);
+
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Agent Trace Pipeline',
+          nodes: [
+            {
+              id: 'ask',
+              type: 'agent',
+              agent_id: agentRes.body.id,
+              input_mapping: { prompt: { var: 'question' } },
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const generationSpy = jest
+        .spyOn(agentGenerationModule, 'createGeneration')
+        .mockResolvedValue({
+          id: 'gen_orchtrace01',
+          traceId: 'trc_orchtrace01',
+          status: 'completed',
+          output: {
+            model: 'llama3.2',
+            content: 'Hello back.',
+            finishReason: 'stop',
+          },
+        });
+
+      try {
+        const runRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send({
+            orchestration_id: createRes.body.id,
+            input: { question: 'hello' },
+          });
+        expect(runRes.status).toBe(201);
+        expect(runRes.body.error).toBeNull();
+        expect(runRes.body.status).toBe('completed');
+        expect(runRes.body.trace_id).toBe('trc_orchtrace01');
+
+        const getRunRes = await authenticatedTestClient(userToken).get(
+          `/api/v1/orchestration-runs/${runRes.body.id}`
+        );
+        expect(getRunRes.status).toBe(200);
+        expect(getRunRes.body.trace_id).toBe('trc_orchtrace01');
+      } finally {
+        generationSpy.mockRestore();
+      }
+    });
+
     test('records the failing node with its input and error', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
@@ -1248,6 +1324,10 @@ describe('Orchestrations', () => {
       expect(response.body.status).toBe('paused');
       expect(response.body.required_action).toBeDefined();
       expect(response.body.required_action.node_id).toBe('approval');
+      // Regression: https://github.com/ttoss/soat/issues/376 — the docs
+      // document `required_action.type: "human_input"` as a discriminator,
+      // but the field was never part of the runtime type or construction site.
+      expect(response.body.required_action.type).toBe('human_input');
     });
 
     test('submitting human input resumes the run', async () => {
@@ -1457,6 +1537,19 @@ describe('Orchestrations', () => {
         .send({ orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('paused');
+
+      // Regression: https://github.com/ttoss/soat/issues/377 — without a
+      // `type` discriminator, a client can't tell this webhook-receive pause
+      // apart from a `human` node pause (see also #376).
+      expect(runRes.body.required_action.type).toBe('webhook_receive');
+
+      const submitRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestration-runs/${runRes.body.id}/human-input`)
+        .send({ node_id: 'wh', output: { delivered: true } });
+      expect(submitRes.status).toBe(200);
+      expect(['completed', 'running', 'paused']).toContain(
+        submitRes.body.status
+      );
     });
 
     test('loop node without orchestration_id is rejected at create', async () => {
@@ -1556,6 +1649,36 @@ describe('Orchestrations', () => {
         .send({ orchestration_id: createRes.body.id, input: { items: [] } });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('completed');
+    });
+
+    // Regression: https://github.com/ttoss/soat/issues/379 — a `loop` node
+    // anywhere in the graph blanket-exempted cycle detection, so a totally
+    // unrelated cycle between non-loop nodes (`a -> b -> a`) slipped through
+    // both create-time and runtime validation.
+    test('a loop node does not exempt an unrelated cycle among non-loop nodes', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Loop Plus Unrelated Cycle',
+          nodes: [
+            {
+              id: 'loop',
+              type: 'loop',
+              orchestration_id: subOrchId,
+              collection: 'state.items',
+              item_variable: 'item',
+            },
+            { id: 'a', type: 'transform', expression: 1 },
+            { id: 'b', type: 'transform', expression: 1 },
+          ],
+          edges: [
+            { from: 'a', to: 'b' },
+            { from: 'b', to: 'a' },
+          ],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(400);
+      expect(createRes.body.error.code).toBe('ORCHESTRATION_VALIDATION_FAILED');
     });
 
     test('sub_orchestration node without orchestration_id is rejected at create', async () => {

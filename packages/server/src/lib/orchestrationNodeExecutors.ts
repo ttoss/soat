@@ -9,10 +9,11 @@ import type { OrchestrationNode } from './orchestrations';
 import { callTool } from './tools';
 
 export type NodeExecutionResult =
-  | { kind: 'artifact'; artifact: Record<string, unknown> }
+  | { kind: 'artifact'; artifact: Record<string, unknown>; traceId?: string }
   | { kind: 'condition'; label: string }
   | {
       kind: 'requires_action';
+      type: 'human_input' | 'webhook_receive';
       nodeId: string;
       prompt: string;
       context: Record<string, unknown>;
@@ -103,7 +104,7 @@ export const executeAgentNode = async (args: {
   }
 
   const artifact = parseAgentOutput(result.output?.content, node.outputSchema);
-  return { kind: 'artifact', artifact };
+  return { kind: 'artifact', artifact, traceId: result.traceId };
 };
 
 export const executeToolNode = async (args: {
@@ -230,6 +231,7 @@ export const executeHumanNode = (args: {
   const context = applyInputMapping(node.inputMapping, state);
   return {
     kind: 'requires_action',
+    type: 'human_input',
     nodeId: node.id,
     prompt: node.prompt ?? 'Human input required.',
     context,
@@ -297,6 +299,7 @@ export const executeWebhookNode = (args: {
     const context = applyInputMapping(node.inputMapping, state);
     return {
       kind: 'requires_action',
+      type: 'webhook_receive',
       nodeId: node.id,
       prompt: 'Waiting for webhook callback.',
       context,

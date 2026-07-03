@@ -1291,3 +1291,128 @@ describe('Group 13: API key with project-scoped SRN policy — memories, ai-prov
     expect(deleteRes.status).toBe(204);
   });
 });
+
+// ─── Group 14: Regression — https://github.com/ttoss/soat/issues/380 ─────
+//
+// Same bug pattern as Group 13 (#355/#361), reproduced for the `formations`
+// module: GET/PUT/DELETE/events-by-id routes called `isAllowed` without a
+// `resource` field, so a project-scoped SRN policy (`soat:{projectId}:*:*`)
+// never matched and every by-ID formations route returned 403.
+
+describe('Group 14: API key with project-scoped SRN policy — formations', () => {
+  let adminToken: string;
+  let projectId: string;
+  let apiKey: string;
+
+  const simpleTemplate = {
+    resources: {
+      SrnMemory: {
+        type: 'memory',
+        properties: { name: 'SRN Formation Memory' },
+      },
+    },
+  };
+
+  beforeAll(async () => {
+    await testClient
+      .post('/api/v1/users/bootstrap')
+      .send({ username: 'admin', password: 'supersecret' });
+
+    adminToken = await loginAs('admin', 'supersecret');
+
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'SRN Scoped Formations Project' });
+    projectId = projectRes.body.id;
+
+    const userRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'olga', password: 'olgapass' });
+
+    const userPolicyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: {
+          statement: [{ effect: 'Allow', action: ['*'] }],
+        },
+      });
+
+    await authenticatedTestClient(adminToken)
+      .put(`/api/v1/users/${userRes.body.id}/policies`)
+      .send({ policy_ids: [userPolicyRes.body.id] });
+
+    const userToken = await loginAs('olga', 'olgapass');
+
+    // Key policy targets the project via an explicit resource SRN, like
+    // Group 13 does for memories/ai-providers — the pattern that already
+    // works there but not (yet) for formations.
+    const keyPolicyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['formations:*', 'memories:*'],
+              resource: [`soat:${projectId}:*:*`],
+            },
+          ],
+        },
+      });
+
+    const apiKeyRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/api-keys')
+      .send({
+        project_id: projectId,
+        policy_ids: [keyPolicyRes.body.id],
+        name: 'SRN scoped formations key',
+      });
+
+    apiKey = apiKeyRes.body.key;
+  });
+
+  test('API key can get/update/list-events/delete a formation when the key policy SRN matches the project', async () => {
+    const createRes = await testClient
+      .post('/api/v1/formations')
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({
+        project_id: projectId,
+        name: 'srn-formation',
+        template: simpleTemplate,
+      });
+    expect(createRes.status).toBe(201);
+    const formationId = createRes.body.id;
+
+    const getRes = await testClient
+      .get(`/api/v1/formations/${formationId}`)
+      .set('Authorization', `Bearer ${apiKey}`);
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.id).toBe(formationId);
+
+    const updateRes = await testClient
+      .put(`/api/v1/formations/${formationId}`)
+      .set('Authorization', `Bearer ${apiKey}`)
+      .send({
+        template: {
+          resources: {
+            SrnMemory: {
+              type: 'memory',
+              properties: { name: 'SRN Formation Memory Updated' },
+            },
+          },
+        },
+      });
+    expect(updateRes.status).toBe(200);
+
+    const eventsRes = await testClient
+      .get(`/api/v1/formations/${formationId}/events`)
+      .set('Authorization', `Bearer ${apiKey}`);
+    expect(eventsRes.status).toBe(200);
+    expect(Array.isArray(eventsRes.body)).toBe(true);
+
+    const deleteRes = await testClient
+      .delete(`/api/v1/formations/${formationId}`)
+      .set('Authorization', `Bearer ${apiKey}`);
+    expect(deleteRes.status).toBe(200);
+  });
+});

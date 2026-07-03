@@ -13,6 +13,7 @@ import {
   updateFormation,
   validateFormationTemplate,
 } from 'src/lib/formations';
+import { buildSrn } from 'src/lib/iam';
 
 import { checkAuth, resolveWriteProjectId } from './helpers';
 
@@ -186,6 +187,11 @@ formationsRouter.get('/formations/:formation_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: formation.projectId,
     action: 'formations:GetFormation',
+    resource: buildSrn({
+      projectPublicId: formation.projectId,
+      resourceType: 'formation',
+      resourceId: formation.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -208,6 +214,11 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: formation.projectId,
     action: 'formations:UpdateFormation',
+    resource: buildSrn({
+      projectPublicId: formation.projectId,
+      resourceType: 'formation',
+      resourceId: formation.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -265,6 +276,11 @@ formationsRouter.delete('/formations/:formation_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: formation.projectId,
     action: 'formations:DeleteFormation',
+    resource: buildSrn({
+      projectPublicId: formation.projectId,
+      resourceType: 'formation',
+      resourceId: formation.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -291,6 +307,11 @@ formationsRouter.get(
     const allowed = await ctx.authUser.isAllowed({
       projectPublicId: formation.projectId,
       action: 'formations:ListFormationEvents',
+      resource: buildSrn({
+        projectPublicId: formation.projectId,
+        resourceType: 'formation',
+        resourceId: formation.id,
+      }),
     });
     if (!allowed) {
       ctx.status = 403;
