@@ -41,6 +41,38 @@ const anyLength = (arr: unknown[] | undefined): boolean => {
   return (arr?.length ?? 0) > 0;
 };
 
+const unionArrays = (
+  a: string[] | undefined,
+  b: string[] | undefined
+): string[] | undefined => {
+  if (!a && !b) return undefined;
+  return Array.from(new Set([...(a ?? []), ...(b ?? [])]));
+};
+
+/**
+ * Merges a per-generation `knowledge_config` override into the agent's
+ * stored config. Array filters (memoryIds, memoryTags, documentIds,
+ * documentPaths) are unioned so a single call can extend, not replace, the
+ * agent's retrieval scope; scalar fields use the override value when present.
+ */
+export const mergeKnowledgeConfig = (args: {
+  base: unknown;
+  override: unknown;
+}): KnowledgeConfig | null | undefined => {
+  const base = args.base as KnowledgeConfig | null | undefined;
+  const override = args.override as KnowledgeConfig | null | undefined;
+  if (!override) return base;
+  if (!base) return override;
+  return {
+    ...base,
+    ...override,
+    memoryIds: unionArrays(base.memoryIds, override.memoryIds),
+    memoryTags: unionArrays(base.memoryTags, override.memoryTags),
+    documentIds: unionArrays(base.documentIds, override.documentIds),
+    documentPaths: unionArrays(base.documentPaths, override.documentPaths),
+  };
+};
+
 const hasKnowledgeFilters = (config: KnowledgeConfig): boolean => {
   return (
     anyLength(config.memoryIds) ||

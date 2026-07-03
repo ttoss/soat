@@ -1,24 +1,22 @@
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
-import type { LanguageModel, Tool } from 'ai';
 import createDebug from 'debug';
 import type { AuthUser } from 'src/Context';
-import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 
 import { DomainError } from '../errors';
 import {
-  buildAllMessages,
+  buildGenerationContext,
+  type GenerationContext,
+} from './agentGenerationContext';
+import {
   type GenerationResult,
   pendingGenerations,
   runStreamGeneration,
-  type TypedAgent,
 } from './agentGenerationHelpers';
 import {
   buildDepthGuardResult,
   recoverPendingFromDb,
   resolveAgentForGeneration,
 } from './agentGenerationRecovery';
-import { buildKnowledgeMessages, buildKnowledgeTools } from './agentKnowledge';
-import { buildModel } from './agentModel';
 import {
   buildToolResultMessages as buildToolResultMessagesFromOutputs,
   loadOutputMappingsByToolName,
@@ -26,180 +24,14 @@ import {
   runNonStreamGeneration,
   runToolOutputsGeneration,
 } from './agentNonStreamGeneration';
-import { resolveAgentTools } from './agentToolResolver';
-import {
-  type GenerationInputMessage,
-  resolveGenerationInputMessages,
-} from './generationInputMessages';
+import { type GenerationInputMessage } from './generationInputMessages';
 import { recordGenerationFailure } from './generationLifecycle';
 import { createGenerationRecord } from './generations';
 import { assertStreamingSupportsOutputSchema } from './outputSchema';
-import {
-  type ProviderOptionsMap,
-  type ReasoningConfig,
-  resolveReasoningForContext,
-} from './reasoning';
 
 const log = createDebug('soat:generation');
 
 export type { GenerationResult };
-
-// ── Build Generation Context ──────────────────────────────────────────────
-
-type GenerationContext = {
-  typedAgent: TypedAgent;
-  model: LanguageModel;
-  resolvedTools: Record<string, Tool>;
-  allMessages: Array<{ role: string; content: unknown }>;
-  generationId: string;
-  toolContext?: Record<string, string> | null;
-  remainingDepth?: number | null;
-  reasoningConfig?: ReasoningConfig | null;
-  providerOptions?: ProviderOptionsMap;
-  maxOutputTokens?: number;
-};
-
-const resolveGenerationModel = async (args: {
-  agentId: string;
-  typedAgent: TypedAgent;
-}) => {
-  const resolved = await resolveAiProviderSecret({
-    aiProviderId: args.typedAgent.aiProvider.publicId,
-  });
-
-  if (!resolved) {
-    throw new DomainError(
-      'AI_PROVIDER_NOT_FOUND',
-      `AI provider for agent '${args.agentId}' could not be resolved.`
-    );
-  }
-
-  const model = await buildModel({
-    provider: resolved.provider,
-    secretValue: resolved.secretValue,
-    model: args.typedAgent.model ?? resolved.defaultModel,
-    baseUrl: resolved.baseUrl,
-    config: resolved.config as Record<string, unknown> | undefined,
-  });
-
-  return { model, provider: resolved.provider };
-};
-
-const assembleContextMessages = async (args: {
-  agentId: string;
-  projectIds?: number[];
-  typedAgent: TypedAgent;
-  resolvedMessages: Array<{ role: string; content: unknown }>;
-}): Promise<Array<{ role: string; content: unknown }>> => {
-  const knowledgeMessages = await buildKnowledgeMessages({
-    knowledgeConfig: args.typedAgent.knowledgeConfig,
-    projectIds: args.projectIds,
-    messages: args.resolvedMessages,
-  });
-
-  log(
-    'assembleContextMessages: agentId=%s knowledgeMessages=%d userMessages=%d',
-    args.agentId,
-    knowledgeMessages.length,
-    args.resolvedMessages.length
-  );
-
-  const allMessages = buildAllMessages(args.typedAgent.instructions, [
-    ...knowledgeMessages,
-    ...args.resolvedMessages,
-  ]);
-
-  log('assembleContextMessages: allMessages=%o', allMessages);
-
-  return allMessages;
-};
-
-const buildGenerationContext = async (args: {
-  agentId: string;
-  projectIds?: number[];
-  messages: GenerationInputMessage[];
-  authHeader?: string;
-  authUser?: AuthUser;
-  toolContext?: Record<string, string>;
-  traceId?: string;
-  parentTraceId?: string | null;
-  rootTraceId?: string | null;
-  remainingDepth?: number;
-  reasoning?: object;
-}): Promise<GenerationContext> => {
-  const typedAgent = await resolveAgentForGeneration({
-    agentId: args.agentId,
-    projectIds: args.projectIds,
-  });
-
-  if (!typedAgent)
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Agent '${args.agentId}' not found.`
-    );
-
-  const resolvedMessages = await resolveGenerationInputMessages({
-    projectIds: args.projectIds,
-    messages: args.messages,
-    authHeader: args.authHeader,
-    authUser: args.authUser,
-    allowedToolIds: Array.isArray(typedAgent.toolIds)
-      ? (typedAgent.toolIds as string[])
-      : undefined,
-    agentBoundaryPolicy: typedAgent.boundaryPolicy,
-  });
-  const { model, provider } = await resolveGenerationModel({
-    agentId: args.agentId,
-    typedAgent,
-  });
-
-  const { reasoningConfig, reasoningOptions } = resolveReasoningForContext({
-    typedAgent,
-    override: args.reasoning,
-    provider,
-  });
-
-  const resolvedTools = typedAgent.toolIds
-    ? await resolveAgentTools({
-        toolIds: typedAgent.toolIds as string[],
-        projectIds: args.projectIds,
-        boundaryPolicy: typedAgent.boundaryPolicy,
-        authHeader: args.authHeader,
-        toolContext: args.toolContext,
-        traceId: args.traceId,
-        parentTraceId: args.parentTraceId,
-        rootTraceId: args.rootTraceId,
-        remainingDepth: args.remainingDepth,
-      })
-    : {};
-
-  buildKnowledgeTools({
-    agentId: args.agentId,
-    projectIds: args.projectIds,
-    typedAgent,
-    resolvedTools,
-  });
-
-  const allMessages = await assembleContextMessages({
-    agentId: args.agentId,
-    projectIds: args.projectIds,
-    typedAgent,
-    resolvedMessages,
-  });
-
-  return {
-    typedAgent,
-    model,
-    resolvedTools,
-    allMessages,
-    generationId: generatePublicId(PUBLIC_ID_PREFIXES.generation),
-    toolContext: args.toolContext ?? null,
-    remainingDepth: args.remainingDepth ?? null,
-    reasoningConfig,
-    providerOptions: reasoningOptions?.providerOptions,
-    maxOutputTokens: reasoningOptions?.maxOutputTokens,
-  };
-};
 
 // ── Create Generation ─────────────────────────────────────────────────────
 
@@ -261,6 +93,7 @@ const resolveContextAndRecord = async (args: {
   initiatorGenerationId?: string | null;
   remainingDepth?: number;
   reasoning?: object;
+  knowledgeConfig?: object;
 }): Promise<GenerationContext> => {
   const ctx = await buildGenerationContext({
     agentId: args.agentId,
@@ -274,6 +107,7 @@ const resolveContextAndRecord = async (args: {
     rootTraceId: args.rootTraceId,
     remainingDepth: args.remainingDepth,
     reasoning: args.reasoning,
+    knowledgeConfig: args.knowledgeConfig,
   });
 
   // Awaited so the record reliably exists before the generation runs and a
@@ -312,6 +146,7 @@ export const createGeneration = async (args: {
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
   reasoning?: object;
+  knowledgeConfig?: object;
 }): Promise<GenerationResult | ReadableStream> => {
   const maxDepth = args.remainingDepth ?? 10;
   const traceId = args.traceId ?? generatePublicId(PUBLIC_ID_PREFIXES.trace);
@@ -352,6 +187,7 @@ export const createGeneration = async (args: {
     initiatorGenerationId: args.initiatorGenerationId,
     remainingDepth: maxDepth,
     reasoning: args.reasoning,
+    knowledgeConfig: args.knowledgeConfig,
   });
 
   log('createGeneration: agentId=%s stream=%s', args.agentId, args.stream);

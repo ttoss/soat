@@ -301,7 +301,7 @@ An agent can automatically retrieve relevant knowledge before every generation b
 | `write_memory_id`| `string`   | When set, automatically injects a `write_memory` tool that writes facts to this memory      |
 | `extraction`     | `boolean` \| `object` | Automatic fact extraction from completed turns (requires `write_memory_id`). `true` enables defaults; the object form customizes provider, model, and prompt — see [Automatic Extraction](./memories.md#automatic-extraction) |
 
-The per-generation `knowledge_config` is merged with the agent's stored config. Arrays are **unioned**; scalars use the per-generation value when present. See [Memories](./memories.md#agent-integration) for details on how the `write_memory` tool works.
+`knowledge_config` can also be passed in the body of `POST /agents/:id/generate` to override the agent's stored config for that single call: `memory_ids`, `memory_tags`, `document_ids`, and `document_paths` are **unioned** with the agent's stored arrays, while `min_score` and `limit` use the per-generation value when present. `write_memory_id` and `extraction` are agent-level only and cannot be set per generation. See [Memories](./memories.md#agent-integration) for details on how the `write_memory` tool works.
 
 Results are injected as a fenced reference-context message prepended to the conversation:
 
