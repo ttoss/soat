@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "@soat/postgresdb",
-  "version": "0.13.14",
+  "version": "0.13.15",
   "description": "Database models and operations for SOAT packages",
   "type": "module",
   "exports": {
