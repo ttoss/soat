@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/@lerna-lite/cli/schemas/lerna-schema.json",
-  "version": "0.13.17",
+  "version": "0.13.18",
   "npmClient": "pnpm",
   "stream": true,
   "command": {
@@ -15,7 +15,11 @@
       "message": "chore(release): publish packages",
       "syncWorkspaceLock": true,
       "allowPeerDependenciesUpdate": true,
-      "allowBranch": "*"
+      "allowBranch": [
+        "main",
+        "release/*",
+        "claude/*"
+      ]
     }
   },
   "ignoreChanges": [
