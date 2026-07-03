@@ -115,7 +115,7 @@ Agents can read from and write to memories automatically during generation.
 
 #### Automatic Knowledge Retrieval
 
-Set `knowledge_config` on an agent to have the server search relevant memory entries before every generation and inject them as system messages. See [Knowledge Config](./agents.md#knowledge-config) in the Agents module.
+Set `knowledge_config` on an agent to have the server search relevant memory entries before every generation and inject them as a delimited reference-context message (never as `system` content, since memory entries can be user-derived). See [Knowledge Config](./agents.md#knowledge-config) in the Agents module.
 
 #### `write_memory` Tool
 
