@@ -4,7 +4,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import type { RequiredAction } from './orchestrationExecutors';
 import {
-  detectCycle,
+  detectCycleExcludingLoopNodes,
   findStartNodes,
   processNodeResultBatch,
 } from './orchestrationExecutors';
@@ -70,6 +70,7 @@ type RunBatchResult = {
   nextActiveNodeIds: string[];
   runStatus: 'running' | 'paused';
   requiredAction: RequiredAction | null;
+  traceId: string | null;
 };
 
 const executeRunBatch = async (args: {
@@ -142,7 +143,12 @@ const executeRunBatch = async (args: {
   await writeRunCheckpoint({ runRecord, nodeId: lastNodeId, state, artifacts });
 
   const nextActiveNodeIds = runStatus === 'running' ? batch.nextRound : [];
-  return { nextActiveNodeIds, runStatus, requiredAction };
+  return {
+    nextActiveNodeIds,
+    runStatus,
+    requiredAction,
+    traceId: batch.traceId,
+  };
 };
 
 type RunLoopState = {
@@ -198,17 +204,10 @@ const executeRunLoop = async (args: {
   runStatus: MappedOrchestrationRun['status'];
   requiredAction: RequiredAction | null;
   runError: object | null;
+  traceId: string | null;
 }> => {
-  const {
-    runRecord,
-    nodes,
-    edges,
-    state,
-    artifacts,
-    projectIds,
-    traceId,
-    authHeader,
-  } = args;
+  const { runRecord, nodes, edges, state, artifacts, projectIds, authHeader } =
+    args;
   const loopState = initRunLoopState(args);
   let { activeNodeIds } = loopState;
   const { completedNodes, conditionLabels, activatedNodes, iterationCount } =
@@ -216,14 +215,13 @@ const executeRunLoop = async (args: {
   let runStatus: MappedOrchestrationRun['status'] = 'running';
   let runError: object | null = null;
   let requiredAction: RequiredAction | null = null;
+  // The run's own trace id if already set, otherwise the first trace id
+  // produced by a traced node (e.g. an `agent` node) — captured so it can be
+  // persisted onto the run and used as the parent for subsequent nodes.
+  let traceId: string | null = args.traceId;
 
   try {
-    if (
-      !nodes.some((n) => {
-        return n.type === 'loop';
-      }) &&
-      detectCycle(nodes, edges)
-    ) {
+    if (detectCycleExcludingLoopNodes(nodes, edges)) {
       throw new DomainError(
         'ORCHESTRATION_CYCLE_DETECTED',
         'Cycle detected in orchestration graph.'
@@ -249,6 +247,7 @@ const executeRunLoop = async (args: {
       activeNodeIds = batchResult.nextActiveNodeIds;
       runStatus = batchResult.runStatus;
       requiredAction = batchResult.requiredAction;
+      traceId = traceId ?? batchResult.traceId;
     }
 
     if (runStatus === 'running') runStatus = 'completed';
@@ -261,7 +260,7 @@ const executeRunLoop = async (args: {
     log('executeRun error %o', runError);
   }
 
-  return { runStatus, requiredAction, runError };
+  return { runStatus, requiredAction, runError, traceId };
 };
 
 export const startOrchestrationRun = async (args: {
@@ -302,16 +301,18 @@ export const startOrchestrationRun = async (args: {
     startedAt: new Date(),
   });
 
-  const { runStatus, requiredAction, runError } = await executeRunLoop({
-    runRecord,
-    nodes,
-    edges,
-    state,
-    artifacts,
-    projectIds: effectiveProjectIds,
-    traceId: runRecord.traceId ?? null,
-    authHeader: args.authHeader,
-  });
+  const { runStatus, requiredAction, runError, traceId } = await executeRunLoop(
+    {
+      runRecord,
+      nodes,
+      edges,
+      state,
+      artifacts,
+      projectIds: effectiveProjectIds,
+      traceId: runRecord.traceId ?? null,
+      authHeader: args.authHeader,
+    }
+  );
 
   const output = getTerminalOutput({ nodes, edges, artifacts });
 
@@ -323,6 +324,7 @@ export const startOrchestrationRun = async (args: {
     state,
     artifacts,
     output,
+    traceId,
   });
 
   const mapped = await mapRunWithIncludes(runRecord.id as number);
@@ -386,18 +388,20 @@ export const resumeOrchestrationRunExecution = async (args: {
   const activatedNodes = new Set<string>(startNodeIds);
   const projectIds = [run.projectId as number];
 
-  const { runStatus, requiredAction, runError } = await executeRunLoop({
-    runRecord: run,
-    nodes,
-    edges,
-    state,
-    artifacts,
-    projectIds,
-    traceId: run.traceId ?? null,
-    completedNodes,
-    conditionLabels,
-    activatedNodes,
-  });
+  const { runStatus, requiredAction, runError, traceId } = await executeRunLoop(
+    {
+      runRecord: run,
+      nodes,
+      edges,
+      state,
+      artifacts,
+      projectIds,
+      traceId: run.traceId ?? null,
+      completedNodes,
+      conditionLabels,
+      activatedNodes,
+    }
+  );
 
   const output = getTerminalOutput({ nodes, edges, artifacts });
 
@@ -409,6 +413,7 @@ export const resumeOrchestrationRunExecution = async (args: {
     state,
     artifacts,
     output,
+    traceId,
   });
 
   const mapped = await mapRunWithIncludes(run.id as number);

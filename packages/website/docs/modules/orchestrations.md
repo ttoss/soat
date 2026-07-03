@@ -280,6 +280,8 @@ When a `human` node is reached, the run pauses and the GET run response includes
 }
 ```
 
+`required_action.type` discriminates why the run paused: `human_input` for a `human` node, `webhook_receive` for a `webhook` node in `mode: "receive"`. Both pause reasons are resumed the same way — `POST /orchestration-runs/{id}/human-input` with the paused node's `node_id` — there is currently no separate, independently-authenticated callback endpoint for webhook-receive nodes, so delivering the callback requires the same platform bearer token or API key as any other write to the run.
+
 ## Examples
 
 ### Create a sequential pipeline

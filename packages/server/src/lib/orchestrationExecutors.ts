@@ -20,6 +20,7 @@ import type { OrchestrationEdge, OrchestrationNode } from './orchestrations';
 
 export {
   detectCycle,
+  detectCycleExcludingLoopNodes,
   findStartNodes,
   resolveNextNodes,
 } from './orchestrationGraph';
@@ -32,6 +33,7 @@ export {
 // ── Types ─────────────────────────────────────────────────────────────────
 
 export type RequiredAction = {
+  type: 'human_input' | 'webhook_receive';
   nodeId: string;
   prompt: string;
   context: Record<string, unknown>;
@@ -147,6 +149,17 @@ export const executeNodeById = async (args: {
 
 // ── Batch result processing ───────────────────────────────────────────────
 
+const findFirstTraceId = (
+  nodeResults: Array<{ execResult: NodeExecutionResult }>
+): string | null => {
+  for (const { execResult } of nodeResults) {
+    if (execResult.kind === 'artifact' && execResult.traceId) {
+      return execResult.traceId;
+    }
+  }
+  return null;
+};
+
 export const processNodeResultBatch = (args: {
   nodeResults: Array<{
     nodeId: string;
@@ -160,7 +173,11 @@ export const processNodeResultBatch = (args: {
   state: Record<string, unknown>;
   edges: OrchestrationEdge[];
   isRunning: boolean;
-}): { nextRound: string[]; requiredAction: RequiredAction | null } => {
+}): {
+  nextRound: string[];
+  requiredAction: RequiredAction | null;
+  traceId: string | null;
+} => {
   const {
     nodeResults,
     artifacts,
@@ -174,11 +191,13 @@ export const processNodeResultBatch = (args: {
 
   const nextRound: string[] = [];
   let requiredAction: RequiredAction | null = null;
+  const traceId = findFirstTraceId(nodeResults);
 
   for (const { nodeId, nodeDefn, execResult } of nodeResults) {
     if (execResult.kind === 'requires_action') {
       if (!requiredAction) {
         requiredAction = {
+          type: execResult.type,
           nodeId: execResult.nodeId,
           prompt: execResult.prompt,
           context: execResult.context,
@@ -213,5 +232,5 @@ export const processNodeResultBatch = (args: {
     }
   }
 
-  return { nextRound, requiredAction };
+  return { nextRound, requiredAction, traceId };
 };

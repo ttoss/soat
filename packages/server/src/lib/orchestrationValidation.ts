@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
-import { detectCycle } from './orchestrationGraph';
+import { detectCycleExcludingLoopNodes } from './orchestrationGraph';
 import {
   buildPredecessors,
   computeDominators,
@@ -386,13 +386,11 @@ export const validateOrchestrationGraph = (args: {
     });
   errors.push(...checkEdges({ edges, nodeIdSet: new Set(nodeIds) }));
 
-  // Loop nodes legitimately introduce cycles, so the cycle check is skipped
-  // (mirroring the run engine) when a loop node exists.
-  const hasLoopNode = nodes.some((n) => {
-    return n.type === 'loop';
-  });
-  const cyclic = detectCycle(nodes, edges);
-  if (!hasLoopNode && cyclic) {
+  // Loop nodes legitimately introduce iteration via a sub-orchestration, so
+  // they (and edges touching them) are excluded from cycle detection —
+  // but a genuine cycle among the remaining nodes still fails validation.
+  const cyclic = detectCycleExcludingLoopNodes(nodes, edges);
+  if (cyclic) {
     errors.push({
       path: 'edges',
       message: 'Cycle detected in orchestration graph.',

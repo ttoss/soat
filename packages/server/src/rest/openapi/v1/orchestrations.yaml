@@ -747,10 +747,17 @@ components:
       type: object
       description: Details for a paused run waiting for human input.
       required:
+        - type
         - node_id
         - prompt
         - context
       properties:
+        type:
+          type: string
+          enum:
+            - human_input
+            - webhook_receive
+          description: Discriminator identifying the kind of pause.
         node_id:
           type: string
         prompt:
