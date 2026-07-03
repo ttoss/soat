@@ -1,3 +1,5 @@
+import { updateGenerationRecord } from 'src/lib/generations';
+
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -187,14 +189,43 @@ describe('Generations', () => {
       expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
     });
 
-    test('does not expose internal metadata or numeric IDs', async () => {
+    test('does not expose internal numeric IDs', async () => {
       const response = await authenticatedTestClient(userToken).get(
         `/api/v1/generations/${failedGenerationId}`
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.metadata).toBeUndefined();
       expect(typeof response.body.project_id).toBe('string');
+    });
+
+    test('exposes metadata.extraction but strips internal pendingState', async () => {
+      await updateGenerationRecord({
+        publicId: failedGenerationId,
+        metadata: {
+          pendingState: {
+            messages: [{ role: 'user', content: 'secret internal message' }],
+          },
+          extraction: {
+            candidates: 2,
+            created: 1,
+            updated: 0,
+            skipped: 1,
+          },
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations/${failedGenerationId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.metadata.extraction).toEqual({
+        candidates: 2,
+        created: 1,
+        updated: 0,
+        skipped: 1,
+      });
+      expect(response.body.metadata.pendingState).toBeUndefined();
     });
   });
 });
