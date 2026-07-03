@@ -16,7 +16,8 @@ Rules are per-project. SOAT does not perform OCR or transcription itself — the
 ## Related Tutorials
 
 - [Ingest Images and Audio with Converters - Step 6 (Route images to the agent)](/docs/tutorials/ingest-images-and-audio#step-6--route-images-to-the-agent)
-- [Ingest Images and Audio with Converters - Step 11 (Route audio to the transcription agent)](/docs/tutorials/ingest-images-and-audio#step-11--route-audio-to-the-transcription-agent)
+- [Ingest Images and Audio with Converters - Step 10 (Create the speech-to-text tool)](/docs/tutorials/ingest-images-and-audio#step-10--create-the-speech-to-text-tool)
+- [Ingest Images and Audio with Converters - Step 12 (Route audio to the tool converter)](/docs/tutorials/ingest-images-and-audio#step-12--route-audio-to-the-tool-converter)
 
 ## Data Model
 
@@ -74,7 +75,7 @@ A rule's converter is either a [Tool](./tools.md) or an [Agent](./agents.md) (ex
 - **Agent converter** (`agent_id`) — ingestion sends the file to the agent as multimodal input with a fixed "extract all text / transcribe" instruction; the agent's text output becomes the document content. Zero extra infrastructure, but the agent's model must support the file's modality (a **vision** model for images and scanned PDFs; an **audio-capable** model for audio). The generation is awaited inline — there is no deferral/callback for agent converters.
 
 :::caution Audio agent converters need a Chat Completions-compatible AI provider
-An agent whose [AI provider](./ai-providers.md) uses the `openai` provider slug talks to OpenAI's Responses API, which does not accept audio input — an audio file routed to such an agent fails with `CONVERTER_FAILED` (`AI_UnsupportedFunctionalityError: file part media type audio/...`). To use an OpenAI audio-capable model (e.g. `gpt-audio-mini`) as an audio converter today, register it with the **`custom`** provider slug and `base_url` pointed at `https://api.openai.com/v1` instead — that path uses the Chat Completions API, which does support audio input. Vision (image) agent converters are unaffected. See [Ingest Images and Audio with Converters](/docs/tutorials/ingest-images-and-audio) for a worked example.
+An agent whose [AI provider](./ai-providers.md) uses the `openai` provider slug talks to OpenAI's Responses API, which does not accept audio input — an audio file routed to such an agent fails with `CONVERTER_FAILED` (`AI_UnsupportedFunctionalityError: file part media type audio/...`). To use an OpenAI audio-capable model (e.g. `gpt-audio-mini`) as an audio converter, register it with the **`custom`** provider slug and `base_url` pointed at `https://api.openai.com/v1` instead — that path uses the Chat Completions API, which does support audio input. Vision (image) agent converters are unaffected. Many dedicated speech-to-text APIs (including xAI's) aren't chat-completions-shaped at all, in which case a **tool converter** is the better fit regardless — see [Ingest Images and Audio with Converters](/docs/tutorials/ingest-images-and-audio) for a worked example of both converter kinds.
 :::
 
 ### Building a Tool Converter for a Third-Party API
