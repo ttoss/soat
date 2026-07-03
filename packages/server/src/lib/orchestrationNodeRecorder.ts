@@ -57,6 +57,11 @@ const summarizeNodeResult = (
   if (execResult.kind === 'condition') {
     return { status: 'completed', output: { label: execResult.label } };
   }
+  if (execResult.kind === 'wait') {
+    // A wait is never summarized into a node execution — executeAndRecordNode
+    // returns before reaching here. Guard exhaustively for the type checker.
+    return { status: 'completed', output: {} };
+  }
   return { status: 'completed', output: execResult.artifact };
 };
 
@@ -74,13 +79,22 @@ export const executeAndRecordNode = async (args: {
   projectIds: number[];
   traceId: string | null;
   authHeader?: string;
+  pollAttempt?: number;
 }): Promise<{
   nodeId: string;
   nodeDefn: OrchestrationNode;
   execResult: NodeExecutionResult;
 }> => {
-  const { nodeId, runRecord, nodes, state, projectIds, traceId, authHeader } =
-    args;
+  const {
+    nodeId,
+    runRecord,
+    nodes,
+    state,
+    projectIds,
+    traceId,
+    authHeader,
+    pollAttempt,
+  } = args;
   const nodeDefn = nodes.find((n) => {
     return n.id === nodeId;
   });
@@ -95,7 +109,14 @@ export const executeAndRecordNode = async (args: {
       projectIds,
       traceId,
       authHeader,
+      pollAttempt,
     });
+    // A `wait` result means the node has not finished — it will be resumed by
+    // the scheduler. Do not record a node execution yet; the completed (or
+    // failed) record is written when the wait resolves on a later attempt.
+    if (result.execResult.kind === 'wait') {
+      return result;
+    }
     const { status, output } = summarizeNodeResult(result.execResult);
     await recordNodeExecution({
       runRecord,
@@ -121,6 +142,30 @@ export const executeAndRecordNode = async (args: {
     });
     throw error;
   }
+};
+
+/**
+ * Records the completed node execution for a delay node once its timer has
+ * elapsed. The delay's execution is not recorded when it first pauses (it
+ * returns a `wait`), so this fills in the record on resumption to keep the
+ * per-node trace complete.
+ */
+export const recordDelayResumption = async (args: {
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  node: OrchestrationNode;
+  state: Record<string, unknown>;
+  artifact: Record<string, unknown>;
+}): Promise<void> => {
+  await recordNodeExecution({
+    runRecord: args.runRecord,
+    nodeId: args.node.id,
+    nodeType: args.node.type,
+    status: 'completed',
+    input: applyInputMapping(args.node.inputMapping, args.state),
+    output: args.artifact,
+    error: null,
+    startedAt: new Date(),
+  });
 };
 
 export const recordSkippedNodeExecutions = async (args: {

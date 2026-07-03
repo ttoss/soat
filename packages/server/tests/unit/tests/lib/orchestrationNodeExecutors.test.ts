@@ -483,21 +483,21 @@ describe('executeSubOrchestrationNode', () => {
 });
 
 describe('executeDelayNode', () => {
-  test('throws DomainError when duration is missing', async () => {
-    await expect(
-      executeDelayNode({ node: makeNode({ type: 'delay' }) })
-    ).rejects.toThrow(DomainError);
+  test('throws DomainError when duration is missing', () => {
+    expect(() => {
+      return executeDelayNode({ node: makeNode({ type: 'delay' }) });
+    }).toThrow(DomainError);
   });
 
-  test('completes immediately for PT0S (zero-duration)', async () => {
-    const result = await executeDelayNode({
+  test('completes immediately for PT0S (zero-duration)', () => {
+    const result = executeDelayNode({
       node: makeNode({ type: 'delay', duration: 'PT0S' }),
     });
     expect(result).toEqual({ kind: 'artifact', artifact: { waited: 'PT0S' } });
   });
 
-  test('returns zero ms for invalid ISO duration string (no-op delay)', async () => {
-    const result = await executeDelayNode({
+  test('returns an artifact for invalid ISO duration string (no-op delay)', () => {
+    const result = executeDelayNode({
       node: makeNode({ type: 'delay', duration: 'INVALID' }),
     });
     expect(result).toEqual({
@@ -506,15 +506,15 @@ describe('executeDelayNode', () => {
     });
   });
 
-  test('handles P0D (days only, zero) format', async () => {
-    const result = await executeDelayNode({
+  test('handles P0D (days only, zero) format', () => {
+    const result = executeDelayNode({
       node: makeNode({ type: 'delay', duration: 'P0D' }),
     });
     expect(result).toEqual({ kind: 'artifact', artifact: { waited: 'P0D' } });
   });
 
-  test('handles PT0H0M0S (all zero components) format', async () => {
-    const result = await executeDelayNode({
+  test('handles PT0H0M0S (all zero components) format', () => {
+    const result = executeDelayNode({
       node: makeNode({ type: 'delay', duration: 'PT0H0M0S' }),
     });
     expect(result).toEqual({
@@ -523,11 +523,23 @@ describe('executeDelayNode', () => {
     });
   });
 
-  test('accepts the friendly suffix form (0s) for an instant wait', async () => {
-    const result = await executeDelayNode({
+  test('accepts the friendly suffix form (0s) for an instant wait', () => {
+    const result = executeDelayNode({
       node: makeNode({ type: 'delay', duration: '0s' }),
     });
     expect(result).toEqual({ kind: 'artifact', artifact: { waited: '0s' } });
+  });
+
+  test('returns a scheduled wait for a non-zero duration instead of sleeping', () => {
+    const result = executeDelayNode({
+      node: makeNode({ type: 'delay', duration: '2h' }),
+    });
+    expect(result).toEqual({
+      kind: 'wait',
+      nodeId: 'n1',
+      resumeInMs: 7200000,
+      resume: { kind: 'delay', artifact: { waited: '2h' } },
+    });
   });
 });
 
@@ -625,20 +637,39 @@ describe('executePollNode', () => {
     });
   });
 
-  test('polls until the exit condition becomes true', async () => {
+  test('returns a scheduled wait for the next attempt when the condition is not yet met', async () => {
     const spy = jest
       .spyOn(toolsModule, 'callTool')
-      .mockResolvedValueOnce({ status: 'pending' })
-      .mockResolvedValueOnce({ status: 'pending' })
-      .mockResolvedValueOnce({ status: 'completed' });
+      .mockResolvedValue({ status: 'pending' });
+
+    const result = await executePollNode({
+      node: pollNode({ interval: '30s' }),
+      state: {},
+      projectIds: [1],
+    });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      kind: 'wait',
+      nodeId: 'n1',
+      resumeInMs: 30000,
+      resume: { kind: 'poll', attempt: 2 },
+    });
+  });
+
+  test('completes on a later attempt when the condition becomes true', async () => {
+    const spy = jest
+      .spyOn(toolsModule, 'callTool')
+      .mockResolvedValue({ status: 'completed' });
 
     const result = await executePollNode({
       node: pollNode(),
       state: {},
       projectIds: [1],
+      attempt: 3,
     });
 
-    expect(spy).toHaveBeenCalledTimes(3);
+    expect(spy).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       kind: 'artifact',
       artifact: {
@@ -672,7 +703,7 @@ describe('executePollNode', () => {
     );
   });
 
-  test('completes with conditionMet=false when attempts are exhausted', async () => {
+  test('completes with conditionMet=false when the final attempt is exhausted', async () => {
     jest
       .spyOn(toolsModule, 'callTool')
       .mockResolvedValue({ status: 'pending' });
@@ -681,6 +712,7 @@ describe('executePollNode', () => {
       node: pollNode({ maxIterations: 3 }),
       state: {},
       projectIds: [1],
+      attempt: 3,
     });
 
     expect(result).toEqual({
@@ -694,7 +726,7 @@ describe('executePollNode', () => {
     });
   });
 
-  test('throws ORCHESTRATION_POLL_EXHAUSTED when fail_on_timeout is set', async () => {
+  test('throws ORCHESTRATION_POLL_EXHAUSTED when fail_on_timeout is set on the final attempt', async () => {
     jest
       .spyOn(toolsModule, 'callTool')
       .mockResolvedValue({ status: 'pending' });
@@ -704,6 +736,7 @@ describe('executePollNode', () => {
         node: pollNode({ maxIterations: 2, failOnTimeout: true }),
         state: {},
         projectIds: [1],
+        attempt: 2,
       })
     ).rejects.toThrow(DomainError);
   });

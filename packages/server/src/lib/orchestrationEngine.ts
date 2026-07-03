@@ -2,25 +2,24 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import type { RequiredAction } from './orchestrationExecutors';
 import {
-  detectCycle,
-  findStartNodes,
-  processNodeResultBatch,
-} from './orchestrationExecutors';
-import {
-  buildRunError,
-  executeAndRecordNode,
-  recordSkippedNodeExecutions,
-} from './orchestrationNodeRecorder';
+  emitRunLifecycleEvent,
+  lifecycleEventForStatus,
+} from './orchestrationEvents';
+import type { RequiredAction, ScheduledWait } from './orchestrationExecutors';
+import { applyOutputMapping, resolveNextNodes } from './orchestrationExecutors';
+import { recordDelayResumption } from './orchestrationNodeRecorder';
+import type { PersistedResumeContext } from './orchestrationRunHelpers';
 import {
   applyHumanInputToState,
   getTerminalOutput,
   mapRunWithIncludes,
+  persistScheduledWait,
   resolveResumeStartNodes,
   restoreRunFromCheckpoint,
   updateRunRecord,
 } from './orchestrationRunHelpers';
+import { executeRunLoop } from './orchestrationRunLoop';
 import type {
   MappedOrchestrationRun,
   OrchestrationEdge,
@@ -34,154 +33,141 @@ import {
 
 const log = createDebug('soat:orchestrations');
 
-const MAX_ITERATIONS = 100;
+// ── Drive: run a run to its next resting point (terminal, paused, or wait) ──
 
-const enforceMaxIterations = (args: {
-  activeNodeIds: string[];
-  iterationCount: Map<string, number>;
-}): void => {
-  for (const nodeId of args.activeNodeIds) {
-    const count = (args.iterationCount.get(nodeId) ?? 0) + 1;
-    args.iterationCount.set(nodeId, count);
-    if (count > MAX_ITERATIONS) {
-      throw new DomainError(
-        'ORCHESTRATION_MAX_ITERATIONS_EXCEEDED',
-        `Node '${nodeId}' exceeded maximum iteration count (${MAX_ITERATIONS}).`
-      );
-    }
-  }
+type LoopEntry = {
+  activatedNodes: Set<string>;
+  completedNodes: Set<string>;
+  conditionLabels: Map<string, string>;
+  pollAttempts: Map<string, number>;
 };
 
-const writeRunCheckpoint = async (args: {
+const sleep = (ms: number): Promise<void> => {
+  return new Promise<void>((resolve) => {
+    return setTimeout(resolve, Math.max(ms, 0));
+  });
+};
+
+/**
+ * Builds the loop entry to resume a run that paused on a scheduled wait. For a
+ * `delay` the timer has elapsed, so the node is recorded complete and the loop
+ * resumes from its successors; for a `poll` the node re-executes at the next
+ * attempt.
+ */
+const buildResumeEntry = async (args: {
   runRecord: InstanceType<typeof db.OrchestrationRun>;
   nodeId: string;
-  state: Record<string, unknown>;
-  artifacts: Record<string, unknown>;
-}): Promise<void> => {
-  await db.OrchestrationCheckpoint.create({
-    runId: args.runRecord.id as number,
-    nodeId: args.nodeId,
-    state: { ...args.state },
-    artifacts: { ...args.artifacts },
-  });
-};
-
-type RunBatchResult = {
-  nextActiveNodeIds: string[];
-  runStatus: 'running' | 'paused';
-  requiredAction: RequiredAction | null;
-};
-
-const executeRunBatch = async (args: {
-  activeNodeIds: string[];
-  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  resume: ScheduledWait['resume'];
   nodes: OrchestrationNode[];
   edges: OrchestrationEdge[];
   state: Record<string, unknown>;
   artifacts: Record<string, unknown>;
-  projectIds: number[];
-  traceId: string | null;
-  authHeader?: string;
-  completedNodes: Set<string>;
-  conditionLabels: Map<string, string>;
-  activatedNodes: Set<string>;
-  iterationCount: Map<string, number>;
-}): Promise<RunBatchResult> => {
-  const {
-    activeNodeIds,
-    runRecord,
-    nodes,
-    edges,
-    state,
-    artifacts,
-    projectIds,
-    traceId,
-    authHeader,
-    completedNodes,
-    conditionLabels,
-    activatedNodes,
-    iterationCount,
-  } = args;
+}): Promise<LoopEntry> => {
+  const { runRecord, nodeId, resume, nodes, edges, state, artifacts } = args;
+  const completedNodes = new Set<string>(Object.keys(artifacts));
+  const conditionLabels = new Map<string, string>();
+  const pollAttempts = new Map<string, number>();
 
-  log('executeRun: activeNodes=%o', activeNodeIds);
-  enforceMaxIterations({ activeNodeIds, iterationCount });
-
-  const nodeResults = await Promise.all(
-    activeNodeIds.map((nodeId) => {
-      return executeAndRecordNode({
-        nodeId,
-        runRecord,
-        nodes,
-        state,
-        projectIds,
-        traceId,
-        authHeader,
-      });
-    })
-  );
-
-  const batch = processNodeResultBatch({
-    nodeResults,
-    artifacts,
-    conditionLabels,
-    completedNodes,
-    activatedNodes,
-    state,
-    edges,
-    isRunning: true,
-  });
-
-  let runStatus: 'running' | 'paused' = 'running';
-  let requiredAction: RequiredAction | null = null;
-  if (batch.requiredAction) {
-    runStatus = 'paused';
-    requiredAction = batch.requiredAction;
+  if (resume.kind === 'poll') {
+    pollAttempts.set(nodeId, resume.attempt);
+    return {
+      activatedNodes: new Set<string>([nodeId]),
+      completedNodes,
+      conditionLabels,
+      pollAttempts,
+    };
   }
 
-  const lastNodeId = activeNodeIds[activeNodeIds.length - 1];
-  await writeRunCheckpoint({ runRecord, nodeId: lastNodeId, state, artifacts });
-
-  const nextActiveNodeIds = runStatus === 'running' ? batch.nextRound : [];
-  return { nextActiveNodeIds, runStatus, requiredAction };
-};
-
-type RunLoopState = {
-  completedNodes: Set<string>;
-  conditionLabels: Map<string, string>;
-  activatedNodes: Set<string>;
-  iterationCount: Map<string, number>;
-  activeNodeIds: string[];
-};
-
-const initRunLoopState = (args: {
-  nodes: OrchestrationNode[];
-  edges: OrchestrationEdge[];
-  completedNodes?: Set<string>;
-  conditionLabels?: Map<string, string>;
-  activatedNodes?: Set<string>;
-  iterationCount?: Map<string, number>;
-}): RunLoopState => {
-  const completedNodes = args.completedNodes ?? new Set<string>();
-  const conditionLabels = args.conditionLabels ?? new Map<string, string>();
-  const activatedNodes =
-    args.activatedNodes ??
-    new Set<string>(findStartNodes(args.nodes, args.edges));
-  const iterationCount = args.iterationCount ?? new Map<string, number>();
-  const activeNodeIds = args.activatedNodes
-    ? [...activatedNodes].filter((n) => {
-        return !completedNodes.has(n);
-      })
-    : [...activatedNodes];
-  return {
+  // delay: record completion, apply its artifact, resume from successors.
+  const node = nodes.find((n) => {
+    return n.id === nodeId;
+  });
+  artifacts[nodeId] = resume.artifact;
+  if (node) applyOutputMapping(node.outputMapping, resume.artifact, state);
+  completedNodes.add(nodeId);
+  if (node) {
+    await recordDelayResumption({
+      runRecord,
+      node,
+      state,
+      artifact: resume.artifact,
+    });
+  }
+  const startNodes = resolveNextNodes({
+    completedNodeId: nodeId,
     completedNodes,
     conditionLabels,
-    activatedNodes,
-    iterationCount,
-    activeNodeIds,
+    edges,
+  });
+  return {
+    activatedNodes: new Set<string>(startNodes),
+    completedNodes,
+    conditionLabels,
+    pollAttempts,
   };
 };
 
-const executeRunLoop = async (args: {
+/**
+ * Settles a run into a terminal or paused state: persists the final record,
+ * emits the matching lifecycle webhook event, and returns the mapped run.
+ */
+const settleRun = async (args: {
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  runStatus: MappedOrchestrationRun['status'];
+  requiredAction: RequiredAction | null;
+  runError: object | null;
+  state: Record<string, unknown>;
+  artifacts: Record<string, unknown>;
+  nodes: OrchestrationNode[];
+  edges: OrchestrationEdge[];
+}): Promise<MappedOrchestrationRun> => {
+  const {
+    runRecord,
+    runStatus,
+    requiredAction,
+    runError,
+    state,
+    artifacts,
+    nodes,
+    edges,
+  } = args;
+
+  const output = getTerminalOutput({ nodes, edges, artifacts });
+  await updateRunRecord({
+    runRecord,
+    runStatus,
+    requiredAction,
+    runError,
+    state,
+    artifacts,
+    output,
+  });
+
+  const mapped = await mapRunWithIncludes(runRecord.id as number);
+
+  const event = lifecycleEventForStatus(runStatus);
+  if (event) {
+    emitRunLifecycleEvent({
+      event,
+      projectId: runRecord.projectId as number,
+      run: mapped,
+    });
+  }
+
+  return attachRequiredActionToRun({ mapped, runStatus, requiredAction });
+};
+
+/**
+ * Runs a run forward until it reaches a resting point.
+ *
+ * - `inlineWaits: true` (synchronous mode) drives the run to completion or a
+ *   pause, sleeping through delay/poll waits in-process. Used by callers that
+ *   opt into blocking (`wait: true`) and by nested loop/sub-orchestration runs.
+ * - `inlineWaits: false` (background mode) stops at the first scheduled wait,
+ *   persisting `resumeAt`/`resumeContext` so the scheduler resumes the run
+ *   later. Used for durable, request-detached execution.
+ */
+const driveRunToRest = async (args: {
   runRecord: InstanceType<typeof db.OrchestrationRun>;
   nodes: OrchestrationNode[];
   edges: OrchestrationEdge[];
@@ -190,15 +176,9 @@ const executeRunLoop = async (args: {
   projectIds: number[];
   traceId: string | null;
   authHeader?: string;
-  completedNodes?: Set<string>;
-  conditionLabels?: Map<string, string>;
-  activatedNodes?: Set<string>;
-  iterationCount?: Map<string, number>;
-}): Promise<{
-  runStatus: MappedOrchestrationRun['status'];
-  requiredAction: RequiredAction | null;
-  runError: object | null;
-}> => {
+  inlineWaits: boolean;
+  entry?: LoopEntry;
+}): Promise<MappedOrchestrationRun> => {
   const {
     runRecord,
     nodes,
@@ -208,31 +188,13 @@ const executeRunLoop = async (args: {
     projectIds,
     traceId,
     authHeader,
+    inlineWaits,
   } = args;
-  const loopState = initRunLoopState(args);
-  let { activeNodeIds } = loopState;
-  const { completedNodes, conditionLabels, activatedNodes, iterationCount } =
-    loopState;
-  let runStatus: MappedOrchestrationRun['status'] = 'running';
-  let runError: object | null = null;
-  let requiredAction: RequiredAction | null = null;
+  let entry = args.entry;
 
-  try {
-    if (
-      !nodes.some((n) => {
-        return n.type === 'loop';
-      }) &&
-      detectCycle(nodes, edges)
-    ) {
-      throw new DomainError(
-        'ORCHESTRATION_CYCLE_DETECTED',
-        'Cycle detected in orchestration graph.'
-      );
-    }
-
-    while (activeNodeIds.length > 0 && runStatus === 'running') {
-      const batchResult = await executeRunBatch({
-        activeNodeIds,
+  for (;;) {
+    const { runStatus, requiredAction, runError, scheduledWait } =
+      await executeRunLoop({
         runRecord,
         nodes,
         edges,
@@ -241,27 +203,47 @@ const executeRunLoop = async (args: {
         projectIds,
         traceId,
         authHeader,
-        completedNodes,
-        conditionLabels,
-        activatedNodes,
-        iterationCount,
+        completedNodes: entry?.completedNodes,
+        conditionLabels: entry?.conditionLabels,
+        activatedNodes: entry?.activatedNodes,
+        pollAttempts: entry?.pollAttempts,
       });
-      activeNodeIds = batchResult.nextActiveNodeIds;
-      runStatus = batchResult.runStatus;
-      requiredAction = batchResult.requiredAction;
+
+    if (scheduledWait) {
+      if (inlineWaits) {
+        await sleep(scheduledWait.resumeInMs);
+        entry = await buildResumeEntry({
+          runRecord,
+          nodeId: scheduledWait.nodeId,
+          resume: scheduledWait.resume,
+          nodes,
+          edges,
+          state,
+          artifacts,
+        });
+        continue;
+      }
+      await persistScheduledWait({
+        runRecord,
+        scheduledWait,
+        state,
+        artifacts,
+        now: Date.now(),
+      });
+      return mapRunWithIncludes(runRecord.id as number);
     }
 
-    if (runStatus === 'running') runStatus = 'completed';
-    if (runStatus === 'completed') {
-      await recordSkippedNodeExecutions({ runRecord, nodes });
-    }
-  } catch (error: unknown) {
-    runStatus = 'failed';
-    runError = buildRunError(error);
-    log('executeRun error %o', runError);
+    return settleRun({
+      runRecord,
+      runStatus,
+      requiredAction,
+      runError,
+      state,
+      artifacts,
+      nodes,
+      edges,
+    });
   }
-
-  return { runStatus, requiredAction, runError };
 };
 
 export const startOrchestrationRun = async (args: {
@@ -270,9 +252,11 @@ export const startOrchestrationRun = async (args: {
   projectIds?: number[];
   input?: Record<string, unknown>;
   authHeader?: string;
+  wait?: boolean;
 }): Promise<MappedOrchestrationRun> => {
   log('startOrchestrationRun %o', {
     orchestrationPublicId: args.orchestrationPublicId,
+    wait: args.wait,
   });
 
   const orch = await findOrchestrationForStartRun({
@@ -302,7 +286,33 @@ export const startOrchestrationRun = async (args: {
     startedAt: new Date(),
   });
 
-  const { runStatus, requiredAction, runError } = await executeRunLoop({
+  const startMapped = await mapRunWithIncludes(runRecord.id as number);
+  emitRunLifecycleEvent({
+    event: 'started',
+    projectId: effectiveProjectId,
+    run: startMapped,
+  });
+
+  // Synchronous (compatibility) mode: block until the run reaches a terminal or
+  // paused state, sleeping through any delay/poll waits in-process.
+  if (args.wait) {
+    return driveRunToRest({
+      runRecord,
+      nodes,
+      edges,
+      state,
+      artifacts,
+      projectIds: effectiveProjectIds,
+      traceId: runRecord.traceId ?? null,
+      authHeader: args.authHeader,
+      inlineWaits: true,
+    });
+  }
+
+  // Durable async mode (default): detach execution from the request. The run is
+  // driven in the background and offloads long waits to the scheduler, so this
+  // returns immediately with status 'running'.
+  void driveRunToRest({
     runRecord,
     nodes,
     edges,
@@ -311,26 +321,74 @@ export const startOrchestrationRun = async (args: {
     projectIds: effectiveProjectIds,
     traceId: runRecord.traceId ?? null,
     authHeader: args.authHeader,
+    inlineWaits: false,
+  }).catch((error: unknown) => {
+    log('startOrchestrationRun: background drive error %o', error);
   });
 
-  const output = getTerminalOutput({ nodes, edges, artifacts });
+  return startMapped;
+};
 
-  await updateRunRecord({
-    runRecord,
-    runStatus,
-    requiredAction,
-    runError,
+/**
+ * Resumes a run that a worker/scheduler has determined is due (its `resumeAt`
+ * has elapsed). Reads `resumeContext` to rebuild the loop entry, then drives in
+ * background mode so a poll that is still not satisfied simply re-schedules.
+ */
+export const resumeScheduledRun = async (args: {
+  run: InstanceType<typeof db.OrchestrationRun>;
+}): Promise<void> => {
+  const { run } = args;
+  log('resumeScheduledRun %o', { runId: run.id });
+
+  const resumeContext = run.resumeContext as PersistedResumeContext | null;
+  if (!resumeContext) {
+    log('resumeScheduledRun: run %s has no resumeContext, skipping', run.id);
+    return;
+  }
+
+  const orch = await db.Orchestration.findOne({
+    where: { id: run.orchestrationId as number },
+  });
+  if (!orch) {
+    await run.update({
+      status: 'failed',
+      error: { code: 'ORCHESTRATION_NOT_FOUND', message: 'Orchestration gone' },
+      resumeAt: null,
+      resumeContext: null,
+      completedAt: new Date(),
+    });
+    return;
+  }
+
+  const nodes = orch.nodes as OrchestrationNode[];
+  const edges = orch.edges as OrchestrationEdge[];
+  // Clone so mutations produce a fresh object reference — Sequelize does not
+  // reliably detect in-place mutation of a JSONB attribute, so reusing
+  // run.state directly can cause the final update to skip persisting it.
+  const state = { ...((run.state ?? {}) as Record<string, unknown>) };
+  const artifacts = { ...((run.artifacts ?? {}) as Record<string, unknown>) };
+  await restoreRunFromCheckpoint({ runId: run.id as number, state, artifacts });
+
+  const entry = await buildResumeEntry({
+    runRecord: run,
+    nodeId: resumeContext.nodeId,
+    resume: resumeContext.resume,
+    nodes,
+    edges,
     state,
     artifacts,
-    output,
   });
 
-  const mapped = await mapRunWithIncludes(runRecord.id as number);
-
-  return attachRequiredActionToRun({
-    mapped,
-    runStatus,
-    requiredAction,
+  await driveRunToRest({
+    runRecord: run,
+    nodes,
+    edges,
+    state,
+    artifacts,
+    projectIds: [run.projectId as number],
+    traceId: run.traceId ?? null,
+    inlineWaits: false,
+    entry,
   });
 };
 
@@ -353,8 +411,9 @@ export const resumeOrchestrationRunExecution = async (args: {
 
   const nodes = orch.nodes as OrchestrationNode[];
   const edges = orch.edges as OrchestrationEdge[];
-  const state = (run.state ?? {}) as Record<string, unknown>;
-  const artifacts = (run.artifacts ?? {}) as Record<string, unknown>;
+  // Clone so mutations produce a fresh reference (see resumeScheduledRun).
+  const state = { ...((run.state ?? {}) as Record<string, unknown>) };
+  const artifacts = { ...((run.artifacts ?? {}) as Record<string, unknown>) };
 
   await restoreRunFromCheckpoint({ runId: run.id as number, state, artifacts });
 
@@ -383,41 +442,23 @@ export const resumeOrchestrationRunExecution = async (args: {
 
   await run.update({ status: 'running', activeNodes: startNodeIds });
 
-  const activatedNodes = new Set<string>(startNodeIds);
-  const projectIds = [run.projectId as number];
-
-  const { runStatus, requiredAction, runError } = await executeRunLoop({
+  // Human-input and manual resume are request-driven, so they block inline
+  // (matching their existing synchronous behaviour); timer-driven resumptions
+  // go through resumeScheduledRun instead.
+  return driveRunToRest({
     runRecord: run,
     nodes,
     edges,
     state,
     artifacts,
-    projectIds,
+    projectIds: [run.projectId as number],
     traceId: run.traceId ?? null,
-    completedNodes,
-    conditionLabels,
-    activatedNodes,
+    inlineWaits: true,
+    entry: {
+      activatedNodes: new Set<string>(startNodeIds),
+      completedNodes,
+      conditionLabels,
+      pollAttempts: new Map<string, number>(),
+    },
   });
-
-  const output = getTerminalOutput({ nodes, edges, artifacts });
-
-  await updateRunRecord({
-    runRecord: run,
-    runStatus,
-    requiredAction,
-    runError,
-    state,
-    artifacts,
-    output,
-  });
-
-  const mapped = await mapRunWithIncludes(run.id as number);
-
-  if (runStatus === 'paused' && requiredAction) {
-    (
-      mapped as MappedOrchestrationRun & { requiredAction?: RequiredAction }
-    ).requiredAction = requiredAction;
-  }
-
-  return mapped;
 };

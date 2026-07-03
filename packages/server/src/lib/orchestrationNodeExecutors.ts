@@ -8,6 +8,16 @@ import { startOrchestrationRun } from './orchestrationEngine';
 import type { OrchestrationNode } from './orchestrations';
 import { callTool } from './tools';
 
+/**
+ * Describes how a scheduled `wait` should be resumed once its timer elapses.
+ * `delay` carries the artifact the delay node produces (the wait is a pure
+ * timer, so on resume the node is simply recorded as complete). `poll` carries
+ * the next attempt number, so the poll node re-executes from where it left off.
+ */
+export type WaitResume =
+  | { kind: 'delay'; artifact: Record<string, unknown> }
+  | { kind: 'poll'; attempt: number };
+
 export type NodeExecutionResult =
   | { kind: 'artifact'; artifact: Record<string, unknown> }
   | { kind: 'condition'; label: string }
@@ -17,6 +27,16 @@ export type NodeExecutionResult =
       prompt: string;
       context: Record<string, unknown>;
       options?: string[];
+    }
+  | {
+      // The node cannot complete now and must be resumed after `resumeInMs`.
+      // Used by `delay` (a timer) and `poll` (the wait between attempts) so
+      // long waits are offloaded to the background scheduler instead of holding
+      // the run loop — and its HTTP request — open.
+      kind: 'wait';
+      nodeId: string;
+      resumeInMs: number;
+      resume: WaitResume;
     };
 
 const writeToState = (
@@ -271,9 +291,9 @@ export const parseDuration = (value: string): number => {
   return ((days * 24 + hours) * 60 + minutes) * 60000 + seconds * 1000;
 };
 
-export const executeDelayNode = async (args: {
+export const executeDelayNode = (args: {
   node: OrchestrationNode;
-}): Promise<NodeExecutionResult> => {
+}): NodeExecutionResult => {
   const { node } = args;
   if (!node.duration)
     throw new DomainError(
@@ -281,10 +301,18 @@ export const executeDelayNode = async (args: {
       `Delay node '${node.id}' missing duration.`
     );
   const ms = parseDuration(node.duration);
-  await new Promise<void>((resolve) => {
-    return setTimeout(resolve, ms);
-  });
-  return { kind: 'artifact', artifact: { waited: node.duration } };
+  const artifact = { waited: node.duration };
+  // A zero-length delay completes immediately; anything longer is offloaded to
+  // the scheduler as a durable wait rather than blocking the run loop.
+  if (ms <= 0) {
+    return { kind: 'artifact', artifact };
+  }
+  return {
+    kind: 'wait',
+    nodeId: node.id,
+    resumeInMs: ms,
+    resume: { kind: 'delay', artifact },
+  };
 };
 
 export const executeWebhookNode = (args: {
@@ -360,6 +388,9 @@ const runLoopBatches = async (args: {
           projectIds,
           input: itemInput,
           authHeader,
+          // Nested runs must complete synchronously so their output can be
+          // aggregated into this loop node's artifact.
+          wait: true,
         });
       })
     );
@@ -423,6 +454,9 @@ export const executeSubOrchestrationNode = async (args: {
     projectIds,
     input,
     authHeader,
+    // A sub-orchestration is a synchronous child: its terminal output feeds this
+    // node's artifact, so it must run to completion before continuing.
+    wait: true,
   });
 
   return { kind: 'artifact', artifact: run.output ?? {} };

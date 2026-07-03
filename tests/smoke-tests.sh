@@ -1030,10 +1030,11 @@ if ! printf '%s\n' "$ORCH_UPDATE_RESP" | jq -e '.description == "Smoke orchestra
 fi
 echo "Update orchestration: OK"
 
-echo "--- Starting completed run ---"
+echo "--- Starting completed run (synchronous wait) ---"
 ORCH_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$ORCH_ID" \
-  --input '{"theme":"orchestration"}')
+  --input '{"theme":"orchestration"}' \
+  --wait true)
 ORCH_RUN_ID=$(printf '%s\n' "$ORCH_RUN_RESP" | jq -r '.id')
 ORCH_RUN_STATUS=$(printf '%s\n' "$ORCH_RUN_RESP" | jq -r '.status')
 ORCH_RUN_TITLE=$(printf '%s\n' "$ORCH_RUN_RESP" | jq -r '.state.title')
@@ -1086,7 +1087,8 @@ echo "Human orchestration id: $HUMAN_ORCH_ID"
 echo "--- Starting paused run ---"
 HUMAN_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$HUMAN_ORCH_ID" \
-  --input '{"temaDocumentId":"ood_123","titulo":"Verao"}')
+  --input '{"temaDocumentId":"ood_123","titulo":"Verao"}' \
+  --wait true)
 HUMAN_RUN_ID=$(printf '%s\n' "$HUMAN_RUN_RESP" | jq -r '.id')
 HUMAN_RUN_STATUS=$(printf '%s\n' "$HUMAN_RUN_RESP" | jq -r '.status')
 HUMAN_NODE_ID=$(printf '%s\n' "$HUMAN_RUN_RESP" | jq -r '.required_action.node_id')
@@ -1118,7 +1120,8 @@ echo "Submit human input: OK"
 echo "--- Resuming a paused run without input ---"
 RESUME_CANDIDATE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$HUMAN_ORCH_ID" \
-  --input '{}')
+  --input '{}' \
+  --wait true)
 RESUME_RUN_ID=$(printf '%s\n' "$RESUME_CANDIDATE_RESP" | jq -r '.id')
 if ! printf '%s\n' "$RESUME_CANDIDATE_RESP" | jq -e '.status == "paused" and .required_action.node_id == "approval"' >/dev/null 2>&1; then
   echo "Expected resume candidate run to be paused"
@@ -1137,7 +1140,8 @@ echo "Resume run: OK"
 echo "--- Cancelling a paused run ---"
 CANCEL_CANDIDATE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$HUMAN_ORCH_ID" \
-  --input '{}')
+  --input '{}' \
+  --wait true)
 CANCEL_RUN_ID=$(printf '%s\n' "$CANCEL_CANDIDATE_RESP" | jq -r '.id')
 if ! printf '%s\n' "$CANCEL_CANDIDATE_RESP" | jq -e '.status == "paused"' >/dev/null 2>&1; then
   echo "Expected second human run to be paused before cancellation"
@@ -1168,7 +1172,8 @@ fi
 
 COND_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$COND_ORCH_ID" \
-  --input '{"score":0.9}')
+  --input '{"score":0.9}' \
+  --wait true)
 if ! printf '%s\n' "$COND_RUN_RESP" | jq -e '.status == "completed"' >/dev/null 2>&1; then
   echo "Condition-skip run did not complete"
   printf '%s\n' "$COND_RUN_RESP"
@@ -1185,6 +1190,89 @@ if ! printf '%s\n' "$COND_RUN_RESP" | jq -e '
 fi
 SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI delete-orchestration --orchestration-id "$COND_ORCH_ID"
 echo "Condition-branch skipped node executions: OK"
+
+# --- Durable background execution ---------------------------------------------
+
+echo "--- Starting an async run (returns immediately) ---"
+ASYNC_ORCH_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-async-orchestration" \
+  --nodes '[{"id":"start","type":"transform","expression":"async ok","output_mapping":{"result":"state.msg"}}]' \
+  --edges '[]')
+ASYNC_ORCH_ID=$(printf '%s\n' "$ASYNC_ORCH_RESP" | jq -r '.id')
+
+# No --wait: the run must come back immediately with status "running".
+ASYNC_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
+  --orchestration-id "$ASYNC_ORCH_ID" \
+  --input '{}')
+ASYNC_RUN_ID=$(printf '%s\n' "$ASYNC_RUN_RESP" | jq -r '.id')
+if ! printf '%s\n' "$ASYNC_RUN_RESP" | jq -e '.status == "running"' >/dev/null 2>&1; then
+  echo "start-orchestration-run (async) did not return status running"
+  printf '%s\n' "$ASYNC_RUN_RESP"
+  exit 1
+fi
+echo "Async run returned status running: OK"
+
+# The background worker drives it to completion shortly after.
+ASYNC_DONE=0
+i=0
+while [ "$i" -lt 30 ]; do
+  ASYNC_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run --run-id "$ASYNC_RUN_ID")
+  ASYNC_STATUS=$(printf '%s\n' "$ASYNC_GET" | jq -r '.status')
+  if [ "$ASYNC_STATUS" = "completed" ]; then
+    ASYNC_DONE=1
+    break
+  fi
+  i=$((i + 1))
+  sleep 1
+done
+if [ "$ASYNC_DONE" != "1" ] || ! printf '%s\n' "$ASYNC_GET" | jq -e '.state.msg == "async ok"' >/dev/null 2>&1; then
+  echo "Async run did not complete in the background as expected"
+  printf '%s\n' "$ASYNC_GET"
+  exit 1
+fi
+echo "Async run completed in the background: OK"
+SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI delete-orchestration --orchestration-id "$ASYNC_ORCH_ID"
+
+echo "--- Delay run resumes via the background scheduler ---"
+DELAY_ORCH_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-delay-orchestration" \
+  --nodes '[{"id":"pause","type":"delay","duration":"3s","output_mapping":{"waited":"state.waited"}},{"id":"after","type":"transform","expression":"resumed","output_mapping":{"result":"state.after"}}]' \
+  --edges '[{"from":"pause","to":"after"}]')
+DELAY_ORCH_ID=$(printf '%s\n' "$DELAY_ORCH_RESP" | jq -r '.id')
+
+DELAY_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
+  --orchestration-id "$DELAY_ORCH_ID" \
+  --input '{}')
+DELAY_RUN_ID=$(printf '%s\n' "$DELAY_RUN_RESP" | jq -r '.id')
+if ! printf '%s\n' "$DELAY_RUN_RESP" | jq -e '.status == "running"' >/dev/null 2>&1; then
+  echo "Delay run did not return status running"
+  printf '%s\n' "$DELAY_RUN_RESP"
+  exit 1
+fi
+
+# The delay is a scheduled resumption; the worker completes the run after the
+# delay elapses (no HTTP request was held open).
+DELAY_DONE=0
+i=0
+while [ "$i" -lt 30 ]; do
+  DELAY_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run --run-id "$DELAY_RUN_ID")
+  DELAY_STATUS=$(printf '%s\n' "$DELAY_GET" | jq -r '.status')
+  if [ "$DELAY_STATUS" = "completed" ]; then
+    DELAY_DONE=1
+    break
+  fi
+  i=$((i + 1))
+  sleep 1
+done
+if [ "$DELAY_DONE" != "1" ] || ! printf '%s\n' "$DELAY_GET" | jq -e '.state.waited == "3s" and .state.after == "resumed"' >/dev/null 2>&1; then
+  echo "Delay run did not resume and complete via the scheduler"
+  printf '%s\n' "$DELAY_GET"
+  exit 1
+fi
+echo "Delay run resumed via scheduler: OK"
+SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI delete-orchestration --orchestration-id "$DELAY_ORCH_ID"
 
 echo "--- Deleting orchestrations ---"
 SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI delete-orchestration --orchestration-id "$ORCH_ID"

@@ -1,5 +1,5 @@
 import { db } from '../db';
-import type { RequiredAction } from './orchestrationExecutors';
+import type { RequiredAction, ScheduledWait } from './orchestrationExecutors';
 import { applyOutputMapping, resolveNextNodes } from './orchestrationExecutors';
 import type {
   MappedOrchestrationRun,
@@ -78,7 +78,54 @@ export const updateRunRecord = async (args: {
     error: runError,
     requiredAction: runStatus === 'paused' ? requiredAction : null,
     output: runStatus === 'completed' ? output : null,
+    // Settling into a terminal or paused state clears any pending scheduled
+    // resumption so the background scheduler ignores the run.
+    resumeAt: null,
+    resumeContext: null,
     completedAt: isTerminal ? new Date() : null,
+  });
+};
+
+/**
+ * Context persisted on a run that is waiting for a scheduled resumption. The
+ * scheduler reads this to know which node to resume and how (a delay carries
+ * the artifact to record; a poll carries the next attempt number).
+ */
+export type PersistedResumeContext = {
+  nodeId: string;
+  resume: ScheduledWait['resume'];
+};
+
+/**
+ * Persists a run that has paused on a timer (delay) or a poll interval. The run
+ * stays `running` — from the caller's perspective it is still in flight — but
+ * `resumeAt`/`resumeContext` mark it for the background scheduler to pick up
+ * once the timer elapses. Survives a process restart because the state lives in
+ * the database, not an in-process timer.
+ */
+export const persistScheduledWait = async (args: {
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  scheduledWait: ScheduledWait;
+  state: Record<string, unknown>;
+  artifacts: Record<string, unknown>;
+  now: number;
+}): Promise<void> => {
+  const { runRecord, scheduledWait, state, artifacts, now } = args;
+  const resumeContext: PersistedResumeContext = {
+    nodeId: scheduledWait.nodeId,
+    resume: scheduledWait.resume,
+  };
+  await runRecord.update({
+    status: 'running',
+    state,
+    artifacts,
+    activeNodes: [scheduledWait.nodeId],
+    requiredAction: null,
+    error: null,
+    output: null,
+    completedAt: null,
+    resumeAt: new Date(now + scheduledWait.resumeInMs),
+    resumeContext,
   });
 };
 

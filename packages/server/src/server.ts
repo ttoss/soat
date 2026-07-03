@@ -5,6 +5,7 @@ import createDebug from 'debug';
 import pkg from '../package.json' assert { type: 'json' };
 import { app } from './app';
 import { initializeDatabase } from './db';
+import { initializeOrchestrationScheduler } from './lib/orchestrationScheduler';
 import { createFirstAdminUser } from './lib/users';
 
 const log = createDebug('soat:server');
@@ -18,6 +19,10 @@ const startServer = async () => {
   try {
     const database = await initializeDatabase(app);
     await database.sequelize.sync({ alter: true });
+    // Start the durable orchestration scheduler once the database is ready so
+    // it can resume runs whose delay/poll waits are due (including runs that
+    // were parked before a restart).
+    initializeOrchestrationScheduler();
   } catch (error) {
     log('startServer: failed to connect to database error=%o', error);
     process.exit(1);

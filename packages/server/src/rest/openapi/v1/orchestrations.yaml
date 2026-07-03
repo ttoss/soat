@@ -185,7 +185,15 @@ paths:
       tags:
         - Orchestrations
       summary: Start an orchestration run
-      description: Creates and immediately executes a new run for the orchestration named by orchestration_id.
+      description: >-
+        Creates a new run for the orchestration named by orchestration_id. By
+        default the run executes durably in the background: the response returns
+        immediately with status "running" and progress is observed via
+        get-orchestration-run or run lifecycle webhook events
+        (orchestration_runs.started/paused/completed/failed). Delay and poll
+        waits are offloaded to a background scheduler and survive restarts. Pass
+        wait=true to block until the run reaches a terminal or paused state
+        (the legacy synchronous behaviour).
       operationId: startOrchestrationRun
       requestBody:
         required: true
@@ -788,6 +796,14 @@ components:
         input:
           type: object
           description: Initial state for the run (merged with orchestration defaults).
+        wait:
+          type: boolean
+          default: false
+          description: >-
+            When true, block until the run reaches a terminal (completed/failed)
+            or paused state and return the settled run. When false (default),
+            return immediately with status "running" and execute the run in the
+            background.
 
     ValidateOrchestrationRequest:
       type: object
