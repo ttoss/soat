@@ -1,7 +1,11 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import { getGeneration, listGenerations } from 'src/lib/generations';
+import {
+  getGeneration,
+  listGenerations,
+  toPublicGenerationMetadata,
+} from 'src/lib/generations';
 
 export const generationsRouter = new Router<Context>();
 
@@ -35,7 +39,7 @@ generationsRouter.get('/generations', async (ctx: Context) => {
   const { agentId, traceId, initiatorGenerationId, status, limit, offset } =
     ctx.query as Record<string, string | undefined>;
 
-  ctx.body = await listGenerations({
+  const result = await listGenerations({
     projectIds: projectIds ?? undefined,
     agentId,
     traceId,
@@ -44,6 +48,13 @@ generationsRouter.get('/generations', async (ctx: Context) => {
     limit: limit ? Number(limit) : undefined,
     offset: offset ? Number(offset) : undefined,
   });
+
+  ctx.body = {
+    ...result,
+    data: result.data.map((gen) => {
+      return { ...gen, metadata: toPublicGenerationMetadata(gen.metadata) };
+    }),
+  };
 });
 
 /**
@@ -86,10 +97,8 @@ generationsRouter.get('/generations/:generation_id', async (ctx: Context) => {
     );
   }
 
-  // `metadata` holds internal pending-generation state (messages, tool
-  // context) and is intentionally not exposed.
-  const { metadata, ...publicGeneration } = generation;
-  void metadata;
-
-  ctx.body = publicGeneration;
+  ctx.body = {
+    ...generation,
+    metadata: toPublicGenerationMetadata(generation.metadata),
+  };
 });

@@ -27,7 +27,7 @@ Generations can be listed via `GET /generations` (filter by `agent_id`, `trace_i
 | `last_activity_at`          | string \| null | Last activity timestamp                                                                              |
 | `stop_reason`               | string \| null | Why the generation stopped (e.g. `stop`, `error`, `depth_guard`)                                     |
 | `error`                     | object \| null | Structured error payload recorded when the generation failed (see [Error Recording](#error-recording)) |
-| `metadata`                  | object \| null | Structured metadata written by reasoning modes (see [Metadata](#metadata))                           |
+| `metadata`                  | object \| null | Non-sensitive structured metadata written by reasoning modes and memory extraction (see [Metadata](#metadata)) |
 | `created_at`                | string         | ISO 8601 creation timestamp                                                                          |
 | `updated_at`                | string         | ISO 8601 last-update timestamp                                                                       |
 
@@ -81,7 +81,33 @@ The `meta` field includes the `generation_id` and `trace_id` of the failed run s
 
 ### Metadata
 
-The `metadata` field is written by the server to record the outcome of reasoning modes. It is read-only and not settable by callers.
+The `metadata` field is written by the server to record the outcome of reasoning modes and memory extraction. It is read-only and not settable by callers. Internal recovery state (used to resume a `requires_action` generation after a server restart) is stored under the same DB column but is never exposed through the API.
+
+#### `metadata.extraction` — memory-extraction summary
+
+When an agent is configured with `knowledge_config.extraction` and `write_memory_id`, a completed generation writes a `metadata.extraction` summary describing what the auto-extraction pass did with the turn:
+
+```json
+{
+  "metadata": {
+    "extraction": {
+      "candidates": 3,
+      "created": 2,
+      "updated": 1,
+      "skipped": 0
+    }
+  }
+}
+```
+
+| Field        | Description                                             |
+| ------------ | -------------------------------------------------------- |
+| `candidates` | Number of extraction candidates considered from the turn |
+| `created`    | Number of new memory entries created                     |
+| `updated`    | Number of existing memory entries updated                |
+| `skipped`    | Number of candidates skipped (e.g. duplicates)           |
+
+See [Knowledge](./knowledge.md) for how `write_memory_id` and `extraction` are configured on an agent.
 
 #### `metadata.reasoning` — pipeline summary
 

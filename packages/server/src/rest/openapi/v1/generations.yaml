@@ -234,6 +234,33 @@ components:
               example: 'Provider returned 402: insufficient credits'
             meta:
               type: object
+        metadata:
+          type: object
+          nullable: true
+          description: >
+            Non-sensitive metadata recorded about the generation. Currently
+            only includes `extraction` — set when the agent's
+            `knowledge_config.extraction` produced a memory-extraction summary
+            for this turn (`candidates`, `created`, `updated`, `skipped`).
+            Internal recovery state is never included here.
+          properties:
+            extraction:
+              type: object
+              nullable: true
+              description: Memory-extraction summary recorded for this generation
+              properties:
+                candidates:
+                  type: integer
+                  description: Number of extraction candidates considered
+                created:
+                  type: integer
+                  description: Number of new memory entries created
+                updated:
+                  type: integer
+                  description: Number of existing memory entries updated
+                skipped:
+                  type: integer
+                  description: Number of candidates skipped (e.g. duplicates)
         created_at:
           type: string
           format: date-time

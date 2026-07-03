@@ -52,6 +52,27 @@ const mapGeneration = (
   };
 };
 
+// Generation.metadata also carries internal recovery state (`pendingState`:
+// full message history, tool context, agent config) needed by
+// agentGenerationRecovery.ts to resume paused generations after a restart.
+// That must never reach API clients; only externally-meaningful keys (e.g.
+// `extraction`, written by recordExtractionSummary) are safe to expose.
+const INTERNAL_METADATA_KEYS = ['pendingState'];
+
+export const toPublicGenerationMetadata = (
+  metadata: Record<string, unknown> | null
+): Record<string, unknown> | null => {
+  if (!metadata) return null;
+
+  const publicMetadata = Object.fromEntries(
+    Object.entries(metadata).filter(([key]) => {
+      return !INTERNAL_METADATA_KEYS.includes(key);
+    })
+  );
+
+  return Object.keys(publicMetadata).length > 0 ? publicMetadata : null;
+};
+
 const findInitiatorGeneration = async (args: {
   initiatorGenerationId?: string | null;
   projectId: number;
