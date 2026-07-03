@@ -1,24 +1,13 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
-import {
-  buildHttpToolExecute,
-  parseHttpExecuteConfig,
-} from './agentToolResolver';
-import {
-  buildMcpToolExecute,
-  executeSoatTool,
-} from './agentToolResolverExternalTools';
+import { applyToolOutputMapping } from './jsonLogicMapping';
 import {
   assertPipelineStepToolsValid,
   runPipeline,
   validatePipelineConfig,
 } from './pipelineTools';
-import {
-  assertSecretRefsExist,
-  resolveSecretRefsInRecord,
-  resolveSecretRefsInString,
-} from './secrets';
-import { soatTools } from './soatTools';
+import { assertSecretRefsExist } from './secrets';
+import { callHttpTool, callMcpTool, callSoatTool } from './toolsCall';
 
 // ── Mapped Types ─────────────────────────────────────────────────────────
 
@@ -34,6 +23,7 @@ export type MappedTool = {
   actions: string[] | null;
   presetParameters: object | null;
   pipeline: object | null;
+  outputMapping: object | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -61,6 +51,7 @@ const mapTool = (
     actions: tool.actions,
     presetParameters: tool.presetParameters,
     pipeline: tool.pipeline,
+    outputMapping: tool.outputMapping,
     createdAt: tool.createdAt,
     updatedAt: tool.updatedAt,
   };
@@ -68,7 +59,7 @@ const mapTool = (
 
 // ── CRUD ──────────────────────────────────────────────────────────────────
 
-export const createTool = async (args: {
+type CreateToolArgs = {
   projectId: number;
   type?: string;
   name: string;
@@ -79,7 +70,26 @@ export const createTool = async (args: {
   actions?: string[];
   presetParameters?: object;
   pipeline?: object;
-}): Promise<MappedTool> => {
+  outputMapping?: object;
+};
+
+const buildToolCreateAttributes = (args: CreateToolArgs) => {
+  return {
+    projectId: args.projectId,
+    type: args.type ?? 'http',
+    name: args.name,
+    description: args.description ?? null,
+    parameters: args.parameters ?? null,
+    execute: args.execute ?? null,
+    mcp: args.mcp ?? null,
+    actions: args.actions ?? null,
+    presetParameters: args.presetParameters ?? null,
+    pipeline: args.pipeline ?? null,
+    outputMapping: args.outputMapping ?? null,
+  };
+};
+
+export const createTool = async (args: CreateToolArgs): Promise<MappedTool> => {
   if (args.type === 'pipeline') {
     const config = validatePipelineConfig(args.pipeline);
     await assertPipelineStepToolsValid({
@@ -95,18 +105,7 @@ export const createTool = async (args: {
     projectId: args.projectId,
   });
 
-  const tool = await db.Tool.create({
-    projectId: args.projectId,
-    type: args.type ?? 'http',
-    name: args.name,
-    description: args.description ?? null,
-    parameters: args.parameters ?? null,
-    execute: args.execute ?? null,
-    mcp: args.mcp ?? null,
-    actions: args.actions ?? null,
-    presetParameters: args.presetParameters ?? null,
-    pipeline: args.pipeline ?? null,
-  });
+  const tool = await db.Tool.create(buildToolCreateAttributes(args));
 
   const created = await db.Tool.findOne({
     where: { id: (tool as unknown as { id: number }).id },
@@ -173,6 +172,7 @@ const buildToolUpdates = (args: {
   actions?: string[] | null;
   presetParameters?: object | null;
   pipeline?: object | null;
+  outputMapping?: object | null;
 }): Record<string, unknown> => {
   const updates: Record<string, unknown> = {};
   const fields = [
@@ -185,6 +185,7 @@ const buildToolUpdates = (args: {
     'actions',
     'presetParameters',
     'pipeline',
+    'outputMapping',
   ] as const;
   for (const field of fields) {
     if (args[field] !== undefined) updates[field] = args[field];
@@ -204,6 +205,7 @@ export const updateTool = async (args: {
   actions?: string[] | null;
   presetParameters?: object | null;
   pipeline?: object | null;
+  outputMapping?: object | null;
 }): Promise<MappedTool> => {
   if (args.pipeline !== undefined && args.pipeline !== null) {
     const config = validatePipelineConfig(args.pipeline);
@@ -259,128 +261,6 @@ export const deleteTool = async (args: {
 
 // ── Call ──────────────────────────────────────────────────────────────────
 
-const noopLogToolCallingError = () => {};
-
-const callHttpTool = (
-  tool: MappedTool,
-  mergedInput: Record<string, unknown>,
-  projectId: number
-): Promise<unknown> => {
-  const executeConfig = parseHttpExecuteConfig(
-    (tool.execute as
-      | { url: string; method?: string; headers?: Record<string, string> }
-      | string
-      | null) ?? null
-  );
-  if (!executeConfig) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'HTTP tool has an invalid execute configuration.'
-    );
-  }
-  return buildHttpToolExecute({
-    toolName: tool.name,
-    execute: executeConfig,
-    projectId,
-  })(mergedInput);
-};
-
-const callSoatTool = (
-  tool: MappedTool,
-  args: {
-    action?: string;
-    mergedInput: Record<string, unknown>;
-    authHeader?: string;
-  }
-): Promise<unknown> => {
-  const { authHeader } = args;
-  // Support presetParameters.action as a fallback when no explicit action is given.
-  const action =
-    args.action ??
-    (typeof args.mergedInput['action'] === 'string'
-      ? args.mergedInput['action']
-      : undefined);
-  // Strip 'action' from the inputs so it is not forwarded as a tool parameter.
-  const { action: _action, ...mergedInput } = args.mergedInput;
-  void _action;
-  if (!action) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'operationId is required for soat tools.'
-    );
-  }
-  if (!tool.actions?.includes(action)) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `action "${action}" is not available on this tool.`
-    );
-  }
-  const def = soatTools.find((t) => {
-    return t.name === action;
-  });
-  if (!def) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `action "${action}" is not a known SOAT action.`
-    );
-  }
-  return executeSoatTool({
-    toolName: tool.name,
-    def,
-    rawArgs: mergedInput,
-    base: `http://localhost:${process.env.PORT ?? 5047}`,
-    authHeader,
-    buildContextHeaders: () => {
-      return {};
-    },
-    logToolCallingError: noopLogToolCallingError,
-  });
-};
-
-const callMcpTool = async (
-  tool: MappedTool,
-  action: string | undefined,
-  mergedInput: Record<string, unknown>,
-  projectId: number
-): Promise<unknown> => {
-  if (!action) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'action is required for mcp tools.'
-    );
-  }
-  const mcpConfig = tool.mcp as {
-    url: string;
-    headers?: Record<string, string>;
-  } | null;
-  if (!mcpConfig?.url) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'MCP tool has an invalid mcp configuration.'
-    );
-  }
-  // {{secret:...}} tokens resolve at the point of use, right before the
-  // outbound MCP request — the stored config keeps the reference.
-  const mcpUrl = await resolveSecretRefsInString({
-    value: mcpConfig.url,
-    projectId,
-  });
-  const mcpHeaders = await resolveSecretRefsInRecord({
-    record: mcpConfig.headers,
-    projectId,
-  });
-  return buildMcpToolExecute({
-    mcpUrl,
-    mcpHeaders: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json, text/event-stream',
-      ...(mcpHeaders ?? {}),
-    },
-    mcpToolName: action,
-    logToolCallingError: noopLogToolCallingError,
-  })(mergedInput);
-};
-
 export const callTool = async (args: {
   projectIds?: number[];
   id: string;
@@ -399,7 +279,7 @@ export const callTool = async (args: {
   const toolProjectId = toolInstance.projectId;
 
   if (foundTool.type === 'pipeline') {
-    return runPipeline({
+    const rawResult = await runPipeline({
       pipeline: foundTool.pipeline,
       presetParameters: foundTool.presetParameters,
       input: args.input,
@@ -415,6 +295,10 @@ export const callTool = async (args: {
         });
       },
     });
+    return applyToolOutputMapping(
+      foundTool.outputMapping as Record<string, unknown> | null,
+      rawResult
+    );
   }
 
   const mergedInput = {
@@ -422,20 +306,32 @@ export const callTool = async (args: {
     ...(args.input ?? {}),
   };
 
-  if (foundTool.type === 'http')
-    return callHttpTool(foundTool, mergedInput, toolProjectId);
-  if (foundTool.type === 'soat')
-    return callSoatTool(foundTool, {
+  let rawResult: unknown;
+  if (foundTool.type === 'http') {
+    rawResult = await callHttpTool(foundTool, mergedInput, toolProjectId);
+  } else if (foundTool.type === 'soat') {
+    rawResult = await callSoatTool(foundTool, {
       action: args.action,
       mergedInput,
       authHeader: args.authHeader,
     });
-  if (foundTool.type === 'mcp')
-    return callMcpTool(foundTool, args.action, mergedInput, toolProjectId);
+  } else if (foundTool.type === 'mcp') {
+    rawResult = await callMcpTool(
+      foundTool,
+      args.action,
+      mergedInput,
+      toolProjectId
+    );
+  } else {
+    // client tools (and any unknown type) cannot be invoked server-side
+    throw new DomainError(
+      'TOOL_CALL_NOT_SUPPORTED',
+      'Client tools cannot be invoked server-side; they must be executed by the calling client.'
+    );
+  }
 
-  // client tools (and any unknown type) cannot be invoked server-side
-  throw new DomainError(
-    'TOOL_CALL_NOT_SUPPORTED',
-    'Client tools cannot be invoked server-side; they must be executed by the calling client.'
+  return applyToolOutputMapping(
+    foundTool.outputMapping as Record<string, unknown> | null,
+    rawResult
   );
 };

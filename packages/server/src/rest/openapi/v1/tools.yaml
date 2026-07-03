@@ -53,6 +53,25 @@ paths:
                       - city
                   execute:
                     url: https://api.weather.example/v1/current?city={{city}}
+              http_with_output_mapping:
+                summary: HTTP tool reshaping its result with output_mapping
+                value:
+                  name: transcribe-audio
+                  type: http
+                  description: Transcribes an audio file and returns the bare text
+                  parameters:
+                    type: object
+                    properties:
+                      file:
+                        type: string
+                    required:
+                      - file
+                  execute:
+                    url: https://api.x.ai/v1/stt
+                    method: POST
+                    body_mode: multipart
+                  output_mapping:
+                    var: output.text
               client:
                 summary: Client tool
                 value:
@@ -456,6 +475,16 @@ components:
             each step invoking another tool by `tool_id` (optional `action`) and
             building its `input` from earlier results via JSON Logic evaluated
             over `{ input, steps }`. An optional `output` maps the final result.
+        output_mapping:
+          type: object
+          nullable: true
+          description: >-
+            Universal JSON Logic mapping applied to the tool's raw result,
+            for every tool type (`http`, `mcp`, `soat`, `pipeline`, `client`).
+            Evaluated over `{ output: <raw result> }`, so `{ "var": "output.text" }`
+            extracts a bare scalar field instead of requiring a wrapping
+            `pipeline` tool. For `pipeline` tools this runs *after* the
+            pipeline's own `output` mapping, over that mapping's result.
         created_at:
           type: string
           format: date-time
@@ -525,6 +554,11 @@ components:
           description: >-
             Pipeline definition for `pipeline` tools. See the `pipeline` field
             on the Tool schema for the full structure.
+        output_mapping:
+          type: object
+          description: >-
+            Universal JSON Logic mapping applied to the tool's raw result. See
+            the `output_mapping` field on the Tool schema for details.
 
     UpdateToolRequest:
       type: object
@@ -583,6 +617,12 @@ components:
           description: >-
             Pipeline definition for `pipeline` tools. See the `pipeline` field
             on the Tool schema for the full structure.
+        output_mapping:
+          type: object
+          nullable: true
+          description: >-
+            Universal JSON Logic mapping applied to the tool's raw result. See
+            the `output_mapping` field on the Tool schema for details.
 
     CallToolRequest:
       type: object

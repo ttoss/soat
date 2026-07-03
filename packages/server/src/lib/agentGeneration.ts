@@ -21,6 +21,7 @@ import { buildKnowledgeMessages, buildWriteMemoryTool } from './agentKnowledge';
 import { buildModel } from './agentModel';
 import {
   buildToolResultMessages as buildToolResultMessagesFromOutputs,
+  loadOutputMappingsByToolName,
   resolveToolOutputsResult,
   runNonStreamGeneration,
   runToolOutputsGeneration,
@@ -416,6 +417,7 @@ export const submitToolOutputs = async (args: {
   const toolResultMessages = buildToolResultMessagesFromOutputs({
     toolOutputs: args.toolOutputs,
     pendingToolCalls: pending.pendingToolCalls,
+    outputMappingsByToolName: await loadOutputMappingsByToolName(pending),
   });
   const allMessages = [...pending.messages, ...toolResultMessages];
   const system = (

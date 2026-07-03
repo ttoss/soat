@@ -113,6 +113,7 @@ describe('resolveMessageContent', () => {
       actions: null,
       presetParameters: null,
       pipeline: null,
+      outputMapping: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -155,6 +156,7 @@ describe('resolveMessageContent', () => {
       actions: null,
       presetParameters: null,
       pipeline: null,
+      outputMapping: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -193,6 +195,7 @@ describe('resolveMessageContent', () => {
       actions: null,
       presetParameters: null,
       pipeline: null,
+      outputMapping: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -272,6 +275,7 @@ describe('resolveMessageContent', () => {
       actions: null,
       presetParameters: null,
       pipeline: null,
+      outputMapping: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -306,6 +310,7 @@ describe('resolveMessageContent', () => {
       actions: null,
       presetParameters: null,
       pipeline: null,
+      outputMapping: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -342,6 +347,7 @@ describe('resolveMessageContent', () => {
       actions: ['list-tools'],
       presetParameters: null,
       pipeline: null,
+      outputMapping: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

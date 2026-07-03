@@ -838,6 +838,14 @@ components:
             `{ input, steps }`, plus an optional `output` mapping. Step `input`
             keys and `var` paths use camelCase (the runtime form). Free-form,
             user-defined.
+        output_mapping:
+          type: object
+          nullable: true
+          description: >-
+            Universal JSON Logic mapping applied to the tool's raw result, for
+            every tool type. Evaluated over `{ output: <raw result> }`, e.g.
+            `{ "var": "output.text" }`. For `pipeline` tools this runs after
+            the pipeline's own `output` mapping.
 
     DocumentResourceProperties:
       description: >-

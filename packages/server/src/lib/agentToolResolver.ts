@@ -13,6 +13,7 @@ import {
   resolveMcpTools,
   resolveSoatTools,
 } from './agentToolResolverExternalTools';
+import { applyToolOutputMapping } from './jsonLogicMapping';
 import {
   resolveSecretRefsInRecord,
   resolveSecretRefsInString,
@@ -564,6 +565,43 @@ type AgentToolRow = {
   mcp: { url: string; headers?: Record<string, string> } | null;
   actions: string[] | null;
   presetParameters: Record<string, unknown> | null;
+  outputMapping: Record<string, unknown> | null;
+};
+
+/**
+ * Wraps every resolved AI-SDK tool's `execute` with {@link applyToolOutputMapping}
+ * so the model receives the reshaped result instead of the tool's raw output.
+ * A single wrap point here covers `http`, `mcp`, `soat`, and `pipeline` — the
+ * only tool types that produce an `execute` function; `client` tools have none.
+ */
+const wrapExecuteWithOutputMapping = (
+  originalExecute: NonNullable<Tool['execute']>,
+  outputMapping: Record<string, unknown>
+): NonNullable<Tool['execute']> => {
+  return async (...executeArgs) => {
+    const rawResult = await originalExecute(...executeArgs);
+    return applyToolOutputMapping(outputMapping, rawResult);
+  };
+};
+
+const wrapToolsWithOutputMapping = (
+  tools: Record<string, Tool>,
+  outputMapping: Record<string, unknown> | null
+): Record<string, Tool> => {
+  if (!outputMapping) return tools;
+  const wrapped: Record<string, Tool> = {};
+  for (const [name, typedTool] of Object.entries(tools)) {
+    wrapped[name] = typedTool.execute
+      ? {
+          ...typedTool,
+          execute: wrapExecuteWithOutputMapping(
+            typedTool.execute,
+            outputMapping
+          ),
+        }
+      : typedTool;
+  }
+  return wrapped;
 };
 
 const resolvePipelineTool = (
@@ -693,7 +731,16 @@ export const resolveAgentTools = async (args: {
     if (!agentTool) continue;
 
     const typedTool = agentTool as unknown as AgentToolRow;
-    Object.assign(resolvedTools, await resolveToolByType(typedTool, args));
+    const tools = await resolveToolByType(typedTool, args);
+    // Pipeline tools delegate execution to `callTool` (tools.ts), which
+    // already applies `outputMapping` to its return value — wrapping again
+    // here would double-apply the mapping.
+    Object.assign(
+      resolvedTools,
+      typedTool.type === 'pipeline'
+        ? tools
+        : wrapToolsWithOutputMapping(tools, typedTool.outputMapping)
+    );
   }
 
   return resolvedTools;

@@ -3,6 +3,7 @@ import type { LanguageModel, ModelMessage, Tool, ToolChoice } from 'ai';
 import { generateText, isStepCount } from 'ai';
 import createDebug from 'debug';
 
+import { db } from '../db';
 import {
   buildCompletedGenerationResult,
   findPendingClientTools,
@@ -15,6 +16,7 @@ import {
   fireCompletionSideEffects,
   recordGenerationFailure,
 } from './generationLifecycle';
+import { applyToolOutputMapping } from './jsonLogicMapping';
 import { buildStructuredOutput } from './outputSchema';
 import { toProviderDomainError } from './providerError';
 import { type ProviderOptionsMap, type ReasoningConfig } from './reasoning';
@@ -420,14 +422,55 @@ export const resolveToolOutputsResult = (args: {
   return completedResult;
 };
 
+/**
+ * Client tools are materialized directly from submitted outputs, bypassing
+ * the AI-SDK resolver where `outputMapping` is normally applied — so it's
+ * looked up here by name, scoped to the generation's project.
+ */
+export const loadOutputMappingsByToolName = async (args: {
+  projectId: number;
+  pendingToolCalls: PendingGeneration['pendingToolCalls'];
+}): Promise<Record<string, Record<string, unknown> | null>> => {
+  const toolNames = [
+    ...new Set(
+      args.pendingToolCalls.map((toolCall) => {
+        return toolCall.toolName;
+      })
+    ),
+  ];
+  if (toolNames.length === 0) return {};
+  const tools = await db.Tool.findAll({
+    where: { projectId: args.projectId, name: toolNames },
+  });
+  const result: Record<string, Record<string, unknown> | null> = {};
+  for (const toolInstance of tools) {
+    result[toolInstance.name] = toolInstance.outputMapping as Record<
+      string,
+      unknown
+    > | null;
+  }
+  return result;
+};
+
 export const buildToolResultMessages = (args: {
   toolOutputs: Array<{ toolCallId: string; output: unknown }>;
   pendingToolCalls: PendingGeneration['pendingToolCalls'];
+  // Client tools bypass the resolver's execute wrapping, so their
+  // output_mapping (if any) is applied here instead, keyed by tool name.
+  outputMappingsByToolName?: Record<
+    string,
+    Record<string, unknown> | null | undefined
+  >;
 }) => {
   return args.toolOutputs.map((output) => {
     const pendingTool = args.pendingToolCalls.find((toolCall) => {
       return toolCall.toolCallId === output.toolCallId;
     });
+    const toolName = pendingTool?.toolName ?? '';
+    const outputMapping = args.outputMappingsByToolName?.[toolName];
+    const mappedOutput = outputMapping
+      ? applyToolOutputMapping(outputMapping, output.output)
+      : output.output;
 
     return {
       role: 'tool' as const,
@@ -435,13 +478,13 @@ export const buildToolResultMessages = (args: {
         {
           type: 'tool-result' as const,
           toolCallId: output.toolCallId,
-          toolName: pendingTool?.toolName ?? '',
+          toolName,
           output: {
             type: 'text' as const,
             value:
-              typeof output.output === 'string'
-                ? output.output
-                : JSON.stringify(output.output),
+              typeof mappedOutput === 'string'
+                ? mappedOutput
+                : JSON.stringify(mappedOutput),
           },
         },
       ],

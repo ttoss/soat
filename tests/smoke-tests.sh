@@ -1323,6 +1323,36 @@ if printf '%s\n' "$BARE_OUTPUT_CALL_RESP" | jq -e 'type != "string"' > /dev/null
   exit 1
 fi
 echo "Bare-scalar pipeline output OK"
+
+# 19d. A universal `output_mapping` field reshapes a tool's raw result at call
+# time, for every tool type — without wrapping it in a `pipeline` tool just to
+# extract or reshape a field (see issue #346).
+echo "--- Creating an http tool with output_mapping ---"
+OUTPUT_MAPPING_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name list-projects-first-id-output-mapping \
+  --type http \
+  --description "Lists projects and extracts the first project's id via output_mapping" \
+  --parameters '{"type":"object","properties":{},"required":[]}' \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}" \
+  --output-mapping '{"var":"output.0.id"}')
+OUTPUT_MAPPING_TOOL_ID=$(echo "$OUTPUT_MAPPING_TOOL_RESP" | jq -r '.id')
+if [ -z "$OUTPUT_MAPPING_TOOL_ID" ] || [ "$OUTPUT_MAPPING_TOOL_ID" = "null" ]; then
+  echo "FAIL: could not create http tool with output_mapping"
+  echo "$OUTPUT_MAPPING_TOOL_RESP"
+  exit 1
+fi
+echo "output_mapping http tool id: $OUTPUT_MAPPING_TOOL_ID"
+
+echo "--- Calling http tool with output_mapping ---"
+OUTPUT_MAPPING_CALL_RESP=$($SOAT_CLI call-tool --tool-id "$OUTPUT_MAPPING_TOOL_ID" --input '{}')
+printf '%s\n' "$OUTPUT_MAPPING_CALL_RESP" | jq .
+if printf '%s\n' "$OUTPUT_MAPPING_CALL_RESP" | jq -e 'type != "string"' > /dev/null; then
+  echo "FAIL: output_mapping did not resolve the http tool's raw result to a bare scalar"
+  echo "$OUTPUT_MAPPING_CALL_RESP"
+  exit 1
+fi
+echo "http tool output_mapping OK"
 $SOAT_CLI delete-tool --tool-id "$BARE_OUTPUT_PIPELINE_ID"
 
 # 19d. Cleanup — delete the pipeline tool (keep list-projects for the agent below)
