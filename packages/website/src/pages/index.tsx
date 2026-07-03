@@ -18,17 +18,17 @@ const platformPillars = [
   {
     title: 'Orchestrate',
     description:
-      'Agents, tools, sessions, conversations, and actors handle real multi-step workflows.',
+      'Agents, tools, sessions, chats, and DAG-based orchestrations handle real multi-step workflows.',
   },
   {
     title: 'Remember',
     description:
-      'Knowledge search and memories retrieve context, deduplicate writes, and preserve useful facts.',
+      'Knowledge search and memories retrieve context, while ingestion rules turn images and audio into searchable documents.',
   },
   {
     title: 'Govern',
     description:
-      'IAM policies, API keys, scoped secrets, and resource names keep every operation bounded.',
+      'IAM policies, API keys, OAuth for MCP clients, and scoped secrets keep every operation bounded.',
   },
   {
     title: 'Observe',
@@ -41,7 +41,7 @@ const formationSteps = [
   {
     title: 'Declare',
     description:
-      'Describe providers, memories, tools, agents, documents, and webhooks in one JSON or YAML template.',
+      'Describe providers, memories, tools, agents, orchestrations, documents, and webhooks in one JSON or YAML template.',
   },
   {
     title: 'Resolve',
@@ -63,9 +63,9 @@ const HomepageHeader = () => {
           The infrastructure layer for production-ready AI agents.
         </Heading>
         <p className={clsx('hero__subtitle', styles.heroSubtitle)}>
-          Run tool-calling agents with durable sessions, searchable knowledge,
-          writable memory, scoped secrets, IAM policies, traces, and MCP from
-          one self-hosted server.
+          Run tool-calling agents with durable sessions, deterministic
+          orchestrations, searchable knowledge, writable memory, scoped secrets,
+          IAM policies, traces, and MCP from one self-hosted server.
         </p>
         <div className={clsx(styles.buttons, styles.heroButtons)}>
           <Link
@@ -168,12 +168,12 @@ const CodeShowcase = () => {
         <div className="row">
           <div className={clsx('col col--6', styles.showcaseCopy)}>
             <Heading as="h2">
-              From zero to running agent in three commands.
+              From zero to a running agent in four commands.
             </Heading>
             <p>
-              Create an agent, open a session to persist conversation state, and
-              run a generation — all from the CLI. Every step is recorded as a
-              traceable operation.
+              Create an agent, open a session to persist conversation state,
+              send a message, and generate the answer — all from the CLI. Every
+              step is recorded as a traceable operation.
             </p>
             <ul className={styles.checkList}>
               <li>Attach any AI provider with a single flag</li>
@@ -195,14 +195,16 @@ const CodeShowcase = () => {
   --name "support-bot" \\
   --instructions "You are a helpful support assistant."
 
-soat create-agent-session \\
+soat create-session \\
   --agent-id "$AGENT_ID" \\
   --name "user-chat-42"
 
-soat create-agent-generation \\
-  --agent-id "$AGENT_ID" \\
+soat add-session-message \\
   --session-id "$SESSION_ID" \\
-  --messages '[{"role":"user","content":"Hello!"}]'`}
+  --message "Hello!"
+
+soat generate-session-response \\
+  --session-id "$SESSION_ID"`}
             </CodeBlock>
           </div>
         </div>
@@ -244,7 +246,7 @@ export default function Home(): React.ReactNode {
   return (
     <Layout
       title={`${siteConfig.title} — Infrastructure for production-ready AI agents`}
-      description="Run tool-calling agents with durable sessions, searchable knowledge, writable memory, scoped secrets, IAM policies, traces, and MCP from one self-hosted server."
+      description="Run tool-calling agents with durable sessions, deterministic orchestrations, searchable knowledge, writable memory, scoped secrets, IAM policies, traces, and MCP from one self-hosted server."
     >
       <HomepageHeader />
       <main>
