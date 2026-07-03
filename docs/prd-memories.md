@@ -7,7 +7,8 @@
 | Memory model (container CRUD)  | ✅ Implemented | Model, lib, REST, OpenAPI, permissions, tests, docs                                                                              |
 | Memory tags field              | ✅ Implemented | `tags` string-array column on Memory model; glob filter on `GET /memories`; `resolveMemoryIdsByGlobTags()` in knowledge search   |
 | MemoryEntry model              | ✅ Implemented | Model with `me_` prefix, embedding column, lib, REST, OpenAPI, permissions, tests                                                |
-| Entry write (dedup algorithm)  | ✅ Implemented | Two-threshold dedup/merge/skip in `writeMemoryEntry`; v1 merge (`mergeEntryContent`) concatenates — superseded by Phase 5 (v2)   |
+| Entry write (dedup algorithm)  | ✅ Implemented | Two-threshold dedup/merge/skip in `writeMemoryEntry`; manual writes still concatenate on merge                                    |
+| Merge consolidation (LLM)      | 🟡 Partial    | Agent-tool + extraction merges consolidate into a single fact via the LLM (`memoryConsolidationCompletion.ts`), concat fallback; manual REST writes still concatenate (Phase 5) |
 | Entry REST endpoints           | ✅ Implemented | `POST/GET/PUT/DELETE /api/v1/memories/:memoryId/entries`; POST returns `action` field                                            |
 | Entry permissions              | ✅ Implemented | `WriteMemoryEntry`, `ReadMemoryEntry`, `ListMemoryEntries`, `UpdateMemoryEntry`, `DeleteMemoryEntry`                             |
 | `knowledgeConfig` on Agent     | ✅ Implemented | JSONB field on Agent model; merged with per-generation config; drives automatic context injection                                |
@@ -95,12 +96,20 @@
 
 ---
 
-### Phase 5 — Write Algorithm v2 (LLM-Arbitrated, Temporal) ❌ Not started
+### Phase 5 — Write Algorithm v2 (LLM-Arbitrated, Temporal) 🟡 In progress
 
 **Goal:** Replace the v1 threshold-decided, concatenation-merge write path with an LLM-arbitrated
 decision over a shortlist of similar entries; add temporal invalidation (supersede) so
 contradictions retire old facts instead of rewriting them; and record provenance so every entry is
 auditable back to the conversation that produced it.
+
+> **Delivered so far:** the **merge consolidation** step. When a write with an agent context (the
+> `write_memory` tool and automatic extraction) merges into an existing entry, an LLM consolidates
+> both facts into a single atomic entry — contradictions resolve in favour of the new fact —
+> instead of concatenating (`memoryConsolidationCompletion.ts`, best-effort with a concat
+> fallback). Still pending: the top-K shortlist + full add/update/supersede/skip arbitration,
+> temporal invalidation, provenance, and consolidation for the manual REST write path (which has no
+> agent context to resolve a provider — see the [merge provider decision](#5a--llm-arbitrated-write-decision) below).
 
 **Motivation:** v1 has three structural problems (see
 [Known v1 Limitations](#known-v1-limitations-addressed-by-phase-5)): the concatenation merge

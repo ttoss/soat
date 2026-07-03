@@ -2,6 +2,20 @@ import type { MemoryEntrySource } from '@soat/postgresdb';
 import { Op } from '@ttoss/postgresdb';
 import { db } from 'src/db';
 import { getEmbedding } from 'src/lib/embedding';
+import { pickMergedContent } from 'src/lib/memoryConsolidation';
+import * as consolidationCompletion from 'src/lib/memoryConsolidationCompletion';
+
+/**
+ * Context needed to consolidate a merge with an LLM. Present only for writes
+ * with an agent context (the `write_memory` tool and automatic extraction);
+ * absent for manual REST writes, which keep the concatenation merge.
+ */
+export type MemoryConsolidationContext = {
+  agentId: string;
+  projectIds?: number[];
+  aiProviderId?: string;
+  model?: string;
+};
 
 const mapMemoryEntry = (
   instance: InstanceType<(typeof db)['MemoryEntry']> & {
@@ -55,12 +69,36 @@ const findTopSimilarEntry = async (args: {
 const mergeAndUpdateEntry = async (args: {
   match: Awaited<ReturnType<typeof findTopSimilarEntry>>;
   incoming: string;
+  consolidation?: MemoryConsolidationContext;
 }): Promise<ReturnType<typeof mapMemoryEntry>> => {
   const match = args.match!;
-  const mergedContent = mergeEntryContent({
+
+  // Concatenation is the fallback; when an agent context is available we ask an
+  // LLM to consolidate the two facts into a single atomic entry instead.
+  const fallback = mergeEntryContent({
     existing: match.content,
     incoming: args.incoming,
   });
+
+  let mergedContent = fallback;
+  if (args.consolidation) {
+    try {
+      const consolidated =
+        await consolidationCompletion.runConsolidationCompletion({
+          agentId: args.consolidation.agentId,
+          projectIds: args.consolidation.projectIds,
+          existing: match.content,
+          incoming: args.incoming,
+          aiProviderId: args.consolidation.aiProviderId,
+          model: args.consolidation.model,
+        });
+      mergedContent = pickMergedContent({ consolidated, fallback });
+    } catch {
+      // Best-effort: a failed completion must never lose the write, so fall
+      // back to the concatenation.
+      mergedContent = fallback;
+    }
+  }
 
   match.content = mergedContent;
   try {
@@ -85,6 +123,7 @@ export const writeMemoryEntry = async (args: {
   sourceType?: MemoryEntrySource;
   duplicateThreshold?: number;
   updateThreshold?: number;
+  consolidation?: MemoryConsolidationContext;
 }): Promise<{
   action: 'created' | 'updated' | 'skipped';
   entry: ReturnType<typeof mapMemoryEntry>;
@@ -119,11 +158,13 @@ export const writeMemoryEntry = async (args: {
         return { action: 'skipped', entry: mapMemoryEntry(topMatch) };
       }
 
-      // Step 3b: Related — merge via LLM
+      // Step 3b: Related — merge (LLM consolidation when an agent context is
+      // available, concatenation otherwise)
       if (score >= updateThreshold) {
         const entry = await mergeAndUpdateEntry({
           match: topMatch,
           incoming: args.content,
+          consolidation: args.consolidation,
         });
         return { action: 'updated', entry };
       }

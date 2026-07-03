@@ -3,6 +3,7 @@ import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import type { TypedAgent } from './agentGenerationHelpers';
 import { searchKnowledge } from './knowledge';
 import { writeMemoryEntry } from './memoryEntries';
 
@@ -119,7 +120,11 @@ export const buildKnowledgeMessages = async (args: {
   return [{ role: 'user', content: buildKnowledgeContent(knowledgeText) }];
 };
 
-export const buildWriteMemoryTool = (args: { writeMemoryId: string }): Tool => {
+export const buildWriteMemoryTool = (args: {
+  writeMemoryId: string;
+  agentId: string;
+  projectIds?: number[];
+}): Tool => {
   return tool({
     description:
       'Write a fact to memory. The system automatically deduplicates: creates new entries, merges with similar existing ones, or skips duplicates.',
@@ -144,8 +149,35 @@ export const buildWriteMemoryTool = (args: { writeMemoryId: string }): Tool => {
         memoryId: memory.id as number,
         content,
         sourceType: 'agent',
+        // Agent context is available here, so merges consolidate via the LLM
+        // rather than concatenating.
+        consolidation: { agentId: args.agentId, projectIds: args.projectIds },
       });
       return { action: result.action, entryId: result.entry.id };
     },
   });
+};
+
+/**
+ * Attaches the `write_memory` tool to an agent's resolved tools when its
+ * knowledge config names a write target. Lives here alongside the tool it
+ * builds; called from the generation pipeline.
+ */
+export const buildKnowledgeTools = (args: {
+  agentId: string;
+  projectIds?: number[];
+  typedAgent: TypedAgent;
+  resolvedTools: Record<string, unknown>;
+}): void => {
+  const knowledgeConfig = args.typedAgent.knowledgeConfig as
+    | { writeMemoryId?: string }
+    | null
+    | undefined;
+  if (knowledgeConfig?.writeMemoryId) {
+    args.resolvedTools['write_memory'] = buildWriteMemoryTool({
+      writeMemoryId: knowledgeConfig.writeMemoryId,
+      agentId: args.agentId,
+      projectIds: args.projectIds,
+    });
+  }
 };
