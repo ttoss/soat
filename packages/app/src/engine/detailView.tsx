@@ -4,6 +4,7 @@ import { apiFetch } from '@/api/client';
 import { useAuth } from '@/auth/authContext';
 import { Button } from '@/components/ui/button';
 
+import { DeleteConfirmModal } from './deleteConfirmModal';
 import { DetailSections } from './detailSections';
 import { SubResourceTabs } from './detailSubResources';
 import { useNavigation } from './navigationContext';
@@ -81,55 +82,18 @@ const DetailActions = ({
   });
 };
 
-const DeleteButtons = ({
-  deleting,
-  onDelete,
-  onCancel,
-}: {
-  deleting: boolean;
-  onDelete: () => void;
-  onCancel: () => void;
-}) => {
-  return (
-    <>
-      <span className="text-sm text-muted-foreground self-center">
-        {'Are you sure?'}
-      </span>
-      <Button
-        variant="destructive"
-        size="sm"
-        disabled={deleting}
-        onClick={onDelete}
-      >
-        {deleting ? 'Deleting…' : 'Confirm delete'}
-      </Button>
-      <Button variant="outline" size="sm" onClick={onCancel}>
-        {'Cancel'}
-      </Button>
-    </>
-  );
-};
-
 type DetailToolbarProps = {
   module: ModuleInfo;
   pathParams: Record<string, string>;
-  confirmDelete: boolean;
-  deleting: boolean;
   onEdit: () => void;
   onAskDelete: () => void;
-  onDelete: () => void;
-  onCancelDelete: () => void;
 };
 
 const DetailToolbar = ({
   module,
   pathParams,
-  confirmDelete,
-  deleting,
   onEdit,
   onAskDelete,
-  onDelete,
-  onCancelDelete,
 }: DetailToolbarProps) => {
   return (
     <div className="flex gap-2 flex-wrap justify-end">
@@ -139,17 +103,10 @@ const DetailToolbar = ({
         </Button>
       )}
       <DetailActions module={module} pathParams={pathParams} />
-      {module.deleteOp && !confirmDelete && (
+      {module.deleteOp && (
         <Button variant="destructive" size="sm" onClick={onAskDelete}>
           {'Delete'}
         </Button>
-      )}
-      {confirmDelete && (
-        <DeleteButtons
-          deleting={deleting}
-          onDelete={onDelete}
-          onCancel={onCancelDelete}
-        />
       )}
     </div>
   );
@@ -183,7 +140,6 @@ export const DetailView = ({
   const [viewState, setViewState] = React.useState<DetailState>({
     status: 'loading',
   });
-  const [deleting, setDeleting] = React.useState(false);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
 
   const token = state.status === 'authenticated' ? state.token : '';
@@ -216,20 +172,6 @@ export const DetailView = ({
       pathParams,
       mode: 'edit',
     });
-  };
-
-  const handleDelete = async () => {
-    if (!module.deleteOp || !token) return;
-    setDeleting(true);
-    const url = buildUrl(module.deleteOp.pathTemplate, pathParams);
-    const result = await apiFetch<unknown>({ url, method: 'DELETE', token });
-    setDeleting(false);
-    setConfirmDelete(false);
-    if (result.ok) {
-      navigate(null);
-    } else {
-      setViewState({ status: 'error', message: result.error.message });
-    }
   };
 
   if (viewState.status === 'loading') {
@@ -279,15 +221,9 @@ export const DetailView = ({
         <DetailToolbar
           module={module}
           pathParams={pathParams}
-          confirmDelete={confirmDelete}
-          deleting={deleting}
           onEdit={handleEdit}
           onAskDelete={() => {
             return setConfirmDelete(true);
-          }}
-          onDelete={handleDelete}
-          onCancelDelete={() => {
-            return setConfirmDelete(false);
           }}
         />
       </div>
@@ -305,6 +241,21 @@ export const DetailView = ({
         pathParams={pathParams}
         token={token}
       />
+
+      {confirmDelete && (
+        <DeleteConfirmModal
+          module={module}
+          pathParams={pathParams}
+          itemName={itemName}
+          token={token}
+          onDeleted={() => {
+            return navigate(null);
+          }}
+          onCancel={() => {
+            return setConfirmDelete(false);
+          }}
+        />
+      )}
     </div>
   );
 };

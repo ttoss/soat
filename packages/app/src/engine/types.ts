@@ -15,6 +15,7 @@ export type OpenApiSchema = {
   properties?: Record<string, OpenApiSchema>;
   required?: string[];
   description?: string;
+  default?: JsonValue;
   $ref?: string;
   /**
    * Vendor extension marking a field as a reference to another REST resource,
