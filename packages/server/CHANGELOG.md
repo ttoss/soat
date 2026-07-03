@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.15](https://127.0.0.1/41729/git/ttoss/compare/v0.13.14...v0.13.15) (2026-07-03)
+
+### Bug Fixes
+
+* **knowledge:** inject retrieved knowledge as non-system reference content ([#342](https://127.0.0.1/41729/git/ttoss/issues/342)) ([3bf9702](https://127.0.0.1/41729/git/ttoss/commits/3bf970299cc3dec3c1d54ab2ac24f955fffbf8bd))
+* **tools:** deep-resolve $refs in SOAT tool body schemas ([#344](https://127.0.0.1/41729/git/ttoss/issues/344)) ([#345](https://127.0.0.1/41729/git/ttoss/issues/345)) ([24c2a58](https://127.0.0.1/41729/git/ttoss/commits/24c2a58b5717c743bf822dfaa8e7389b42856f8f))
+
+### Features
+
+* **formations:** add orchestration resource type (agent squads) ([#341](https://127.0.0.1/41729/git/ttoss/issues/341)) ([0d86dbc](https://127.0.0.1/41729/git/ttoss/commits/0d86dbc453a09c470c1cb040d823a290f5affea6))
+* **memories:** consolidate merges into a single fact via LLM (agent paths) ([#347](https://127.0.0.1/41729/git/ttoss/issues/347)) ([da3a367](https://127.0.0.1/41729/git/ttoss/commits/da3a367ad4b7beafc7586239e5c8c03df16d7fff))
+* **tools:** add universal output_mapping field to reshape tool results ([#349](https://127.0.0.1/41729/git/ttoss/issues/349)) ([fb93b65](https://127.0.0.1/41729/git/ttoss/commits/fb93b65681fccdf11c22b76ab28ca1c65102101e)), closes [#346](https://127.0.0.1/41729/git/ttoss/issues/346)
+
 ## [0.13.14](https://127.0.0.1/41729/git/ttoss/compare/v0.13.13...v0.13.14) (2026-07-02)
 
 ### Bug Fixes
