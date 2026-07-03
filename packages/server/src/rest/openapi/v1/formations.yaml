@@ -1164,6 +1164,55 @@ components:
           nullable: true
           description: Arbitrary JSON metadata
 
+    OrchestrationResourceProperties:
+      description: >-
+        Creates a DAG orchestration that wires agents, tools, and knowledge
+        lookups into a repeatable pipeline within the formation's project. Node
+        resource references (`agent_id`, `tool_id`, `memory_id`,
+        `orchestration_id`) accept `{ "ref": "LogicalId" }` expressions to point
+        at other resources declared in the same template — the basis for
+        deploying an agent "squad" (a team of agents plus the flow that
+        coordinates them) as a single stack.
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - nodes
+        - edges
+      properties:
+        name:
+          type: string
+          description: Human-readable name for the orchestration
+        description:
+          type: string
+          nullable: true
+          description: Optional description of what the orchestration does
+        nodes:
+          type: array
+          description: >-
+            Ordered list of node definitions. A node's resource references
+            (`agent_id`, `tool_id`, `memory_id`, `orchestration_id`) may use
+            `{ "ref": "LogicalId" }` to bind to other resources in the template.
+          items:
+            type: object
+            additionalProperties: true
+        edges:
+          type: array
+          description: Directed connections between nodes
+          items:
+            type: object
+            additionalProperties: true
+        state_schema:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Optional JSON Schema describing the run state
+        input_schema:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Optional JSON Schema describing the run input
+
     ResourceDeclaration:
       type: object
       required:
@@ -1185,6 +1234,7 @@ components:
             - ingestion_rule
             - memory
             - memory_entry
+            - orchestration
             - policy
             - secret
             - session
@@ -1204,6 +1254,7 @@ components:
             - $ref: '#/components/schemas/IngestionRuleResourceProperties'
             - $ref: '#/components/schemas/MemoryResourceProperties'
             - $ref: '#/components/schemas/MemoryEntryResourceProperties'
+            - $ref: '#/components/schemas/OrchestrationResourceProperties'
             - $ref: '#/components/schemas/PolicyResourceProperties'
             - $ref: '#/components/schemas/SecretResourceProperties'
             - $ref: '#/components/schemas/SessionResourceProperties'

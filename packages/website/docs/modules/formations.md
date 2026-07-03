@@ -297,7 +297,7 @@ Rules:
 }
 ```
 
-- **`type`** — one of: `ai_provider`, `tool`, `agent`, `actor`, `api_key`, `chat`, `conversation`, `document`, `file`, `ingestion_rule`, `memory`, `memory_entry`, `policy`, `secret`, `session`, `webhook`. See [Formations Types](/docs/formations-types) for the full properties reference.
+- **`type`** — one of: `ai_provider`, `tool`, `agent`, `actor`, `api_key`, `chat`, `conversation`, `document`, `file`, `ingestion_rule`, `memory`, `memory_entry`, `orchestration`, `policy`, `secret`, `session`, `webhook`. See [Formations Types](/docs/formations-types) for the full properties reference.
 - **`properties`** — resource-specific properties (snake_case, matching the REST API body fields)
 - **`depends_on`** — explicit dependency list in addition to implicit `ref` dependencies
 - **`deletion_policy`** — controls what happens to the physical resource when it is removed from the stack. `delete` (default) deletes the physical resource. `retain` keeps the physical resource alive and only removes the formation record.
@@ -355,6 +355,77 @@ After deployment the tool's stored header is `Bearer {{secret:sec_01HXYZ}}` — 
 ### Topological Ordering
 
 SOAT builds a dependency graph from explicit `depends_on` entries, implicit `ref` expressions, and resource logical IDs referenced inside `sub` strings, then uses topological sort (Kahn's algorithm) to determine the creation order. A template with a cycle fails validation.
+
+### Agent Squads
+
+An **agent squad** is a team of agents plus the flow that coordinates them,
+deployed as one stack. Because an [orchestration](./orchestrations.md) is a
+formation resource type, you declare the agents and the orchestration that wires
+them together in a single template — a node's `agent_id` uses a `ref` to bind to
+an agent created in the same stack, and the engine resolves it to the physical
+`agt_...` ID before the orchestration is created.
+
+Node fields are written in snake_case (`agent_id`, `input_mapping`,
+`output_mapping`, `activation_condition`), exactly as in the [Orchestrations](./orchestrations.md)
+REST contract; the formation layer maps them onto the engine's internal shape.
+
+```json
+{
+  "resources": {
+    "Provider": {
+      "type": "ai_provider",
+      "properties": { "name": "OpenAI", "provider": "openai", "default_model": "gpt-4o" }
+    },
+    "Writer": {
+      "type": "agent",
+      "properties": {
+        "name": "Writer",
+        "ai_provider_id": { "ref": "Provider" },
+        "instructions": "Draft a short article on the given topic."
+      }
+    },
+    "Reviewer": {
+      "type": "agent",
+      "properties": {
+        "name": "Reviewer",
+        "ai_provider_id": { "ref": "Provider" },
+        "instructions": "Tighten and fact-check the draft."
+      }
+    },
+    "ContentSquad": {
+      "type": "orchestration",
+      "properties": {
+        "name": "content-squad",
+        "input_schema": { "type": "object", "properties": { "topic": { "type": "string" } } },
+        "nodes": [
+          {
+            "id": "write",
+            "type": "agent",
+            "agent_id": { "ref": "Writer" },
+            "input_mapping": { "prompt": { "var": "topic" } },
+            "output_mapping": { "content": "state.draft" }
+          },
+          {
+            "id": "review",
+            "type": "agent",
+            "agent_id": { "ref": "Reviewer" },
+            "input_mapping": { "prompt": { "var": "draft" } },
+            "output_mapping": { "content": "state.final" }
+          }
+        ],
+        "edges": [{ "from": "write", "to": "review" }]
+      }
+    }
+  },
+  "outputs": {
+    "squadId": { "ref": "ContentSquad" }
+  }
+}
+```
+
+Deploying this template creates the provider, both agents, and the orchestration
+in dependency order. Run the squad with [`start-orchestration-run`](./orchestrations.md#start-a-run)
+against the `squadId` output, passing `{ "topic": "..." }` as input.
 
 ### Resource Lifecycle
 

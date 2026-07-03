@@ -15,6 +15,7 @@ import {
 } from 'src/lib/formationsResourceHandlers';
 import * as ingestionRulesModule from 'src/lib/ingestionRules';
 import * as memoriesModule from 'src/lib/memories';
+import * as orchestrationsModule from 'src/lib/orchestrations';
 import * as policiesModule from 'src/lib/policies';
 import * as secretsModule from 'src/lib/secrets';
 import * as sessionsModule from 'src/lib/sessions';
@@ -2026,5 +2027,322 @@ describe('memoriesFormationModule - read', () => {
     const result = await module!.read!({ physicalResourceId: 'mem_throws' });
 
     expect(result).toBeNull();
+  });
+});
+
+// ── orchestrationsFormationModule ─────────────────────────────────────────
+
+describe('orchestrationsFormationModule', () => {
+  const mockCreateOrchestration = jest.spyOn(
+    orchestrationsModule,
+    'createOrchestration'
+  );
+  const mockUpdateOrchestration = jest.spyOn(
+    orchestrationsModule,
+    'updateOrchestration'
+  );
+  const mockDeleteOrchestration = jest.spyOn(
+    orchestrationsModule,
+    'deleteOrchestration'
+  );
+  const mockFindOrchestration = jest.spyOn(
+    orchestrationsModule,
+    'findOrchestration'
+  );
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('registry exposes the orchestration module', () => {
+    const module = getFormationModule({ resourceType: 'orchestration' });
+    expect(module).toBeDefined();
+    expect(module?.resourceType).toBe('orchestration');
+  });
+
+  test('creates an orchestration, converting node/edge keys to camelCase', async () => {
+    mockCreateOrchestration.mockResolvedValueOnce({
+      id: 'orch_1',
+    } as Awaited<ReturnType<typeof orchestrationsModule.createOrchestration>>);
+
+    // agent_id refs have already been resolved to physical IDs by the engine
+    // before the module runs, mirroring how the apply flow calls create.
+    await expect(
+      applyCreateResource({
+        resourceType: 'orchestration',
+        projectId: 5,
+        resolvedProperties: {
+          name: 'Content Squad',
+          description: 'writer then reviewer',
+          nodes: [
+            {
+              id: 'write',
+              type: 'agent',
+              agent_id: 'agt_writer',
+              input_mapping: { prompt: { var: 'topic' } },
+              output_mapping: { content: 'state.draft' },
+            },
+            {
+              id: 'review',
+              type: 'agent',
+              agent_id: 'agt_reviewer',
+              input_mapping: { prompt: { var: 'draft' } },
+              output_mapping: { content: 'state.review' },
+            },
+          ],
+          edges: [{ from: 'write', to: 'review', activation_condition: 'all' }],
+          input_schema: {
+            type: 'object',
+            properties: { topic: { type: 'string' } },
+          },
+        },
+      })
+    ).resolves.toBe('orch_1');
+
+    expect(mockCreateOrchestration).toHaveBeenCalledWith({
+      projectId: 5,
+      name: 'Content Squad',
+      description: 'writer then reviewer',
+      nodes: [
+        {
+          id: 'write',
+          type: 'agent',
+          agentId: 'agt_writer',
+          inputMapping: { prompt: { var: 'topic' } },
+          outputMapping: { content: 'state.draft' },
+        },
+        {
+          id: 'review',
+          type: 'agent',
+          agentId: 'agt_reviewer',
+          inputMapping: { prompt: { var: 'draft' } },
+          outputMapping: { content: 'state.review' },
+        },
+      ],
+      edges: [{ from: 'write', to: 'review', activationCondition: 'all' }],
+      stateSchema: undefined,
+      inputSchema: {
+        type: 'object',
+        properties: { topic: { type: 'string' } },
+      },
+    });
+  });
+
+  test('throws when create properties are not an object', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'orchestration',
+        projectId: 5,
+        resolvedProperties: null as unknown as Record<string, unknown>,
+      })
+    ).rejects.toThrow('Orchestration `properties` must be an object');
+  });
+
+  test('rejects an unknown field', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'orchestration',
+        projectId: 5,
+        resolvedProperties: {
+          name: 'X',
+          nodes: [],
+          edges: [],
+          bogus_field: true,
+        },
+      })
+    ).rejects.toThrow(/bogus_field/);
+  });
+
+  test('requires name, nodes and edges', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'orchestration',
+        projectId: 5,
+        resolvedProperties: { name: 'X' },
+      })
+    ).rejects.toThrow(/`nodes` is required/);
+  });
+
+  test('creates normalizing a camelCase top-level property key', async () => {
+    mockCreateOrchestration.mockResolvedValueOnce({
+      id: 'orch_2',
+    } as Awaited<ReturnType<typeof orchestrationsModule.createOrchestration>>);
+
+    await expect(
+      applyCreateResource({
+        resourceType: 'orchestration',
+        projectId: 5,
+        resolvedProperties: {
+          name: 'Camel Squad',
+          nodes: [{ id: 'a', type: 'transform', expression: 1 }],
+          edges: [],
+          // camelCase key must be normalized to state_schema before validation
+          stateSchema: { type: 'object' },
+        },
+      })
+    ).resolves.toBe('orch_2');
+
+    expect(mockCreateOrchestration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Camel Squad',
+        stateSchema: { type: 'object' },
+      })
+    );
+  });
+
+  test('updates an orchestration, converting node keys to camelCase', async () => {
+    mockUpdateOrchestration.mockResolvedValueOnce({
+      id: 'orch_1',
+    } as Awaited<ReturnType<typeof orchestrationsModule.updateOrchestration>>);
+
+    await expect(
+      applyUpdateResource({
+        resourceType: 'orchestration',
+        physicalResourceId: 'orch_1',
+        resolvedProperties: {
+          name: 'Updated Squad',
+          nodes: [{ id: 'only', type: 'agent', agent_id: 'agt_writer' }],
+          edges: [],
+        },
+      })
+    ).resolves.toBeUndefined();
+
+    expect(mockUpdateOrchestration).toHaveBeenCalledWith({
+      id: 'orch_1',
+      name: 'Updated Squad',
+      description: undefined,
+      nodes: [{ id: 'only', type: 'agent', agentId: 'agt_writer' }],
+      edges: [],
+      stateSchema: undefined,
+      inputSchema: undefined,
+    });
+  });
+
+  test('update passes only provided fields (partial update)', async () => {
+    mockUpdateOrchestration.mockResolvedValueOnce({
+      id: 'orch_1',
+    } as Awaited<ReturnType<typeof orchestrationsModule.updateOrchestration>>);
+
+    await applyUpdateResource({
+      resourceType: 'orchestration',
+      physicalResourceId: 'orch_1',
+      resolvedProperties: { name: 'Renamed' },
+    });
+
+    expect(mockUpdateOrchestration).toHaveBeenCalledWith({
+      id: 'orch_1',
+      name: 'Renamed',
+      description: undefined,
+      nodes: undefined,
+      edges: undefined,
+      stateSchema: undefined,
+      inputSchema: undefined,
+    });
+  });
+
+  test('throws when update properties are not an object', async () => {
+    await expect(
+      applyUpdateResource({
+        resourceType: 'orchestration',
+        physicalResourceId: 'orch_1',
+        resolvedProperties: null as unknown as Record<string, unknown>,
+      })
+    ).rejects.toThrow('Orchestration `properties` must be an object');
+  });
+
+  test('deletes an orchestration', async () => {
+    mockDeleteOrchestration.mockResolvedValueOnce(undefined);
+
+    await expect(
+      applyDeleteResource({
+        resourceType: 'orchestration',
+        physicalResourceId: 'orch_1',
+      })
+    ).resolves.toBeUndefined();
+
+    expect(mockDeleteOrchestration).toHaveBeenCalledWith({ id: 'orch_1' });
+  });
+
+  test('reads an orchestration, converting node/edge keys to snake_case', async () => {
+    mockFindOrchestration.mockResolvedValueOnce({
+      id: 'orch_1',
+      projectId: 'prj_1',
+      name: 'Content Squad',
+      description: 'writer then reviewer',
+      nodes: [
+        {
+          id: 'write',
+          type: 'agent',
+          agentId: 'agt_writer',
+          inputMapping: { prompt: { var: 'topic' } },
+          outputMapping: { content: 'state.draft' },
+        },
+      ],
+      edges: [{ from: 'write', to: 'review', activationCondition: 'all' }],
+      stateSchema: null,
+      inputSchema: {
+        type: 'object',
+        properties: { topic: { type: 'string' } },
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as unknown as Awaited<
+      ReturnType<typeof orchestrationsModule.findOrchestration>
+    >);
+
+    const module = getFormationModule({ resourceType: 'orchestration' });
+    await expect(
+      module?.read?.({ physicalResourceId: 'orch_1' })
+    ).resolves.toEqual({
+      name: 'Content Squad',
+      description: 'writer then reviewer',
+      nodes: [
+        {
+          id: 'write',
+          type: 'agent',
+          agent_id: 'agt_writer',
+          input_mapping: { prompt: { var: 'topic' } },
+          output_mapping: { content: 'state.draft' },
+        },
+      ],
+      edges: [{ from: 'write', to: 'review', activation_condition: 'all' }],
+      state_schema: null,
+      input_schema: {
+        type: 'object',
+        properties: { topic: { type: 'string' } },
+      },
+    });
+  });
+
+  test('read returns null when the orchestration is not found', async () => {
+    mockFindOrchestration.mockResolvedValueOnce(null);
+
+    const module = getFormationModule({ resourceType: 'orchestration' });
+    await expect(
+      module?.read?.({ physicalResourceId: 'orch_missing' })
+    ).resolves.toBeNull();
+  });
+
+  test('read returns null when findOrchestration throws', async () => {
+    mockFindOrchestration.mockRejectedValueOnce(new Error('db error'));
+
+    const module = getFormationModule({ resourceType: 'orchestration' });
+    await expect(
+      module?.read?.({ physicalResourceId: 'orch_err' })
+    ).resolves.toBeNull();
+  });
+
+  test('validateProperties delegates to the internal validator', () => {
+    const module = getFormationModule({ resourceType: 'orchestration' });
+    const errors = module?.validateProperties?.({
+      properties: null,
+      basePath: 'resources.<orchestration>.properties',
+    });
+    expect(errors).toEqual([
+      {
+        path: 'resources.<orchestration>.properties',
+        message: 'Orchestration `properties` must be an object',
+      },
+    ]);
   });
 });

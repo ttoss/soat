@@ -160,6 +160,7 @@ export const SUPPORTED_RESOURCE_TYPES = new Set([
   'ingestion_rule',
   'memory',
   'memory_entry',
+  'orchestration',
   'policy',
   'secret',
   'session',

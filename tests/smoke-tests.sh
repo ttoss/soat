@@ -2400,6 +2400,43 @@ echo "Session formation created: $SESSION_FORMATION_ID"
 $SOAT_CLI delete-formation --formation_id "$SESSION_FORMATION_ID"
 echo "Session formation deleted."
 
+# orchestration formation — an agent "squad": the formation creates an agent and
+# an orchestration whose node references that agent via a ref, proving the ref is
+# resolved to the physical agent id inside the orchestration's nodes.
+echo "--- Formation: orchestration resource type (agent squad) ---"
+SQUAD_TEMPLATE="{\"resources\":{\"squadAgent\":{\"type\":\"agent\",\"properties\":{\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Smoke Squad Agent\",\"instructions\":\"Summarize the input.\"}},\"squadFlow\":{\"type\":\"orchestration\",\"properties\":{\"name\":\"smoke-squad\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"topic\":{\"type\":\"string\"}}},\"nodes\":[{\"id\":\"summarize\",\"type\":\"agent\",\"agent_id\":{\"ref\":\"squadAgent\"},\"input_mapping\":{\"prompt\":{\"var\":\"topic\"}},\"output_mapping\":{\"content\":\"state.summary\"}}],\"edges\":[]}}},\"outputs\":{\"orchestrationId\":{\"ref\":\"squadFlow\"}}}"
+SQUAD_FORMATION_RESP=$($SOAT_CLI create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-formation-orchestration" \
+  --template "$SQUAD_TEMPLATE")
+SQUAD_FORMATION_ID=$(printf '%s\n' "$SQUAD_FORMATION_RESP" | jq -r '.id')
+if [ -z "$SQUAD_FORMATION_ID" ] || [ "$SQUAD_FORMATION_ID" = "null" ]; then
+  echo "ERROR: create-formation (orchestration) did not return an id" >&2
+  printf '%s\n' "$SQUAD_FORMATION_RESP" >&2
+  exit 1
+fi
+echo "Orchestration formation created: $SQUAD_FORMATION_ID"
+
+SQUAD_AGENT_PHYSICAL_ID=$(printf '%s\n' "$SQUAD_FORMATION_RESP" | jq -r '.resources[] | select(.logical_id == "squadAgent") | .physical_resource_id')
+SQUAD_ORCH_PHYSICAL_ID=$(printf '%s\n' "$SQUAD_FORMATION_RESP" | jq -r '.resources[] | select(.logical_id == "squadFlow") | .physical_resource_id')
+if [ -z "$SQUAD_ORCH_PHYSICAL_ID" ] || [ "$SQUAD_ORCH_PHYSICAL_ID" = "null" ]; then
+  echo "ERROR: formation did not create the orchestration resource" >&2
+  printf '%s\n' "$SQUAD_FORMATION_RESP" >&2
+  exit 1
+fi
+
+SQUAD_ORCH_GET=$($SOAT_CLI get-orchestration --orchestration-id "$SQUAD_ORCH_PHYSICAL_ID")
+SQUAD_NODE_AGENT_ID=$(printf '%s\n' "$SQUAD_ORCH_GET" | jq -r '.nodes[0].agent_id')
+if [ "$SQUAD_NODE_AGENT_ID" != "$SQUAD_AGENT_PHYSICAL_ID" ]; then
+  echo "ERROR: expected orchestration node agent_id '$SQUAD_AGENT_PHYSICAL_ID', got '$SQUAD_NODE_AGENT_ID'" >&2
+  printf '%s\n' "$SQUAD_ORCH_GET" >&2
+  exit 1
+fi
+echo "Formation ref resolved into orchestration node agent_id: OK"
+
+$SOAT_CLI delete-formation --formation_id "$SQUAD_FORMATION_ID"
+echo "Orchestration formation deleted."
+
 echo "Formations new resource types coverage: OK"
 
 # single_session_per_actor

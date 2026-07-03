@@ -1395,6 +1395,138 @@ resources:
     });
   });
 
+  // ── orchestration resource type (agent squad) ─────────────────────────────
+
+  describe('Formation with orchestration resources (agent squad)', () => {
+    test('deploys an agent squad: an agent + an orchestration wired by ref', async () => {
+      const squadTemplate = {
+        resources: {
+          SquadProvider: {
+            type: 'ai_provider',
+            properties: {
+              name: 'squad-provider',
+              provider: 'openai',
+              default_model: 'gpt-4o',
+            },
+          },
+          SquadAgent: {
+            type: 'agent',
+            properties: {
+              name: 'Squad Writer',
+              ai_provider_id: { ref: 'SquadProvider' },
+              instructions: 'Write a draft.',
+            },
+          },
+          SquadFlow: {
+            type: 'orchestration',
+            properties: {
+              name: 'squad-flow',
+              input_schema: {
+                type: 'object',
+                properties: { topic: { type: 'string' } },
+              },
+              nodes: [
+                {
+                  id: 'write',
+                  type: 'agent',
+                  agent_id: { ref: 'SquadAgent' },
+                  input_mapping: { prompt: { var: 'topic' } },
+                  output_mapping: { content: 'state.draft' },
+                },
+              ],
+              edges: [],
+            },
+          },
+        },
+        outputs: { orchestrationId: { ref: 'SquadFlow' } },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `squad-formation-${Date.now()}`,
+          template: squadTemplate,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+
+      const findResource = (logicalId: string) => {
+        return res.body.resources.find((r: { logical_id: string }) => {
+          return r.logical_id === logicalId;
+        });
+      };
+      const agentResource = findResource('SquadAgent');
+      const orchResource = findResource('SquadFlow');
+
+      expect(agentResource.status).toBe('created');
+      expect(agentResource.physical_resource_id).toMatch(/^agent_/);
+      expect(orchResource.status).toBe('created');
+      expect(orchResource.physical_resource_id).toMatch(/^orch_/);
+
+      // The `{ ref: SquadAgent }` nested inside the orchestration node must have
+      // been resolved to the physical agent id and stored in camelCase form for
+      // the engine to read.
+      const orchRow = await db.Orchestration.findOne({
+        where: { publicId: orchResource.physical_resource_id },
+      });
+      const nodes = orchRow?.nodes as Array<{ id: string; agentId: string }>;
+      expect(nodes).toHaveLength(1);
+      expect(nodes[0].agentId).toBe(agentResource.physical_resource_id);
+
+      // Cleanup tears down all three resources in reverse dependency order.
+      const del = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${res.body.id}`
+      );
+      expect(del.status).toBe(200);
+    });
+
+    test('rejects a squad template whose orchestration graph is invalid', async () => {
+      // A cyclic graph with no loop node must fail orchestration validation at
+      // apply time, marking the orchestration resource failed.
+      const badTemplate = {
+        resources: {
+          BadFlow: {
+            type: 'orchestration',
+            properties: {
+              name: 'bad-flow',
+              nodes: [
+                { id: 'a', type: 'transform', expression: 1 },
+                { id: 'b', type: 'transform', expression: 1 },
+              ],
+              edges: [
+                { from: 'a', to: 'b' },
+                { from: 'b', to: 'a' },
+              ],
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `bad-squad-formation-${Date.now()}`,
+          template: badTemplate,
+        });
+
+      // The formation is created but the orchestration resource fails to apply.
+      expect(res.status).toBe(201);
+      const badResource = res.body.resources.find(
+        (r: { logical_id: string }) => {
+          return r.logical_id === 'BadFlow';
+        }
+      );
+      expect(badResource.status).toBe('failed');
+
+      await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${res.body.id}`
+      );
+    });
+  });
+
   // ── document resource type ────────────────────────────────────────────────
 
   describe('Formation with document resources', () => {
