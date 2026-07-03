@@ -512,6 +512,10 @@ GET /api/v1/agents/generations/{generation_id}
 GET /api/v1/agents/generations?status=in_progress&project_id=proj_ABC
 ```
 
+### Deletion
+
+By default, deleting an agent that has dependent generations or traces returns `409 Conflict` with error code `AGENT_HAS_DEPENDENTS`. Pass `?force=true` to delete those generations and traces along with the agent.
+
 ## Examples
 
 ### Create an agent

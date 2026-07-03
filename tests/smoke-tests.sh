@@ -2109,6 +2109,12 @@ echo "User actor deleted."
 echo "--- Verifying conversation-generate agent delete-block ---"
 expect_cli_error_status 409 delete-agent --agent-id "$CONVO_GEN_AGENT_ID"
 echo "Conversation-generate agent delete-block: OK (409 as expected)"
+
+# 54b. force=true deletes the agent along with its dependent generations/traces
+echo "--- Verifying agent force-delete ---"
+$SOAT_CLI delete-agent --agent-id "$CONVO_GEN_AGENT_ID" --force true
+expect_cli_error_status 404 get-agent --agent-id "$CONVO_GEN_AGENT_ID"
+echo "Agent force-delete: OK (agent and dependents removed)"
 echo "Conversations generate coverage: OK"
 
 # ── Webhooks ──────────────────────────────────────────────────────────────

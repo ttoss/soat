@@ -298,9 +298,12 @@ agentsRouter.delete('/agents/:agent_id', async (ctx: Context) => {
     return;
   }
 
+  const force = ctx.query.force === 'true';
+
   await deleteAgent({
     projectIds,
     id: ctx.params.agent_id,
+    force,
   });
 
   ctx.status = 204;
