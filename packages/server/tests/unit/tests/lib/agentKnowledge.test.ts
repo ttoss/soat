@@ -1,4 +1,4 @@
-import { buildKnowledgeMessages } from 'src/lib/agentKnowledge';
+import { buildKnowledgeMessages, mergeKnowledgeConfig } from 'src/lib/agentKnowledge';
 import * as knowledgeModule from 'src/lib/knowledge';
 
 const mockSearchKnowledge = jest.spyOn(knowledgeModule, 'searchKnowledge');
@@ -227,6 +227,73 @@ describe('buildKnowledgeMessages', () => {
     expect(result).toHaveLength(1);
     expect(result[0].content).toContain('Content A');
     expect(result[0].content).toContain('Memory B');
+  });
+});
+
+describe('mergeKnowledgeConfig', () => {
+  test('returns base unchanged when override is null/undefined', () => {
+    const base = { memoryIds: ['mem_1'], limit: 5 };
+    expect(mergeKnowledgeConfig({ base, override: null })).toEqual(base);
+    expect(mergeKnowledgeConfig({ base, override: undefined })).toEqual(base);
+  });
+
+  test('returns override unchanged when base is null/undefined', () => {
+    const override = { memoryIds: ['mem_1'] };
+    expect(mergeKnowledgeConfig({ base: null, override })).toEqual(override);
+    expect(mergeKnowledgeConfig({ base: undefined, override })).toEqual(
+      override
+    );
+  });
+
+  test('unions memoryIds without duplicates', () => {
+    const result = mergeKnowledgeConfig({
+      base: { memoryIds: ['mem_1', 'mem_2'] },
+      override: { memoryIds: ['mem_2', 'mem_3'] },
+    });
+    expect(result?.memoryIds).toHaveLength(3);
+    expect(result?.memoryIds).toEqual(
+      expect.arrayContaining(['mem_1', 'mem_2', 'mem_3'])
+    );
+  });
+
+  test('unions memoryTags, documentIds, and documentPaths independently', () => {
+    const result = mergeKnowledgeConfig({
+      base: {
+        memoryTags: ['a'],
+        documentIds: ['doc_1'],
+        documentPaths: ['/base'],
+      },
+      override: {
+        memoryTags: ['b'],
+        documentIds: ['doc_2'],
+        documentPaths: ['/override'],
+      },
+    });
+    expect(result?.memoryTags).toEqual(expect.arrayContaining(['a', 'b']));
+    expect(result?.documentIds).toEqual(
+      expect.arrayContaining(['doc_1', 'doc_2'])
+    );
+    expect(result?.documentPaths).toEqual(
+      expect.arrayContaining(['/base', '/override'])
+    );
+  });
+
+  test('scalar fields use the override value when present', () => {
+    const result = mergeKnowledgeConfig({
+      base: { minScore: 0.5, limit: 5 },
+      override: { limit: 10 },
+    });
+    expect(result?.minScore).toBe(0.5);
+    expect(result?.limit).toBe(10);
+  });
+
+  test('array field on only one side is preserved as-is', () => {
+    const result = mergeKnowledgeConfig({
+      base: { memoryIds: ['mem_1'] },
+      override: { limit: 3 },
+    });
+    expect(result?.memoryIds).toEqual(['mem_1']);
+    expect(result?.limit).toBe(3);
   });
 });
 

@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+import * as knowledgeModule from 'src/lib/knowledge';
 import { saveTrace } from 'src/lib/traces';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -1158,6 +1159,44 @@ describe('Agents', () => {
         });
       expect(genRes.status).not.toBe(400);
       expect(genRes.status).not.toBe(404);
+    });
+
+    test('per-generation knowledge_config memory_ids is unioned with the agent stored config', async () => {
+      const mockSearchKnowledge = jest.spyOn(knowledgeModule, 'searchKnowledge');
+      mockSearchKnowledge.mockResolvedValueOnce([]);
+
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Per-Generation Knowledge Agent',
+          knowledge_config: { memory_ids: ['mem_agent_config'] },
+        });
+      expect(createRes.status).toBe(201);
+      const knowledgeAgentId = createRes.body.id;
+
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${knowledgeAgentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: 'Tell me something' }],
+          knowledge_config: { memory_ids: ['mem_per_generation'] },
+        });
+
+      expect(genRes.status).not.toBe(400);
+      expect(genRes.status).not.toBe(404);
+      expect(mockSearchKnowledge).toHaveBeenCalledWith(
+        expect.objectContaining({
+          memoryIds: expect.arrayContaining([
+            'mem_agent_config',
+            'mem_per_generation',
+          ]),
+        })
+      );
+      const callArgs = mockSearchKnowledge.mock.calls[0][0];
+      expect(callArgs.memoryIds).toHaveLength(2);
+
+      mockSearchKnowledge.mockRestore();
     });
 
     test('agent with output_schema runs a non-streaming generation', async () => {

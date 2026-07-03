@@ -82,6 +82,10 @@ const fireExtractionForCompletedResult = (args: {
   });
 };
 
+const toObjectOrUndefined = (value: unknown): object | undefined => {
+  return value && typeof value === 'object' ? value : undefined;
+};
+
 export const agentGenerationRouter = new Router<Context>();
 
 agentGenerationRouter.post(
@@ -112,6 +116,7 @@ agentGenerationRouter.post(
       maxCallDepth,
       toolContext,
       reasoning,
+      knowledgeConfig,
     } = ctx.request.body as {
       messages?: unknown;
       stream?: boolean;
@@ -121,6 +126,7 @@ agentGenerationRouter.post(
       maxCallDepth?: unknown;
       toolContext?: Record<string, string>;
       reasoning?: object;
+      knowledgeConfig?: object;
     };
 
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -144,8 +150,8 @@ agentGenerationRouter.post(
       authHeader: (ctx.headers.authorization as string) ?? '',
       authUser: ctx.authUser,
       toolContext,
-      reasoning:
-        reasoning && typeof reasoning === 'object' ? reasoning : undefined,
+      reasoning: toObjectOrUndefined(reasoning),
+      knowledgeConfig: toObjectOrUndefined(knowledgeConfig),
     });
 
     fireExtractionForCompletedResult({

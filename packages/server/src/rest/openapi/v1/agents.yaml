@@ -1087,6 +1087,33 @@ components:
             type: string
           nullable: true
           description: Key-value pairs injected as context headers into all tool call requests made during this generation.
+        knowledge_config:
+          type: object
+          nullable: true
+          description: Per-generation knowledge retrieval override. Array filters (memory_ids, memory_tags, document_ids, document_paths) are unioned with the agent's stored knowledge_config; scalar fields (min_score, limit) use the per-generation value when present.
+          properties:
+            memory_ids:
+              x-soat-ref: memories
+              type: array
+              items:
+                type: string
+            memory_tags:
+              type: array
+              items:
+                type: string
+            document_ids:
+              x-soat-ref: documents
+              type: array
+              items:
+                type: string
+            document_paths:
+              type: array
+              items:
+                type: string
+            min_score:
+              type: number
+            limit:
+              type: integer
         reasoning:
           type: object
           nullable: true

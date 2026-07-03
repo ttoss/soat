@@ -1,5 +1,6 @@
 import { DomainError } from 'src/errors';
 import * as agentsModule from 'src/lib/agents';
+import * as aiProvidersModule from 'src/lib/aiProviders';
 
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -94,6 +95,21 @@ describe('Agent Generation Routes', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
+    });
+
+    test('returns 400 when the underlying AI provider secret cannot be resolved', async () => {
+      const spy = jest
+        .spyOn(aiProvidersModule, 'resolveAiProviderSecret')
+        .mockResolvedValueOnce(null);
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'Hello' }] });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('AI_PROVIDER_NOT_FOUND');
+
+      spy.mockRestore();
     });
   });
 
