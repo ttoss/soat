@@ -1914,6 +1914,16 @@ else
   echo "WARNING: SOAT Agent output may not contain exact project names (LLM response varies), but generation completed successfully."
 fi
 
+# Regression check for issue #371: mid-turn soat-type tool calls used to fail
+# with "Unknown field(s): parent_trace_id, root_trace_id, max_call_depth"
+# because those fields were injected into every soat action's request body,
+# even ones whose schema (like list-projects) doesn't declare them.
+if echo "$SOAT_GEN_CONTENT" | grep -qi "VALIDATION_FAILED\|Unknown field"; then
+  echo "ERROR: SOAT agent output leaked a tool validation error (regression of #371)" >&2
+  exit 1
+fi
+echo "SOAT agent mid-turn tool call did not leak a validation error: OK"
+
 # 41. SOAT agent is delete-blocked after generation persists trace data
 echo "--- Verifying SOAT agent delete-block after generation ---"
 expect_cli_error_status 409 delete-agent --agent-id "$SOAT_AGENT_ID"
