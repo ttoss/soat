@@ -75,7 +75,20 @@ export const testSpec: OpenApiSpec = {
           },
         },
       },
-      delete: { operationId: 'deleteAgent', tags: ['Agents'] },
+      delete: {
+        operationId: 'deleteAgent',
+        tags: ['Agents'],
+        parameters: [
+          {
+            name: 'force',
+            in: 'query',
+            required: false,
+            description:
+              "When true, deletes the agent's dependent generations and traces instead of returning 409.",
+            schema: { type: 'boolean', default: false },
+          },
+        ],
+      },
     },
     '/api/v1/agents/{agent_id}/generate': {
       post: {

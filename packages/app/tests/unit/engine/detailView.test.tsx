@@ -96,7 +96,7 @@ describe('DetailView', () => {
     expect(screen.getByTestId('nav-probe')).toHaveTextContent('generateAgent');
   });
 
-  test('Delete asks for confirmation, then deletes and navigates back', async () => {
+  test('Delete opens a confirmation modal, then deletes and navigates back', async () => {
     let deleted = false;
     server.use(
       itemHandler(),
@@ -108,7 +108,10 @@ describe('DetailView', () => {
     renderDetail();
 
     await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));
-    expect(screen.getByText('Are you sure?')).toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', { name: 'Confirm delete' })
+    ).toBeInTheDocument();
+    expect(screen.getByText(/delete "Alpha"/)).toBeInTheDocument();
 
     await userEvent.click(
       screen.getByRole('button', { name: 'Confirm delete' })
@@ -118,6 +121,73 @@ describe('DetailView', () => {
       '"view":null'
     );
     expect(deleted).toBe(true);
+  });
+
+  test('Delete modal renders the deleteOp query params (e.g. force) and cancels without deleting', async () => {
+    let deleteCalls = 0;
+    server.use(
+      itemHandler(),
+      http.delete('*/api/v1/agents/:agent_id', () => {
+        deleteCalls += 1;
+        return new HttpResponse(null, { status: 204 });
+      })
+    );
+    renderDetail();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    expect(screen.getByLabelText('Force')).toBeInTheDocument();
+    expect(
+      screen.getByText(/deletes the agent's dependent generations/)
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(deleteCalls).toBe(0);
+  });
+
+  test('Delete modal sends force=true when the checkbox is checked', async () => {
+    let requestedUrl = '';
+    server.use(
+      itemHandler(),
+      http.delete('*/api/v1/agents/:agent_id', ({ request }) => {
+        requestedUrl = request.url;
+        return new HttpResponse(null, { status: 204 });
+      })
+    );
+    renderDetail();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await userEvent.click(screen.getByLabelText('Force'));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Confirm delete' })
+    );
+
+    expect(await screen.findByTestId('nav-probe')).toHaveTextContent(
+      '"view":null'
+    );
+    expect(requestedUrl).toContain('force=true');
+  });
+
+  test('Delete modal stays open and hints at force on a 409 conflict', async () => {
+    server.use(
+      itemHandler(),
+      http.delete('*/api/v1/agents/:agent_id', () =>
+        HttpResponse.json(
+          { error: { message: 'Agent has dependents' } },
+          { status: 409 }
+        )
+      )
+    );
+    renderDetail();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Confirm delete' })
+    );
+
+    expect(await screen.findByText('Agent has dependents')).toBeInTheDocument();
+    expect(screen.getByText(/enable "Force"/)).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
   test('shows the item name as the primary heading', async () => {
