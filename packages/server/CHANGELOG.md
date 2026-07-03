@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.16](https://127.0.0.1/41729/git/ttoss/compare/v0.13.15...v0.13.16) (2026-07-03)
+
+### Bug Fixes
+
+* **generations:** expose metadata.extraction via GET /generations endpoints ([#362](https://127.0.0.1/41729/git/ttoss/issues/362)) ([64a8443](https://127.0.0.1/41729/git/ttoss/commits/64a84438049d575b93084724e50fb1e02f179a0a)), closes [#359](https://127.0.0.1/41729/git/ttoss/issues/359)
+* **server:** pass resource SRN to isAllowed for memories, ai-providers, memory-entries ([#361](https://127.0.0.1/41729/git/ttoss/issues/361)) ([7170f80](https://127.0.0.1/41729/git/ttoss/commits/7170f80475726d2421d1d4981cd0ad4bedbd7d92))
+* **tools:** validate soat tool actions against the platform registry ([#364](https://127.0.0.1/41729/git/ttoss/issues/364)) ([b81bf11](https://127.0.0.1/41729/git/ttoss/commits/b81bf113a5221e29eb38f4f812961cdba359f32a)), closes [#358](https://127.0.0.1/41729/git/ttoss/issues/358)
+
+### Features
+
+* **agents:** add force delete for agents with dependent generations/traces ([#351](https://127.0.0.1/41729/git/ttoss/issues/351)) ([3ab07e4](https://127.0.0.1/41729/git/ttoss/commits/3ab07e4c89b14cad708cae72d4fa00cfa33af177)), closes [#343](https://127.0.0.1/41729/git/ttoss/issues/343)
+* **projects:** add PROJECT_HAS_DEPENDENTS 409 and force-delete cascade ([#360](https://127.0.0.1/41729/git/ttoss/issues/360)) ([4642dab](https://127.0.0.1/41729/git/ttoss/commits/4642dab90a8edbfc7557c03dd3e14acdb9ddffce)), closes [343/#351](https://127.0.0.1/41729/git/ttoss/issues/351) [#353](https://127.0.0.1/41729/git/ttoss/issues/353)
+
 ## [0.13.15](https://127.0.0.1/41729/git/ttoss/compare/v0.13.14...v0.13.15) (2026-07-03)
 
 ### Bug Fixes
