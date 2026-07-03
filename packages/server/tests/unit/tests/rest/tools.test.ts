@@ -762,7 +762,7 @@ describe('Tools', () => {
       expect(callRes.body.error.message).toMatch(/not available on this tool/i);
     });
 
-    test('calling a soat tool with an action unknown to the SOAT registry returns 400', async () => {
+    test('creating a soat tool with an action unknown to the SOAT registry returns 400', async () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
@@ -771,15 +771,38 @@ describe('Tools', () => {
           type: 'soat',
           actions: ['not-a-real-soat-action'],
         });
-      expect(createRes.status).toBe(201);
 
-      const callRes = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/tools/${createRes.body.id}/call`)
-        .send({ action: 'not-a-real-soat-action' });
+      expect(createRes.status).toBe(400);
+      expect(createRes.body.error.code).toBe('VALIDATION_FAILED');
+      expect(createRes.body.error.message).toMatch(/not-a-real-soat-action/);
+    });
 
-      expect(callRes.status).toBe(400);
-      expect(callRes.body.error.code).toBe('VALIDATION_FAILED');
-      expect(callRes.body.error.message).toMatch(/not a known SOAT action/i);
+    test('creating a soat tool with an operationId-style action name is rejected with a kebab-case suggestion', async () => {
+      // A common mistake: using the OpenAPI operationId (camelCase, e.g. "searchKnowledge")
+      // instead of the MCP tool name (kebab-case, e.g. "search-knowledge"). See #358.
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'camel-case-action-tool',
+          type: 'soat',
+          actions: ['searchKnowledge'],
+        });
+
+      expect(createRes.status).toBe(400);
+      expect(createRes.body.error.code).toBe('VALIDATION_FAILED');
+      expect(createRes.body.error.message).toMatch(/searchKnowledge/);
+      expect(createRes.body.error.message).toMatch(/search-knowledge/);
+    });
+
+    test('updating a soat tool with an action unknown to the SOAT registry returns 400', async () => {
+      const updateRes = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/tools/${soatToolId}`)
+        .send({ actions: ['not-a-real-soat-action'] });
+
+      expect(updateRes.status).toBe(400);
+      expect(updateRes.body.error.code).toBe('VALIDATION_FAILED');
+      expect(updateRes.body.error.message).toMatch(/not-a-real-soat-action/);
     });
 
     test('calling an mcp tool without an action returns 400', async () => {

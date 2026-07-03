@@ -7,7 +7,44 @@ import {
   validatePipelineConfig,
 } from './pipelineTools';
 import { assertSecretRefsExist } from './secrets';
+import { soatTools } from './soatTools';
 import { callHttpTool, callMcpTool, callSoatTool } from './toolsCall';
+
+// ── SOAT Action Validation ──────────────────────────────────────────────────
+
+const KNOWN_SOAT_ACTIONS = new Set(
+  soatTools.map((tool) => {
+    return tool.name;
+  })
+);
+
+// SOAT action names are kebab-case (e.g. "search-knowledge"), matching the MCP
+// tool name derived from the OpenAPI operationId. A common mistake is passing
+// the operationId itself (camelCase, e.g. "searchKnowledge") — detect that case
+// and suggest the correct kebab-case name.
+const camelToKebab = (value: string): string => {
+  return value.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+};
+
+export const validateSoatActions = (actions: string[] | null | undefined) => {
+  if (!actions) return;
+  const unknown = actions.filter((action) => {
+    return !KNOWN_SOAT_ACTIONS.has(action);
+  });
+  if (unknown.length === 0) return;
+  const details = unknown
+    .map((action) => {
+      const suggestion = camelToKebab(action);
+      return KNOWN_SOAT_ACTIONS.has(suggestion)
+        ? `"${action}" (did you mean "${suggestion}"?)`
+        : `"${action}"`;
+    })
+    .join(', ');
+  throw new DomainError(
+    'VALIDATION_FAILED',
+    `Unknown SOAT action(s): ${details}.`
+  );
+};
 
 // ── Mapped Types ─────────────────────────────────────────────────────────
 
@@ -96,6 +133,10 @@ export const createTool = async (args: CreateToolArgs): Promise<MappedTool> => {
       steps: config.steps,
       projectIds: [args.projectId],
     });
+  }
+
+  if ((args.type ?? 'http') === 'soat') {
+    validateSoatActions(args.actions);
   }
 
   // Fail fast on {{secret:...}} tokens referencing nonexistent or
@@ -224,6 +265,10 @@ export const updateTool = async (args: {
 
   if (!tool)
     throw new DomainError('RESOURCE_NOT_FOUND', `Tool '${args.id}' not found.`);
+
+  if (args.actions !== undefined && (args.type ?? tool.type) === 'soat') {
+    validateSoatActions(args.actions);
+  }
 
   if (args.execute !== undefined || args.mcp !== undefined) {
     await assertSecretRefsExist({
