@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.17](https://127.0.0.1/41729/git/ttoss/compare/v0.13.16...v0.13.17) (2026-07-03)
+
+### Bug Fixes
+
+* scope soat tool trace/context injection to schemas that declare it ([#372](https://127.0.0.1/41729/git/ttoss/issues/372)) ([8b455d9](https://127.0.0.1/41729/git/ttoss/commits/8b455d990beee8d21f66fcf92df8159b40a4e4ce)), closes [#371](https://127.0.0.1/41729/git/ttoss/issues/371)
+
 ## [0.13.16](https://127.0.0.1/41729/git/ttoss/compare/v0.13.15...v0.13.16) (2026-07-03)
 
 ### Bug Fixes
