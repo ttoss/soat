@@ -156,7 +156,13 @@ paths:
       tags:
         - Projects
       summary: Delete a project
-      description: Deletes a project. Requires admin role.
+      description: >
+        Deletes a project. Requires admin role. Fails with `409` if the
+        project has any dependent resources (agents, ai providers, tools,
+        conversations, chats, formations, memories, actors, webhooks,
+        secrets, sessions, files, traces, generations, orchestrations, etc.),
+        unless `force=true` is passed, in which case those resources are
+        deleted along with the project.
       operationId: deleteProject
       parameters:
         - name: project_id
@@ -166,6 +172,15 @@ paths:
           schema:
             type: string
             example: proj_V1StGXR8Z5jdHi6B
+        - name: force
+          in: query
+          required: false
+          description: >
+            When `true`, deletes all of the project's dependent resources
+            instead of returning `409 PROJECT_HAS_DEPENDENTS`.
+          schema:
+            type: boolean
+            default: false
       responses:
         '204':
           description: Project deleted successfully
@@ -175,6 +190,12 @@ paths:
           description: Forbidden (non-admin user)
         '404':
           description: Project not found
+        '409':
+          description: Project has dependent resources (pass `force=true` to delete anyway)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     bearerAuth:
@@ -200,3 +221,24 @@ components:
           type: string
           format: date-time
           example: '2024-01-01T00:00:00.000Z'
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          oneOf:
+            - type: string
+              description: Generic error message (e.g. "Unauthorized" or "Internal Server Error")
+              example: Unauthorized
+            - type: object
+              description: Structured domain error
+              properties:
+                code:
+                  type: string
+                  example: PROJECT_HAS_DEPENDENTS
+                message:
+                  type: string
+                  example: Project 'proj_V1StGXR8Z5jdHi6B' has dependent resources and cannot be deleted.
+                meta:
+                  type: object

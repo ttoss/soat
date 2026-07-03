@@ -102,7 +102,9 @@ projectsRouter.delete('/projects/:project_id', async (ctx: Context) => {
     return;
   }
 
-  await deleteProject({ id: ctx.params.project_id });
+  const force = ctx.query.force === 'true';
+
+  await deleteProject({ id: ctx.params.project_id, force });
 
   ctx.status = 204;
 });

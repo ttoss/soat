@@ -92,6 +92,11 @@ export const ERROR_CODES = {
     description:
       'The agent is referenced by one or more generations or traces and cannot be deleted. Delete the dependent records first.',
   },
+  PROJECT_HAS_DEPENDENTS: {
+    httpStatus: 409,
+    description:
+      'The project has one or more dependent resources (agents, ai providers, tools, etc.) and cannot be deleted. Use force=true to delete dependents as well.',
+  },
   FILE_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:

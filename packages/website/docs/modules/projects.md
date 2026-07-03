@@ -72,6 +72,10 @@ To grant a user access to a single project, attach a [Policy](./policies.md) sco
 }
 ```
 
+### Deletion
+
+By default, deleting a project that has any dependent resource (agents, AI providers, tools, conversations, chats, formations, memories, actors, webhooks, secrets, sessions, files, traces, generations, orchestrations, etc.) returns `409 Conflict` with error code `PROJECT_HAS_DEPENDENTS`. Pass `?force=true` to delete all of those dependent resources along with the project itself, inside a single transaction.
+
 ## Examples
 
 ### Create a project
@@ -173,6 +177,41 @@ curl -X PATCH https://api.example.com/api/v1/projects/proj_ABC \
   -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
   -d '{"name": "Renamed Project"}'
+```
+
+</TabItem>
+</Tabs>
+
+### Delete a project
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat delete-project --project-id proj_ABC
+
+# Force-delete a project along with all of its dependent resources
+soat delete-project --project-id proj_ABC --force true
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// SDK
+const { error } = await soat.projects.deleteProject({
+  path: { project_id: 'proj_ABC' },
+  query: { force: true },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X DELETE "https://api.example.com/api/v1/projects/proj_ABC?force=true" \
+  -H "Authorization: Bearer <admin-token>"
 ```
 
 </TabItem>

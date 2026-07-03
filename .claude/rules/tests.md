@@ -2,17 +2,21 @@
 
 ## Running Tests
 
-Run all tests for a package from the repo root:
+Running the **entire** suite locally (`pnpm --filter @soat/server test` with no pattern) spins up a full Postgres testcontainer and runs every integration test — this is slow and should not be your default while iterating.
 
-```bash
-pnpm --filter @soat/server test
-```
-
-Run tests for a specific file using `--testPathPatterns` (plural):
+**Preferred local workflow:** run only the test file(s) relevant to the module you're changing, using `--testPathPatterns` (plural), then push and let GitHub Actions run the full suite (`build-and-test`) against the complete matrix:
 
 ```bash
 pnpm --filter @soat/server test --testPathPatterns=users.test.ts
 ```
+
+Multiple files can be matched with a regex-style alternation:
+
+```bash
+pnpm --filter @soat/server test --testPathPatterns="projects.test.ts|agents.test.ts"
+```
+
+Only fall back to running the full local suite (`pnpm --filter @soat/server test`) when you need to sanity-check a change that plausibly affects many modules (e.g. a shared model, migration, or middleware) before pushing — do not run it as a matter of course for every change.
 
 ## Test File Location and Naming
 
