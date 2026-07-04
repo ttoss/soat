@@ -69,6 +69,7 @@ export type TypedAgent = {
   instructions: string | null;
   model: string | null;
   toolIds: unknown;
+  tools: unknown;
   maxSteps: unknown;
   toolChoice: unknown;
   stopConditions: unknown;

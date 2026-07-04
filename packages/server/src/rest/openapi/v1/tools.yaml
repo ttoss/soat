@@ -472,9 +472,14 @@ components:
           nullable: true
           description: >-
             Pipeline definition for `pipeline` tools: an ordered `steps` array,
-            each step invoking another tool by `tool_id` (optional `action`) and
-            building its `input` from earlier results via JSON Logic evaluated
-            over `{ input, steps }`. An optional `output` maps the final result.
+            each step invoking a tool (optional `action`) and building its
+            `input` from earlier results via JSON Logic evaluated over
+            `{ input, steps }`. A step references its tool either by `tool_id`
+            (an existing, persisted tool) or by an inline `tool` definition —
+            the same shape as `CreateToolRequest` minus `project_id` —
+            executed directly without a Tool row, but never both. An inline
+            step `tool` cannot itself be of type `pipeline`. An optional
+            `output` maps the final result.
         output_mapping:
           type: object
           nullable: true

@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
+import type { InlineToolDefinition } from 'src/lib/agents';
 import {
   createAgent,
   deleteAgent,
@@ -10,6 +11,7 @@ import {
 } from 'src/lib/agents';
 
 import { agentGenerationRouter } from './agentGeneration';
+import { coerceToJsonObject } from './tools';
 
 export const agentsRouter = new Router<Context>();
 
@@ -21,6 +23,7 @@ type CreateAgentBody = {
   instructions?: unknown;
   model?: unknown;
   toolIds?: unknown;
+  tools?: unknown;
   maxSteps?: unknown;
   toolChoice?: unknown;
   stopConditions?: unknown;
@@ -34,6 +37,75 @@ type CreateAgentBody = {
   maxContextMessages?: unknown;
   singleSessionPerActor?: unknown;
   projectId?: string;
+};
+
+/**
+ * Parses one inline tool definition from a request body (`CreateAgentRequest`
+ * / `UpdateAgentRequest`'s `tools` array). Returns `null` when the value is
+ * not an object or is missing a string `name`, so the caller can return 400.
+ */
+const parseInlineToolDefinition = (
+  value: unknown
+): InlineToolDefinition | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const {
+    name,
+    type,
+    description,
+    parameters,
+    execute,
+    mcp,
+    actions,
+    presetParameters,
+    pipeline,
+    outputMapping,
+  } = value as Record<string, unknown>;
+
+  if (!name || typeof name !== 'string') return null;
+
+  try {
+    return {
+      name,
+      type: typeof type === 'string' ? type : undefined,
+      description: typeof description === 'string' ? description : undefined,
+      parameters: coerceToJsonObject(parameters) as object | undefined,
+      execute: coerceToJsonObject(execute) as object | undefined,
+      mcp: coerceToJsonObject(mcp) as object | undefined,
+      actions: Array.isArray(actions) ? (actions as string[]) : undefined,
+      presetParameters: coerceToJsonObject(presetParameters) as
+        | object
+        | undefined,
+      pipeline: coerceToJsonObject(pipeline) as object | undefined,
+      outputMapping: coerceToJsonObject(outputMapping) as object | undefined,
+    };
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Parses the `tools` array of inline tool definitions. Returns `undefined`
+ * when absent (leave as-is), `null` when explicitly cleared, `'invalid'` when
+ * malformed (not an array, or an entry without a string `name`), or the
+ * parsed definitions otherwise.
+ */
+const parseInlineTools = (
+  value: unknown
+): InlineToolDefinition[] | null | undefined | 'invalid' => {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (!Array.isArray(value)) return 'invalid';
+
+  const parsed: InlineToolDefinition[] = [];
+  for (const item of value) {
+    const def = parseInlineToolDefinition(item);
+    if (!def) return 'invalid';
+    parsed.push(def);
+  }
+  return parsed;
 };
 
 const parseNullableString = (v: unknown): string | null | undefined => {
@@ -50,7 +122,10 @@ const parseNumber = (v: unknown): number | undefined => {
   return typeof v === 'number' ? v : undefined;
 };
 
-const parseUpdateAgentBody = (body: Record<string, unknown>) => {
+const parseUpdateAgentBody = (
+  body: Record<string, unknown>,
+  tools: InlineToolDefinition[] | null | undefined
+) => {
   return {
     aiProviderId:
       typeof body.aiProviderId === 'string' ? body.aiProviderId : undefined,
@@ -58,6 +133,7 @@ const parseUpdateAgentBody = (body: Record<string, unknown>) => {
     instructions: parseNullableString(body.instructions),
     model: parseNullableString(body.model),
     toolIds: parseOptional<string[] | null>(body.toolIds),
+    tools,
     maxSteps: parseOptional<number | null>(body.maxSteps),
     toolChoice: parseOptional<string | object | null>(body.toolChoice),
     stopConditions: parseOptional<object[] | null>(body.stopConditions),
@@ -100,7 +176,8 @@ const resolveAgentProjectId = async (
 
 const buildCreateAgentArgs = (
   projectId: number,
-  body: CreateAgentBody
+  body: CreateAgentBody,
+  tools: InlineToolDefinition[] | undefined
 ): Parameters<typeof createAgent>[0] => {
   return {
     projectId,
@@ -110,6 +187,7 @@ const buildCreateAgentArgs = (
       typeof body.instructions === 'string' ? body.instructions : undefined,
     model: typeof body.model === 'string' ? body.model : undefined,
     toolIds: Array.isArray(body.toolIds) ? body.toolIds : undefined,
+    tools,
     maxSteps: parseNumber(body.maxSteps),
     toolChoice: body.toolChoice as string | object | undefined,
     stopConditions: Array.isArray(body.stopConditions)
@@ -147,6 +225,15 @@ agentsRouter.post('/agents', async (ctx: Context) => {
     return;
   }
 
+  const tools = parseInlineTools(reqBody.tools);
+  if (tools === 'invalid') {
+    ctx.status = 400;
+    ctx.body = {
+      error: 'tools must be an array of tool definition objects with a name',
+    };
+    return;
+  }
+
   const targetProjectId = await resolveAgentProjectId(
     ctx.authUser,
     reqBody.projectId
@@ -166,7 +253,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
   }
 
   const result = await createAgent(
-    buildCreateAgentArgs(targetProjectId, reqBody)
+    buildCreateAgentArgs(targetProjectId, reqBody, tools ?? undefined)
   );
 
   ctx.status = 201;
@@ -242,10 +329,19 @@ agentsRouter.put('/agents/:agent_id', async (ctx: Context) => {
 
   const body = ctx.request.body as Record<string, unknown>;
 
+  const tools = parseInlineTools(body.tools);
+  if (tools === 'invalid') {
+    ctx.status = 400;
+    ctx.body = {
+      error: 'tools must be an array of tool definition objects with a name',
+    };
+    return;
+  }
+
   const result = await updateAgent({
     projectIds,
     id: ctx.params.agent_id,
-    ...parseUpdateAgentBody(body),
+    ...parseUpdateAgentBody(body, tools),
   });
 
   ctx.body = result;
@@ -271,10 +367,19 @@ agentsRouter.patch('/agents/:agent_id', async (ctx: Context) => {
 
   const body = ctx.request.body as Record<string, unknown>;
 
+  const tools = parseInlineTools(body.tools);
+  if (tools === 'invalid') {
+    ctx.status = 400;
+    ctx.body = {
+      error: 'tools must be an array of tool definition objects with a name',
+    };
+    return;
+  }
+
   const result = await updateAgent({
     projectIds,
     id: ctx.params.agent_id,
-    ...parseUpdateAgentBody(body),
+    ...parseUpdateAgentBody(body, tools),
   });
 
   ctx.body = result;

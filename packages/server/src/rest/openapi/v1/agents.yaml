@@ -486,6 +486,18 @@ components:
           items:
             type: string
           description: Public IDs of attached agent tools
+        tools:
+          type: array
+          nullable: true
+          items:
+            $ref: './tools.yaml#/components/schemas/CreateToolRequest'
+          description: >-
+            Ephemeral tool definitions available only to this agent's
+            generations — not persisted as separate Tool resources, so they
+            never appear in `GET /tools` and cannot be targeted by
+            `active_tool_ids`/`step_rules` (which reference `tool_ids`).
+            Cannot be of type `pipeline`; nest a persisted pipeline tool via
+            `tool_ids` instead. See [Inline Tool Definitions](/docs/modules/agents#inline-tool-definitions).
         max_steps:
           type: integer
           nullable: true
@@ -687,6 +699,19 @@ components:
           type: array
           items:
             type: string
+        tools:
+          type: array
+          items:
+            $ref: './tools.yaml#/components/schemas/CreateToolRequest'
+          description: >-
+            Ephemeral tool definitions available only to this agent's
+            generations — no separate Tool resource is created (any
+            `project_id` on an entry is ignored), so they never appear in
+            `GET /tools` and cannot be targeted by `active_tool_ids`/
+            `step_rules` (which reference `tool_ids`). Cannot be of type
+            `pipeline`; nest a persisted pipeline tool via `tool_ids` instead.
+            Use `tool_ids` to reference existing tools and `tools` for ones
+            scoped to just this agent.
         max_steps:
           type: integer
         tool_choice:
@@ -863,6 +888,19 @@ components:
           nullable: true
           items:
             type: string
+        tools:
+          type: array
+          nullable: true
+          items:
+            $ref: './tools.yaml#/components/schemas/CreateToolRequest'
+          description: >-
+            Ephemeral tool definitions available only to this agent's
+            generations — no separate Tool resource is created (any
+            `project_id` on an entry is ignored), so they never appear in
+            `GET /tools` and cannot be targeted by `active_tool_ids`/
+            `step_rules` (which reference `tool_ids`). Cannot be of type
+            `pipeline`; nest a persisted pipeline tool via `tool_ids` instead.
+            Replaces the agent's entire `tools` array; set to `null` to clear.
         max_steps:
           type: integer
           nullable: true

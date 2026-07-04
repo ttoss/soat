@@ -63,6 +63,9 @@ export class Agent extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare toolIds: string[] | null;
 
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare tools: object[] | null;
+
   @Column({ type: DataType.INTEGER, allowNull: true, defaultValue: 20 })
   declare maxSteps: number | null;
 

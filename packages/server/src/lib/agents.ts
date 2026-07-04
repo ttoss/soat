@@ -5,8 +5,27 @@ import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { validateOutputSchema } from './outputSchema';
 import { validateReasoningConfig } from './reasoning';
+import {
+  assertEphemeralTypeSupported,
+  type InlineToolDefinition,
+  validateToolDefinition,
+} from './tools';
 
 const log = createDebug('soat:agents');
+
+export type { InlineToolDefinition };
+
+// Validates every inline tool definition in an agent's `tools` field —
+// shared with pipeline steps' inline `tool` via `tools.ts#validateToolDefinition`.
+const validateAgentInlineTools = async (args: {
+  projectId: number;
+  tools: InlineToolDefinition[] | null | undefined;
+}): Promise<void> => {
+  for (const definition of args.tools ?? []) {
+    assertEphemeralTypeSupported(definition);
+    await validateToolDefinition({ definition, projectId: args.projectId });
+  }
+};
 
 // Re-export symbols that callers expect from this module.
 export {
@@ -26,6 +45,7 @@ export type MappedAgent = {
   instructions: string | null;
   model: string | null;
   toolIds: string[] | null;
+  tools: InlineToolDefinition[] | null;
   maxSteps: number | null;
   toolChoice: string | object | null;
   stopConditions: object[] | null;
@@ -65,6 +85,7 @@ const mapAgent = (
     instructions: agent.instructions,
     model: agent.model,
     toolIds: agent.toolIds,
+    tools: agent.tools as InlineToolDefinition[] | null,
     maxSteps: agent.maxSteps,
     toolChoice: agent.toolChoice,
     stopConditions: agent.stopConditions,
@@ -90,6 +111,7 @@ type AgentUpdateFields = {
   instructions?: string | null;
   model?: string | null;
   toolIds?: string[] | null;
+  tools?: InlineToolDefinition[] | null;
   maxSteps?: number | null;
   toolChoice?: string | object | null;
   stopConditions?: object[] | null;
@@ -109,6 +131,7 @@ const AGENT_SCALAR_FIELDS = [
   'instructions',
   'model',
   'toolIds',
+  'tools',
   'maxSteps',
   'toolChoice',
   'stopConditions',
@@ -149,6 +172,7 @@ export const createAgent = async (args: {
   instructions?: string;
   model?: string;
   toolIds?: string[];
+  tools?: InlineToolDefinition[];
   maxSteps?: number;
   toolChoice?: string | object;
   stopConditions?: object[];
@@ -172,11 +196,17 @@ export const createAgent = async (args: {
       `AI provider '${args.aiProviderId}' not found.`
     );
 
+  await validateAgentInlineTools({
+    projectId: args.projectId,
+    tools: args.tools,
+  });
+
   const defaults = {
     name: null,
     instructions: null,
     model: null,
     toolIds: null,
+    tools: null,
     maxSteps: 20,
     toolChoice: null,
     stopConditions: null,
@@ -266,6 +296,13 @@ export const updateAgent = async (
       'RESOURCE_NOT_FOUND',
       `Agent '${args.id}' not found.`
     );
+
+  if (args.tools !== undefined) {
+    await validateAgentInlineTools({
+      projectId: (agent as unknown as { projectId: number }).projectId,
+      tools: args.tools,
+    });
+  }
 
   const updates = buildAgentUpdates(args);
 

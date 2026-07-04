@@ -18,6 +18,7 @@ import {
   resolveSecretRefsInRecord,
   resolveSecretRefsInString,
 } from './secrets';
+import type { InlineToolDefinition } from './tools';
 
 const log = createDebug('soat:toolResolver');
 
@@ -708,8 +709,58 @@ const resolveToolByType = async (
   }
 };
 
+/**
+ * Resolves an ephemeral (inline, unpersisted) tool definition into an AI-SDK
+ * tool — reusing the same `resolveToolByType` dispatch as a persisted Tool
+ * row, adapted to a synthetic `AgentToolRow`. `projectId` scopes
+ * `{{secret:...}}` resolution for `http`/`mcp` definitions. `pipeline`-type
+ * definitions are rejected by `assertEphemeralTypeSupported` (imported
+ * dynamically to avoid a circular import with tools.ts, which imports this
+ * module) before resolution — they have no persisted steps to resolve.
+ */
+export const resolveEphemeralAgentTool = async (args: {
+  definition: InlineToolDefinition;
+  projectId: number;
+  boundaryPolicy?: unknown;
+  authHeader?: string;
+  toolContext?: Record<string, string>;
+  traceId?: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
+  remainingDepth?: number;
+}): Promise<Record<string, Tool>> => {
+  const { assertEphemeralTypeSupported } = await import('./tools');
+  assertEphemeralTypeSupported(args.definition);
+
+  const typedTool: AgentToolRow = {
+    publicId: '',
+    projectId: args.projectId,
+    type: args.definition.type ?? 'http',
+    name: args.definition.name,
+    description: args.definition.description ?? null,
+    parameters:
+      (args.definition.parameters as Record<string, unknown> | undefined) ??
+      null,
+    execute: (args.definition.execute as AgentToolRow['execute']) ?? null,
+    mcp: (args.definition.mcp as AgentToolRow['mcp']) ?? null,
+    actions: args.definition.actions ?? null,
+    presetParameters:
+      (args.definition.presetParameters as
+        | Record<string, unknown>
+        | undefined) ?? null,
+    outputMapping:
+      (args.definition.outputMapping as Record<string, unknown> | undefined) ??
+      null,
+  };
+
+  const tools = await resolveToolByType(typedTool, args);
+  return wrapToolsWithOutputMapping(tools, typedTool.outputMapping);
+};
+
 export const resolveAgentTools = async (args: {
   toolIds: string[];
+  tools?: InlineToolDefinition[] | null;
+  projectId?: number;
   projectIds?: number[];
   boundaryPolicy?: unknown;
   authHeader?: string;
@@ -741,6 +792,23 @@ export const resolveAgentTools = async (args: {
         ? tools
         : wrapToolsWithOutputMapping(tools, typedTool.outputMapping)
     );
+  }
+
+  if (args.projectId !== undefined) {
+    for (const definition of args.tools ?? []) {
+      const ephemeralTools = await resolveEphemeralAgentTool({
+        definition,
+        projectId: args.projectId,
+        boundaryPolicy: args.boundaryPolicy,
+        authHeader: args.authHeader,
+        toolContext: args.toolContext,
+        traceId: args.traceId,
+        parentTraceId: args.parentTraceId,
+        rootTraceId: args.rootTraceId,
+        remainingDepth: args.remainingDepth,
+      });
+      Object.assign(resolvedTools, ephemeralTools);
+    }
   }
 
   return resolvedTools;

@@ -508,6 +508,89 @@ describe('Agents', () => {
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('INVALID_OUTPUT_SCHEMA');
     });
+
+    test('creates an agent with an ephemeral inline tool, echoed back but not persisted as a Tool', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          tools: [
+            {
+              name: 'inline-weather-tool',
+              description: 'Gets the weather',
+              execute: { url: 'https://example.com/weather' },
+            },
+          ],
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.tools).toEqual([
+        {
+          name: 'inline-weather-tool',
+          description: 'Gets the weather',
+          execute: { url: 'https://example.com/weather' },
+        },
+      ]);
+      // Ephemeral — no separate Tool resource is created, so tool_ids is untouched.
+      expect(response.body.tool_ids).toBeNull();
+
+      const toolsRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/tools?project_id=${projectId}`
+      );
+      expect(
+        (toolsRes.body as Array<{ name: string }>).some((t) => {
+          return t.name === 'inline-weather-tool';
+        })
+      ).toBe(false);
+    });
+
+    test('keeps tool_ids and tools independent', async () => {
+      const toolRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({ name: 'preexisting-tool', project_id: projectId });
+      const existingToolId = toolRes.body.id;
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          tool_ids: [existingToolId],
+          tools: [{ name: 'inline-tool-merge' }],
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.tool_ids).toEqual([existingToolId]);
+      expect(response.body.tools).toEqual([{ name: 'inline-tool-merge' }]);
+    });
+
+    test('rejects an ephemeral tool definition of type pipeline', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          tools: [{ name: 'inline-pipeline', type: 'pipeline' }],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/pipeline/i);
+    });
+
+    test('inline tool definition without a name returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          tools: [{ description: 'missing a name' }],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toMatch(/tools/i);
+    });
   });
 
   describe('GET /api/v1/agents', () => {
@@ -649,6 +732,38 @@ describe('Agents', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.tool_ids).toEqual([toolId]);
+    });
+
+    test('can update agent with an ephemeral inline tool', async () => {
+      const freshAgentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
+      const freshAgentId = freshAgentRes.body.id;
+
+      const response = await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${freshAgentId}`)
+        .send({ tools: [{ name: 'inline-tool-on-update' }] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.tools).toEqual([{ name: 'inline-tool-on-update' }]);
+    });
+
+    test('can clear tools by setting it to null', async () => {
+      const freshAgentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          tools: [{ name: 'to-be-cleared' }],
+        });
+      const freshAgentId = freshAgentRes.body.id;
+
+      const response = await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${freshAgentId}`)
+        .send({ tools: null });
+
+      expect(response.status).toBe(200);
+      expect(response.body.tools).toBeNull();
     });
 
     test('unknown fields in PUT body return 400', async () => {
@@ -1162,7 +1277,10 @@ describe('Agents', () => {
     });
 
     test('per-generation knowledge_config memory_ids is unioned with the agent stored config', async () => {
-      const mockSearchKnowledge = jest.spyOn(knowledgeModule, 'searchKnowledge');
+      const mockSearchKnowledge = jest.spyOn(
+        knowledgeModule,
+        'searchKnowledge'
+      );
       mockSearchKnowledge.mockResolvedValueOnce([]);
 
       const createRes = await authenticatedTestClient(userToken)
