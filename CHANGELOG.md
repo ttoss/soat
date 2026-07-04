@@ -3,6 +3,26 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.14.0](https://github.com/ttoss/soat/compare/v0.13.18...v0.14.0) (2026-07-04)
+
+* feat(agents)!: normalize reasoning pipeline to a single branches/rounds primitive (#390) ([6d7a7fa](https://github.com/ttoss/soat/commit/6d7a7faecddde711c804df84749686298384a755)), closes [#390](https://github.com/ttoss/soat/issues/390) [#388](https://github.com/ttoss/soat/issues/388)
+
+### Bug Fixes
+
+* finalize human/webhook-receive node execution record on resume ([#391](https://github.com/ttoss/soat/issues/391)) ([7ab68de](https://github.com/ttoss/soat/commit/7ab68de08667da079e7f3fda278468a431e68592))
+* **orchestrations:** normalize output_mapping paths without state. prefix ([#389](https://github.com/ttoss/soat/issues/389)) ([4fbd9d4](https://github.com/ttoss/soat/commit/4fbd9d40715753897b2d900289170fd6e1dbd547)), closes [#383](https://github.com/ttoss/soat/issues/383)
+
+### Features
+
+* **agents:** allow inline tool definitions alongside tool_ids ([#387](https://github.com/ttoss/soat/issues/387)) ([8fda25b](https://github.com/ttoss/soat/commit/8fda25b6aee9b51548bf81a331727d161446179f))
+* **orchestrations:** durable background run execution ([#374](https://github.com/ttoss/soat/issues/374)) ([96a510d](https://github.com/ttoss/soat/commit/96a510ddb94674726237d62dac8f7c507eb01d11)), closes [#366](https://github.com/ttoss/soat/issues/366)
+
+### BREAKING CHANGES
+
+* `kind`, `count`, and `perspectives` are removed from the
+reasoning step schema; existing configs using them are rejected with
+INVALID_REASONING_CONFIG. Use `branches` instead.
+
 ## [0.13.18](https://github.com/ttoss/soat/compare/v0.13.17...v0.13.18) (2026-07-03)
 
 ### Bug Fixes
