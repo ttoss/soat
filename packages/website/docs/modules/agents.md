@@ -17,6 +17,7 @@ Agents differ from [Chats](./chats.md) in that they can call tools, observe resu
 - [Agent SOAT Tools and Preset Parameters - Step 7 (Create the agent)](/docs/tutorials/agent-soat-tools#step-7--create-the-agent)
 - [Multi-Agent Sonnet with Nested Agent Calls - Step 6 (Create stanza agents)](/docs/tutorials/multi-agent-orchestration#step-6--create-the-four-stanza-agents)
 - [Deep Thinking: Reasoning Pipelines - Step 2 (Reflect)](/docs/tutorials/deep-thinking#step-2--reflect-self-critique)
+- [Create an Agent Squad - Step 4 (Write the formation template)](/docs/tutorials/create-an-agent-squad#step-4--write-the-formation-template)
 
 ## Data Model
 

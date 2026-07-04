@@ -19,7 +19,7 @@ import {
   validateOrchestrationGraph,
 } from 'src/lib/orchestrations';
 
-import { resolveStartRunScope } from './orchestrationAuth';
+import { resolveRunAuth, resolveStartRunScope } from './orchestrationAuth';
 
 export const orchestrationsRouter = new Router<Context>();
 const resolveAuth = async (
@@ -451,7 +451,7 @@ orchestrationsRouter.post(
   '/orchestration-runs/:run_id/cancel',
   async (ctx: Context) => {
     const runId = ctx.params['run_id'] as string;
-    const auth = await resolveAuth(ctx, 'orchestrations:CancelRun');
+    const auth = await resolveRunAuth(ctx, 'orchestrations:CancelRun');
     if (!auth) return;
 
     const result = await cancelOrchestrationRun({
@@ -472,7 +472,7 @@ orchestrationsRouter.post(
   '/orchestration-runs/:run_id/human-input',
   async (ctx: Context) => {
     const runId = ctx.params['run_id'] as string;
-    const auth = await resolveAuth(ctx, 'orchestrations:SubmitHumanInput');
+    const auth = await resolveRunAuth(ctx, 'orchestrations:SubmitHumanInput');
     if (!auth) return;
 
     const body = (ctx.request.body ?? {}) as {
@@ -512,7 +512,7 @@ orchestrationsRouter.post(
   '/orchestration-runs/:run_id/resume',
   async (ctx: Context) => {
     const runId = ctx.params['run_id'] as string;
-    const auth = await resolveAuth(ctx, 'orchestrations:ResumeRun');
+    const auth = await resolveRunAuth(ctx, 'orchestrations:ResumeRun');
     if (!auth) return;
 
     const result = await resumeOrchestrationRun({

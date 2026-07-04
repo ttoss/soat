@@ -1370,6 +1370,33 @@ describe('Orchestrations', () => {
         .send({ node_id: 'approval', output: {} });
       expect([403, 400]).toContain(response.status);
     });
+
+    // Regression: the bootstrap admin authenticates via JWT with no project
+    // membership, so resolveProjectIds() legitimately returns `undefined`
+    // ("no filter — all projects"). human-input required a resolvable single
+    // primaryId and rejected that case with a spurious 400
+    // 'project_id is required', even though submitHumanInput only needs the
+    // (optional) projectIds array to scope its query.
+    test('admin (unrestricted JWT, no explicit project) can submit human input', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/orchestrations')
+        .send({ ...humanNodeOrchestration, project_id: projectId });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('paused');
+
+      const response = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/orchestration-runs/${runRes.body.id}/human-input`)
+        .send({ node_id: 'approval', output: { choice: 'approve' } });
+      expect(response.status).toBe(200);
+      expect(['completed', 'running', 'paused']).toContain(
+        response.body.status
+      );
+    });
   });
 
   describe('POST /api/v1/orchestration-runs/:run_id/resume', () => {

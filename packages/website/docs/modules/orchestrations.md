@@ -13,7 +13,7 @@ Use orchestrations when you know the exact steps in advance and want determinist
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
-An orchestration can also be declared as a [Formation](./formations.md) resource, letting you deploy a team of agents together with the flow that coordinates them as a single stack — see [Agent Squads](./formations.md#agent-squads).
+An orchestration can also be declared as a [Formation](./formations.md) resource, letting you deploy a team of agents together with the flow that coordinates them as a single stack — see the [Agent Squad example](#agent-squad).
 
 ## Related Tutorials
 
@@ -22,6 +22,7 @@ An orchestration can also be declared as a [Formation](./formations.md) resource
 - [Orchestrate a Sonnet - Step 6 (Create the orchestration graph)](/docs/tutorials/orchestrate-a-sonnet#step-6--create-the-orchestration-graph)
 - [Orchestrate a Sonnet - Step 7 (Start a run)](/docs/tutorials/orchestrate-a-sonnet#step-7--start-a-run)
 - [Orchestrate a Sonnet - Step 9 (Inspect the run state)](/docs/tutorials/orchestrate-a-sonnet#step-9--inspect-the-run-state)
+- [Create an Agent Squad](/docs/tutorials/create-an-agent-squad) — a team of agents plus a coordinating orchestration, deployed and run as one stack
 
 ## Data Model
 
@@ -481,3 +482,165 @@ A `condition` node emits a string label; edges carry `condition: "<label>"` to s
   ]
 }
 ```
+
+### Agent Squad
+
+A team of agents plus the flow that coordinates them can deploy as a single [Formation](./formations.md) stack, because an orchestration is itself a formation resource type. A node's `agent_id` uses a [`ref` expression](./formations.md#ref-expressions) to bind to an agent created in the same template; SOAT resolves it to the physical `agt_...` ID before the orchestration is created. Node fields are written in snake_case (`agent_id`, `input_mapping`, `output_mapping`), exactly as in this module's REST contract. For a full step-by-step build, see [Create an Agent Squad](/docs/tutorials/create-an-agent-squad).
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+cat > squad.json << 'EOF'
+{
+  "resources": {
+    "Provider": {
+      "type": "ai_provider",
+      "properties": { "name": "OpenAI", "provider": "openai", "default_model": "gpt-4o" }
+    },
+    "Writer": {
+      "type": "agent",
+      "properties": {
+        "name": "Writer",
+        "ai_provider_id": { "ref": "Provider" },
+        "instructions": "Draft a short article on the given topic."
+      }
+    },
+    "Reviewer": {
+      "type": "agent",
+      "properties": {
+        "name": "Reviewer",
+        "ai_provider_id": { "ref": "Provider" },
+        "instructions": "Tighten and fact-check the draft."
+      }
+    },
+    "ContentSquad": {
+      "type": "orchestration",
+      "properties": {
+        "name": "content-squad",
+        "input_schema": { "type": "object", "properties": { "topic": { "type": "string" } } },
+        "nodes": [
+          {
+            "id": "write",
+            "type": "agent",
+            "agent_id": { "ref": "Writer" },
+            "input_mapping": { "prompt": { "var": "topic" } },
+            "output_mapping": { "content": "state.draft" }
+          },
+          {
+            "id": "review",
+            "type": "agent",
+            "agent_id": { "ref": "Reviewer" },
+            "input_mapping": { "prompt": { "var": "draft" } },
+            "output_mapping": { "content": "state.final" }
+          }
+        ],
+        "edges": [{ "from": "write", "to": "review" }]
+      }
+    }
+  },
+  "outputs": {
+    "squad_id": { "ref": "ContentSquad" }
+  }
+}
+EOF
+
+FORMATION=$(soat create-formation \
+  --project-id "$PROJECT_ID" \
+  --name "content-squad" \
+  --template-file squad.json)
+
+SQUAD_ID=$(printf '%s' "$FORMATION" | jq -r '.outputs.squad_id')
+
+soat start-orchestration-run \
+  --orchestration-id "$SQUAD_ID" \
+  --input '{"topic": "agent squads"}' \
+  --wait
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const template = {
+  resources: {
+    Provider: {
+      type: 'ai_provider',
+      properties: { name: 'OpenAI', provider: 'openai', default_model: 'gpt-4o' },
+    },
+    Writer: {
+      type: 'agent',
+      properties: {
+        name: 'Writer',
+        ai_provider_id: { ref: 'Provider' },
+        instructions: 'Draft a short article on the given topic.',
+      },
+    },
+    Reviewer: {
+      type: 'agent',
+      properties: {
+        name: 'Reviewer',
+        ai_provider_id: { ref: 'Provider' },
+        instructions: 'Tighten and fact-check the draft.',
+      },
+    },
+    ContentSquad: {
+      type: 'orchestration',
+      properties: {
+        name: 'content-squad',
+        input_schema: { type: 'object', properties: { topic: { type: 'string' } } },
+        nodes: [
+          {
+            id: 'write',
+            type: 'agent',
+            agent_id: { ref: 'Writer' },
+            input_mapping: { prompt: { var: 'topic' } },
+            output_mapping: { content: 'state.draft' },
+          },
+          {
+            id: 'review',
+            type: 'agent',
+            agent_id: { ref: 'Reviewer' },
+            input_mapping: { prompt: { var: 'draft' } },
+            output_mapping: { content: 'state.final' },
+          },
+        ],
+        edges: [{ from: 'write', to: 'review' }],
+      },
+    },
+  },
+  outputs: { squad_id: { ref: 'ContentSquad' } },
+};
+
+const { data: formation } = await soat.formations.createFormation({
+  body: { project_id: 'proj_ABC', name: 'content-squad', template },
+});
+const SQUAD_ID = formation.outputs?.squad_id as string;
+
+const { data: run } = await soat.orchestrations.startOrchestrationRun({
+  body: { orchestration_id: SQUAD_ID, input: { topic: 'agent squads' }, wait: true },
+});
+if (run.error) throw new Error(JSON.stringify(run.error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+FORMATION=$(curl -s -X POST https://api.example.com/api/v1/formations \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\": \"proj_ABC\", \"name\": \"content-squad\", \"template\": $(cat squad.json)}")
+
+SQUAD_ID=$(printf '%s' "$FORMATION" | jq -r '.outputs.squad_id')
+
+curl -X POST https://api.example.com/api/v1/orchestration-runs \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d "{\"orchestration_id\": \"$SQUAD_ID\", \"input\": {\"topic\": \"agent squads\"}, \"wait\": true}"
+```
+
+</TabItem>
+</Tabs>
+
+Deploying this template creates the provider, both agents, and the orchestration in dependency order. Running it with `{ "topic": "..." }` as input drives `write` then `review` and leaves the final draft at `state.final`.
