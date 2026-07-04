@@ -140,10 +140,10 @@ describe('applyOutputMapping', () => {
     expect(state['output']).toBe(42);
   });
 
-  test('non-state output path is silently ignored', () => {
+  test('an output path without the state. prefix is normalized to one', () => {
     const state: Record<string, unknown> = {};
-    applyOutputMapping({ result: 'env.output' }, { result: 42 }, state);
-    expect(Object.keys(state)).toHaveLength(0);
+    applyOutputMapping({ result: 'output' }, { result: 42 }, state);
+    expect(state['output']).toBe(42);
   });
 });
 

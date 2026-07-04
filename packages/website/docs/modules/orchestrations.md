@@ -175,7 +175,7 @@ The scheduler tick interval is configurable with the `ORCHESTRATION_SCHEDULER_IN
 Each node can define:
 
 - **`inputMapping`** — Maps node input keys to values resolved against the run state before execution. Each value is [JSON Logic](https://jsonlogic.com) (see [Input Mapping](#input-mapping-json-logic)).
-- **`outputMapping`** — Maps node outputs back to state paths after execution. Each value **must** be a string starting with the literal `state.` prefix (e.g. `"state.summary"`, not `"summary"`) — this is not optional or auto-normalized. A value without the prefix is silently ignored: the write never happens, and no error or warning is raised at create, update, validate, or run time. Always copy the `state.`-prefixed form shown in the examples throughout this page.
+- **`outputMapping`** — Maps node outputs back to state paths after execution. Each value should be a string starting with the literal `state.` prefix (e.g. `"state.summary"`); a value without the prefix (e.g. `"summary"`) is normalized to be state-relative, the same convention `loop.collection` already uses. Prefer the explicit `state.`-prefixed form shown in the examples throughout this page.
 
 The root state is available to every node. Transforms and conditions receive the full state object.
 

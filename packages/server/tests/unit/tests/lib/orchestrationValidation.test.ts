@@ -270,6 +270,32 @@ describe('validateOrchestrationGraph', () => {
       expect(result.warnings).toHaveLength(0);
     });
 
+    test('accepts a reference written by an upstream node whose outputMapping value omits the state. prefix', () => {
+      const result = validate({
+        nodes: [
+          {
+            id: 'a',
+            type: 'transform',
+            expression: 1,
+            outputMapping: { result: 'step1' },
+          },
+          {
+            id: 'b',
+            type: 'transform',
+            expression: 1,
+            inputMapping: { val: { var: 'step1' } },
+          },
+        ],
+        edges: [{ from: 'a', to: 'b' }],
+        inputSchema: {
+          type: 'object',
+          properties: { other: { type: 'string' } },
+        },
+      });
+      expect(result.valid).toBe(true);
+      expect(result.warnings).toHaveLength(0);
+    });
+
     test('accepts a reference satisfied by the run input schema', () => {
       const result = validate({
         nodes: [
