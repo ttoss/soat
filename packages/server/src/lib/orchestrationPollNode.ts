@@ -7,12 +7,12 @@ import {
 import type { OrchestrationNode } from './orchestrations';
 import { callTool } from './tools';
 
-// Poll node safety bounds. `maxIterations` caps the number of attempts; the
-// wall-clock ceiling protects the request held open by the synchronous run loop
-// regardless of per-attempt tool latency.
+// Poll node safety bounds. `maxIterations` caps the number of attempts. There
+// is no longer a wall-clock ceiling: each attempt runs in its own scheduled
+// resumption rather than inside a single held-open HTTP request, so the only
+// bound that matters is the attempt cap.
 const DEFAULT_POLL_ATTEMPTS = 10;
 const MAX_POLL_ATTEMPTS = 1000;
-const MAX_POLL_WALL_CLOCK_MS = 10 * 60 * 1000;
 
 /**
  * Validates a poll node's three required fields and returns the ones the
@@ -41,19 +41,27 @@ const assertPollNode = (
 };
 
 /**
- * Polls a tool until a JSON Logic exit condition is satisfied. Each attempt
- * calls `toolId` (with `inputMapping` resolved against state), then evaluates
- * `exitCondition` against an augmented context — `{ ...state, response, attempt }`
- * — where `response` is the latest tool result and `attempt` is the 1-based
- * count. Stops on a truthy condition, or when `maxIterations` (default 10) /
- * the wall-clock ceiling is reached. On exhaustion it either fails the run
- * (`failOnTimeout: true`) or completes with `conditionMet: false`.
+ * Executes a single poll attempt. Calls `toolId` (with `inputMapping` resolved
+ * against state), then evaluates `exitCondition` against an augmented context —
+ * `{ ...state, response, attempt }` — where `response` is the latest tool
+ * result and `attempt` is the 1-based count. Returns:
+ *
+ * - an `artifact` result when the condition is met (`conditionMet: true`);
+ * - an `artifact` result when the attempt cap is reached without the condition
+ *   holding (`conditionMet: false`, `timedOut: true`), or throws when
+ *   `failOnTimeout` is set;
+ * - a `wait` result when more attempts remain, so the scheduler resumes the
+ *   node after `interval` for the next attempt.
+ *
+ * The wait between attempts is no longer an in-process sleep: it is offloaded
+ * to the background scheduler, so a poll never holds an HTTP request open.
  */
 export const executePollNode = async (args: {
   node: OrchestrationNode;
   state: Record<string, unknown>;
   projectIds: number[];
   authHeader?: string;
+  attempt?: number;
 }): Promise<NodeExecutionResult> => {
   const { node, state, projectIds, authHeader } = args;
   const { toolId, interval } = assertPollNode(node);
@@ -61,53 +69,51 @@ export const executePollNode = async (args: {
   const { maxIterations = DEFAULT_POLL_ATTEMPTS } = node;
   const intervalMs = parseDuration(interval);
   const maxAttempts = Math.min(Math.max(maxIterations, 1), MAX_POLL_ATTEMPTS);
-  const deadline = Date.now() + MAX_POLL_WALL_CLOCK_MS;
+  const attempt = Math.max(args.attempt ?? 1, 1);
 
-  let attempt = 0;
-  let lastResponse: unknown = null;
-  for (;;) {
-    attempt += 1;
-    const inputs = applyInputMapping(node.inputMapping, state);
-    lastResponse = await callTool({
-      projectIds,
-      id: toolId,
-      action: node.operationId,
-      input: inputs,
-      authHeader,
-    });
+  const inputs = applyInputMapping(node.inputMapping, state);
+  const lastResponse = await callTool({
+    projectIds,
+    id: toolId,
+    action: node.operationId,
+    input: inputs,
+    authHeader,
+  });
 
-    const context = { ...state, response: lastResponse, attempt };
-    if (evaluateLogic(node.exitCondition, context)) {
-      return {
-        kind: 'artifact',
-        artifact: {
-          result: lastResponse,
-          attempts: attempt,
-          conditionMet: true,
-          timedOut: false,
-        },
-      };
-    }
-
-    if (attempt >= maxAttempts || Date.now() >= deadline) {
-      if (node.failOnTimeout)
-        throw new DomainError(
-          'ORCHESTRATION_POLL_EXHAUSTED',
-          `Poll node '${node.id}' exhausted after ${attempt} attempt(s) without meeting its exit condition.`
-        );
-      return {
-        kind: 'artifact',
-        artifact: {
-          result: lastResponse,
-          attempts: attempt,
-          conditionMet: false,
-          timedOut: true,
-        },
-      };
-    }
-
-    await new Promise<void>((resolve) => {
-      return setTimeout(resolve, intervalMs);
-    });
+  const context = { ...state, response: lastResponse, attempt };
+  if (evaluateLogic(node.exitCondition, context)) {
+    return {
+      kind: 'artifact',
+      artifact: {
+        result: lastResponse,
+        attempts: attempt,
+        conditionMet: true,
+        timedOut: false,
+      },
+    };
   }
+
+  if (attempt >= maxAttempts) {
+    if (node.failOnTimeout)
+      throw new DomainError(
+        'ORCHESTRATION_POLL_EXHAUSTED',
+        `Poll node '${node.id}' exhausted after ${attempt} attempt(s) without meeting its exit condition.`
+      );
+    return {
+      kind: 'artifact',
+      artifact: {
+        result: lastResponse,
+        attempts: attempt,
+        conditionMet: false,
+        timedOut: true,
+      },
+    };
+  }
+
+  return {
+    kind: 'wait',
+    nodeId: node.id,
+    resumeInMs: intervalMs,
+    resume: { kind: 'poll', attempt: attempt + 1 },
+  };
 };

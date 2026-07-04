@@ -87,6 +87,18 @@ export class OrchestrationRun extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare traceId: string | null;
 
+  // Durable background execution. When `status` is 'running' and `resumeAt` is
+  // set, the run is waiting for a scheduled resumption (e.g. a `delay` timer or
+  // the interval between `poll` attempts). The background scheduler picks up
+  // runs whose `resumeAt` is due and resumes them from `resumeContext`, which
+  // describes the waiting node and how to continue it. Both are null while a
+  // run is actively executing or has reached a terminal/paused state.
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare resumeAt: Date | null;
+
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare resumeContext: object | null;
+
   @Column({ type: DataType.JSONB, allowNull: true })
   declare input: object | null;
 

@@ -105,10 +105,9 @@ const parseUpdateBody = (body: RawUpdateBody) => {
 };
 
 const parseRunInput = (raw: unknown): Record<string, unknown> | undefined => {
-  if (raw != null && typeof raw === 'object' && !Array.isArray(raw)) {
-    return raw as Record<string, unknown>;
-  }
-  return undefined;
+  return raw != null && typeof raw === 'object' && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : undefined;
 };
 /**
  * @openapi
@@ -338,6 +337,7 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
   const body = (ctx.request.body ?? {}) as {
     orchestrationId?: unknown;
     input?: unknown;
+    wait?: unknown;
   };
   const orchestrationId =
     typeof body.orchestrationId === 'string' ? body.orchestrationId : undefined;
@@ -359,6 +359,7 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
     projectIds: scope.projectIds,
     input,
     authHeader,
+    wait: body.wait === true,
   });
 
   ctx.status = 201;

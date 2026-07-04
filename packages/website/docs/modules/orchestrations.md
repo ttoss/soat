@@ -49,7 +49,7 @@ An orchestration can also be declared as a [Formation](./formations.md) resource
 | `project_id`       | string         | Owning project                                                    |
 | `status`           | string         | `running` \| `paused` \| `completed` \| `failed` \| `cancelled`   |
 | `state`            | object         | Current mutable execution state                                   |
-| `active_nodes`     | array          | Node IDs awaiting input (populated when status is `paused`)       |
+| `active_nodes`     | array          | Node IDs awaiting input or a scheduled resumption (populated when `paused`, or `running` while parked on a `delay`/`poll` wait) |
 | `artifacts`        | object         | Outputs keyed by node ID                                          |
 | `error`            | object \| null | Error details if failed                                           |
 | `node_executions`  | array          | Per-node execution records (see [Node Executions](#node-executions)) |
@@ -130,7 +130,7 @@ Each attempt:
 
 1. Calls `toolId` (resolving `inputMapping` against state, like a `tool` node).
 2. Evaluates `exitCondition` against an **augmented context** — the run state plus `response` (the latest tool result) and `attempt` (1-based count). A truthy result stops polling.
-3. Otherwise waits `interval` and retries, bounded by `maxIterations` (default 10, ceiling 1000) and a 10-minute wall-clock ceiling.
+3. Otherwise the `interval` becomes a **scheduled resumption**: the run is parked and the background scheduler drives the next attempt after `interval`, bounded by `maxIterations` (default 10, ceiling 1000). There is no wall-clock ceiling — the wait no longer holds an HTTP request open, so a poll can span hours or days.
 
 The node completes with an artifact `{ result, attempts, conditionMet, timedOut }`. On exhaustion it completes with `conditionMet: false` (branch on it downstream with a `condition` node) — unless `failOnTimeout: true`, which fails the run with `ORCHESTRATION_POLL_EXHAUSTED`.
 
@@ -147,7 +147,28 @@ The node completes with an artifact `{ result, attempts, conditionMet, timedOut 
 }
 ```
 
-> **Note:** `poll` and `delay` run inside the synchronous run loop, so they hold the run (and its HTTP request) open while waiting. Keep `interval` and `maxIterations` bounded; long waits are not yet offloaded to a background scheduler.
+> **Note:** `poll` and `delay` waits are offloaded to the background scheduler (see [Durable Background Execution](#durable-background-execution)). They do not hold an HTTP request open, and a run parked on a wait survives a server restart.
+
+### Durable Background Execution
+
+Runs execute in a **durable background worker**, detached from the HTTP request that starts them:
+
+- `start-orchestration-run` persists the run and returns immediately with `status: "running"`. Observe progress with `get-orchestration-run` (which includes `node_executions`) or via run lifecycle [webhook](./webhooks.md) events.
+- `delay` and `poll` waits become **scheduled resumptions**, not in-process sleeps. The due time and how to continue are persisted with the run, and a scheduler resumes it when the wait is due — so a run containing `delay: "2h"` survives a restart and completes on schedule.
+- `human` and `webhook (mode: receive)` nodes still pause the run (`status: "paused"`); resume them with `submit-human-input` or `resume-orchestration-run`.
+
+**Synchronous (compatibility) mode.** Pass `wait: true` to `start-orchestration-run` to block until the run reaches a terminal (`completed`/`failed`) or `paused` state, sleeping through any delay/poll waits in-process. This preserves the legacy behaviour for callers (and tests) that need the settled run in the response. Nested `loop` and `sub_orchestration` runs always execute synchronously so their output can be aggregated.
+
+**Lifecycle events.** The following events are emitted through the [Webhooks](./webhooks.md) module so callers do not need to poll:
+
+| Event                          | When                                          |
+| ------------------------------ | --------------------------------------------- |
+| `orchestration_runs.started`   | A run is created and begins executing         |
+| `orchestration_runs.paused`    | A run pauses on a `human`/`webhook` node      |
+| `orchestration_runs.completed` | A run reaches `completed`                     |
+| `orchestration_runs.failed`    | A run reaches `failed`                        |
+
+The scheduler tick interval is configurable with the `ORCHESTRATION_SCHEDULER_INTERVAL_MS` environment variable (default `5000`).
 
 ### State and Mappings
 
@@ -366,13 +387,22 @@ curl -X POST https://api.example.com/api/v1/orchestrations \
 
 ### Start a run
 
+Returns immediately with `status: "running"`; the run executes in the background. Add `wait: true` (`--wait` in the CLI) to block until the run settles (see [Durable Background Execution](#durable-background-execution)).
+
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+# Async (default): returns a "running" run immediately
 soat start-orchestration-run \
   --orchestration-id orch_01 \
   --input '{"query": "summarize Q1 revenue"}'
+
+# Synchronous: block until the run completes or pauses
+soat start-orchestration-run \
+  --orchestration-id orch_01 \
+  --input '{"query": "summarize Q1 revenue"}' \
+  --wait
 ```
 
 </TabItem>
@@ -380,7 +410,8 @@ soat start-orchestration-run \
 
 ```ts
 const { data, error } = await soat.orchestrations.startOrchestrationRun({
-  body: { orchestration_id: 'orch_01', input: { query: 'summarize Q1 revenue' } },
+  // omit `wait` (or pass false) for background execution
+  body: { orchestration_id: 'orch_01', input: { query: 'summarize Q1 revenue' }, wait: true },
 });
 if (error) throw new Error(JSON.stringify(error));
 ```
@@ -392,7 +423,7 @@ if (error) throw new Error(JSON.stringify(error));
 curl -X POST https://api.example.com/api/v1/orchestration-runs \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"orchestration_id": "orch_01", "input": {"query": "summarize Q1 revenue"}}'
+  -d '{"orchestration_id": "orch_01", "input": {"query": "summarize Q1 revenue"}, "wait": true}'
 ```
 
 </TabItem>

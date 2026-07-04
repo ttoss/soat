@@ -1,6 +1,9 @@
 import { DomainError } from '../errors';
 import { resolveNextNodes } from './orchestrationGraph';
-import type { NodeExecutionResult } from './orchestrationNodeExecutors';
+import type {
+  NodeExecutionResult,
+  WaitResume,
+} from './orchestrationNodeExecutors';
 import {
   applyOutputMapping,
   executeAgentNode,
@@ -40,6 +43,19 @@ export type RequiredAction = {
   options?: string[];
 };
 
+export type { WaitResume } from './orchestrationNodeExecutors';
+
+/**
+ * A node that paused the run to wait for a timer (delay) or the interval
+ * between poll attempts. The engine persists this so the background scheduler
+ * can resume the run from `nodeId` once `resumeInMs` has elapsed.
+ */
+export type ScheduledWait = {
+  nodeId: string;
+  resumeInMs: number;
+  resume: WaitResume;
+};
+
 // ── Dispatch ──────────────────────────────────────────────────────────────
 
 type DispatchArgs = {
@@ -48,6 +64,8 @@ type DispatchArgs = {
   projectIds: number[];
   traceId: string | null;
   authHeader?: string;
+  // 1-based attempt number for a resuming poll node; undefined for a first run.
+  pollAttempt?: number;
 };
 
 const dispatchSimpleNode = (args: DispatchArgs): NodeExecutionResult | null => {
@@ -69,7 +87,8 @@ const dispatchSimpleNode = (args: DispatchArgs): NodeExecutionResult | null => {
 const dispatchNodeExecution = async (
   args: DispatchArgs
 ): Promise<NodeExecutionResult> => {
-  const { nodeDefn, state, projectIds, traceId, authHeader } = args;
+  const { nodeDefn, state, projectIds, traceId, authHeader, pollAttempt } =
+    args;
   const simple = dispatchSimpleNode(args);
   if (simple !== null) return simple;
   switch (nodeDefn.type) {
@@ -84,7 +103,13 @@ const dispatchNodeExecution = async (
     case 'tool':
       return executeToolNode({ node: nodeDefn, state, projectIds, authHeader });
     case 'poll':
-      return executePollNode({ node: nodeDefn, state, projectIds, authHeader });
+      return executePollNode({
+        node: nodeDefn,
+        state,
+        projectIds,
+        authHeader,
+        attempt: pollAttempt,
+      });
     case 'knowledge':
       return executeKnowledgeNode({ node: nodeDefn, state, projectIds });
     case 'memory_write':
@@ -122,12 +147,14 @@ export const executeNodeById = async (args: {
   projectIds: number[];
   traceId: string | null;
   authHeader?: string;
+  pollAttempt?: number;
 }): Promise<{
   nodeId: string;
   nodeDefn: OrchestrationNode;
   execResult: NodeExecutionResult;
 }> => {
-  const { nodeId, nodes, state, projectIds, traceId, authHeader } = args;
+  const { nodeId, nodes, state, projectIds, traceId, authHeader, pollAttempt } =
+    args;
   const nodeDefn = nodes.find((n) => {
     return n.id === nodeId;
   });
@@ -143,12 +170,39 @@ export const executeNodeById = async (args: {
     projectIds,
     traceId,
     authHeader,
+    pollAttempt,
   });
   return { nodeId, nodeDefn, execResult };
 };
 
 // ── Batch result processing ───────────────────────────────────────────────
 
+// Activates the successors of a just-completed node, appending newly-activated
+// node IDs to `nextRound` (deduped against `activatedNodes`).
+const advanceSuccessors = (args: {
+  nodeId: string;
+  completedNodes: Set<string>;
+  conditionLabels: Map<string, string>;
+  edges: OrchestrationEdge[];
+  activatedNodes: Set<string>;
+  nextRound: string[];
+}): void => {
+  const resolved = resolveNextNodes({
+    completedNodeId: args.nodeId,
+    completedNodes: args.completedNodes,
+    conditionLabels: args.conditionLabels,
+    edges: args.edges,
+  });
+  for (const n of resolved) {
+    if (!args.activatedNodes.has(n)) {
+      args.activatedNodes.add(n);
+      args.nextRound.push(n);
+    }
+  }
+};
+
+// The first trace produced by a traced node (e.g. an `agent` node) in a batch;
+// becomes the run's trace_id when the run has none yet.
 const findFirstTraceId = (
   nodeResults: Array<{ execResult: NodeExecutionResult }>
 ): string | null => {
@@ -176,6 +230,7 @@ export const processNodeResultBatch = (args: {
 }): {
   nextRound: string[];
   requiredAction: RequiredAction | null;
+  scheduledWait: ScheduledWait | null;
   traceId: string | null;
 } => {
   const {
@@ -191,6 +246,7 @@ export const processNodeResultBatch = (args: {
 
   const nextRound: string[] = [];
   let requiredAction: RequiredAction | null = null;
+  let scheduledWait: ScheduledWait | null = null;
   const traceId = findFirstTraceId(nodeResults);
 
   for (const { nodeId, nodeDefn, execResult } of nodeResults) {
@@ -207,6 +263,21 @@ export const processNodeResultBatch = (args: {
       continue;
     }
 
+    if (execResult.kind === 'wait') {
+      // The node is not complete — it must be resumed after a timer. Record the
+      // first wait and stop advancing; the node stays uncompleted so it (or its
+      // successors) resume correctly. Mirrors the single-pause model used for
+      // requires_action nodes.
+      if (!scheduledWait) {
+        scheduledWait = {
+          nodeId: execResult.nodeId,
+          resumeInMs: execResult.resumeInMs,
+          resume: execResult.resume,
+        };
+      }
+      continue;
+    }
+
     if (execResult.kind === 'condition') {
       conditionLabels.set(nodeId, execResult.label);
     } else {
@@ -216,21 +287,17 @@ export const processNodeResultBatch = (args: {
 
     completedNodes.add(nodeId);
 
-    if (isRunning && !requiredAction) {
-      const resolved = resolveNextNodes({
-        completedNodeId: nodeId,
+    if (isRunning && !requiredAction && !scheduledWait) {
+      advanceSuccessors({
+        nodeId,
         completedNodes,
         conditionLabels,
         edges,
+        activatedNodes,
+        nextRound,
       });
-      for (const n of resolved) {
-        if (!activatedNodes.has(n)) {
-          activatedNodes.add(n);
-          nextRound.push(n);
-        }
-      }
     }
   }
 
-  return { nextRound, requiredAction, traceId };
+  return { nextRound, requiredAction, scheduledWait, traceId };
 };
