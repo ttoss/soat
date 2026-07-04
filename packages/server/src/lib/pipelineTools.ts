@@ -299,6 +299,62 @@ export const assertPipelineStepToolsValid = async (args: {
   }
 };
 
+const addVarInputRef = (
+  varObject: Record<string, unknown>,
+  refs: Set<string>
+): void => {
+  const raw = varObject['var'];
+  const path = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof path !== 'string') return;
+  const parts = path.split('.');
+  if (parts[0] === 'input' && parts[1]) refs.add(parts[1]);
+};
+
+/**
+ * Collects the top-level `input.<name>` keys referenced by `{ var: 'input.<name>...' }`
+ * expressions anywhere inside a JSON Logic value (a step's `input` mapping or
+ * the pipeline's `output` mapping).
+ */
+const collectInputRefs = (value: unknown, refs: Set<string>): void => {
+  if (Array.isArray(value)) {
+    for (const item of value) collectInputRefs(item, refs);
+    return;
+  }
+  if (!isRecord(value)) return;
+  const keys = Object.keys(value);
+  if (keys.length === 1 && keys[0] === 'var') {
+    addVarInputRef(value, refs);
+    return;
+  }
+  for (const key of keys) collectInputRefs(value[key], refs);
+};
+
+/**
+ * Returns the names of declared tool `parameters` (JSON Schema properties)
+ * that no step's `input` mapping, nor the pipeline's `output` mapping, ever
+ * reads via `{ var: 'input.<name>' }`. A caller-supplied parameter with no
+ * such reference never reaches any step — it is silently dropped rather than
+ * causing a runtime error, so callers (e.g. `validate-formation`) can surface
+ * it as a warning pointing at the unreachable input key.
+ */
+export const findUnreferencedPipelineParams = (args: {
+  config: PipelineConfig;
+  parameters: unknown;
+}): string[] => {
+  const properties = isRecord(args.parameters)
+    ? args.parameters['properties']
+    : undefined;
+  if (!isRecord(properties)) return [];
+
+  const refs = new Set<string>();
+  for (const step of args.config.steps) collectInputRefs(step.input, refs);
+  collectInputRefs(args.config.output, refs);
+
+  return Object.keys(properties).filter((name) => {
+    return !refs.has(name);
+  });
+};
+
 // ── Execution ─────────────────────────────────────────────────────────────────
 
 const executeStep = async (args: {

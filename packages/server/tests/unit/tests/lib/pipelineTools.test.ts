@@ -1,5 +1,9 @@
 import { DomainError } from 'src/errors';
-import { runPipeline, validatePipelineConfig } from 'src/lib/pipelineTools';
+import {
+  findUnreferencedPipelineParams,
+  runPipeline,
+  validatePipelineConfig,
+} from 'src/lib/pipelineTools';
 
 // ── validatePipelineConfig ───────────────────────────────────────────────────
 
@@ -101,6 +105,68 @@ describe('validatePipelineConfig', () => {
         output: 'nope',
       });
     }).toThrow(/output/i);
+  });
+});
+
+// ── findUnreferencedPipelineParams ──────────────────────────────────────────
+
+describe('findUnreferencedPipelineParams', () => {
+  test('flags a declared parameter no step input or output ever reads', () => {
+    const config = validatePipelineConfig({
+      steps: [{ id: 'a', toolId: 't1', input: { x: { var: 'input.data' } } }],
+    });
+    const unreferenced = findUnreferencedPipelineParams({
+      config,
+      parameters: {
+        type: 'object',
+        properties: { data: { type: 'string' }, strapiDocumentId: {} },
+      },
+    });
+    expect(unreferenced).toEqual(['strapiDocumentId']);
+  });
+
+  test('does not flag a parameter referenced deep inside a step input', () => {
+    const config = validatePipelineConfig({
+      steps: [
+        {
+          id: 'a',
+          toolId: 't1',
+          input: { data: { title: { var: 'input.strapiDocumentId' } } },
+        },
+      ],
+    });
+    const unreferenced = findUnreferencedPipelineParams({
+      config,
+      parameters: {
+        type: 'object',
+        properties: { strapiDocumentId: {} },
+      },
+    });
+    expect(unreferenced).toEqual([]);
+  });
+
+  test('does not flag a parameter only referenced in the pipeline output', () => {
+    const config = validatePipelineConfig({
+      steps: [{ id: 'a', toolId: 't1' }],
+      output: { id: { var: 'input.strapiDocumentId' } },
+    });
+    const unreferenced = findUnreferencedPipelineParams({
+      config,
+      parameters: {
+        type: 'object',
+        properties: { strapiDocumentId: {} },
+      },
+    });
+    expect(unreferenced).toEqual([]);
+  });
+
+  test('returns an empty array when no parameters schema is declared', () => {
+    const config = validatePipelineConfig({
+      steps: [{ id: 'a', toolId: 't1' }],
+    });
+    expect(
+      findUnreferencedPipelineParams({ config, parameters: undefined })
+    ).toEqual([]);
   });
 });
 

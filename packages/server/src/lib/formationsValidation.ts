@@ -141,14 +141,31 @@ const validateResourceProperties = (args: {
   return errors;
 };
 
+const runFormationModuleHooks = (args: {
+  type: string;
+  properties: unknown;
+  basePath: string;
+}): { errors: ValidationError[]; warnings: ValidationError[] } => {
+  const formationModule = getFormationModule({ resourceType: args.type });
+  const hookArgs = {
+    properties: args.properties,
+    basePath: `${args.basePath}.properties`,
+  };
+  return {
+    errors: formationModule?.validateProperties?.(hookArgs) ?? [],
+    warnings: formationModule?.warnProperties?.(hookArgs) ?? [],
+  };
+};
+
 const validateResourceDeclaration = (args: {
   logicalId: string;
   declRaw: unknown;
   logicalIds: Set<string>;
   paramNames: Set<string>;
-}): ValidationError[] => {
+}): { errors: ValidationError[]; warnings: ValidationError[] } => {
   const { logicalId, declRaw, logicalIds, paramNames } = args;
   const errors: ValidationError[] = [];
+  const warnings: ValidationError[] = [];
   const basePath = `resources.${logicalId}`;
 
   if (
@@ -156,9 +173,12 @@ const validateResourceDeclaration = (args: {
     declRaw === null ||
     Array.isArray(declRaw)
   ) {
-    return [
-      { path: basePath, message: 'Resource declaration must be an object' },
-    ];
+    return {
+      errors: [
+        { path: basePath, message: 'Resource declaration must be an object' },
+      ],
+      warnings,
+    };
   }
 
   const decl = declRaw as Record<string, unknown>;
@@ -174,17 +194,13 @@ const validateResourceDeclaration = (args: {
   );
 
   if (typeof decl.type === 'string') {
-    const formationModule = getFormationModule({
-      resourceType: decl.type,
+    const hookResult = runFormationModuleHooks({
+      type: decl.type,
+      properties: decl.properties,
+      basePath,
     });
-    if (formationModule?.validateProperties) {
-      errors.push(
-        ...formationModule.validateProperties({
-          properties: decl.properties,
-          basePath: `${basePath}.properties`,
-        })
-      );
-    }
+    errors.push(...hookResult.errors);
+    warnings.push(...hookResult.warnings);
   }
 
   if (decl.depends_on !== undefined) {
@@ -202,7 +218,7 @@ const validateResourceDeclaration = (args: {
     }
   }
 
-  return errors;
+  return { errors, warnings };
 };
 
 // ── Output Refs Validation ────────────────────────────────────────────────
@@ -393,14 +409,14 @@ export const validateFormationTemplate = (
   const logicalIds = new Set(Object.keys(resources));
 
   for (const [logicalId, declRaw] of Object.entries(resources)) {
-    errors.push(
-      ...validateResourceDeclaration({
-        logicalId,
-        declRaw,
-        logicalIds,
-        paramNames,
-      })
-    );
+    const declResult = validateResourceDeclaration({
+      logicalId,
+      declRaw,
+      logicalIds,
+      paramNames,
+    });
+    errors.push(...declResult.errors);
+    warnings.push(...declResult.warnings);
   }
 
   const outputs = getOutputsObject(tmpl);

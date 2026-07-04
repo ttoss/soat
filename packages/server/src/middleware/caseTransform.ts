@@ -55,11 +55,30 @@ const transformKeys = (
 // endpoint is excluded from case conversion entirely.
 const OPENAPI_SPEC_PATH = '/api/v1/openapi.json';
 
+// Only the documents module treats `metadata` as an arbitrary user-defined
+// bag that must round-trip in the exact casing the caller wrote it in (e.g.
+// `strapiDocumentId`). Other resources (e.g. conversation/session messages)
+// store server-generated camelCase data under `metadata` and rely on the
+// normal outbound camelCase → snake_case conversion, so the pass-through
+// must be scoped to these paths rather than applied globally.
+const METADATA_PASSTHROUGH_PATH_PREFIXES = [
+  '/api/v1/documents',
+  '/api/v1/knowledge/search',
+];
+
+const isMetadataPassthroughPath = (path: string): boolean => {
+  return METADATA_PASSTHROUGH_PATH_PREFIXES.some((prefix) => {
+    return path === prefix || path.startsWith(`${prefix}/`);
+  });
+};
+
 export const caseTransformMiddleware = async (ctx: Context, next: Next) => {
   if (!ctx.path.startsWith('/api/v1') || ctx.path === OPENAPI_SPEC_PATH) {
     await next();
     return;
   }
+
+  const metadataPassthrough = isMetadataPassthroughPath(ctx.path);
 
   // Transform incoming request body from snake_case to camelCase
   // The 'template' key is a pass-through user document (formation templates),
@@ -70,6 +89,7 @@ export const caseTransformMiddleware = async (ctx: Context, next: Next) => {
   // This mirrors the outbound RESPONSE_SKIP_KEYS below so execute round-trips
   // unchanged in snake_case.
   const BODY_SKIP_KEYS = new Set(['template', 'presetParameters', 'execute']);
+  if (metadataPassthrough) BODY_SKIP_KEYS.add('metadata');
   if (isPlainObject(ctx.request.body) || Array.isArray(ctx.request.body)) {
     ctx.request.body = transformKeys(
       ctx.request.body,
@@ -93,6 +113,7 @@ export const caseTransformMiddleware = async (ctx: Context, next: Next) => {
   // fields. 'preset_parameters' (the snake_case form of the response's
   // presetParameters field) is the same verbatim converter-tool input.
   const RESPONSE_SKIP_KEYS = new Set(['execute', 'preset_parameters']);
+  if (metadataPassthrough) RESPONSE_SKIP_KEYS.add('metadata');
   if (isPlainObject(ctx.body) || Array.isArray(ctx.body)) {
     ctx.body = transformKeys(ctx.body, camelToSnake, RESPONSE_SKIP_KEYS);
   }

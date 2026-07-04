@@ -38,7 +38,7 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 | `size`       | number         | File size in bytes                                                                                                 |
 | `status`     | string         | Ingestion lifecycle state: `pending` → `processing` → `ready` \| `failed`. Plain-text documents are always `ready`. |
 | `title`      | string \| null | Human-readable title (auto-set to filename for PDF ingestion)                                                      |
-| `metadata`   | object \| null | Arbitrary JSON metadata. After ingestion: `source_file_id`, `total_pages`, `chunk_count`. On failure: `failure_reason`. |
+| `metadata`   | object \| null | Arbitrary JSON metadata. After ingestion: `source_file_id`, `total_pages`, `chunk_count`. On failure: `failure_reason`. Key casing is preserved verbatim — unlike other response fields, `metadata` keys are not converted between `snake_case` and `camelCase`. |
 | `tags`       | object \| null | Key-value string tags                                                                                              |
 | `content`    | string \| null | Joined chunk content — only present in `GET /documents/:id` responses when `status` is `ready`                     |
 | `created_at` | string         | ISO 8601 creation timestamp                                                                                        |

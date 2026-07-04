@@ -114,6 +114,37 @@ describe('caseTransform middleware', () => {
     );
   });
 
+  test('document metadata keys are preserved verbatim (not case-transformed)', async () => {
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'metadata-passthrough-project' });
+    const projectId = projectRes.body.id;
+
+    const createRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/documents')
+      .send({
+        project_id: projectId,
+        content: 'hello world',
+        metadata: { strapiDocumentId: 'abc123' },
+      });
+    expect(createRes.status).toBe(201);
+    // `metadata` is an arbitrary user-defined bag: its keys must survive the
+    // round-trip unchanged in both directions, exactly like `execute`.
+    expect(createRes.body.metadata.strapiDocumentId).toBe('abc123');
+    expect(createRes.body.metadata.strapi_document_id).toBeUndefined();
+
+    const getRes = await authenticatedTestClient(adminToken).get(
+      `/api/v1/documents/${createRes.body.id}`
+    );
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.metadata.strapiDocumentId).toBe('abc123');
+    expect(getRes.body.metadata.strapi_document_id).toBeUndefined();
+
+    await authenticatedTestClient(adminToken).delete(
+      `/api/v1/projects/${projectId}`
+    );
+  });
+
   test('non /api/v1 paths are not transformed', async () => {
     // The health or root endpoint should not be transformed
     const response = await testClient.get('/');
