@@ -45,7 +45,7 @@ A `KnowledgeResult` is a discriminated union on `source_type`. All results share
 | `filename`    | `string`       | Original filename                                        |
 | `size`        | `number`       | File size in bytes                                       |
 | `title`       | `string\|null` | Document title (if set)                                  |
-| `metadata`    | `object\|null` | Arbitrary JSON metadata                                  |
+| `metadata`    | `object\|null` | Arbitrary JSON metadata, returned with keys in the exact casing they were written with — not converted between `snake_case` and `camelCase` like other fields |
 | `tags`        | `object`       | Key-value tags associated with the document              |
 
 #### Memory result (`source_type: "memory"`)

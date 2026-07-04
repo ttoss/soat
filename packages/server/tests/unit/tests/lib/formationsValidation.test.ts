@@ -823,6 +823,74 @@ describe('validateFormationTemplate', () => {
     expect(result.errors).toHaveLength(0);
   });
 
+  test('returns invalid when a pipeline tool step has an inline tool missing a name', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyPipeline: {
+          type: 'tool',
+          properties: {
+            type: 'pipeline',
+            name: 'my-pipeline',
+            pipeline: {
+              steps: [
+                {
+                  id: 'step1',
+                  tool: { description: 'no name here' },
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return (
+          e.path === 'resources.MyPipeline.properties.pipeline' &&
+          e.message.includes("step 'step1'") &&
+          e.message.includes('inline tool must be an object with a name')
+        );
+      })
+    ).toBe(true);
+  });
+
+  test('warns when a declared pipeline parameter is never referenced by any step', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyPipeline: {
+          type: 'tool',
+          properties: {
+            type: 'pipeline',
+            name: 'my-pipeline',
+            parameters: {
+              type: 'object',
+              properties: { data: {}, strapiDocumentId: {} },
+            },
+            pipeline: {
+              steps: [
+                {
+                  id: 'step1',
+                  toolId: 'tool_x',
+                  input: { body: { var: 'input.data' } },
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+    expect(result.valid).toBe(true);
+    expect(
+      result.warnings.some((w) => {
+        return (
+          w.path === 'resources.MyPipeline.properties.pipeline' &&
+          w.message.includes("'strapiDocumentId'")
+        );
+      })
+    ).toBe(true);
+  });
+
   test('returns valid for a template with param expression in resource properties', () => {
     const result = validateFormationTemplate({
       parameters: {

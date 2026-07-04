@@ -279,6 +279,8 @@ Each step's full output is captured under `steps.<id>`. A step may reference onl
 
 For LLM-decided (rather than fixed) multi-step flows, see [Orchestrations](./orchestrations.md), which share the same JSON Logic mapping model.
 
+**Validation.** `POST /tools`, `PATCH /tools/:id`, and `validate-formation` all validate a `pipeline` config's structure before it can run — including that every step has a `tool_id`/inline `tool` and that an inline step `tool` is an object with a `name` (missing it is reported immediately as an error, instead of surfacing only as a runtime failure the first time the pipeline executes). `validate-formation` additionally warns (not an error) when the tool's own `parameters` schema declares a property that no step's `input` mapping, and no `output` mapping, ever reads via `{ "var": "input.<name>" }` — such a caller-supplied value never reaches a step, so it is reported as an unreachable input key rather than being silently dropped.
+
 ### Output Mapping
 
 `output_mapping` is a universal [JSON Logic](https://jsonlogic.com) mapping applied to a tool's raw result, for **every** tool type (`http`, `mcp`, `soat`, `pipeline`, `client`). It's evaluated over `{ "output": <raw result> }`, so `{ "var": "output.text" }` extracts a bare scalar field without needing a wrapping `pipeline` tool just to reshape a response:

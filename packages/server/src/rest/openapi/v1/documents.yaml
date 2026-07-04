@@ -90,7 +90,10 @@ paths:
                   description: Document title
                 metadata:
                   type: object
-                  description: Arbitrary metadata object
+                  description: >-
+                    Arbitrary metadata object. Unlike other body fields, keys
+                    are stored and returned verbatim in the casing supplied —
+                    they are not converted between snake_case and camelCase.
                 tags:
                   type: object
                   additionalProperties:
@@ -342,7 +345,10 @@ paths:
                   example: '/reports/q1.txt'
                 metadata:
                   type: object
-                  description: Arbitrary metadata object
+                  description: >-
+                    Arbitrary metadata object. Unlike other body fields, keys
+                    are stored and returned verbatim in the casing supplied —
+                    they are not converted between snake_case and camelCase.
                 tags:
                   type: object
                   additionalProperties:

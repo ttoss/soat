@@ -55,6 +55,13 @@ export type FormationModule = {
     properties: unknown;
     basePath: string;
   }) => ValidationError[];
+  // Non-fatal checks — e.g. a declared input that no part of the resource
+  // config ever reads. Surfaced in `ValidationResult.warnings`, never fails
+  // validation.
+  warnProperties?: (args: {
+    properties: unknown;
+    basePath: string;
+  }) => ValidationError[];
   create: (args: {
     properties: Record<string, unknown>;
     projectId: number;

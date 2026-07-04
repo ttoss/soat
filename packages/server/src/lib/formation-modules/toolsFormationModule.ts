@@ -1,6 +1,11 @@
 import createDebug from 'debug';
 
+import { DomainError } from '../../errors';
 import type { FormationModule, ValidationError } from '../formationsTypes';
+import {
+  findUnreferencedPipelineParams,
+  validatePipelineConfig,
+} from '../pipelineTools';
 import {
   toNullableArray,
   toNullableObject,
@@ -52,7 +57,55 @@ const validateToolProperties = (args: {
   }
   pushFieldTypeErrors({ spec, properties, basePath, errors });
 
+  if (properties.type === 'pipeline' && properties.pipeline !== undefined) {
+    try {
+      validatePipelineConfig(properties.pipeline);
+    } catch (error) {
+      const message =
+        error instanceof DomainError ? error.message : String(error);
+      errors.push({ path: `${basePath}.pipeline`, message });
+    }
+  }
+
   return errors;
+};
+
+/**
+ * Warns when a pipeline tool declares a `parameters` property that no step's
+ * `input` mapping (nor the pipeline's `output` mapping) ever reads via
+ * `{ var: 'input.<name>' }`. Such a caller-supplied value never reaches any
+ * step — it is silently dropped rather than causing a runtime error — so
+ * this is a warning, not a validation error.
+ */
+const warnToolProperties = (args: {
+  properties: unknown;
+  basePath: string;
+}): ValidationError[] => {
+  const { properties, basePath } = args;
+  if (!isObjectRecord(properties)) return [];
+  if (properties.type !== 'pipeline' || properties.pipeline === undefined) {
+    return [];
+  }
+
+  let config;
+  try {
+    config = validatePipelineConfig(properties.pipeline);
+  } catch {
+    // Already reported by validateToolProperties; nothing more to warn about.
+    return [];
+  }
+
+  const unreferenced = findUnreferencedPipelineParams({
+    config,
+    parameters: properties.parameters,
+  });
+
+  return unreferenced.map((name) => {
+    return {
+      path: `${basePath}.pipeline`,
+      message: `Pipeline parameter '${name}' is declared but never referenced by any step's \`input\` (or the pipeline \`output\`) as \`{ "var": "input.${name}" }\` — it will never reach a step.`,
+    };
+  });
 };
 
 // ── Module export ────────────────────────────────────────────────────────
@@ -62,6 +115,10 @@ export const toolsFormationModule: FormationModule = {
 
   validateProperties: ({ properties, basePath }) => {
     return validateToolProperties({ properties, basePath });
+  },
+
+  warnProperties: ({ properties, basePath }) => {
+    return warnToolProperties({ properties, basePath });
   },
 
   create: async ({ properties, projectId }) => {
