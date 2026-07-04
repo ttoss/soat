@@ -38,6 +38,7 @@ interface OpenApiRequestBodyProperty {
   type?: string;
   description?: string;
   nullable?: boolean;
+  $ref?: string;
 }
 
 interface OpenApiRequestBodySchema {
@@ -167,6 +168,23 @@ for (const file of files) {
     return schema;
   };
 
+  /**
+   * Resolves a body property that is itself a bare `$ref` (e.g. `reasoning:
+   * $ref: '#/components/schemas/ReasoningConfig'`) so its description/type
+   * still reach the CLI flag metadata. Same-file refs only — no request body
+   * property currently points across files.
+   */
+  const resolveProperty = (
+    property: OpenApiRequestBodyProperty
+  ): OpenApiRequestBodyProperty => {
+    if (property.$ref && property.$ref.startsWith('#/components/schemas/')) {
+      const refKey = property.$ref.replace('#/components/schemas/', '');
+      const resolved = spec.components?.schemas?.[refKey];
+      if (resolved) return resolved;
+    }
+    return property;
+  };
+
   for (const [, pathItem] of Object.entries(spec.paths ?? {})) {
     // Collect path-level parameters (inherited by all operations)
     const pathLevelParams = (pathItem.parameters ?? []).map(resolveParam);
@@ -209,9 +227,12 @@ for (const file of files) {
         });
       }
 
-      const rawBodySchema = op.requestBody?.content?.['application/json']?.schema;
+      const rawBodySchema =
+        op.requestBody?.content?.['application/json']?.schema;
       const bodySchema = rawBodySchema
-        ? resolveSchema(rawBodySchema as OpenApiRequestBodySchema & { $ref?: string })
+        ? resolveSchema(
+            rawBodySchema as OpenApiRequestBodySchema & { $ref?: string }
+          )
         : undefined;
       if (bodySchema) {
         const mergedProperties: Record<string, OpenApiRequestBodyProperty> = {};
@@ -224,7 +245,7 @@ for (const file of files) {
               schema.properties
             )) {
               if (!mergedProperties[propName]) {
-                mergedProperties[propName] = propSchema;
+                mergedProperties[propName] = resolveProperty(propSchema);
                 if (required.has(propName)) requiredInAll.add(propName);
               }
             }
@@ -239,7 +260,9 @@ for (const file of files) {
           const requiredEvery = new Set<string>();
           for (const propName of Object.keys(mergedProperties)) {
             if (
-              bodySchema.oneOf.every((v) => v.required?.includes(propName))
+              bodySchema.oneOf.every((v) => {
+                return v.required?.includes(propName);
+              })
             ) {
               requiredEvery.add(propName);
             }

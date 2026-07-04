@@ -34,7 +34,7 @@ describe('Reasoning config', () => {
   });
 
   describe('agent pipeline contract', () => {
-    test('agent create round-trips a pipeline config', async () => {
+    test('agent create round-trips a single implicit-branch step', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/agents')
         .send({
@@ -72,24 +72,27 @@ describe('Reasoning config', () => {
       expect(res.body.reasoning.steps[1].output).toBe(true);
     });
 
-    test('agent create round-trips a fanout step', async () => {
+    test('agent create round-trips a multi-branch step with per-branch overrides', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/agents')
         .send({
           project_id: projectId,
           ai_provider_id: aiProviderId,
-          name: 'FanoutContractAgent',
+          name: 'BranchesContractAgent',
           reasoning: {
             mode: 'pipeline',
             steps: [
               {
-                kind: 'fanout',
                 name: 'angles',
-                perspectives: [
-                  { name: 'Skeptic', prompt: 'Find the flaw.' },
-                  { name: 'Advocate' },
-                ],
                 prompt: 'Argue an angle on {question}',
+                branches: [
+                  {
+                    name: 'Skeptic',
+                    prompt: 'Find the flaw.',
+                    temperature: 0.2,
+                  },
+                  { name: 'Advocate', temperature: 0.9 },
+                ],
               },
               {
                 name: 'final',
@@ -101,9 +104,41 @@ describe('Reasoning config', () => {
         });
 
       expect(res.status).toBe(201);
-      expect(res.body.reasoning.steps[0].kind).toBe('fanout');
-      expect(res.body.reasoning.steps[0].perspectives).toHaveLength(2);
-      expect(res.body.reasoning.steps[0].perspectives[0].name).toBe('Skeptic');
+      expect(res.body.reasoning.steps[0].branches).toHaveLength(2);
+      expect(res.body.reasoning.steps[0].branches[0].name).toBe('Skeptic');
+      expect(res.body.reasoning.steps[0].branches[0].temperature).toBe(0.2);
+    });
+
+    test('agent create round-trips a debate step (branches + rounds + {transcript})', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'DebateContractAgent',
+          reasoning: {
+            mode: 'pipeline',
+            steps: [
+              {
+                name: 'debate',
+                rounds: 2,
+                branches: [
+                  { name: 'Optimist', prompt: 'Argue for. {transcript}' },
+                  { name: 'Skeptic', prompt: 'Argue against. {transcript}' },
+                ],
+              },
+              {
+                name: 'final',
+                prompt: 'Synthesize {steps.debate.last}',
+                output: true,
+              },
+            ],
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.reasoning.steps[0].rounds).toBe(2);
+      expect(res.body.reasoning.steps[0].branches).toHaveLength(2);
     });
 
     test('agent update sets and clears the reasoning config', async () => {
@@ -180,10 +215,33 @@ describe('Reasoning config', () => {
       expect(res.body.error.code).toBe('INVALID_REASONING_CONFIG');
     });
 
-    test('rejects a fanout count out of range', async () => {
+    test('rejects a dotted step name', async () => {
       const res = await createWithReasoning({
         mode: 'pipeline',
-        steps: [{ name: 'a', prompt: 'p', kind: 'fanout', count: 9 }],
+        steps: [{ name: 'a.b', prompt: 'p' }],
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_REASONING_CONFIG');
+    });
+
+    test.each(['kind', 'count', 'perspectives'])(
+      'rejects the removed %s field',
+      async (field) => {
+        // Caught by the strict-fields OpenAPI schema check (VALIDATION_FAILED)
+        // before it would otherwise reach validateReasoningConfig's own
+        // INVALID_REASONING_CONFIG rejection of the same removed fields.
+        const res = await createWithReasoning({
+          mode: 'pipeline',
+          steps: [{ name: 'a', prompt: 'p', [field]: 'x' }],
+        });
+        expect(res.status).toBe(400);
+      }
+    );
+
+    test('rejects branches out of range', async () => {
+      const res = await createWithReasoning({
+        mode: 'pipeline',
+        steps: [{ name: 'a', prompt: 'p', branches: [] }],
       });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('INVALID_REASONING_CONFIG');
@@ -224,15 +282,14 @@ describe('Reasoning config', () => {
       expect(res.status).toBe(201);
     });
 
-    test('rejects a perspective entry with a non-string field', async () => {
+    test('rejects a branch entry with a non-string field', async () => {
       const res = await createWithReasoning({
         mode: 'pipeline',
         steps: [
           {
             name: 'angles',
-            kind: 'fanout',
             prompt: 'p',
-            perspectives: [{ name: 'ok' }, { name: 123 }],
+            branches: [{ name: 'ok' }, { name: 123 }],
           },
         ],
       });
@@ -240,12 +297,104 @@ describe('Reasoning config', () => {
       expect(res.body.error.code).toBe('INVALID_REASONING_CONFIG');
     });
 
+    test('rejects haltIfEquals on a multi-branch step', async () => {
+      const res = await createWithReasoning({
+        mode: 'pipeline',
+        steps: [
+          {
+            name: 'angles',
+            prompt: 'p',
+            branches: [{ name: 'A' }, { name: 'B' }],
+            halt_if_equals: 'APPROVED',
+          },
+        ],
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_REASONING_CONFIG');
+    });
+
+    test('rejects rounds > 1 with no {transcript} reference', async () => {
+      const res = await createWithReasoning({
+        mode: 'pipeline',
+        steps: [
+          {
+            name: 'debate',
+            rounds: 2,
+            branches: [{ name: 'A' }, { name: 'B' }],
+            prompt: 'Argue about {question}',
+          },
+        ],
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_REASONING_CONFIG');
+    });
+
+    test('rejects {steps.x.last} referencing an independent multi-branch step', async () => {
+      const res = await createWithReasoning({
+        mode: 'pipeline',
+        steps: [
+          {
+            name: 'samples',
+            prompt: 'Sample {question}',
+            branches: [{ name: 'A' }, { name: 'B' }],
+          },
+          {
+            name: 'final',
+            prompt: 'Use {steps.samples.last}',
+            output: true,
+          },
+        ],
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_REASONING_CONFIG');
+    });
+
+    test('accepts {steps.x.last} referencing a {transcript}-shared multi-branch step', async () => {
+      const res = await createWithReasoning({
+        mode: 'pipeline',
+        steps: [
+          {
+            name: 'debate',
+            rounds: 2,
+            branches: [
+              { name: 'A', prompt: 'Argue. {transcript}' },
+              { name: 'B', prompt: 'Argue. {transcript}' },
+            ],
+          },
+          { name: 'final', prompt: 'Use {steps.debate.last}', output: true },
+        ],
+      });
+      expect(res.status).toBe(201);
+    });
+
     test('rejects a pipeline exceeding the total completion budget', async () => {
       const res = await createWithReasoning({
         mode: 'pipeline',
         steps: [
-          { name: 'a', kind: 'fanout', prompt: 'p', count: 5, rounds: 3 },
-          { name: 'b', kind: 'fanout', prompt: 'q', count: 5, rounds: 2 },
+          {
+            name: 'a',
+            prompt: 'p {transcript}',
+            rounds: 3,
+            branches: [
+              { name: 'A1' },
+              { name: 'A2' },
+              { name: 'A3' },
+              { name: 'A4' },
+              { name: 'A5' },
+            ],
+          },
+          {
+            name: 'b',
+            prompt: 'q {transcript}',
+            rounds: 2,
+            branches: [
+              { name: 'B1' },
+              { name: 'B2' },
+              { name: 'B3' },
+              { name: 'B4' },
+              { name: 'B5' },
+            ],
+          },
         ],
       });
       expect(res.status).toBe(400);
