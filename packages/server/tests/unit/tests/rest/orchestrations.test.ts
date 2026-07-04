@@ -2040,6 +2040,82 @@ describe('Orchestrations', () => {
     });
   });
 
+  // ── Human node execution record is finalized on resume (#384) ─────────────
+
+  describe('Human node execution record after resume', () => {
+    test("the human node's own node_executions entry is updated to completed, not left as requires_action", async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          project_id: projectId,
+          name: 'human-resume-record-test',
+          nodes: [
+            {
+              id: 'review',
+              type: 'human',
+              prompt: 'Approve?',
+              options: ['approve', 'reject'],
+            },
+            {
+              id: 'after_review',
+              type: 'transform',
+              expression: { var: 'state.review.decision' },
+              output_mapping: { result: 'state.decision' },
+            },
+          ],
+          edges: [{ from: 'review', to: 'after_review' }],
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({
+          wait: true,
+          orchestration_id: createRes.body.id,
+          input: {},
+        });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('paused');
+      const runId = runRes.body.id;
+
+      const pausedExecs: Array<{ node_id: string; status: string }> =
+        runRes.body.node_executions;
+      const pausedReviewExec = pausedExecs.find((e) => {
+        return e.node_id === 'review';
+      });
+      expect(pausedReviewExec?.status).toBe('requires_action');
+
+      const submitRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestration-runs/${runId}/human-input`)
+        .send({ node_id: 'review', output: { decision: 'approve' } });
+      expect(submitRes.status).toBe(200);
+      expect(submitRes.body.status).toBe('completed');
+
+      const finalRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${runId}`
+      );
+      expect(finalRes.status).toBe(200);
+      expect(finalRes.body.status).toBe('completed');
+
+      const finalExecs: Array<{
+        node_id: string;
+        status: string;
+        output: unknown;
+        completed_at: unknown;
+      }> = finalRes.body.node_executions;
+      const reviewExecs = finalExecs.filter((e) => {
+        return e.node_id === 'review';
+      });
+
+      // Exactly one execution record for the node — the original
+      // requires_action record was updated in place, not duplicated.
+      expect(reviewExecs).toHaveLength(1);
+      expect(reviewExecs[0].status).toBe('completed');
+      expect(reviewExecs[0].output).toEqual({ decision: 'approve' });
+      expect(reviewExecs[0].completed_at).not.toBeNull();
+    });
+  });
+
   // ── Durable background execution ──────────────────────────────────────────
 
   describe('Durable background execution', () => {

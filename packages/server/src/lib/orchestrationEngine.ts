@@ -8,7 +8,10 @@ import {
 } from './orchestrationEvents';
 import type { RequiredAction, ScheduledWait } from './orchestrationExecutors';
 import { applyOutputMapping, resolveNextNodes } from './orchestrationExecutors';
-import { recordDelayResumption } from './orchestrationNodeRecorder';
+import {
+  recordDelayResumption,
+  recordHumanInputResumption,
+} from './orchestrationNodeRecorder';
 import type { PersistedResumeContext } from './orchestrationRunHelpers';
 import {
   applyHumanInputToState,
@@ -433,6 +436,11 @@ export const resumeOrchestrationRunExecution = async (args: {
       nodes,
       state,
       artifacts,
+    });
+    await recordHumanInputResumption({
+      runRecord: run,
+      humanNodeId,
+      humanOutput,
     });
   }
 

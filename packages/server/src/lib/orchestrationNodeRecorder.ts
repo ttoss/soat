@@ -168,6 +168,32 @@ export const recordDelayResumption = async (args: {
   });
 };
 
+/**
+ * Finalizes a human/webhook-receive node's own `node_executions` entry once
+ * its pause is satisfied. The node's record is written as `requires_action`
+ * when the run first pauses (see `summarizeNodeResult`); without this, that
+ * record is never revisited and the finished run's history keeps claiming the
+ * node is still waiting on an action, even though the submitted payload was
+ * already applied to `state`/`artifacts` by `applyHumanInputToState`.
+ */
+export const recordHumanInputResumption = async (args: {
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  humanNodeId: string;
+  humanOutput: Record<string, unknown>;
+}): Promise<void> => {
+  const { runRecord, humanNodeId, humanOutput } = args;
+  await db.OrchestrationNodeExecution.update(
+    { status: 'completed', output: humanOutput, completedAt: new Date() },
+    {
+      where: {
+        runId: runRecord.id as number,
+        nodeId: humanNodeId,
+        status: 'requires_action',
+      },
+    }
+  );
+};
+
 export const recordSkippedNodeExecutions = async (args: {
   runRecord: InstanceType<typeof db.OrchestrationRun>;
   nodes: OrchestrationNode[];
