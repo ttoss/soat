@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.18](https://github.com/ttoss/soat/compare/v0.13.17...v0.13.18) (2026-07-03)
+
+### Bug Fixes
+
+* resolve six orchestration/MCP/formations bugs via red-green TDD ([#381](https://github.com/ttoss/soat/issues/381)) ([10edd2c](https://github.com/ttoss/soat/commit/10edd2c7563b7f2a12d778910c5209576b20624d))
+
+## [0.13.17](https://github.com/ttoss/soat/compare/v0.13.16...v0.13.17) (2026-07-03)
+
+### Bug Fixes
+
+* scope soat tool trace/context injection to schemas that declare it ([#372](https://github.com/ttoss/soat/issues/372)) ([8b455d9](https://github.com/ttoss/soat/commit/8b455d990beee8d21f66fcf92df8159b40a4e4ce)), closes [#371](https://github.com/ttoss/soat/issues/371)
+
 ## [0.13.16](https://github.com/ttoss/soat/compare/v0.13.15...v0.13.16) (2026-07-03)
 
 ### Bug Fixes

@@ -27,6 +27,8 @@ export interface ToolDefinition {
   query?: (args: Record<string, unknown>) => string;
   body?: (args: Record<string, unknown>) => Record<string, unknown>;
   iamAction?: string;
+  /** snake_case names of every top-level request body property this operation's schema declares, including server-managed ones. */
+  acceptedBodyFields: string[];
 }
 
 export interface OpenApiSpec {
@@ -36,6 +38,22 @@ export interface OpenApiSpec {
     parameters?: Record<string, unknown>;
   };
 }
+
+export type RequestBodySpec = {
+  required?: boolean;
+  content?: {
+    'application/json'?: {
+      schema?: {
+        type?: string;
+        required?: string[];
+        properties?: Record<string, unknown>;
+        oneOf?: Array<Record<string, unknown>>;
+        anyOf?: Array<Record<string, unknown>>;
+        $ref?: string;
+      };
+    };
+  };
+};
 
 export interface OperationSpec {
   operationId?: string;
@@ -51,21 +69,7 @@ export interface OperationSpec {
     };
     $ref?: string;
   }>;
-  requestBody?: {
-    required?: boolean;
-    content?: {
-      'application/json'?: {
-        schema?: {
-          type?: string;
-          required?: string[];
-          properties?: Record<string, unknown>;
-          oneOf?: Array<Record<string, unknown>>;
-          anyOf?: Array<Record<string, unknown>>;
-          $ref?: string;
-        };
-      };
-    };
-  };
+  requestBody?: RequestBodySpec;
   'x-iam-action'?: string;
   /** When true, the operation is excluded from the MCP tool surface. */
   'x-soat-mcp-exclude'?: boolean;
@@ -264,22 +268,26 @@ export const extractQueryParams = (args: {
     });
 };
 
+const resolveBodySchema = (args: {
+  requestBody?: RequestBodySpec;
+  spec: OpenApiSpec;
+}) => {
+  const rawBodySchema = args.requestBody?.content?.['application/json']?.schema;
+  const dereferencedBodySchema = dereferenceSchema(rawBodySchema, args.spec);
+  return resolveSchema(dereferencedBodySchema, args.spec);
+};
+
+/** snake_case names of every top-level property an operation's request schema declares, including server-managed ones. */
+export const extractAcceptedBodyFields = (args: {
+  requestBody?: RequestBodySpec;
+  spec: OpenApiSpec;
+}): string[] => {
+  const bodySchema = resolveBodySchema(args);
+  return Object.keys(bodySchema?.properties ?? {});
+};
+
 export const extractBodyProps = (args: {
-  requestBody?: {
-    required?: boolean;
-    content?: {
-      'application/json'?: {
-        schema?: {
-          type?: string;
-          required?: string[];
-          properties?: Record<string, unknown>;
-          oneOf?: Array<Record<string, unknown>>;
-          anyOf?: Array<Record<string, unknown>>;
-          $ref?: string;
-        };
-      };
-    };
-  };
+  requestBody?: RequestBodySpec;
   spec: OpenApiSpec;
 }): Array<{
   snakeName: string;
@@ -289,9 +297,7 @@ export const extractBodyProps = (args: {
   type: string;
   items?: unknown;
 }> => {
-  const rawBodySchema = args.requestBody?.content?.['application/json']?.schema;
-  const dereferencedBodySchema = dereferenceSchema(rawBodySchema, args.spec);
-  const bodySchema = resolveSchema(dereferencedBodySchema, args.spec);
+  const bodySchema = resolveBodySchema(args);
   if (!bodySchema?.properties) return [];
   const allEntries = Object.entries(bodySchema.properties);
   const filtered = allEntries.filter(([, value]: [string, unknown]) => {
@@ -380,6 +386,11 @@ export const processOperation = (args: {
 
   const inputSchema = buildInputSchema(pathParams, queryParams, bodyProps);
 
+  const acceptedBodyFields = extractAcceptedBodyFields({
+    requestBody: args.operation.requestBody,
+    spec: args.spec,
+  });
+
   return {
     name: toolName,
     description: (args.operation.description || '')
@@ -392,6 +403,7 @@ export const processOperation = (args: {
     query: buildQueryFn(queryParams),
     body: buildBodyFn(bodyProps),
     iamAction: args.operation['x-iam-action'],
+    acceptedBodyFields,
   };
 };
 

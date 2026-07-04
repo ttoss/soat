@@ -151,6 +151,51 @@ const buildInputSchemaWithoutPresets = (
   };
 };
 
+const withToolContext = (args: {
+  body: Record<string, unknown>;
+  toolContext?: Record<string, string>;
+  acceptedBodyFields: string[];
+}) => {
+  if (!args.toolContext || !args.acceptedBodyFields.includes('tool_context')) {
+    return args.body;
+  }
+  return { ...args.body, tool_context: args.toolContext };
+};
+
+const withTraceIds = (args: {
+  body: Record<string, unknown>;
+  traceId?: string;
+  rootTraceId?: string | null;
+  acceptedBodyFields: string[];
+}) => {
+  const acceptsTrace =
+    args.acceptedBodyFields.includes('parent_trace_id') &&
+    args.acceptedBodyFields.includes('root_trace_id');
+  if (!args.traceId || !acceptsTrace) return args.body;
+  return {
+    ...args.body,
+    parent_trace_id: args.traceId,
+    root_trace_id: args.rootTraceId ?? args.traceId,
+  };
+};
+
+const withMaxCallDepth = (args: {
+  body: Record<string, unknown>;
+  remainingDepth?: number;
+  acceptedBodyFields: string[];
+}) => {
+  if (
+    args.remainingDepth === undefined ||
+    !args.acceptedBodyFields.includes('max_call_depth')
+  ) {
+    return args.body;
+  }
+  return {
+    ...args.body,
+    max_call_depth: Math.max(0, args.remainingDepth - 1),
+  };
+};
+
 const buildSoatRequestBody = (args: {
   def: (typeof soatTools)[number];
   rawArgs: Record<string, unknown>;
@@ -160,21 +205,25 @@ const buildSoatRequestBody = (args: {
   remainingDepth?: number;
 }) => {
   const soatBody = args.def.body ? args.def.body(args.rawArgs) : undefined;
-  const soatBodyWithContext =
-    soatBody && args.toolContext
-      ? { ...soatBody, tool_context: args.toolContext }
-      : soatBody;
-  const withTrace =
-    soatBodyWithContext && args.traceId
-      ? {
-          ...soatBodyWithContext,
-          parent_trace_id: args.traceId,
-          root_trace_id: args.rootTraceId ?? args.traceId,
-        }
-      : soatBodyWithContext;
-  return withTrace && args.remainingDepth !== undefined
-    ? { ...withTrace, max_call_depth: Math.max(0, args.remainingDepth - 1) }
-    : withTrace;
+  if (!soatBody) return soatBody;
+
+  const acceptedBodyFields = args.def.acceptedBodyFields;
+  const withContext = withToolContext({
+    body: soatBody,
+    toolContext: args.toolContext,
+    acceptedBodyFields,
+  });
+  const withTrace = withTraceIds({
+    body: withContext,
+    traceId: args.traceId,
+    rootTraceId: args.rootTraceId,
+    acceptedBodyFields,
+  });
+  return withMaxCallDepth({
+    body: withTrace,
+    remainingDepth: args.remainingDepth,
+    acceptedBodyFields,
+  });
 };
 
 export const executeSoatTool = async (args: {

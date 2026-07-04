@@ -1,6 +1,5 @@
 import type { App } from '@ttoss/http-server';
 import {
-  apiCall,
   createMcpRouter,
   McpServer,
   registerToolFromSchema,
@@ -10,7 +9,10 @@ import { version } from '../../package.json' with { type: 'json' };
 import { getDocPage, getDocsIndex } from '../lib/docs';
 import { soatTools } from '../lib/soatTools';
 import { ISSUER, verifyOauthAccessToken } from '../oauth/server';
+import { callApi, mcpAuthorizationStore } from './callApi';
 import { toMcpText } from './toMcpText';
+
+const apiBaseUrl = `http://localhost:${process.env.PORT || 5047}`;
 
 const mcpServer = new McpServer({
   name: 'soat',
@@ -35,11 +37,12 @@ for (const tool of soatTools) {
     inputSchema: tool.inputSchema,
     handler: async (args: Record<string, unknown>) => {
       const url = tool.path(args) + (tool.query ? tool.query(args) : '');
-      const data = await apiCall(
-        tool.method,
+      const data = await callApi({
+        apiBaseUrl,
+        method: tool.method,
         url,
-        tool.body ? { body: tool.body(args) } : {}
-      );
+        body: tool.body ? tool.body(args) : undefined,
+      });
       return { content: [{ type: 'text' as const, text: toMcpText(data) }] };
     },
   });
@@ -81,11 +84,13 @@ registerToolFromSchema(mcpServer, {
 
 const mcpRouter = createMcpRouter(mcpServer, {
   aliases: ['/'],
-  apiBaseUrl: `http://localhost:${process.env.PORT || 5047}`,
+  apiBaseUrl,
   getApiHeaders: (ctx) => {
-    return {
-      authorization: (ctx.headers.authorization as string) ?? '',
-    };
+    const authorization = (ctx.headers.authorization as string) ?? '';
+    // Populates callApi's AsyncLocalStorage for the remainder of this
+    // request's async chain, including the tool handlers above.
+    mcpAuthorizationStore.enterWith(authorization);
+    return { authorization };
   },
   auth: {
     verifyToken: async (token) => {

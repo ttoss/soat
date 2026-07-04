@@ -225,7 +225,11 @@ describe('executeAgentNode', () => {
       traceId: null,
     });
 
-    expect(result).toEqual({ kind: 'artifact', artifact: { answer: 'yes' } });
+    expect(result).toEqual({
+      kind: 'artifact',
+      artifact: { answer: 'yes' },
+      traceId: 'trc_1',
+    });
     spy.mockRestore();
   });
 
@@ -258,6 +262,7 @@ describe('executeAgentNode', () => {
     expect(result).toEqual({
       kind: 'artifact',
       artifact: { content: 'not valid json' },
+      traceId: 'trc_2',
     });
     spy.mockRestore();
   });

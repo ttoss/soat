@@ -41,6 +41,37 @@ export const detectCycle = (
   return false;
 };
 
+/**
+ * Detects a cycle while ignoring `loop` nodes, which legitimately introduce
+ * intentional iteration via a sub-orchestration rather than a graph cycle.
+ * Excluding only `loop` nodes (and edges touching them) — rather than
+ * skipping cycle detection entirely whenever one is present — still catches
+ * a genuine, unrelated cycle among the remaining nodes.
+ */
+export const detectCycleExcludingLoopNodes = (
+  nodes: OrchestrationNode[],
+  edges: OrchestrationEdge[]
+): boolean => {
+  const loopNodeIds = new Set(
+    nodes
+      .filter((n) => {
+        return n.type === 'loop';
+      })
+      .map((n) => {
+        return n.id;
+      })
+  );
+  if (loopNodeIds.size === 0) return detectCycle(nodes, edges);
+
+  const nonLoopNodes = nodes.filter((n) => {
+    return !loopNodeIds.has(n.id);
+  });
+  const nonLoopEdges = edges.filter((e) => {
+    return !loopNodeIds.has(e.from) && !loopNodeIds.has(e.to);
+  });
+  return detectCycle(nonLoopNodes, nonLoopEdges);
+};
+
 export const findStartNodes = (
   nodes: OrchestrationNode[],
   edges: OrchestrationEdge[]

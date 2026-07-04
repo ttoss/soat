@@ -59,6 +59,7 @@ export const updateRunRecord = async (args: {
   state: Record<string, unknown>;
   artifacts: Record<string, unknown>;
   output: Record<string, unknown>;
+  traceId?: string | null;
 }): Promise<void> => {
   const {
     runRecord,
@@ -68,6 +69,7 @@ export const updateRunRecord = async (args: {
     state,
     artifacts,
     output,
+    traceId,
   } = args;
   const isTerminal = runStatus === 'completed' || runStatus === 'failed';
   await runRecord.update({
@@ -83,6 +85,9 @@ export const updateRunRecord = async (args: {
     resumeAt: null,
     resumeContext: null,
     completedAt: isTerminal ? new Date() : null,
+    // Only fill once: the first trace produced by a traced node (e.g. an
+    // `agent` node) becomes the run's trace_id and is never overwritten.
+    ...(runRecord.traceId ? {} : traceId ? { traceId } : {}),
   });
 };
 

@@ -1433,6 +1433,78 @@ describe('executeSoatTool - direct', () => {
   });
 });
 
+describe('executeSoatTool - trace field injection scoping (issue #371)', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('does not inject parent_trace_id/root_trace_id/max_call_depth for actions whose schema does not declare them', async () => {
+    const searchKnowledgeDef = soatTools.find((t) => {
+      return t.name === 'search-knowledge';
+    });
+    expect(searchKnowledgeDef).toBeDefined();
+
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ results: [] }), { status: 200 })
+      );
+
+    await executeSoatTool({
+      toolName: 'test',
+      def: searchKnowledgeDef!,
+      rawArgs: { query: 'hello' },
+      base: 'http://localhost:5047',
+      traceId: 'trc_123',
+      rootTraceId: 'trc_root',
+      remainingDepth: 3,
+      buildContextHeaders: () => {
+        return {};
+      },
+      logToolCallingError: jest.fn(),
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const sentBody = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(sentBody).not.toHaveProperty('parent_trace_id');
+    expect(sentBody).not.toHaveProperty('root_trace_id');
+    expect(sentBody).not.toHaveProperty('max_call_depth');
+  });
+
+  test('still injects parent_trace_id/root_trace_id/max_call_depth for create-agent-generation', async () => {
+    const createAgentGenerationDef = soatTools.find((t) => {
+      return t.name === 'create-agent-generation';
+    });
+    expect(createAgentGenerationDef).toBeDefined();
+
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'gen_1' }), { status: 201 })
+      );
+
+    await executeSoatTool({
+      toolName: 'test',
+      def: createAgentGenerationDef!,
+      rawArgs: { agent_id: 'agt_1', messages: [] },
+      base: 'http://localhost:5047',
+      traceId: 'trc_123',
+      rootTraceId: 'trc_root',
+      remainingDepth: 3,
+      buildContextHeaders: () => {
+        return {};
+      },
+      logToolCallingError: jest.fn(),
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const sentBody = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(sentBody.parent_trace_id).toBe('trc_123');
+    expect(sentBody.root_trace_id).toBe('trc_root');
+    expect(sentBody.max_call_depth).toBe(2);
+  });
+});
+
 describe('resolveSoatTools - direct', () => {
   test('returns empty object when actions is null', () => {
     const result = resolveSoatTools({

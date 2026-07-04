@@ -23,6 +23,7 @@ import type { OrchestrationEdge, OrchestrationNode } from './orchestrations';
 
 export {
   detectCycle,
+  detectCycleExcludingLoopNodes,
   findStartNodes,
   resolveNextNodes,
 } from './orchestrationGraph';
@@ -35,6 +36,7 @@ export {
 // ── Types ─────────────────────────────────────────────────────────────────
 
 export type RequiredAction = {
+  type: 'human_input' | 'webhook_receive';
   nodeId: string;
   prompt: string;
   context: Record<string, unknown>;
@@ -199,6 +201,19 @@ const advanceSuccessors = (args: {
   }
 };
 
+// The first trace produced by a traced node (e.g. an `agent` node) in a batch;
+// becomes the run's trace_id when the run has none yet.
+const findFirstTraceId = (
+  nodeResults: Array<{ execResult: NodeExecutionResult }>
+): string | null => {
+  for (const { execResult } of nodeResults) {
+    if (execResult.kind === 'artifact' && execResult.traceId) {
+      return execResult.traceId;
+    }
+  }
+  return null;
+};
+
 export const processNodeResultBatch = (args: {
   nodeResults: Array<{
     nodeId: string;
@@ -216,6 +231,7 @@ export const processNodeResultBatch = (args: {
   nextRound: string[];
   requiredAction: RequiredAction | null;
   scheduledWait: ScheduledWait | null;
+  traceId: string | null;
 } => {
   const {
     nodeResults,
@@ -231,11 +247,13 @@ export const processNodeResultBatch = (args: {
   const nextRound: string[] = [];
   let requiredAction: RequiredAction | null = null;
   let scheduledWait: ScheduledWait | null = null;
+  const traceId = findFirstTraceId(nodeResults);
 
   for (const { nodeId, nodeDefn, execResult } of nodeResults) {
     if (execResult.kind === 'requires_action') {
       if (!requiredAction) {
         requiredAction = {
+          type: execResult.type,
           nodeId: execResult.nodeId,
           prompt: execResult.prompt,
           context: execResult.context,
@@ -281,5 +299,5 @@ export const processNodeResultBatch = (args: {
     }
   }
 
-  return { nextRound, requiredAction, scheduledWait };
+  return { nextRound, requiredAction, scheduledWait, traceId };
 };

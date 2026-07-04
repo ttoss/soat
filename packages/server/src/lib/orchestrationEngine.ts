@@ -108,8 +108,9 @@ const buildResumeEntry = async (args: {
 };
 
 /**
- * Settles a run into a terminal or paused state: persists the final record,
- * emits the matching lifecycle webhook event, and returns the mapped run.
+ * Settles a run into a terminal or paused state: persists the final record
+ * (including the run's resolved trace id), emits the matching lifecycle webhook
+ * event, and returns the mapped run.
  */
 const settleRun = async (args: {
   runRecord: InstanceType<typeof db.OrchestrationRun>;
@@ -120,6 +121,7 @@ const settleRun = async (args: {
   artifacts: Record<string, unknown>;
   nodes: OrchestrationNode[];
   edges: OrchestrationEdge[];
+  traceId: string | null;
 }): Promise<MappedOrchestrationRun> => {
   const {
     runRecord,
@@ -130,6 +132,7 @@ const settleRun = async (args: {
     artifacts,
     nodes,
     edges,
+    traceId,
   } = args;
 
   const output = getTerminalOutput({ nodes, edges, artifacts });
@@ -141,6 +144,7 @@ const settleRun = async (args: {
     state,
     artifacts,
     output,
+    traceId,
   });
 
   const mapped = await mapRunWithIncludes(runRecord.id as number);
@@ -166,6 +170,9 @@ const settleRun = async (args: {
  * - `inlineWaits: false` (background mode) stops at the first scheduled wait,
  *   persisting `resumeAt`/`resumeContext` so the scheduler resumes the run
  *   later. Used for durable, request-detached execution.
+ *
+ * The first trace id produced by a traced node (e.g. an `agent` node) is
+ * captured across segments and persisted onto the run when it settles.
  */
 const driveRunToRest = async (args: {
   runRecord: InstanceType<typeof db.OrchestrationRun>;
@@ -186,14 +193,14 @@ const driveRunToRest = async (args: {
     state,
     artifacts,
     projectIds,
-    traceId,
     authHeader,
     inlineWaits,
   } = args;
   let entry = args.entry;
+  let capturedTraceId: string | null = args.traceId;
 
   for (;;) {
-    const { runStatus, requiredAction, runError, scheduledWait } =
+    const { runStatus, requiredAction, runError, scheduledWait, traceId } =
       await executeRunLoop({
         runRecord,
         nodes,
@@ -201,13 +208,14 @@ const driveRunToRest = async (args: {
         state,
         artifacts,
         projectIds,
-        traceId,
+        traceId: capturedTraceId,
         authHeader,
         completedNodes: entry?.completedNodes,
         conditionLabels: entry?.conditionLabels,
         activatedNodes: entry?.activatedNodes,
         pollAttempts: entry?.pollAttempts,
       });
+    capturedTraceId = capturedTraceId ?? traceId;
 
     if (scheduledWait) {
       if (inlineWaits) {
@@ -242,6 +250,7 @@ const driveRunToRest = async (args: {
       artifacts,
       nodes,
       edges,
+      traceId: capturedTraceId,
     });
   }
 };

@@ -4,7 +4,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import type { RequiredAction, ScheduledWait } from './orchestrationExecutors';
 import {
-  detectCycle,
+  detectCycleExcludingLoopNodes,
   findStartNodes,
   processNodeResultBatch,
 } from './orchestrationExecutors';
@@ -58,6 +58,7 @@ type RunBatchResult = {
   runStatus: 'running' | 'paused';
   requiredAction: RequiredAction | null;
   scheduledWait: ScheduledWait | null;
+  traceId: string | null;
 };
 
 const executeRunBatch = async (args: {
@@ -142,6 +143,7 @@ const executeRunBatch = async (args: {
     runStatus,
     requiredAction,
     scheduledWait: batch.scheduledWait,
+    traceId: batch.traceId,
   };
 };
 
@@ -185,16 +187,13 @@ const initRunLoopState = (args: {
   };
 };
 
-// Throws if the graph has a cycle, unless it contains a `loop` node (which
-// legitimately re-enters). Kept separate so executeRunLoop stays compact.
+// Throws if the graph has a cycle, ignoring `loop` nodes (which legitimately
+// re-enter). Kept separate so executeRunLoop stays compact.
 const assertNoCycle = (args: {
   nodes: OrchestrationNode[];
   edges: OrchestrationEdge[];
 }): void => {
-  const hasLoop = args.nodes.some((n) => {
-    return n.type === 'loop';
-  });
-  if (!hasLoop && detectCycle(args.nodes, args.edges)) {
+  if (detectCycleExcludingLoopNodes(args.nodes, args.edges)) {
     throw new DomainError(
       'ORCHESTRATION_CYCLE_DETECTED',
       'Cycle detected in orchestration graph.'
@@ -207,6 +206,7 @@ export type RunLoopResult = {
   requiredAction: RequiredAction | null;
   runError: object | null;
   scheduledWait: ScheduledWait | null;
+  traceId: string | null;
 };
 
 /**
@@ -230,8 +230,7 @@ export const executeRunLoop = async (args: {
   iterationCount?: Map<string, number>;
   pollAttempts?: Map<string, number>;
 }): Promise<RunLoopResult> => {
-  const { runRecord, nodes, edges, state, artifacts, projectIds, traceId } =
-    args;
+  const { runRecord, nodes, edges, state, artifacts, projectIds } = args;
   const loopState = initRunLoopState(args);
   let { activeNodeIds } = loopState;
   const { completedNodes, conditionLabels, activatedNodes, iterationCount } =
@@ -241,6 +240,10 @@ export const executeRunLoop = async (args: {
   let runError: object | null = null;
   let requiredAction: RequiredAction | null = null;
   let scheduledWait: ScheduledWait | null = null;
+  // The run's own trace id if already set, otherwise the first trace id produced
+  // by a traced node (e.g. an `agent` node) — captured so it can be persisted
+  // onto the run and used as the parent for subsequent nodes.
+  let traceId: string | null = args.traceId;
 
   try {
     assertNoCycle({ nodes, edges });
@@ -266,6 +269,7 @@ export const executeRunLoop = async (args: {
       runStatus = batchResult.runStatus;
       requiredAction = batchResult.requiredAction;
       scheduledWait = batchResult.scheduledWait;
+      traceId = traceId ?? batchResult.traceId;
       // A scheduled wait leaves the run 'running' but must break the loop so the
       // caller can offload the wait to the scheduler.
       if (scheduledWait) break;
@@ -282,5 +286,5 @@ export const executeRunLoop = async (args: {
     log('executeRun error %o', runError);
   }
 
-  return { runStatus, requiredAction, runError, scheduledWait };
+  return { runStatus, requiredAction, runError, scheduledWait, traceId };
 };

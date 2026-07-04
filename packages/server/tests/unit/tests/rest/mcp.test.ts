@@ -1126,6 +1126,45 @@ describe('MCP tools - happy path', () => {
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
     });
+
+    // Regression: https://github.com/ttoss/soat/issues/375
+    // PATCH/DELETE-backed MCP tools surfaced DomainError bodies
+    // (`{ error: { code, message } }`) as the unhelpful literal string
+    // "[object Object]" instead of the DomainError's readable message —
+    // while the equivalent GET tool surfaced it cleanly.
+    test('get-orchestration surfaces a readable not-found message', async () => {
+      const res = await mcpCall('get-orchestration', {
+        orchestrationId: 'orch_doesnotexist',
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.result?.isError).toBe(true);
+      const text = res.body.result?.content?.[0]?.text;
+      expect(text).not.toContain('[object Object]');
+      expect(text).toMatch(/not found/i);
+    });
+
+    test('update-orchestration on a nonexistent id surfaces a readable message, not [object Object]', async () => {
+      const res = await mcpCall('update-orchestration', {
+        orchestrationId: 'orch_doesnotexist',
+        name: 'renamed',
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.result?.isError).toBe(true);
+      const text = res.body.result?.content?.[0]?.text;
+      expect(text).not.toContain('[object Object]');
+      expect(text).toMatch(/not found/i);
+    });
+
+    test('delete-orchestration on a nonexistent id surfaces a readable message, not [object Object]', async () => {
+      const res = await mcpCall('delete-orchestration', {
+        orchestrationId: 'orch_doesnotexist',
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.result?.isError).toBe(true);
+      const text = res.body.result?.content?.[0]?.text;
+      expect(text).not.toContain('[object Object]');
+      expect(text).toMatch(/not found/i);
+    });
   });
 
   // ── Ingestion Rules ────────────────────────────────────────────────────────

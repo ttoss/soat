@@ -246,6 +246,8 @@ A `soat` tool exposes actions from the SOAT platform itself (documents, conversa
 
 Creating or updating a `soat` tool validates every entry in `actions` against the platform's action registry. An unrecognized action name returns `400 VALIDATION_FAILED` immediately; if the name looks like an operationId (camelCase) that matches a known action once converted to kebab-case, the error message includes a suggestion (e.g. `"searchKnowledge" (did you mean "search-knowledge"?)`).
 
+When a `soat` tool is called mid-turn by an agent, the server injects `tool_context`, `parent_trace_id`, `root_trace_id`, and `max_call_depth` into the request only for actions whose REST schema declares those fields (currently only `create-agent-generation`, for nested agent-to-agent calls). Actions with no such fields — e.g. `search-knowledge` — are called as-is, so this bookkeeping never leaks into their request body as an unknown field.
+
 ### pipeline
 
 A `pipeline` tool runs a **fixed, ordered sequence of other tools as a single call**, so an agent makes one tool call and the whole `compute → persist` sequence executes deterministically server-side — with no model reasoning between steps. The same pipeline is callable by orchestration `tool` nodes and directly via the API, so it is reusable wherever a tool is.

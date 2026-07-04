@@ -94,8 +94,8 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `orchestrationId`, `collection`, `itemVariable`, and `parallelism`. See [Loops](#loops-collection-iteration). |
 | `poll`         | Calls a tool on an interval until a JSON Logic exit condition on the response holds. Uses `toolId`, `exitCondition`, and `interval`. See [Polling](#polling). |
 | `delay`        | Waits for a fixed `duration`, then continues. Accepts `5s`/`5m`/`2h`/`500ms` or ISO 8601 (`PT5S`).                                   |
-| `webhook`      | Emits an HTTP POST (`mode: "emit"`, `webhookUrl`) or pauses awaiting a callback (`mode: "receive"`).                                 |
-| `sub_orchestration` | Runs another orchestration as a single step. Uses `orchestrationId`.                                                           |
+| `webhook`      | Emits an HTTP POST (`mode: "emit"`, `webhookUrl`) or pauses awaiting a callback (`mode: "receive"`). `emit` is fire-and-forget: the POST is not awaited, and delivery success or failure is not tracked or retried — the node completes immediately with `{ emitted: true }` regardless of the outcome. |
+| `sub_orchestration` | Runs another orchestration as a single step. Uses `orchestrationId`. The node's artifact is the **child run's `output`** — i.e. `{ terminalNodeId: terminalArtifact }`, the same shape used for `output` on [OrchestrationRun](#orchestrationrun) and for each item in a [`loop`](#loops-collection-iteration) node's `results` array — not a flattened value. `output_mapping`'s artifact key is a flat property lookup (it does not traverse dots), so `{"childNode": "state.x"}` copies the whole `{ terminalNodeId: terminalArtifact }` object into `state.x`; pull out a deeper field with a following `transform` node reading `{"var": "x.terminalNodeId.someField"}`. |
 
 ### Loops (collection iteration)
 
@@ -175,7 +175,7 @@ The scheduler tick interval is configurable with the `ORCHESTRATION_SCHEDULER_IN
 Each node can define:
 
 - **`inputMapping`** — Maps node input keys to values resolved against the run state before execution. Each value is [JSON Logic](https://jsonlogic.com) (see [Input Mapping](#input-mapping-json-logic)).
-- **`outputMapping`** — Maps node outputs back to state paths after execution.
+- **`outputMapping`** — Maps node outputs back to state paths after execution. Each value **must** be a string starting with the literal `state.` prefix (e.g. `"state.summary"`, not `"summary"`) — this is not optional or auto-normalized. A value without the prefix is silently ignored: the write never happens, and no error or warning is raised at create, update, validate, or run time. Always copy the `state.`-prefixed form shown in the examples throughout this page.
 
 The root state is available to every node. Transforms and conditions receive the full state object.
 
@@ -300,6 +300,8 @@ When a `human` node is reached, the run pauses and the GET run response includes
   }
 }
 ```
+
+`required_action.type` discriminates why the run paused: `human_input` for a `human` node, `webhook_receive` for a `webhook` node in `mode: "receive"`. Both pause reasons are resumed the same way — `POST /orchestration-runs/{id}/human-input` with the paused node's `node_id` — there is currently no separate, independently-authenticated callback endpoint for webhook-receive nodes, so delivering the callback requires the same platform bearer token or API key as any other write to the run.
 
 ## Examples
 
