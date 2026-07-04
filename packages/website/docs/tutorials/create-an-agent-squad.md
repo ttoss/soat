@@ -14,7 +14,7 @@ You will:
 1. Design the squad: member roles, instructions, and the flow that connects them.
 2. Write a formation template declaring the agents and the squad [orchestration](/docs/modules/orchestrations) in one document, using `{ "ref": ... }` to cross-reference resources declared in the same template.
 3. Validate the template and preview the deployment plan.
-4. Deploy the stack and read the `squadId` output.
+4. Deploy the stack and read the `squad_id` output.
 5. Run the squad and inspect which node is waiting on you.
 6. Resume the `human` approval node and read the published result.
 7. Add a member to the squad and redeploy.
@@ -255,7 +255,7 @@ cat > squad.json << 'EOF'
     }
   },
   "outputs": {
-    "squadId": { "ref": "ContentSquad" }
+    "squad_id": { "ref": "ContentSquad" }
   }
 }
 EOF
@@ -358,7 +358,7 @@ const template = {
       },
     },
   },
-  outputs: { squadId: { ref: 'ContentSquad' } },
+  outputs: { squad_id: { ref: 'ContentSquad' } },
 };
 ```
 
@@ -457,7 +457,7 @@ cat > squad.json << 'EOF'
     }
   },
   "outputs": {
-    "squadId": { "ref": "ContentSquad" }
+    "squad_id": { "ref": "ContentSquad" }
   }
 }
 EOF
@@ -553,7 +553,7 @@ FORMATION=$(soat create-formation \
   --template "$TEMPLATE")
 
 FORMATION_ID=$(printf '%s' "$FORMATION" | jq -r '.id')
-SQUAD_ID=$(printf '%s' "$FORMATION" | jq -r '.outputs.squadId')
+SQUAD_ID=$(printf '%s' "$FORMATION" | jq -r '.outputs.squad_id')
 
 echo "FORMATION_ID: $FORMATION_ID"
 echo "SQUAD_ID:     $SQUAD_ID"
@@ -567,7 +567,7 @@ const { data: formation } = await authClient.formations.createFormation({
   body: { project_id: PROJECT_ID, name: 'content-squad', template },
 });
 const FORMATION_ID = formation.id;
-const SQUAD_ID = formation.outputs?.squadId as string;
+const SQUAD_ID = formation.outputs?.squad_id as string;
 ```
 
 </TabItem>
@@ -580,7 +580,7 @@ FORMATION=$(curl -s -X POST "$SOAT_URL/api/v1/formations" \
   -d "{\"project_id\": \"$PROJECT_ID\", \"name\": \"content-squad\", \"template\": $TEMPLATE}")
 
 FORMATION_ID=$(printf '%s' "$FORMATION" | jq -r '.id')
-SQUAD_ID=$(printf '%s' "$FORMATION" | jq -r '.outputs.squadId')
+SQUAD_ID=$(printf '%s' "$FORMATION" | jq -r '.outputs.squad_id')
 ```
 
 </TabItem>
@@ -590,7 +590,7 @@ SQUAD_ID=$(printf '%s' "$FORMATION" | jq -r '.outputs.squadId')
 
 ## Step 7 — Run the squad
 
-Start a run against the `squadId` output, passing `{ "topic": "..." }` as [`input`](/docs/modules/orchestrations#state-and-mappings). `research` runs first, then `write` and `review` run in parallel, then the run pauses at the `approve` [human node](/docs/modules/orchestrations#human-nodes).
+Start a run against the `squad_id` output, passing `{ "topic": "..." }` as [`input`](/docs/modules/orchestrations#state-and-mappings). `research` runs first, then `write` and `review` run in parallel, then the run pauses at the `approve` [human node](/docs/modules/orchestrations#human-nodes).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

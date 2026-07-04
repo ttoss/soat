@@ -540,7 +540,7 @@ cat > squad.json << 'EOF'
     }
   },
   "outputs": {
-    "squadId": { "ref": "ContentSquad" }
+    "squad_id": { "ref": "ContentSquad" }
   }
 }
 EOF
@@ -550,7 +550,7 @@ FORMATION=$(soat create-formation \
   --name "content-squad" \
   --template-file squad.json)
 
-SQUAD_ID=$(printf '%s' "$FORMATION" | jq -r '.outputs.squadId')
+SQUAD_ID=$(printf '%s' "$FORMATION" | jq -r '.outputs.squad_id')
 
 soat start-orchestration-run \
   --orchestration-id "$SQUAD_ID" \
@@ -609,13 +609,13 @@ const template = {
       },
     },
   },
-  outputs: { squadId: { ref: 'ContentSquad' } },
+  outputs: { squad_id: { ref: 'ContentSquad' } },
 };
 
 const { data: formation } = await soat.formations.createFormation({
   body: { project_id: 'proj_ABC', name: 'content-squad', template },
 });
-const SQUAD_ID = formation.outputs?.squadId as string;
+const SQUAD_ID = formation.outputs?.squad_id as string;
 
 const { data: run } = await soat.orchestrations.startOrchestrationRun({
   body: { orchestration_id: SQUAD_ID, input: { topic: 'agent squads' }, wait: true },
@@ -632,7 +632,7 @@ FORMATION=$(curl -s -X POST https://api.example.com/api/v1/formations \
   -H "Content-Type: application/json" \
   -d "{\"project_id\": \"proj_ABC\", \"name\": \"content-squad\", \"template\": $(cat squad.json)}")
 
-SQUAD_ID=$(printf '%s' "$FORMATION" | jq -r '.outputs.squadId')
+SQUAD_ID=$(printf '%s' "$FORMATION" | jq -r '.outputs.squad_id')
 
 curl -X POST https://api.example.com/api/v1/orchestration-runs \
   -H "Authorization: Bearer <token>" \
