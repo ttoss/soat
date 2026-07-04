@@ -5,11 +5,27 @@ import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { validateOutputSchema } from './outputSchema';
 import { validateReasoningConfig } from './reasoning';
-import { createInlineTools, type InlineToolDefinition } from './tools';
+import {
+  assertEphemeralTypeSupported,
+  type InlineToolDefinition,
+  validateToolDefinition,
+} from './tools';
 
 const log = createDebug('soat:agents');
 
 export type { InlineToolDefinition };
+
+// Validates every inline tool definition in an agent's `tools` field —
+// shared with pipeline steps' inline `tool` via `tools.ts#validateToolDefinition`.
+const validateAgentInlineTools = async (args: {
+  projectId: number;
+  tools: InlineToolDefinition[] | null | undefined;
+}): Promise<void> => {
+  for (const definition of args.tools ?? []) {
+    assertEphemeralTypeSupported(definition);
+    await validateToolDefinition({ definition, projectId: args.projectId });
+  }
+};
 
 // Re-export symbols that callers expect from this module.
 export {
@@ -29,6 +45,7 @@ export type MappedAgent = {
   instructions: string | null;
   model: string | null;
   toolIds: string[] | null;
+  tools: InlineToolDefinition[] | null;
   maxSteps: number | null;
   toolChoice: string | object | null;
   stopConditions: object[] | null;
@@ -68,6 +85,7 @@ const mapAgent = (
     instructions: agent.instructions,
     model: agent.model,
     toolIds: agent.toolIds,
+    tools: agent.tools as InlineToolDefinition[] | null,
     maxSteps: agent.maxSteps,
     toolChoice: agent.toolChoice,
     stopConditions: agent.stopConditions,
@@ -93,6 +111,7 @@ type AgentUpdateFields = {
   instructions?: string | null;
   model?: string | null;
   toolIds?: string[] | null;
+  tools?: InlineToolDefinition[] | null;
   maxSteps?: number | null;
   toolChoice?: string | object | null;
   stopConditions?: object[] | null;
@@ -112,6 +131,7 @@ const AGENT_SCALAR_FIELDS = [
   'instructions',
   'model',
   'toolIds',
+  'tools',
   'maxSteps',
   'toolChoice',
   'stopConditions',
@@ -176,18 +196,17 @@ export const createAgent = async (args: {
       `AI provider '${args.aiProviderId}' not found.`
     );
 
-  const inlineToolIds = args.tools?.length
-    ? await createInlineTools({ projectId: args.projectId, tools: args.tools })
-    : [];
-  const toolIds = inlineToolIds.length
-    ? [...(args.toolIds ?? []), ...inlineToolIds]
-    : args.toolIds;
+  await validateAgentInlineTools({
+    projectId: args.projectId,
+    tools: args.tools,
+  });
 
   const defaults = {
     name: null,
     instructions: null,
     model: null,
     toolIds: null,
+    tools: null,
     maxSteps: 20,
     toolChoice: null,
     stopConditions: null,
@@ -199,7 +218,7 @@ export const createAgent = async (args: {
   };
   const agent = await db.Agent.create({
     ...defaults,
-    ...buildAgentUpdates({ ...args, toolIds }),
+    ...buildAgentUpdates(args),
     projectId: args.projectId,
     aiProviderId,
   });
@@ -263,7 +282,6 @@ export const updateAgent = async (
   args: {
     projectIds?: number[];
     id: string;
-    tools?: InlineToolDefinition[];
   } & AgentUpdateFields
 ): Promise<MappedAgent> => {
   validateReasoningConfig(args.reasoningConfig);
@@ -279,21 +297,14 @@ export const updateAgent = async (
       `Agent '${args.id}' not found.`
     );
 
-  const updates = buildAgentUpdates(args);
-
-  if (args.tools?.length) {
-    const agentProjectId = (agent as unknown as { projectId: number })
-      .projectId;
-    const inlineToolIds = await createInlineTools({
-      projectId: agentProjectId,
+  if (args.tools !== undefined) {
+    await validateAgentInlineTools({
+      projectId: (agent as unknown as { projectId: number }).projectId,
       tools: args.tools,
     });
-    const baseToolIds =
-      args.toolIds !== undefined
-        ? args.toolIds
-        : (agent as unknown as { toolIds: string[] | null }).toolIds;
-    updates.toolIds = [...(baseToolIds ?? []), ...inlineToolIds];
   }
+
+  const updates = buildAgentUpdates(args);
 
   if (args.aiProviderId !== undefined) {
     const dbId = await resolveAiProviderDbId(args.aiProviderId);

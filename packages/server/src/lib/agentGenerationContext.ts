@@ -23,6 +23,7 @@ import {
   type ReasoningConfig,
   resolveReasoningForContext,
 } from './reasoning';
+import type { InlineToolDefinition } from './tools';
 
 const log = createDebug('soat:generation');
 
@@ -109,19 +110,22 @@ const resolveGenerationTools = async (args: {
   rootTraceId?: string | null;
   remainingDepth?: number;
 }): Promise<Record<string, Tool>> => {
-  const resolvedTools = args.typedAgent.toolIds
-    ? await resolveAgentTools({
-        toolIds: args.typedAgent.toolIds as string[],
-        projectIds: args.projectIds,
-        boundaryPolicy: args.typedAgent.boundaryPolicy,
-        authHeader: args.authHeader,
-        toolContext: args.toolContext,
-        traceId: args.traceId,
-        parentTraceId: args.parentTraceId,
-        rootTraceId: args.rootTraceId,
-        remainingDepth: args.remainingDepth,
-      })
-    : {};
+  const resolvedTools =
+    args.typedAgent.toolIds || args.typedAgent.tools
+      ? await resolveAgentTools({
+          toolIds: (args.typedAgent.toolIds as string[] | null) ?? [],
+          tools: args.typedAgent.tools as InlineToolDefinition[] | null,
+          projectId: args.typedAgent.project.id as number,
+          projectIds: args.projectIds,
+          boundaryPolicy: args.typedAgent.boundaryPolicy,
+          authHeader: args.authHeader,
+          toolContext: args.toolContext,
+          traceId: args.traceId,
+          parentTraceId: args.parentTraceId,
+          rootTraceId: args.rootTraceId,
+          remainingDepth: args.remainingDepth,
+        })
+      : {};
 
   buildKnowledgeTools({
     agentId: args.agentId,

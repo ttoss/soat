@@ -331,6 +331,7 @@ const buildTypedAgentFromPending = (pending: PendingGeneration): TypedAgent => {
     instructions: pending.agentConfig.instructions,
     model: null,
     toolIds: null,
+    tools: null,
     maxSteps: pending.agentConfig.maxSteps,
     toolChoice: pending.agentConfig.toolChoice,
     stopConditions: pending.agentConfig.stopConditions,

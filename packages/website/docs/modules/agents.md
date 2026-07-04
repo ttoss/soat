@@ -30,7 +30,7 @@ Agents differ from [Chats](./chats.md) in that they can call tools, observe resu
 | `instructions`             | string        | System instructions guiding agent behavior                                                                                       |
 | `model`                    | string        | Model identifier (falls back to AI provider default)                                                                             |
 | `tool_ids`                 | array         | IDs of tools attached to this agent — see [Tools](./tools.md)                                                                   |
-| `tools`                    | array         | Write-only, create/update only. Inline tool definitions created and attached in the same request — see [Inline Tool Definitions](#inline-tool-definitions) |
+| `tools`                    | array         | Ephemeral inline tool definitions, resolved only for this agent's generations — see [Inline (Ephemeral) Tool Definitions](#inline-ephemeral-tool-definitions) |
 | `max_steps`                | number        | Maximum reasoning steps before stopping (default: `20`)                                                                          |
 | `tool_choice`              | string/object | How the model selects tools — see [Tool Choice](#tool-choice)                                                                    |
 | `stop_conditions`          | array         | Additional stop conditions — see [Stop Conditions](#stop-conditions)                                                             |
@@ -95,11 +95,11 @@ Agents reference [Tools](./tools.md) by their IDs via the `tool_ids` field. A si
 
 `tool_choice` and `stop_conditions` reference tools by their **resolved name** (e.g., `github_create_issue`), not by ID. See [Tool Name Resolution](./tools.md#tool-name-resolution) in the Tools module.
 
-#### Inline Tool Definitions
+#### Inline (Ephemeral) Tool Definitions
 
-`tools` accepts an array of inline tool definitions on `POST /agents`, `PUT /agents/{agent_id}`, and `PATCH /agents/{agent_id}` — the same shape as the [Create Tool](./tools.md#data-model) request body, minus `project_id` (the agent's own project is always used). Each definition is persisted as a standalone Tool resource, exactly as if it had been created via `POST /tools`, and its resulting ID is appended to `tool_ids`. This is a convenience for defining a new tool at the same time as the agent that uses it; use `tool_ids` to attach tools that already exist. `tools` is never returned in a response — inspect `tool_ids` (and `GET /tools/{tool_id}`) to see the resulting tools.
+`tools` accepts an array of inline tool definitions — the same shape as the [Create Tool](./tools.md#data-model) request body, minus `project_id` (the agent's own project is always used for `{{secret:...}}` resolution). Unlike `tool_ids`, these are **ephemeral**: they are stored directly on the agent record and resolved fresh at generation time, without creating a separate Tool resource. They never appear in `GET /tools` and cannot be targeted by `active_tool_ids` or `step_rules`, both of which reference `tool_ids`. An ephemeral definition cannot itself be of type `pipeline` — nest a persisted pipeline tool via `tool_ids` instead.
 
-On update, the IDs of newly created inline tools are appended to whichever `tool_ids` wins: the `tool_ids` sent in the same request if present, otherwise the agent's existing `tool_ids`.
+`tools` is a convenience for defining a tool that only ever makes sense for one agent (skipping the separate `POST /tools` call and any tool-lifecycle bookkeeping); use `tool_ids` for tools that are reused across agents or need to be independently manageable. `tools` and `tool_ids` are independent — updating one never affects the other. Send `tools: null` to clear an agent's ephemeral tools.
 
 ### Instructions
 

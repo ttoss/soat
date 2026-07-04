@@ -488,6 +488,108 @@ describe('Tools', () => {
       expect(res.status).toBe(401);
     });
 
+    test('accepts a step with an inline ephemeral tool instead of a tool_id', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'inline-step-pipeline',
+          type: 'pipeline',
+          pipeline: {
+            steps: [
+              {
+                id: 'inline',
+                tool: { name: 'inline-step-tool', type: 'soat' },
+                action: 'list-tools',
+              },
+            ],
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.pipeline.steps[0].tool).toEqual({
+        name: 'inline-step-tool',
+        type: 'soat',
+      });
+      expect(res.body.pipeline.steps[0].tool_id).toBeUndefined();
+
+      // Same network-unreachable pattern as the tool_id-based pipeline test
+      // above — proves dispatch reaches the ephemeral step's execution.
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${res.body.id}/call`)
+        .send({ input: {} });
+      expect(callRes.status).toBe(422);
+      expect(callRes.body.error.code).toBe('PIPELINE_STEP_FAILED');
+      expect(callRes.body.error.meta.step_id).toBe('inline');
+
+      // No standalone Tool resource was created for the inline step.
+      const listRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/tools?project_id=${projectId}`
+      );
+      expect(
+        (listRes.body as Array<{ name: string }>).some((t) => {
+          return t.name === 'inline-step-tool';
+        })
+      ).toBe(false);
+    });
+
+    test('rejects a step with both a tool_id and an inline tool (400)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'both-tool-and-tool-id',
+          type: 'pipeline',
+          pipeline: {
+            steps: [
+              {
+                id: 'a',
+                tool_id: soatToolId,
+                tool: { name: 'inline' },
+              },
+            ],
+          },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PIPELINE_INVALID_STEP');
+    });
+
+    test('rejects an inline step tool of type pipeline (400)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'nested-pipeline-step',
+          type: 'pipeline',
+          pipeline: {
+            steps: [
+              {
+                id: 'a',
+                tool: { name: 'nested', type: 'pipeline' },
+              },
+            ],
+          },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/pipeline/i);
+    });
+
+    test('rejects an inline step tool without a name (400)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'unnamed-inline-step',
+          type: 'pipeline',
+          pipeline: {
+            steps: [{ id: 'a', tool: { description: 'missing a name' } }],
+          },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PIPELINE_INVALID_STEP');
+    });
+
     test('pipeline call without permission returns 403 or 404', async () => {
       const res = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/tools/${pipelineToolId}/call`)

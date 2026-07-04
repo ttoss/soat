@@ -9,6 +9,7 @@ import {
 import { buildModel } from './agentModel';
 import { resolveAgentTools } from './agentToolResolver';
 import { getGeneration, updateGenerationRecord } from './generations';
+import type { InlineToolDefinition } from './tools';
 import { saveTrace } from './traces';
 
 // ── Agent Resolver ────────────────────────────────────────────────────────
@@ -107,16 +108,19 @@ const buildPendingFromState = async (args: {
     config: resolved.config as Record<string, unknown> | undefined,
   });
 
-  const resolvedTools = args.typedAgent.toolIds
-    ? await resolveAgentTools({
-        toolIds: args.typedAgent.toolIds as string[],
-        projectIds: args.projectIds,
-        boundaryPolicy: args.typedAgent.boundaryPolicy,
-        authHeader: args.authHeader,
-        toolContext: args.pendingState.toolContext ?? undefined,
-        remainingDepth: args.pendingState.remainingDepth ?? undefined,
-      })
-    : {};
+  const resolvedTools =
+    args.typedAgent.toolIds || args.typedAgent.tools
+      ? await resolveAgentTools({
+          toolIds: (args.typedAgent.toolIds as string[] | null) ?? [],
+          tools: args.typedAgent.tools as InlineToolDefinition[] | null,
+          projectId: args.typedAgent.project.id as number,
+          projectIds: args.projectIds,
+          boundaryPolicy: args.typedAgent.boundaryPolicy,
+          authHeader: args.authHeader,
+          toolContext: args.pendingState.toolContext ?? undefined,
+          remainingDepth: args.pendingState.remainingDepth ?? undefined,
+        })
+      : {};
 
   return {
     agentId: args.agentId,

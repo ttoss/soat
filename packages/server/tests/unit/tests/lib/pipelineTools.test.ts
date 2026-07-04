@@ -108,7 +108,10 @@ describe('validatePipelineConfig', () => {
 
 describe('runPipeline', () => {
   test('runs steps in order, threading earlier outputs via JSON Logic', async () => {
-    const calls: Array<{ toolId: string; input: Record<string, unknown> }> = [];
+    const calls: Array<{
+      toolId: string | undefined;
+      input: Record<string, unknown>;
+    }> = [];
     const result = await runPipeline({
       pipeline: {
         steps: [
@@ -130,7 +133,10 @@ describe('runPipeline', () => {
   });
 
   test('resolves vars nested inside a plain object in step input', async () => {
-    const calls: Array<{ toolId: string; input: Record<string, unknown> }> = [];
+    const calls: Array<{
+      toolId: string | undefined;
+      input: Record<string, unknown>;
+    }> = [];
     await runPipeline({
       pipeline: {
         steps: [
@@ -257,7 +263,7 @@ describe('runPipeline', () => {
   });
 
   test('wraps a failing step as PIPELINE_STEP_FAILED and stops the sequence', async () => {
-    const calls: string[] = [];
+    const calls: Array<string | undefined> = [];
     let error: unknown;
     try {
       await runPipeline({

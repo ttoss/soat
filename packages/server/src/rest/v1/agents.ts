@@ -88,13 +88,15 @@ const parseInlineToolDefinition = (
 
 /**
  * Parses the `tools` array of inline tool definitions. Returns `undefined`
- * when absent, `'invalid'` when malformed (not an array, or an entry without
- * a string `name`), or the parsed definitions otherwise.
+ * when absent (leave as-is), `null` when explicitly cleared, `'invalid'` when
+ * malformed (not an array, or an entry without a string `name`), or the
+ * parsed definitions otherwise.
  */
 const parseInlineTools = (
   value: unknown
-): InlineToolDefinition[] | undefined | 'invalid' => {
+): InlineToolDefinition[] | null | undefined | 'invalid' => {
   if (value === undefined) return undefined;
+  if (value === null) return null;
   if (!Array.isArray(value)) return 'invalid';
 
   const parsed: InlineToolDefinition[] = [];
@@ -122,7 +124,7 @@ const parseNumber = (v: unknown): number | undefined => {
 
 const parseUpdateAgentBody = (
   body: Record<string, unknown>,
-  tools: InlineToolDefinition[] | undefined
+  tools: InlineToolDefinition[] | null | undefined
 ) => {
   return {
     aiProviderId:
@@ -251,7 +253,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
   }
 
   const result = await createAgent(
-    buildCreateAgentArgs(targetProjectId, reqBody, tools)
+    buildCreateAgentArgs(targetProjectId, reqBody, tools ?? undefined)
   );
 
   ctx.status = 201;

@@ -152,6 +152,7 @@ const mockAgent: TypedAgent = {
   instructions: null,
   model: 'test-model',
   toolIds: null,
+  tools: null,
   maxSteps: 5,
   toolChoice: 'auto',
   stopConditions: null,

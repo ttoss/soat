@@ -1,12 +1,17 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { applyInputMapping, applyOutputMapping } from './jsonLogicMapping';
+import type { InlineToolDefinition } from './tools';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
+// A step references its tool either by `toolId` (an existing, persisted Tool)
+// or by an inline `tool` definition (ephemeral — executed directly, no Tool
+// row), never both.
 export type PipelineStep = {
   id: string;
-  toolId: string;
+  toolId?: string;
+  tool?: InlineToolDefinition;
   action?: string;
   input?: Record<string, unknown>;
 };
@@ -18,10 +23,11 @@ export type PipelineConfig = {
 
 /**
  * Executes a single resolved tool call. Injected by the caller (tools.ts) so the
- * pipeline runner reuses `callTool` without a circular import.
+ * pipeline runner reuses `callTool`/`callEphemeralTool` without a circular import.
  */
 export type PipelineStepCaller = (call: {
-  toolId: string;
+  toolId?: string;
+  tool?: InlineToolDefinition;
   action?: string;
   input: Record<string, unknown>;
   remainingDepth: number;
@@ -34,6 +40,12 @@ const STEP_ID_RE = /^[A-Za-z0-9_]+$/;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+const isInlineToolDefinition = (
+  value: Record<string, unknown>
+): value is InlineToolDefinition => {
+  return typeof value['name'] === 'string';
 };
 
 const parseOptionalString = (
@@ -123,6 +135,41 @@ const assertStepRefsResolved = (
   }
 };
 
+// A step references its tool either by `toolId`/`tool_id` (REST body vs.
+// formation template casing) or by an inline `tool` definition, never both.
+const parseStepToolReference = (
+  rawStep: Record<string, unknown>,
+  id: string
+): { toolId?: string; tool?: InlineToolDefinition } => {
+  const toolId = rawStep['toolId'] ?? rawStep['tool_id'];
+  const rawTool = rawStep['tool'];
+
+  if (toolId !== undefined && rawTool !== undefined) {
+    throw new DomainError(
+      'PIPELINE_INVALID_STEP',
+      `Pipeline step '${id}' must reference either a tool_id or an inline tool, not both.`
+    );
+  }
+
+  if (rawTool !== undefined) {
+    if (!isRecord(rawTool) || !isInlineToolDefinition(rawTool)) {
+      throw new DomainError(
+        'PIPELINE_INVALID_STEP',
+        `Pipeline step '${id}' inline tool must be an object with a name.`
+      );
+    }
+    return { tool: rawTool };
+  }
+
+  if (typeof toolId !== 'string' || toolId.length === 0) {
+    throw new DomainError(
+      'PIPELINE_INVALID_STEP',
+      `Pipeline step '${id}' must reference a tool_id or an inline tool.`
+    );
+  }
+  return { toolId };
+};
+
 const parseStep = (
   rawStep: unknown,
   index: number,
@@ -147,15 +194,7 @@ const parseStep = (
       `Duplicate pipeline step id '${id}'.`
     );
   }
-  // Accept both `toolId` (REST body, case-transformed by middleware) and
-  // `tool_id` (formation templates, stored verbatim and kept snake_case).
-  const toolId = rawStep['toolId'] ?? rawStep['tool_id'];
-  if (typeof toolId !== 'string' || toolId.length === 0) {
-    throw new DomainError(
-      'PIPELINE_INVALID_STEP',
-      `Pipeline step '${id}' must reference a tool_id.`
-    );
-  }
+  const { toolId, tool } = parseStepToolReference(rawStep, id);
   const action = parseOptionalString(
     rawStep['action'],
     `Pipeline step '${id}' action must be a string.`
@@ -165,7 +204,7 @@ const parseStep = (
     `Pipeline step '${id}' input must be an object.`
   );
   assertStepRefsResolved(id, input, seen);
-  return { id, toolId, action, input };
+  return { id, toolId, tool, action, input };
 };
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -209,14 +248,35 @@ export const validatePipelineConfig = (pipeline: unknown): PipelineConfig => {
 };
 
 /**
- * Verifies every step references a tool that exists in scope and is not a
- * `client` tool (which cannot run server-side). Throws `PIPELINE_INVALID_STEP`.
+ * Verifies every step is valid: a `tool_id` step must reference a tool that
+ * exists in scope and is not a `client` tool (which cannot run server-side);
+ * an inline `tool` step must pass the same business-rule validation as a
+ * persisted tool (name, secret refs, soat actions — see
+ * `tools.ts#validateToolDefinition`) and cannot itself be of type `pipeline`.
+ * `projectId` scopes inline-tool validation (always the owning pipeline
+ * tool's own project); `projectIds` scopes `tool_id` DB lookups. Throws
+ * `PIPELINE_INVALID_STEP` / `VALIDATION_FAILED`.
  */
 export const assertPipelineStepToolsValid = async (args: {
   steps: PipelineStep[];
+  projectId: number;
   projectIds?: number[];
 }): Promise<void> => {
+  // Dynamically imported to avoid a circular import with tools.ts, which
+  // imports this module.
+  const { assertEphemeralTypeSupported, validateToolDefinition } =
+    await import('./tools');
+
   for (const step of args.steps) {
+    if (step.tool) {
+      assertEphemeralTypeSupported(step.tool);
+      await validateToolDefinition({
+        definition: step.tool,
+        projectId: args.projectId,
+      });
+      continue;
+    }
+
     const where: Record<string, unknown> = { publicId: step.toolId };
     if (args.projectIds !== undefined) {
       where['projectId'] = args.projectIds;
@@ -252,6 +312,7 @@ const executeStep = async (args: {
     const input = applyInputMapping(step.input, args.context);
     return await args.callStep({
       toolId: step.toolId,
+      tool: step.tool,
       action: step.action,
       input,
       remainingDepth: args.remainingDepth - 1,

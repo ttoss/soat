@@ -254,7 +254,7 @@ A `pipeline` tool runs a **fixed, ordered sequence of other tools as a single ca
 
 The `pipeline` config has a `steps` array and an optional `output`:
 
-- **`steps[]`** — each step calls an existing tool by **`tool_id`** (with an optional **`action`** for `soat`/`mcp` step tools). The step's **`input`** is a mapping object whose values are [JSON Logic](https://jsonlogic.com) expressions evaluated against a `{ input, steps }` context:
+- **`steps[]`** — each step calls a tool either by **`tool_id`** (an existing, persisted tool) or by an inline **`tool`** definition — the same shape as [Create Tool](#data-model) minus `project_id`, executed directly without a Tool row — never both. An inline step `tool` cannot itself be of type `pipeline`. Either form accepts an optional **`action`** for `soat`/`mcp` step tools. The step's **`input`** is a mapping object whose values are [JSON Logic](https://jsonlogic.com) expressions evaluated against a `{ input, steps }` context:
   - `{ "var": "input.<field>" }` reads the pipeline tool's own input.
   - `{ "var": "steps.<id>.<path>" }` reads an earlier step's output.
   - Literals pass through; transforms (`cat`, `+`, `if`, `map`, `filter`, `reduce`, …) are supported.
@@ -273,7 +273,7 @@ The `pipeline` config has a `steps` array and an optional `output`:
   - `{ "var": "steps.<id>.<path>" }` returns that field's value directly, e.g. a bare string.
   - `{ "<key>": { "var": "steps.<id>.<path>" } }` returns an object, resolving the expression nested under `<key>`.
 
-Each step's full output is captured under `steps.<id>`. A step may reference only **earlier** steps — forward references are rejected at create time — which keeps the sequence linear and deterministic. Execution is **fail-fast**: the first failing step aborts the pipeline with `PIPELINE_STEP_FAILED`. A step that targets another `pipeline` tool is bounded by a maximum nesting depth (`PIPELINE_DEPTH_EXCEEDED`). Steps cannot target `client` tools, which cannot run server-side.
+Each step's full output is captured under `steps.<id>`. A step may reference only **earlier** steps — forward references are rejected at create time — which keeps the sequence linear and deterministic. Execution is **fail-fast**: the first failing step aborts the pipeline with `PIPELINE_STEP_FAILED`. A `tool_id` step that targets another `pipeline` tool is bounded by a maximum nesting depth (`PIPELINE_DEPTH_EXCEEDED`); an inline `tool` step cannot be of type `pipeline` at all (no nested ephemeral pipelines). Steps cannot target `client` tools, which cannot run server-side.
 
 > **Case convention.** Structural keys are snake_case (`tool_id`, `steps`, `input`, `output`). Step `input` keys and `var` paths use **camelCase** — the runtime form (e.g. `{ "var": "input.documentId" }`), matching the input shape `callTool` passes to the underlying tools.
 

@@ -534,6 +534,92 @@ describe('resolveAgentTools', () => {
   });
 });
 
+describe('resolveAgentTools - ephemeral tools', () => {
+  let adminToken: string;
+  let projectId: string;
+  let internalProjectId: number;
+
+  beforeAll(async () => {
+    // toolresolveradmin was bootstrapped by the first describe's beforeAll
+    adminToken = await loginAs('toolresolveradmin', 'supersecret');
+
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'Ephemeral Tool Test Project' });
+    projectId = projectRes.body.id;
+
+    const projectRow = await db.Project.findOne({
+      where: { publicId: projectId },
+    });
+    internalProjectId = projectRow!.id as number;
+  });
+
+  test('resolves an ephemeral http tool without creating a Tool row', async () => {
+    const tools = await resolveAgentTools({
+      toolIds: [],
+      tools: [
+        {
+          name: 'ephemeralHttpTool',
+          type: 'http',
+          execute: { url: 'https://example.com/ping' },
+        },
+      ],
+      projectId: internalProjectId,
+    });
+
+    expect(tools).toHaveProperty('ephemeralHttpTool');
+    expect(typeof tools.ephemeralHttpTool.execute).toBe('function');
+
+    const listRes = await authenticatedTestClient(adminToken).get(
+      `/api/v1/tools?project_id=${projectId}`
+    );
+    expect(
+      (listRes.body as Array<{ name: string }>).some((t) => {
+        return t.name === 'ephemeralHttpTool';
+      })
+    ).toBe(false);
+  });
+
+  test('merges DB-backed toolIds with ephemeral tools', async () => {
+    const persistedRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'persistedTool',
+        type: 'client',
+      });
+
+    const tools = await resolveAgentTools({
+      toolIds: [persistedRes.body.id],
+      tools: [{ name: 'ephemeralClientTool', type: 'client' }],
+      projectId: internalProjectId,
+    });
+
+    expect(Object.keys(tools).sort()).toEqual([
+      'ephemeralClientTool',
+      'persistedTool',
+    ]);
+  });
+
+  test('rejects an ephemeral tool definition of type pipeline', async () => {
+    await expect(
+      resolveAgentTools({
+        toolIds: [],
+        tools: [{ name: 'ephemeralPipeline', type: 'pipeline' }],
+        projectId: internalProjectId,
+      })
+    ).rejects.toThrow(/pipeline/i);
+  });
+
+  test('does not resolve ephemeral tools when projectId is not provided', async () => {
+    const tools = await resolveAgentTools({
+      toolIds: [],
+      tools: [{ name: 'orphanedEphemeralTool' }],
+    });
+    expect(Object.keys(tools)).toHaveLength(0);
+  });
+});
+
 describe('HttpToolError', () => {
   test('serializes to JSON with message, name, status, url, method, and body', () => {
     const error = new HttpToolError(

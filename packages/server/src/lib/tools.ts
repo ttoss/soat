@@ -2,17 +2,25 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { applyToolOutputMapping } from './jsonLogicMapping';
 import {
   assertPipelineStepToolsValid,
-  runPipeline,
   validatePipelineConfig,
 } from './pipelineTools';
 import { assertSecretRefsExist } from './secrets';
 import { soatTools } from './soatTools';
-import { callHttpTool, callMcpTool, callSoatTool } from './toolsCall';
+import { callResolvedTool, type InlineToolDefinition } from './toolsCall';
 
 const log = createDebug('soat:tools');
+
+// Re-exported so existing importers of `assertEphemeralTypeSupported`,
+// `callEphemeralTool`, and `InlineToolDefinition` (agents.ts, pipelineTools.ts,
+// agentToolResolver.ts) can keep importing them from this module.
+export {
+  assertEphemeralTypeSupported,
+  type CallableToolDefinition,
+  callEphemeralTool,
+  type InlineToolDefinition,
+} from './toolsCall';
 
 // ── SOAT Action Validation ──────────────────────────────────────────────────
 
@@ -100,19 +108,7 @@ const mapTool = (
 
 // ── CRUD ──────────────────────────────────────────────────────────────────
 
-export type CreateToolArgs = {
-  projectId: number;
-  type?: string;
-  name: string;
-  description?: string;
-  parameters?: object;
-  execute?: object;
-  mcp?: object;
-  actions?: string[];
-  presetParameters?: object;
-  pipeline?: object;
-  outputMapping?: object;
-};
+export type CreateToolArgs = InlineToolDefinition & { projectId: number };
 
 const buildToolCreateAttributes = (args: CreateToolArgs) => {
   return {
@@ -130,25 +126,58 @@ const buildToolCreateAttributes = (args: CreateToolArgs) => {
   };
 };
 
-export const createTool = async (args: CreateToolArgs): Promise<MappedTool> => {
-  if (args.type === 'pipeline') {
-    const config = validatePipelineConfig(args.pipeline);
+// ── Shared Tool Definition Validation ────────────────────────────────────────
+
+/**
+ * Validates a tool definition's business rules — shared by `createTool` (a
+ * persisted Tool row) and every ephemeral consumer (an agent's inline `tools`,
+ * a pipeline step's inline `tool`): a name is required, `pipeline` steps
+ * reference tools that exist, `soat` actions are known, and `{{secret:...}}`
+ * references resolve within the given project.
+ */
+export const validateToolDefinition = async (args: {
+  definition: InlineToolDefinition;
+  projectId: number;
+}): Promise<void> => {
+  const { definition, projectId } = args;
+
+  log(
+    'validateToolDefinition: projectId=%d name=%s type=%s',
+    projectId,
+    definition.name,
+    definition.type ?? 'http'
+  );
+
+  if (!definition.name || typeof definition.name !== 'string') {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'Tool definition requires a name.'
+    );
+  }
+
+  if (definition.type === 'pipeline') {
+    const config = validatePipelineConfig(definition.pipeline);
     await assertPipelineStepToolsValid({
       steps: config.steps,
-      projectIds: [args.projectId],
+      projectId,
+      projectIds: [projectId],
     });
   }
 
-  if ((args.type ?? 'http') === 'soat') {
-    validateSoatActions(args.actions);
+  if ((definition.type ?? 'http') === 'soat') {
+    validateSoatActions(definition.actions);
   }
 
   // Fail fast on {{secret:...}} tokens referencing nonexistent or
   // out-of-project secrets, instead of failing at first call.
   await assertSecretRefsExist({
-    value: { execute: args.execute, mcp: args.mcp },
-    projectId: args.projectId,
+    value: { execute: definition.execute, mcp: definition.mcp },
+    projectId,
   });
+};
+
+export const createTool = async (args: CreateToolArgs): Promise<MappedTool> => {
+  await validateToolDefinition({ definition: args, projectId: args.projectId });
 
   const tool = await db.Tool.create(buildToolCreateAttributes(args));
 
@@ -158,41 +187,6 @@ export const createTool = async (args: CreateToolArgs): Promise<MappedTool> => {
   });
 
   return mapTool(created as unknown as Parameters<typeof mapTool>[0]);
-};
-
-// ── Inline Tool Definitions ─────────────────────────────────────────────────
-
-// An inline tool definition mirrors `createTool`'s args minus `projectId`,
-// which is always the owning resource's own project (e.g. the agent's).
-export type InlineToolDefinition = Omit<CreateToolArgs, 'projectId'>;
-
-/**
- * Persists each inline tool definition as a standalone Tool resource (so it
- * shows up in list-tools, permissions, and the MCP surface like any other
- * tool) and returns the resulting public IDs. Used by callers (e.g. agents)
- * that accept inline tool definitions instead of only pre-created tool IDs.
- */
-export const createInlineTools = async (args: {
-  projectId: number;
-  tools: InlineToolDefinition[];
-}): Promise<string[]> => {
-  const ids: string[] = [];
-  for (const toolDef of args.tools) {
-    if (!toolDef.name || typeof toolDef.name !== 'string') {
-      throw new DomainError(
-        'VALIDATION_FAILED',
-        'Inline tool definitions require a name.'
-      );
-    }
-    log(
-      'createInlineTools: projectId=%d name=%s',
-      args.projectId,
-      toolDef.name
-    );
-    const created = await createTool({ projectId: args.projectId, ...toolDef });
-    ids.push(created.id);
-  }
-  return ids;
 };
 
 export const listTools = async (args: {
@@ -287,14 +281,6 @@ export const updateTool = async (args: {
   pipeline?: object | null;
   outputMapping?: object | null;
 }): Promise<MappedTool> => {
-  if (args.pipeline !== undefined && args.pipeline !== null) {
-    const config = validatePipelineConfig(args.pipeline);
-    await assertPipelineStepToolsValid({
-      steps: config.steps,
-      projectIds: args.projectIds,
-    });
-  }
-
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) {
     where.projectId = args.projectIds;
@@ -304,6 +290,15 @@ export const updateTool = async (args: {
 
   if (!tool)
     throw new DomainError('RESOURCE_NOT_FOUND', `Tool '${args.id}' not found.`);
+
+  if (args.pipeline !== undefined && args.pipeline !== null) {
+    const config = validatePipelineConfig(args.pipeline);
+    await assertPipelineStepToolsValid({
+      steps: config.steps,
+      projectId: tool.projectId,
+      projectIds: args.projectIds,
+    });
+  }
 
   if (args.actions !== undefined && (args.type ?? tool.type) === 'soat') {
     validateSoatActions(args.actions);
@@ -345,6 +340,8 @@ export const deleteTool = async (args: {
 
 // ── Call ──────────────────────────────────────────────────────────────────
 
+// A thin DB-backed wrapper around `callResolvedTool` (toolsCall.ts), which
+// holds the actual per-type dispatch logic shared with `callEphemeralTool`.
 export const callTool = async (args: {
   projectIds?: number[];
   id: string;
@@ -360,62 +357,14 @@ export const callTool = async (args: {
   const foundTool = mapTool(
     toolInstance as unknown as Parameters<typeof mapTool>[0]
   );
-  const toolProjectId = toolInstance.projectId;
 
-  if (foundTool.type === 'pipeline') {
-    const rawResult = await runPipeline({
-      pipeline: foundTool.pipeline,
-      presetParameters: foundTool.presetParameters,
-      input: args.input,
-      remainingDepth: args.remainingDepth,
-      callStep: (step) => {
-        return callTool({
-          projectIds: args.projectIds,
-          id: step.toolId,
-          action: step.action,
-          input: step.input,
-          authHeader: args.authHeader,
-          remainingDepth: step.remainingDepth,
-        });
-      },
-    });
-    return applyToolOutputMapping(
-      foundTool.outputMapping as Record<string, unknown> | null,
-      rawResult
-    );
-  }
-
-  const mergedInput = {
-    ...(foundTool.presetParameters ?? {}),
-    ...(args.input ?? {}),
-  };
-
-  let rawResult: unknown;
-  if (foundTool.type === 'http') {
-    rawResult = await callHttpTool(foundTool, mergedInput, toolProjectId);
-  } else if (foundTool.type === 'soat') {
-    rawResult = await callSoatTool(foundTool, {
-      action: args.action,
-      mergedInput,
-      authHeader: args.authHeader,
-    });
-  } else if (foundTool.type === 'mcp') {
-    rawResult = await callMcpTool(
-      foundTool,
-      args.action,
-      mergedInput,
-      toolProjectId
-    );
-  } else {
-    // client tools (and any unknown type) cannot be invoked server-side
-    throw new DomainError(
-      'TOOL_CALL_NOT_SUPPORTED',
-      'Client tools cannot be invoked server-side; they must be executed by the calling client.'
-    );
-  }
-
-  return applyToolOutputMapping(
-    foundTool.outputMapping as Record<string, unknown> | null,
-    rawResult
-  );
+  return callResolvedTool({
+    tool: foundTool,
+    toolProjectId: toolInstance.projectId,
+    action: args.action,
+    input: args.input,
+    authHeader: args.authHeader,
+    remainingDepth: args.remainingDepth,
+    projectIds: args.projectIds,
+  });
 };
