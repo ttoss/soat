@@ -61,18 +61,20 @@ const topSegment = (path: string): string => {
 
 /**
  * The top-level state keys a node writes via its `outputMapping`. Values are
- * `state.<path>` strings; `writeToState` strips the `state.` prefix, so the
- * top-level segment of the remainder is the key that becomes available to
- * downstream nodes.
+ * `state.<path>` strings; a value without the `state.` prefix is normalized
+ * to one, mirroring `writeToState`. The top-level segment of the remainder is
+ * the key that becomes available to downstream nodes.
  */
 const writtenStateKeys = (node: OrchestrationNode): string[] => {
   if (!node.outputMapping) return [];
   const keys: string[] = [];
   for (const statePath of Object.values(node.outputMapping)) {
-    if (typeof statePath === 'string' && statePath.startsWith('state.')) {
-      const remainder = statePath.slice('state.'.length);
-      if (remainder.length > 0) keys.push(topSegment(remainder));
-    }
+    if (typeof statePath !== 'string') continue;
+    const normalizedPath = statePath.startsWith('state.')
+      ? statePath
+      : `state.${statePath}`;
+    const remainder = normalizedPath.slice('state.'.length);
+    if (remainder.length > 0) keys.push(topSegment(remainder));
   }
   return keys;
 };

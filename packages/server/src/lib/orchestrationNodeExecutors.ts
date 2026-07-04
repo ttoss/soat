@@ -45,8 +45,8 @@ const writeToState = (
   value: unknown,
   state: Record<string, unknown>
 ): void => {
-  if (!path.startsWith('state.')) return;
-  const fieldName = path.slice('state.'.length);
+  const normalizedPath = path.startsWith('state.') ? path : `state.${path}`;
+  const fieldName = normalizedPath.slice('state.'.length);
   state[fieldName] = value;
 };
 
