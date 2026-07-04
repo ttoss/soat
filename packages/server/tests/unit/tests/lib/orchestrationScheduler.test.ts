@@ -161,74 +161,45 @@ describe('orchestrationScheduler', () => {
   });
 
   describe('initializeOrchestrationScheduler', () => {
-    test('is a no-op under the test environment', () => {
-      expect(() => {
-        return initializeOrchestrationScheduler();
-      }).not.toThrow();
+    // Fake timers keep the interval under the test's control: no real waiting,
+    // no leaked timer, and no need to sniff the environment in production code.
+    beforeEach(() => {
+      jest.useFakeTimers();
     });
 
-    test('starts a timer outside the test environment and is idempotent', () => {
-      const prevNodeEnv = process.env.NODE_ENV;
-      const prevJestWorker = process.env.JEST_WORKER_ID;
-      delete process.env.NODE_ENV;
-      delete process.env.JEST_WORKER_ID;
-      try {
-        // Large interval so the timer never fires during the test.
-        initializeOrchestrationScheduler({ intervalMs: 3_600_000 });
-        // Second call short-circuits because a timer already exists.
-        initializeOrchestrationScheduler({ intervalMs: 3_600_000 });
-      } finally {
-        stopOrchestrationScheduler();
-        process.env.NODE_ENV = prevNodeEnv;
-        if (prevJestWorker === undefined) {
-          delete process.env.JEST_WORKER_ID;
-        } else {
-          process.env.JEST_WORKER_ID = prevJestWorker;
-        }
-      }
+    afterEach(() => {
+      stopOrchestrationScheduler();
+      jest.useRealTimers();
     });
 
-    test('falls back to the default interval for an invalid override', () => {
-      const prevNodeEnv = process.env.NODE_ENV;
-      const prevJestWorker = process.env.JEST_WORKER_ID;
-      delete process.env.NODE_ENV;
-      delete process.env.JEST_WORKER_ID;
-      try {
-        initializeOrchestrationScheduler({ intervalMs: 0 });
-      } finally {
-        stopOrchestrationScheduler();
-        process.env.NODE_ENV = prevNodeEnv;
-        if (prevJestWorker === undefined) {
-          delete process.env.JEST_WORKER_ID;
-        } else {
-          process.env.JEST_WORKER_ID = prevJestWorker;
-        }
-      }
-    });
-
-    test('ticks the resumer on its interval', async () => {
-      const prevNodeEnv = process.env.NODE_ENV;
-      const prevJestWorker = process.env.JEST_WORKER_ID;
-      delete process.env.NODE_ENV;
-      delete process.env.JEST_WORKER_ID;
+    test('drives the resumer on each interval tick and is idempotent', async () => {
       const findAllSpy = jest
         .spyOn(db.OrchestrationRun, 'findAll')
         .mockResolvedValue([]);
-      try {
-        initializeOrchestrationScheduler({ intervalMs: 20 });
-        await new Promise<void>((resolve) => {
-          return setTimeout(resolve, 80);
-        });
-        expect(findAllSpy).toHaveBeenCalled();
-      } finally {
-        stopOrchestrationScheduler();
-        process.env.NODE_ENV = prevNodeEnv;
-        if (prevJestWorker === undefined) {
-          delete process.env.JEST_WORKER_ID;
-        } else {
-          process.env.JEST_WORKER_ID = prevJestWorker;
-        }
-      }
+
+      initializeOrchestrationScheduler({ intervalMs: 5000 });
+      // Second call short-circuits because a timer already exists.
+      initializeOrchestrationScheduler({ intervalMs: 5000 });
+
+      await jest.advanceTimersByTimeAsync(5000);
+      expect(findAllSpy).toHaveBeenCalledTimes(1);
+
+      await jest.advanceTimersByTimeAsync(5000);
+      expect(findAllSpy).toHaveBeenCalledTimes(2);
+    });
+
+    test('falls back to the default interval for an invalid override', async () => {
+      const findAllSpy = jest
+        .spyOn(db.OrchestrationRun, 'findAll')
+        .mockResolvedValue([]);
+
+      initializeOrchestrationScheduler({ intervalMs: 0 });
+
+      // Nothing fires before the default 5s interval elapses.
+      await jest.advanceTimersByTimeAsync(4999);
+      expect(findAllSpy).not.toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(1);
+      expect(findAllSpy).toHaveBeenCalledTimes(1);
     });
   });
 });

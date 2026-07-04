@@ -72,14 +72,15 @@ export const runDueScheduledResumptions = async (args?: {
 let timer: ReturnType<typeof setInterval> | null = null;
 
 /**
- * Starts the background scheduler loop. Skipped under NODE_ENV=test, where tests
- * invoke {@link runDueScheduledResumptions} directly for determinism. The timer
- * is unref'd so it never keeps the process alive on its own.
+ * Starts the background scheduler loop. Called once from `server.ts` at startup;
+ * unit tests never import the server entrypoint, so the timer is not created
+ * during tests (they drive {@link runDueScheduledResumptions} directly, or use
+ * fake timers to exercise the interval). The timer is unref'd so it never keeps
+ * the process alive on its own, and repeated calls are a no-op.
  */
 export const initializeOrchestrationScheduler = (args?: {
   intervalMs?: number;
 }): void => {
-  if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) return;
   if (timer) return;
 
   const intervalMs =
