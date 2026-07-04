@@ -1584,6 +1584,23 @@ if ! printf '%s\n' "$RC_BAD_RESP" | jq -e '.error.code == "INVALID_REASONING_CON
   echo "$RC_BAD_RESP" >&2
   exit 1
 fi
+# Normalized branches/rounds primitive: a debate step (2 branches, 2 rounds,
+# each branch prompt referencing {transcript}) synthesized by a final step.
+RC_BRANCHES_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
+  --reasoning '{"mode":"pipeline","steps":[{"name":"debate","rounds":2,"branches":[{"name":"Optimist","prompt":"Argue for. {transcript}"},{"name":"Skeptic","prompt":"Argue against. {transcript}"}]},{"name":"final","prompt":"Synthesize {steps.debate.last}","output":true}]}')
+if ! printf '%s\n' "$RC_BRANCHES_RESP" | jq -e '.reasoning.steps[0].branches | length == 2' >/dev/null 2>&1; then
+  echo "ERROR: update-agent did not round-trip a branches-based reasoning step" >&2
+  echo "$RC_BRANCHES_RESP" >&2
+  exit 1
+fi
+# rounds > 1 with no {transcript} reference must be rejected.
+RC_NO_TRANSCRIPT_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
+  --reasoning '{"mode":"pipeline","steps":[{"name":"debate","rounds":2,"branches":[{"name":"A"},{"name":"B"}],"prompt":"Argue about {question}"}]}' 2>&1 || true)
+if ! printf '%s\n' "$RC_NO_TRANSCRIPT_RESP" | jq -e '.error.code == "INVALID_REASONING_CONFIG"' >/dev/null 2>&1; then
+  echo "ERROR: rounds > 1 with no {transcript} reference was not rejected with INVALID_REASONING_CONFIG" >&2
+  echo "$RC_NO_TRANSCRIPT_RESP" >&2
+  exit 1
+fi
 # Disable again so later generations in this script stay single-pass
 # (pipeline behavior is LLM-dependent and covered by unit tests, not smoke).
 $SOAT_CLI update-agent --agent-id "$AGENT_ID" --reasoning '{"mode":"none"}' >/dev/null

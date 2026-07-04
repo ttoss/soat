@@ -208,7 +208,7 @@ export const ERROR_CODES = {
   INVALID_REASONING_CONFIG: {
     httpStatus: 400,
     description:
-      'The agent reasoning config is invalid (e.g. an unknown mode, no pipeline steps, too many steps, a duplicate or unnamed step, a step missing a prompt, an unknown step kind, or a fanout count/rounds out of range).',
+      'The agent reasoning config is invalid (e.g. an unknown mode, no pipeline steps, too many steps, a duplicate/dotted/unnamed step, a step missing a prompt, branches or rounds out of range, or rounds > 1 with no {transcript} reference).',
   },
   INVALID_OUTPUT_SCHEMA: {
     httpStatus: 400,

@@ -16,6 +16,7 @@ Agents differ from [Chats](./chats.md) in that they can call tools, observe resu
 - [Chat with an LLM - Step 4 (Create an agent)](/docs/tutorials/chat-with-llm#step-4--create-an-agent)
 - [Agent SOAT Tools and Preset Parameters - Step 7 (Create the agent)](/docs/tutorials/agent-soat-tools#step-7--create-the-agent)
 - [Multi-Agent Sonnet with Nested Agent Calls - Step 6 (Create stanza agents)](/docs/tutorials/multi-agent-orchestration#step-6--create-the-four-stanza-agents)
+- [Deep Thinking: Reasoning Pipelines - Step 2 (Reflect)](/docs/tutorials/deep-thinking#step-2--reflect-self-critique)
 
 ## Data Model
 
@@ -331,29 +332,37 @@ The `reasoning` config makes an agent think harder before answering. It applies 
 
 #### Pipeline mode
 
-`mode: pipeline` runs an ordered list of pure-text steps after the agent produces its initial draft. Each step is a **side-effect-free completion** (no tools, no knowledge retrieval); the designated **output step** produces the final answer. Pipelines never fail a request — any step failure degrades to the plain draft.
+`mode: pipeline` runs an ordered list of steps after the agent produces its initial draft. Every step is the same primitive — **`1..N` branches × `1..R` rounds** — with no preset "kind": a single-branch, single-round step is today's simple completion; a multi-branch step is a fanout; multiple rounds with a shared transcript is a debate. Each branch turn is a **side-effect-free completion** (no tools, no knowledge retrieval); the designated **output step** produces the final answer. Pipelines never fail a request — any step failure degrades to the plain draft.
 
 > **Reasoning vs orchestration.** A reasoning pipeline is *meta-cognition over a single answer*: pure-text steps, bounded, fallback-safe, ephemeral. It is **not** the [orchestration engine](./orchestrations.md), which composes tool-using, permissioned agents into a persisted, resumable graph. Reach for reasoning to make one agent think harder; reach for orchestration to make many agents collaborate.
 
 **Step fields**
 
-| Field            | Type    | Description                                                                                  |
-| ---------------- | ------- | ------------------------------------------------------------------------------------------- |
-| `name`           | string  | Required, unique; referenced elsewhere as `{steps.<name>}`                                   |
-| `kind`           | string  | `completion` (default) — one call; or `fanout` — N perspectives over rounds                  |
-| `prompt`         | string  | Template supporting `{question}`, `{draft}`, and `{steps.<name>}` tokens                     |
-| `ai_provider_id` | string  | Per-step provider override (must belong to the agent's project)                              |
-| `model`          | string  | Per-step model override                                                                      |
-| `temperature`    | number  | Per-step sampling temperature                                                                |
-| `output`         | boolean | Marks the step whose output is the final answer (defaults to the last step)                  |
-| `halt_if_equals` | string  | If the step output equals this string, halt the pipeline and keep the draft                  |
-| `count`          | integer | Fanout only — number of auto-named perspectives (2–5)                                         |
-| `perspectives`   | array   | Fanout only — explicit `{ name?, prompt?, ai_provider_id?, model? }` objects (overrides `count`) |
-| `rounds`         | integer | Fanout only — rounds of perspective turns (default 1, max 3)                                  |
+| Field            | Type    | Description                                                                                            |
+| ---------------- | ------- | -------------------------------------------------------------------------------------------------------- |
+| `name`           | string  | Required, unique; referenced elsewhere as `{steps.<name>}`. Must not contain `.`.                        |
+| `prompt`         | string  | Template for this step, supporting `{question}`, `{draft}`, `{steps.<name>}`, `{steps.<name>.last}`, and `{transcript}`. Required unless every branch supplies its own. |
+| `branches`       | array   | 1–5 `{ name?, prompt?, ai_provider_id?, model?, temperature? }` objects. Omit for a single implicit branch (a plain completion). |
+| `rounds`         | integer | Rounds of branch turns (default 1, max 3). `rounds > 1` requires a branch (or step) prompt that references `{transcript}`. |
+| `ai_provider_id` | string  | Step-level provider default for branches that omit their own (must belong to the agent's project)        |
+| `model`          | string  | Step-level model default for branches that omit their own                                                |
+| `temperature`    | number  | Step-level sampling temperature default for branches that omit their own                                 |
+| `output`         | boolean | Marks the step whose output is the final answer (defaults to the last step)                              |
+| `halt_if_equals` | string  | Single-branch steps only. If the step output equals this string, halt the pipeline and keep the draft    |
 
-**Template tokens** — `{question}` (the transcript), `{draft}` (the agent's initial answer), and `{steps.<name>}` (an earlier step's output; a fanout step's output is the joined transcript of its perspectives). A `{steps.<name>}` token must name a step declared **earlier** in the list; a reference to an unknown or later step is rejected with `INVALID_REASONING_CONFIG` (400) rather than silently resolving to an empty string.
+**Template tokens** — the mechanism that expresses visibility and reduction, since neither is a field:
 
-**Caps** — a pipeline allows at most 8 steps, fanout width 2–5, 3 rounds, and 24 total completions. Violations are rejected with `INVALID_REASONING_CONFIG` (400) at agent create/update and on the per-generate override. Each step also carries a per-step timeout and the pipeline an overall deadline, so a slow or hung provider degrades to the draft instead of stalling a request that has already produced its answer.
+| Token | Resolves to |
+| --- | --- |
+| `{question}` | The flattened conversation transcript |
+| `{draft}` | The agent's initial answer |
+| `{steps.<name>}` | An earlier step's full output — all `N×R` turns. Single-branch: the raw text. Multi-branch: each turn joined `name: text`. |
+| `{steps.<name>.last}` | Only the chronologically final turn of an earlier step. Valid only when that step is single-branch or references `{transcript}` (i.e. its last turn is a converged result, not an arbitrary sample) — referencing `.last` on an independent multi-branch step is rejected with `INVALID_REASONING_CONFIG`. |
+| `{transcript}` | Prior turns **within the current step**, formatted `name: text`. Its presence in a branch (or step, used as fallback) prompt is what turns on the shared, sequential transcript — branches run in round-major order and each sees every earlier turn. Its absence means branches are independent, parallel-eligible samples. |
+
+A `{steps.<name>}` / `{steps.<name>.last}` token must name a step declared **earlier** in the list; a reference to an unknown or later step is rejected with `INVALID_REASONING_CONFIG` (400) rather than silently resolving to an empty string.
+
+**Caps** — a pipeline allows at most 8 steps, 1–5 branches per step, 3 rounds, and 24 total completions (`Σ branches × rounds`). Violations are rejected with `INVALID_REASONING_CONFIG` (400) at agent create/update and on the per-generate override. Each step also carries a per-step timeout and the pipeline an overall deadline, so a slow or hung provider degrades to the draft instead of stalling a request that has already produced its answer.
 
 ```json
 {
@@ -361,32 +370,37 @@ The `reasoning` config makes an agent think harder before answering. It applies 
     "effort": "high",
     "mode": "pipeline",
     "steps": [
-      { "kind": "fanout", "name": "angles", "count": 3, "prompt": "Argue one angle on: {question}" },
+      {
+        "name": "angles",
+        "prompt": "Argue one angle on: {question}",
+        "branches": [{ "name": "A" }, { "name": "B" }, { "name": "C" }]
+      },
       { "name": "final", "prompt": "Reconcile the angles into one answer:\n{steps.angles}", "output": true }
     ]
   }
 }
 ```
 
+See the [Deep Thinking tutorial](/docs/tutorials/deep-thinking) for a full walkthrough of each recipe below.
+
 #### Example: reflect (self-critique)
 
-A draft → critique → revise loop. The `halt_if_equals` short-circuit keeps the draft when the critique approves it. A different model family for the critique catches blind spots the drafting model shares with itself.
+A draft → critique → revise loop expressed as a single step with no `branches` — the degenerate `1 branch × 1 round` case. The `halt_if_equals` short-circuit keeps the draft when the critique approves it.
 
 ```json
 {
   "reasoning": {
     "mode": "pipeline",
     "steps": [
-      { "name": "critique", "prompt": "Critique this draft; reply exactly APPROVED if it needs no change:\n{draft}", "model": "gpt-4o-mini", "halt_if_equals": "APPROVED" },
-      { "name": "final", "prompt": "Revise the draft using the critique:\nDraft: {draft}\nCritique: {steps.critique}", "output": true }
+      { "name": "critique", "prompt": "Critique this draft; reply exactly APPROVED if it needs no change:\n{draft}", "model": "gpt-4o-mini", "halt_if_equals": "APPROVED", "output": true }
     ]
   }
 }
 ```
 
-#### Example: debate (multiple perspectives)
+#### Example: debate (branches + rounds + `{transcript}`)
 
-N independent perspectives, then a synthesis. Prefer **different model families** across perspectives — same-model personas tend to agree rather than surface the disagreement synthesis harvests. Each perspective sees the question and all prior turns in the transcript.
+Two branches argue over multiple rounds — `rounds: 2` with each branch prompt referencing `{transcript}` is what makes them run sequentially and see each other's turns, instead of sampling independently. A synthesis step then reads `{steps.debate}` (the full transcript). Prefer **different model families** per branch — same-model personas tend to agree rather than surface the disagreement synthesis harvests.
 
 ```json
 {
@@ -394,12 +408,11 @@ N independent perspectives, then a synthesis. Prefer **different model families*
     "mode": "pipeline",
     "steps": [
       {
-        "kind": "fanout",
         "name": "debate",
-        "prompt": "Take a position on: {question}",
-        "perspectives": [
-          { "name": "Skeptic", "prompt": "Attack the strongest claim.", "ai_provider_id": "aip_alt", "model": "claude-sonnet-4-6" },
-          { "name": "Advocate", "prompt": "Steelman the proposal with evidence." }
+        "rounds": 2,
+        "branches": [
+          { "name": "Skeptic", "prompt": "Attack the strongest claim on: {question}\n{transcript}", "ai_provider_id": "aip_alt", "model": "claude-sonnet-4-6" },
+          { "name": "Advocate", "prompt": "Steelman the proposal on: {question}\n{transcript}" }
         ]
       },
       { "name": "synthesis", "prompt": "Weigh these perspectives and commit to a recommendation:\n{steps.debate}", "output": true }
@@ -408,13 +421,37 @@ N independent perspectives, then a synthesis. Prefer **different model families*
 }
 ```
 
+#### Example: best-of-N (self-consistency)
+
+Independent samples — branches whose prompts do **not** reference `{transcript}` — typically varying `temperature`, then a judge step over the full set. Never reference `{steps.samples.last}` here: on an independent multi-branch step the last turn is an arbitrary sample, not a converged result, and the server rejects that reference at write time. Selecting among samples is an author-written judge step, not a built-in reducer — SOAT does not ship a `vote`/`pick` primitive.
+
+```json
+{
+  "reasoning": {
+    "mode": "pipeline",
+    "steps": [
+      {
+        "name": "samples",
+        "prompt": "Answer concisely: {question}",
+        "branches": [
+          { "name": "A", "temperature": 0.2 },
+          { "name": "B", "temperature": 0.7 },
+          { "name": "C", "temperature": 1.0 }
+        ]
+      },
+      { "name": "final", "prompt": "Pick or synthesize the single best answer:\n{steps.samples}", "output": true }
+    ]
+  }
+}
+```
+
 #### Observability
 
-Each step (and each fanout perspective turn) creates a child [generation](./generations.md) record linked to the parent via `initiator_generation_id` and sharing the same `trace_id`. Querying `GET /generations?trace_id=<trace_id>` returns the full tree. Each child carries `metadata.reasoning.step` (the step or persona name), `metadata.reasoning.output`, and `started_at` / `completed_at`. The parent generation's [`metadata.reasoning`](./generations.md#metadatareasoning--pipeline-summary) summary carries `mode`, `applied`, `reason`, `stepsRun`, `dropped`, and `fallback`.
+Each branch turn creates a child [generation](./generations.md) record linked to the parent via `initiator_generation_id` and sharing the same `trace_id`. Querying `GET /generations?trace_id=<trace_id>` returns the full tree. Each child carries `metadata.reasoning.step` (the step or branch name), `metadata.reasoning.output`, and `started_at` / `completed_at`. The parent generation's [`metadata.reasoning`](./generations.md#metadatareasoning--pipeline-summary) summary carries `mode`, `applied`, `reason`, `stepsRun`, `dropped`, and `fallback`.
 
 **Silent-degradation events** — deep thinking never fails a request: when a step fails or the output step produces nothing, the engine falls back to the plain draft. Because that fallback is otherwise invisible, it emits an `agents.reasoning.fallback` [webhook event](./webhooks.md) (`data: { mode, reason, stepsRun, dropped }`) and sets `metadata.reasoning.fallback: true`. Subscribe to it to detect when an agent is paying for deep thinking but receiving the plain draft. An intentional `halt_if_equals` short-circuit is **not** a degradation — it keeps the draft on purpose, so it does not emit the event nor set the flag. An agent still stored with a removed legacy mode (`reflect`/`debate`) is inert and returns the plain draft, and also emits the event (`data: { legacyMode: true }`) so the migration gap is visible.
 
-Failure semantics: a pipeline never makes a generation worse. A failed non-output step is dropped and the pipeline continues; if the output step fails or nothing produces text, the initial draft is returned. Pipelines skip streaming generations and `requires_action` (client-tool) turns; `effort` applies to streaming as well.
+Failure semantics: a pipeline never makes a generation worse. A failed branch turn is dropped and the pipeline continues with the remaining turns; if the output step produces no successful turns, the initial draft is returned. Pipelines skip streaming generations and `requires_action` (client-tool) turns; `effort` applies to streaming as well.
 
 ### Structured Output
 

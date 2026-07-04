@@ -572,79 +572,7 @@ components:
                       type: string
                       description: Replaces the default task instructions. The JSON response contract and the conversation transcript are always appended by the server.
         reasoning:
-          type: object
-          nullable: true
-          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning; `mode: pipeline` runs an ordered list of reasoning steps after the base draft. reflect and debate are expressed as pipelines — see the Agents module docs.'
-          properties:
-            effort:
-              type: string
-              enum: [low, medium, high]
-              description: Provider-native reasoning effort, forwarded to providers that support it (OpenAI reasoning models, Anthropic extended thinking, Google thinking budgets). Ignored elsewhere.
-            mode:
-              type: string
-              enum: [none, pipeline]
-              description: 'Orchestrated reasoning strategy. `pipeline` runs an ordered list of reasoning steps after the base draft. Applies to non-streaming completed generations only.'
-            steps:
-              type: array
-              maxItems: 8
-              description: 'Pipeline only — ordered reasoning steps run after the base draft. The output step (`output: true`, else the last) produces the final answer. Prompts support `{question}`, `{draft}`, and `{steps.<name>}`. reflect and debate are expressed as step configs — see the Agents module docs.'
-              items:
-                type: object
-                required:
-                  - name
-                  - prompt
-                properties:
-                  name:
-                    type: string
-                    description: Unique step name; referenced as `{steps.<name>}`.
-                  kind:
-                    type: string
-                    enum: [completion, fanout]
-                    description: '`completion` (default) runs one call; `fanout` runs N perspectives over rounds.'
-                  prompt:
-                    type: string
-                    description: 'Prompt template supporting `{question}`, `{draft}`, and `{steps.<name>}`.'
-                  ai_provider_id:
-                    x-soat-ref: ai-providers
-                    type: string
-                    description: AI provider override for this step. Must belong to the agent's project.
-                  model:
-                    type: string
-                    description: Model override for this step.
-                  temperature:
-                    type: number
-                    description: Sampling temperature for this step.
-                  output:
-                    type: boolean
-                    description: Marks the step whose output is the final answer (else the last step).
-                  halt_if_equals:
-                    type: string
-                    description: If the step output equals this string, halt the pipeline and keep the draft.
-                  count:
-                    type: integer
-                    minimum: 2
-                    maximum: 5
-                    description: 'Fanout only — number of auto-named perspectives (2–5).'
-                  rounds:
-                    type: integer
-                    minimum: 1
-                    maximum: 3
-                    description: 'Fanout only — rounds of perspective turns (default 1, max 3).'
-                  perspectives:
-                    type: array
-                    description: 'Fanout only — explicit perspective objects; overrides count.'
-                    items:
-                      type: object
-                      properties:
-                        name:
-                          type: string
-                        prompt:
-                          type: string
-                        ai_provider_id:
-                          x-soat-ref: ai-providers
-                          type: string
-                        model:
-                          type: string
+          $ref: '#/components/schemas/ReasoningConfig'
         output_schema:
           type: object
           nullable: true
@@ -662,6 +590,86 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    ReasoningBranch:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Label used for transcript/observability and as the `{transcript}` turn attribution; falls back to the step name.
+        prompt:
+          type: string
+          description: 'Prompt template for this branch, supporting `{question}`, `{draft}`, `{steps.<name>}`, `{steps.<name>.last}`, and `{transcript}`. Falls back to the step-level `prompt` when omitted.'
+        ai_provider_id:
+          x-soat-ref: ai-providers
+          type: string
+          description: AI provider override for this branch. Must belong to the agent's project.
+        model:
+          type: string
+          description: Model override for this branch.
+        temperature:
+          type: number
+          description: Sampling temperature override for this branch.
+
+    ReasoningStep:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Unique step name; referenced as `{steps.<name>}` / `{steps.<name>.last}`. Must not contain '.'.
+        prompt:
+          type: string
+          description: 'Prompt template supporting `{question}`, `{draft}`, `{steps.<name>}`, `{steps.<name>.last}`, and `{transcript}`. Required unless every branch supplies its own prompt.'
+        branches:
+          type: array
+          minItems: 1
+          maxItems: 5
+          description: 'Branches to run for this step (1–5 entries). Omit for a single implicit branch (today’s "completion").'
+          items:
+            $ref: '#/components/schemas/ReasoningBranch'
+        rounds:
+          type: integer
+          minimum: 1
+          maximum: 3
+          description: 'Rounds of branch turns (default 1). A value greater than 1 requires a branch (or step, used as fallback) prompt that references `{transcript}` — otherwise the rounds would be provably redundant, identical-config samples.'
+        ai_provider_id:
+          x-soat-ref: ai-providers
+          type: string
+          description: Step-level AI provider default for branches that omit their own.
+        model:
+          type: string
+          description: Step-level model default for branches that omit their own.
+        temperature:
+          type: number
+          description: Step-level sampling temperature default for branches that omit their own.
+        output:
+          type: boolean
+          description: Marks the step whose output is the final answer (else the last step).
+        halt_if_equals:
+          type: string
+          description: Single-branch steps only. If the step output equals this string, halt the pipeline and keep the draft.
+
+    ReasoningConfig:
+      type: object
+      nullable: true
+      description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning; `mode: pipeline` runs an ordered list of reasoning steps after the base draft, each step running 1..N branches over 1..R rounds. reflect, debate, and best-of-N are expressed as pipelines over this primitive — see the Agents module docs and the deep-thinking tutorial. As a per-generation override (in the generate request body), this replaces the agent''s stored reasoning config entirely (object replace, not merge).'
+      properties:
+        effort:
+          type: string
+          enum: [low, medium, high]
+          description: Provider-native reasoning effort, forwarded to providers that support it (OpenAI reasoning models, Anthropic extended thinking, Google thinking budgets). Ignored elsewhere. Composes with any `mode`.
+        mode:
+          type: string
+          enum: [none, pipeline]
+          description: 'Orchestrated reasoning strategy. `pipeline` runs an ordered list of reasoning steps after the base draft. Applies to non-streaming completed generations only.'
+        steps:
+          type: array
+          maxItems: 8
+          description: 'Pipeline only — ordered reasoning steps run after the base draft. The output step (`output: true`, else the last) produces the final answer.'
+          items:
+            $ref: '#/components/schemas/ReasoningStep'
 
     CreateAgentRequest:
       type: object
@@ -758,79 +766,7 @@ components:
                       type: string
                       description: Replaces the default task instructions. The JSON response contract and the conversation transcript are always appended by the server.
         reasoning:
-          type: object
-          nullable: true
-          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning; `mode: pipeline` runs an ordered list of reasoning steps after the base draft. reflect and debate are expressed as pipelines — see the Agents module docs.'
-          properties:
-            effort:
-              type: string
-              enum: [low, medium, high]
-              description: Provider-native reasoning effort, forwarded to providers that support it (OpenAI reasoning models, Anthropic extended thinking, Google thinking budgets). Ignored elsewhere.
-            mode:
-              type: string
-              enum: [none, pipeline]
-              description: 'Orchestrated reasoning strategy. `pipeline` runs an ordered list of reasoning steps after the base draft.'
-            steps:
-              type: array
-              maxItems: 8
-              description: 'Pipeline only — ordered reasoning steps run after the base draft. The output step (`output: true`, else the last) produces the final answer. Prompts support `{question}`, `{draft}`, and `{steps.<name>}`. reflect and debate are expressed as step configs — see the Agents module docs.'
-              items:
-                type: object
-                required:
-                  - name
-                  - prompt
-                properties:
-                  name:
-                    type: string
-                    description: Unique step name; referenced as `{steps.<name>}`.
-                  kind:
-                    type: string
-                    enum: [completion, fanout]
-                    description: '`completion` (default) runs one call; `fanout` runs N perspectives over rounds.'
-                  prompt:
-                    type: string
-                    description: 'Prompt template supporting `{question}`, `{draft}`, and `{steps.<name>}`.'
-                  ai_provider_id:
-                    x-soat-ref: ai-providers
-                    type: string
-                    description: AI provider override for this step. Must belong to the agent's project.
-                  model:
-                    type: string
-                    description: Model override for this step.
-                  temperature:
-                    type: number
-                    description: Sampling temperature for this step.
-                  output:
-                    type: boolean
-                    description: Marks the step whose output is the final answer (else the last step).
-                  halt_if_equals:
-                    type: string
-                    description: If the step output equals this string, halt the pipeline and keep the draft.
-                  count:
-                    type: integer
-                    minimum: 2
-                    maximum: 5
-                    description: 'Fanout only — number of auto-named perspectives (2–5).'
-                  rounds:
-                    type: integer
-                    minimum: 1
-                    maximum: 3
-                    description: 'Fanout only — rounds of perspective turns (default 1, max 3).'
-                  perspectives:
-                    type: array
-                    description: 'Fanout only — explicit perspective objects; overrides count.'
-                    items:
-                      type: object
-                      properties:
-                        name:
-                          type: string
-                        prompt:
-                          type: string
-                        ai_provider_id:
-                          x-soat-ref: ai-providers
-                          type: string
-                        model:
-                          type: string
+          $ref: '#/components/schemas/ReasoningConfig'
         output_schema:
           type: object
           nullable: true
@@ -942,79 +878,7 @@ components:
                       type: string
                       description: Replaces the default task instructions. The JSON response contract and the conversation transcript are always appended by the server.
         reasoning:
-          type: object
-          nullable: true
-          description: 'Deep-thinking configuration. `effort` forwards provider-native reasoning; `mode: pipeline` runs an ordered list of reasoning steps after the base draft. reflect and debate are expressed as pipelines — see the Agents module docs.'
-          properties:
-            effort:
-              type: string
-              enum: [low, medium, high]
-              description: Provider-native reasoning effort, forwarded to providers that support it (OpenAI reasoning models, Anthropic extended thinking, Google thinking budgets). Ignored elsewhere.
-            mode:
-              type: string
-              enum: [none, pipeline]
-              description: 'Orchestrated reasoning strategy. `pipeline` runs an ordered list of reasoning steps after the base draft.'
-            steps:
-              type: array
-              maxItems: 8
-              description: 'Pipeline only — ordered reasoning steps run after the base draft. The output step (`output: true`, else the last) produces the final answer. Prompts support `{question}`, `{draft}`, and `{steps.<name>}`. reflect and debate are expressed as step configs — see the Agents module docs.'
-              items:
-                type: object
-                required:
-                  - name
-                  - prompt
-                properties:
-                  name:
-                    type: string
-                    description: Unique step name; referenced as `{steps.<name>}`.
-                  kind:
-                    type: string
-                    enum: [completion, fanout]
-                    description: '`completion` (default) runs one call; `fanout` runs N perspectives over rounds.'
-                  prompt:
-                    type: string
-                    description: 'Prompt template supporting `{question}`, `{draft}`, and `{steps.<name>}`.'
-                  ai_provider_id:
-                    x-soat-ref: ai-providers
-                    type: string
-                    description: AI provider override for this step. Must belong to the agent's project.
-                  model:
-                    type: string
-                    description: Model override for this step.
-                  temperature:
-                    type: number
-                    description: Sampling temperature for this step.
-                  output:
-                    type: boolean
-                    description: Marks the step whose output is the final answer (else the last step).
-                  halt_if_equals:
-                    type: string
-                    description: If the step output equals this string, halt the pipeline and keep the draft.
-                  count:
-                    type: integer
-                    minimum: 2
-                    maximum: 5
-                    description: 'Fanout only — number of auto-named perspectives (2–5).'
-                  rounds:
-                    type: integer
-                    minimum: 1
-                    maximum: 3
-                    description: 'Fanout only — rounds of perspective turns (default 1, max 3).'
-                  perspectives:
-                    type: array
-                    description: 'Fanout only — explicit perspective objects; overrides count.'
-                    items:
-                      type: object
-                      properties:
-                        name:
-                          type: string
-                        prompt:
-                          type: string
-                        ai_provider_id:
-                          x-soat-ref: ai-providers
-                          type: string
-                        model:
-                          type: string
+          $ref: '#/components/schemas/ReasoningConfig'
         output_schema:
           type: object
           nullable: true
@@ -1115,79 +979,7 @@ components:
             limit:
               type: integer
         reasoning:
-          type: object
-          nullable: true
-          description: Per-generation deep-thinking override. Replaces the agent's stored reasoning config for this request (object replace, not merge). Same shape as the agent `reasoning` field.
-          properties:
-            effort:
-              type: string
-              enum: [low, medium, high]
-              description: Provider-native reasoning effort for this generation.
-            mode:
-              type: string
-              enum: [none, pipeline]
-              description: Orchestrated reasoning strategy for this generation.
-            steps:
-              type: array
-              maxItems: 8
-              description: 'Pipeline only — ordered reasoning steps for this generation. The output step (`output: true`, else the last) produces the final answer. Prompts support `{question}`, `{draft}`, and `{steps.<name>}`.'
-              items:
-                type: object
-                required:
-                  - name
-                  - prompt
-                properties:
-                  name:
-                    type: string
-                    description: Unique step name; referenced as `{steps.<name>}`.
-                  kind:
-                    type: string
-                    enum: [completion, fanout]
-                    description: '`completion` (default) runs one call; `fanout` runs N perspectives over rounds.'
-                  prompt:
-                    type: string
-                    description: 'Prompt template supporting `{question}`, `{draft}`, and `{steps.<name>}`.'
-                  ai_provider_id:
-                    x-soat-ref: ai-providers
-                    type: string
-                    description: AI provider override for this step. Must belong to the agent's project.
-                  model:
-                    type: string
-                    description: Model override for this step.
-                  temperature:
-                    type: number
-                    description: Sampling temperature for this step.
-                  output:
-                    type: boolean
-                    description: Marks the step whose output is the final answer (else the last step).
-                  halt_if_equals:
-                    type: string
-                    description: If the step output equals this string, halt the pipeline and keep the draft.
-                  count:
-                    type: integer
-                    minimum: 2
-                    maximum: 5
-                    description: 'Fanout only — number of auto-named perspectives (2–5).'
-                  rounds:
-                    type: integer
-                    minimum: 1
-                    maximum: 3
-                    description: 'Fanout only — rounds of perspective turns (default 1, max 3).'
-                  perspectives:
-                    type: array
-                    description: 'Fanout only — explicit perspective objects; overrides count.'
-                    items:
-                      type: object
-                      properties:
-                        name:
-                          type: string
-                        prompt:
-                          type: string
-                        ai_provider_id:
-                          x-soat-ref: ai-providers
-                          type: string
-                        model:
-                          type: string
+          $ref: '#/components/schemas/ReasoningConfig'
 
     ToolOutputMessageContent:
       type: object
