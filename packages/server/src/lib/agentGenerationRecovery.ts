@@ -108,19 +108,18 @@ const buildPendingFromState = async (args: {
     config: resolved.config as Record<string, unknown> | undefined,
   });
 
-  const resolvedTools =
-    args.typedAgent.toolIds || args.typedAgent.tools
-      ? await resolveAgentTools({
-          toolIds: (args.typedAgent.toolIds as string[] | null) ?? [],
-          tools: args.typedAgent.tools as InlineToolDefinition[] | null,
-          projectId: args.typedAgent.project.id as number,
-          projectIds: args.projectIds,
-          boundaryPolicy: args.typedAgent.boundaryPolicy,
-          authHeader: args.authHeader,
-          toolContext: args.pendingState.toolContext ?? undefined,
-          remainingDepth: args.pendingState.remainingDepth ?? undefined,
-        })
-      : {};
+  // No branch on toolIds/tools presence — resolveAgentTools no-ops on empty
+  // input, so this covers "no tools at all" the same way as either alone.
+  const resolvedTools = await resolveAgentTools({
+    toolIds: (args.typedAgent.toolIds as string[] | null) ?? [],
+    tools: args.typedAgent.tools as InlineToolDefinition[] | null,
+    projectId: args.typedAgent.project.id as number,
+    projectIds: args.projectIds,
+    boundaryPolicy: args.typedAgent.boundaryPolicy,
+    authHeader: args.authHeader,
+    toolContext: args.pendingState.toolContext ?? undefined,
+    remainingDepth: args.pendingState.remainingDepth ?? undefined,
+  });
 
   return {
     agentId: args.agentId,
