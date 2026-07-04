@@ -52,6 +52,7 @@ SOAT detects that `MyAgent` depends on `MyProvider` and `MyMemory` through the `
 - [Deploy a Multi-Agent App with Agent Formation - Step 3 (Write the formation template)](/docs/tutorials/formations#step-3--write-the-formation-template)
 - [Deploy a Multi-Agent App with Agent Formation - Step 6 (Deploy the formation)](/docs/tutorials/formations#step-6--deploy-the-formation)
 - [Deploy a Multi-Agent App with Agent Formation - Step 10 (Update the formation)](/docs/tutorials/formations#step-10--update-the-formation)
+- [Create an Agent Squad](/docs/tutorials/create-an-agent-squad) — deploy a team of agents plus their coordinating orchestration as one stack
 
 ## Data Model
 
@@ -358,74 +359,7 @@ SOAT builds a dependency graph from explicit `depends_on` entries, implicit `ref
 
 ### Agent Squads
 
-An **agent squad** is a team of agents plus the flow that coordinates them,
-deployed as one stack. Because an [orchestration](./orchestrations.md) is a
-formation resource type, you declare the agents and the orchestration that wires
-them together in a single template — a node's `agent_id` uses a `ref` to bind to
-an agent created in the same stack, and the engine resolves it to the physical
-`agt_...` ID before the orchestration is created.
-
-Node fields are written in snake_case (`agent_id`, `input_mapping`,
-`output_mapping`, `activation_condition`), exactly as in the [Orchestrations](./orchestrations.md)
-REST contract; the formation layer maps them onto the engine's internal shape.
-
-```json
-{
-  "resources": {
-    "Provider": {
-      "type": "ai_provider",
-      "properties": { "name": "OpenAI", "provider": "openai", "default_model": "gpt-4o" }
-    },
-    "Writer": {
-      "type": "agent",
-      "properties": {
-        "name": "Writer",
-        "ai_provider_id": { "ref": "Provider" },
-        "instructions": "Draft a short article on the given topic."
-      }
-    },
-    "Reviewer": {
-      "type": "agent",
-      "properties": {
-        "name": "Reviewer",
-        "ai_provider_id": { "ref": "Provider" },
-        "instructions": "Tighten and fact-check the draft."
-      }
-    },
-    "ContentSquad": {
-      "type": "orchestration",
-      "properties": {
-        "name": "content-squad",
-        "input_schema": { "type": "object", "properties": { "topic": { "type": "string" } } },
-        "nodes": [
-          {
-            "id": "write",
-            "type": "agent",
-            "agent_id": { "ref": "Writer" },
-            "input_mapping": { "prompt": { "var": "topic" } },
-            "output_mapping": { "content": "state.draft" }
-          },
-          {
-            "id": "review",
-            "type": "agent",
-            "agent_id": { "ref": "Reviewer" },
-            "input_mapping": { "prompt": { "var": "draft" } },
-            "output_mapping": { "content": "state.final" }
-          }
-        ],
-        "edges": [{ "from": "write", "to": "review" }]
-      }
-    }
-  },
-  "outputs": {
-    "squadId": { "ref": "ContentSquad" }
-  }
-}
-```
-
-Deploying this template creates the provider, both agents, and the orchestration
-in dependency order. Run the squad with [`start-orchestration-run`](./orchestrations.md#start-a-run)
-against the `squadId` output, passing `{ "topic": "..." }` as input.
+An [orchestration](./orchestrations.md) is a formation resource type, so a team of agents plus its coordinating flow can deploy as one stack — see the [Agent Squad example](./orchestrations.md#agent-squad).
 
 ### Resource Lifecycle
 
