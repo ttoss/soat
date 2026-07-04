@@ -357,10 +357,6 @@ After deployment the tool's stored header is `Bearer {{secret:sec_01HXYZ}}` — 
 
 SOAT builds a dependency graph from explicit `depends_on` entries, implicit `ref` expressions, and resource logical IDs referenced inside `sub` strings, then uses topological sort (Kahn's algorithm) to determine the creation order. A template with a cycle fails validation.
 
-### Agent Squads
-
-An [orchestration](./orchestrations.md) is a formation resource type, so a team of agents plus its coordinating flow can deploy as one stack — see the [Agent Squad example](./orchestrations.md#agent-squad).
-
 ### Resource Lifecycle
 
 Each resource in a formation goes through these statuses:
@@ -524,3 +520,7 @@ curl -X PUT https://api.example.com/api/v1/formations/af_01 \
 
 </TabItem>
 </Tabs>
+
+### Agent Squad
+
+An [orchestration](./orchestrations.md) is itself a formation resource type, so a team of agents plus the flow that coordinates them can deploy as one stack — see the [Agent Squad example](./orchestrations.md#agent-squad) and the [Create an Agent Squad](/docs/tutorials/create-an-agent-squad) tutorial.
