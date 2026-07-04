@@ -21,7 +21,7 @@ const parseStringOrUndefined = (v: unknown): string | undefined => {
  * when the value is present but cannot be coerced to a plain object, so the
  * caller can return a 400 response.
  */
-const coerceToJsonObject = (v: unknown): object | null | undefined => {
+export const coerceToJsonObject = (v: unknown): object | null | undefined => {
   if (v === undefined) return undefined;
   if (v === null) return null;
   if (typeof v === 'object' && !Array.isArray(v)) return v as object;

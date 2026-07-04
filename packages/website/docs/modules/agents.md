@@ -30,6 +30,7 @@ Agents differ from [Chats](./chats.md) in that they can call tools, observe resu
 | `instructions`             | string        | System instructions guiding agent behavior                                                                                       |
 | `model`                    | string        | Model identifier (falls back to AI provider default)                                                                             |
 | `tool_ids`                 | array         | IDs of tools attached to this agent — see [Tools](./tools.md)                                                                   |
+| `tools`                    | array         | Write-only, create/update only. Inline tool definitions created and attached in the same request — see [Inline Tool Definitions](#inline-tool-definitions) |
 | `max_steps`                | number        | Maximum reasoning steps before stopping (default: `20`)                                                                          |
 | `tool_choice`              | string/object | How the model selects tools — see [Tool Choice](#tool-choice)                                                                    |
 | `stop_conditions`          | array         | Additional stop conditions — see [Stop Conditions](#stop-conditions)                                                             |
@@ -93,6 +94,12 @@ When `status` is `completed`, `stop_reason` indicates why:
 Agents reference [Tools](./tools.md) by their IDs via the `tool_ids` field. A single tool can be attached to many agents. For tool types (`http`, `client`, `mcp`, `soat`), execution behavior, preset parameters, and tool name resolution, see the [Tools module](./tools.md). See it end to end in [Agent SOAT Tools and Preset Parameters — Step 7 (Create the agent)](/docs/tutorials/agent-soat-tools#step-7--create-the-agent), which attaches `soat` document tools (with a preset document ID) to an agent.
 
 `tool_choice` and `stop_conditions` reference tools by their **resolved name** (e.g., `github_create_issue`), not by ID. See [Tool Name Resolution](./tools.md#tool-name-resolution) in the Tools module.
+
+#### Inline Tool Definitions
+
+`tools` accepts an array of inline tool definitions on `POST /agents`, `PUT /agents/{agent_id}`, and `PATCH /agents/{agent_id}` — the same shape as the [Create Tool](./tools.md#data-model) request body, minus `project_id` (the agent's own project is always used). Each definition is persisted as a standalone Tool resource, exactly as if it had been created via `POST /tools`, and its resulting ID is appended to `tool_ids`. This is a convenience for defining a new tool at the same time as the agent that uses it; use `tool_ids` to attach tools that already exist. `tools` is never returned in a response — inspect `tool_ids` (and `GET /tools/{tool_id}`) to see the resulting tools.
+
+On update, the IDs of newly created inline tools are appended to whichever `tool_ids` wins: the `tool_ids` sent in the same request if present, otherwise the agent's existing `tool_ids`.
 
 ### Instructions
 

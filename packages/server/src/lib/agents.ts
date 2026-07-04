@@ -5,8 +5,11 @@ import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { validateOutputSchema } from './outputSchema';
 import { validateReasoningConfig } from './reasoning';
+import { createInlineTools, type InlineToolDefinition } from './tools';
 
 const log = createDebug('soat:agents');
+
+export type { InlineToolDefinition };
 
 // Re-export symbols that callers expect from this module.
 export {
@@ -149,6 +152,7 @@ export const createAgent = async (args: {
   instructions?: string;
   model?: string;
   toolIds?: string[];
+  tools?: InlineToolDefinition[];
   maxSteps?: number;
   toolChoice?: string | object;
   stopConditions?: object[];
@@ -172,6 +176,13 @@ export const createAgent = async (args: {
       `AI provider '${args.aiProviderId}' not found.`
     );
 
+  const inlineToolIds = args.tools?.length
+    ? await createInlineTools({ projectId: args.projectId, tools: args.tools })
+    : [];
+  const toolIds = inlineToolIds.length
+    ? [...(args.toolIds ?? []), ...inlineToolIds]
+    : args.toolIds;
+
   const defaults = {
     name: null,
     instructions: null,
@@ -188,7 +199,7 @@ export const createAgent = async (args: {
   };
   const agent = await db.Agent.create({
     ...defaults,
-    ...buildAgentUpdates(args),
+    ...buildAgentUpdates({ ...args, toolIds }),
     projectId: args.projectId,
     aiProviderId,
   });
@@ -252,6 +263,7 @@ export const updateAgent = async (
   args: {
     projectIds?: number[];
     id: string;
+    tools?: InlineToolDefinition[];
   } & AgentUpdateFields
 ): Promise<MappedAgent> => {
   validateReasoningConfig(args.reasoningConfig);
@@ -268,6 +280,20 @@ export const updateAgent = async (
     );
 
   const updates = buildAgentUpdates(args);
+
+  if (args.tools?.length) {
+    const agentProjectId = (agent as unknown as { projectId: number })
+      .projectId;
+    const inlineToolIds = await createInlineTools({
+      projectId: agentProjectId,
+      tools: args.tools,
+    });
+    const baseToolIds =
+      args.toolIds !== undefined
+        ? args.toolIds
+        : (agent as unknown as { toolIds: string[] | null }).toolIds;
+    updates.toolIds = [...(baseToolIds ?? []), ...inlineToolIds];
+  }
 
   if (args.aiProviderId !== undefined) {
     const dbId = await resolveAiProviderDbId(args.aiProviderId);

@@ -1,3 +1,5 @@
+import createDebug from 'debug';
+
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { applyToolOutputMapping } from './jsonLogicMapping';
@@ -9,6 +11,8 @@ import {
 import { assertSecretRefsExist } from './secrets';
 import { soatTools } from './soatTools';
 import { callHttpTool, callMcpTool, callSoatTool } from './toolsCall';
+
+const log = createDebug('soat:tools');
 
 // ── SOAT Action Validation ──────────────────────────────────────────────────
 
@@ -96,7 +100,7 @@ const mapTool = (
 
 // ── CRUD ──────────────────────────────────────────────────────────────────
 
-type CreateToolArgs = {
+export type CreateToolArgs = {
   projectId: number;
   type?: string;
   name: string;
@@ -154,6 +158,41 @@ export const createTool = async (args: CreateToolArgs): Promise<MappedTool> => {
   });
 
   return mapTool(created as unknown as Parameters<typeof mapTool>[0]);
+};
+
+// ── Inline Tool Definitions ─────────────────────────────────────────────────
+
+// An inline tool definition mirrors `createTool`'s args minus `projectId`,
+// which is always the owning resource's own project (e.g. the agent's).
+export type InlineToolDefinition = Omit<CreateToolArgs, 'projectId'>;
+
+/**
+ * Persists each inline tool definition as a standalone Tool resource (so it
+ * shows up in list-tools, permissions, and the MCP surface like any other
+ * tool) and returns the resulting public IDs. Used by callers (e.g. agents)
+ * that accept inline tool definitions instead of only pre-created tool IDs.
+ */
+export const createInlineTools = async (args: {
+  projectId: number;
+  tools: InlineToolDefinition[];
+}): Promise<string[]> => {
+  const ids: string[] = [];
+  for (const toolDef of args.tools) {
+    if (!toolDef.name || typeof toolDef.name !== 'string') {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        'Inline tool definitions require a name.'
+      );
+    }
+    log(
+      'createInlineTools: projectId=%d name=%s',
+      args.projectId,
+      toolDef.name
+    );
+    const created = await createTool({ projectId: args.projectId, ...toolDef });
+    ids.push(created.id);
+  }
+  return ids;
 };
 
 export const listTools = async (args: {

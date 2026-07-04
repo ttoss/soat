@@ -687,6 +687,17 @@ components:
           type: array
           items:
             type: string
+        tools:
+          type: array
+          items:
+            $ref: './tools.yaml#/components/schemas/CreateToolRequest'
+          description: >-
+            Inline tool definitions to create and attach to this agent in the
+            same request. Each definition is persisted as a standalone Tool
+            resource (equivalent to POST /tools) in the agent's own project —
+            any `project_id` on an entry is ignored — and the resulting tool
+            ID is appended to `tool_ids`. Use `tool_ids` to reference existing
+            tools and `tools` to define new ones inline.
         max_steps:
           type: integer
         tool_choice:
@@ -863,6 +874,18 @@ components:
           nullable: true
           items:
             type: string
+        tools:
+          type: array
+          items:
+            $ref: './tools.yaml#/components/schemas/CreateToolRequest'
+          description: >-
+            Inline tool definitions to create and attach to this agent in the
+            same request. Each definition is persisted as a standalone Tool
+            resource (equivalent to POST /tools) in the agent's own project —
+            any `project_id` on an entry is ignored — and the resulting tool
+            ID is appended to `tool_ids` (merged with any `tool_ids` also
+            provided in this request, or the agent's existing `tool_ids`
+            otherwise).
         max_steps:
           type: integer
           nullable: true
