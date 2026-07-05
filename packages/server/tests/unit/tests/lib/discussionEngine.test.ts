@@ -83,7 +83,7 @@ describe('discussionEngine', () => {
     expect(outcome.turns).toHaveLength(5);
   });
 
-  test('all turns failing degrades to all_failed with empty text', async () => {
+  test('the sole (output) step failing degrades to output_failed with empty text', async () => {
     jest
       .spyOn(discussionCompletion, 'runDiscussionCompletion')
       .mockRejectedValue(new Error('provider down'));
@@ -95,7 +95,7 @@ describe('discussionEngine', () => {
       topic: 'Q',
     });
     expect(outcome.applied).toBe(false);
-    expect(outcome.reason).toBe('all_failed');
+    expect(outcome.reason).toBe('output_failed');
     expect(outcome.text).toBe('');
     expect(outcome.dropped).toBeGreaterThan(0);
   });
