@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.20](https://github.com/ttoss/soat/compare/v0.13.19...v0.13.20) (2026-07-05)
+
+**Note:** Version bump only for package @soat/cli
+
 ## [0.13.19](https://github.com/ttoss/soat/compare/v0.13.18...v0.13.19) (2026-07-04)
 
 * feat(agents)!: normalize reasoning pipeline to a single branches/rounds primitive (#390) ([6d7a7fa](https://github.com/ttoss/soat/commit/6d7a7faecddde711c804df84749686298384a755)), closes [#390](https://github.com/ttoss/soat/issues/390) [#388](https://github.com/ttoss/soat/issues/388)
