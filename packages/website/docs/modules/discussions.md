@@ -13,6 +13,10 @@ Deep thinking used to be a `reasoning` config on the agent; it now lives here en
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Review Panel - step 4 (Create the review-panel discussion)](/docs/tutorials/review-panel-discussion) — a writer agent drafts text, then a discussion checks its fundamentals and voice/tone.
+
 ## Data Model
 
 ### Discussion
