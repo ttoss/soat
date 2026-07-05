@@ -4,6 +4,7 @@ import { aiProvidersFormationModule } from './formation-modules/aiProvidersForma
 import { apiKeysFormationModule } from './formation-modules/apiKeysFormationModule';
 import { chatsFormationModule } from './formation-modules/chatsFormationModule';
 import { conversationsFormationModule } from './formation-modules/conversationsFormationModule';
+import { discussionsFormationModule } from './formation-modules/discussionsFormationModule';
 import { documentsFormationModule } from './formation-modules/documentsFormationModule';
 import { filesFormationModule } from './formation-modules/filesFormationModule';
 import { ingestionRulesFormationModule } from './formation-modules/ingestionRulesFormationModule';
@@ -41,6 +42,7 @@ registerFormationModule({ module: memoryEntriesFormationModule });
 registerFormationModule({ module: webhooksFormationModule });
 registerFormationModule({ module: chatsFormationModule });
 registerFormationModule({ module: conversationsFormationModule });
+registerFormationModule({ module: discussionsFormationModule });
 registerFormationModule({ module: filesFormationModule });
 registerFormationModule({ module: ingestionRulesFormationModule });
 registerFormationModule({ module: policiesFormationModule });

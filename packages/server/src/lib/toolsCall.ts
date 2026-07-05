@@ -35,6 +35,7 @@ export type InlineToolDefinition = {
   actions?: string[];
   presetParameters?: object;
   pipeline?: object;
+  discussion?: object;
   outputMapping?: object;
 };
 
@@ -52,6 +53,7 @@ export type CallableToolDefinition = {
   actions?: string[] | null;
   presetParameters?: object | null;
   pipeline?: object | null;
+  discussion?: object | null;
   outputMapping?: object | null;
 };
 
@@ -71,6 +73,49 @@ export const assertEphemeralTypeSupported = (
       'Ephemeral tool definitions of type "pipeline" are not supported; create a persisted pipeline tool via POST /tools and reference it by ID instead.'
     );
   }
+  if (definition.type === 'discussion') {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'Ephemeral tool definitions of type "discussion" are not supported; create a persisted discussion tool via POST /tools and reference it by ID instead.'
+    );
+  }
+};
+
+/**
+ * Executes a `discussion` tool: invokes the referenced discussion synchronously
+ * with the `topic` argument and returns the outcome + run id as the tool
+ * result. Mirrors the `mcp` type (references another resource by id), but calls
+ * the discussions engine directly rather than round-tripping HTTP.
+ */
+export const callDiscussionTool = async (
+  tool: CallableToolDefinition,
+  mergedInput: Record<string, unknown>
+): Promise<unknown> => {
+  const config = tool.discussion as { discussionId?: string } | null;
+  if (!config?.discussionId) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'Discussion tool has an invalid discussion configuration.'
+    );
+  }
+  const topic = mergedInput.topic;
+  if (typeof topic !== 'string' || topic.trim().length === 0) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'A discussion tool call requires a string `topic`.'
+    );
+  }
+  // Dynamically imported to avoid a circular import at module load.
+  const { runDiscussion } = await import('./discussionRuns');
+  const run = await runDiscussion({
+    discussionId: config.discussionId,
+    topic,
+    initiatorGenerationId:
+      typeof mergedInput.initiatorGenerationId === 'string'
+        ? mergedInput.initiatorGenerationId
+        : undefined,
+  });
+  return { outcome: run.outcome, run_id: run.id };
 };
 
 export const callHttpTool = (
@@ -208,6 +253,45 @@ export const callMcpTool = async (
  * a single self-recursive function instead of two consts referencing each
  * other out of declaration order.
  */
+/**
+ * Dispatches a non-pipeline tool to its per-type executor. `client` tools (and
+ * any unknown type) cannot run server-side.
+ */
+const dispatchDirectTool = async (args: {
+  type: string;
+  tool: CallableToolDefinition;
+  action?: string;
+  mergedInput: Record<string, unknown>;
+  authHeader?: string;
+  toolProjectId: number;
+}): Promise<unknown> => {
+  if (args.type === 'http') {
+    return callHttpTool(args.tool, args.mergedInput, args.toolProjectId);
+  }
+  if (args.type === 'soat') {
+    return callSoatTool(args.tool, {
+      action: args.action,
+      mergedInput: args.mergedInput,
+      authHeader: args.authHeader,
+    });
+  }
+  if (args.type === 'mcp') {
+    return callMcpTool(
+      args.tool,
+      args.action,
+      args.mergedInput,
+      args.toolProjectId
+    );
+  }
+  if (args.type === 'discussion') {
+    return callDiscussionTool(args.tool, args.mergedInput);
+  }
+  throw new DomainError(
+    'TOOL_CALL_NOT_SUPPORTED',
+    'Client tools cannot be invoked server-side; they must be executed by the calling client.'
+  );
+};
+
 export const callResolvedTool = async (args: {
   tool: CallableToolDefinition;
   toolProjectId: number;
@@ -262,29 +346,14 @@ export const callResolvedTool = async (args: {
     ...(args.input ?? {}),
   };
 
-  let rawResult: unknown;
-  if (type === 'http') {
-    rawResult = await callHttpTool(args.tool, mergedInput, args.toolProjectId);
-  } else if (type === 'soat') {
-    rawResult = await callSoatTool(args.tool, {
-      action: args.action,
-      mergedInput,
-      authHeader: args.authHeader,
-    });
-  } else if (type === 'mcp') {
-    rawResult = await callMcpTool(
-      args.tool,
-      args.action,
-      mergedInput,
-      args.toolProjectId
-    );
-  } else {
-    // client tools (and any unknown type) cannot be invoked server-side
-    throw new DomainError(
-      'TOOL_CALL_NOT_SUPPORTED',
-      'Client tools cannot be invoked server-side; they must be executed by the calling client.'
-    );
-  }
+  const rawResult = await dispatchDirectTool({
+    type,
+    tool: args.tool,
+    action: args.action,
+    mergedInput,
+    authHeader: args.authHeader,
+    toolProjectId: args.toolProjectId,
+  });
 
   return applyToolOutputMapping(
     (args.tool.outputMapping as Record<string, unknown> | null) ?? null,

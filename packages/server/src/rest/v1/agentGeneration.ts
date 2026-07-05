@@ -115,7 +115,6 @@ agentGenerationRouter.post(
       rootTraceId,
       maxCallDepth,
       toolContext,
-      reasoning,
       knowledgeConfig,
     } = ctx.request.body as {
       messages?: unknown;
@@ -125,7 +124,6 @@ agentGenerationRouter.post(
       rootTraceId?: string;
       maxCallDepth?: unknown;
       toolContext?: Record<string, string>;
-      reasoning?: object;
       knowledgeConfig?: object;
     };
 
@@ -150,7 +148,6 @@ agentGenerationRouter.post(
       authHeader: (ctx.headers.authorization as string) ?? '',
       authUser: ctx.authUser,
       toolContext,
-      reasoning: toObjectOrUndefined(reasoning),
       knowledgeConfig: toObjectOrUndefined(knowledgeConfig),
     });
 

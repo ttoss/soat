@@ -34,6 +34,9 @@ export const PUBLIC_ID_PREFIXES = {
   uploadToken: 'upt_',
   ingestionRule: 'igr_',
   ingestionAttempt: 'iat_',
+  discussion: 'disc_',
+  discussionParticipant: 'dpt_',
+  discussionRun: 'drn_',
 } as const;
 
 /**

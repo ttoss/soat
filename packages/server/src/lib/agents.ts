@@ -4,7 +4,6 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { validateOutputSchema } from './outputSchema';
-import { validateReasoningConfig } from './reasoning';
 import {
   assertEphemeralTypeSupported,
   type InlineToolDefinition,
@@ -54,7 +53,6 @@ export type MappedAgent = {
   boundaryPolicy: object | null;
   temperature: number | null;
   knowledgeConfig: object | null;
-  reasoning: object | null;
   outputSchema: object | null;
   maxContextMessages: number | null;
   singleSessionPerActor: boolean;
@@ -94,7 +92,6 @@ const mapAgent = (
     boundaryPolicy: agent.boundaryPolicy,
     temperature: agent.temperature,
     knowledgeConfig: agent.knowledgeConfig,
-    reasoning: agent.reasoningConfig,
     outputSchema: agent.outputSchema,
     maxContextMessages: agent.maxContextMessages,
     singleSessionPerActor: agent.singleSessionPerActor,
@@ -120,7 +117,6 @@ type AgentUpdateFields = {
   boundaryPolicy?: object | null;
   temperature?: number | null;
   knowledgeConfig?: object | null;
-  reasoningConfig?: object | null;
   outputSchema?: object | null;
   maxContextMessages?: number | null;
   singleSessionPerActor?: boolean;
@@ -140,7 +136,6 @@ const AGENT_SCALAR_FIELDS = [
   'boundaryPolicy',
   'temperature',
   'knowledgeConfig',
-  'reasoningConfig',
   'outputSchema',
   'maxContextMessages',
   'singleSessionPerActor',
@@ -181,12 +176,10 @@ export const createAgent = async (args: {
   boundaryPolicy?: object;
   temperature?: number;
   knowledgeConfig?: object;
-  reasoningConfig?: object;
   outputSchema?: object;
   maxContextMessages?: number;
   singleSessionPerActor?: boolean;
 }): Promise<MappedAgent> => {
-  validateReasoningConfig(args.reasoningConfig);
   validateOutputSchema(args.outputSchema);
 
   const aiProviderId = await resolveAiProviderDbId(args.aiProviderId);
@@ -284,7 +277,6 @@ export const updateAgent = async (
     id: string;
   } & AgentUpdateFields
 ): Promise<MappedAgent> => {
-  validateReasoningConfig(args.reasoningConfig);
   validateOutputSchema(args.outputSchema);
 
   const where: Record<string, unknown> = { publicId: args.id };

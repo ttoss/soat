@@ -19,8 +19,6 @@ import {
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import { buildStructuredOutput } from './outputSchema';
 import { toProviderDomainError } from './providerError';
-import { type ProviderOptionsMap, type ReasoningConfig } from './reasoning';
-import { applyReasoningPipeline } from './reasoningPipelineHook';
 
 const log = createDebug('soat:generation');
 
@@ -85,8 +83,6 @@ const callGenerateText = async (args: {
   typedAgent: TypedAgent;
   prepareStep: ReturnType<typeof buildPrepareStep>;
   abortSignal?: AbortSignal;
-  providerOptions?: ProviderOptionsMap;
-  maxOutputTokens?: number;
 }) => {
   const hasTools = Object.keys(args.resolvedTools).length > 0;
 
@@ -106,8 +102,6 @@ const callGenerateText = async (args: {
       stopWhen: isStepCount((args.typedAgent.maxSteps as number) ?? 20),
       temperature: (args.typedAgent.temperature as number) ?? undefined,
       abortSignal: args.abortSignal,
-      providerOptions: args.providerOptions,
-      maxOutputTokens: args.maxOutputTokens,
       output: buildStructuredOutput(args.typedAgent.outputSchema),
     });
   } catch (error) {
@@ -143,7 +137,6 @@ const resolveGenerationResult = async (args: {
   result: GenerateTextResult;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
-  reasoningConfig?: ReasoningConfig | null;
 }): Promise<GenerationResult> => {
   const pendingToolCalls = findPendingClientTools(
     args.result.steps as Array<{
@@ -179,24 +172,6 @@ const resolveGenerationResult = async (args: {
     });
   }
 
-  // Wrap in plain object: AI SDK exposes `text` as getter-only; orchestration needs to mutate it.
-  const mutableResult = {
-    text: args.result.text,
-    response: args.result.response,
-  };
-
-  await applyReasoningPipeline({
-    reasoningConfig: args.reasoningConfig,
-    agentId: args.agentId,
-    generationId: args.generationId,
-    traceId: args.traceId,
-    projectId: args.typedAgent.project.id as number,
-    projectPublicId: args.typedAgent.project.publicId,
-    messages: args.allMessages,
-    result: mutableResult,
-    temperature: args.typedAgent.temperature as number | null,
-  });
-
   return buildCompletedGenerationResult({
     generationId: args.generationId,
     traceId: args.traceId,
@@ -205,8 +180,8 @@ const resolveGenerationResult = async (args: {
     result: {
       steps: args.result.steps,
       finishReason: args.result.finishReason,
-      text: mutableResult.text,
-      response: mutableResult.response,
+      text: args.result.text,
+      response: args.result.response,
       object: args.typedAgent.outputSchema ? args.result.output : undefined,
     },
     typedAgent: args.typedAgent,
@@ -227,9 +202,6 @@ export const runNonStreamGeneration = async (args: {
   abortSignal?: AbortSignal;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
-  providerOptions?: ProviderOptionsMap;
-  maxOutputTokens?: number;
-  reasoningConfig?: ReasoningConfig | null;
 }): Promise<GenerationResult> => {
   const system = args.allMessages.find((message) => {
     return message.role === 'system';
@@ -258,8 +230,6 @@ export const runNonStreamGeneration = async (args: {
     typedAgent: args.typedAgent,
     prepareStep,
     abortSignal: args.abortSignal,
-    providerOptions: args.providerOptions,
-    maxOutputTokens: args.maxOutputTokens,
   };
 
   let result;
@@ -340,7 +310,6 @@ const buildTypedAgentFromPending = (pending: PendingGeneration): TypedAgent => {
     boundaryPolicy: null,
     temperature: pending.agentConfig.temperature,
     knowledgeConfig: null,
-    reasoningConfig: null,
     outputSchema: pending.agentConfig.outputSchema,
     project: { id: pending.projectId, publicId: pending.projectPublicId },
     aiProvider: { publicId: '' },

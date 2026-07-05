@@ -2152,49 +2152,6 @@ resources:
       );
     });
 
-    test('creates an agent with a reasoning config from a formation', async () => {
-      const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/formations')
-        .send({
-          project_id: projectId,
-          name: `reasoning-formation-${Date.now()}`,
-          template: {
-            resources: {
-              ReasoningAgent: {
-                type: 'agent',
-                properties: {
-                  ai_provider_id: aiProviderId,
-                  name: 'reasoning-agent',
-                  reasoning: {
-                    effort: 'high',
-                    mode: 'pipeline',
-                    steps: [
-                      {
-                        name: 'final',
-                        prompt: 'Refine: {draft}',
-                        output: true,
-                      },
-                    ],
-                  },
-                },
-              },
-            },
-          },
-        });
-
-      expect(res.status).toBe(201);
-      expect(res.body.status).toBe('active');
-      const reasoningAgentId = res.body.resources[0].physical_resource_id;
-
-      const agentRes = await authenticatedTestClient(adminToken).get(
-        `/api/v1/agents/${reasoningAgentId}`
-      );
-      expect(agentRes.status).toBe(200);
-      expect(agentRes.body.reasoning.effort).toBe('high');
-      expect(agentRes.body.reasoning.mode).toBe('pipeline');
-      expect(agentRes.body.reasoning.steps[0].name).toBe('final');
-    });
-
     test('formation update can switch extraction to the boolean form', async () => {
       const res = await authenticatedTestClient(userToken)
         .put(`/api/v1/formations/${extractionFormationId}`)
@@ -2224,6 +2181,149 @@ resources:
       );
       expect(agentRes.status).toBe(200);
       expect(agentRes.body.knowledge_config.extraction).toBe(true);
+    });
+  });
+
+  describe('Formation discussion resource', () => {
+    let discussionFormationId: string;
+    let discussionAiProviderId: string;
+
+    beforeAll(async () => {
+      const aiProvRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'FormationDiscussionProvider',
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        });
+      discussionAiProviderId = aiProvRes.body.id;
+    });
+
+    test('creates a discussion from a formation', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `discussion-formation-${Date.now()}`,
+          template: {
+            resources: {
+              Panel: {
+                type: 'discussion',
+                properties: {
+                  name: 'Formation panel',
+                  ai_provider_id: discussionAiProviderId,
+                  max_rounds: 1,
+                  participants: [
+                    { name: 'Advocate', prompt: 'Argue for.' },
+                    { name: 'Skeptic', prompt: 'Argue against.' },
+                  ],
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      discussionFormationId = res.body.id;
+      const discussionId = res.body.resources[0].physical_resource_id;
+      expect(discussionId).toMatch(/^disc_/);
+
+      const discRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/discussions/${discussionId}`
+      );
+      expect(discRes.status).toBe(200);
+      expect(discRes.body.name).toBe('Formation panel');
+      expect(discRes.body.participants).toHaveLength(2);
+    });
+
+    test('formation update changes the discussion', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${discussionFormationId}`)
+        .send({
+          template: {
+            resources: {
+              Panel: {
+                type: 'discussion',
+                properties: {
+                  name: 'Formation panel renamed',
+                  ai_provider_id: discussionAiProviderId,
+                  max_rounds: 2,
+                  participants: [{ name: 'Solo', prompt: 'Think alone.' }],
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      const discussionId = res.body.resources[0].physical_resource_id;
+      const discRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/discussions/${discussionId}`
+      );
+      expect(discRes.body.name).toBe('Formation panel renamed');
+      expect(discRes.body.max_rounds).toBe(2);
+    });
+
+    test('creates a discussion with a synthesis override and effort', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `discussion-synthesis-${Date.now()}`,
+          template: {
+            resources: {
+              Panel: {
+                type: 'discussion',
+                properties: {
+                  name: 'Synthesis panel',
+                  ai_provider_id: discussionAiProviderId,
+                  description: 'panel with synthesis',
+                  synthesis: {
+                    ai_provider_id: discussionAiProviderId,
+                    prompt: 'Weigh {steps.deliberation}',
+                    effort: 'high',
+                  },
+                  participants: [
+                    { name: 'A', prompt: 'a', effort: 'low' },
+                    { name: 'B', prompt: 'b' },
+                  ],
+                },
+              },
+            },
+          },
+        });
+      expect(res.status).toBe(201);
+      const discussionId = res.body.resources[0].physical_resource_id;
+      const discRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/discussions/${discussionId}`
+      );
+      expect(discRes.body.synthesis.effort).toBe('high');
+    });
+
+    test('validate rejects a discussion missing ai_provider_id', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              Panel: {
+                type: 'discussion',
+                properties: { name: 'no provider' },
+              },
+            },
+          },
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+    });
+
+    test('formation delete removes the discussion', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${discussionFormationId}`
+      );
+      expect([200, 202, 204]).toContain(res.status);
     });
   });
 

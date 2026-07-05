@@ -9,7 +9,7 @@ Standalone, reusable tool definitions that agents call during generation.
 
 The Tools module lets you define callable tools that agents use during a generation loop. A tool encapsulates its type, input schema, and execution configuration in one project-scoped record. Tools can be shared across multiple agents and invoked directly via the API independently of any agent.
 
-Five tool types are supported: `http` (calls an external HTTP endpoint), `client` (signals the calling application to execute locally), `mcp` (proxies an MCP server), `soat` (invokes a SOAT platform action), and `pipeline` (runs a deterministic sequence of other tools as a single call).
+Six tool types are supported: `http` (calls an external HTTP endpoint), `client` (signals the calling application to execute locally), `mcp` (proxies an MCP server), `soat` (invokes a SOAT platform action), `pipeline` (runs a deterministic sequence of other tools as a single call), and `discussion` (invokes a [Discussion](./discussions.md) — the way an agent thinks mid-loop).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -27,7 +27,7 @@ Five tool types are supported: `http` (calls an external HTTP endpoint), `client
 | `id`                | `string`                                        | Public ID (`tool_` prefix)                                                                                        |
 | `project_id`        | `string`                                        | ID of the owning project                                                                                          |
 | `name`              | `string`                                        | Machine-readable tool name sent to the model (or namespace prefix for `mcp`/`soat`)                               |
-| `type`              | `"http"` \| `"client"` \| `"mcp"` \| `"soat"` \| `"pipeline"` | Tool type — determines execution behaviour                                                          |
+| `type`              | `"http"` \| `"client"` \| `"mcp"` \| `"soat"` \| `"pipeline"` \| `"discussion"` | Tool type — determines execution behaviour                                        |
 | `description`       | `string \| null`                                | Human-readable description sent to the model for tool selection                                                   |
 | `parameters`        | `object \| null`                                | JSON Schema describing the tool's input. Required for `http` and `client` types.                                  |
 | `execute`           | `object \| null`                                | HTTP execution config (`url`, `method`, `headers`, `body_mode`). Required for `http` type.                        |
@@ -41,6 +41,7 @@ Five tool types are supported: `http` (calls an external HTTP endpoint), `client
 | `actions`           | `string[] \| null`                              | SOAT platform actions to expose (e.g. `["search-documents"]`). Required for `soat` type.                         |
 | `preset_parameters` | `object \| null`                                | Fixed parameter values merged into every call. Keys are hidden from the model and injected automatically.         |
 | `pipeline`          | `object \| null`                                | Pipeline definition (`steps`, optional `output`). Required for `pipeline` type. See [pipeline](#pipeline).         |
+| `discussion`        | `object \| null`                                | Discussion config (`{ discussion_id }`). Required for `discussion` type. See [discussion](#discussion).            |
 | `output_mapping`    | `object \| null`                                | JSON Logic mapping applied to the tool's raw result, for every tool type. See [output mapping](#output-mapping).   |
 | `created_at`        | `string`                                        | ISO 8601 creation timestamp                                                                                       |
 | `updated_at`        | `string`                                        | ISO 8601 last-updated timestamp                                                                                   |
@@ -280,6 +281,25 @@ Each step's full output is captured under `steps.<id>`. A step may reference onl
 For LLM-decided (rather than fixed) multi-step flows, see [Orchestrations](./orchestrations.md), which share the same JSON Logic mapping model.
 
 **Validation.** `POST /tools`, `PATCH /tools/:id`, and `validate-formation` all validate a `pipeline` config's structure before it can run — including that every step has a `tool_id`/inline `tool` and that an inline step `tool` is an object with a `name` (missing it is reported immediately as an error, instead of surfacing only as a runtime failure the first time the pipeline executes). `validate-formation` additionally warns (not an error) when the tool's own `parameters` schema declares a property that no step's `input` mapping, and no `output` mapping, ever reads via `{ "var": "input.<name>" }` — such a caller-supplied value never reaches a step, so it is reported as an unreachable input key rather than being silently dropped.
+
+### discussion
+
+A `discussion` tool invokes a [Discussion](./discussions.md) — the way an agent thinks mid-loop. It references a discussion config by ID:
+
+```json
+{
+  "name": "ask-the-panel",
+  "type": "discussion",
+  "parameters": {
+    "type": "object",
+    "properties": { "topic": { "type": "string" } },
+    "required": ["topic"]
+  },
+  "discussion": { "discussion_id": "disc_V1StGXR8Z5jdHi6B" }
+}
+```
+
+When the model calls it with a `topic`, the server runs the discussion synchronously (bounded by the discussion's caps and timeouts, the same profile as a nested `create-agent-generation`) and returns `{ outcome, run_id }` as the tool result. The full transcript and outcome persist on the [run](./discussions.md#discussionrun); only the synthesized `outcome` re-enters the caller's context. The referenced discussion must belong to the tool's project. `discussion` tools cannot be defined inline on an agent — create a persisted discussion tool and reference it by `tool_id`.
 
 ### Output Mapping
 
