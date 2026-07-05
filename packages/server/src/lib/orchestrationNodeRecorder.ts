@@ -1,8 +1,17 @@
+import createDebug from 'debug';
+
 import { db } from '../db';
 import { DomainError } from '../errors';
 import type { NodeExecutionResult } from './orchestrationExecutors';
 import { applyInputMapping, executeNodeById } from './orchestrationExecutors';
+import {
+  backoffMs,
+  isRetriableError,
+  resolveRetryPolicy,
+} from './orchestrationRetry';
 import type { OrchestrationNode } from './orchestrations';
+
+const log = createDebug('soat:orchestrations');
 
 /**
  * Normalizes any thrown value into the structured error shape persisted on a
@@ -24,11 +33,13 @@ const recordNodeExecution = async (args: {
   output: Record<string, unknown> | null;
   error: object | null;
   startedAt: Date | null;
+  attempt?: number;
 }): Promise<void> => {
   await db.OrchestrationNodeExecution.create({
     runId: args.runRecord.id as number,
     nodeId: args.nodeId,
     nodeType: args.nodeType,
+    attempt: args.attempt ?? 1,
     status: args.status,
     input: args.input,
     output: args.output,
@@ -66,6 +77,63 @@ const summarizeNodeResult = (
 };
 
 /**
+ * Handles a node execution failure: records the failed attempt (so the per-node
+ * trace shows every try), then either parks the run on a retry wait — when the
+ * error is transient and attempts remain — or re-throws to fail the run. A
+ * terminal error, or exhausting the attempt budget, re-throws.
+ */
+const handleNodeFailure = async (args: {
+  error: unknown;
+  nodeId: string;
+  nodeDefn: OrchestrationNode | undefined;
+  nodeType: string | null;
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  input: Record<string, unknown> | null;
+  attempt: number;
+  startedAt: Date;
+}): Promise<{
+  nodeId: string;
+  nodeDefn: OrchestrationNode;
+  execResult: NodeExecutionResult;
+}> => {
+  const { error, nodeId, nodeDefn, nodeType, runRecord, input, attempt } = args;
+  await recordNodeExecution({
+    runRecord,
+    nodeId,
+    nodeType,
+    attempt,
+    status: 'failed',
+    input,
+    output: null,
+    error: buildRunError(error),
+    startedAt: args.startedAt,
+  });
+
+  if (nodeDefn) {
+    const policy = resolveRetryPolicy(nodeDefn);
+    if (isRetriableError(error) && attempt < policy.maxAttempts) {
+      log(
+        'handleNodeFailure: retrying node=%s attempt=%d/%d',
+        nodeId,
+        attempt,
+        policy.maxAttempts
+      );
+      return {
+        nodeId,
+        nodeDefn,
+        execResult: {
+          kind: 'wait',
+          nodeId,
+          resumeInMs: backoffMs({ policy, attempt }),
+          resume: { kind: 'retry', attempt: attempt + 1 },
+        },
+      };
+    }
+  }
+  throw error;
+};
+
+/**
  * Executes a single node and persists an OrchestrationNodeExecution record
  * capturing its resolved input, output, status, and (on failure) error. The
  * record is written before re-throwing so a failing node is always traceable
@@ -80,6 +148,7 @@ export const executeAndRecordNode = async (args: {
   traceId: string | null;
   authHeader?: string;
   pollAttempt?: number;
+  retryAttempt?: number;
 }): Promise<{
   nodeId: string;
   nodeDefn: OrchestrationNode;
@@ -100,6 +169,7 @@ export const executeAndRecordNode = async (args: {
   });
   const nodeType = nodeDefn?.type ?? null;
   const input = applyInputMapping(nodeDefn?.inputMapping, state);
+  const attempt = Math.max(args.retryAttempt ?? 1, 1);
   const startedAt = new Date();
   try {
     const result = await executeNodeById({
@@ -122,6 +192,7 @@ export const executeAndRecordNode = async (args: {
       runRecord,
       nodeId,
       nodeType,
+      attempt,
       status,
       input,
       output,
@@ -130,17 +201,16 @@ export const executeAndRecordNode = async (args: {
     });
     return result;
   } catch (error: unknown) {
-    await recordNodeExecution({
-      runRecord,
+    return handleNodeFailure({
+      error,
       nodeId,
+      nodeDefn,
       nodeType,
-      status: 'failed',
+      runRecord,
       input,
-      output: null,
-      error: buildRunError(error),
+      attempt,
       startedAt,
     });
-    throw error;
   }
 };
 

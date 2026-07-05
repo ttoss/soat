@@ -26,6 +26,22 @@ export type OrchestratorNodeType =
   | 'webhook'
   | 'sub_orchestration';
 
+export type RetryBackoffStrategy = 'fixed' | 'exponential';
+
+/**
+ * Per-node retry policy. When a node throws a *retriable* error and attempts
+ * remain, the run parks as `sleeping` and re-executes the node after the backoff
+ * delay. Absent (or `maxAttempts <= 1`) preserves fail-fast behaviour.
+ */
+export type NodeRetryPolicy = {
+  maxAttempts?: number;
+  backoff?: {
+    strategy?: RetryBackoffStrategy;
+    delayMs?: number;
+    maxDelayMs?: number;
+  };
+};
+
 export type OrchestrationNode = {
   id: string;
   type: OrchestratorNodeType;
@@ -68,6 +84,8 @@ export type OrchestrationNode = {
   inputMapping?: Record<string, unknown>;
   outputMapping?: Record<string, string>;
   outputSchema?: object;
+  // Retry-on-failure policy for this node (see NodeRetryPolicy).
+  retry?: NodeRetryPolicy;
 };
 
 export type OrchestrationEdge = {
@@ -94,6 +112,7 @@ export type MappedOrchestration = {
 export type MappedNodeExecution = {
   nodeId: string;
   nodeType: string | null;
+  attempt: number;
   status: 'completed' | 'failed' | 'requires_action' | 'skipped';
   input: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
@@ -158,6 +177,7 @@ export const mapNodeExecution = (
   return {
     nodeId: exec.nodeId,
     nodeType: exec.nodeType,
+    attempt: exec.attempt,
     status: exec.status,
     input: exec.input as Record<string, unknown> | null,
     output: exec.output as Record<string, unknown> | null,

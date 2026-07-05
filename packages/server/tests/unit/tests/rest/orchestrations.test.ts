@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+import { DomainError } from 'src/errors';
 import * as agentGenerationModule from 'src/lib/agentGeneration';
 import type { SoatEvent } from 'src/lib/eventBus';
 import { eventBus } from 'src/lib/eventBus';
@@ -2478,6 +2479,131 @@ describe('Orchestrations', () => {
 
       const after = await getRun(healthy.publicId as string);
       expect(after.body.status).toBe('running');
+    });
+
+    // ── Per-node retry policy ────────────────────────────────────────────────
+
+    const callExecsOf = (run: Record<string, unknown>, nodeId: string) => {
+      return (run.node_executions as Array<Record<string, unknown>>).filter(
+        (e) => {
+          return e.node_id === nodeId;
+        }
+      );
+    };
+
+    const startAsyncRun = async (orchId: string) => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: orchId, input: {} });
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    test('retries a transient node failure and completes the run', async () => {
+      const spy = jest
+        .spyOn(toolsModule, 'callTool')
+        .mockRejectedValueOnce(new Error('transient upstream error'))
+        .mockResolvedValue({ ok: true });
+      try {
+        const orchId = await createOrchestration({
+          name: 'Retry Transient',
+          nodes: [
+            {
+              id: 'call',
+              type: 'tool',
+              tool_id: 'tool_x',
+              retry: { max_attempts: 2, backoff: { delay_ms: 1000 } },
+            },
+          ],
+          edges: [],
+        });
+        const runId = await startAsyncRun(orchId);
+
+        // First attempt failed → the run parks as `sleeping` on the retry wait.
+        await waitForActiveNode(runId, 'call');
+        expect((await getRun(runId)).body.status).toBe('sleeping');
+
+        // The scheduler drives the retry, which succeeds.
+        await wakeDueRuns({ now: new Date(Date.now() + 5000) });
+        const settled = await waitForStatus(runId, ['succeeded']);
+
+        const execs = callExecsOf(settled, 'call');
+        expect(execs).toHaveLength(2);
+        expect(execs[0]).toMatchObject({ attempt: 1, status: 'failed' });
+        expect(execs[1]).toMatchObject({ attempt: 2, status: 'completed' });
+        expect(spy).toHaveBeenCalledTimes(2);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    test('fails the run after exhausting the attempt budget', async () => {
+      const spy = jest
+        .spyOn(toolsModule, 'callTool')
+        .mockRejectedValue(new Error('always down'));
+      try {
+        const orchId = await createOrchestration({
+          name: 'Retry Exhausted',
+          nodes: [
+            {
+              id: 'call',
+              type: 'tool',
+              tool_id: 'tool_x',
+              retry: { max_attempts: 2, backoff: { delay_ms: 1000 } },
+            },
+          ],
+          edges: [],
+        });
+        const runId = await startAsyncRun(orchId);
+
+        await waitForActiveNode(runId, 'call');
+        await wakeDueRuns({ now: new Date(Date.now() + 5000) });
+        const settled = await waitForStatus(runId, ['failed']);
+
+        const execs = callExecsOf(settled, 'call');
+        expect(execs).toHaveLength(2);
+        expect(
+          execs.every((e) => {
+            return e.status === 'failed';
+          })
+        ).toBe(true);
+        expect(spy).toHaveBeenCalledTimes(2);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    test('a terminal (4xx) error fails immediately without retrying', async () => {
+      const spy = jest
+        .spyOn(toolsModule, 'callTool')
+        .mockRejectedValue(new DomainError('RESOURCE_NOT_FOUND', 'gone'));
+      try {
+        const orchId = await createOrchestration({
+          name: 'Retry Terminal',
+          nodes: [
+            {
+              id: 'call',
+              type: 'tool',
+              tool_id: 'tool_x',
+              retry: { max_attempts: 5, backoff: { delay_ms: 1000 } },
+            },
+          ],
+          edges: [],
+        });
+        // wait:true is safe here — a terminal error never parks, so nothing sleeps.
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send({ wait: true, orchestration_id: orchId, input: {} });
+        expect(res.status).toBe(201);
+        expect(res.body.status).toBe('failed');
+
+        const execs = callExecsOf(res.body, 'call');
+        expect(execs).toHaveLength(1);
+        expect(execs[0]).toMatchObject({ attempt: 1, status: 'failed' });
+        expect(spy).toHaveBeenCalledTimes(1);
+      } finally {
+        spy.mockRestore();
+      }
     });
   });
 });
