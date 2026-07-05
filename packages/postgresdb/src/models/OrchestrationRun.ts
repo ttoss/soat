@@ -111,6 +111,15 @@ export class OrchestrationRun extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare wakeContext: object | null;
 
+  // Crash recovery. While a run is `running` it holds a lease: `leaseExpiresAt`
+  // is set when execution starts and refreshed each round while the driver makes
+  // progress. If the driver crashes or is redeployed mid-execution the lease is
+  // never refreshed, so the background reaper reclaims runs whose lease has
+  // expired and re-drives them from the last checkpoint. Null while a run is not
+  // actively executing (`queued`/`sleeping`/`awaiting_input`/terminal).
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare leaseExpiresAt: Date | null;
+
   @Column({ type: DataType.JSONB, allowNull: true })
   declare input: object | null;
 

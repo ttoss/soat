@@ -9,6 +9,7 @@ import {
 import * as runHelpersModule from 'src/lib/orchestrationRunHelpers';
 import type { MappedOrchestrationRun } from 'src/lib/orchestrations';
 import {
+  reapOrphanedRuns,
   startOrchestrationScheduler,
   stopOrchestrationScheduler,
   wakeDueRuns,
@@ -124,7 +125,11 @@ describe('orchestrationScheduler', () => {
 
       expect(count).toBe(1);
       expect(updateSpy).toHaveBeenCalledWith(
-        { status: 'running', wakeAt: null },
+        expect.objectContaining({
+          status: 'running',
+          wakeAt: null,
+          leaseExpiresAt: expect.any(Date),
+        }),
         expect.objectContaining({
           where: expect.objectContaining({ id: 987654 }),
         })
@@ -159,6 +164,74 @@ describe('orchestrationScheduler', () => {
       // The rejection is caught internally; flushing must not surface it.
       await flush();
       expect(wakeSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('reapOrphanedRuns', () => {
+    test('returns 0 when no runs are orphaned', async () => {
+      jest.spyOn(db.OrchestrationRun, 'findAll').mockResolvedValueOnce([]);
+      const count = await reapOrphanedRuns({ now: new Date() });
+      expect(count).toBe(0);
+    });
+
+    test('returns 0 and swallows a query failure', async () => {
+      jest
+        .spyOn(db.OrchestrationRun, 'findAll')
+        .mockRejectedValueOnce(new Error('db unavailable'));
+      const count = await reapOrphanedRuns();
+      expect(count).toBe(0);
+    });
+
+    test('claims an orphaned running run and hands it to the redriver', async () => {
+      const run = { id: 424242 } as InstanceType<typeof db.OrchestrationRun>;
+      jest.spyOn(db.OrchestrationRun, 'findAll').mockResolvedValueOnce([run]);
+      const updateSpy = jest
+        .spyOn(db.OrchestrationRun, 'update')
+        .mockResolvedValueOnce([1]);
+      const redriveSpy = jest
+        .spyOn(engineModule, 'redriveRun')
+        .mockResolvedValueOnce(undefined);
+
+      const count = await reapOrphanedRuns({ now: new Date() });
+
+      expect(count).toBe(1);
+      // The claim extends the lease guarded on the run still being running with
+      // an expired lease, so a single reaper reclaims it.
+      expect(updateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ leaseExpiresAt: expect.any(Date) }),
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 424242, status: 'running' }),
+        })
+      );
+      await flush();
+      expect(redriveSpy).toHaveBeenCalledTimes(1);
+    });
+
+    test('skips a run it fails to claim', async () => {
+      const run = { id: 555666 } as InstanceType<typeof db.OrchestrationRun>;
+      jest.spyOn(db.OrchestrationRun, 'findAll').mockResolvedValueOnce([run]);
+      jest.spyOn(db.OrchestrationRun, 'update').mockResolvedValueOnce([0]);
+      const redriveSpy = jest.spyOn(engineModule, 'redriveRun');
+
+      const count = await reapOrphanedRuns({ now: new Date() });
+
+      expect(count).toBe(0);
+      expect(redriveSpy).not.toHaveBeenCalled();
+    });
+
+    test('swallows a redrive failure without rejecting', async () => {
+      const run = { id: 777888 } as InstanceType<typeof db.OrchestrationRun>;
+      jest.spyOn(db.OrchestrationRun, 'findAll').mockResolvedValueOnce([run]);
+      jest.spyOn(db.OrchestrationRun, 'update').mockResolvedValueOnce([1]);
+      const redriveSpy = jest
+        .spyOn(engineModule, 'redriveRun')
+        .mockRejectedValueOnce(new Error('redrive blew up'));
+
+      const count = await reapOrphanedRuns({ now: new Date() });
+
+      expect(count).toBe(1);
+      await flush();
+      expect(redriveSpy).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -237,6 +310,87 @@ describe('wakeRun (branch coverage)', () => {
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'failed', wakeAt: null })
     );
+  });
+});
+
+describe('redriveRun (branch coverage)', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('marks the run failed and clears the lease when its orchestration is gone', async () => {
+    const update = jest.fn().mockResolvedValue(undefined);
+    const run = {
+      id: 9,
+      orchestrationId: 77,
+      update,
+    } as unknown as InstanceType<typeof db.OrchestrationRun>;
+    jest.spyOn(db.Orchestration, 'findOne').mockResolvedValueOnce(null);
+
+    await engineModule.redriveRun({ run });
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'failed',
+        leaseExpiresAt: null,
+      })
+    );
+  });
+});
+
+describe('buildRedriveEntry', () => {
+  const nodes = [
+    { id: 'a', type: 'transform' },
+    { id: 'b', type: 'transform' },
+    { id: 'c', type: 'transform' },
+  ] as Parameters<typeof engineModule.buildRedriveEntry>[0]['nodes'];
+  const edges = [
+    { from: 'a', to: 'b' },
+    { from: 'b', to: 'c' },
+  ];
+
+  test('restarts from start nodes when nothing was checkpointed', () => {
+    const entry = engineModule.buildRedriveEntry({
+      nodes,
+      edges,
+      artifacts: {},
+    });
+    expect([...entry.activatedNodes]).toEqual(['a']);
+    expect(entry.completedNodes.size).toBe(0);
+  });
+
+  test('resumes the not-yet-completed successor of the last completed node', () => {
+    const entry = engineModule.buildRedriveEntry({
+      nodes,
+      edges,
+      artifacts: { a: { result: 1 } },
+    });
+    // `a` is completed → `b` is the frontier; `a` is not re-activated.
+    expect([...entry.activatedNodes]).toEqual(['b']);
+    expect(entry.completedNodes.has('a')).toBe(true);
+  });
+
+  test('yields an empty frontier when every node completed (settles on redrive)', () => {
+    const entry = engineModule.buildRedriveEntry({
+      nodes,
+      edges,
+      artifacts: { a: {}, b: {}, c: {} },
+    });
+    expect([...entry.activatedNodes]).toEqual([]);
+  });
+
+  test('re-activates an uncompleted parallel start branch', () => {
+    const parallelNodes = [
+      { id: 'x', type: 'transform' },
+      { id: 'y', type: 'transform' },
+    ] as Parameters<typeof engineModule.buildRedriveEntry>[0]['nodes'];
+    // Two independent start nodes; `x` checkpointed, `y` crashed mid-execution.
+    const entry = engineModule.buildRedriveEntry({
+      nodes: parallelNodes,
+      edges: [],
+      artifacts: { x: {} },
+    });
+    expect([...entry.activatedNodes]).toEqual(['y']);
   });
 });
 

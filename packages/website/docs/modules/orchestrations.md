@@ -158,6 +158,8 @@ Runs execute in a **durable background worker**, detached from the HTTP request 
 - `delay` and `poll` waits park the run as **`sleeping`** — it holds no worker and no memory, pure DB state. The wake time (`wake_at`) and how to continue are persisted with the run, and the scheduler wakes it when the wait is due — so a run containing `delay: "2h"` survives a restart and completes on schedule.
 - `human` and `webhook (mode: receive)` nodes park the run as **`awaiting_input`** (also pure DB state, no worker); resume them with `submit-human-input` or `resume-orchestration-run`.
 
+**Crash recovery.** While a run is `running` it holds a **lease** — `lease_expires_at` is set when execution starts and refreshed after every completed round (every checkpoint). If the process driving a run crashes or is redeployed mid-execution, it stops refreshing the lease. A background reaper reclaims runs whose lease has expired and **re-drives them from the last checkpoint**, not from scratch: completed nodes are skipped and only the unfinished frontier re-executes. A healthy long run is never reclaimed because it refreshes its lease each round. (Node execution is not yet idempotent across a redrive; run-scoped idempotency keys arrive with the queue-backed worker.)
+
 **Synchronous (compatibility) mode.** Pass `wait: true` to `start-orchestration-run` to block until the run reaches a terminal (`succeeded`/`failed`) or `awaiting_input` state, sleeping through any delay/poll waits in-process. This preserves the legacy behaviour for callers (and tests) that need the settled run in the response. Nested `loop` and `sub_orchestration` runs always execute synchronously so their output can be aggregated.
 
 **Lifecycle events.** The following events are emitted through the [Webhooks](./webhooks.md) module so callers do not need to poll:
@@ -169,7 +171,12 @@ Runs execute in a **durable background worker**, detached from the HTTP request 
 | `orchestration_runs.succeeded`       | A run reaches `succeeded`                      |
 | `orchestration_runs.failed`          | A run reaches `failed`                        |
 
-The scheduler tick interval is configurable with the `ORCHESTRATION_SCHEDULER_INTERVAL_MS` environment variable (default `5000`).
+The scheduler tick — which both wakes due `sleeping` runs and reaps orphaned `running` runs — is configurable:
+
+| Environment Variable | Required | Description |
+| --- | --- | --- |
+| `ORCHESTRATION_SCHEDULER_INTERVAL_MS` | No | Scheduler tick interval in ms (default `5000`). |
+| `ORCHESTRATION_RUN_LEASE_TTL_MS` | No | How long a `running` run's lease is valid before the reaper may reclaim it, in ms (default `600000`). Must exceed the longest single round of node execution. |
 
 ### State and Mappings
 
