@@ -58,16 +58,27 @@ export class OrchestrationRun extends Model {
 
   @Column({
     type: DataType.ENUM(
+      'queued',
       'running',
-      'paused',
-      'completed',
+      'sleeping',
+      'awaiting_input',
+      'succeeded',
       'failed',
-      'cancelled'
+      'cancelled',
+      'expired'
     ),
     allowNull: false,
     defaultValue: 'running',
   })
-  declare status: 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
+  declare status:
+    | 'queued'
+    | 'running'
+    | 'sleeping'
+    | 'awaiting_input'
+    | 'succeeded'
+    | 'failed'
+    | 'cancelled'
+    | 'expired';
 
   @Column({ type: DataType.JSONB, allowNull: false, defaultValue: {} })
   declare state: object;
@@ -87,17 +98,18 @@ export class OrchestrationRun extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare traceId: string | null;
 
-  // Durable background execution. When `status` is 'running' and `resumeAt` is
-  // set, the run is waiting for a scheduled resumption (e.g. a `delay` timer or
-  // the interval between `poll` attempts). The background scheduler picks up
-  // runs whose `resumeAt` is due and resumes them from `resumeContext`, which
-  // describes the waiting node and how to continue it. Both are null while a
-  // run is actively executing or has reached a terminal/paused state.
+  // Durable background execution. When `status` is 'sleeping', the run is
+  // parked on a scheduled wait (a `delay` timer or the interval between `poll`
+  // attempts) and `wakeAt` holds when it should resume. The background
+  // scheduler wakes runs whose `wakeAt` is due and continues them from
+  // `wakeContext`, which describes the waiting node and how to continue it.
+  // Both are null while a run is actively executing (`running`), waiting on a
+  // human node (`awaiting_input`), or has reached a terminal state.
   @Column({ type: DataType.DATE, allowNull: true })
-  declare resumeAt: Date | null;
+  declare wakeAt: Date | null;
 
   @Column({ type: DataType.JSONB, allowNull: true })
-  declare resumeContext: object | null;
+  declare wakeContext: object | null;
 
   @Column({ type: DataType.JSONB, allowNull: true })
   declare input: object | null;

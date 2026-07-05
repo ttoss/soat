@@ -12,7 +12,7 @@ import {
   recordDelayResumption,
   recordHumanInputResumption,
 } from './orchestrationNodeRecorder';
-import type { PersistedResumeContext } from './orchestrationRunHelpers';
+import type { PersistedWakeContext } from './orchestrationRunHelpers';
 import {
   applyHumanInputToState,
   getTerminalOutput,
@@ -36,7 +36,7 @@ import {
 
 const log = createDebug('soat:orchestrations');
 
-// ── Drive: run a run to its next resting point (terminal, paused, or wait) ──
+// ── Drive: run a run to its next resting point (terminal, awaiting_input, or sleeping) ──
 
 type LoopEntry = {
   activatedNodes: Set<string>;
@@ -52,8 +52,8 @@ const sleep = (ms: number): Promise<void> => {
 };
 
 /**
- * Builds the loop entry to resume a run that paused on a scheduled wait. For a
- * `delay` the timer has elapsed, so the node is recorded complete and the loop
+ * Builds the loop entry to wake a run that was sleeping on a scheduled wait. For
+ * a `delay` the timer has elapsed, so the node is recorded complete and the loop
  * resumes from its successors; for a `poll` the node re-executes at the next
  * attempt.
  */
@@ -111,7 +111,7 @@ const buildResumeEntry = async (args: {
 };
 
 /**
- * Settles a run into a terminal or paused state: persists the final record
+ * Settles a run into a terminal or awaiting_input state: persists the final record
  * (including the run's resolved trace id), emits the matching lifecycle webhook
  * event, and returns the mapped run.
  */
@@ -171,8 +171,8 @@ const settleRun = async (args: {
  *   pause, sleeping through delay/poll waits in-process. Used by callers that
  *   opt into blocking (`wait: true`) and by nested loop/sub-orchestration runs.
  * - `inlineWaits: false` (background mode) stops at the first scheduled wait,
- *   persisting `resumeAt`/`resumeContext` so the scheduler resumes the run
- *   later. Used for durable, request-detached execution.
+ *   parking the run as `sleeping` with `wakeAt`/`wakeContext` so the scheduler
+ *   wakes it later. Used for durable, request-detached execution.
  *
  * The first trace id produced by a traced node (e.g. an `agent` node) is
  * captured across segments and persisted onto the run when it settles.
@@ -306,7 +306,7 @@ export const startOrchestrationRun = async (args: {
   });
 
   // Synchronous (compatibility) mode: block until the run reaches a terminal or
-  // paused state, sleeping through any delay/poll waits in-process.
+  // awaiting_input state, sleeping through any delay/poll waits in-process.
   if (args.wait) {
     return driveRunToRest({
       runRecord,
@@ -342,19 +342,19 @@ export const startOrchestrationRun = async (args: {
 };
 
 /**
- * Resumes a run that a worker/scheduler has determined is due (its `resumeAt`
- * has elapsed). Reads `resumeContext` to rebuild the loop entry, then drives in
- * background mode so a poll that is still not satisfied simply re-schedules.
+ * Wakes a sleeping run that the scheduler has determined is due (its `wakeAt`
+ * has elapsed). Reads `wakeContext` to rebuild the loop entry, then drives in
+ * background mode so a poll that is still not satisfied simply re-sleeps.
  */
-export const resumeScheduledRun = async (args: {
+export const wakeRun = async (args: {
   run: InstanceType<typeof db.OrchestrationRun>;
 }): Promise<void> => {
   const { run } = args;
-  log('resumeScheduledRun %o', { runId: run.id });
+  log('wakeRun %o', { runId: run.id });
 
-  const resumeContext = run.resumeContext as PersistedResumeContext | null;
-  if (!resumeContext) {
-    log('resumeScheduledRun: run %s has no resumeContext, skipping', run.id);
+  const wakeContext = run.wakeContext as PersistedWakeContext | null;
+  if (!wakeContext) {
+    log('wakeRun: run %s has no wakeContext, skipping', run.id);
     return;
   }
 
@@ -365,8 +365,8 @@ export const resumeScheduledRun = async (args: {
     await run.update({
       status: 'failed',
       error: { code: 'ORCHESTRATION_NOT_FOUND', message: 'Orchestration gone' },
-      resumeAt: null,
-      resumeContext: null,
+      wakeAt: null,
+      wakeContext: null,
       completedAt: new Date(),
     });
     return;
@@ -383,8 +383,8 @@ export const resumeScheduledRun = async (args: {
 
   const entry = await buildResumeEntry({
     runRecord: run,
-    nodeId: resumeContext.nodeId,
-    resume: resumeContext.resume,
+    nodeId: wakeContext.nodeId,
+    resume: wakeContext.resume,
     nodes,
     edges,
     state,
@@ -423,7 +423,7 @@ export const resumeOrchestrationRunExecution = async (args: {
 
   const nodes = orch.nodes as OrchestrationNode[];
   const edges = orch.edges as OrchestrationEdge[];
-  // Clone so mutations produce a fresh reference (see resumeScheduledRun).
+  // Clone so mutations produce a fresh reference (see wakeRun).
   const state = { ...((run.state ?? {}) as Record<string, unknown>) };
   const artifacts = { ...((run.artifacts ?? {}) as Record<string, unknown>) };
 
@@ -461,7 +461,7 @@ export const resumeOrchestrationRunExecution = async (args: {
 
   // Human-input and manual resume are request-driven, so they block inline
   // (matching their existing synchronous behaviour); timer-driven resumptions
-  // go through resumeScheduledRun instead.
+  // go through wakeRun instead.
   return driveRunToRest({
     runRecord: run,
     nodes,

@@ -151,9 +151,9 @@ export const ERROR_CODES = {
     description:
       'The orchestration run is already in a terminal state and cannot be cancelled.',
   },
-  ORCHESTRATION_RUN_NOT_PAUSED: {
+  ORCHESTRATION_RUN_NOT_AWAITING_INPUT: {
     httpStatus: 409,
-    description: 'The orchestration run is not paused.',
+    description: 'The orchestration run is not awaiting input.',
   },
   ORCHESTRATION_HUMAN_NODE_MISMATCH: {
     httpStatus: 400,

@@ -257,7 +257,7 @@ Expected output:
 
 ```json
 {
-  "status": "completed",
+  "status": "succeeded",
   "result": null,
   "executions": [
     { "node_id": "route",      "status": "completed" },
