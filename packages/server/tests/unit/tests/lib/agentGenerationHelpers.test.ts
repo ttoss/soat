@@ -285,6 +285,36 @@ describe('savePendingGeneration', () => {
       20
     );
   });
+
+  test('does not throw when updateGenerationRecord rejects while saving pending state', async () => {
+    jest
+      .spyOn(generationsModule, 'updateGenerationRecord')
+      .mockRejectedValue(new Error('db down'));
+
+    expect(() => {
+      return savePendingGeneration({
+        generationId: 'gen_reject001',
+        traceId: 'trc_reject001',
+        pendingToolCalls: [
+          { toolCallId: 'tc_1', toolName: 'myTool', input: {} },
+        ],
+        allMessages: [{ role: 'user', content: 'Hello' }],
+        result: { steps: [], response: { messages: [] } },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        model: {} as any,
+        typedAgent: mockAgent,
+        agentId: 'agt_test001',
+        resolvedTools: {},
+      });
+    }).not.toThrow();
+
+    // Flush the microtask queue so the fire-and-forget `.catch` handlers run.
+    await new Promise((resolve) => {
+      setImmediate(resolve);
+    });
+
+    jest.restoreAllMocks();
+  });
 });
 
 describe('buildCompletedGenerationResult', () => {
@@ -375,6 +405,32 @@ describe('buildCompletedGenerationResult', () => {
     });
 
     expect(saveTraceResolved).toBe(true);
+  });
+
+  test('does not throw when updateGenerationRecord rejects', async () => {
+    jest
+      .spyOn(generationsModule, 'updateGenerationRecord')
+      .mockRejectedValueOnce(new Error('db down'));
+
+    const result = await buildCompletedGenerationResult({
+      generationId: 'gen_reject002',
+      traceId: 'trc_reject002',
+      result: {
+        steps: [],
+        response: { modelId: 'gpt-4' },
+        text: 'Hello world',
+        finishReason: 'stop',
+      },
+      typedAgent: mockAgent,
+      agentId: 'agt_test001',
+    });
+
+    // Flush the microtask queue so the fire-and-forget `.catch` handler runs.
+    await new Promise((resolve) => {
+      setImmediate(resolve);
+    });
+
+    expect(result.status).toBe('completed');
   });
 });
 

@@ -1,3 +1,5 @@
+import { db } from 'src/db';
+
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Webhooks', () => {
@@ -362,6 +364,37 @@ describe('Webhooks', () => {
       expect(response.body.data).toBeDefined();
       expect(Array.isArray(response.body.data)).toBe(true);
       expect(response.body.total).toBeDefined();
+    });
+
+    test('lists a delivery with its mapped fields', async () => {
+      const webhook = await db.Webhook.findOne({
+        where: { publicId: webhookId },
+      });
+      const delivery = await db.WebhookDelivery.create({
+        webhookId: webhook!.id as number,
+        eventType: 'files.created',
+        payload: { hello: 'world' },
+        status: 'success',
+        statusCode: 200,
+        attempts: 1,
+      });
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/webhook-deliveries?webhook_id=${webhookId}`
+      );
+
+      expect(response.status).toBe(200);
+      const found = response.body.data.find((d: { id: string }) => {
+        return d.id === delivery.publicId;
+      });
+      expect(found).toMatchObject({
+        webhook_id: webhookId,
+        event_type: 'files.created',
+        payload: { hello: 'world' },
+        status: 'success',
+        status_code: 200,
+        attempts: 1,
+      });
     });
 
     test('unauthenticated request returns 401', async () => {

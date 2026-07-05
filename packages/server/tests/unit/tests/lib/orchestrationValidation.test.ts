@@ -315,6 +315,27 @@ describe('validateOrchestrationGraph', () => {
       expect(result.valid).toBe(true);
     });
 
+    test('accepts a reference satisfied by an input schema with no `properties` key', () => {
+      // Falls back to scanning the schema's own top-level keys (excluding
+      // JSON-schema keywords) when `properties` is absent.
+      const result = validate({
+        nodes: [
+          {
+            id: 'a',
+            type: 'transform',
+            expression: 1,
+            inputMapping: { val: { var: 'seed' } },
+          },
+        ],
+        edges: [],
+        inputSchema: {
+          type: 'object',
+          seed: { type: 'string' },
+        },
+      });
+      expect(result.valid).toBe(true);
+    });
+
     test('errors when the writer is a parallel (non-upstream) node', () => {
       const result = validate({
         nodes: [
