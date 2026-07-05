@@ -1,6 +1,6 @@
 {
   "name": "@soat/cli",
-  "version": "0.13.19",
+  "version": "0.13.20",
   "type": "module",
   "scripts": {
     "generate": "tsx scripts/generate.ts",

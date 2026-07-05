@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.13.20](https://127.0.0.1/41729/git/ttoss/compare/v0.13.19...v0.13.20) (2026-07-05)
+
+### Bug Fixes
+
+* **tools:** surface real upstream status for failed http tool calls ([#397](https://127.0.0.1/41729/git/ttoss/issues/397)) ([0e7a1d8](https://127.0.0.1/41729/git/ttoss/commits/0e7a1d8942f078cf82bf96213a0e8dd982f89ab8))
+
 ## [0.13.19](https://127.0.0.1/41729/git/ttoss/compare/v0.13.18...v0.13.19) (2026-07-04)
 
 * feat(agents)!: normalize reasoning pipeline to a single branches/rounds primitive (#390) ([6d7a7fa](https://127.0.0.1/41729/git/ttoss/commits/6d7a7faecddde711c804df84749686298384a755)), closes [#390](https://127.0.0.1/41729/git/ttoss/issues/390) [#388](https://127.0.0.1/41729/git/ttoss/issues/388)
