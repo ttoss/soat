@@ -5,6 +5,7 @@ import * as aiProvidersModule from 'src/lib/aiProviders';
 import * as apiKeysModule from 'src/lib/apiKeys';
 import * as chatsModule from 'src/lib/chats';
 import * as conversationsModule from 'src/lib/conversations';
+import * as documentsModule from 'src/lib/documents';
 import * as filesModule from 'src/lib/files';
 import * as helpersModule from 'src/lib/formationsHelpers';
 import { getFormationModule } from 'src/lib/formationsRegistry';
@@ -15,6 +16,7 @@ import {
 } from 'src/lib/formationsResourceHandlers';
 import * as ingestionRulesModule from 'src/lib/ingestionRules';
 import * as memoriesModule from 'src/lib/memories';
+import * as memoryEntriesModule from 'src/lib/memoryEntries';
 import * as orchestrationsModule from 'src/lib/orchestrations';
 import * as policiesModule from 'src/lib/policies';
 import * as secretsModule from 'src/lib/secrets';
@@ -81,6 +83,19 @@ const mockLookupAgentInternalId = jest.spyOn(
 const mockLookupToolInternalId = jest.spyOn(
   helpersModule,
   'lookupToolInternalId'
+);
+
+const mockCreateAiProvider = jest.spyOn(aiProvidersModule, 'createAiProvider');
+
+const mockCreateDocument = jest.spyOn(documentsModule, 'createDocument');
+
+const mockLookupMemoryInternalId = jest.spyOn(
+  helpersModule,
+  'lookupMemoryInternalId'
+);
+const mockCreateMemoryEntry = jest.spyOn(
+  memoryEntriesModule,
+  'createMemoryEntry'
 );
 
 const mockCreateIngestionRule = jest.spyOn(
@@ -1390,6 +1405,20 @@ describe('ingestionRulesFormationModule', () => {
     ).rejects.toThrow('Ingestion rule `properties` must be an object');
   });
 
+  test('validateProperties wrapper delegates to the internal validator', () => {
+    const module = getFormationModule({ resourceType: 'ingestion_rule' });
+    const errors = module?.validateProperties?.({
+      properties: null,
+      basePath: 'resources.<ingestion_rule>.properties',
+    });
+    expect(errors).toEqual([
+      {
+        path: 'resources.<ingestion_rule>.properties',
+        message: 'Ingestion rule `properties` must be an object',
+      },
+    ]);
+  });
+
   test('throws when both tool_id and agent_id are set', async () => {
     await expect(
       applyCreateResource({
@@ -1699,6 +1728,36 @@ describe('actorsFormationModule - read', () => {
   });
 });
 
+// ── aiProvidersFormationModule — camelCase key normalization ─────────────
+
+describe('aiProvidersFormationModule - camelCase key normalization', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('normalizes camelCase property keys (defaultModel) to snake_case before create', async () => {
+    mockCreateAiProvider.mockResolvedValueOnce({ id: 'aip_1' } as Awaited<
+      ReturnType<typeof aiProvidersModule.createAiProvider>
+    >);
+
+    await expect(
+      applyCreateResource({
+        resourceType: 'ai_provider',
+        projectId: 5,
+        resolvedProperties: {
+          name: 'Camel Provider',
+          provider: 'openai',
+          defaultModel: 'gpt-4o',
+        },
+      })
+    ).resolves.toBe('aip_1');
+
+    expect(mockCreateAiProvider).toHaveBeenCalledWith(
+      expect.objectContaining({ defaultModel: 'gpt-4o' })
+    );
+  });
+});
+
 // ── aiProvidersFormationModule.read ───────────────────────────────────────
 
 describe('aiProvidersFormationModule - read', () => {
@@ -1964,7 +2023,6 @@ describe('memoriesFormationModule - camelCase key normalization', () => {
       id: 'mem_1',
     } as Awaited<ReturnType<typeof memoriesModule.createMemory>>);
 
-    // Pass camelCase key (memoryName) to exercise the regex callback in camelToSnakeKey
     await expect(
       applyCreateResource({
         resourceType: 'memory',
@@ -1976,6 +2034,91 @@ describe('memoriesFormationModule - camelCase key normalization', () => {
     expect(mockCreateMemory).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'My Memory', projectId: 5 })
     );
+  });
+
+  test('rejects an unknown camelCase property key after normalization', async () => {
+    // A key with an uppercase letter (e.g. someUnknownKey) exercises the
+    // regex callback in camelToSnakeKey, normalizing it to some_unknown_key
+    // before the unknown-field check runs.
+    await expect(
+      applyCreateResource({
+        resourceType: 'memory',
+        projectId: 5,
+        resolvedProperties: { name: 'My Memory', someUnknownKey: 'y' },
+      })
+    ).rejects.toThrow(/some_unknown_key/);
+  });
+});
+
+describe('documentsFormationModule - camelCase key normalization', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('rejects an unknown camelCase property key after normalization', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'document',
+        projectId: 5,
+        resolvedProperties: { content: 'hello', someUnknownKey: 'y' },
+      })
+    ).rejects.toThrow(/some_unknown_key/);
+  });
+
+  test('normalizes a well-formed camelCase create request', async () => {
+    mockCreateDocument.mockResolvedValueOnce({ id: 'doc_1' } as Awaited<
+      ReturnType<typeof documentsModule.createDocument>
+    >);
+
+    await expect(
+      applyCreateResource({
+        resourceType: 'document',
+        projectId: 5,
+        resolvedProperties: { content: 'hello world' },
+      })
+    ).resolves.toBe('doc_1');
+
+    expect(mockCreateDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'hello world', projectId: 5 })
+    );
+  });
+});
+
+describe('memoryEntriesFormationModule - camelCase key normalization', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('normalizes camelCase property keys (memoryId) to snake_case before create', async () => {
+    mockLookupMemoryInternalId.mockResolvedValueOnce(7);
+    mockCreateMemoryEntry.mockResolvedValueOnce({ id: 'me_2' } as Awaited<
+      ReturnType<typeof memoryEntriesModule.createMemoryEntry>
+    >);
+
+    await expect(
+      applyCreateResource({
+        resourceType: 'memory_entry',
+        projectId: 5,
+        resolvedProperties: { memoryId: 'mem_1', content: 'a fact' },
+      })
+    ).resolves.toBe('me_2');
+
+    expect(mockLookupMemoryInternalId).toHaveBeenCalledWith('mem_1');
+    expect(mockCreateMemoryEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ memoryId: 7, content: 'a fact' })
+    );
+  });
+});
+
+describe('policiesFormationModule - camelCase key normalization', () => {
+  test('rejects an unknown camelCase property key after normalization', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'policy',
+        projectId: 5,
+        resolvedProperties: { document: {}, someUnknownKey: 'y' },
+      })
+    ).rejects.toThrow(/some_unknown_key/);
   });
 });
 

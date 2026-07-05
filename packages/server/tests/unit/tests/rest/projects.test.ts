@@ -580,6 +580,16 @@ describe('Projects', () => {
         .send({ project_id: forceProjectId, name: 'Force Delete Memory' });
       expect(memoryRes.status).toBe(201);
 
+      const fileRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/files')
+        .send({
+          project_id: forceProjectId,
+          filename: 'force-delete-file.txt',
+          content_type: 'text/plain',
+          size: 12,
+        });
+      expect(fileRes.status).toBe(201);
+
       const blockedResponse = await authenticatedTestClient(adminToken).delete(
         `/api/v1/projects/${forceProjectId}`
       );
@@ -611,6 +621,9 @@ describe('Projects', () => {
       ).toBeNull();
       expect(
         await db.Secret.findOne({ where: { publicId: secretRes.body.id } })
+      ).toBeNull();
+      expect(
+        await db.File.findOne({ where: { publicId: fileRes.body.id } })
       ).toBeNull();
     });
 
