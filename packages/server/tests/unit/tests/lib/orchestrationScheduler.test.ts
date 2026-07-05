@@ -247,7 +247,9 @@ describe('orchestrationScheduler', () => {
       jest.useRealTimers();
     });
 
-    test('drives the waker on each interval tick and is idempotent', async () => {
+    // Each tick runs both sweeps (wakeDueRuns + reapOrphanedRuns), so findAll is
+    // queried twice per tick.
+    test('drives the sweeps on each interval tick and is idempotent', async () => {
       const findAllSpy = jest
         .spyOn(db.OrchestrationRun, 'findAll')
         .mockResolvedValue([]);
@@ -257,10 +259,10 @@ describe('orchestrationScheduler', () => {
       startOrchestrationScheduler({ intervalMs: 5000 });
 
       await jest.advanceTimersByTimeAsync(5000);
-      expect(findAllSpy).toHaveBeenCalledTimes(1);
+      expect(findAllSpy).toHaveBeenCalledTimes(2);
 
       await jest.advanceTimersByTimeAsync(5000);
-      expect(findAllSpy).toHaveBeenCalledTimes(2);
+      expect(findAllSpy).toHaveBeenCalledTimes(4);
     });
 
     test('falls back to the default interval for an invalid override', async () => {
@@ -273,8 +275,9 @@ describe('orchestrationScheduler', () => {
       // Nothing fires before the default 5s interval elapses.
       await jest.advanceTimersByTimeAsync(4999);
       expect(findAllSpy).not.toHaveBeenCalled();
+      // One tick → both sweeps query once each.
       await jest.advanceTimersByTimeAsync(1);
-      expect(findAllSpy).toHaveBeenCalledTimes(1);
+      expect(findAllSpy).toHaveBeenCalledTimes(2);
     });
   });
 });
