@@ -8,6 +8,7 @@ import {
   findStartNodes,
   processNodeResultBatch,
 } from './orchestrationExecutors';
+import { newLeaseExpiry } from './orchestrationLease';
 import {
   buildRunError,
   executeAndRecordNode,
@@ -51,6 +52,10 @@ const writeRunCheckpoint = async (args: {
     state: { ...args.state },
     artifacts: { ...args.artifacts },
   });
+  // Progress was made this round, so extend the lease: the reaper only reclaims
+  // a `running` run whose lease has expired (i.e. whose driver stopped making
+  // progress). Refreshing per round means a healthy long run is never reclaimed.
+  await args.runRecord.update({ leaseExpiresAt: newLeaseExpiry() });
 };
 
 type RunBatchResult = {

@@ -82,9 +82,11 @@ export const updateRunRecord = async (args: {
     requiredAction: runStatus === 'awaiting_input' ? requiredAction : null,
     output: runStatus === 'succeeded' ? output : null,
     // Settling into a terminal or awaiting_input state clears any pending
-    // scheduled wake so the background scheduler ignores the run.
+    // scheduled wake so the background scheduler ignores the run, and releases
+    // the run lease (no worker holds it any longer) so the reaper ignores it.
     wakeAt: null,
     wakeContext: null,
+    leaseExpiresAt: null,
     completedAt: isTerminal ? new Date() : null,
     // Only fill once: the first trace produced by a traced node (e.g. an
     // `agent` node) becomes the run's trace_id and is never overwritten.
@@ -132,6 +134,9 @@ export const persistScheduledWait = async (args: {
     completedAt: null,
     wakeAt: new Date(now + scheduledWait.resumeInMs),
     wakeContext,
+    // A `sleeping` run holds no worker, so it releases its lease; the scheduler
+    // (not the reaper) is responsible for waking it at `wakeAt`.
+    leaseExpiresAt: null,
   });
 };
 

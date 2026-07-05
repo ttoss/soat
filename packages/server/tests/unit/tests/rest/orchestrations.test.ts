@@ -1,7 +1,8 @@
+import { db } from 'src/db';
 import * as agentGenerationModule from 'src/lib/agentGeneration';
 import type { SoatEvent } from 'src/lib/eventBus';
 import { eventBus } from 'src/lib/eventBus';
-import { wakeDueRuns } from 'src/lib/orchestrationScheduler';
+import { reapOrphanedRuns, wakeDueRuns } from 'src/lib/orchestrationScheduler';
 import * as toolsModule from 'src/lib/tools';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -2385,6 +2386,98 @@ describe('Orchestrations', () => {
       } finally {
         eventBus.off('soat:event', listener);
       }
+    });
+
+    // Simulates a run whose driver crashed mid-execution: a `running` row with an
+    // expired lease and no fresh worker. The reaper must reclaim and finish it.
+    const createOrphanedRun = async (orchestrationPublicId: string) => {
+      const orch = await db.Orchestration.findOne({
+        where: { publicId: orchestrationPublicId },
+      });
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      return db.OrchestrationRun.create({
+        orchestrationId: orch?.id as number,
+        projectId: project?.id as number,
+        status: 'running',
+        state: {},
+        activeNodes: [],
+        artifacts: {},
+        input: {},
+        startedAt: new Date(),
+        // Lease already expired → the driver stopped refreshing it (crashed).
+        leaseExpiresAt: new Date(Date.now() - 60_000),
+      });
+    };
+
+    test('the reaper reclaims an orphaned running run and drives it to completion', async () => {
+      const orchId = await createOrchestration({
+        name: 'Orphan Recovery',
+        nodes: [
+          {
+            id: 'start',
+            type: 'transform',
+            expression: 'hello',
+            output_mapping: { result: 'state.msg' },
+          },
+          {
+            id: 'after',
+            type: 'transform',
+            expression: 'done',
+            output_mapping: { result: 'state.after' },
+          },
+        ],
+        edges: [{ from: 'start', to: 'after' }],
+      });
+      const orphan = await createOrphanedRun(orchId);
+
+      const claimed = await reapOrphanedRuns({ now: new Date() });
+      expect(claimed).toBeGreaterThanOrEqual(1);
+
+      const settled = await waitForStatus(orphan.publicId as string, [
+        'succeeded',
+      ]);
+      expect((settled.state as Record<string, unknown>).msg).toBe('hello');
+      expect((settled.state as Record<string, unknown>).after).toBe('done');
+    });
+
+    test('the reaper does not reclaim a running run whose lease is still fresh', async () => {
+      const orchId = await createOrchestration({
+        name: 'Fresh Lease',
+        nodes: [
+          {
+            id: 'start',
+            type: 'transform',
+            expression: 'hi',
+            output_mapping: { result: 'state.msg' },
+          },
+        ],
+        edges: [],
+      });
+      const orch = await db.Orchestration.findOne({
+        where: { publicId: orchId },
+      });
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      const healthy = await db.OrchestrationRun.create({
+        orchestrationId: orch?.id as number,
+        projectId: project?.id as number,
+        status: 'running',
+        state: {},
+        activeNodes: [],
+        artifacts: {},
+        input: {},
+        startedAt: new Date(),
+        // Lease still valid → a live driver is holding it.
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+      });
+
+      await reapOrphanedRuns({ now: new Date() });
+
+      const after = await getRun(healthy.publicId as string);
+      expect(after.body.status).toBe('running');
     });
   });
 });

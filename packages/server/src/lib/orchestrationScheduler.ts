@@ -2,15 +2,16 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { wakeRun } from './orchestrationEngine';
+import { redriveRun, wakeRun } from './orchestrationEngine';
+import { newLeaseExpiry } from './orchestrationLease';
 
 const log = createDebug('soat:orchestrations');
 
 const DEFAULT_INTERVAL_MS = 5000;
 const BATCH_LIMIT = 20;
 
-// Guards against the same run being woken twice within a single process if a
-// tick fires again before an in-flight wake finishes.
+// Guards against the same run being woken or reaped twice within a single
+// process if a tick fires again before an in-flight wake/redrive finishes.
 const inFlight = new Set<number>();
 
 /**
@@ -44,8 +45,9 @@ export const wakeDueRuns = async (args?: { now?: Date }): Promise<number> => {
 
     // Atomic claim: flipping sleeping → running guarded on wakeAt still being
     // set ensures a single wake even with overlapping ticks or multiple workers.
+    // The woken run re-enters `running`, so it acquires a fresh lease.
     const [claimed] = await db.OrchestrationRun.update(
-      { status: 'running', wakeAt: null },
+      { status: 'running', wakeAt: null, leaseExpiresAt: newLeaseExpiry() },
       { where: { id: runId, wakeAt: { [Op.ne]: null } } }
     );
     if (!claimed) continue;
@@ -55,6 +57,65 @@ export const wakeDueRuns = async (args?: { now?: Date }): Promise<number> => {
     void wakeRun({ run })
       .catch((error: unknown) => {
         log('wakeDueRuns: wake failed runId=%s %o', runId, error);
+      })
+      .finally(() => {
+        inFlight.delete(runId);
+      });
+  }
+
+  return claimedCount;
+};
+
+/**
+ * Finds orphaned runs — `running` runs whose lease has expired because their
+ * driver crashed or was redeployed mid-execution and stopped refreshing it —
+ * atomically claims each one (by extending the lease), and re-drives it from its
+ * last checkpoint. A healthy run refreshes its lease each round, so it is never
+ * reclaimed while it is making progress.
+ *
+ * Returns the number of runs claimed for re-driving this tick.
+ */
+export const reapOrphanedRuns = async (args?: {
+  now?: Date;
+}): Promise<number> => {
+  const now = args?.now ?? new Date();
+
+  let orphaned: InstanceType<typeof db.OrchestrationRun>[];
+  try {
+    orphaned = await db.OrchestrationRun.findAll({
+      where: { status: 'running', leaseExpiresAt: { [Op.lt]: now } },
+      order: [['leaseExpiresAt', 'ASC']],
+      limit: BATCH_LIMIT,
+    });
+  } catch (error) {
+    log('reapOrphanedRuns: query failed %o', error);
+    return 0;
+  }
+
+  let claimedCount = 0;
+  for (const run of orphaned) {
+    const runId = run.id as number;
+    if (inFlight.has(runId)) continue;
+
+    // Atomic claim: extend the lease guarded on it still being expired so a
+    // single reaper (across overlapping ticks or multiple workers) reclaims it.
+    const [claimed] = await db.OrchestrationRun.update(
+      { leaseExpiresAt: newLeaseExpiry({ now: now.getTime() }) },
+      {
+        where: {
+          id: runId,
+          status: 'running',
+          leaseExpiresAt: { [Op.lt]: now },
+        },
+      }
+    );
+    if (!claimed) continue;
+
+    inFlight.add(runId);
+    claimedCount += 1;
+    void redriveRun({ run })
+      .catch((error: unknown) => {
+        log('reapOrphanedRuns: redrive failed runId=%s %o', runId, error);
       })
       .finally(() => {
         inFlight.delete(runId);
@@ -88,6 +149,7 @@ export const startOrchestrationScheduler = (args?: {
   log('startOrchestrationScheduler: interval=%dms', resolvedInterval);
   timer = setInterval(() => {
     void wakeDueRuns();
+    void reapOrphanedRuns();
   }, resolvedInterval);
   timer.unref?.();
 };
