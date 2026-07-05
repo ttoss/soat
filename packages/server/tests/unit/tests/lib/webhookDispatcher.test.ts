@@ -230,6 +230,72 @@ describe('webhookDispatcher', () => {
     expect(retryCalls.length).toBeLessThanOrEqual(3);
   });
 
+  test('dispatcher aborts the request when it exceeds the delivery timeout', async () => {
+    // A hanging fetch that only settles when the AbortSignal fires — mirrors
+    // real `fetch` behavior when the 10s delivery timeout's setTimeout
+    // callback calls `controller.abort()`.
+    fetchMock.mockImplementation((_url, init) => {
+      return new Promise((_resolve, reject) => {
+        const signal = (init as { signal?: AbortSignal }).signal;
+        signal?.addEventListener('abort', () => {
+          const err = new Error('This operation was aborted');
+          err.name = 'AbortError';
+          reject(err);
+        });
+      });
+    });
+
+    // Fire the delivery-timeout's setTimeout callback immediately instead of
+    // waiting the real 10s — only for that specific timeout, so unrelated
+    // timers (DB driver, supertest) keep behaving normally.
+    const realSetTimeout = global.setTimeout;
+    const setTimeoutSpy = jest
+      .spyOn(global, 'setTimeout')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .mockImplementation((callback: (...args: any[]) => void, ms, ...args) => {
+        if (ms === 10_000) {
+          callback(...args);
+          return {} as ReturnType<typeof setTimeout>;
+        }
+        return realSetTimeout(callback, ms, ...args);
+      });
+
+    try {
+      await authenticatedTestClient(adminToken)
+        .post(`/api/v1/webhooks`)
+        .send({
+          project_id: projectId,
+          name: 'Timeout Webhook',
+          url: 'https://example.com/hook-timeout',
+          events: ['files.created'],
+        });
+
+      emitEvent({
+        type: 'files.created',
+        projectId: projectInternalId ?? 1,
+        projectPublicId: projectId,
+        resourceType: 'file',
+        resourceId: 'fil_timeout',
+        data: {},
+        timestamp: new Date().toISOString(),
+      });
+
+      // Allow the async delivery (all MAX_ATTEMPTS retries) to run.
+      await new Promise((resolve) => {
+        return realSetTimeout(resolve, 500);
+      });
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+
+    const timeoutCalls = fetchMock.mock.calls.filter(([url]) => {
+      return (
+        typeof url === 'string' && url === 'https://example.com/hook-timeout'
+      );
+    });
+    expect(timeoutCalls.length).toBeGreaterThan(0);
+  });
+
   test('dispatcher delivers webhook when policy allows the event', async () => {
     fetchMock.mockClear();
 
