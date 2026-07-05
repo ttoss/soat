@@ -81,6 +81,7 @@ const executeRunBatch = async (args: {
   activatedNodes: Set<string>;
   iterationCount: Map<string, number>;
   pollAttempts: Map<string, number>;
+  retryAttempts: Map<string, number>;
 }): Promise<RunBatchResult> => {
   const {
     activeNodeIds,
@@ -97,6 +98,7 @@ const executeRunBatch = async (args: {
     activatedNodes,
     iterationCount,
     pollAttempts,
+    retryAttempts,
   } = args;
 
   log('executeRun: activeNodes=%o', activeNodeIds);
@@ -113,6 +115,7 @@ const executeRunBatch = async (args: {
         traceId,
         authHeader,
         pollAttempt: pollAttempts.get(nodeId),
+        retryAttempt: retryAttempts.get(nodeId),
       });
     })
   );
@@ -158,6 +161,7 @@ export type RunLoopState = {
   activatedNodes: Set<string>;
   iterationCount: Map<string, number>;
   pollAttempts: Map<string, number>;
+  retryAttempts: Map<string, number>;
   activeNodeIds: string[];
 };
 
@@ -169,6 +173,7 @@ const initRunLoopState = (args: {
   activatedNodes?: Set<string>;
   iterationCount?: Map<string, number>;
   pollAttempts?: Map<string, number>;
+  retryAttempts?: Map<string, number>;
 }): RunLoopState => {
   const completedNodes = args.completedNodes ?? new Set<string>();
   const conditionLabels = args.conditionLabels ?? new Map<string, string>();
@@ -177,6 +182,7 @@ const initRunLoopState = (args: {
     new Set<string>(findStartNodes(args.nodes, args.edges));
   const iterationCount = args.iterationCount ?? new Map<string, number>();
   const pollAttempts = args.pollAttempts ?? new Map<string, number>();
+  const retryAttempts = args.retryAttempts ?? new Map<string, number>();
   const activeNodeIds = args.activatedNodes
     ? [...activatedNodes].filter((n) => {
         return !completedNodes.has(n);
@@ -188,6 +194,7 @@ const initRunLoopState = (args: {
     activatedNodes,
     iterationCount,
     pollAttempts,
+    retryAttempts,
     activeNodeIds,
   };
 };
@@ -235,13 +242,14 @@ export const executeRunLoop = async (args: {
   activatedNodes?: Set<string>;
   iterationCount?: Map<string, number>;
   pollAttempts?: Map<string, number>;
+  retryAttempts?: Map<string, number>;
 }): Promise<RunLoopResult> => {
   const { runRecord, nodes, edges, state, artifacts, projectIds } = args;
   const loopState = initRunLoopState(args);
   let { activeNodeIds } = loopState;
   const { completedNodes, conditionLabels, activatedNodes, iterationCount } =
     loopState;
-  const { pollAttempts } = loopState;
+  const { pollAttempts, retryAttempts } = loopState;
   let runStatus: MappedOrchestrationRun['status'] = 'running';
   let runError: object | null = null;
   let requiredAction: RequiredAction | null = null;
@@ -270,6 +278,7 @@ export const executeRunLoop = async (args: {
         activatedNodes,
         iterationCount,
         pollAttempts,
+        retryAttempts,
       });
       activeNodeIds = batchResult.nextActiveNodeIds;
       runStatus = batchResult.runStatus;

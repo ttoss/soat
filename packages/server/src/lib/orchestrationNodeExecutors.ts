@@ -16,7 +16,8 @@ import { callTool } from './tools';
  */
 export type WaitResume =
   | { kind: 'delay'; artifact: Record<string, unknown> }
-  | { kind: 'poll'; attempt: number };
+  | { kind: 'poll'; attempt: number }
+  | { kind: 'retry'; attempt: number };
 
 export type NodeExecutionResult =
   | { kind: 'artifact'; artifact: Record<string, unknown>; traceId?: string }

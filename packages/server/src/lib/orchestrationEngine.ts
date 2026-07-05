@@ -49,6 +49,7 @@ type LoopEntry = {
   completedNodes: Set<string>;
   conditionLabels: Map<string, string>;
   pollAttempts: Map<string, number>;
+  retryAttempts: Map<string, number>;
 };
 
 const sleep = (ms: number): Promise<void> => {
@@ -60,8 +61,8 @@ const sleep = (ms: number): Promise<void> => {
 /**
  * Builds the loop entry to wake a run that was sleeping on a scheduled wait. For
  * a `delay` the timer has elapsed, so the node is recorded complete and the loop
- * resumes from its successors; for a `poll` the node re-executes at the next
- * attempt.
+ * resumes from its successors; for a `poll` or `retry` the same node re-executes
+ * at the next attempt.
  */
 const buildResumeEntry = async (args: {
   runRecord: InstanceType<typeof db.OrchestrationRun>;
@@ -76,6 +77,7 @@ const buildResumeEntry = async (args: {
   const completedNodes = new Set<string>(Object.keys(artifacts));
   const conditionLabels = new Map<string, string>();
   const pollAttempts = new Map<string, number>();
+  const retryAttempts = new Map<string, number>();
 
   if (resume.kind === 'poll') {
     pollAttempts.set(nodeId, resume.attempt);
@@ -84,6 +86,18 @@ const buildResumeEntry = async (args: {
       completedNodes,
       conditionLabels,
       pollAttempts,
+      retryAttempts,
+    };
+  }
+
+  if (resume.kind === 'retry') {
+    retryAttempts.set(nodeId, resume.attempt);
+    return {
+      activatedNodes: new Set<string>([nodeId]),
+      completedNodes,
+      conditionLabels,
+      pollAttempts,
+      retryAttempts,
     };
   }
 
@@ -113,6 +127,7 @@ const buildResumeEntry = async (args: {
     completedNodes,
     conditionLabels,
     pollAttempts,
+    retryAttempts,
   };
 };
 
@@ -223,6 +238,7 @@ const driveRunToRest = async (args: {
         conditionLabels: entry?.conditionLabels,
         activatedNodes: entry?.activatedNodes,
         pollAttempts: entry?.pollAttempts,
+        retryAttempts: entry?.retryAttempts,
       });
     capturedTraceId = capturedTraceId ?? traceId;
 
@@ -489,6 +505,7 @@ export const resumeOrchestrationRunExecution = async (args: {
       completedNodes,
       conditionLabels,
       pollAttempts: new Map<string, number>(),
+      retryAttempts: new Map<string, number>(),
     },
   });
 };
@@ -532,6 +549,7 @@ export const buildRedriveEntry = (args: {
     completedNodes,
     conditionLabels,
     pollAttempts: new Map<string, number>(),
+    retryAttempts: new Map<string, number>(),
   };
 };
 

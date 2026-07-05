@@ -71,6 +71,7 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | -------------- | -------------- | -------------------------------------------------------- |
 | `node_id`      | string         | ID of the executed node                                  |
 | `node_type`    | string \| null | Node type (`agent`, `transform`, …)                      |
+| `attempt`      | integer        | 1-based attempt number (a retried node yields one record per attempt) |
 | `status`       | string         | `completed` \| `failed` \| `requires_action` \| `skipped` |
 | `input`        | object \| null | Resolved `input_mapping` the node received               |
 | `output`       | object \| null | Output artifact the node produced (`null` when failed)   |
@@ -149,6 +150,35 @@ The node completes with an artifact `{ result, attempts, conditionMet, timedOut 
 ```
 
 > **Note:** `poll` and `delay` waits are offloaded to the background scheduler (see [Durable Background Execution](#durable-background-execution)). They do not hold an HTTP request open, and a run parked on a wait survives a server restart.
+
+### Retry Policy
+
+Any node can declare a `retry` policy. When the node throws a **transient** error and attempts remain, the run parks as `sleeping` and re-executes the node after a backoff delay (offloaded to the scheduler, exactly like `poll`/`delay` — so retries survive a restart and hold no worker). Absent, or `max_attempts <= 1`, is fail-fast (today's behaviour).
+
+**Retriable vs terminal.** Unexpected/infrastructure errors (network, timeouts, provider SDK throws) and upstream `5xx` errors are **retriable**. Deliberate `4xx` business errors (validation, not found, conflict) are **terminal** and fail the run immediately without consuming attempts.
+
+**Attempt history.** Each attempt writes its own `node_executions` record with an incrementing `attempt` — failed attempts `1..N-1` followed by a final `completed` (success) or `failed` (retries exhausted, run fails).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `max_attempts` | integer | Total attempts including the first (default `1`, ceiling `20`). |
+| `backoff.strategy` | string | `fixed` (constant `delay_ms`) or `exponential` (doubles per prior attempt). Default `fixed`. |
+| `backoff.delay_ms` | integer | Base delay between attempts in ms (default `1000`). |
+| `backoff.max_delay_ms` | integer | Cap on the computed backoff delay in ms (default `300000`). |
+
+```json
+{
+  "id": "call_flaky_api",
+  "type": "tool",
+  "tool_id": "tool_upstream",
+  "retry": {
+    "max_attempts": 4,
+    "backoff": { "strategy": "exponential", "delay_ms": 1000, "max_delay_ms": 60000 }
+  }
+}
+```
+
+> **Note:** node execution is not yet idempotent across a retry (or a reaper redrive) — a node with external side effects may repeat them. Run-scoped idempotency keys arrive with the queue-backed worker.
 
 ### Durable Background Execution
 
