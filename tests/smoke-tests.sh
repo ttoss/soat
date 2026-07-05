@@ -1592,12 +1592,13 @@ fi
 $SOAT_CLI update-agent --agent-id "$AGENT_ID" --knowledge_config '{}' >/dev/null
 echo "knowledge_config extraction round-trip: OK"
 
-# 22b3. Deep thinking moved to Discussions — reasoning is rejected on agents.
+# 22b3. Deep thinking moved to Discussions — reasoning is no longer a valid
+# agent field, so it is rejected (as an unknown field) with a 400.
 echo "--- Asserting reasoning is rejected on agents ---"
 RC_REMOVED_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
   --reasoning '{"effort":"low"}' 2>&1 || true)
-if ! printf '%s\n' "$RC_REMOVED_RESP" | jq -e '.error.code == "AGENT_FIELD_REMOVED"' >/dev/null 2>&1; then
-  echo "ERROR: reasoning on an agent was not rejected with AGENT_FIELD_REMOVED" >&2
+if ! printf '%s\n' "$RC_REMOVED_RESP" | jq -e '.status == 400' >/dev/null 2>&1; then
+  echo "ERROR: reasoning on an agent was not rejected with a 400" >&2
   echo "$RC_REMOVED_RESP" >&2
   exit 1
 fi

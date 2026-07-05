@@ -210,11 +210,6 @@ export const ERROR_CODES = {
     description:
       'The discussion config is invalid (e.g. max_rounds out of range, no participants, too many participants, or an invalid effort value).',
   },
-  AGENT_FIELD_REMOVED: {
-    httpStatus: 400,
-    description:
-      'A removed agent field was supplied. Deep thinking now lives in the Discussions module — attach a discussion-type tool instead of configuring thinking on the agent.',
-  },
   INVALID_OUTPUT_SCHEMA: {
     httpStatus: 400,
     description:

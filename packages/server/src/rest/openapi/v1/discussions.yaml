@@ -205,6 +205,7 @@ paths:
       tags:
         - Discussions
       summary: Get a discussion by ID
+      description: Returns a discussion config with its participants.
       operationId: getDiscussion
       parameters:
         - name: discussion_id
@@ -321,6 +322,7 @@ paths:
       tags:
         - Discussions
       summary: Delete a discussion
+      description: Deletes a discussion config and its participants.
       operationId: deleteDiscussion
       parameters:
         - name: discussion_id
@@ -417,6 +419,7 @@ paths:
       tags:
         - Discussions
       summary: List a discussion's runs
+      description: Returns the run history of a discussion, most recent first.
       operationId: listDiscussionRuns
       parameters:
         - name: discussion_id

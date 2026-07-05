@@ -2,7 +2,6 @@ import type { ServerResponse } from 'node:http';
 
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { DomainError } from 'src/errors';
 import type { GenerationResult } from 'src/lib/agentGeneration';
 import { createGeneration, submitToolOutputs } from 'src/lib/agents';
 import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
@@ -106,13 +105,6 @@ agentGenerationRouter.post(
       ctx.status = 403;
       ctx.body = { error: 'Forbidden' };
       return;
-    }
-
-    if ('reasoning' in (ctx.request.body as Record<string, unknown>)) {
-      throw new DomainError(
-        'AGENT_FIELD_REMOVED',
-        'The per-generation `reasoning` override has been removed. Deep thinking now lives in the Discussions module — attach a discussion-type tool to the agent instead.'
-      );
     }
 
     const {

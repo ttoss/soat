@@ -977,6 +977,8 @@ components:
         participants:
           type: array
           description: The deliberation participants (max 5)
+          items:
+            type: object
 
     FileResourceProperties:
       description: >-

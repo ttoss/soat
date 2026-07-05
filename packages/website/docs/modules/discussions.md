@@ -95,7 +95,7 @@ The full transcript and outcome persist on the run (Conversation + Document); th
 
 ### Migrating from agent reasoning
 
-The agent `reasoning` config (provider-native effort **and** the reasoning-step pipeline) has been removed. Agent create/update and per-generation overrides that include a `reasoning` field are rejected with `AGENT_FIELD_REMOVED`. Map each former recipe to a discussion:
+The agent `reasoning` config (provider-native effort **and** the reasoning-step pipeline) has been removed. The `reasoning` field no longer exists in the agent schema, so agent create/update and per-generation overrides that include it are rejected with a `400` (unknown field). Map each former recipe to a discussion:
 
 | Former agent `reasoning`                    | Discussion equivalent                                                             |
 | ------------------------------------------- | --------------------------------------------------------------------------------- |

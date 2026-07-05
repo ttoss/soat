@@ -326,7 +326,7 @@ Customer prefers email over phone calls.
 
 ### Deep Thinking (moved to Discussions)
 
-Orchestrated thinking is no longer configured on the agent. The `reasoning` config (provider-native effort **and** the reasoning-step pipeline) has been removed — creating or updating an agent with a `reasoning` field, or passing it as a per-generation override, is rejected with `AGENT_FIELD_REMOVED`.
+Orchestrated thinking is no longer configured on the agent. The `reasoning` config (provider-native effort **and** the reasoning-step pipeline) has been removed — creating or updating an agent with a `reasoning` field, or passing it as a per-generation override, is rejected with a `400` (it is no longer a recognized field).
 
 Deep thinking now lives in the [Discussions](./discussions.md) module. An agent that needs to think before acting attaches a **`discussion`-type [tool](./tools.md)** referencing a `Discussion` config and calls it mid-loop with a `topic`; the synthesized outcome is returned as the tool result. Provider-native reasoning effort moves there too, as a per-participant/synthesis `effort` knob.
 
