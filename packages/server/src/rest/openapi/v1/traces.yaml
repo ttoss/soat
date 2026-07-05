@@ -150,7 +150,7 @@ paths:
           description: >
             Comma-separated list of related resources to embed on each node.
             Supported value: `generations` — attaches all generations that belong
-            to each trace node (including reasoning pipeline children
+            to each trace node (including sub-agent generations
             linked via `initiator_generation_id`).
           schema:
             type: string
@@ -294,8 +294,7 @@ components:
           description: >
             Generations that belong to this trace node. Only present when
             `include=generations` is requested. Includes top-level generations
-            and reasoning pipeline child generations (steps and perspective turns)
-            linked via `initiator_generation_id`.
+            and sub-agent child generations linked via `initiator_generation_id`.
           items:
             $ref: './generations.yaml#/components/schemas/Generation'
 

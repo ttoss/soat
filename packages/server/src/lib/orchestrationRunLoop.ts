@@ -8,6 +8,7 @@ import {
   findStartNodes,
   processNodeResultBatch,
 } from './orchestrationExecutors';
+import { newLeaseExpiry } from './orchestrationLease';
 import {
   buildRunError,
   executeAndRecordNode,
@@ -51,11 +52,15 @@ const writeRunCheckpoint = async (args: {
     state: { ...args.state },
     artifacts: { ...args.artifacts },
   });
+  // Progress was made this round, so extend the lease: the reaper only reclaims
+  // a `running` run whose lease has expired (i.e. whose driver stopped making
+  // progress). Refreshing per round means a healthy long run is never reclaimed.
+  await args.runRecord.update({ leaseExpiresAt: newLeaseExpiry() });
 };
 
 type RunBatchResult = {
   nextActiveNodeIds: string[];
-  runStatus: 'running' | 'paused';
+  runStatus: 'running' | 'awaiting_input';
   requiredAction: RequiredAction | null;
   scheduledWait: ScheduledWait | null;
   traceId: string | null;
@@ -76,6 +81,7 @@ const executeRunBatch = async (args: {
   activatedNodes: Set<string>;
   iterationCount: Map<string, number>;
   pollAttempts: Map<string, number>;
+  retryAttempts: Map<string, number>;
 }): Promise<RunBatchResult> => {
   const {
     activeNodeIds,
@@ -92,6 +98,7 @@ const executeRunBatch = async (args: {
     activatedNodes,
     iterationCount,
     pollAttempts,
+    retryAttempts,
   } = args;
 
   log('executeRun: activeNodes=%o', activeNodeIds);
@@ -108,6 +115,7 @@ const executeRunBatch = async (args: {
         traceId,
         authHeader,
         pollAttempt: pollAttempts.get(nodeId),
+        retryAttempt: retryAttempts.get(nodeId),
       });
     })
   );
@@ -123,20 +131,20 @@ const executeRunBatch = async (args: {
     isRunning: true,
   });
 
-  let runStatus: 'running' | 'paused' = 'running';
+  let runStatus: 'running' | 'awaiting_input' = 'running';
   let requiredAction: RequiredAction | null = null;
   if (batch.requiredAction) {
-    runStatus = 'paused';
+    runStatus = 'awaiting_input';
     requiredAction = batch.requiredAction;
   }
 
   const lastNodeId = activeNodeIds[activeNodeIds.length - 1];
   await writeRunCheckpoint({ runRecord, nodeId: lastNodeId, state, artifacts });
 
-  // A scheduled wait (or a pause) stops this loop: no further nodes activate
-  // this round. The wait is handled by the caller (persisted for the scheduler,
-  // or slept through inline in synchronous mode).
-  const stop = runStatus === 'paused' || batch.scheduledWait !== null;
+  // An awaiting_input pause (or a scheduled wait) stops this loop: no further
+  // nodes activate this round. The wait is handled by the caller (persisted for
+  // the scheduler, or slept through inline in synchronous mode).
+  const stop = runStatus === 'awaiting_input' || batch.scheduledWait !== null;
   const nextActiveNodeIds = stop ? [] : batch.nextRound;
   return {
     nextActiveNodeIds,
@@ -153,6 +161,7 @@ export type RunLoopState = {
   activatedNodes: Set<string>;
   iterationCount: Map<string, number>;
   pollAttempts: Map<string, number>;
+  retryAttempts: Map<string, number>;
   activeNodeIds: string[];
 };
 
@@ -164,6 +173,7 @@ const initRunLoopState = (args: {
   activatedNodes?: Set<string>;
   iterationCount?: Map<string, number>;
   pollAttempts?: Map<string, number>;
+  retryAttempts?: Map<string, number>;
 }): RunLoopState => {
   const completedNodes = args.completedNodes ?? new Set<string>();
   const conditionLabels = args.conditionLabels ?? new Map<string, string>();
@@ -172,6 +182,7 @@ const initRunLoopState = (args: {
     new Set<string>(findStartNodes(args.nodes, args.edges));
   const iterationCount = args.iterationCount ?? new Map<string, number>();
   const pollAttempts = args.pollAttempts ?? new Map<string, number>();
+  const retryAttempts = args.retryAttempts ?? new Map<string, number>();
   const activeNodeIds = args.activatedNodes
     ? [...activatedNodes].filter((n) => {
         return !completedNodes.has(n);
@@ -183,6 +194,7 @@ const initRunLoopState = (args: {
     activatedNodes,
     iterationCount,
     pollAttempts,
+    retryAttempts,
     activeNodeIds,
   };
 };
@@ -211,9 +223,10 @@ export type RunLoopResult = {
 
 /**
  * Runs one segment of a run: executes activated nodes round by round until the
- * graph settles (completed), a node pauses it (requires_action), or a node
- * parks it on a scheduled wait (delay/poll). Mutates `state`/`artifacts` in
- * place and writes a checkpoint per round; the caller persists the outcome.
+ * graph settles (succeeded), a node pauses it on a human node (awaiting_input),
+ * or a node parks it on a scheduled wait (delay/poll → sleeping). Mutates
+ * `state`/`artifacts` in place and writes a checkpoint per round; the caller
+ * persists the outcome.
  */
 export const executeRunLoop = async (args: {
   runRecord: InstanceType<typeof db.OrchestrationRun>;
@@ -229,13 +242,14 @@ export const executeRunLoop = async (args: {
   activatedNodes?: Set<string>;
   iterationCount?: Map<string, number>;
   pollAttempts?: Map<string, number>;
+  retryAttempts?: Map<string, number>;
 }): Promise<RunLoopResult> => {
   const { runRecord, nodes, edges, state, artifacts, projectIds } = args;
   const loopState = initRunLoopState(args);
   let { activeNodeIds } = loopState;
   const { completedNodes, conditionLabels, activatedNodes, iterationCount } =
     loopState;
-  const { pollAttempts } = loopState;
+  const { pollAttempts, retryAttempts } = loopState;
   let runStatus: MappedOrchestrationRun['status'] = 'running';
   let runError: object | null = null;
   let requiredAction: RequiredAction | null = null;
@@ -264,6 +278,7 @@ export const executeRunLoop = async (args: {
         activatedNodes,
         iterationCount,
         pollAttempts,
+        retryAttempts,
       });
       activeNodeIds = batchResult.nextActiveNodeIds;
       runStatus = batchResult.runStatus;
@@ -275,8 +290,8 @@ export const executeRunLoop = async (args: {
       if (scheduledWait) break;
     }
 
-    if (runStatus === 'running' && !scheduledWait) runStatus = 'completed';
-    if (runStatus === 'completed') {
+    if (runStatus === 'running' && !scheduledWait) runStatus = 'succeeded';
+    if (runStatus === 'succeeded') {
       await recordSkippedNodeExecutions({ runRecord, nodes });
     }
   } catch (error: unknown) {

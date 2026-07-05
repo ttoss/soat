@@ -48,18 +48,18 @@ An orchestration can also be declared as a [Formation](./formations.md) resource
 | `id`               | string         | Public ID (`run_` prefix)                                         |
 | `orchestration_id` | string         | Parent orchestration                                              |
 | `project_id`       | string         | Owning project                                                    |
-| `status`           | string         | `running` \| `paused` \| `completed` \| `failed` \| `cancelled`   |
+| `status`           | string         | `queued` \| `running` \| `sleeping` \| `awaiting_input` \| `succeeded` \| `failed` \| `cancelled` \| `expired` |
 | `state`            | object         | Current mutable execution state                                   |
-| `active_nodes`     | array          | Node IDs awaiting input or a scheduled resumption (populated when `paused`, or `running` while parked on a `delay`/`poll` wait) |
+| `active_nodes`     | array          | Node IDs awaiting input or a scheduled wake (populated when `awaiting_input`, or `sleeping` while parked on a `delay`/`poll` wait) |
 | `artifacts`        | object         | Outputs keyed by node ID                                          |
 | `error`            | object \| null | Error details if failed                                           |
 | `node_executions`  | array          | Per-node execution records (see [Node Executions](#node-executions)) |
-| `required_action`  | object \| null | Present when status is `paused` (see [Human Nodes](#human-nodes)) |
+| `required_action`  | object \| null | Present when status is `awaiting_input` (see [Human Nodes](#human-nodes)) |
 | `trace_id`         | string \| null | Linked observability trace, if any                                |
 | `input`            | object \| null | Initial input provided at run creation                            |
-| `output`           | object \| null | Terminal node artifact(s) when completed                          |
+| `output`           | object \| null | Terminal node artifact(s) when the run has `succeeded`            |
 | `started_at`       | string \| null | ISO 8601 execution start timestamp                                |
-| `completed_at`     | string \| null | ISO 8601 terminal timestamp (`completed`/`failed`/`cancelled`)    |
+| `completed_at`     | string \| null | ISO 8601 terminal timestamp (`succeeded`/`failed`/`cancelled`/`expired`) |
 | `created_at`       | string         | ISO 8601 creation timestamp                                       |
 | `updated_at`       | string         | ISO 8601 last-updated timestamp                                   |
 
@@ -71,6 +71,7 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | -------------- | -------------- | -------------------------------------------------------- |
 | `node_id`      | string         | ID of the executed node                                  |
 | `node_type`    | string \| null | Node type (`agent`, `transform`, …)                      |
+| `attempt`      | integer        | 1-based attempt number (a retried node yields one record per attempt) |
 | `status`       | string         | `completed` \| `failed` \| `requires_action` \| `skipped` |
 | `input`        | object \| null | Resolved `input_mapping` the node received               |
 | `output`       | object \| null | Output artifact the node produced (`null` when failed)   |
@@ -91,7 +92,7 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | `knowledge`    | Searches a knowledge source via the [Knowledge](./knowledge.md) module. Uses `inputMapping` with `query` and optional `memoryIds`. |
 | `memory_write` | Writes a [Memory](./memories.md) entry. Uses `memoryId` and `inputMapping` with `content`.                                        |
 | `condition`    | Evaluates a JSON Logic rule and emits a string label. Downstream edges use `condition: "<label>"` to select the active branch.      |
-| `human`        | Pauses the run and waits for external input. The run enters `paused` status with `requiredAction`.                                  |
+| `human`        | Pauses the run and waits for external input. The run enters `awaiting_input` status with `requiredAction`.                          |
 | `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `orchestrationId`, `collection`, `itemVariable`, and `parallelism`. See [Loops](#loops-collection-iteration). |
 | `poll`         | Calls a tool on an interval until a JSON Logic exit condition on the response holds. Uses `toolId`, `exitCondition`, and `interval`. See [Polling](#polling). |
 | `delay`        | Waits for a fixed `duration`, then continues. Accepts `5s`/`5m`/`2h`/`500ms` or ISO 8601 (`PT5S`).                                   |
@@ -150,26 +151,62 @@ The node completes with an artifact `{ result, attempts, conditionMet, timedOut 
 
 > **Note:** `poll` and `delay` waits are offloaded to the background scheduler (see [Durable Background Execution](#durable-background-execution)). They do not hold an HTTP request open, and a run parked on a wait survives a server restart.
 
+### Retry Policy
+
+Any node can declare a `retry` policy. When the node throws a **transient** error and attempts remain, the run parks as `sleeping` and re-executes the node after a backoff delay (offloaded to the scheduler, exactly like `poll`/`delay` — so retries survive a restart and hold no worker). Absent, or `max_attempts <= 1`, is fail-fast (today's behaviour).
+
+**Retriable vs terminal.** Unexpected/infrastructure errors (network, timeouts, provider SDK throws) and upstream `5xx` errors are **retriable**. Deliberate `4xx` business errors (validation, not found, conflict) are **terminal** and fail the run immediately without consuming attempts.
+
+**Attempt history.** Each attempt writes its own `node_executions` record with an incrementing `attempt` — failed attempts `1..N-1` followed by a final `completed` (success) or `failed` (retries exhausted, run fails).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `max_attempts` | integer | Total attempts including the first (default `1`, ceiling `20`). |
+| `backoff.strategy` | string | `fixed` (constant `delay_ms`) or `exponential` (doubles per prior attempt). Default `fixed`. |
+| `backoff.delay_ms` | integer | Base delay between attempts in ms (default `1000`). |
+| `backoff.max_delay_ms` | integer | Cap on the computed backoff delay in ms (default `300000`). |
+
+```json
+{
+  "id": "call_flaky_api",
+  "type": "tool",
+  "tool_id": "tool_upstream",
+  "retry": {
+    "max_attempts": 4,
+    "backoff": { "strategy": "exponential", "delay_ms": 1000, "max_delay_ms": 60000 }
+  }
+}
+```
+
+> **Note:** node execution is not yet idempotent across a retry (or a reaper redrive) — a node with external side effects may repeat them. Run-scoped idempotency keys arrive with the queue-backed worker.
+
 ### Durable Background Execution
 
 Runs execute in a **durable background worker**, detached from the HTTP request that starts them:
 
 - `start-orchestration-run` persists the run and returns immediately with `status: "running"`. Observe progress with `get-orchestration-run` (which includes `node_executions`) or via run lifecycle [webhook](./webhooks.md) events.
-- `delay` and `poll` waits become **scheduled resumptions**, not in-process sleeps. The due time and how to continue are persisted with the run, and a scheduler resumes it when the wait is due — so a run containing `delay: "2h"` survives a restart and completes on schedule.
-- `human` and `webhook (mode: receive)` nodes still pause the run (`status: "paused"`); resume them with `submit-human-input` or `resume-orchestration-run`.
+- `delay` and `poll` waits park the run as **`sleeping`** — it holds no worker and no memory, pure DB state. The wake time (`wake_at`) and how to continue are persisted with the run, and the scheduler wakes it when the wait is due — so a run containing `delay: "2h"` survives a restart and completes on schedule.
+- `human` and `webhook (mode: receive)` nodes park the run as **`awaiting_input`** (also pure DB state, no worker); resume them with `submit-human-input` or `resume-orchestration-run`.
 
-**Synchronous (compatibility) mode.** Pass `wait: true` to `start-orchestration-run` to block until the run reaches a terminal (`completed`/`failed`) or `paused` state, sleeping through any delay/poll waits in-process. This preserves the legacy behaviour for callers (and tests) that need the settled run in the response. Nested `loop` and `sub_orchestration` runs always execute synchronously so their output can be aggregated.
+**Crash recovery.** While a run is `running` it holds a **lease** — `lease_expires_at` is set when execution starts and refreshed after every completed round (every checkpoint). If the process driving a run crashes or is redeployed mid-execution, it stops refreshing the lease. A background reaper reclaims runs whose lease has expired and **re-drives them from the last checkpoint**, not from scratch: completed nodes are skipped and only the unfinished frontier re-executes. A healthy long run is never reclaimed because it refreshes its lease each round. (Node execution is not yet idempotent across a redrive; run-scoped idempotency keys arrive with the queue-backed worker.)
+
+**Synchronous (compatibility) mode.** Pass `wait: true` to `start-orchestration-run` to block until the run reaches a terminal (`succeeded`/`failed`) or `awaiting_input` state, sleeping through any delay/poll waits in-process. This preserves the legacy behaviour for callers (and tests) that need the settled run in the response. Nested `loop` and `sub_orchestration` runs always execute synchronously so their output can be aggregated.
 
 **Lifecycle events.** The following events are emitted through the [Webhooks](./webhooks.md) module so callers do not need to poll:
 
-| Event                          | When                                          |
-| ------------------------------ | --------------------------------------------- |
-| `orchestration_runs.started`   | A run is created and begins executing         |
-| `orchestration_runs.paused`    | A run pauses on a `human`/`webhook` node      |
-| `orchestration_runs.completed` | A run reaches `completed`                     |
-| `orchestration_runs.failed`    | A run reaches `failed`                        |
+| Event                                | When                                          |
+| ------------------------------------ | --------------------------------------------- |
+| `orchestration_runs.started`         | A run is created and begins executing         |
+| `orchestration_runs.awaiting_input`  | A run pauses on a `human`/`webhook` node      |
+| `orchestration_runs.succeeded`       | A run reaches `succeeded`                      |
+| `orchestration_runs.failed`          | A run reaches `failed`                        |
 
-The scheduler tick interval is configurable with the `ORCHESTRATION_SCHEDULER_INTERVAL_MS` environment variable (default `5000`).
+The scheduler tick — which both wakes due `sleeping` runs and reaps orphaned `running` runs — is configurable:
+
+| Environment Variable | Required | Description |
+| --- | --- | --- |
+| `ORCHESTRATION_SCHEDULER_INTERVAL_MS` | No | Scheduler tick interval in ms (default `5000`). |
+| `ORCHESTRATION_RUN_LEASE_TTL_MS` | No | How long a `running` run's lease is valid before the reaper may reclaim it, in ms (default `600000`). Must exceed the longest single round of node execution. |
 
 ### State and Mappings
 

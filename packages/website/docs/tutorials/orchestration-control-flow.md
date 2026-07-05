@@ -378,7 +378,7 @@ Expected output:
 
 ```json
 {
-  "status": "completed",
+  "status": "succeeded",
   "output": {
     "summary-processed": {
       "result": "Items were processed."

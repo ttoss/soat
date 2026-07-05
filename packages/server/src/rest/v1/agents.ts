@@ -32,7 +32,6 @@ type CreateAgentBody = {
   boundaryPolicy?: unknown;
   temperature?: unknown;
   knowledgeConfig?: unknown;
-  reasoning?: unknown;
   outputSchema?: unknown;
   maxContextMessages?: unknown;
   singleSessionPerActor?: unknown;
@@ -142,7 +141,6 @@ const parseUpdateAgentBody = (
     boundaryPolicy: parseOptional<object | null>(body.boundaryPolicy),
     temperature: parseOptional<number | null>(body.temperature),
     knowledgeConfig: parseOptional<object | null>(body.knowledgeConfig),
-    reasoningConfig: parseOptional<object | null>(body.reasoning),
     outputSchema: parseOptional<object | null>(body.outputSchema),
     maxContextMessages: parseOptional<number | null>(body.maxContextMessages),
     singleSessionPerActor:
@@ -200,7 +198,6 @@ const buildCreateAgentArgs = (
     boundaryPolicy: body.boundaryPolicy as object | undefined,
     temperature: parseNumber(body.temperature),
     knowledgeConfig: body.knowledgeConfig as object | undefined,
-    reasoningConfig: body.reasoning as object | undefined,
     outputSchema: body.outputSchema as object | undefined,
     maxContextMessages: parseNumber(body.maxContextMessages),
     singleSessionPerActor:

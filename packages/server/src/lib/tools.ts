@@ -72,6 +72,7 @@ export type MappedTool = {
   actions: string[] | null;
   presetParameters: object | null;
   pipeline: object | null;
+  discussion: object | null;
   outputMapping: object | null;
   createdAt: Date;
   updatedAt: Date;
@@ -100,6 +101,7 @@ const mapTool = (
     actions: tool.actions,
     presetParameters: tool.presetParameters,
     pipeline: tool.pipeline,
+    discussion: tool.discussion,
     outputMapping: tool.outputMapping,
     createdAt: tool.createdAt,
     updatedAt: tool.updatedAt,
@@ -110,11 +112,8 @@ const mapTool = (
 
 export type CreateToolArgs = InlineToolDefinition & { projectId: number };
 
-const buildToolCreateAttributes = (args: CreateToolArgs) => {
+const buildToolConfigFields = (args: CreateToolArgs) => {
   return {
-    projectId: args.projectId,
-    type: args.type ?? 'http',
-    name: args.name,
     description: args.description ?? null,
     parameters: args.parameters ?? null,
     execute: args.execute ?? null,
@@ -122,7 +121,17 @@ const buildToolCreateAttributes = (args: CreateToolArgs) => {
     actions: args.actions ?? null,
     presetParameters: args.presetParameters ?? null,
     pipeline: args.pipeline ?? null,
+    discussion: args.discussion ?? null,
     outputMapping: args.outputMapping ?? null,
+  };
+};
+
+const buildToolCreateAttributes = (args: CreateToolArgs) => {
+  return {
+    projectId: args.projectId,
+    type: args.type ?? 'http',
+    name: args.name,
+    ...buildToolConfigFields(args),
   };
 };
 
@@ -135,6 +144,35 @@ const buildToolCreateAttributes = (args: CreateToolArgs) => {
  * reference tools that exist, `soat` actions are known, and `{{secret:...}}`
  * references resolve within the given project.
  */
+/**
+ * Validates a `discussion` tool's config: it must reference a discussion that
+ * exists in the tool's project (so a tool cannot invoke another project's
+ * discussion).
+ */
+const assertDiscussionToolValid = async (args: {
+  definition: InlineToolDefinition;
+  projectId: number;
+}): Promise<void> => {
+  const config = args.definition.discussion as
+    | { discussionId?: string }
+    | undefined;
+  if (!config?.discussionId) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'A discussion tool requires a discussion configuration with a discussionId.'
+    );
+  }
+  const discussion = await db.Discussion.findOne({
+    where: { publicId: config.discussionId, projectId: args.projectId },
+  });
+  if (!discussion) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Discussion '${config.discussionId}' not found in the project.`
+    );
+  }
+};
+
 export const validateToolDefinition = async (args: {
   definition: InlineToolDefinition;
   projectId: number;
@@ -166,6 +204,10 @@ export const validateToolDefinition = async (args: {
 
   if ((definition.type ?? 'http') === 'soat') {
     validateSoatActions(definition.actions);
+  }
+
+  if (definition.type === 'discussion') {
+    await assertDiscussionToolValid({ definition, projectId });
   }
 
   // Fail fast on {{secret:...}} tokens referencing nonexistent or
@@ -246,6 +288,7 @@ const buildToolUpdates = (args: {
   actions?: string[] | null;
   presetParameters?: object | null;
   pipeline?: object | null;
+  discussion?: object | null;
   outputMapping?: object | null;
 }): Record<string, unknown> => {
   const updates: Record<string, unknown> = {};
@@ -259,6 +302,7 @@ const buildToolUpdates = (args: {
     'actions',
     'presetParameters',
     'pipeline',
+    'discussion',
     'outputMapping',
   ] as const;
   for (const field of fields) {
@@ -267,7 +311,7 @@ const buildToolUpdates = (args: {
   return updates;
 };
 
-export const updateTool = async (args: {
+type ToolUpdateArgs = {
   projectIds?: number[];
   id: string;
   type?: string;
@@ -279,8 +323,46 @@ export const updateTool = async (args: {
   actions?: string[] | null;
   presetParameters?: object | null;
   pipeline?: object | null;
+  discussion?: object | null;
   outputMapping?: object | null;
-}): Promise<MappedTool> => {
+};
+
+/** Runs the per-type validation for an update against the existing tool row. */
+const validateToolUpdate = async (params: {
+  args: ToolUpdateArgs;
+  tool: InstanceType<typeof db.Tool>;
+}): Promise<void> => {
+  const { args, tool } = params;
+  if (args.discussion !== undefined && args.discussion !== null) {
+    await assertDiscussionToolValid({
+      definition: {
+        name: tool.name,
+        type: 'discussion',
+        discussion: args.discussion,
+      },
+      projectId: tool.projectId,
+    });
+  }
+  if (args.pipeline !== undefined && args.pipeline !== null) {
+    const config = validatePipelineConfig(args.pipeline);
+    await assertPipelineStepToolsValid({
+      steps: config.steps,
+      projectId: tool.projectId,
+      projectIds: args.projectIds,
+    });
+  }
+  if (args.actions !== undefined && (args.type ?? tool.type) === 'soat') {
+    validateSoatActions(args.actions);
+  }
+  if (args.execute !== undefined || args.mcp !== undefined) {
+    await assertSecretRefsExist({
+      value: { execute: args.execute, mcp: args.mcp },
+      projectId: tool.projectId,
+    });
+  }
+};
+
+export const updateTool = async (args: ToolUpdateArgs): Promise<MappedTool> => {
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) {
     where.projectId = args.projectIds;
@@ -291,25 +373,7 @@ export const updateTool = async (args: {
   if (!tool)
     throw new DomainError('RESOURCE_NOT_FOUND', `Tool '${args.id}' not found.`);
 
-  if (args.pipeline !== undefined && args.pipeline !== null) {
-    const config = validatePipelineConfig(args.pipeline);
-    await assertPipelineStepToolsValid({
-      steps: config.steps,
-      projectId: tool.projectId,
-      projectIds: args.projectIds,
-    });
-  }
-
-  if (args.actions !== undefined && (args.type ?? tool.type) === 'soat') {
-    validateSoatActions(args.actions);
-  }
-
-  if (args.execute !== undefined || args.mcp !== undefined) {
-    await assertSecretRefsExist({
-      value: { execute: args.execute, mcp: args.mcp },
-      projectId: tool.projectId,
-    });
-  }
+  await validateToolUpdate({ args, tool });
 
   await tool.update(buildToolUpdates(args));
 

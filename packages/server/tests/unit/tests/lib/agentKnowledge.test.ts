@@ -1,10 +1,68 @@
-import { buildKnowledgeMessages, mergeKnowledgeConfig } from 'src/lib/agentKnowledge';
+import {
+  buildKnowledgeMessages,
+  buildWriteMemoryTool,
+  mergeKnowledgeConfig,
+} from 'src/lib/agentKnowledge';
 import * as knowledgeModule from 'src/lib/knowledge';
+
+import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 const mockSearchKnowledge = jest.spyOn(knowledgeModule, 'searchKnowledge');
 
 afterEach(() => {
   jest.clearAllMocks();
+});
+
+describe('buildWriteMemoryTool', () => {
+  let adminToken: string;
+  let projectId: string;
+  let memoryId: string;
+
+  beforeAll(async () => {
+    await testClient
+      .post('/api/v1/users/bootstrap')
+      .send({ username: 'admin', password: 'supersecret' });
+    adminToken = await loginAs('admin', 'supersecret');
+
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'buildWriteMemoryTool Test Project' });
+    projectId = projectRes.body.id;
+
+    const memoryRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/memories')
+      .send({ project_id: projectId, name: 'Write Memory Tool Test' });
+    memoryId = memoryRes.body.id;
+  });
+
+  test('writes a fact and returns the created entry', async () => {
+    const writeMemoryTool = buildWriteMemoryTool({
+      writeMemoryId: memoryId,
+      agentId: 'agt_test',
+    });
+
+    const result = await writeMemoryTool.execute!(
+      { content: 'The sky is blue.' },
+      {} as never
+    );
+
+    expect(result).toMatchObject({ action: 'created' });
+    expect((result as { entryId: string }).entryId).toBeDefined();
+  });
+
+  test('returns an error when the target memory does not exist', async () => {
+    const writeMemoryTool = buildWriteMemoryTool({
+      writeMemoryId: 'mem_nonexistent',
+      agentId: 'agt_test',
+    });
+
+    const result = await writeMemoryTool.execute!(
+      { content: 'A fact' },
+      {} as never
+    );
+
+    expect(result).toEqual({ error: 'Memory mem_nonexistent not found' });
+  });
 });
 
 describe('buildKnowledgeMessages', () => {

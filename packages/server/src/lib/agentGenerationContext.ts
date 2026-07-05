@@ -18,11 +18,6 @@ import {
   type GenerationInputMessage,
   resolveGenerationInputMessages,
 } from './generationInputMessages';
-import {
-  type ProviderOptionsMap,
-  type ReasoningConfig,
-  resolveReasoningForContext,
-} from './reasoning';
 import type { InlineToolDefinition } from './tools';
 
 const log = createDebug('soat:generation');
@@ -35,9 +30,6 @@ export type GenerationContext = {
   generationId: string;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
-  reasoningConfig?: ReasoningConfig | null;
-  providerOptions?: ProviderOptionsMap;
-  maxOutputTokens?: number;
 };
 
 const resolveGenerationModel = async (args: {
@@ -147,7 +139,6 @@ export const buildGenerationContext = async (args: {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
   remainingDepth?: number;
-  reasoning?: object;
   knowledgeConfig?: object;
 }): Promise<GenerationContext> => {
   const typedAgent = await resolveAgentForGeneration({
@@ -171,15 +162,9 @@ export const buildGenerationContext = async (args: {
       : undefined,
     agentBoundaryPolicy: typedAgent.boundaryPolicy,
   });
-  const { model, provider } = await resolveGenerationModel({
+  const { model } = await resolveGenerationModel({
     agentId: args.agentId,
     typedAgent,
-  });
-
-  const { reasoningConfig, reasoningOptions } = resolveReasoningForContext({
-    typedAgent,
-    override: args.reasoning,
-    provider,
   });
 
   const resolvedTools = await resolveGenerationTools({
@@ -210,8 +195,5 @@ export const buildGenerationContext = async (args: {
     generationId: generatePublicId(PUBLIC_ID_PREFIXES.generation),
     toolContext: args.toolContext ?? null,
     remainingDepth: args.remainingDepth ?? null,
-    reasoningConfig,
-    providerOptions: reasoningOptions?.providerOptions,
-    maxOutputTokens: reasoningOptions?.maxOutputTokens,
   };
 };

@@ -13,8 +13,8 @@ const log = createDebug('soat:orchestrations');
  */
 export const RUN_EVENT_TYPES = {
   started: 'orchestration_runs.started',
-  paused: 'orchestration_runs.paused',
-  completed: 'orchestration_runs.completed',
+  awaitingInput: 'orchestration_runs.awaiting_input',
+  succeeded: 'orchestration_runs.succeeded',
   failed: 'orchestration_runs.failed',
 } as const;
 
@@ -22,18 +22,18 @@ export type RunLifecycleEvent = keyof typeof RUN_EVENT_TYPES;
 
 /**
  * Maps a run status to the lifecycle event that should fire when a run settles
- * into it. `running` is not terminal for eventing (a run that pauses on a timer
- * stays `running`), so it has no event here; `run.started` is emitted
- * explicitly at creation.
+ * into it. `sleeping` (parked on a timer) and `queued` are not terminal for
+ * eventing, so they have no event here; `run.started` is emitted explicitly at
+ * creation.
  */
 export const lifecycleEventForStatus = (
   status: MappedOrchestrationRun['status']
 ): RunLifecycleEvent | null => {
   switch (status) {
-    case 'paused':
-      return 'paused';
-    case 'completed':
-      return 'completed';
+    case 'awaiting_input':
+      return 'awaitingInput';
+    case 'succeeded':
+      return 'succeeded';
     case 'failed':
       return 'failed';
     default:

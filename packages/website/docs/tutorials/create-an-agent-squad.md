@@ -609,7 +609,7 @@ Expected output — the run pauses at `approve`:
 
 ```json
 {
-  "status": "paused",
+  "status": "awaiting_input",
   "required_action": {
     "type": "human_input",
     "node_id": "approve",
@@ -674,7 +674,7 @@ Expected output:
 
 ```json
 {
-  "status": "completed",
+  "status": "succeeded",
   "state": {
     "research": "...",
     "draft": "...",

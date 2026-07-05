@@ -151,9 +151,9 @@ export const ERROR_CODES = {
     description:
       'The orchestration run is already in a terminal state and cannot be cancelled.',
   },
-  ORCHESTRATION_RUN_NOT_PAUSED: {
+  ORCHESTRATION_RUN_NOT_AWAITING_INPUT: {
     httpStatus: 409,
-    description: 'The orchestration run is not paused.',
+    description: 'The orchestration run is not awaiting input.',
   },
   ORCHESTRATION_HUMAN_NODE_MISMATCH: {
     httpStatus: 400,
@@ -205,10 +205,10 @@ export const ERROR_CODES = {
     description:
       'The referenced file has a content type that cannot be ingested. Supported types: application/pdf, text/plain, text/markdown.',
   },
-  INVALID_REASONING_CONFIG: {
+  INVALID_DISCUSSION_CONFIG: {
     httpStatus: 400,
     description:
-      'The agent reasoning config is invalid (e.g. an unknown mode, no pipeline steps, too many steps, a duplicate/dotted/unnamed step, a step missing a prompt, branches or rounds out of range, or rounds > 1 with no {transcript} reference).',
+      'The discussion config is invalid (e.g. max_rounds out of range, no participants, too many participants, or an invalid effort value).',
   },
   INVALID_OUTPUT_SCHEMA: {
     httpStatus: 400,

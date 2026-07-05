@@ -30,6 +30,12 @@ export class OrchestrationNodeExecution extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare nodeType: string | null;
 
+  // 1-based attempt number this execution record is for. A node with a retry
+  // policy produces one record per attempt: failed attempts 1..N-1 followed by a
+  // final `completed` (or a final `failed` when retries are exhausted).
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 1 })
+  declare attempt: number;
+
   @Column({
     type: DataType.ENUM('completed', 'failed', 'requires_action', 'skipped'),
     allowNull: false,

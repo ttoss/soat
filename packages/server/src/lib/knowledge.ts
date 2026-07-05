@@ -286,6 +286,26 @@ const buildDocWhere = (args: {
   return { publicId: args.documentIds };
 };
 
+/**
+ * The `document` resourceType's policy alias (`$file.<column>$`) assumes the
+ * `Document` model with `file` included directly, as used by `listDocuments`.
+ * Here the query root is `DocumentChunk`, where `file` is nested one level
+ * deeper under `document`, so a `$file.<column>$` key must be rewritten to
+ * `$document.file.<column>$` or Sequelize throws "missing FROM-clause entry".
+ */
+const remapPolicyWhereForChunks = (
+  policyWhere: Record<string, unknown>
+): Record<string, unknown> => {
+  return Object.fromEntries(
+    Object.entries(policyWhere).map(([key, value]) => {
+      const remappedKey = key.startsWith('$file.')
+        ? `$document.file.${key.slice('$file.'.length)}`
+        : key;
+      return [remappedKey, value];
+    })
+  );
+};
+
 export const resolveDocumentSearch = async (args: {
   projectIds?: number[];
   config: DocumentQueryConfig;
@@ -301,7 +321,7 @@ export const resolveDocumentSearch = async (args: {
 
   const effectivePolicyWhere =
     args.policyWhere && Object.keys(args.policyWhere).length > 0
-      ? args.policyWhere
+      ? remapPolicyWhereForChunks(args.policyWhere)
       : undefined;
 
   const fileInclude = buildFileInclude({ projectIds, paths: config.paths });

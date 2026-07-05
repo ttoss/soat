@@ -48,9 +48,10 @@ export const cancelOrchestrationRun = async (args: {
     );
 
   if (
-    run.status === 'completed' ||
+    run.status === 'succeeded' ||
     run.status === 'failed' ||
-    run.status === 'cancelled'
+    run.status === 'cancelled' ||
+    run.status === 'expired'
   ) {
     throw new DomainError(
       'ORCHESTRATION_RUN_NOT_CANCELLABLE',
@@ -101,10 +102,10 @@ export const submitHumanInput = async (args: {
       `Run '${args.runPublicId}' not found.`
     );
 
-  if (run.status !== 'paused')
+  if (run.status !== 'awaiting_input')
     throw new DomainError(
-      'ORCHESTRATION_RUN_NOT_PAUSED',
-      `Run '${args.runPublicId}' is not paused (status: '${run.status}').`
+      'ORCHESTRATION_RUN_NOT_AWAITING_INPUT',
+      `Run '${args.runPublicId}' is not awaiting input (status: '${run.status}').`
     );
 
   const activeNodes = run.activeNodes as string[];
@@ -149,10 +150,10 @@ export const resumeOrchestrationRun = async (args: {
       `Run '${args.runPublicId}' not found.`
     );
 
-  if (run.status !== 'paused')
+  if (run.status !== 'awaiting_input')
     throw new DomainError(
-      'ORCHESTRATION_RUN_NOT_PAUSED',
-      `Run '${args.runPublicId}' is not paused (status: '${run.status}').`
+      'ORCHESTRATION_RUN_NOT_AWAITING_INPUT',
+      `Run '${args.runPublicId}' is not awaiting input (status: '${run.status}').`
     );
 
   return resumeOrchestrationRunExecution({ run });

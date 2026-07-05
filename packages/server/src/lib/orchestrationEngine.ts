@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import createDebug from 'debug';
 
 import { db } from '../db';
@@ -7,12 +8,17 @@ import {
   lifecycleEventForStatus,
 } from './orchestrationEvents';
 import type { RequiredAction, ScheduledWait } from './orchestrationExecutors';
-import { applyOutputMapping, resolveNextNodes } from './orchestrationExecutors';
+import {
+  applyOutputMapping,
+  findStartNodes,
+  resolveNextNodes,
+} from './orchestrationExecutors';
+import { newLeaseExpiry } from './orchestrationLease';
 import {
   recordDelayResumption,
   recordHumanInputResumption,
 } from './orchestrationNodeRecorder';
-import type { PersistedResumeContext } from './orchestrationRunHelpers';
+import type { PersistedWakeContext } from './orchestrationRunHelpers';
 import {
   applyHumanInputToState,
   getTerminalOutput,
@@ -36,13 +42,14 @@ import {
 
 const log = createDebug('soat:orchestrations');
 
-// ── Drive: run a run to its next resting point (terminal, paused, or wait) ──
+// ── Drive: run a run to its next resting point (terminal, awaiting_input, or sleeping) ──
 
 type LoopEntry = {
   activatedNodes: Set<string>;
   completedNodes: Set<string>;
   conditionLabels: Map<string, string>;
   pollAttempts: Map<string, number>;
+  retryAttempts: Map<string, number>;
 };
 
 const sleep = (ms: number): Promise<void> => {
@@ -52,10 +59,10 @@ const sleep = (ms: number): Promise<void> => {
 };
 
 /**
- * Builds the loop entry to resume a run that paused on a scheduled wait. For a
- * `delay` the timer has elapsed, so the node is recorded complete and the loop
- * resumes from its successors; for a `poll` the node re-executes at the next
- * attempt.
+ * Builds the loop entry to wake a run that was sleeping on a scheduled wait. For
+ * a `delay` the timer has elapsed, so the node is recorded complete and the loop
+ * resumes from its successors; for a `poll` or `retry` the same node re-executes
+ * at the next attempt.
  */
 const buildResumeEntry = async (args: {
   runRecord: InstanceType<typeof db.OrchestrationRun>;
@@ -70,6 +77,7 @@ const buildResumeEntry = async (args: {
   const completedNodes = new Set<string>(Object.keys(artifacts));
   const conditionLabels = new Map<string, string>();
   const pollAttempts = new Map<string, number>();
+  const retryAttempts = new Map<string, number>();
 
   if (resume.kind === 'poll') {
     pollAttempts.set(nodeId, resume.attempt);
@@ -78,6 +86,18 @@ const buildResumeEntry = async (args: {
       completedNodes,
       conditionLabels,
       pollAttempts,
+      retryAttempts,
+    };
+  }
+
+  if (resume.kind === 'retry') {
+    retryAttempts.set(nodeId, resume.attempt);
+    return {
+      activatedNodes: new Set<string>([nodeId]),
+      completedNodes,
+      conditionLabels,
+      pollAttempts,
+      retryAttempts,
     };
   }
 
@@ -107,11 +127,12 @@ const buildResumeEntry = async (args: {
     completedNodes,
     conditionLabels,
     pollAttempts,
+    retryAttempts,
   };
 };
 
 /**
- * Settles a run into a terminal or paused state: persists the final record
+ * Settles a run into a terminal or awaiting_input state: persists the final record
  * (including the run's resolved trace id), emits the matching lifecycle webhook
  * event, and returns the mapped run.
  */
@@ -171,8 +192,8 @@ const settleRun = async (args: {
  *   pause, sleeping through delay/poll waits in-process. Used by callers that
  *   opt into blocking (`wait: true`) and by nested loop/sub-orchestration runs.
  * - `inlineWaits: false` (background mode) stops at the first scheduled wait,
- *   persisting `resumeAt`/`resumeContext` so the scheduler resumes the run
- *   later. Used for durable, request-detached execution.
+ *   parking the run as `sleeping` with `wakeAt`/`wakeContext` so the scheduler
+ *   wakes it later. Used for durable, request-detached execution.
  *
  * The first trace id produced by a traced node (e.g. an `agent` node) is
  * captured across segments and persisted onto the run when it settles.
@@ -217,6 +238,7 @@ const driveRunToRest = async (args: {
         conditionLabels: entry?.conditionLabels,
         activatedNodes: entry?.activatedNodes,
         pollAttempts: entry?.pollAttempts,
+        retryAttempts: entry?.retryAttempts,
       });
     capturedTraceId = capturedTraceId ?? traceId;
 
@@ -296,6 +318,9 @@ export const startOrchestrationRun = async (args: {
     artifacts,
     input: args.input ?? null,
     startedAt: new Date(),
+    // The run enters `running` immediately; acquire a lease so the reaper can
+    // reclaim it if this driver crashes before the first checkpoint refresh.
+    leaseExpiresAt: newLeaseExpiry(),
   });
 
   const startMapped = await mapRunWithIncludes(runRecord.id as number);
@@ -306,7 +331,7 @@ export const startOrchestrationRun = async (args: {
   });
 
   // Synchronous (compatibility) mode: block until the run reaches a terminal or
-  // paused state, sleeping through any delay/poll waits in-process.
+  // awaiting_input state, sleeping through any delay/poll waits in-process.
   if (args.wait) {
     return driveRunToRest({
       runRecord,
@@ -342,19 +367,19 @@ export const startOrchestrationRun = async (args: {
 };
 
 /**
- * Resumes a run that a worker/scheduler has determined is due (its `resumeAt`
- * has elapsed). Reads `resumeContext` to rebuild the loop entry, then drives in
- * background mode so a poll that is still not satisfied simply re-schedules.
+ * Wakes a sleeping run that the scheduler has determined is due (its `wakeAt`
+ * has elapsed). Reads `wakeContext` to rebuild the loop entry, then drives in
+ * background mode so a poll that is still not satisfied simply re-sleeps.
  */
-export const resumeScheduledRun = async (args: {
+export const wakeRun = async (args: {
   run: InstanceType<typeof db.OrchestrationRun>;
 }): Promise<void> => {
   const { run } = args;
-  log('resumeScheduledRun %o', { runId: run.id });
+  log('wakeRun %o', { runId: run.id });
 
-  const resumeContext = run.resumeContext as PersistedResumeContext | null;
-  if (!resumeContext) {
-    log('resumeScheduledRun: run %s has no resumeContext, skipping', run.id);
+  const wakeContext = run.wakeContext as PersistedWakeContext | null;
+  if (!wakeContext) {
+    log('wakeRun: run %s has no wakeContext, skipping', run.id);
     return;
   }
 
@@ -365,8 +390,8 @@ export const resumeScheduledRun = async (args: {
     await run.update({
       status: 'failed',
       error: { code: 'ORCHESTRATION_NOT_FOUND', message: 'Orchestration gone' },
-      resumeAt: null,
-      resumeContext: null,
+      wakeAt: null,
+      wakeContext: null,
       completedAt: new Date(),
     });
     return;
@@ -383,8 +408,8 @@ export const resumeScheduledRun = async (args: {
 
   const entry = await buildResumeEntry({
     runRecord: run,
-    nodeId: resumeContext.nodeId,
-    resume: resumeContext.resume,
+    nodeId: wakeContext.nodeId,
+    resume: wakeContext.resume,
     nodes,
     edges,
     state,
@@ -423,7 +448,7 @@ export const resumeOrchestrationRunExecution = async (args: {
 
   const nodes = orch.nodes as OrchestrationNode[];
   const edges = orch.edges as OrchestrationEdge[];
-  // Clone so mutations produce a fresh reference (see resumeScheduledRun).
+  // Clone so mutations produce a fresh reference (see wakeRun).
   const state = { ...((run.state ?? {}) as Record<string, unknown>) };
   const artifacts = { ...((run.artifacts ?? {}) as Record<string, unknown>) };
 
@@ -457,11 +482,15 @@ export const resumeOrchestrationRunExecution = async (args: {
     edges,
   });
 
-  await run.update({ status: 'running', activeNodes: startNodeIds });
+  await run.update({
+    status: 'running',
+    activeNodes: startNodeIds,
+    leaseExpiresAt: newLeaseExpiry(),
+  });
 
   // Human-input and manual resume are request-driven, so they block inline
   // (matching their existing synchronous behaviour); timer-driven resumptions
-  // go through resumeScheduledRun instead.
+  // go through wakeRun instead.
   return driveRunToRest({
     runRecord: run,
     nodes,
@@ -476,6 +505,99 @@ export const resumeOrchestrationRunExecution = async (args: {
       completedNodes,
       conditionLabels,
       pollAttempts: new Map<string, number>(),
+      retryAttempts: new Map<string, number>(),
     },
+  });
+};
+
+/**
+ * Reconstructs the loop entry for re-driving a run that crashed while `running`.
+ * The last checkpoint's artifacts identify the completed nodes; the frontier to
+ * resume is the union of their not-yet-completed successors and any start node
+ * that never completed (covering a crash on a parallel start branch that was
+ * never checkpointed). Condition-branch labels are not persisted across a crash,
+ * mirroring the existing wake/resume paths.
+ */
+export const buildRedriveEntry = (args: {
+  nodes: OrchestrationNode[];
+  edges: OrchestrationEdge[];
+  artifacts: Record<string, unknown>;
+}): LoopEntry => {
+  const { nodes, edges, artifacts } = args;
+  const completedNodes = new Set<string>(Object.keys(artifacts));
+  const conditionLabels = new Map<string, string>();
+  const activatedNodes = new Set<string>();
+
+  for (const completedNodeId of completedNodes) {
+    const next = resolveNextNodes({
+      completedNodeId,
+      completedNodes,
+      conditionLabels,
+      edges,
+    });
+    for (const n of next) {
+      if (!completedNodes.has(n)) activatedNodes.add(n);
+    }
+  }
+
+  for (const startNode of findStartNodes(nodes, edges)) {
+    if (!completedNodes.has(startNode)) activatedNodes.add(startNode);
+  }
+
+  return {
+    activatedNodes,
+    completedNodes,
+    conditionLabels,
+    pollAttempts: new Map<string, number>(),
+    retryAttempts: new Map<string, number>(),
+  };
+};
+
+/**
+ * Re-drives a run the reaper reclaimed after its lease expired — its driver
+ * crashed or was redeployed mid-execution. Restores the last checkpoint and
+ * resumes the frontier in background mode, so any remaining delay/poll waits are
+ * offloaded to the scheduler again rather than slept through in-process.
+ */
+export const redriveRun = async (args: {
+  run: InstanceType<typeof db.OrchestrationRun>;
+}): Promise<void> => {
+  const { run } = args;
+  log('redriveRun %o', { runId: run.id });
+
+  const orch = await db.Orchestration.findOne({
+    where: { id: run.orchestrationId as number },
+  });
+  if (!orch) {
+    await run.update({
+      status: 'failed',
+      error: { code: 'ORCHESTRATION_NOT_FOUND', message: 'Orchestration gone' },
+      wakeAt: null,
+      wakeContext: null,
+      leaseExpiresAt: null,
+      completedAt: new Date(),
+    });
+    return;
+  }
+
+  const nodes = orch.nodes as OrchestrationNode[];
+  const edges = orch.edges as OrchestrationEdge[];
+  // Clone so mutations produce a fresh reference (see wakeRun).
+  const state = { ...((run.state ?? {}) as Record<string, unknown>) };
+  const artifacts = { ...((run.artifacts ?? {}) as Record<string, unknown>) };
+  await restoreRunFromCheckpoint({ runId: run.id as number, state, artifacts });
+
+  const entry = buildRedriveEntry({ nodes, edges, artifacts });
+
+  await driveRunToRest({
+    runRecord: run,
+    nodes,
+    edges,
+    state,
+    artifacts,
+    projectIds: [run.projectId as number],
+    traceId: run.traceId ?? null,
+    inlineWaits: false,
+    entry,
   });
 };

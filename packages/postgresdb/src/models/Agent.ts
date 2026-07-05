@@ -94,9 +94,6 @@ export class Agent extends Model {
   declare knowledgeConfig: object | null;
 
   @Column({ type: DataType.JSONB, allowNull: true })
-  declare reasoningConfig: object | null;
-
-  @Column({ type: DataType.JSONB, allowNull: true })
   declare outputSchema: object | null;
 
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })

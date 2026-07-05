@@ -523,6 +523,24 @@ describe('Chats', () => {
       expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
     });
+
+    test('non-streaming request reaches createChatCompletion (propagates AI error status)', async () => {
+      // createChatCompletion runs its system/non-system message split before
+      // calling generateText. generateText throws because ollama falls back
+      // to OpenAI (no baseUrl set) and OpenAI returns 401 for the 'ollama'
+      // api key; Koa propagates that statusCode as the HTTP response status.
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/chat/completions')
+        .send({
+          ai_provider_id: aiProviderId,
+          messages: [
+            { role: 'system', content: 'Be concise.' },
+            { role: 'user', content: 'Hello' },
+          ],
+        });
+
+      expect(response.status).not.toBe(200);
+    });
   });
 
   // ── Real createChatCompletionForChat execution (admin) ──────────────────

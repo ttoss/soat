@@ -145,31 +145,15 @@ const resolveApiKeyScopedProjectIds = async (args: {
   return [proj.id as number];
 };
 
-const resolveApiKeyUnscopedProjectIds = async (args: {
-  reqProjectPublicId?: string;
-  action: string;
-  apiKeyIsAllowed: IsAllowedFn;
-  apiKeyPolicyIds: number[];
-  userPolicyIds: number[];
-  db: Context['db'];
-}): Promise<number[] | null> => {
-  const effectivePolicyIds =
-    args.apiKeyPolicyIds.length > 0 ? args.apiKeyPolicyIds : args.userPolicyIds;
-
-  return resolveProjectIdsByPublicIdAndPolicy({
-    reqProjectPublicId: args.reqProjectPublicId,
-    action: args.action,
-    isAllowed: args.apiKeyIsAllowed,
-    policyIds: effectivePolicyIds,
-    db: args.db,
-  });
-};
-
+// Both call sites (a real API key's `resolveProjectIds`, and an OAuth
+// token's when its consented scope carries a project) only construct this
+// with a project already resolved: API keys require `project_id` at both
+// the REST layer and the DB FK (NOT NULL), and the OAuth call site is
+// itself gated on `oauthProjectPublicId` being set. So `apiKeyProjectPublicId`
+// is always defined here — there is no unscoped fallback to resolve.
 const createApiKeyResolveProjectIds = (args: {
-  apiKeyProjectPublicId?: string;
+  apiKeyProjectPublicId: string;
   apiKeyIsAllowed: IsAllowedFn;
-  apiKeyPolicyIds: number[];
-  userPolicyIds: number[];
   db: Context['db'];
 }) => {
   return async ({
@@ -179,21 +163,11 @@ const createApiKeyResolveProjectIds = (args: {
     projectPublicId?: string;
     action: string;
   }): Promise<number[] | null | undefined> => {
-    if (args.apiKeyProjectPublicId) {
-      return resolveApiKeyScopedProjectIds({
-        apiKeyProjectPublicId: args.apiKeyProjectPublicId,
-        reqProjectPublicId: reqId,
-        action,
-        apiKeyIsAllowed: args.apiKeyIsAllowed,
-        db: args.db,
-      });
-    }
-    return resolveApiKeyUnscopedProjectIds({
+    return resolveApiKeyScopedProjectIds({
+      apiKeyProjectPublicId: args.apiKeyProjectPublicId,
       reqProjectPublicId: reqId,
       action,
       apiKeyIsAllowed: args.apiKeyIsAllowed,
-      apiKeyPolicyIds: args.apiKeyPolicyIds,
-      userPolicyIds: args.userPolicyIds,
       db: args.db,
     });
   };
@@ -263,15 +237,13 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
       const userPolicyIds = (keyUser.policyIds as number[]) ?? [];
       const apiKeyPolicyIds = (row.policyIds as number[]) ?? [];
 
-      let apiKeyProjectPublicId: string | undefined;
-      let apiKeyProjectId: number | undefined;
-      if (row.projectId) {
-        apiKeyProjectId = row.projectId as number;
-        const proj = await ctx.db.Project.findOne({
-          where: { id: apiKeyProjectId },
-        });
-        apiKeyProjectPublicId = proj?.publicId as string | undefined;
-      }
+      // An ApiKey's `projectId` FK is NOT NULL and cascades from Project, so
+      // a real key row always has a live project.
+      const apiKeyProjectId = row.projectId as number;
+      const proj = await ctx.db.Project.findOne({
+        where: { id: apiKeyProjectId },
+      });
+      const apiKeyProjectPublicId = proj!.publicId as string;
 
       const apiKeyIsAllowed = createApiKeyIsAllowed({
         apiKeyProjectPublicId,
@@ -292,8 +264,6 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
         resolveProjectIds: createApiKeyResolveProjectIds({
           apiKeyProjectPublicId,
           apiKeyIsAllowed,
-          apiKeyPolicyIds,
-          userPolicyIds,
           db: ctx.db,
         }),
         getPolicies: createApiKeyGetPolicies({
@@ -368,8 +338,6 @@ const resolveJwt = async (ctx: Context, token: string) => {
       ? createApiKeyResolveProjectIds({
           apiKeyProjectPublicId: oauthProjectPublicId,
           apiKeyIsAllowed: isAllowed,
-          apiKeyPolicyIds: [],
-          userPolicyIds,
           db: ctx.db,
         })
       : async ({

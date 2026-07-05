@@ -71,19 +71,22 @@ export const updateRunRecord = async (args: {
     output,
     traceId,
   } = args;
-  const isTerminal = runStatus === 'completed' || runStatus === 'failed';
+  const isTerminal = runStatus === 'succeeded' || runStatus === 'failed';
   await runRecord.update({
     status: runStatus,
     state,
-    activeNodes: runStatus === 'paused' ? [requiredAction?.nodeId ?? ''] : [],
+    activeNodes:
+      runStatus === 'awaiting_input' ? [requiredAction?.nodeId ?? ''] : [],
     artifacts,
     error: runError,
-    requiredAction: runStatus === 'paused' ? requiredAction : null,
-    output: runStatus === 'completed' ? output : null,
-    // Settling into a terminal or paused state clears any pending scheduled
-    // resumption so the background scheduler ignores the run.
-    resumeAt: null,
-    resumeContext: null,
+    requiredAction: runStatus === 'awaiting_input' ? requiredAction : null,
+    output: runStatus === 'succeeded' ? output : null,
+    // Settling into a terminal or awaiting_input state clears any pending
+    // scheduled wake so the background scheduler ignores the run, and releases
+    // the run lease (no worker holds it any longer) so the reaper ignores it.
+    wakeAt: null,
+    wakeContext: null,
+    leaseExpiresAt: null,
     completedAt: isTerminal ? new Date() : null,
     // Only fill once: the first trace produced by a traced node (e.g. an
     // `agent` node) becomes the run's trace_id and is never overwritten.
@@ -92,21 +95,21 @@ export const updateRunRecord = async (args: {
 };
 
 /**
- * Context persisted on a run that is waiting for a scheduled resumption. The
- * scheduler reads this to know which node to resume and how (a delay carries
- * the artifact to record; a poll carries the next attempt number).
+ * Context persisted on a `sleeping` run so the scheduler knows which node to
+ * wake and how (a delay carries the artifact to record; a poll carries the next
+ * attempt number).
  */
-export type PersistedResumeContext = {
+export type PersistedWakeContext = {
   nodeId: string;
   resume: ScheduledWait['resume'];
 };
 
 /**
- * Persists a run that has paused on a timer (delay) or a poll interval. The run
- * stays `running` — from the caller's perspective it is still in flight — but
- * `resumeAt`/`resumeContext` mark it for the background scheduler to pick up
- * once the timer elapses. Survives a process restart because the state lives in
- * the database, not an in-process timer.
+ * Persists a run that has parked on a timer (delay) or a poll interval. The run
+ * transitions to `sleeping` — it holds no worker and no memory, pure DB state —
+ * and `wakeAt`/`wakeContext` mark it for the background scheduler to wake once
+ * the timer elapses. Survives a process restart because the state lives in the
+ * database, not an in-process timer.
  */
 export const persistScheduledWait = async (args: {
   runRecord: InstanceType<typeof db.OrchestrationRun>;
@@ -116,12 +119,12 @@ export const persistScheduledWait = async (args: {
   now: number;
 }): Promise<void> => {
   const { runRecord, scheduledWait, state, artifacts, now } = args;
-  const resumeContext: PersistedResumeContext = {
+  const wakeContext: PersistedWakeContext = {
     nodeId: scheduledWait.nodeId,
     resume: scheduledWait.resume,
   };
   await runRecord.update({
-    status: 'running',
+    status: 'sleeping',
     state,
     artifacts,
     activeNodes: [scheduledWait.nodeId],
@@ -129,8 +132,11 @@ export const persistScheduledWait = async (args: {
     error: null,
     output: null,
     completedAt: null,
-    resumeAt: new Date(now + scheduledWait.resumeInMs),
-    resumeContext,
+    wakeAt: new Date(now + scheduledWait.resumeInMs),
+    wakeContext,
+    // A `sleeping` run holds no worker, so it releases its lease; the scheduler
+    // (not the reaper) is responsible for waking it at `wakeAt`.
+    leaseExpiresAt: null,
   });
 };
 
