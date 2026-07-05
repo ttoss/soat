@@ -1219,7 +1219,7 @@ i=0
 while [ "$i" -lt 30 ]; do
   ASYNC_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run --run-id "$ASYNC_RUN_ID")
   ASYNC_STATUS=$(printf '%s\n' "$ASYNC_GET" | jq -r '.status')
-  if [ "$ASYNC_STATUS" = "completed" ]; then
+  if [ "$ASYNC_STATUS" = "succeeded" ]; then
     ASYNC_DONE=1
     break
   fi
@@ -1259,7 +1259,7 @@ i=0
 while [ "$i" -lt 30 ]; do
   DELAY_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run --run-id "$DELAY_RUN_ID")
   DELAY_STATUS=$(printf '%s\n' "$DELAY_GET" | jq -r '.status')
-  if [ "$DELAY_STATUS" = "completed" ]; then
+  if [ "$DELAY_STATUS" = "succeeded" ]; then
     DELAY_DONE=1
     break
   fi
