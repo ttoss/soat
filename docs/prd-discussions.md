@@ -1,6 +1,8 @@
 # PRD: Deep Thinking — Reasoning Engine & Discussions
 
 > Supersedes the original "Discussions Module" PRD. The multi-agent deliberation idea is re-layered: the **deliberation engine** ships first as invisible machinery behind the existing generate flow (a `reasoning` config — "deep thinking"), and the user-facing **Discussions resource** becomes a later surface on the same engine. The original Discussions design is preserved as Phase 4.
+>
+> **Direction change (2026-07): thinking moves OUT of agents and INTO the Discussions module.** The post-draft `reasoning.mode: pipeline` on agents is being removed, not merely layered under. Rationale: the post-draft model assumes the agent's output is prose worth refining, which breaks for tool-calling agents — thinking runs after all actions are taken, so it can't influence which tools get called, and branch output can only rewrite final text. In the target state, **orchestrated thinking is a `Discussion`** (a first-class, listable resource) that an agent invokes *mid-loop* via the auto-derived `create-discussion` SOAT action, reading the outcome as the tool result. Agents keep only `reasoning.effort` (provider-native, single-call — a sampling knob like `temperature`, valid for streaming). Naming split: **`reasoning` = the engine + the provider-native knob; `discussions` = the module that owns orchestrated thinking.** See Phase 4 and Phase 5.
 
 ## Implementation Status
 
@@ -18,7 +20,8 @@
 | Silent-degradation event                    | ✅ Implemented | `agents.reasoning.fallback` event emitted on debate fallback/synthesis_failed and reflect critique_failed/revision_failed — `emitReasoningFallbackEvent()` in `reasoning.ts` |
 | Async debate generate (`?async=true`)       | ❌ Not started | Larger effort; depends on the session async/poll mechanism (deferred)                            |
 | `reasoning.budget` guard                    | ❌ Not started | Optional cap on total internal completions per generation (deferred)                            |
-| **Discussions module (agent-callable)**     | ❌ Not started | The visible surface for reasoning: a first-class `Discussion` resource (list/inspect/retain historical thinking runs) whose `POST /discussions` auto-derives a `create-discussion` SOAT action. An agent calls it mid-loop; the outcome synthesis returns as the tool result. Reuses `runReasoningPipeline`; participants stay tool-less. This is Phase 4, extended with the agent trigger — see the "Agent-callable" note there. |
+| **Discussions module (agent-callable)**     | ❌ Not started | The new home of orchestrated thinking: a first-class `Discussion` resource (list/inspect/retain historical thinking runs) whose `POST /discussions` auto-derives a `create-discussion` SOAT action. An agent calls it mid-loop; the outcome synthesis returns as the tool result. Reuses `runReasoningPipeline`; participants stay tool-less. See Phase 4. |
+| **Remove `reasoning.mode: pipeline` from agents** | ❌ Not started | Once Discussions ships, the post-draft pipeline on agents is removed: `mode`/`steps` rejected on write, stored legacy configs go inert (draft + `agents.reasoning.fallback` event — same treatment as legacy `reflect`/`debate`). `reasoning.effort` **stays** on agents. See Phase 5. |
 | Discussions resource module                 | ❌ Not started | Visible transcript, organizer-selected turns, human participants (original PRD, now Phase 4). **Recommendation: build a thin MVP that delegates deliberation to the existing pipeline engine — see Phase 4.** |
 
 ## Implementation Phases
@@ -104,9 +107,9 @@
 
 ---
 
-### Phase 4 — Discussions Resource (the visible surface) ❌ Not started · **Recommendation: thin MVP**
+### Phase 4 — Discussions Resource (the new home of thinking) ❌ Not started · **Recommendation: thin MVP**
 
-**Goal:** When the debate itself is the deliverable — brainstorming an idea, red-teaming a decision, expert-in-the-loop review — expose the same engine as a first-class resource. This is the original Discussions PRD, now explicitly layered on the pipeline engine (Phase 2 + the pipeline generalization above).
+**Goal:** Make orchestrated thinking a first-class resource instead of an invisible post-draft phase on agents. A `Discussion` is a durable, listable thinking run — usable standalone (brainstorming, red-teaming, expert review, where the transcript is the deliverable) **and** as the way an agent thinks mid-loop (via the auto-derived `create-discussion` SOAT action). Layered on the pipeline engine (Phase 2 + the pipeline generalization above); Phase 5 then removes the agent-side pipeline this module replaces.
 
 #### Should we build it? — Recommendation
 
@@ -114,6 +117,8 @@ The pipeline engine already delivers the *answer-quality* value of "multiple age
 
 1. **The transcript itself is the deliverable** — a **persistent, attributed, inspectable transcript** (brainstorming, red-teaming, expert review). For pure answer quality alone, prefer a `reasoning` pipeline; do not stand up a resource.
 2. **An agent needs to invoke deliberation mid-loop and the run must be a durable, listable object.** This is the "redefine the thinking part of agents" driver: a tool-calling agent has no natural post-draft answer to refine, so reasoning must be something it *calls* and gets a result back from — and the project wants to list and inspect those runs historically, not just dig through per-execution traces. A resource satisfies both: its `POST /discussions` auto-derives a `create-discussion` SOAT action (the agent trigger + result return), and the row is first-class listable/permissioned/retained.
+
+**Naming decision — `discussions`.** Considered: `reasoning`, `deep-thinking`, `deliberations`, `discussions`. `reasoning` is mechanism-named and permanently collides with the `reasoning.effort` field that stays on agents (and `POST /reasonings` is not a resource shape); `deep-thinking` is a docs/marketing umbrella term, not a countable resource; `deliberations` duplicates the meaning of `discussions` while abandoning the vocabulary this PRD's roadmap is written in (human participants, organizer-selected turns are discussion-shaped). A topic + participants + transcript + outcome *is* a discussion, and the single-participant degenerate case (self-reflection) still reads fine. Split going forward: **`reasoning` = the engine internals + the provider-native `effort` knob on agents; `discussions` = the module that owns orchestrated thinking.**
 
 **Why a resource and not a bare tool or a trace query-view.** The engine already records every reasoning run as child generations under a shared `trace_id` (`GET /generations?trace_id=…`), so a thin query-view over traces *could* deliver listing. But a `Discussion` needs what trace telemetry cannot give: its own permissions (`discussions:Create/Read`), a stable public id to reference/re-open, retention independent of trace lifecycle, a **formation** resource type (declare a discussion in infra-as-code), and an outcome Document. Traces are execution telemetry; a Discussion is a domain object. Build the resource; the trace tree remains underneath for per-turn observability.
 
@@ -153,6 +158,23 @@ When that bar is met, build a **thin MVP** that *delegates deliberation to the e
 
 ---
 
+### Phase 5 — Remove Pipeline Thinking from Agents ❌ Not started · depends on Phase 4
+
+**Goal:** One home for orchestrated thinking. After Discussions ships, `reasoning.mode: pipeline` (and `steps`) is removed from agents — the module is not a second way to think, it is *the* way.
+
+**What stays on agents:** `reasoning.effort` only. It is provider-native (OpenAI reasoningEffort / Anthropic thinking budget / Google thinkingBudget), a single-call knob like `temperature`, applies to streaming, and involves no orchestration — it never belonged to the pipeline layer.
+
+**Deliverables:**
+
+- **Write-time rejection** — `reasoning.mode` / `reasoning.steps` on agent create/update and on the per-generate override are rejected with `INVALID_REASONING_CONFIG`, pointing at Discussions (`create-discussion`) as the replacement. `reasoning` reduces to `{ effort? }`.
+- **Stored legacy configs go inert** — an agent still carrying `mode: pipeline` behaves exactly like the removed `reflect`/`debate` modes today: the generation returns the plain draft and emits `agents.reasoning.fallback` (`data: { legacyMode: true }`) so the migration gap is visible. No hard failure — deep thinking must never make an agent less reliable, including during its own removal.
+- **Migration guide** — docs mapping each pipeline recipe to its Discussion equivalent (post-draft reflect/debate/best-of-N → a `Discussion` with the same steps, invoked by the agent or by the caller before/after generate). No automated data migration: `reasoningConfig` JSONB simply stops being read beyond `effort`.
+- **Cleanup** — `applyReasoningPipeline` hook removed from `resolveGenerationResult`; `reasoningPipeline.ts` / `reasoningCompletion.ts` move under the Discussions lib (the engine survives, its post-draft hook does not); `agents.md` "Reasoning (Deep Thinking)" section shrinks to `effort` + a pointer to Discussions; OpenAPI `ReasoningConfig` loses `mode`/`steps` (SDK/CLI regen); tests updated.
+
+**Sequencing note:** the removal is a **breaking change** to the agent API surface (`ReasoningConfig` shrinks), so it rides a major version per the release rules, with at least one release where `mode: pipeline` still runs but logs/emits a deprecation signal before going inert.
+
+---
+
 ## Override Semantics
 
 All provider/model/prompt overrides in this PRD — `critique`, each `perspectives[]` entry, and `synthesis` — use the **same contract established by `knowledge_config.extraction`**:
@@ -166,6 +188,8 @@ All provider/model/prompt overrides in this PRD — `critique`, each `perspectiv
 **Shared implementation (done):** `resolveCompletionModel({ agentId, projectIds, aiProviderId?, model? })` in `completionModel.ts` is the single source of truth for the resolution + project-scope security check, used by memory extraction and every reasoning step (completion + fanout perspectives + synthesis). Phase 4's `runDiscussion` reuses it unchanged.
 
 ## Reasoning Config Schema
+
+> **Target end-state (Phase 5):** this schema shrinks to `{ effort? }` on agents. `mode` and `steps` below describe the shipped-but-to-be-removed pipeline surface; their step model carries over as the Discussion run definition.
 
 Stored as `reasoningConfig` JSONB on the `agents` table; per-generate `reasoning` body field overrides it (object replace, not deep merge). All snake_case on the wire per case convention.
 
