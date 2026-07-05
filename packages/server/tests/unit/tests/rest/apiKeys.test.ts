@@ -486,12 +486,17 @@ describe('API Keys', () => {
         .post('/api/v1/projects')
         .send({ name: 'Scope Project B' });
 
-      // Give alice a policy that allows listing projects
+      // Give alice a policy that allows listing projects and files
       const listPolicyRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
         .send({
           document: {
-            statement: [{ effect: 'Allow', action: ['projects:ListProjects'] }],
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['projects:ListProjects', 'files:GetFile'],
+              },
+            ],
           },
         });
 
@@ -514,6 +519,18 @@ describe('API Keys', () => {
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBe(1);
       expect(response.body[0].id).toBe(projectAId);
+    });
+
+    test('a policy-less key falls back to the owning user policies for getPolicies', async () => {
+      // The key itself has no policy_ids, so files.ts's `authUser.getPolicies`
+      // call falls back to alice's own user-level policies (createApiKeyGetPolicies's
+      // userPolicyIds branch) to evaluate `files:GetFile` access.
+      const response = await authenticatedTestClient(rawKey).get(
+        `/api/v1/files?project_id=${projectAId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.data)).toBe(true);
     });
 
     afterAll(async () => {

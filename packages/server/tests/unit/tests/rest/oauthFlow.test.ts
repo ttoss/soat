@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import jwt from 'jsonwebtoken';
 
+import { db } from '../../../../src/db';
 import { JWT_SECRET } from '../../../../src/middleware/auth';
 import { verifyOauthAccessToken } from '../../../../src/oauth/server';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -255,6 +256,29 @@ describe('OAuth authorization server (SPA consent)', () => {
 
       const payload = verifyOauthAccessToken(res.body.access_token);
       expect(payload?.sub).toBeTruthy();
+    });
+
+    test('an expired refresh token is rejected and deleted from the store', async () => {
+      const { clientId, refreshToken } = await completeAuthFlow();
+
+      const row = await db.OauthRefreshToken.findOne({
+        where: { clientId },
+        order: [['id', 'DESC']],
+      });
+      expect(row).not.toBeNull();
+      await row!.update({ expiresAt: new Date(Date.now() - 1000) });
+
+      const res = await testClient.post('/token').type('form').send({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: clientId,
+      });
+      expect([400, 401]).toContain(res.status);
+
+      const afterRow = await db.OauthRefreshToken.findOne({
+        where: { id: row!.id as number },
+      });
+      expect(afterRow).toBeNull();
     });
 
     test('replayed refresh token is rejected (reuse detection)', async () => {

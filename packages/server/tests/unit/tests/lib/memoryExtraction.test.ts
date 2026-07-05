@@ -1,6 +1,7 @@
 import { db } from 'src/db';
 import { createGenerationRecord, getGeneration } from 'src/lib/generations';
 import {
+  fireMemoryExtraction,
   parseFactCandidates,
   runMemoryExtraction,
 } from 'src/lib/memoryExtraction';
@@ -185,6 +186,28 @@ describe('memoryExtraction lib', () => {
       });
 
       expect(summary).toBeNull();
+    });
+  });
+
+  describe('fireMemoryExtraction', () => {
+    test('does not throw when runMemoryExtraction rejects', async () => {
+      expect(() => {
+        return fireMemoryExtraction({
+          agentId: 'agt_fire_test',
+          // An invalid projectIds value makes the underlying Agent lookup
+          // reject (invalid input syntax for integer), forcing
+          // runMemoryExtraction's promise to reject so the fire-and-forget
+          // `.catch` handler runs.
+          projectIds: ['not-a-number'] as unknown as number[],
+          messages: [{ role: 'user', content: 'hi' }],
+          assistantContent: 'hello',
+        });
+      }).not.toThrow();
+
+      // Flush the microtask queue so the fire-and-forget `.catch` runs.
+      await new Promise((resolve) => {
+        setImmediate(resolve);
+      });
     });
   });
 });

@@ -532,6 +532,115 @@ describe('resolveAgentTools', () => {
     fetchMock.mockRestore();
     process.env.SOAT_ERROR_LOGS_ENABLED = originalValue;
   });
+
+  test('http tool with a malformed execute config throws when called', async () => {
+    const invalidToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'myInvalidHttpTool',
+        type: 'http',
+        description: 'Test HTTP tool with a malformed execute config',
+        parameters: { type: 'object', properties: {} },
+        // Missing `url` — parseHttpExecuteConfig returns null, so
+        // resolveHttpTool falls back to buildInvalidHttpToolExecute.
+        execute: { method: 'GET' },
+      });
+
+    const tools = await resolveAgentTools({
+      toolIds: [invalidToolRes.body.id],
+    });
+    const invalidTool = tools.myInvalidHttpTool;
+
+    expect('execute' in invalidTool && typeof invalidTool.execute).toBe(
+      'function'
+    );
+    if ('execute' in invalidTool && typeof invalidTool.execute === 'function') {
+      await expect(invalidTool.execute({}, {} as never)).rejects.toThrow(
+        'Invalid HTTP tool execute config for myInvalidHttpTool'
+      );
+    }
+  });
+
+  test('wraps a tool execute with output_mapping and reshapes the result', async () => {
+    const mappedToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'myMappedHttpTool',
+        type: 'http',
+        description: 'Test HTTP tool with output_mapping',
+        parameters: { type: 'object', properties: {} },
+        execute: { url: 'https://example.com/api/mapped', method: 'GET' },
+        output_mapping: { text: { var: 'output.body' } },
+      });
+
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ body: 'hello' }), { status: 200 })
+      );
+
+    const tools = await resolveAgentTools({
+      toolIds: [mappedToolRes.body.id],
+    });
+    const mappedTool = tools.myMappedHttpTool;
+
+    expect('execute' in mappedTool).toBe(true);
+    if ('execute' in mappedTool && typeof mappedTool.execute === 'function') {
+      const result = await mappedTool.execute({}, {} as never);
+      expect(result).toEqual({ text: 'hello' });
+    }
+
+    fetchMock.mockRestore();
+  });
+
+  test('pipeline tool execute delegates to callTool (fails deep in the pipeline runner)', async () => {
+    const soatToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'myPipelineSoatSubTool',
+        type: 'soat',
+        description: 'SOAT sub-tool used by the pipeline tool',
+        actions: ['list-tools'],
+      });
+
+    const pipelineToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'myPipelineTool',
+        type: 'pipeline',
+        description: 'Pipeline tool used to exercise resolvePipelineTool',
+        pipeline: {
+          steps: [
+            {
+              id: 'first',
+              tool_id: soatToolRes.body.id,
+              action: 'list-tools',
+              input: {},
+            },
+          ],
+        },
+      });
+
+    const tools = await resolveAgentTools({
+      toolIds: [pipelineToolRes.body.id],
+    });
+    const pipelineTool = tools.myPipelineTool;
+
+    expect('execute' in pipelineTool).toBe(true);
+    if (
+      'execute' in pipelineTool &&
+      typeof pipelineTool.execute === 'function'
+    ) {
+      // The SOAT step makes an internal HTTP call that is unreachable from
+      // unit tests (see tools.test.ts), so the pipeline step fails — this
+      // still proves execution reached resolvePipelineTool's callTool bridge.
+      await expect(pipelineTool.execute({}, {} as never)).rejects.toThrow();
+    }
+  });
 });
 
 describe('resolveAgentTools - ephemeral tools', () => {
