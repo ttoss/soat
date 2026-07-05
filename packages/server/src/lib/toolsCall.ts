@@ -2,6 +2,7 @@ import { DomainError } from '../errors';
 import {
   buildHttpToolExecute,
   parseHttpExecuteConfig,
+  toHttpToolDomainError,
 } from './agentToolResolver';
 import {
   buildMcpToolExecute,
@@ -93,7 +94,9 @@ export const callHttpTool = (
     toolName: tool.name,
     execute: executeConfig,
     projectId,
-  })(mergedInput);
+  })(mergedInput).catch((error: unknown) => {
+    throw toHttpToolDomainError(error) ?? error;
+  });
 };
 
 export const callSoatTool = (

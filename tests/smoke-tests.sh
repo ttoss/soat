@@ -1485,6 +1485,37 @@ fi
 echo "Multipart http tool call OK (file uploaded via multipart/form-data)"
 $SOAT_CLI delete-tool --tool-id "$MULTIPART_TOOL_ID"
 
+# 19f. An http tool whose target rejects the request must surface the real
+# upstream status via 502 TOOL_HTTP_ERROR, not a bare 500 (see GitHub issue
+# on POST /tools/{tool_id}/call swallowing tool target errors).
+echo "--- Creating HTTP tool proxying an unauthenticated request (expected 401 upstream) ---"
+REJECTING_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name proxy-unauthenticated-orchestrations \
+  --type http \
+  --description "Proxies an unauthenticated request to trigger an upstream 401." \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/orchestrations\",\"method\":\"GET\"}")
+REJECTING_TOOL_ID=$(echo "$REJECTING_TOOL_RESP" | jq -r '.id')
+if [ -z "$REJECTING_TOOL_ID" ] || [ "$REJECTING_TOOL_ID" = "null" ]; then
+  echo "FAIL: could not create rejecting http tool"
+  echo "$REJECTING_TOOL_RESP"
+  exit 1
+fi
+
+REJECTING_CALL_RESP=$($SOAT_CLI call-tool --tool-id "$REJECTING_TOOL_ID" 2>&1 || true)
+if ! printf '%s\n' "$REJECTING_CALL_RESP" | jq -e '.error.code == "TOOL_HTTP_ERROR"' >/dev/null 2>&1; then
+  echo "FAIL: calling an http tool whose target returns a non-2xx response did not surface TOOL_HTTP_ERROR" >&2
+  echo "$REJECTING_CALL_RESP" >&2
+  exit 1
+fi
+if [ "$(printf '%s\n' "$REJECTING_CALL_RESP" | jq -r '.error.meta.tool_status_code')" != "401" ]; then
+  echo "FAIL: TOOL_HTTP_ERROR meta did not carry the real upstream status code" >&2
+  echo "$REJECTING_CALL_RESP" >&2
+  exit 1
+fi
+echo "HTTP tool upstream error surfacing OK (502 TOOL_HTTP_ERROR with real status in meta)"
+$SOAT_CLI delete-tool --tool-id "$REJECTING_TOOL_ID"
+
 # 20. Create an agent with the list-projects tool
 echo "--- Creating agent ---"
 AGENT_RESP=$($SOAT_CLI create-agent \

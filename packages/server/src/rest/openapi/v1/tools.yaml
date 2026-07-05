@@ -391,6 +391,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: >
+            Upstream tool target error (TOOL_HTTP_ERROR). Returned when an
+            `http`-type tool's target responds with a non-2xx status. The
+            error `meta` carries the real upstream `tool_status_code`,
+            `tool_response_body`, `tool_url`, and `tool_method`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
 components:
   securitySchemes:

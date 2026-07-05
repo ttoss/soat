@@ -340,6 +340,8 @@ The model calls `public_doc_update-document` with only the fields it needs to su
 
 Tools can be invoked independently of an agent via `POST /api/v1/tools/{tool_id}/call`. The request body accepts `action` (required for `soat` and `mcp` types) and `input` (key-value arguments). For `pipeline` tools, `input` is the pipeline input, `action` is ignored, and the response is the mapped `output`. When the tool has an `output_mapping`, the response is that mapping's result instead of the raw output — see [Output Mapping](#output-mapping).
 
+If an `http` tool's target responds with a non-2xx status, the call fails with `502 TOOL_HTTP_ERROR` instead of the target's own status code. The error `meta` carries the real upstream response: `tool_status_code`, `tool_response_body`, `tool_url`, and `tool_method`.
+
 ## Examples
 
 ### Create an HTTP tool

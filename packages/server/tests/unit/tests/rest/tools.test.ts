@@ -854,6 +854,48 @@ describe('Tools', () => {
       );
     });
 
+    test('calling an http tool whose target returns a non-2xx response surfaces a structured 502, not a bare 500', async () => {
+      const rejectingServer = http.createServer((req, res) => {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+      });
+      await new Promise<void>((resolve) => {
+        rejectingServer.listen(0, '127.0.0.1', resolve);
+      });
+      const { port } = rejectingServer.address() as AddressInfo;
+      const rejectingServerUrl = `http://127.0.0.1:${port}`;
+
+      try {
+        const createRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/tools')
+          .send({
+            project_id: projectId,
+            name: 'rejecting-http-tool',
+            type: 'http',
+            execute: { url: `${rejectingServerUrl}/proxy`, method: 'GET' },
+          });
+        expect(createRes.status).toBe(201);
+
+        const callRes = await authenticatedTestClient(adminToken)
+          .post(`/api/v1/tools/${createRes.body.id}/call`)
+          .send({});
+
+        expect(callRes.status).toBe(502);
+        expect(callRes.body.error.code).toBe('TOOL_HTTP_ERROR');
+        expect(callRes.body.error.meta.tool_status_code).toBe(401);
+        expect(callRes.body.error.meta.tool_response_body).toContain(
+          'Unauthorized'
+        );
+        expect(callRes.body.error.meta.tool_url).toContain('/proxy');
+      } finally {
+        await new Promise<void>((resolve) => {
+          rejectingServer.close(() => {
+            resolve();
+          });
+        });
+      }
+    });
+
     test('calling a soat tool with an action not on the tool returns 400', async () => {
       const callRes = await authenticatedTestClient(adminToken)
         .post(`/api/v1/tools/${soatToolId}/call`)
