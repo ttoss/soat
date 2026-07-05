@@ -109,24 +109,26 @@ const handleNodeFailure = async (args: {
     startedAt: args.startedAt,
   });
 
-  const policy = resolveRetryPolicy(nodeDefn ?? { id: nodeId, type: 'tool' });
-  if (nodeDefn && isRetriableError(error) && attempt < policy.maxAttempts) {
-    log(
-      'handleNodeFailure: retrying node=%s attempt=%d/%d',
-      nodeId,
-      attempt,
-      policy.maxAttempts
-    );
-    return {
-      nodeId,
-      nodeDefn,
-      execResult: {
-        kind: 'wait',
+  if (nodeDefn) {
+    const policy = resolveRetryPolicy(nodeDefn);
+    if (isRetriableError(error) && attempt < policy.maxAttempts) {
+      log(
+        'handleNodeFailure: retrying node=%s attempt=%d/%d',
         nodeId,
-        resumeInMs: backoffMs({ policy, attempt }),
-        resume: { kind: 'retry', attempt: attempt + 1 },
-      },
-    };
+        attempt,
+        policy.maxAttempts
+      );
+      return {
+        nodeId,
+        nodeDefn,
+        execResult: {
+          kind: 'wait',
+          nodeId,
+          resumeInMs: backoffMs({ policy, attempt }),
+          resume: { kind: 'retry', attempt: attempt + 1 },
+        },
+      };
+    }
   }
   throw error;
 };
