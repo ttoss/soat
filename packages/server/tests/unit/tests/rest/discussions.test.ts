@@ -311,4 +311,135 @@ describe('Discussions', () => {
       expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
     });
   });
+
+  describe('config variants', () => {
+    test('creates a discussion with a synthesis override and participant effort', async () => {
+      const res = await createDiscussion({
+        synthesis: {
+          ai_provider_id: aiProviderId,
+          prompt: 'Weigh {steps.deliberation}',
+          effort: 'high',
+        },
+        participants: [
+          { name: 'A', prompt: 'a', effort: 'low' },
+          { name: 'B', prompt: 'b', model: 'llama3.2', temperature: 0.5 },
+        ],
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.synthesis.effort).toBe('high');
+      expect(res.body.participants[0].effort).toBe('low');
+    });
+
+    test('rejects a synthesis referencing an unknown provider', async () => {
+      const res = await createDiscussion({
+        synthesis: { ai_provider_id: 'aip_missing' },
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('AI_PROVIDER_NOT_FOUND');
+    });
+  });
+
+  describe('authorization', () => {
+    let discussionId: string;
+
+    beforeAll(async () => {
+      const created = await createDiscussion();
+      discussionId = created.body.id;
+    });
+
+    test('unauthenticated get/patch/delete/runs return 401', async () => {
+      expect(
+        (await testClient.get(`/api/v1/discussions/${discussionId}`)).status
+      ).toBe(401);
+      expect(
+        (
+          await testClient
+            .patch(`/api/v1/discussions/${discussionId}`)
+            .send({ name: 'x' })
+        ).status
+      ).toBe(401);
+      expect(
+        (await testClient.delete(`/api/v1/discussions/${discussionId}`)).status
+      ).toBe(401);
+      expect(
+        (await testClient.get(`/api/v1/discussions/${discussionId}/runs`))
+          .status
+      ).toBe(401);
+      expect(
+        (await testClient.get('/api/v1/discussions/runs/drn_x')).status
+      ).toBe(401);
+    });
+
+    test('user without permission is forbidden on every endpoint', async () => {
+      const client = authenticatedTestClient(noPermToken);
+      expect(
+        (await client.get(`/api/v1/discussions/${discussionId}`)).status
+      ).toBe(403);
+      expect(
+        (
+          await client
+            .patch(`/api/v1/discussions/${discussionId}`)
+            .send({ name: 'x' })
+        ).status
+      ).toBe(403);
+      expect(
+        (await client.delete(`/api/v1/discussions/${discussionId}`)).status
+      ).toBe(403);
+      expect(
+        (
+          await client
+            .post(`/api/v1/discussions/${discussionId}/runs`)
+            .send({ topic: 't' })
+        ).status
+      ).toBe(403);
+      expect(
+        (await client.get(`/api/v1/discussions/${discussionId}/runs`)).status
+      ).toBe(403);
+    });
+  });
+
+  describe('run variants', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    test('a single-participant discussion returns its lone turn as the outcome', async () => {
+      jest
+        .spyOn(discussionCompletion, 'runDiscussionCompletion')
+        .mockResolvedValue('solo outcome');
+      const created = await createDiscussion({
+        participants: [{ name: 'Solo', prompt: 'think' }],
+      });
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/discussions/${created.body.id}/runs`)
+        .send({ topic: 'Q' });
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('completed');
+      expect(res.body.outcome).toBe('solo outcome');
+      expect(res.body.conversation_id).toMatch(/^conv_/);
+      expect(res.body.outcome_document_id).toMatch(/^doc_/);
+    });
+
+    test('an all-failed run is marked failed with no persisted artifacts', async () => {
+      jest
+        .spyOn(discussionCompletion, 'runDiscussionCompletion')
+        .mockRejectedValue(new Error('provider down'));
+      const created = await createDiscussion({
+        participants: [{ name: 'Solo', prompt: 'think' }],
+      });
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/discussions/${created.body.id}/runs`)
+        .send({ topic: 'Q' });
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('failed');
+      expect(res.body.conversation_id).toBeNull();
+    });
+
+    test('get-run returns 404 for a missing run', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/discussions/runs/drn_missing'
+      );
+      expect(res.status).toBe(404);
+    });
+  });
 });

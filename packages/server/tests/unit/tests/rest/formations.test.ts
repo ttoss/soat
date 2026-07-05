@@ -2266,6 +2266,59 @@ resources:
       expect(discRes.body.max_rounds).toBe(2);
     });
 
+    test('creates a discussion with a synthesis override and effort', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `discussion-synthesis-${Date.now()}`,
+          template: {
+            resources: {
+              Panel: {
+                type: 'discussion',
+                properties: {
+                  name: 'Synthesis panel',
+                  ai_provider_id: discussionAiProviderId,
+                  description: 'panel with synthesis',
+                  synthesis: {
+                    ai_provider_id: discussionAiProviderId,
+                    prompt: 'Weigh {steps.deliberation}',
+                    effort: 'high',
+                  },
+                  participants: [
+                    { name: 'A', prompt: 'a', effort: 'low' },
+                    { name: 'B', prompt: 'b' },
+                  ],
+                },
+              },
+            },
+          },
+        });
+      expect(res.status).toBe(201);
+      const discussionId = res.body.resources[0].physical_resource_id;
+      const discRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/discussions/${discussionId}`
+      );
+      expect(discRes.body.synthesis.effort).toBe('high');
+    });
+
+    test('validate rejects a discussion missing ai_provider_id', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              Panel: {
+                type: 'discussion',
+                properties: { name: 'no provider' },
+              },
+            },
+          },
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+    });
+
     test('formation delete removes the discussion', async () => {
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${discussionFormationId}`
