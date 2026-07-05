@@ -46,7 +46,7 @@ export const attachRequiredActionToRun = (args: {
   requiredAction: RequiredAction | null;
 }): MappedOrchestrationRun => {
   const { mapped, runStatus, requiredAction } = args;
-  if (runStatus !== 'paused' || !requiredAction) return mapped;
+  if (runStatus !== 'awaiting_input' || !requiredAction) return mapped;
 
   (
     mapped as MappedOrchestrationRun & { requiredAction?: RequiredAction }

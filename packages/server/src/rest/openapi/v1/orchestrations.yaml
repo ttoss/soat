@@ -190,10 +190,11 @@ paths:
         default the run executes durably in the background: the response returns
         immediately with status "running" and progress is observed via
         get-orchestration-run or run lifecycle webhook events
-        (orchestration_runs.started/paused/completed/failed). Delay and poll
-        waits are offloaded to a background scheduler and survive restarts. Pass
-        wait=true to block until the run reaches a terminal or paused state
-        (the legacy synchronous behaviour).
+        (orchestration_runs.started/awaiting_input/succeeded/failed). Delay and
+        poll waits park the run as "sleeping" and are woken by a background
+        scheduler, surviving restarts. Pass wait=true to block until the run
+        reaches a terminal or awaiting_input state (the legacy synchronous
+        behaviour).
       operationId: startOrchestrationRun
       requestBody:
         required: true
@@ -249,7 +250,7 @@ paths:
       tags:
         - Orchestrations
       summary: Cancel an orchestration run
-      description: Cancels a running or paused orchestration run.
+      description: Cancels a run that has not yet reached a terminal state.
       operationId: cancelOrchestrationRun
       parameters:
         - $ref: '#/components/parameters/run_id'
@@ -274,7 +275,7 @@ paths:
       tags:
         - Orchestrations
       summary: Submit human input
-      description: Provides human input to a paused orchestration run waiting at a human node.
+      description: Provides human input to a run that is awaiting_input at a human node.
       operationId: submitHumanInput
       parameters:
         - $ref: '#/components/parameters/run_id'
@@ -300,14 +301,14 @@ paths:
         '404':
           description: Not found
         '409':
-          description: Run is not paused
+          description: Run is not awaiting input
 
   /api/v1/orchestration-runs/{run_id}/resume:
     post:
       tags:
         - Orchestrations
       summary: Resume an orchestration run
-      description: Resumes a paused orchestration run from its last checkpoint.
+      description: Resumes an awaiting_input orchestration run from its last checkpoint.
       operationId: resumeOrchestrationRun
       parameters:
         - $ref: '#/components/parameters/run_id'
@@ -325,7 +326,7 @@ paths:
         '404':
           description: Not found
         '409':
-          description: Run is not paused
+          description: Run is not awaiting input
 
   /api/v1/orchestration-runs/{run_id}:
     get:
@@ -652,7 +653,23 @@ components:
           description: Public ID of the owning project.
         status:
           type: string
-          enum: [running, paused, completed, failed, cancelled]
+          description: >-
+            Run lifecycle state. `queued` awaits a worker; `running` is actively
+            executing; `sleeping` is parked on a delay/poll wait (no worker);
+            `awaiting_input` is parked on a human node; `succeeded`/`failed`/
+            `cancelled` are terminal; `expired` is a wait that passed its
+            deadline.
+          enum:
+            [
+              queued,
+              running,
+              sleeping,
+              awaiting_input,
+              succeeded,
+              failed,
+              cancelled,
+              expired,
+            ]
         state:
           type: object
           description: Current accumulated state.
@@ -679,7 +696,7 @@ components:
         output:
           type: object
           nullable: true
-          description: Terminal node artifact(s) when completed.
+          description: Terminal node artifact(s) when the run has succeeded.
         node_executions:
           type: array
           description: >-
@@ -753,7 +770,7 @@ components:
 
     RequiredAction:
       type: object
-      description: Details for a paused run waiting for human input.
+      description: Details for an awaiting_input run waiting for human input.
       required:
         - type
         - node_id
@@ -807,10 +824,10 @@ components:
           type: boolean
           default: false
           description: >-
-            When true, block until the run reaches a terminal (completed/failed)
-            or paused state and return the settled run. When false (default),
-            return immediately with status "running" and execute the run in the
-            background.
+            When true, block until the run reaches a terminal (succeeded/failed)
+            or awaiting_input state and return the settled run. When false
+            (default), return immediately with status "running" and execute the
+            run in the background.
 
     ValidateOrchestrationRequest:
       type: object

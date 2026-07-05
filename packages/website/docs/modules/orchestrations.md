@@ -48,18 +48,18 @@ An orchestration can also be declared as a [Formation](./formations.md) resource
 | `id`               | string         | Public ID (`run_` prefix)                                         |
 | `orchestration_id` | string         | Parent orchestration                                              |
 | `project_id`       | string         | Owning project                                                    |
-| `status`           | string         | `running` \| `paused` \| `completed` \| `failed` \| `cancelled`   |
+| `status`           | string         | `queued` \| `running` \| `sleeping` \| `awaiting_input` \| `succeeded` \| `failed` \| `cancelled` \| `expired` |
 | `state`            | object         | Current mutable execution state                                   |
-| `active_nodes`     | array          | Node IDs awaiting input or a scheduled resumption (populated when `paused`, or `running` while parked on a `delay`/`poll` wait) |
+| `active_nodes`     | array          | Node IDs awaiting input or a scheduled wake (populated when `awaiting_input`, or `sleeping` while parked on a `delay`/`poll` wait) |
 | `artifacts`        | object         | Outputs keyed by node ID                                          |
 | `error`            | object \| null | Error details if failed                                           |
 | `node_executions`  | array          | Per-node execution records (see [Node Executions](#node-executions)) |
-| `required_action`  | object \| null | Present when status is `paused` (see [Human Nodes](#human-nodes)) |
+| `required_action`  | object \| null | Present when status is `awaiting_input` (see [Human Nodes](#human-nodes)) |
 | `trace_id`         | string \| null | Linked observability trace, if any                                |
 | `input`            | object \| null | Initial input provided at run creation                            |
-| `output`           | object \| null | Terminal node artifact(s) when completed                          |
+| `output`           | object \| null | Terminal node artifact(s) when the run has `succeeded`            |
 | `started_at`       | string \| null | ISO 8601 execution start timestamp                                |
-| `completed_at`     | string \| null | ISO 8601 terminal timestamp (`completed`/`failed`/`cancelled`)    |
+| `completed_at`     | string \| null | ISO 8601 terminal timestamp (`succeeded`/`failed`/`cancelled`/`expired`) |
 | `created_at`       | string         | ISO 8601 creation timestamp                                       |
 | `updated_at`       | string         | ISO 8601 last-updated timestamp                                   |
 
@@ -91,7 +91,7 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | `knowledge`    | Searches a knowledge source via the [Knowledge](./knowledge.md) module. Uses `inputMapping` with `query` and optional `memoryIds`. |
 | `memory_write` | Writes a [Memory](./memories.md) entry. Uses `memoryId` and `inputMapping` with `content`.                                        |
 | `condition`    | Evaluates a JSON Logic rule and emits a string label. Downstream edges use `condition: "<label>"` to select the active branch.      |
-| `human`        | Pauses the run and waits for external input. The run enters `paused` status with `requiredAction`.                                  |
+| `human`        | Pauses the run and waits for external input. The run enters `awaiting_input` status with `requiredAction`.                          |
 | `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `orchestrationId`, `collection`, `itemVariable`, and `parallelism`. See [Loops](#loops-collection-iteration). |
 | `poll`         | Calls a tool on an interval until a JSON Logic exit condition on the response holds. Uses `toolId`, `exitCondition`, and `interval`. See [Polling](#polling). |
 | `delay`        | Waits for a fixed `duration`, then continues. Accepts `5s`/`5m`/`2h`/`500ms` or ISO 8601 (`PT5S`).                                   |
@@ -155,19 +155,19 @@ The node completes with an artifact `{ result, attempts, conditionMet, timedOut 
 Runs execute in a **durable background worker**, detached from the HTTP request that starts them:
 
 - `start-orchestration-run` persists the run and returns immediately with `status: "running"`. Observe progress with `get-orchestration-run` (which includes `node_executions`) or via run lifecycle [webhook](./webhooks.md) events.
-- `delay` and `poll` waits become **scheduled resumptions**, not in-process sleeps. The due time and how to continue are persisted with the run, and a scheduler resumes it when the wait is due — so a run containing `delay: "2h"` survives a restart and completes on schedule.
-- `human` and `webhook (mode: receive)` nodes still pause the run (`status: "paused"`); resume them with `submit-human-input` or `resume-orchestration-run`.
+- `delay` and `poll` waits park the run as **`sleeping`** — it holds no worker and no memory, pure DB state. The wake time (`wake_at`) and how to continue are persisted with the run, and the scheduler wakes it when the wait is due — so a run containing `delay: "2h"` survives a restart and completes on schedule.
+- `human` and `webhook (mode: receive)` nodes park the run as **`awaiting_input`** (also pure DB state, no worker); resume them with `submit-human-input` or `resume-orchestration-run`.
 
-**Synchronous (compatibility) mode.** Pass `wait: true` to `start-orchestration-run` to block until the run reaches a terminal (`completed`/`failed`) or `paused` state, sleeping through any delay/poll waits in-process. This preserves the legacy behaviour for callers (and tests) that need the settled run in the response. Nested `loop` and `sub_orchestration` runs always execute synchronously so their output can be aggregated.
+**Synchronous (compatibility) mode.** Pass `wait: true` to `start-orchestration-run` to block until the run reaches a terminal (`succeeded`/`failed`) or `awaiting_input` state, sleeping through any delay/poll waits in-process. This preserves the legacy behaviour for callers (and tests) that need the settled run in the response. Nested `loop` and `sub_orchestration` runs always execute synchronously so their output can be aggregated.
 
 **Lifecycle events.** The following events are emitted through the [Webhooks](./webhooks.md) module so callers do not need to poll:
 
-| Event                          | When                                          |
-| ------------------------------ | --------------------------------------------- |
-| `orchestration_runs.started`   | A run is created and begins executing         |
-| `orchestration_runs.paused`    | A run pauses on a `human`/`webhook` node      |
-| `orchestration_runs.completed` | A run reaches `completed`                     |
-| `orchestration_runs.failed`    | A run reaches `failed`                        |
+| Event                                | When                                          |
+| ------------------------------------ | --------------------------------------------- |
+| `orchestration_runs.started`         | A run is created and begins executing         |
+| `orchestration_runs.awaiting_input`  | A run pauses on a `human`/`webhook` node      |
+| `orchestration_runs.succeeded`       | A run reaches `succeeded`                      |
+| `orchestration_runs.failed`          | A run reaches `failed`                        |
 
 The scheduler tick interval is configurable with the `ORCHESTRATION_SCHEDULER_INTERVAL_MS` environment variable (default `5000`).
 

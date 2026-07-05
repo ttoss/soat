@@ -29,6 +29,8 @@ const WARNING = new Set([
   'running',
   'queued',
   'requires_action',
+  'awaiting_input',
+  'sleeping',
   'waiting',
   'processing',
 ]);

@@ -1038,7 +1038,7 @@ ORCH_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run
 ORCH_RUN_ID=$(printf '%s\n' "$ORCH_RUN_RESP" | jq -r '.id')
 ORCH_RUN_STATUS=$(printf '%s\n' "$ORCH_RUN_RESP" | jq -r '.status')
 ORCH_RUN_TITLE=$(printf '%s\n' "$ORCH_RUN_RESP" | jq -r '.state.title')
-if [ "$ORCH_RUN_STATUS" != "completed" ] || [ "$ORCH_RUN_TITLE" != "orchestration sonnet" ]; then
+if [ "$ORCH_RUN_STATUS" != "succeeded" ] || [ "$ORCH_RUN_TITLE" != "orchestration sonnet" ]; then
   echo "start-orchestration-run did not complete as expected"
   printf '%s\n' "$ORCH_RUN_RESP"
   exit 1
@@ -1048,7 +1048,7 @@ echo "Completed run: OK"
 echo "--- Getting run ---"
 ORCH_RUN_GET_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run \
   --run-id "$ORCH_RUN_ID")
-if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e --arg id "$ORCH_RUN_ID" '.id == $id and .status == "completed"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e --arg id "$ORCH_RUN_ID" '.id == $id and .status == "succeeded"' >/dev/null 2>&1; then
   echo "get-orchestration-run returned unexpected response"
   printf '%s\n' "$ORCH_RUN_GET_RESP"
   exit 1
@@ -1092,7 +1092,7 @@ HUMAN_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-ru
 HUMAN_RUN_ID=$(printf '%s\n' "$HUMAN_RUN_RESP" | jq -r '.id')
 HUMAN_RUN_STATUS=$(printf '%s\n' "$HUMAN_RUN_RESP" | jq -r '.status')
 HUMAN_NODE_ID=$(printf '%s\n' "$HUMAN_RUN_RESP" | jq -r '.required_action.node_id')
-if [ "$HUMAN_RUN_STATUS" != "paused" ] || [ "$HUMAN_NODE_ID" != "approval" ]; then
+if [ "$HUMAN_RUN_STATUS" != "awaiting_input" ] || [ "$HUMAN_NODE_ID" != "approval" ]; then
   echo "Human orchestration did not pause as expected"
   printf '%s\n' "$HUMAN_RUN_RESP"
   exit 1
@@ -1110,7 +1110,7 @@ HUMAN_INPUT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI submit-human-input \
   --run-id "$HUMAN_RUN_ID" \
   --node-id "$HUMAN_NODE_ID" \
   --output '{"choice":"approve"}')
-if ! printf '%s\n' "$HUMAN_INPUT_RESP" | jq -e '.status == "completed" and .output.finalize.result == "approve"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$HUMAN_INPUT_RESP" | jq -e '.status == "succeeded" and .output.finalize.result == "approve"' >/dev/null 2>&1; then
   echo "submit-human-input returned unexpected response"
   printf '%s\n' "$HUMAN_INPUT_RESP"
   exit 1
@@ -1123,14 +1123,14 @@ RESUME_CANDIDATE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestra
   --input '{}' \
   --wait true)
 RESUME_RUN_ID=$(printf '%s\n' "$RESUME_CANDIDATE_RESP" | jq -r '.id')
-if ! printf '%s\n' "$RESUME_CANDIDATE_RESP" | jq -e '.status == "paused" and .required_action.node_id == "approval"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$RESUME_CANDIDATE_RESP" | jq -e '.status == "awaiting_input" and .required_action.node_id == "approval"' >/dev/null 2>&1; then
   echo "Expected resume candidate run to be paused"
   printf '%s\n' "$RESUME_CANDIDATE_RESP"
   exit 1
 fi
 HUMAN_RESUME_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI resume-orchestration-run \
   --run-id "$RESUME_RUN_ID")
-if ! printf '%s\n' "$HUMAN_RESUME_RESP" | jq -e '.status == "paused" and .required_action.node_id == "approval"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$HUMAN_RESUME_RESP" | jq -e '.status == "awaiting_input" and .required_action.node_id == "approval"' >/dev/null 2>&1; then
   echo "resume-orchestration-run did not complete human orchestration as expected"
   printf '%s\n' "$HUMAN_RESUME_RESP"
   exit 1
@@ -1143,7 +1143,7 @@ CANCEL_CANDIDATE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestra
   --input '{}' \
   --wait true)
 CANCEL_RUN_ID=$(printf '%s\n' "$CANCEL_CANDIDATE_RESP" | jq -r '.id')
-if ! printf '%s\n' "$CANCEL_CANDIDATE_RESP" | jq -e '.status == "paused"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$CANCEL_CANDIDATE_RESP" | jq -e '.status == "awaiting_input"' >/dev/null 2>&1; then
   echo "Expected second human run to be paused before cancellation"
   printf '%s\n' "$CANCEL_CANDIDATE_RESP"
   exit 1
@@ -1174,7 +1174,7 @@ COND_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run
   --orchestration-id "$COND_ORCH_ID" \
   --input '{"score":0.9}' \
   --wait true)
-if ! printf '%s\n' "$COND_RUN_RESP" | jq -e '.status == "completed"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$COND_RUN_RESP" | jq -e '.status == "succeeded"' >/dev/null 2>&1; then
   echo "Condition-skip run did not complete"
   printf '%s\n' "$COND_RUN_RESP"
   exit 1

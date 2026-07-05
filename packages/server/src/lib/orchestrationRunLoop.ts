@@ -55,7 +55,7 @@ const writeRunCheckpoint = async (args: {
 
 type RunBatchResult = {
   nextActiveNodeIds: string[];
-  runStatus: 'running' | 'paused';
+  runStatus: 'running' | 'awaiting_input';
   requiredAction: RequiredAction | null;
   scheduledWait: ScheduledWait | null;
   traceId: string | null;
@@ -123,20 +123,20 @@ const executeRunBatch = async (args: {
     isRunning: true,
   });
 
-  let runStatus: 'running' | 'paused' = 'running';
+  let runStatus: 'running' | 'awaiting_input' = 'running';
   let requiredAction: RequiredAction | null = null;
   if (batch.requiredAction) {
-    runStatus = 'paused';
+    runStatus = 'awaiting_input';
     requiredAction = batch.requiredAction;
   }
 
   const lastNodeId = activeNodeIds[activeNodeIds.length - 1];
   await writeRunCheckpoint({ runRecord, nodeId: lastNodeId, state, artifacts });
 
-  // A scheduled wait (or a pause) stops this loop: no further nodes activate
-  // this round. The wait is handled by the caller (persisted for the scheduler,
-  // or slept through inline in synchronous mode).
-  const stop = runStatus === 'paused' || batch.scheduledWait !== null;
+  // An awaiting_input pause (or a scheduled wait) stops this loop: no further
+  // nodes activate this round. The wait is handled by the caller (persisted for
+  // the scheduler, or slept through inline in synchronous mode).
+  const stop = runStatus === 'awaiting_input' || batch.scheduledWait !== null;
   const nextActiveNodeIds = stop ? [] : batch.nextRound;
   return {
     nextActiveNodeIds,
@@ -211,9 +211,10 @@ export type RunLoopResult = {
 
 /**
  * Runs one segment of a run: executes activated nodes round by round until the
- * graph settles (completed), a node pauses it (requires_action), or a node
- * parks it on a scheduled wait (delay/poll). Mutates `state`/`artifacts` in
- * place and writes a checkpoint per round; the caller persists the outcome.
+ * graph settles (succeeded), a node pauses it on a human node (awaiting_input),
+ * or a node parks it on a scheduled wait (delay/poll → sleeping). Mutates
+ * `state`/`artifacts` in place and writes a checkpoint per round; the caller
+ * persists the outcome.
  */
 export const executeRunLoop = async (args: {
   runRecord: InstanceType<typeof db.OrchestrationRun>;
@@ -275,8 +276,8 @@ export const executeRunLoop = async (args: {
       if (scheduledWait) break;
     }
 
-    if (runStatus === 'running' && !scheduledWait) runStatus = 'completed';
-    if (runStatus === 'completed') {
+    if (runStatus === 'running' && !scheduledWait) runStatus = 'succeeded';
+    if (runStatus === 'succeeded') {
       await recordSkippedNodeExecutions({ runRecord, nodes });
     }
   } catch (error: unknown) {

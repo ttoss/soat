@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import createDebug from 'debug';
 
 import { db } from '../db';
@@ -106,7 +107,15 @@ export type MappedOrchestrationRun = {
   id: string;
   orchestrationId: string;
   projectId: string;
-  status: 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
+  status:
+    | 'queued'
+    | 'running'
+    | 'sleeping'
+    | 'awaiting_input'
+    | 'succeeded'
+    | 'failed'
+    | 'cancelled'
+    | 'expired';
   state: Record<string, unknown>;
   activeNodes: string[];
   artifacts: Record<string, unknown>;

@@ -9,9 +9,9 @@ import {
 import * as runHelpersModule from 'src/lib/orchestrationRunHelpers';
 import type { MappedOrchestrationRun } from 'src/lib/orchestrations';
 import {
-  initializeOrchestrationScheduler,
-  runDueScheduledResumptions,
+  startOrchestrationScheduler,
   stopOrchestrationScheduler,
+  wakeDueRuns,
 } from 'src/lib/orchestrationScheduler';
 import * as startRunModule from 'src/lib/orchestrationStartRun';
 
@@ -19,7 +19,7 @@ const fakeRun: MappedOrchestrationRun = {
   id: 'orch_run_fake',
   orchestrationId: 'orch_fake',
   projectId: 'prj_fake',
-  status: 'completed',
+  status: 'succeeded',
   state: {},
   activeNodes: [],
   artifacts: {},
@@ -46,11 +46,13 @@ describe('orchestrationEvents', () => {
     jest.restoreAllMocks();
   });
 
-  test('lifecycleEventForStatus maps terminal/paused statuses and ignores others', () => {
-    expect(lifecycleEventForStatus('paused')).toBe('paused');
-    expect(lifecycleEventForStatus('completed')).toBe('completed');
+  test('lifecycleEventForStatus maps terminal/awaiting_input statuses and ignores others', () => {
+    expect(lifecycleEventForStatus('awaiting_input')).toBe('awaitingInput');
+    expect(lifecycleEventForStatus('succeeded')).toBe('succeeded');
     expect(lifecycleEventForStatus('failed')).toBe('failed');
     expect(lifecycleEventForStatus('running')).toBeNull();
+    expect(lifecycleEventForStatus('sleeping')).toBeNull();
+    expect(lifecycleEventForStatus('queued')).toBeNull();
     expect(lifecycleEventForStatus('cancelled')).toBeNull();
   });
 
@@ -64,10 +66,10 @@ describe('orchestrationEvents', () => {
     };
     eventBusModule.eventBus.on('soat:event', listener);
     try {
-      emitRunLifecycleEvent({ event: 'completed', projectId: 1, run: fakeRun });
+      emitRunLifecycleEvent({ event: 'succeeded', projectId: 1, run: fakeRun });
       await flush();
       const match = events.find((e) => {
-        return e.type === 'orchestration_runs.completed';
+        return e.type === 'orchestration_runs.succeeded';
       });
       expect(match).toBeDefined();
       expect(match?.resourceType).toBe('orchestration_run');
@@ -94,9 +96,9 @@ describe('orchestrationScheduler', () => {
     stopOrchestrationScheduler();
   });
 
-  describe('runDueScheduledResumptions', () => {
+  describe('wakeDueRuns', () => {
     test('returns 0 when no runs are due', async () => {
-      const count = await runDueScheduledResumptions({ now: new Date(0) });
+      const count = await wakeDueRuns({ now: new Date(0) });
       expect(count).toBe(0);
     });
 
@@ -104,63 +106,63 @@ describe('orchestrationScheduler', () => {
       jest
         .spyOn(db.OrchestrationRun, 'findAll')
         .mockRejectedValueOnce(new Error('db unavailable'));
-      const count = await runDueScheduledResumptions();
+      const count = await wakeDueRuns();
       expect(count).toBe(0);
     });
 
-    test('claims a due run and hands it to the resumer', async () => {
+    test('claims a due sleeping run and hands it to the waker', async () => {
       const run = { id: 987654 } as InstanceType<typeof db.OrchestrationRun>;
       jest.spyOn(db.OrchestrationRun, 'findAll').mockResolvedValueOnce([run]);
       const updateSpy = jest
         .spyOn(db.OrchestrationRun, 'update')
         .mockResolvedValueOnce([1]);
-      const resumeSpy = jest
-        .spyOn(engineModule, 'resumeScheduledRun')
+      const wakeSpy = jest
+        .spyOn(engineModule, 'wakeRun')
         .mockResolvedValueOnce(undefined);
 
-      const count = await runDueScheduledResumptions({ now: new Date() });
+      const count = await wakeDueRuns({ now: new Date() });
 
       expect(count).toBe(1);
       expect(updateSpy).toHaveBeenCalledWith(
-        { resumeAt: null },
+        { status: 'running', wakeAt: null },
         expect.objectContaining({
           where: expect.objectContaining({ id: 987654 }),
         })
       );
       await flush();
-      expect(resumeSpy).toHaveBeenCalledTimes(1);
+      expect(wakeSpy).toHaveBeenCalledTimes(1);
     });
 
     test('skips a run it fails to claim', async () => {
       const run = { id: 111222 } as InstanceType<typeof db.OrchestrationRun>;
       jest.spyOn(db.OrchestrationRun, 'findAll').mockResolvedValueOnce([run]);
       jest.spyOn(db.OrchestrationRun, 'update').mockResolvedValueOnce([0]);
-      const resumeSpy = jest.spyOn(engineModule, 'resumeScheduledRun');
+      const wakeSpy = jest.spyOn(engineModule, 'wakeRun');
 
-      const count = await runDueScheduledResumptions({ now: new Date() });
+      const count = await wakeDueRuns({ now: new Date() });
 
       expect(count).toBe(0);
-      expect(resumeSpy).not.toHaveBeenCalled();
+      expect(wakeSpy).not.toHaveBeenCalled();
     });
 
-    test('swallows a resumer failure without rejecting', async () => {
+    test('swallows a waker failure without rejecting', async () => {
       const run = { id: 333444 } as InstanceType<typeof db.OrchestrationRun>;
       jest.spyOn(db.OrchestrationRun, 'findAll').mockResolvedValueOnce([run]);
       jest.spyOn(db.OrchestrationRun, 'update').mockResolvedValueOnce([1]);
-      const resumeSpy = jest
-        .spyOn(engineModule, 'resumeScheduledRun')
-        .mockRejectedValueOnce(new Error('resume blew up'));
+      const wakeSpy = jest
+        .spyOn(engineModule, 'wakeRun')
+        .mockRejectedValueOnce(new Error('wake blew up'));
 
-      const count = await runDueScheduledResumptions({ now: new Date() });
+      const count = await wakeDueRuns({ now: new Date() });
 
       expect(count).toBe(1);
       // The rejection is caught internally; flushing must not surface it.
       await flush();
-      expect(resumeSpy).toHaveBeenCalledTimes(1);
+      expect(wakeSpy).toHaveBeenCalledTimes(1);
     });
   });
 
-  describe('initializeOrchestrationScheduler', () => {
+  describe('startOrchestrationScheduler', () => {
     // Fake timers keep the interval under the test's control: no real waiting,
     // no leaked timer, and no need to sniff the environment in production code.
     beforeEach(() => {
@@ -172,14 +174,14 @@ describe('orchestrationScheduler', () => {
       jest.useRealTimers();
     });
 
-    test('drives the resumer on each interval tick and is idempotent', async () => {
+    test('drives the waker on each interval tick and is idempotent', async () => {
       const findAllSpy = jest
         .spyOn(db.OrchestrationRun, 'findAll')
         .mockResolvedValue([]);
 
-      initializeOrchestrationScheduler({ intervalMs: 5000 });
+      startOrchestrationScheduler({ intervalMs: 5000 });
       // Second call short-circuits because a timer already exists.
-      initializeOrchestrationScheduler({ intervalMs: 5000 });
+      startOrchestrationScheduler({ intervalMs: 5000 });
 
       await jest.advanceTimersByTimeAsync(5000);
       expect(findAllSpy).toHaveBeenCalledTimes(1);
@@ -193,7 +195,7 @@ describe('orchestrationScheduler', () => {
         .spyOn(db.OrchestrationRun, 'findAll')
         .mockResolvedValue([]);
 
-      initializeOrchestrationScheduler({ intervalMs: 0 });
+      startOrchestrationScheduler({ intervalMs: 0 });
 
       // Nothing fires before the default 5s interval elapses.
       await jest.advanceTimersByTimeAsync(4999);
@@ -204,19 +206,17 @@ describe('orchestrationScheduler', () => {
   });
 });
 
-describe('resumeScheduledRun (branch coverage)', () => {
+describe('wakeRun (branch coverage)', () => {
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
-  test('no-ops when the run has no resume context', async () => {
+  test('no-ops when the run has no wake context', async () => {
     const run = {
       id: 1,
-      resumeContext: null,
+      wakeContext: null,
     } as unknown as InstanceType<typeof db.OrchestrationRun>;
-    await expect(
-      engineModule.resumeScheduledRun({ run })
-    ).resolves.toBeUndefined();
+    await expect(engineModule.wakeRun({ run })).resolves.toBeUndefined();
   });
 
   test('marks the run failed when its orchestration no longer exists', async () => {
@@ -224,7 +224,7 @@ describe('resumeScheduledRun (branch coverage)', () => {
     const run = {
       id: 2,
       orchestrationId: 42,
-      resumeContext: {
+      wakeContext: {
         nodeId: 'delay',
         resume: { kind: 'delay', artifact: {} },
       },
@@ -232,10 +232,10 @@ describe('resumeScheduledRun (branch coverage)', () => {
     } as unknown as InstanceType<typeof db.OrchestrationRun>;
     jest.spyOn(db.Orchestration, 'findOne').mockResolvedValueOnce(null);
 
-    await engineModule.resumeScheduledRun({ run });
+    await engineModule.wakeRun({ run });
 
     expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'failed', resumeAt: null })
+      expect.objectContaining({ status: 'failed', wakeAt: null })
     );
   });
 });
