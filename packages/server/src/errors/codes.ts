@@ -274,6 +274,11 @@ export const ERROR_CODES = {
     description:
       'The document is no longer awaiting this conversion attempt — it already completed, timed out, or was superseded by a re-ingest.',
   },
+  TOOL_HTTP_ERROR: {
+    httpStatus: 502,
+    description:
+      'An http-type tool call returned a non-2xx response. The error `meta` carries the real upstream status code, response body, URL, and method.',
+  },
 } as const satisfies Record<
   string,
   { httpStatus: number; description: string }

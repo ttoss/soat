@@ -9,6 +9,7 @@ import {
 } from 'src/lib/iam';
 
 import { db } from '../db';
+import { DomainError } from '../errors';
 import {
   resolveMcpTools,
   resolveSoatTools,
@@ -296,6 +297,32 @@ export class HttpToolError extends Error {
     };
   }
 }
+
+/**
+ * Maps an `HttpToolError` (thrown when an http-type tool's target returns a
+ * non-2xx response) to a `TOOL_HTTP_ERROR` `DomainError` (HTTP 502), so the
+ * real upstream status/body/url survive to the API response instead of being
+ * discarded behind a generic 500. Returns `null` for any other error, so
+ * callers can rethrow it unchanged.
+ */
+export const toHttpToolDomainError = (error: unknown): DomainError | null => {
+  if (!(error instanceof HttpToolError)) {
+    return null;
+  }
+
+  // Error responses bypass the caseTransform middleware, so meta keys are
+  // written in snake_case to match the external REST contract.
+  return new DomainError(
+    'TOOL_HTTP_ERROR',
+    `Tool target returned HTTP ${error.status}: ${error.message}`,
+    {
+      tool_status_code: error.status,
+      tool_response_body: error.body,
+      tool_url: error.url,
+      tool_method: error.method,
+    }
+  );
+};
 
 // Resolves {{secret:...}} tokens in the request url and headers at the point
 // of use — the stored config (and anything echoed back by GET/LIST) keeps the
