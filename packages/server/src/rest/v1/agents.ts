@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
+import { DomainError } from 'src/errors';
 import type { InlineToolDefinition } from 'src/lib/agents';
 import {
   createAgent,
@@ -32,7 +33,6 @@ type CreateAgentBody = {
   boundaryPolicy?: unknown;
   temperature?: unknown;
   knowledgeConfig?: unknown;
-  reasoning?: unknown;
   outputSchema?: unknown;
   maxContextMessages?: unknown;
   singleSessionPerActor?: unknown;
@@ -122,6 +122,21 @@ const parseNumber = (v: unknown): number | undefined => {
   return typeof v === 'number' ? v : undefined;
 };
 
+/**
+ * Deep thinking moved out of agents and into the Discussions module. The
+ * `reasoning` config is no longer accepted on an agent — an agent that needs to
+ * think attaches a `discussion`-type tool instead. Reject it explicitly so the
+ * migration path is visible rather than silently ignored.
+ */
+const assertNoRemovedFields = (body: Record<string, unknown>): void => {
+  if ('reasoning' in body) {
+    throw new DomainError(
+      'AGENT_FIELD_REMOVED',
+      'The `reasoning` config has been removed from agents. Deep thinking now lives in the Discussions module — create a discussion and attach a discussion-type tool instead.'
+    );
+  }
+};
+
 const parseUpdateAgentBody = (
   body: Record<string, unknown>,
   tools: InlineToolDefinition[] | null | undefined
@@ -142,7 +157,6 @@ const parseUpdateAgentBody = (
     boundaryPolicy: parseOptional<object | null>(body.boundaryPolicy),
     temperature: parseOptional<number | null>(body.temperature),
     knowledgeConfig: parseOptional<object | null>(body.knowledgeConfig),
-    reasoningConfig: parseOptional<object | null>(body.reasoning),
     outputSchema: parseOptional<object | null>(body.outputSchema),
     maxContextMessages: parseOptional<number | null>(body.maxContextMessages),
     singleSessionPerActor:
@@ -200,7 +214,6 @@ const buildCreateAgentArgs = (
     boundaryPolicy: body.boundaryPolicy as object | undefined,
     temperature: parseNumber(body.temperature),
     knowledgeConfig: body.knowledgeConfig as object | undefined,
-    reasoningConfig: body.reasoning as object | undefined,
     outputSchema: body.outputSchema as object | undefined,
     maxContextMessages: parseNumber(body.maxContextMessages),
     singleSessionPerActor:
@@ -218,6 +231,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
   }
 
   const reqBody = ctx.request.body as CreateAgentBody;
+  assertNoRemovedFields(reqBody as Record<string, unknown>);
 
   if (!reqBody.aiProviderId || typeof reqBody.aiProviderId !== 'string') {
     ctx.status = 400;
@@ -328,6 +342,7 @@ agentsRouter.put('/agents/:agent_id', async (ctx: Context) => {
   }
 
   const body = ctx.request.body as Record<string, unknown>;
+  assertNoRemovedFields(body);
 
   const tools = parseInlineTools(body.tools);
   if (tools === 'invalid') {
@@ -366,6 +381,7 @@ agentsRouter.patch('/agents/:agent_id', async (ctx: Context) => {
   }
 
   const body = ctx.request.body as Record<string, unknown>;
+  assertNoRemovedFields(body);
 
   const tools = parseInlineTools(body.tools);
   if (tools === 'invalid') {

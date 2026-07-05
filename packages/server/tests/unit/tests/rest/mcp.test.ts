@@ -2,6 +2,7 @@ import type http from 'node:http';
 
 import { app } from 'src/app';
 import { db } from 'src/db';
+import * as discussionCompletion from 'src/lib/discussionCompletion';
 import * as pdfModule from 'src/lib/pdf';
 import { saveTrace } from 'src/lib/traces';
 
@@ -1223,6 +1224,85 @@ describe('MCP tools - happy path', () => {
       const res = await mcpCall('delete-ingestion-rule', {
         ingestionRuleId: ruleId,
       });
+      expect(res.status).toBe(200);
+    });
+  });
+
+  // ── Discussions ────────────────────────────────────────────────────────────
+
+  describe('discussions', () => {
+    let discussionId: string;
+    let runId: string;
+
+    test('create-discussion creates a discussion', async () => {
+      const res = await mcpCall('create-discussion', {
+        projectId,
+        name: 'MCP Panel',
+        aiProviderId: chatAiProviderId,
+        participants: [{ name: 'A' }, { name: 'B' }],
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.id).toMatch(/^disc_/);
+      discussionId = result.id;
+    });
+
+    test('list-discussions returns discussions', async () => {
+      const res = await mcpCall('list-discussions', { projectId });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(Array.isArray(result.data)).toBe(true);
+    });
+
+    test('get-discussion returns the discussion', async () => {
+      const res = await mcpCall('get-discussion', { discussionId });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.id).toBe(discussionId);
+    });
+
+    test('update-discussion updates the discussion', async () => {
+      const res = await mcpCall('update-discussion', {
+        discussionId,
+        name: 'MCP Panel Renamed',
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.name).toBe('MCP Panel Renamed');
+    });
+
+    test('create-discussion-run runs the discussion', async () => {
+      const spy = jest
+        .spyOn(discussionCompletion, 'runDiscussionCompletion')
+        .mockResolvedValue('MCP outcome.');
+      const res = await mcpCall('create-discussion-run', {
+        discussionId,
+        topic: 'What next?',
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.id).toMatch(/^drn_/);
+      expect(result.status).toBe('completed');
+      runId = result.id;
+      spy.mockRestore();
+    });
+
+    test('list-discussion-runs lists the runs', async () => {
+      const res = await mcpCall('list-discussion-runs', { discussionId });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.total).toBeGreaterThan(0);
+    });
+
+    test('get-discussion-run returns the run', async () => {
+      const res = await mcpCall('get-discussion-run', { runId });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.id).toBe(runId);
+    });
+
+    test('delete-discussion deletes the discussion', async () => {
+      const res = await mcpCall('delete-discussion', { discussionId });
       expect(res.status).toBe(200);
     });
   });

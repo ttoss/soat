@@ -162,6 +162,7 @@ export const SUPPORTED_RESOURCE_TYPES = new Set([
   'api_key',
   'chat',
   'conversation',
+  'discussion',
   'document',
   'file',
   'ingestion_rule',

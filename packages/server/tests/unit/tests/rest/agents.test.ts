@@ -1500,4 +1500,49 @@ describe('Agents', () => {
       expect(response.body.total).toBe(0);
     });
   });
+
+  describe('reasoning removed (moved to Discussions)', () => {
+    test('rejects reasoning on agent create', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'no-reasoning',
+          reasoning: { effort: 'high' },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('AGENT_FIELD_REMOVED');
+    });
+
+    test('rejects reasoning on agent update', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'to-update',
+        });
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${created.body.id}`)
+        .send({ reasoning: { effort: 'low' } });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('AGENT_FIELD_REMOVED');
+    });
+
+    test('rejects reasoning on a per-generation override', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'gen-agent',
+        });
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${created.body.id}/generate`)
+        .send({ prompt: 'hi', reasoning: { effort: 'high' } });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('AGENT_FIELD_REMOVED');
+    });
+  });
 });

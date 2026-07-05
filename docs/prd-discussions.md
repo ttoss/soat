@@ -20,9 +20,9 @@
 | Silent-degradation event                    | ✅ Implemented | `agents.reasoning.fallback` emitted when a pipeline degrades to the draft (`all_failed`/`output_failed`) and when a stored legacy mode is hit (`fallback`, `data.legacyMode: true`) — `emitReasoningFallbackEvent()` in `reasoning.ts` |
 | Async pipeline generate (`?async=true`)     | ❌ Not started | Larger effort; depends on the session async/poll mechanism (deferred)                            |
 | `reasoning.budget` guard                    | ❌ Not started | Optional cap on total internal completions per generation (deferred)                            |
-| **Discussions module (agent-callable)**     | ❌ Not started | The new home of thinking: a reusable `Discussion` config + `DiscussionRun` instances (list/inspect/retain historical thinking runs). Agents attach a tool of type `discussion` referencing a config and call it mid-loop; the outcome synthesis returns as the tool result. Reuses the (renamed) pipeline engine; participants stay tool-less. See Phase 4. |
-| **Remove `reasoning` from agents (entirely)** | ❌ Not started | Once Discussions ships, the whole `reasoning` config is removed from agents: rejected on write, stored legacy configs go inert (draft + `agents.reasoning.fallback` event — same treatment as legacy `reflect`/`debate`). Provider-native `effort` moves into Discussions as a participant/synthesis knob. See Phase 5. |
-| Discussions resource module                 | ❌ Not started | Visible transcript, organizer-selected turns, human participants (original PRD, now Phase 4). **Recommendation: build a thin MVP that delegates deliberation to the existing pipeline engine — see Phase 4.** |
+| **Discussions module (agent-callable)**     | ✅ Implemented | The new home of thinking: a reusable `Discussion` config (`disc_`) + `DiscussionParticipant` (`dpt_`) + `DiscussionRun` (`drn_`) instances. Agents attach a tool of type `discussion` referencing a config and call it mid-loop; the outcome synthesis returns as the tool result. Reuses the renamed engine (`discussionEngine.ts#runDiscussionPipeline`); participants stay tool-less. See Phase 4. |
+| **Remove `reasoning` from agents (entirely)** | ✅ Implemented | The whole `reasoning` config is removed from agents: rejected on write and per-generate override with `AGENT_FIELD_REMOVED`; the `reasoningConfig` column read path, the `applyReasoningPipeline` hook, and the OpenAPI `ReasoningConfig`/`ReasoningStep`/`ReasoningBranch` schemas are gone. Provider-native `effort` moved into Discussions as a participant/synthesis knob. See Phase 5. |
+| Discussions resource module                 | ✅ Implemented (thin MVP) | Synchronous `pending → running → completed/failed` runs, `round_robin` turns, transcript persisted as a Conversation with Actor authorship + outcome Document. Async/poll, human-in-the-loop, `organizer_selects`, and real-Agent participants remain deferred. See Phase 4. |
 
 ## Implementation Phases
 
@@ -117,7 +117,9 @@
 
 ---
 
-### Phase 4 — Discussions Resource (the new home of thinking) ❌ Not started · **Recommendation: thin MVP**
+### Phase 4 — Discussions Resource (the new home of thinking) ✅ Implemented (thin MVP)
+
+> **Shipped.** The thin MVP recommended below is implemented: `Discussion` (`disc_`), `DiscussionParticipant` (`dpt_`), and `DiscussionRun` (`drn_`) models; REST + OpenAPI (`discussions.yaml`) with `list/create/get/update/delete` + `create-discussion-run`/`list-discussion-runs`/`get-discussion-run`; permissions (`discussions.json`); a formation module (`DiscussionResourceProperties`); the deliberation engine renamed into `discussionEngine.ts` (`runDiscussionPipeline`) / `discussionCompletion.ts`, with `runDiscussion` in `discussionRuns.ts` mapping participants → branches, persisting each turn to a Conversation (Actor-authored) and the outcome to a Document. Agents invoke it via a new `discussion` tool type dispatched in `toolsCall.ts`. SDK/CLI regenerated; MCP tools auto-derived; unit + MCP + smoke tests added. Deferred: async/poll, human-in-the-loop, `organizer_selects`, real-Agent participants, orchestration `discussion` node.
 
 **Goal:** Make orchestrated thinking a first-class resource instead of an invisible post-draft phase on agents. A `Discussion` is a durable, listable thinking run — usable standalone (brainstorming, red-teaming, expert review, where the transcript is the deliverable) **and** as the way an agent thinks mid-loop (via the auto-derived `create-discussion` SOAT action). Layered on the pipeline engine (Phase 2 + the pipeline generalization above); Phase 5 then removes the agent-side pipeline this module replaces.
 
@@ -173,7 +175,9 @@ When that bar is met, build a **thin MVP** that *delegates deliberation to the e
 
 ---
 
-### Phase 5 — Remove Thinking from Agents ❌ Not started · depends on Phase 4
+### Phase 5 — Remove Thinking from Agents ✅ Implemented
+
+> **Shipped.** The `reasoning` config is removed from agents entirely. Agent create/update and the per-generate override reject a `reasoning` field with `AGENT_FIELD_REMOVED` (pointing at Discussions); the `reasoningConfig` read path in `mapAgent`/create/update, the `applyReasoningPipeline` hook in `agentNonStreamGeneration.ts`, the provider-options plumbing (streaming included), and the OpenAPI `ReasoningConfig`/`ReasoningStep`/`ReasoningBranch` schemas are all gone. The five `reasoning*.ts` engine files were deleted and re-created as the discussions lib (`discussionEngine.ts`/`discussionCompletion.ts`/`discussionRuns.ts`), so provider-native `effort` now lives on discussion participants/synthesis. `INVALID_REASONING_CONFIG` was replaced by `INVALID_DISCUSSION_CONFIG`. SDK/CLI regenerated; `agents.md` "Reasoning (Deep Thinking)" replaced by a Discussions pointer; the deep-thinking tutorial retired; a migration guide added to the Discussions module doc. **Deviation from the original plan:** stored legacy configs are simply no longer read (the column is inert) rather than emitting an `agents.reasoning.fallback` event — that event and the whole `reasoning` vocabulary were retired with the agent surface, so there is nothing left to emit it. `grep -ri reasoning packages/server/src` now returns only the migration-rejection guard/messages and the provider-native "reasoning effort" concept that legitimately survives in Discussions.
 
 **Goal:** One home for thinking. After Discussions ships, the `reasoning` config is removed from agents **entirely** — pipeline *and* provider-native effort. The module is not a second way to think, it is *the* way: an agent that needs to think opens a discussion.
 

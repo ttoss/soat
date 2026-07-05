@@ -11,8 +11,7 @@ const log = createDebug('soat:memory-extraction');
  * effects.
  *
  * Provider/model resolution (including the project-scope check for
- * `aiProviderId` overrides) is shared with the reasoning completions via
- * `resolveCompletionModel`.
+ * `aiProviderId` overrides) is shared via `resolveCompletionModel`.
  *
  * Kept in its own module so tests can replace the LLM boundary with
  * `jest.spyOn` while the orchestration in `memoryExtraction.ts` runs for real.

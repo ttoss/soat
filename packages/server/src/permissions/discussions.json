@@ -1,0 +1,45 @@
+{
+  "module": "discussions",
+  "operations": [
+    {
+      "operationId": "listDiscussions",
+      "action": "discussions:ListDiscussions",
+      "description": "List discussions in a project"
+    },
+    {
+      "operationId": "createDiscussion",
+      "action": "discussions:CreateDiscussion",
+      "description": "Create a new discussion"
+    },
+    {
+      "operationId": "getDiscussion",
+      "action": "discussions:GetDiscussion",
+      "description": "Get a discussion by ID"
+    },
+    {
+      "operationId": "updateDiscussion",
+      "action": "discussions:UpdateDiscussion",
+      "description": "Update a discussion"
+    },
+    {
+      "operationId": "deleteDiscussion",
+      "action": "discussions:DeleteDiscussion",
+      "description": "Delete a discussion"
+    },
+    {
+      "operationId": "createDiscussionRun",
+      "action": "discussions:CreateDiscussionRun",
+      "description": "Invoke a discussion, creating a run"
+    },
+    {
+      "operationId": "listDiscussionRuns",
+      "action": "discussions:ListDiscussionRuns",
+      "description": "List the runs of a discussion"
+    },
+    {
+      "operationId": "getDiscussionRun",
+      "action": "discussions:GetDiscussionRun",
+      "description": "Get a discussion run by ID"
+    }
+  ]
+}

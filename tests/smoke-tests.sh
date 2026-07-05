@@ -1592,50 +1592,63 @@ fi
 $SOAT_CLI update-agent --agent-id "$AGENT_ID" --knowledge_config '{}' >/dev/null
 echo "knowledge_config extraction round-trip: OK"
 
-# 22b3. Reasoning config (deep thinking) pipeline round-trip
-echo "--- Setting reasoning pipeline config ---"
-RC_UPDATE_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
-  --reasoning '{"mode":"pipeline","effort":"low","steps":[{"name":"critique","prompt":"Critique factual accuracy only: {draft}"},{"name":"final","prompt":"Improve using {steps.critique}","output":true}]}')
-if ! printf '%s\n' "$RC_UPDATE_RESP" | jq -e '.reasoning.mode == "pipeline" and .reasoning.effort == "low"' >/dev/null 2>&1; then
-  echo "ERROR: update-agent did not round-trip the reasoning config" >&2
-  echo "$RC_UPDATE_RESP" >&2
+# 22b3. Deep thinking moved to Discussions — reasoning is rejected on agents.
+echo "--- Asserting reasoning is rejected on agents ---"
+RC_REMOVED_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
+  --reasoning '{"effort":"low"}' 2>&1 || true)
+if ! printf '%s\n' "$RC_REMOVED_RESP" | jq -e '.error.code == "AGENT_FIELD_REMOVED"' >/dev/null 2>&1; then
+  echo "ERROR: reasoning on an agent was not rejected with AGENT_FIELD_REMOVED" >&2
+  echo "$RC_REMOVED_RESP" >&2
   exit 1
 fi
-RC_GET_RESP=$($SOAT_CLI get-agent --agent-id "$AGENT_ID")
-if ! printf '%s\n' "$RC_GET_RESP" | jq -e '.reasoning.steps[0].name == "critique" and .reasoning.steps[1].output == true' >/dev/null 2>&1; then
-  echo "ERROR: get-agent did not return the reasoning pipeline steps" >&2
-  echo "$RC_GET_RESP" >&2
+echo "reasoning rejected on agents: OK"
+
+# 22b4. Discussions — create a deliberation config, run it, inspect the run.
+echo "--- Creating a discussion ---"
+DISCUSSION_RESP=$($SOAT_CLI create-discussion \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "Smoke panel" \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --max_rounds 1 \
+  --participants '[{"name":"Advocate","prompt":"Argue for."},{"name":"Skeptic","prompt":"Argue against."}]')
+DISCUSSION_ID=$(echo "$DISCUSSION_RESP" | jq -r '.id')
+if [ -z "$DISCUSSION_ID" ] || [ "$DISCUSSION_ID" = "null" ]; then
+  echo "ERROR: create-discussion did not return an id" >&2
+  echo "$DISCUSSION_RESP" >&2
   exit 1
 fi
-# An invalid pipeline (empty steps) must be rejected.
-RC_BAD_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
-  --reasoning '{"mode":"pipeline","steps":[]}' 2>&1 || true)
-if ! printf '%s\n' "$RC_BAD_RESP" | jq -e '.error.code == "INVALID_REASONING_CONFIG"' >/dev/null 2>&1; then
-  echo "ERROR: an empty pipeline was not rejected with INVALID_REASONING_CONFIG" >&2
-  echo "$RC_BAD_RESP" >&2
+echo "Discussion id: $DISCUSSION_ID"
+
+$SOAT_CLI get-discussion --discussion-id "$DISCUSSION_ID" >/dev/null
+$SOAT_CLI list-discussions --project_id "$PROJECT_PUBLIC_ID" >/dev/null
+
+# Run the discussion. The run is LLM-dependent, so assert only structural
+# fields (an id is returned); do not assert on the outcome content.
+echo "--- Running the discussion ---"
+RUN_RESP=$($SOAT_CLI create-discussion-run --discussion-id "$DISCUSSION_ID" \
+  --topic "Should we ship on Friday?" 2>&1 || true)
+RUN_ID=$(echo "$RUN_RESP" | jq -r '.id // empty')
+if [ -z "$RUN_ID" ]; then
+  echo "ERROR: create-discussion-run did not return a run id" >&2
+  echo "$RUN_RESP" >&2
   exit 1
 fi
-# Normalized branches/rounds primitive: a debate step (2 branches, 2 rounds,
-# each branch prompt referencing {transcript}) synthesized by a final step.
-RC_BRANCHES_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
-  --reasoning '{"mode":"pipeline","steps":[{"name":"debate","rounds":2,"branches":[{"name":"Optimist","prompt":"Argue for. {transcript}"},{"name":"Skeptic","prompt":"Argue against. {transcript}"}]},{"name":"final","prompt":"Synthesize {steps.debate.last}","output":true}]}')
-if ! printf '%s\n' "$RC_BRANCHES_RESP" | jq -e '.reasoning.steps[0].branches | length == 2' >/dev/null 2>&1; then
-  echo "ERROR: update-agent did not round-trip a branches-based reasoning step" >&2
-  echo "$RC_BRANCHES_RESP" >&2
+$SOAT_CLI get-discussion-run --run-id "$RUN_ID" >/dev/null
+$SOAT_CLI list-discussion-runs --discussion-id "$DISCUSSION_ID" >/dev/null
+echo "discussion run: OK"
+
+# A discussion-type tool references the discussion by id.
+DISCUSSION_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name ask-the-panel \
+  --type discussion \
+  --discussion "{\"discussion_id\":\"$DISCUSSION_ID\"}")
+if ! printf '%s\n' "$DISCUSSION_TOOL_RESP" | jq -e '.type == "discussion"' >/dev/null 2>&1; then
+  echo "ERROR: create-tool did not create a discussion-type tool" >&2
+  echo "$DISCUSSION_TOOL_RESP" >&2
   exit 1
 fi
-# rounds > 1 with no {transcript} reference must be rejected.
-RC_NO_TRANSCRIPT_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
-  --reasoning '{"mode":"pipeline","steps":[{"name":"debate","rounds":2,"branches":[{"name":"A"},{"name":"B"}],"prompt":"Argue about {question}"}]}' 2>&1 || true)
-if ! printf '%s\n' "$RC_NO_TRANSCRIPT_RESP" | jq -e '.error.code == "INVALID_REASONING_CONFIG"' >/dev/null 2>&1; then
-  echo "ERROR: rounds > 1 with no {transcript} reference was not rejected with INVALID_REASONING_CONFIG" >&2
-  echo "$RC_NO_TRANSCRIPT_RESP" >&2
-  exit 1
-fi
-# Disable again so later generations in this script stay single-pass
-# (pipeline behavior is LLM-dependent and covered by unit tests, not smoke).
-$SOAT_CLI update-agent --agent-id "$AGENT_ID" --reasoning '{"mode":"none"}' >/dev/null
-echo "reasoning pipeline config round-trip: OK"
+echo "discussion tool: OK"
 
 # 22c. Create a deterministic HTTP tool for tool_output message content
 echo "--- Creating project-detail tool ---"

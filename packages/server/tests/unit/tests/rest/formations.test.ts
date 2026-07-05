@@ -2152,49 +2152,6 @@ resources:
       );
     });
 
-    test('creates an agent with a reasoning config from a formation', async () => {
-      const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/formations')
-        .send({
-          project_id: projectId,
-          name: `reasoning-formation-${Date.now()}`,
-          template: {
-            resources: {
-              ReasoningAgent: {
-                type: 'agent',
-                properties: {
-                  ai_provider_id: aiProviderId,
-                  name: 'reasoning-agent',
-                  reasoning: {
-                    effort: 'high',
-                    mode: 'pipeline',
-                    steps: [
-                      {
-                        name: 'final',
-                        prompt: 'Refine: {draft}',
-                        output: true,
-                      },
-                    ],
-                  },
-                },
-              },
-            },
-          },
-        });
-
-      expect(res.status).toBe(201);
-      expect(res.body.status).toBe('active');
-      const reasoningAgentId = res.body.resources[0].physical_resource_id;
-
-      const agentRes = await authenticatedTestClient(adminToken).get(
-        `/api/v1/agents/${reasoningAgentId}`
-      );
-      expect(agentRes.status).toBe(200);
-      expect(agentRes.body.reasoning.effort).toBe('high');
-      expect(agentRes.body.reasoning.mode).toBe('pipeline');
-      expect(agentRes.body.reasoning.steps[0].name).toBe('final');
-    });
-
     test('formation update can switch extraction to the boolean form', async () => {
       const res = await authenticatedTestClient(userToken)
         .put(`/api/v1/formations/${extractionFormationId}`)

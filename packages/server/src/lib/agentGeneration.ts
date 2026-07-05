@@ -56,8 +56,6 @@ const dispatchGeneration = (args: {
       agentId: args.agentId,
       parentTraceId: args.parentTraceId ?? null,
       rootTraceId: args.rootTraceId ?? null,
-      providerOptions: args.ctx.providerOptions,
-      maxOutputTokens: args.ctx.maxOutputTokens,
     });
     return Promise.resolve(stream);
   }
@@ -74,9 +72,6 @@ const dispatchGeneration = (args: {
     abortSignal: args.abortSignal,
     toolContext: args.ctx.toolContext ?? null,
     remainingDepth: args.ctx.remainingDepth ?? null,
-    providerOptions: args.ctx.providerOptions,
-    maxOutputTokens: args.ctx.maxOutputTokens,
-    reasoningConfig: args.ctx.reasoningConfig,
   });
 };
 
@@ -92,7 +87,6 @@ const resolveContextAndRecord = async (args: {
   rootTraceId?: string | null;
   initiatorGenerationId?: string | null;
   remainingDepth?: number;
-  reasoning?: object;
   knowledgeConfig?: object;
 }): Promise<GenerationContext> => {
   const ctx = await buildGenerationContext({
@@ -106,7 +100,6 @@ const resolveContextAndRecord = async (args: {
     parentTraceId: args.parentTraceId,
     rootTraceId: args.rootTraceId,
     remainingDepth: args.remainingDepth,
-    reasoning: args.reasoning,
     knowledgeConfig: args.knowledgeConfig,
   });
 
@@ -145,7 +138,6 @@ export const createGeneration = async (args: {
   authUser?: AuthUser;
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
-  reasoning?: object;
   knowledgeConfig?: object;
 }): Promise<GenerationResult | ReadableStream> => {
   const maxDepth = args.remainingDepth ?? 10;
@@ -186,7 +178,6 @@ export const createGeneration = async (args: {
     rootTraceId: args.rootTraceId,
     initiatorGenerationId: args.initiatorGenerationId,
     remainingDepth: maxDepth,
-    reasoning: args.reasoning,
     knowledgeConfig: args.knowledgeConfig,
   });
 

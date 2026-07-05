@@ -1,0 +1,660 @@
+openapi: 3.0.3
+info:
+  title: SOAT Discussions API
+  version: 1.0.0
+  description: >
+    API for managing discussions — reusable deliberation configs whose
+    invocations are runs. A discussion convenes several participants to think
+    over a topic and returns a synthesized outcome. Agents invoke a discussion
+    mid-loop via a discussion-type tool; it is also the home of deep thinking
+    that used to live on the agent (the removed agent thinking config).
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Discussions
+    description: Manage discussions and their runs
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/discussions:
+    get:
+      tags:
+        - Discussions
+      summary: List discussions
+      description: Returns all discussions the caller has access to. If project_id is provided, returns only discussions in that project.
+      operationId: listDiscussions
+      parameters:
+        - name: project_id
+          in: query
+          required: false
+          description: Project ID (optional)
+          schema:
+            type: string
+            example: 'proj_V1StGXR8Z5jdHi6B'
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of discussions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DiscussionRecord'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - Discussions
+      summary: Create a discussion
+      description: Creates a new discussion config. project keys infer the project from the key's scope; JWT callers must supply project_id.
+      operationId: createDiscussion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - ai_provider_id
+              properties:
+                project_id:
+                  x-soat-ref: projects
+                  type: string
+                  description: Project ID. Required for JWT auth; omit when using a project key.
+                  example: 'proj_V1StGXR8Z5jdHi6B'
+                name:
+                  type: string
+                  example: 'Design review panel'
+                description:
+                  type: string
+                  nullable: true
+                ai_provider_id:
+                  x-soat-ref: ai-providers
+                  type: string
+                  description: Default AI provider participants and synthesis fall back to.
+                  example: 'aip_V1StGXR8Z5jdHi6B'
+                model:
+                  type: string
+                  nullable: true
+                  description: Default model (falls back to the provider's default_model).
+                max_rounds:
+                  type: integer
+                  minimum: 1
+                  maximum: 3
+                  default: 1
+                synthesis:
+                  $ref: '#/components/schemas/SynthesisConfig'
+                tags:
+                  type: object
+                  additionalProperties:
+                    type: string
+                participants:
+                  type: array
+                  maxItems: 5
+                  items:
+                    $ref: '#/components/schemas/ParticipantInput'
+      responses:
+        '201':
+          description: Discussion created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscussionRecord'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/discussions/runs/{run_id}:
+    get:
+      tags:
+        - Discussions
+      summary: Get a discussion run by ID
+      description: Returns a single discussion run, including its outcome, transcript conversation, and outcome document.
+      operationId: getDiscussionRun
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          description: Discussion run ID
+          schema:
+            type: string
+            example: 'drn_V1StGXR8Z5jdHi6B'
+      responses:
+        '200':
+          description: Discussion run found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscussionRunRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Discussion run not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/discussions/{discussion_id}:
+    get:
+      tags:
+        - Discussions
+      summary: Get a discussion by ID
+      operationId: getDiscussion
+      parameters:
+        - name: discussion_id
+          in: path
+          required: true
+          description: Discussion ID
+          schema:
+            type: string
+            example: 'disc_V1StGXR8Z5jdHi6B'
+      responses:
+        '200':
+          description: Discussion found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscussionRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Discussion not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - Discussions
+      summary: Update a discussion
+      description: Updates a discussion. Providing participants replaces the full set (not merged).
+      operationId: updateDiscussion
+      parameters:
+        - name: discussion_id
+          in: path
+          required: true
+          description: Discussion ID
+          schema:
+            type: string
+            example: 'disc_V1StGXR8Z5jdHi6B'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                  nullable: true
+                ai_provider_id:
+                  x-soat-ref: ai-providers
+                  type: string
+                model:
+                  type: string
+                  nullable: true
+                max_rounds:
+                  type: integer
+                  minimum: 1
+                  maximum: 3
+                synthesis:
+                  $ref: '#/components/schemas/SynthesisConfig'
+                tags:
+                  type: object
+                  additionalProperties:
+                    type: string
+                participants:
+                  type: array
+                  maxItems: 5
+                  items:
+                    $ref: '#/components/schemas/ParticipantInput'
+      responses:
+        '200':
+          description: Discussion updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscussionRecord'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Discussion not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Discussions
+      summary: Delete a discussion
+      operationId: deleteDiscussion
+      parameters:
+        - name: discussion_id
+          in: path
+          required: true
+          description: Discussion ID
+          schema:
+            type: string
+            example: 'disc_V1StGXR8Z5jdHi6B'
+      responses:
+        '204':
+          description: Discussion deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Discussion not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/discussions/{discussion_id}/runs:
+    post:
+      tags:
+        - Discussions
+      summary: Invoke a discussion
+      description: >
+        Runs the discussion synchronously over the given topic and returns the
+        completed run, whose outcome inlines the synthesized text. The run's
+        transcript is persisted as a conversation and the outcome as a document.
+      operationId: createDiscussionRun
+      parameters:
+        - name: discussion_id
+          in: path
+          required: true
+          description: Discussion ID
+          schema:
+            type: string
+            example: 'disc_V1StGXR8Z5jdHi6B'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - topic
+              properties:
+                topic:
+                  type: string
+                  description: The question or subject the participants deliberate on.
+                  example: 'Should we migrate the queue to Kafka?'
+      responses:
+        '201':
+          description: Discussion run completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscussionRunRecord'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Discussion not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Discussions
+      summary: List a discussion's runs
+      operationId: listDiscussionRuns
+      parameters:
+        - name: discussion_id
+          in: path
+          required: true
+          description: Discussion ID
+          schema:
+            type: string
+            example: 'disc_V1StGXR8Z5jdHi6B'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of runs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DiscussionRunRecord'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Discussion not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT token or sk_ api key
+  schemas:
+    SynthesisConfig:
+      type: object
+      nullable: true
+      description: Override for the final synthesis pass that weighs the deliberation into a single outcome.
+      properties:
+        ai_provider_id:
+          x-soat-ref: ai-providers
+          type: string
+        model:
+          type: string
+        prompt:
+          type: string
+          description: Synthesis prompt template. Supports {steps.deliberation} and {topic}.
+        effort:
+          type: string
+          enum: [low, medium, high]
+          description: Provider-native reasoning effort for the synthesis completion.
+    ParticipantInput:
+      type: object
+      description: A participant in the deliberation.
+      properties:
+        name:
+          type: string
+          nullable: true
+          description: Display label used for transcript attribution.
+        prompt:
+          type: string
+          nullable: true
+          description: Persona prompt for this participant.
+        position:
+          type: integer
+          description: Turn order (defaults to array index).
+        actor_id:
+          x-soat-ref: actors
+          type: string
+          nullable: true
+          description: Durable actor identity to attribute this participant's turns to.
+        ai_provider_id:
+          x-soat-ref: ai-providers
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        temperature:
+          type: number
+          nullable: true
+        effort:
+          type: string
+          enum: [low, medium, high]
+          nullable: true
+          description: Provider-native reasoning effort for this participant's turns.
+    ParticipantRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 'dpt_V1StGXR8Z5jdHi6B'
+        name:
+          type: string
+          nullable: true
+        prompt:
+          type: string
+          nullable: true
+        position:
+          type: integer
+        actor_id:
+          x-soat-ref: actors
+          type: string
+          nullable: true
+        ai_provider_id:
+          x-soat-ref: ai-providers
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        temperature:
+          type: number
+          nullable: true
+        effort:
+          type: string
+          nullable: true
+    DiscussionRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 'disc_V1StGXR8Z5jdHi6B'
+        project_id:
+          x-soat-ref: projects
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        max_rounds:
+          type: integer
+        ai_provider_id:
+          x-soat-ref: ai-providers
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        synthesis:
+          $ref: '#/components/schemas/SynthesisConfig'
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/ParticipantRecord'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    DiscussionRunRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 'drn_V1StGXR8Z5jdHi6B'
+        discussion_id:
+          x-soat-ref: discussions
+          type: string
+        project_id:
+          x-soat-ref: projects
+          type: string
+        topic:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, completed, failed]
+        outcome:
+          type: string
+          nullable: true
+          description: The synthesized outcome text (the tool-result contract).
+        conversation_id:
+          x-soat-ref: conversations
+          type: string
+          nullable: true
+        outcome_document_id:
+          x-soat-ref: documents
+          type: string
+          nullable: true
+        started_by:
+          type: object
+          nullable: true
+          additionalProperties: true
+        initiator_generation_id:
+          type: string
+          nullable: true
+        trace_id:
+          type: string
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: 'Discussion not found'

@@ -2,6 +2,7 @@ import type { ServerResponse } from 'node:http';
 
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import type { GenerationResult } from 'src/lib/agentGeneration';
 import { createGeneration, submitToolOutputs } from 'src/lib/agents';
 import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
@@ -107,6 +108,13 @@ agentGenerationRouter.post(
       return;
     }
 
+    if ('reasoning' in (ctx.request.body as Record<string, unknown>)) {
+      throw new DomainError(
+        'AGENT_FIELD_REMOVED',
+        'The per-generation `reasoning` override has been removed. Deep thinking now lives in the Discussions module — attach a discussion-type tool to the agent instead.'
+      );
+    }
+
     const {
       messages,
       stream,
@@ -115,7 +123,6 @@ agentGenerationRouter.post(
       rootTraceId,
       maxCallDepth,
       toolContext,
-      reasoning,
       knowledgeConfig,
     } = ctx.request.body as {
       messages?: unknown;
@@ -125,7 +132,6 @@ agentGenerationRouter.post(
       rootTraceId?: string;
       maxCallDepth?: unknown;
       toolContext?: Record<string, string>;
-      reasoning?: object;
       knowledgeConfig?: object;
     };
 
@@ -150,7 +156,6 @@ agentGenerationRouter.post(
       authHeader: (ctx.headers.authorization as string) ?? '',
       authUser: ctx.authUser,
       toolContext,
-      reasoning: toObjectOrUndefined(reasoning),
       knowledgeConfig: toObjectOrUndefined(knowledgeConfig),
     });
 

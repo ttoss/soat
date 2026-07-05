@@ -13,7 +13,7 @@ const log = createDebug('soat:memory-consolidation');
  * side effects.
  *
  * Provider/model resolution is anchored to an agent and shared with extraction
- * and reasoning via `resolveCompletionModel`, so the manual REST write path —
+ * via `resolveCompletionModel`, so the manual REST write path —
  * which has no agent context — does not use this and keeps concatenation.
  *
  * Kept in its own module so tests can replace the LLM boundary with
