@@ -583,6 +583,15 @@ components:
           description: >-
             Pipeline definition for `pipeline` tools. See the `pipeline` field
             on the Tool schema for the full structure.
+        discussion:
+          type: object
+          description: >-
+            Discussion config for `discussion` tools: `{ discussion_id }`. See
+            the `discussion` field on the Tool schema for details.
+          properties:
+            discussion_id:
+              x-soat-ref: discussions
+              type: string
         output_mapping:
           type: object
           description: >-
@@ -646,6 +655,16 @@ components:
           description: >-
             Pipeline definition for `pipeline` tools. See the `pipeline` field
             on the Tool schema for the full structure.
+        discussion:
+          type: object
+          nullable: true
+          description: >-
+            Discussion config for `discussion` tools: `{ discussion_id }`. See
+            the `discussion` field on the Tool schema for details.
+          properties:
+            discussion_id:
+              x-soat-ref: discussions
+              type: string
         output_mapping:
           type: object
           nullable: true

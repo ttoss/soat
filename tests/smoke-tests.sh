@@ -1623,12 +1623,14 @@ echo "Discussion id: $DISCUSSION_ID"
 $SOAT_CLI get-discussion --discussion-id "$DISCUSSION_ID" >/dev/null
 $SOAT_CLI list-discussions --project_id "$PROJECT_PUBLIC_ID" >/dev/null
 
-# Run the discussion. The run is LLM-dependent, so assert only structural
-# fields (an id is returned); do not assert on the outcome content.
+# Run the discussion. The run is LLM-dependent and its `outcome` echoes the
+# model's free-form text (which can contain characters that break `jq`), so
+# extract the run id with a regex rather than parsing the whole response, and
+# do not assert on the outcome content.
 echo "--- Running the discussion ---"
 RUN_RESP=$($SOAT_CLI create-discussion-run --discussion-id "$DISCUSSION_ID" \
   --topic "Should we ship on Friday?" 2>&1 || true)
-RUN_ID=$(echo "$RUN_RESP" | jq -r '.id // empty')
+RUN_ID=$(printf '%s' "$RUN_RESP" | grep -oE 'drn_[A-Za-z0-9]{16}' | head -1 || true)
 if [ -z "$RUN_ID" ]; then
   echo "ERROR: create-discussion-run did not return a run id" >&2
   echo "$RUN_RESP" >&2

@@ -2184,6 +2184,96 @@ resources:
     });
   });
 
+  describe('Formation discussion resource', () => {
+    let discussionFormationId: string;
+    let discussionAiProviderId: string;
+
+    beforeAll(async () => {
+      const aiProvRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'FormationDiscussionProvider',
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        });
+      discussionAiProviderId = aiProvRes.body.id;
+    });
+
+    test('creates a discussion from a formation', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `discussion-formation-${Date.now()}`,
+          template: {
+            resources: {
+              Panel: {
+                type: 'discussion',
+                properties: {
+                  name: 'Formation panel',
+                  ai_provider_id: discussionAiProviderId,
+                  max_rounds: 1,
+                  participants: [
+                    { name: 'Advocate', prompt: 'Argue for.' },
+                    { name: 'Skeptic', prompt: 'Argue against.' },
+                  ],
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      discussionFormationId = res.body.id;
+      const discussionId = res.body.resources[0].physical_resource_id;
+      expect(discussionId).toMatch(/^disc_/);
+
+      const discRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/discussions/${discussionId}`
+      );
+      expect(discRes.status).toBe(200);
+      expect(discRes.body.name).toBe('Formation panel');
+      expect(discRes.body.participants).toHaveLength(2);
+    });
+
+    test('formation update changes the discussion', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${discussionFormationId}`)
+        .send({
+          template: {
+            resources: {
+              Panel: {
+                type: 'discussion',
+                properties: {
+                  name: 'Formation panel renamed',
+                  ai_provider_id: discussionAiProviderId,
+                  max_rounds: 2,
+                  participants: [{ name: 'Solo', prompt: 'Think alone.' }],
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      const discussionId = res.body.resources[0].physical_resource_id;
+      const discRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/discussions/${discussionId}`
+      );
+      expect(discRes.body.name).toBe('Formation panel renamed');
+      expect(discRes.body.max_rounds).toBe(2);
+    });
+
+    test('formation delete removes the discussion', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${discussionFormationId}`
+      );
+      expect([200, 202, 204]).toContain(res.status);
+    });
+  });
+
   // ── secret references via sub expressions ────────────────────────────────
 
   describe('Formation tool referencing a formation-created secret via sub', () => {
