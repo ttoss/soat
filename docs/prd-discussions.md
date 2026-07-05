@@ -18,6 +18,7 @@
 | Silent-degradation event                    | ✅ Implemented | `agents.reasoning.fallback` event emitted on debate fallback/synthesis_failed and reflect critique_failed/revision_failed — `emitReasoningFallbackEvent()` in `reasoning.ts` |
 | Async debate generate (`?async=true`)       | ❌ Not started | Larger effort; depends on the session async/poll mechanism (deferred)                            |
 | `reasoning.budget` guard                    | ❌ Not started | Optional cap on total internal completions per generation (deferred)                            |
+| **Discussions module (agent-callable)**     | ❌ Not started | The visible surface for reasoning: a first-class `Discussion` resource (list/inspect/retain historical thinking runs) whose `POST /discussions` auto-derives a `create-discussion` SOAT action. An agent calls it mid-loop; the outcome synthesis returns as the tool result. Reuses `runReasoningPipeline`; participants stay tool-less. This is Phase 4, extended with the agent trigger — see the "Agent-callable" note there. |
 | Discussions resource module                 | ❌ Not started | Visible transcript, organizer-selected turns, human participants (original PRD, now Phase 4). **Recommendation: build a thin MVP that delegates deliberation to the existing pipeline engine — see Phase 4.** |
 
 ## Implementation Phases
@@ -109,25 +110,35 @@
 
 #### Should we build it? — Recommendation
 
-The pipeline engine already delivers the *answer-quality* value of "multiple agents reasoning together" (multi-perspective `fanout` + synthesis, behind one `generate` call, observable in traces). **A Discussions resource is therefore only worth building when the transcript itself is the deliverable** — the one thing the engine deliberately refuses to do: a **persistent, attributed, inspectable transcript**. For pure answer quality, prefer a `reasoning` pipeline; do not stand up a resource.
+The pipeline engine already delivers the *answer-quality* value of "multiple agents reasoning together" (multi-perspective `fanout` + synthesis, behind one `generate` call, observable in traces). **A Discussions resource is worth building when one of two bars is met** — both being things the invisible engine deliberately refuses to do:
+
+1. **The transcript itself is the deliverable** — a **persistent, attributed, inspectable transcript** (brainstorming, red-teaming, expert review). For pure answer quality alone, prefer a `reasoning` pipeline; do not stand up a resource.
+2. **An agent needs to invoke deliberation mid-loop and the run must be a durable, listable object.** This is the "redefine the thinking part of agents" driver: a tool-calling agent has no natural post-draft answer to refine, so reasoning must be something it *calls* and gets a result back from — and the project wants to list and inspect those runs historically, not just dig through per-execution traces. A resource satisfies both: its `POST /discussions` auto-derives a `create-discussion` SOAT action (the agent trigger + result return), and the row is first-class listable/permissioned/retained.
+
+**Why a resource and not a bare tool or a trace query-view.** The engine already records every reasoning run as child generations under a shared `trace_id` (`GET /generations?trace_id=…`), so a thin query-view over traces *could* deliver listing. But a `Discussion` needs what trace telemetry cannot give: its own permissions (`discussions:Create/Read`), a stable public id to reference/re-open, retention independent of trace lifecycle, a **formation** resource type (declare a discussion in infra-as-code), and an outcome Document. Traces are execution telemetry; a Discussion is a domain object. Build the resource; the trace tree remains underneath for per-turn observability.
 
 When that bar is met, build a **thin MVP** that *delegates deliberation to the existing pipeline engine* rather than re-implementing debate. Recommended scope:
 
 | Decision | Recommendation | Rationale |
 | --- | --- | --- |
-| Build the resource? | Yes — thin MVP only | Persistent attributed transcript is the sole capability the engine lacks |
+| Build the resource? | Yes — thin MVP only | Persistent attributed transcript **and** an agent-callable, listable thinking run are the capabilities the engine lacks |
 | Re-implement deliberation? | **No** — reuse `runFanout` / `runReasoningPipeline` | The fanout engine already does perspectives + rounds + synthesis + traces |
+| Agent trigger (MVP) | **Yes — auto-derived `create-discussion` SOAT action** | `POST /discussions` becomes an MCP/SOAT tool for free via `soatTools.ts`; the agent calls it mid-loop and reads the outcome as the tool result. This is the answer to "how do branches return to the main agent" and "when does a tool-only agent call them" |
 | Participant identity (MVP) | **Engine perspectives (tool-less)** | Maximizes reuse; sidesteps the tools-per-turn decision; leaves a clean seam to real Agents |
-| Lifecycle (MVP) | **Synchronous** `pending → running → completed/failed` | Defer async/poll until the session async mechanism (Phase 3) lands |
+| Lifecycle (MVP) | **Synchronous** `pending → running → completed/failed` | Defer async/poll until the session async mechanism (Phase 3) lands. Note: a synchronous `create-discussion` tool call blocks the calling agent for the full N×M run — bounded by engine caps + timeouts, same profile as a nested `create-agent-generation`; async is the deferred upgrade |
 | Turn policy (MVP) | `round_robin` only | `organizer_selects` needs the organizer decision protocol — defer |
 | Human-in-the-loop (MVP) | Deferred | Reuses orchestration `requires_action` later; not MVP |
 
 #### Thin MVP design
 
-- **`Discussion` (`disc_`)**: `project_id`, `topic`, `status` (`pending|running|completed|failed`), `max_rounds` (cap 3), `conversation_id` (the persisted transcript), `outcome_document_id` (the synthesis), `synthesis` override triple, `tags`.
+- **`Discussion` (`disc_`)**: `project_id`, `topic`, `status` (`pending|running|completed|failed`), `max_rounds` (cap 3), `conversation_id` (the persisted transcript), `outcome_document_id` (the stored synthesis), `synthesis` override triple, `tags`. The synchronous create response also inlines the `outcome` synthesis text so the `create-discussion` tool result carries it directly (no follow-up read required); the Document is the durable copy.
 - **`DiscussionParticipant` (`dpt_`)**: `discussion_id`, `actor_id`, `prompt` (persona), `position`.
 - **Transcript reuse** — persisted as a real [Conversation](../packages/website/docs/modules/conversations.md) with [Actor](../packages/website/docs/modules/actors.md) authorship (`addConversationMessage`), one Actor per participant; outcome stored as a Document. **No new transcript machinery.**
 - **`runDiscussion`** maps participants → the engine's `fanout` perspective list, calls `runReasoningPipeline`/`runFanout` (models resolved via `resolveCompletionModel`), then **persists each turn attributed to its Actor** and the synthesis as the outcome Document. Failure degrades gracefully (deep thinking must never make the resource *less* reliable).
+- **Agent trigger — `create-discussion` SOAT action (auto-derived).** `POST /discussions` runs **synchronously** and returns the completed discussion including its `outcome` synthesis, so when an agent calls the auto-derived `create-discussion` tool mid-loop, the outcome comes back as the tool result and re-enters the caller's message history. No hand-written tool layer — `soatTools.ts` derives the action from the OpenAPI spec. This is how the resource closes the original "redefine thinking" gap:
+  - **Return to the main agent** = the tool result carries the outcome synthesis; participants stay tool-less, so only the reduced conclusion re-enters the loop.
+  - **When the agent calls it** = whenever the model selects the `create-discussion` tool; `tool_choice: required` or a `step_rules` pin forces "discuss before acting."
+  - **History** = every call is a first-class `Discussion` row: `GET /discussions` to list, `GET /discussions/:id` for the transcript Conversation + outcome Document.
 - Full module surface per `.claude/rules/modules.md`: REST + OpenAPI, permissions, formation module + `DiscussionResourceProperties`, SDK/CLI regen (MCP auto-derived), docs, tests (TDD), smoke steps.
 
 #### Deferred to a later Discussions phase (clean seams kept)
