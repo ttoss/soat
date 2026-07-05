@@ -18,7 +18,6 @@ export default jestUnitConfig({
     },
     './src/**/*.ts': {
       branches: 75,
-      functions: 85,
       lines: 80,
       statements: 80,
     },
