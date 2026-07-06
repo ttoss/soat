@@ -43,7 +43,7 @@ export const coerceToJsonObject = (v: unknown): object | null | undefined => {
 };
 
 const TOOL_JSON_FIELDS_ERROR =
-  'parameters, execute, mcp, preset_parameters, pipeline, discussion, and output_mapping must be JSON objects';
+  'parameters, execute, mcp, preset_parameters, pipeline, and output_mapping must be JSON objects';
 
 /**
  * Coerces the JSON-object config fields shared by create/update. Throws
@@ -56,7 +56,6 @@ const coerceToolJsonFields = (body: Record<string, unknown>) => {
     mcp: coerceToJsonObject(body.mcp) ?? undefined,
     presetParameters: coerceToJsonObject(body.presetParameters) ?? undefined,
     pipeline: coerceToJsonObject(body.pipeline) ?? undefined,
-    discussion: coerceToJsonObject(body.discussion) ?? undefined,
     outputMapping: coerceToJsonObject(body.outputMapping) ?? undefined,
   };
 };
@@ -127,6 +126,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
   const body = (ctx.request.body ?? {}) as Record<string, unknown>;
   const { name, type, description, actions } = body;
   const projectPublicId = body.projectId as string | undefined;
+  const discussionId = body.discussionId as string | undefined;
 
   if (!name || typeof name !== 'string') {
     ctx.status = 400;
@@ -156,6 +156,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
     type: parseStringOrUndefined(type),
     description: parseStringOrUndefined(description),
     actions: Array.isArray(actions) ? (actions as string[]) : undefined,
+    discussionId,
     ...jsonFields,
   });
 
@@ -243,7 +244,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     actions,
     presetParameters,
     pipeline,
-    discussion,
+    discussionId,
     outputMapping,
   } = (ctx.request.body ?? {}) as Record<string, unknown>;
 
@@ -252,7 +253,6 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
   let parsedMcp: object | null | undefined;
   let parsedPresetParameters: object | null | undefined;
   let parsedPipeline: object | null | undefined;
-  let parsedDiscussion: object | null | undefined;
   let parsedOutputMapping: object | null | undefined;
   try {
     parsedParameters = coerceToJsonObject(parameters);
@@ -260,14 +260,10 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     parsedMcp = coerceToJsonObject(mcp);
     parsedPresetParameters = coerceToJsonObject(presetParameters);
     parsedPipeline = coerceToJsonObject(pipeline);
-    parsedDiscussion = coerceToJsonObject(discussion);
     parsedOutputMapping = coerceToJsonObject(outputMapping);
   } catch {
     ctx.status = 400;
-    ctx.body = {
-      error:
-        'parameters, execute, mcp, preset_parameters, pipeline, and output_mapping must be JSON objects',
-    };
+    ctx.body = { error: TOOL_JSON_FIELDS_ERROR };
     return;
   }
 
@@ -283,7 +279,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     actions: parseNullableArray(actions),
     presetParameters: parsedPresetParameters,
     pipeline: parsedPipeline,
-    discussion: parsedDiscussion,
+    discussionId: parseNullableString(discussionId),
     outputMapping: parsedOutputMapping,
   });
 

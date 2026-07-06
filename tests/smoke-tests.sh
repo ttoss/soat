@@ -1645,7 +1645,7 @@ DISCUSSION_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name ask-the-panel \
   --type discussion \
-  --discussion "{\"discussion_id\":\"$DISCUSSION_ID\"}")
+  --discussion_id "$DISCUSSION_ID")
 if ! printf '%s\n' "$DISCUSSION_TOOL_RESP" | jq -e '.type == "discussion"' >/dev/null 2>&1; then
   echo "ERROR: create-tool did not create a discussion-type tool" >&2
   echo "$DISCUSSION_TOOL_RESP" >&2

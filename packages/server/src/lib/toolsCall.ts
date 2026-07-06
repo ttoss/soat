@@ -35,7 +35,7 @@ export type InlineToolDefinition = {
   actions?: string[];
   presetParameters?: object;
   pipeline?: object;
-  discussion?: object;
+  discussionId?: string;
   outputMapping?: object;
 };
 
@@ -53,7 +53,7 @@ export type CallableToolDefinition = {
   actions?: string[] | null;
   presetParameters?: object | null;
   pipeline?: object | null;
-  discussion?: object | null;
+  discussionId?: string | null;
   outputMapping?: object | null;
 };
 
@@ -91,8 +91,7 @@ export const callDiscussionTool = async (
   tool: CallableToolDefinition,
   mergedInput: Record<string, unknown>
 ): Promise<unknown> => {
-  const config = tool.discussion as { discussionId?: string } | null;
-  if (!config?.discussionId) {
+  if (!tool.discussionId) {
     throw new DomainError(
       'VALIDATION_FAILED',
       'Discussion tool has an invalid discussion configuration.'
@@ -108,7 +107,7 @@ export const callDiscussionTool = async (
   // Dynamically imported to avoid a circular import at module load.
   const { runDiscussion } = await import('./discussionRuns');
   const run = await runDiscussion({
-    discussionId: config.discussionId,
+    discussionId: tool.discussionId,
     topic,
     initiatorGenerationId:
       typeof mergedInput.initiatorGenerationId === 'string'

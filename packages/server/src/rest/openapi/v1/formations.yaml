@@ -764,6 +764,11 @@ components:
             `{ input, steps }`, plus an optional `output` mapping. Step `input`
             keys and `var` paths use camelCase (the runtime form). Free-form,
             user-defined.
+        discussion_id:
+          type: string
+          nullable: true
+          description: >-
+            For `discussion` tools: the ID of the discussion to invoke.
         output_mapping:
           type: object
           nullable: true

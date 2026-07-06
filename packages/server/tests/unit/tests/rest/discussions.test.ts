@@ -11,6 +11,7 @@ describe('Discussions', () => {
   let policyId: string;
   let aiProviderId: string;
   let noPermToken: string;
+  let scopedApiKey: string;
 
   beforeAll(async () => {
     await testClient
@@ -74,6 +75,17 @@ describe('Discussions', () => {
         default_model: 'llama3.2',
       });
     aiProviderId = aiProvRes.body.id;
+
+    // Project-scoped API key for implicit-project tests.
+    const keyRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/api-keys')
+      .send({
+        project_id: projectId,
+        policy_ids: [policyId],
+        name: 'Discussions scoped key',
+      });
+    expect(keyRes.status).toBe(201);
+    scopedApiKey = keyRes.body.key;
   });
 
   const createDiscussion = (overrides: Record<string, unknown> = {}) => {
@@ -102,6 +114,18 @@ describe('Discussions', () => {
       expect(res.body.participants).toHaveLength(2);
       expect(res.body.participants[0].id).toMatch(/^dpt_/);
       expect(res.body.participants[0].name).toBe('Advocate');
+    });
+
+    test('project-scoped API key resolves projectId automatically when omitted', async () => {
+      const res = await authenticatedTestClient(scopedApiKey)
+        .post('/api/v1/discussions')
+        .send({
+          name: 'Implicit project panel',
+          ai_provider_id: aiProviderId,
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.id).toMatch(/^disc_/);
+      expect(res.body.project_id).toBe(projectId);
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -292,11 +316,11 @@ describe('Discussions', () => {
             properties: { topic: { type: 'string' } },
             required: ['topic'],
           },
-          discussion: { discussion_id: created.body.id },
+          discussion_id: created.body.id,
         });
       expect(res.status).toBe(201);
       expect(res.body.type).toBe('discussion');
-      expect(res.body.discussion.discussion_id).toBe(created.body.id);
+      expect(res.body.discussion_id).toBe(created.body.id);
     });
 
     test('rejects a discussion tool referencing a missing discussion', async () => {
@@ -306,7 +330,7 @@ describe('Discussions', () => {
           project_id: projectId,
           name: 'bad-panel',
           type: 'discussion',
-          discussion: { discussion_id: 'disc_missing' },
+          discussion_id: 'disc_missing',
         });
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
@@ -464,7 +488,7 @@ describe('Discussions', () => {
         {
           name: 'ask',
           type: 'discussion',
-          discussion: { discussionId: created.body.id },
+          discussionId: created.body.id,
         },
         { topic: 'What should we do?' }
       )) as { outcome: string; run_id: string };
@@ -475,7 +499,7 @@ describe('Discussions', () => {
     test('throws when the discussion config is missing a discussionId', async () => {
       await expect(
         callDiscussionTool(
-          { name: 'ask', type: 'discussion', discussion: {} },
+          { name: 'ask', type: 'discussion' },
           {
             topic: 't',
           }
@@ -492,7 +516,7 @@ describe('Discussions', () => {
           {
             name: 'ask',
             type: 'discussion',
-            discussion: { discussionId: created.body.id },
+            discussionId: created.body.id,
           },
           {}
         )
