@@ -209,6 +209,20 @@ resources:
 
       expect(res.status).toBe(403);
     });
+
+    test('plan with a nonexistent formation_id treats every resource as create', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: 'form_doesnotexist',
+          template: simpleTemplate,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.changes[0].action).toBe('create');
+      expect(res.body.changes[0].physical_resource_id).toBeUndefined();
+    });
   });
 
   // ── Create ────────────────────────────────────────────────────────────────
@@ -311,6 +325,58 @@ resources:
       expect(resource.status).toBe('failed');
       expect(resource.physical_resource_id).toBeNull();
     });
+
+    test('creates a formation with metadata', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `metadata-formation-${Date.now()}`,
+          template: simpleTemplate,
+          metadata: { env: 'test' },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.metadata).toEqual({ env: 'test' });
+    });
+
+    test('re-planning a formation with a resource that failed to create treats it as create', async () => {
+      const failingTemplate = {
+        resources: {
+          MyProvider: {
+            type: 'ai_provider',
+            properties: {
+              name: 'test-provider',
+              provider: 'openai',
+              default_model: 'gpt-4o',
+              secret_id: 'sec_nonexistent',
+            },
+          },
+        },
+      };
+
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `replan-failing-provider-${Date.now()}`,
+          template: failingTemplate,
+        });
+      expect(createRes.status).toBe(201);
+      expect(createRes.body.resources[0].physical_resource_id).toBeNull();
+
+      const planRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: createRes.body.id,
+          template: failingTemplate,
+        });
+
+      expect(planRes.status).toBe(200);
+      expect(planRes.body.changes[0].action).toBe('create');
+      expect(planRes.body.changes[0].physical_resource_id).toBeUndefined();
+    });
   });
 
   // ── List ──────────────────────────────────────────────────────────────────
@@ -325,6 +391,7 @@ resources:
       expect(Array.isArray(res.body)).toBe(true);
       expect(res.body.length).toBeGreaterThan(0);
       expect(res.body[0].id).toBeDefined();
+      expect(res.body[0].resources).toBeUndefined();
     });
 
     test('unauthenticated returns 401', async () => {
@@ -434,6 +501,50 @@ resources:
     });
   });
 
+  describe('PUT /api/v1/formations/:formation_id — metadata', () => {
+    let metadataFormationId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `metadata-update-formation-${Date.now()}`,
+          template: simpleTemplate,
+          metadata: { env: 'initial' },
+        });
+      metadataFormationId = res.body.id;
+    });
+
+    test('updates metadata without changing the template', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${metadataFormationId}`)
+        .send({ metadata: { env: 'updated' } });
+
+      expect(res.status).toBe(200);
+      expect(res.body.metadata).toEqual({ env: 'updated' });
+      expect(res.body.resources).toHaveLength(1);
+    });
+
+    test('omitting metadata on update leaves existing metadata unchanged', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${metadataFormationId}`)
+        .send({
+          template: {
+            resources: {
+              MyMemory: {
+                type: 'memory',
+                properties: { name: 'Metadata Formation Memory Renamed' },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.metadata).toEqual({ env: 'updated' });
+    });
+  });
+
   // ── Events ────────────────────────────────────────────────────────────────
 
   describe('GET /api/v1/formations/:formation_id/events', () => {
@@ -524,6 +635,49 @@ resources:
 
       expect(res.status).toBe(201);
       expect(res.body.name).toBe('test-formation');
+    });
+  });
+
+  describe('DELETE /api/v1/formations/:formation_id — resource deletion failure', () => {
+    test('returns success: false and marks the formation delete_failed when a resource cannot be deleted', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `delete-failure-formation-${Date.now()}`,
+          template: simpleTemplate,
+        });
+      expect(createRes.status).toBe(201);
+      const deleteFailureFormationId = createRes.body.id;
+
+      // Seed a corrupted resource row with a resource type that has no
+      // registered formation module, so performResourceDeletions hits a real
+      // (non "already gone") failure when trying to delete it — simulating
+      // an orphaned/corrupted resource without mocking any db/lib call.
+      const formationRow = await db.Formation.findOne({
+        where: { publicId: deleteFailureFormationId },
+      });
+      await db.FormationResource.create({
+        formationId: formationRow!.id,
+        logicalId: 'CorruptedResource',
+        resourceType: 'unsupported_resource_type',
+        physicalResourceId: 'bogus_1',
+        status: 'created',
+        lastAppliedProperties: null,
+      });
+
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${deleteFailureFormationId}`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(false);
+
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${deleteFailureFormationId}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.status).toBe('delete_failed');
     });
   });
 
