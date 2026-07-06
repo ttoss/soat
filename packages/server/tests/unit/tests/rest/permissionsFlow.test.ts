@@ -1228,26 +1228,38 @@ describe('Group 13: API key with project-scoped SRN policy — memories, ai-prov
     apiKey = apiKeyRes.body.key;
   });
 
-  test('API key can get a memory when the key policy SRN matches the project', async () => {
-    const createRes = await testClient
+  let memoryId: string;
+  let createMemoryRes: { status: number; body: { id: string } };
+
+  beforeAll(async () => {
+    createMemoryRes = await testClient
       .post('/api/v1/memories')
       .set('Authorization', `Bearer ${apiKey}`)
       .send({ project_id: projectId, name: 'SRN Memory' });
-    expect(createRes.status).toBe(201);
-    const memoryId = createRes.body.id;
+    memoryId = createMemoryRes.body.id;
+  });
 
+  test('API key can create a memory when the key policy SRN matches the project', () => {
+    expect(createMemoryRes.status).toBe(201);
+  });
+
+  test('API key can get a memory when the key policy SRN matches the project', async () => {
     const getRes = await testClient
       .get(`/api/v1/memories/${memoryId}`)
       .set('Authorization', `Bearer ${apiKey}`);
     expect(getRes.status).toBe(200);
     expect(getRes.body.id).toBe(memoryId);
+  });
 
+  test('API key can update a memory when the key policy SRN matches the project', async () => {
     const updateRes = await testClient
       .put(`/api/v1/memories/${memoryId}`)
       .set('Authorization', `Bearer ${apiKey}`)
       .send({ name: 'Updated SRN Memory' });
     expect(updateRes.status).toBe(200);
+  });
 
+  test('API key can create and get a memory entry when the key policy SRN matches the project', async () => {
     const entryCreateRes = await testClient
       .post('/api/v1/memory-entries')
       .set('Authorization', `Bearer ${apiKey}`)
@@ -1259,7 +1271,9 @@ describe('Group 13: API key with project-scoped SRN policy — memories, ai-prov
       .get(`/api/v1/memory-entries/${entryId}`)
       .set('Authorization', `Bearer ${apiKey}`);
     expect(entryGetRes.status).toBe(200);
+  });
 
+  test('API key can delete a memory when the key policy SRN matches the project', async () => {
     const deleteRes = await testClient
       .delete(`/api/v1/memories/${memoryId}`)
       .set('Authorization', `Bearer ${apiKey}`);
@@ -1371,8 +1385,11 @@ describe('Group 14: API key with project-scoped SRN policy — formations', () =
     apiKey = apiKeyRes.body.key;
   });
 
-  test('API key can get/update/list-events/delete a formation when the key policy SRN matches the project', async () => {
-    const createRes = await testClient
+  let formationId: string;
+  let createFormationRes: { status: number; body: { id: string } };
+
+  beforeAll(async () => {
+    createFormationRes = await testClient
       .post('/api/v1/formations')
       .set('Authorization', `Bearer ${apiKey}`)
       .send({
@@ -1380,15 +1397,22 @@ describe('Group 14: API key with project-scoped SRN policy — formations', () =
         name: 'srn-formation',
         template: simpleTemplate,
       });
-    expect(createRes.status).toBe(201);
-    const formationId = createRes.body.id;
+    formationId = createFormationRes.body.id;
+  });
 
+  test('API key can create a formation when the key policy SRN matches the project', () => {
+    expect(createFormationRes.status).toBe(201);
+  });
+
+  test('API key can get a formation when the key policy SRN matches the project', async () => {
     const getRes = await testClient
       .get(`/api/v1/formations/${formationId}`)
       .set('Authorization', `Bearer ${apiKey}`);
     expect(getRes.status).toBe(200);
     expect(getRes.body.id).toBe(formationId);
+  });
 
+  test('API key can update a formation when the key policy SRN matches the project', async () => {
     const updateRes = await testClient
       .put(`/api/v1/formations/${formationId}`)
       .set('Authorization', `Bearer ${apiKey}`)
@@ -1403,13 +1427,17 @@ describe('Group 14: API key with project-scoped SRN policy — formations', () =
         },
       });
     expect(updateRes.status).toBe(200);
+  });
 
+  test('API key can list-events for a formation when the key policy SRN matches the project', async () => {
     const eventsRes = await testClient
       .get(`/api/v1/formations/${formationId}/events`)
       .set('Authorization', `Bearer ${apiKey}`);
     expect(eventsRes.status).toBe(200);
     expect(Array.isArray(eventsRes.body)).toBe(true);
+  });
 
+  test('API key can delete a formation when the key policy SRN matches the project', async () => {
     const deleteRes = await testClient
       .delete(`/api/v1/formations/${formationId}`)
       .set('Authorization', `Bearer ${apiKey}`);

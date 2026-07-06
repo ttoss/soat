@@ -62,37 +62,11 @@ afterEach(() => {
 
 describe('formationsResourceHandlers', () => {
   describe('applyCreateResource', () => {
-    test('creates ai_provider with resolved secret, agent tool, actor, agent, document, memory, memory_entry, and webhook', async () => {
+    test('creates ai_provider with resolved secret', async () => {
       mockLookupSecretInternalId.mockResolvedValueOnce(42);
       mockCreateAiProvider.mockResolvedValueOnce({
         id: 'aip_1',
       } as Awaited<ReturnType<typeof aiProvidersModule.createAiProvider>>);
-      mockCreateTool.mockResolvedValueOnce({
-        id: 'at_1',
-      } as Awaited<ReturnType<typeof toolsModule.createTool>>);
-      mockResolveActorLinkedIds.mockResolvedValueOnce({
-        agentId: 10,
-        memoryId: 9,
-      });
-      mockCreateActor.mockResolvedValueOnce({
-        id: 'act_1',
-      } as Awaited<ReturnType<typeof actorsModule.createActor>>);
-      mockCreateAgent.mockResolvedValueOnce({
-        id: 'agt_1',
-      } as Awaited<ReturnType<typeof agentsModule.createAgent>>);
-      mockCreateDocument.mockResolvedValueOnce({
-        id: 'doc_1',
-      } as Awaited<ReturnType<typeof documentsModule.createDocument>>);
-      mockCreateMemory.mockResolvedValueOnce({
-        id: 'mem_1',
-      } as Awaited<ReturnType<typeof memoriesModule.createMemory>>);
-      mockLookupMemoryInternalId.mockResolvedValueOnce(7);
-      mockCreateMemoryEntry.mockResolvedValueOnce({
-        id: 'me_1',
-      } as Awaited<ReturnType<typeof memoryEntriesModule.createMemoryEntry>>);
-      mockCreateWebhook.mockResolvedValueOnce({
-        id: 'wh_1',
-      } as Awaited<ReturnType<typeof webhooksModule.createWebhook>>);
 
       await expect(
         applyCreateResource({
@@ -108,6 +82,23 @@ describe('formationsResourceHandlers', () => {
           },
         })
       ).resolves.toBe('aip_1');
+
+      expect(mockLookupSecretInternalId).toHaveBeenCalledWith('sec_public');
+      expect(mockCreateAiProvider).toHaveBeenCalledWith({
+        projectId: 1,
+        secretId: 42,
+        name: 'Provider',
+        provider: 'openai',
+        defaultModel: 'gpt-4o',
+        baseUrl: 'https://api.example.com',
+        config: { region: 'us' },
+      });
+    });
+
+    test('creates tool', async () => {
+      mockCreateTool.mockResolvedValueOnce({
+        id: 'at_1',
+      } as Awaited<ReturnType<typeof toolsModule.createTool>>);
 
       await expect(
         applyCreateResource({
@@ -126,6 +117,28 @@ describe('formationsResourceHandlers', () => {
         })
       ).resolves.toBe('at_1');
 
+      expect(mockCreateTool).toHaveBeenCalledWith({
+        projectId: 1,
+        type: 'http',
+        name: 'Search',
+        description: 'Search tool',
+        parameters: { type: 'object' },
+        execute: { url: 'https://example.com' },
+        mcp: { server: 'mcp-server' },
+        actions: ['read'],
+        presetParameters: { limit: 5 },
+      });
+    });
+
+    test('creates actor with resolved linked ids', async () => {
+      mockResolveActorLinkedIds.mockResolvedValueOnce({
+        agentId: 10,
+        memoryId: 9,
+      });
+      mockCreateActor.mockResolvedValueOnce({
+        id: 'act_1',
+      } as Awaited<ReturnType<typeof actorsModule.createActor>>);
+
       await expect(
         applyCreateResource({
           resourceType: 'actor',
@@ -140,6 +153,29 @@ describe('formationsResourceHandlers', () => {
           },
         })
       ).resolves.toBe('act_1');
+
+      expect(mockResolveActorLinkedIds).toHaveBeenCalledWith({
+        agentId: 'agt_ref',
+        chatId: undefined,
+        memoryId: 'mem_ref',
+        projectId: 1,
+      });
+      expect(mockCreateActor).toHaveBeenCalledWith({
+        projectId: 1,
+        name: 'Customer Actor',
+        externalId: 'whatsapp:+5511999999999',
+        instructions: 'Talk like support',
+        agentId: 10,
+        chatId: undefined,
+        memoryId: 9,
+        autoCreateMemory: false,
+      });
+    });
+
+    test('creates agent', async () => {
+      mockCreateAgent.mockResolvedValueOnce({
+        id: 'agt_1',
+      } as Awaited<ReturnType<typeof agentsModule.createAgent>>);
 
       await expect(
         applyCreateResource({
@@ -163,95 +199,6 @@ describe('formationsResourceHandlers', () => {
         })
       ).resolves.toBe('agt_1');
 
-      await expect(
-        applyCreateResource({
-          resourceType: 'document',
-          projectId: 1,
-          resolvedProperties: {
-            content: 'Doc body',
-            path: 'docs/guide.md',
-            filename: 'guide.md',
-            title: 'Guide',
-            metadata: { version: '1' },
-            tags: { topic: 'test' },
-          },
-        })
-      ).resolves.toBe('doc_1');
-
-      await expect(
-        applyCreateResource({
-          resourceType: 'memory',
-          projectId: 1,
-          resolvedProperties: {
-            name: 'Memory',
-            description: 'Important facts',
-            tags: ['core', 'shared'],
-          },
-        })
-      ).resolves.toBe('mem_1');
-
-      await expect(
-        applyCreateResource({
-          resourceType: 'memory_entry',
-          projectId: 1,
-          resolvedProperties: {
-            memory_id: 'mem_public',
-            content: 'Remember this',
-            source_type: 'manual',
-          },
-        })
-      ).resolves.toBe('me_1');
-
-      await expect(
-        applyCreateResource({
-          resourceType: 'webhook',
-          projectId: 1,
-          resolvedProperties: {
-            name: 'Hook',
-            description: 'Webhook description',
-            url: 'https://example.com/webhook',
-            events: ['memory.created'],
-          },
-        })
-      ).resolves.toBe('wh_1');
-
-      expect(mockLookupSecretInternalId).toHaveBeenCalledWith('sec_public');
-      expect(mockCreateAiProvider).toHaveBeenCalledWith({
-        projectId: 1,
-        secretId: 42,
-        name: 'Provider',
-        provider: 'openai',
-        defaultModel: 'gpt-4o',
-        baseUrl: 'https://api.example.com',
-        config: { region: 'us' },
-      });
-      expect(mockCreateTool).toHaveBeenCalledWith({
-        projectId: 1,
-        type: 'http',
-        name: 'Search',
-        description: 'Search tool',
-        parameters: { type: 'object' },
-        execute: { url: 'https://example.com' },
-        mcp: { server: 'mcp-server' },
-        actions: ['read'],
-        presetParameters: { limit: 5 },
-      });
-      expect(mockResolveActorLinkedIds).toHaveBeenCalledWith({
-        agentId: 'agt_ref',
-        chatId: undefined,
-        memoryId: 'mem_ref',
-        projectId: 1,
-      });
-      expect(mockCreateActor).toHaveBeenCalledWith({
-        projectId: 1,
-        name: 'Customer Actor',
-        externalId: 'whatsapp:+5511999999999',
-        instructions: 'Talk like support',
-        agentId: 10,
-        chatId: undefined,
-        memoryId: 9,
-        autoCreateMemory: false,
-      });
       expect(mockCreateAgent).toHaveBeenCalledWith({
         projectId: 1,
         aiProviderId: 'aip_1',
@@ -268,6 +215,28 @@ describe('formationsResourceHandlers', () => {
         temperature: 0.2,
         knowledgeConfig: { topK: 3 },
       });
+    });
+
+    test('creates document', async () => {
+      mockCreateDocument.mockResolvedValueOnce({
+        id: 'doc_1',
+      } as Awaited<ReturnType<typeof documentsModule.createDocument>>);
+
+      await expect(
+        applyCreateResource({
+          resourceType: 'document',
+          projectId: 1,
+          resolvedProperties: {
+            content: 'Doc body',
+            path: 'docs/guide.md',
+            filename: 'guide.md',
+            title: 'Guide',
+            metadata: { version: '1' },
+            tags: { topic: 'test' },
+          },
+        })
+      ).resolves.toBe('doc_1');
+
       expect(mockCreateDocument).toHaveBeenCalledWith({
         projectId: 1,
         content: 'Doc body',
@@ -277,18 +246,77 @@ describe('formationsResourceHandlers', () => {
         metadata: { version: '1' },
         tags: { topic: 'test' },
       });
+    });
+
+    test('creates memory', async () => {
+      mockCreateMemory.mockResolvedValueOnce({
+        id: 'mem_1',
+      } as Awaited<ReturnType<typeof memoriesModule.createMemory>>);
+
+      await expect(
+        applyCreateResource({
+          resourceType: 'memory',
+          projectId: 1,
+          resolvedProperties: {
+            name: 'Memory',
+            description: 'Important facts',
+            tags: ['core', 'shared'],
+          },
+        })
+      ).resolves.toBe('mem_1');
+
       expect(mockCreateMemory).toHaveBeenCalledWith({
         projectId: 1,
         name: 'Memory',
         description: 'Important facts',
         tags: ['core', 'shared'],
       });
+    });
+
+    test('creates memory_entry with resolved memory internal id', async () => {
+      mockLookupMemoryInternalId.mockResolvedValueOnce(7);
+      mockCreateMemoryEntry.mockResolvedValueOnce({
+        id: 'me_1',
+      } as Awaited<ReturnType<typeof memoryEntriesModule.createMemoryEntry>>);
+
+      await expect(
+        applyCreateResource({
+          resourceType: 'memory_entry',
+          projectId: 1,
+          resolvedProperties: {
+            memory_id: 'mem_public',
+            content: 'Remember this',
+            source_type: 'manual',
+          },
+        })
+      ).resolves.toBe('me_1');
+
       expect(mockLookupMemoryInternalId).toHaveBeenLastCalledWith('mem_public');
       expect(mockCreateMemoryEntry).toHaveBeenCalledWith({
         memoryId: 7,
         content: 'Remember this',
         sourceType: 'manual',
       });
+    });
+
+    test('creates webhook', async () => {
+      mockCreateWebhook.mockResolvedValueOnce({
+        id: 'wh_1',
+      } as Awaited<ReturnType<typeof webhooksModule.createWebhook>>);
+
+      await expect(
+        applyCreateResource({
+          resourceType: 'webhook',
+          projectId: 1,
+          resolvedProperties: {
+            name: 'Hook',
+            description: 'Webhook description',
+            url: 'https://example.com/webhook',
+            events: ['memory.created'],
+          },
+        })
+      ).resolves.toBe('wh_1');
+
       expect(mockCreateWebhook).toHaveBeenCalledWith({
         projectId: 1,
         name: 'Hook',
@@ -356,34 +384,8 @@ describe('formationsResourceHandlers', () => {
   });
 
   describe('applyUpdateResource', () => {
-    test('updates ai_provider, agent_tool, actor, agent, memory, memory_entry, webhook, and ignores document', async () => {
+    test('updates ai_provider with resolved secret', async () => {
       mockLookupSecretInternalId.mockResolvedValueOnce(84);
-      mockUpdateActor.mockResolvedValueOnce({
-        id: 'act_1',
-      } as Awaited<ReturnType<typeof actorsModule.updateActor>>);
-      mockUpdateTool.mockResolvedValue(
-        undefined as unknown as Awaited<
-          ReturnType<typeof toolsModule.updateTool>
-        >
-      );
-      mockUpdateAgent.mockResolvedValue(
-        undefined as unknown as Awaited<
-          ReturnType<typeof agentsModule.updateAgent>
-        >
-      );
-
-      const memoryEntryInstance = db.MemoryEntry.build({
-        publicId: 'men_1',
-        memoryId: 1,
-        content: 'old content',
-        sourceType: 'manual',
-      });
-      const entrySave = jest
-        .spyOn(memoryEntryInstance, 'save')
-        .mockResolvedValue(memoryEntryInstance);
-      jest
-        .spyOn(db.MemoryEntry, 'findOne')
-        .mockResolvedValueOnce(memoryEntryInstance);
 
       await expect(
         applyUpdateResource({
@@ -399,6 +401,24 @@ describe('formationsResourceHandlers', () => {
           },
         })
       ).resolves.toBeUndefined();
+
+      expect(mockUpdateAiProvider).toHaveBeenCalledWith({
+        id: 'aip_1',
+        secretId: 84,
+        name: 'Provider Updated',
+        provider: 'openai',
+        defaultModel: 'gpt-4.1',
+        baseUrl: null,
+        config: null,
+      });
+    });
+
+    test('updates tool', async () => {
+      mockUpdateTool.mockResolvedValueOnce(
+        undefined as unknown as Awaited<
+          ReturnType<typeof toolsModule.updateTool>
+        >
+      );
 
       await expect(
         applyUpdateResource({
@@ -416,6 +436,23 @@ describe('formationsResourceHandlers', () => {
         })
       ).resolves.toBeUndefined();
 
+      expect(mockUpdateTool).toHaveBeenCalledWith({
+        id: 'at_1',
+        name: 'Search Updated',
+        description: null,
+        parameters: null,
+        execute: { url: 'https://example.com/v2' },
+        mcp: null,
+        actions: null,
+        presetParameters: null,
+      });
+    });
+
+    test('updates actor', async () => {
+      mockUpdateActor.mockResolvedValueOnce({
+        id: 'act_1',
+      } as Awaited<ReturnType<typeof actorsModule.updateActor>>);
+
       await expect(
         applyUpdateResource({
           resourceType: 'actor',
@@ -427,6 +464,24 @@ describe('formationsResourceHandlers', () => {
           },
         })
       ).resolves.toBeUndefined();
+
+      expect(mockUpdateActor).toHaveBeenCalledWith({
+        id: 'act_1',
+        name: 'Actor Updated',
+        externalId: undefined,
+        instructions: null,
+        agentId: 'agt_2',
+        chatId: undefined,
+        memoryId: undefined,
+      });
+    });
+
+    test('updates agent', async () => {
+      mockUpdateAgent.mockResolvedValueOnce(
+        undefined as unknown as Awaited<
+          ReturnType<typeof agentsModule.updateAgent>
+        >
+      );
 
       await expect(
         applyUpdateResource({
@@ -450,79 +505,6 @@ describe('formationsResourceHandlers', () => {
         })
       ).resolves.toBeUndefined();
 
-      await expect(
-        applyUpdateResource({
-          resourceType: 'memory',
-          physicalResourceId: 'mem_1',
-          resolvedProperties: {
-            name: 'Memory Updated',
-            description: null,
-            tags: null,
-          },
-        })
-      ).resolves.toBeUndefined();
-
-      await expect(
-        applyUpdateResource({
-          resourceType: 'memory_entry',
-          physicalResourceId: 'me_1',
-          resolvedProperties: {
-            content: 'new content',
-          },
-        })
-      ).resolves.toBeUndefined();
-
-      await expect(
-        applyUpdateResource({
-          resourceType: 'webhook',
-          physicalResourceId: 'wh_1',
-          resolvedProperties: {
-            name: 'Hook Updated',
-            description: 'Updated description',
-            url: 'https://example.com/hook',
-            events: ['memory.updated'],
-          },
-        })
-      ).resolves.toBeUndefined();
-
-      await expect(
-        applyUpdateResource({
-          resourceType: 'document',
-          physicalResourceId: 'doc_1',
-          resolvedProperties: {
-            title: 'ignored',
-          },
-        })
-      ).resolves.toBeUndefined();
-
-      expect(mockUpdateAiProvider).toHaveBeenCalledWith({
-        id: 'aip_1',
-        secretId: 84,
-        name: 'Provider Updated',
-        provider: 'openai',
-        defaultModel: 'gpt-4.1',
-        baseUrl: null,
-        config: null,
-      });
-      expect(mockUpdateTool).toHaveBeenCalledWith({
-        id: 'at_1',
-        name: 'Search Updated',
-        description: null,
-        parameters: null,
-        execute: { url: 'https://example.com/v2' },
-        mcp: null,
-        actions: null,
-        presetParameters: null,
-      });
-      expect(mockUpdateActor).toHaveBeenCalledWith({
-        id: 'act_1',
-        name: 'Actor Updated',
-        externalId: undefined,
-        instructions: null,
-        agentId: 'agt_2',
-        chatId: undefined,
-        memoryId: undefined,
-      });
       expect(mockUpdateAgent).toHaveBeenCalledWith({
         id: 'agt_1',
         aiProviderId: undefined,
@@ -539,14 +521,71 @@ describe('formationsResourceHandlers', () => {
         temperature: 0.5,
         knowledgeConfig: { topK: 8 },
       });
+    });
+
+    test('updates memory', async () => {
+      await expect(
+        applyUpdateResource({
+          resourceType: 'memory',
+          physicalResourceId: 'mem_1',
+          resolvedProperties: {
+            name: 'Memory Updated',
+            description: null,
+            tags: null,
+          },
+        })
+      ).resolves.toBeUndefined();
+
       expect(mockUpdateMemory).toHaveBeenCalledWith({
         id: 'mem_1',
         name: 'Memory Updated',
         description: null,
         tags: null,
       });
+    });
+
+    test('updates memory_entry', async () => {
+      const memoryEntryInstance = db.MemoryEntry.build({
+        publicId: 'men_1',
+        memoryId: 1,
+        content: 'old content',
+        sourceType: 'manual',
+      });
+      const entrySave = jest
+        .spyOn(memoryEntryInstance, 'save')
+        .mockResolvedValue(memoryEntryInstance);
+      jest
+        .spyOn(db.MemoryEntry, 'findOne')
+        .mockResolvedValueOnce(memoryEntryInstance);
+
+      await expect(
+        applyUpdateResource({
+          resourceType: 'memory_entry',
+          physicalResourceId: 'me_1',
+          resolvedProperties: {
+            content: 'new content',
+          },
+        })
+      ).resolves.toBeUndefined();
+
       expect(memoryEntryInstance.content).toBe('new content');
       expect(entrySave).toHaveBeenCalled();
+    });
+
+    test('updates webhook', async () => {
+      await expect(
+        applyUpdateResource({
+          resourceType: 'webhook',
+          physicalResourceId: 'wh_1',
+          resolvedProperties: {
+            name: 'Hook Updated',
+            description: 'Updated description',
+            url: 'https://example.com/hook',
+            events: ['memory.updated'],
+          },
+        })
+      ).resolves.toBeUndefined();
+
       expect(mockUpdateWebhook).toHaveBeenCalledWith({
         id: 'wh_1',
         name: 'Hook Updated',
@@ -554,6 +593,18 @@ describe('formationsResourceHandlers', () => {
         url: 'https://example.com/hook',
         events: ['memory.updated'],
       });
+    });
+
+    test('ignores document (no-op update)', async () => {
+      await expect(
+        applyUpdateResource({
+          resourceType: 'document',
+          physicalResourceId: 'doc_1',
+          resolvedProperties: {
+            title: 'ignored',
+          },
+        })
+      ).resolves.toBeUndefined();
     });
 
     test('throws when agent or memory entry is missing and for unsupported update resource type', async () => {
