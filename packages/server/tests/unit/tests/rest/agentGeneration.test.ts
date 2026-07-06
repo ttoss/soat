@@ -9,6 +9,12 @@ import { pendingGenerations } from 'src/lib/agentGenerationHelpers';
 import { buildModel } from 'src/lib/agentModel';
 import * as agentsModule from 'src/lib/agents';
 import * as aiProvidersModule from 'src/lib/aiProviders';
+import * as generationsModule from 'src/lib/generations';
+import {
+  createGenerationRecord,
+  updateGenerationRecord,
+} from 'src/lib/generations';
+import * as tracesModule from 'src/lib/traces';
 
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -466,6 +472,33 @@ describe('Agent Generation Routes', () => {
       expect(response.body.output.finish_reason).toBe('stop');
       expect(response.body.trace_id).toBeDefined();
     });
+
+    test('depth guard: tolerates saveTrace/updateGenerationRecord failures (fire-and-forget)', async () => {
+      // buildDepthGuardResult fires saveTrace and updateGenerationRecord
+      // without awaiting them (`.catch(() => {})`) — a failure in either
+      // must never surface to the caller. Mirrors the same fault-injection
+      // pattern generationLifecycle.test.ts uses for its own fire-and-forget
+      // side effects.
+      const traceSpy = jest
+        .spyOn(tracesModule, 'saveTrace')
+        .mockRejectedValueOnce(new Error('trace save failed'));
+      const updateSpy = jest
+        .spyOn(generationsModule, 'updateGenerationRecord')
+        .mockRejectedValueOnce(new Error('update failed'));
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: 'hello' }],
+          max_call_depth: 0,
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('completed');
+
+      traceSpy.mockRestore();
+      updateSpy.mockRestore();
+    });
   });
 
   describe('tool-outputs real continuation (local stub server)', () => {
@@ -623,6 +656,45 @@ describe('Agent Generation Routes', () => {
       expect(response.body.status).toBe('completed');
       expect(response.body.output.content).toBe('final answer');
       expect(pendingGenerations.has('gen_stub_pending')).toBe(false);
+    });
+
+    test('tool-outputs recovers a pending generation from the DB when not in memory', async () => {
+      // Simulates a server restart: no pendingGenerations map entry exists,
+      // so submitToolOutputs must fall back to recoverPendingFromDb, which
+      // rebuilds the pending state from the generation record's
+      // metadata.pendingState — real DB, real aiProviders/agentModel
+      // resolution, no mocking.
+      await createGenerationRecord({
+        publicId: 'gen_recovered',
+        projectId: projectDbId,
+        agentId,
+        traceId: 'trc_recovered',
+      });
+      await updateGenerationRecord({
+        publicId: 'gen_recovered',
+        metadata: {
+          pendingState: {
+            pendingToolCalls: [
+              { toolCallId: 'tc_1', toolName: 'noop', args: {} },
+            ],
+            messages: [{ role: 'user', content: 'hello' }],
+            steps: [],
+            parentTraceId: null,
+            rootTraceId: null,
+            toolContext: null,
+            remainingDepth: null,
+          },
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate/gen_recovered/tool-outputs`)
+        .send({ toolOutputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe('gen_recovered');
+      expect(response.body.status).toBe('completed');
+      expect(response.body.output.content).toBe('final answer');
     });
   });
 });
