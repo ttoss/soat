@@ -21,13 +21,31 @@ pgvector Postgres testcontainer. The intended discipline is documented in
 A full review confirmed the suite mostly lives up to this. This PRD captures the
 concentrated set of defects and drifts that do **not**, ranked by risk.
 
+### Guiding policy — where the test boundary lives
+
+The structural theme behind the P2 items is a single decision rule, now codified in
+`.claude/rules/tests.md` ("Where the Test Boundary Lives" + "Mocking Philosophy — Never
+Mock What You Own"):
+
+> **Test through the entry point (REST / MCP / scheduler / event flow) by default. Write
+> a direct `lib/` test only when the function is (a) a pure algorithm with a large input
+> space that is expensive or low-resolution through HTTP, or (b) has no entry point. In
+> any retained `lib/` test, mock only external I/O you don't own — never the DB, never a
+> module you own — and prefer local fake servers over mocks.**
+
+This is not a rewrite of the infrastructure; the suite is already ~90% boundary-tested
+and does that well. It is a **prune + one enforced rule** applied to the `lib/` folder,
+which today mixes genuinely-justified tests with redundant and mock-fiction ones.
+Appendix A maps every current `lib/` file to keep / delete / rewrite.
+
 ## 2. Goals
 
 - Eliminate tests that pass regardless of behavior (false confidence).
 - Close authorization-coverage gaps (every route: happy path + 401 + 403 + edge).
 - Remove flakiness sources (fixed real-time sleeps, leaked global listeners).
-- Realign the heavily-mocked `lib/` cluster with the "real DB, no internal mocks"
-  premise, or explicitly justify the exceptions.
+- Apply the boundary policy to `lib/`: keep the pure-algorithm / no-entry-point tests,
+  delete the redundant ones, and rewrite the internal-mock cluster onto the real DB (or
+  move it to the entry point).
 - Reduce brittleness (exact-string error bodies) and boilerplate (copy-pasted setup).
 
 ## 3. Non-Goals
@@ -207,61 +225,78 @@ named helper with a comment. Convert `memoryExtraction` settling sleeps to predi
 
 ---
 
-### P2-1 — Realign the heavily-mocked `lib/` cluster with the real-DB premise
+### P2-1 — Apply the boundary policy to `lib/`: rewrite the internal-mock cluster
+
+**This is the flagship structural item.** It executes the "rewrite" column of Appendix A —
+the `lib/` files that violate the boundary policy by mocking things the codebase owns.
 
 **Problem.** A cluster of `lib/` files contradicts "real Postgres, no internal mocks":
 - `lib/agentGeneration.test.ts` and `lib/agentGenerationRecovery.test.ts` use
   `jest.doMock('src/db')`, `jest.doMock('src/lib/generations')`, `...eventBus`,
   `...aiProviders`, etc. + `resetModules` — on modules that **are** on the `app.ts`
-  import chain, which `.claude/rules/tests.md` explicitly forbids.
+  import chain, which the policy forbids. `agentGenerationRecovery` stubs *every*
+  dependency, so it is fully disconnected from the real app.
 - `lib/formations.test.ts` stubs `db.Formation.findOne`/`findAll` with `{ id: 1 } as any`
   throughout and duplicates `rest/formations.test.ts` coverage.
+- `lib/orchestrationScheduler.test.ts` stubs `db.OrchestrationRun.*` / `db.Orchestration.*`
+  even though the scheduler is a real entry point and can run against the real DB.
 - `lib/formation-modules.test.ts` (~2,500 lines) and `formationsResourceHandlers.test.ts`
   `jest.spyOn` ~30–40 internal lib functions and carry the bulk of the suite's
   ~125 `as any`/`as unknown` casts.
 
 **Change (per file, in order of value).**
-1. For `formations.test.ts`: delete assertions already covered by `rest/formations.test.ts`;
+1. `formations.test.ts`: delete assertions already covered by `rest/formations.test.ts`;
    convert the remainder to real-DB fixtures created via the API/models.
-2. For `agentGeneration*`: where the behavior is reachable through the REST generate flow,
+2. `agentGeneration*`: where the behavior is reachable through the REST generate flow,
    move it to the existing `rest/agentGeneration.test.ts` real-DB pattern with the sanctioned
-   `mockCreateGeneration`/`ai` spy. Keep only genuinely-internal seams as lib tests, and
-   document the `ai`-module `jest.mock` exception (`streamText` non-configurable) where it
-   is truly required (as `agentGenerationHelpers.test.ts:483-486` already does).
-3. For `formation-modules.test.ts`: collapse the repetitive per-resource adapter assertions
-   with `test.each`, and prefer real lib calls over spying every CRUD function where feasible.
+   `mockCreateGeneration` spy. Keep only genuinely-internal seams as lib tests, and
+   document the one tolerated `ai`-module `jest.mock` exception (`streamText`/`generateText`
+   non-configurable) at the mock site (as `agentGenerationHelpers.test.ts:483-486` already does).
+3. `orchestrationScheduler.test.ts`: drive the scheduler against the real DB with fake timers
+   (the file already restores them cleanly); drop the `db.*` stubs.
+4. `formation-modules.test.ts` / `formationsResourceHandlers.test.ts`: collapse the repetitive
+   per-resource adapter assertions with `test.each`, and prefer real lib calls over spying
+   every CRUD function where feasible.
 
 **Acceptance criteria.**
-- No `jest.doMock`/`jest.mock` of an internal module that is transitively imported by
-  `app.ts` (verify against the import chain), except documented, unavoidable external-lib
-  cases (`ai`).
+- No `jest.doMock`/`jest.mock`/`jest.spyOn` that substitutes the behavior of an internal
+  (`src/**`) module, except the single documented `ai`-package exception.
+- No `jest.spyOn(db.*, ...)` DB-layer stubbing anywhere in `lib/`.
 - `as any`/`as unknown` count in `lib/` reduced substantially (target: eliminate in
   `formations.test.ts`; document any residual).
-- No net loss of behavioral coverage (rest counterparts assert the same properties).
+- No net loss of behavioral coverage (entry-point counterparts assert the same properties).
 
-**Effort:** L (largest item; can be split per-file across PRs).
+**Effort:** L (largest item; split per-file across PRs — one file per PR is fine).
 
 ---
 
-### P2-2 — Prune low-value / redundant tests
+### P2-2 — Prune redundant and low-value `lib/` tests (the "delete" column)
+
+Executes the "delete" column of Appendix A: `lib/` tests that neither test a pure algorithm
+nor an entry-point-less function, and add no behavioral value.
 
 **Problem.**
 - `lib/agents.test.ts` re-tests `resolveUrlPathParams`, a pure re-export already covered by
-  `lib/agentToolResolver.test.ts:896-951`.
-- `lib/agentModel.test.ts` — 17 tests assert only `toBeDefined()`; they exercise branches
-  but cannot distinguish correct from incorrect wiring.
+  `lib/agentToolResolver.test.ts:896-951` — delete outright.
 - `lib/orchestrationRunActions.test.ts` — every test hits a nonexistent run and asserts the
   same `ORCHESTRATION_RUN_NOT_FOUND`; the file comment concedes it exists only for branch
-  coverage.
+  coverage. Covered by the entry point.
+- `lib/sessionTags.test.ts` / the `documents.test.ts` guard — the file comments concede the
+  branch is unreachable via REST because the route pre-checks. Per the policy, delete the
+  dead guard rather than test it (confirm the branch is truly unreachable first).
+- `lib/agentModel.test.ts` — 17 tests assert only `toBeDefined()`; they exercise branches
+  but cannot distinguish correct from incorrect wiring.
 - `lib/policyCompiler.test.ts:141,162,187,…` assert only `result.where).toBeDefined()` for
-  the critical policy→SQL compilation.
+  the critical policy→SQL compilation — this file is a **keep** (pure algorithm), so
+  *strengthen* rather than delete: assert the compiled `where` clause structure.
 
-**Change.** Either strengthen the assertion (assert the compiled clause / resolved model /
-mapped args) so the test can fail on regression, or delete it if a stronger test elsewhere
-already covers the behavior. `agents.test.ts` (re-export) can be deleted outright.
+**Change.** Delete the redundant/branch-only files; for the weak-assertion keeps
+(`policyCompiler`, `agentModel` if kept), strengthen the assertion so the test can fail on
+regression (assert the compiled clause / resolved model / mapped args).
 
-**Acceptance criteria.** Every retained test has an assertion that can fail if the behavior
-regresses; `toBeDefined()`-only tests for non-trivial logic are strengthened or removed.
+**Acceptance criteria.** Every retained `lib/` test either exercises a pure algorithm or an
+entry-point-less function *and* has an assertion that can fail on regression; redundant and
+branch-only files are gone; no dead guard remains solely to be tested.
 
 **Effort:** M.
 
@@ -323,17 +358,24 @@ reason.
 
 ## 5. Rollout
 
-Independent, incrementally shippable PRs. Suggested order:
+The guiding policy (§1) is codified in `.claude/rules/tests.md` in the same PR as this
+PRD, so every subsequent PR is measured against a written rule. Then, independent,
+incrementally shippable PRs in this order:
 
 1. **PR-1 (P0):** P0-1 + P0-2 — fix and audit vacuous assertions.
 2. **PR-2 (P1 coverage):** P1-1 + P1-2 — actors/documents/files/chats 403 coverage.
 3. **PR-3 (P1 reliability):** P1-4 + P1-5 + P1-6 — de-flake webhookDispatcher, eventBus
    leak, TTL/settling sleeps.
 4. **PR-4 (P1 contract):** P1-3 — error-body contract cleanup (coordinate with route owners).
-5. **PR-5+ (P2):** P2-1 split per file, then P2-2/P2-3/P2-4/P2-5.
+5. **PR-5 (P2 delete):** P2-2 — delete the "delete" column of Appendix A; strengthen the
+   weak-assertion keeps. Cheapest, highest signal-to-noise.
+6. **PR-6+ (P2 rewrite):** P2-1 split **one file per PR** following Appendix A's rewrite
+   table, then P2-3 / P2-4 / P2-5.
 
 Each PR follows the repo's red/green rule from `.claude/rules/quality-assurance.md`:
 demonstrate the test fails for the right reason before/without the fix, then green.
+For rewrite PRs, "red/green" means: confirm the entry-point (or real-DB) test fails when
+the production behavior is broken — proving it isn't just re-asserting a mock.
 
 ## 6. Definition of Done (per PR)
 
@@ -348,9 +390,61 @@ demonstrate the test fails for the right reason before/without the fix, then gre
 
 - 0 vacuous (always-passing) assertions in `rest/`.
 - Every REST route: happy path + 401 + 403 + relevant edge covered.
-- 0 `jest.doMock`/`jest.mock` of internal `app.ts`-chain modules (documented exceptions aside).
-- `as any`/`as unknown` in tests reduced from ~125 toward the `formations`/`formation-modules`
-  cluster being the only (documented) residual.
+- 0 `jest.doMock`/`jest.mock`/`jest.spyOn` substituting an internal (`src/**`) module,
+  and 0 `jest.spyOn(db.*)` DB stubs — the single documented `ai`-package mock aside.
+- Every retained `lib/` file satisfies the keep-list rule (pure algorithm or no entry point).
+- `as any`/`as unknown` in tests reduced from ~125 toward zero in the `formations` cluster.
 - Suite passes under randomized order; no fixed real-time settling sleeps.
-</content>
-</invoke>
+
+## Appendix A — `lib/` file disposition under the boundary policy
+
+Every current `lib/` test file, sorted into **keep** (satisfies the keep-list),
+**delete** (redundant / branch-only / dead-guard), or **rewrite** (drop internal mocks →
+real DB, or move to the entry point). Grouped; representative files named.
+
+### Keep — pure algorithm, large input space (test directly; no mocks)
+
+`iam`, `policyCompiler` (strengthen assertions — P2-2), `jsonLogicMapping`,
+`orchestrationValidation`, `orchestrationRetry`, `formationsHelpers`, `formationsValidation`,
+`soatToolsHelpers`, `filePaths`, `openapiSchemaFields`, `chunking`, `ingestionRuleMatching`,
+`providerError`, `oauthConsent`, `memoryConsolidation`, `ingestionCallbackToken`,
+`ingestionCallback`, `fileAuthorization`, `requestValidation`, `normalizers`,
+`strictFields`, `permissionCatalog`, `openapiSpec`, `jsonLogicMapping`.
+
+### Keep — no entry point / internal seam (real DB + external-I/O fake only)
+
+`sessionOperations` (`sendSessionMessage` has no route), `toolsCall` (`callEphemeralTool`),
+`agentToolResolver` (`execute` internals; real echo server), `discussionCompletion` and
+`memoryExtractionCompletion` (**exemplary** — real `generateText` vs local stub),
+`discussionEngine`, `agentKnowledge` (prompt-injection hardening), `memoryEntries`,
+`memoryExtraction`, `messageContent`, `knowledge`, `agentGenerationRecordFailure`,
+`agentTraces`, `fkOnDelete`, `orchestrationLease`, `orchestrationNodeExecutors`
+(timer-free wait-descriptors — **exemplary**), `generationLifecycle`,
+`callApi`, `pipelineTools`, `discussionsFormationModule`, `sessionTags` (keep only if a
+reachable branch remains after P2-2), `generations` (record-writer half only).
+
+### Delete — redundant / branch-only / dead guard (covered at the entry point)
+
+| File | Reason |
+|---|---|
+| `agents.test.ts` | pure re-export of `resolveUrlPathParams`, already in `agentToolResolver.test.ts` |
+| `orchestrationRunActions.test.ts` | every test = same `ORCHESTRATION_RUN_NOT_FOUND`; branch-coverage-only per its own comment |
+| `sessionTags` / `documents` guard tests | branch unreachable via REST; delete the guard instead (verify first) |
+| list/get halves of `generations` / `ingestionRules` | duplicate `rest/` coverage |
+
+### Rewrite — drop internal mocks → real DB, or move to entry point (P2-1)
+
+| File | Current violation | Target |
+|---|---|---|
+| `formations.test.ts` | `db.Formation.*` stubbed with `{id:1} as any`; dup of `rest/formations` | real-DB fixtures; delete duplicated assertions |
+| `agentGeneration.test.ts` | `doMock('src/db')`, `src/lib/generations`, `eventBus` | move reachable cases to `rest/agentGeneration`; keep only internal seams |
+| `agentGenerationRecovery.test.ts` | every dependency `doMock`'d — fully disconnected | real DB + `mockCreateGeneration`; keep only unreachable-via-REST recovery paths |
+| `orchestrationScheduler.test.ts` | `db.OrchestrationRun.*` / `db.Orchestration.*` stubbed | real DB + fake timers (scheduler is an entry point) |
+| `formation-modules.test.ts` | ~30–40 internal `spyOn`; bulk of `as any` | `test.each` + real lib calls where feasible |
+| `formationsResourceHandlers.test.ts` | internal `spyOn` + mega-tests | real calls; split mega-tests (P2-5) |
+| `webhookDispatcher.test.ts` | `db.WebhookDelivery.create` reject stub + fixed sleeps | real DB + promise signaling (also P1-4) |
+| `eventBus.test.ts` | leaked singleton listener | register/unregister in lifecycle (also P1-5) |
+
+> Note: `agentGenerationHelpers.test.ts` and `agentNonStreamGeneration.test.ts` mock only
+> the external `ai` package (`streamText`/`generateText` are non-configurable) — that is the
+> one sanctioned `jest.mock` exception, kept and documented at the mock site, not rewritten.
