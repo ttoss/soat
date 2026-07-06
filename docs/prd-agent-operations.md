@@ -1,0 +1,187 @@
+# PRD: Agent Operations on Formations (Overview)
+
+> Umbrella document for a set of related PRDs that together make a single
+> [Formation](../packages/website/docs/modules/formations.md) able to declare a
+> complete, **operating** team of agents — schedules, guardrails, approval
+> queues, cost meters, and versioned knowledge — not just the static agent
+> topology. Each capability has its own PRD; this page holds the shared goals,
+> the gap analysis, and the end-state template they add up to.
+
+| Capability                                | PRD                                                    |
+| ----------------------------------------- | ------------------------------------------------------ |
+| Cron-triggered orchestration runs         | [prd-schedules.md](./prd-schedules.md)                 |
+| Queue-backed run execution                | [prd-orchestration-queue.md](./prd-orchestration-queue.md) |
+| Approval & exception queues, activity feed | [prd-approvals.md](./prd-approvals.md)                 |
+| Guardrail policies (action classes)       | [prd-guardrails.md](./prd-guardrails.md)               |
+| Usage metering                            | [prd-usage-metering.md](./prd-usage-metering.md)       |
+| Feedback loop → learned rules             | [prd-learned-rules.md](./prd-learned-rules.md)         |
+| Knowledge packages & context assembly     | [prd-knowledge-packages.md](./prd-knowledge-packages.md) |
+
+## Problem Statement
+
+Formations can already deploy a full agent stack declaratively: providers,
+agents, tools, memories, secrets, DAG orchestrations with human nodes, webhooks
+— one template, one stack, parameterized per project. What they deploy today is
+**passive**: nothing runs until a caller starts an orchestration run or sends a
+message.
+
+Teams building always-on, production agent operations (recurring analysis
+cycles, autonomous actions against external systems, human sign-off on risky
+actions, per-project cost accounting) currently have to bolt an external
+scheduler, an approval workflow, a policy layer, and a metering pipeline onto
+SOAT. Those are exactly the pieces that make an agent deployment *operate*
+rather than merely *exist*, and they belong in the platform.
+
+## Goals
+
+1. A single formation template can declare a complete, operating agent stack:
+   agents and tools **plus schedules, guardrail policies, approval queues, and
+   cost meters**.
+2. Cycles run proactively on schedules, durably, surviving redeploys.
+3. Every mutation-capable tool call passes through a deterministic (non-LLM)
+   guardrail evaluator with fail-closed semantics.
+4. Approvals and exceptions are first-class, queryable product state — not
+   ephemeral pauses inside a DAG run.
+5. Per-run cost accounting is billing-grade: append-only, idempotent under
+   retries, attributable to `project → run → node → agent`.
+6. Human corrections are capturable as candidate rules and promotable into
+   versioned, scoped knowledge that changes the next run.
+
+## Non-Goals
+
+- Billing itself. SOAT meters usage; converting meters into invoices, credits,
+  or customer-facing billing units happens downstream in the consuming product.
+- Product surfaces (dashboards, chat apps, messaging integrations). SOAT
+  exposes queues, feeds, and events via REST/MCP/webhooks; surfaces stay thin
+  clients.
+- Curation UIs for learned rules — consumers of the API.
+- A general-purpose workflow engine. Durable execution remains scoped to DAG
+  orchestrations: no sub-workflow signals beyond approval resolution, no
+  arbitrary event triggers (webhook-receive nodes already cover inbound waits).
+
+## Gap Analysis
+
+What SOAT already covers (and these PRDs do **not** re-specify): agents, tools
+(HTTP/MCP/client/SOAT), memories with dedup/merge, secrets, DAG orchestrations
+with human/delay/poll/loop/condition nodes, **durable background run execution
+with checkpoint-based crash recovery and per-node retry/backoff** (see
+[orchestrations.md → Durable Background Execution](../packages/website/docs/modules/orchestrations.md#durable-background-execution)),
+project tenancy, caller ∩ agent permission intersection, webhooks with signed
+deliveries, and Formations as the declarative deploy layer.
+
+| #  | Gap                                    | Requirement                                                        | SOAT today                                                                                                      |
+| -- | -------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| G1 | Scheduler / triggers                    | Recurring cycles (cron-shaped) started without a caller             | Orchestration runs start only via `start-orchestration-run`                                                       |
+| G2 | Queue-backed runs                       | Worker pool, at-least-once + idempotency, concurrency limits        | Durable background execution, lease/reaper recovery, and retries **exist**; no queue abstraction, no idempotency keys, no concurrency limits |
+| G3 | Approval & exception queues             | Persistent queue with evidence + expiry; manage-by-exception        | `human` nodes pause runs (`awaiting_input`); no persistent queue, no expiry, no severity routing                   |
+| G4 | Guardrail policy evaluator              | Action classes A/B/C/D, deterministic guards, fail-closed           | `policy` resource is permission-shaped only                                                                        |
+| G5 | Billing-grade cost metering             | Per-run token/cost accounting, idempotent under retries             | No token usage or cost recording anywhere in the server                                                            |
+| G6 | Feedback loop → learned rules           | Candidate rule → curation → promotion, scoped                       | Memory dedup/merge stores facts; no rule lifecycle                                                                 |
+| G7 | Knowledge packages / layered assembly   | Versioned immutable packages; token-budgeted layered context        | Memories/documents/RAG exist; no package artifact, no layering                                                     |
+
+## End State: One Template, One Operating Stack
+
+With all seven PRDs shipped, a single template expresses an operating stack.
+Illustrative sketch (resource properties abbreviated):
+
+```yaml
+parameters:
+  KnowledgeVersion: { type: string }
+  ActionClassesDoc: { type: string }
+  DailyCycleCron: { type: string, default: '0 8 * * *' }
+  ExternalMcpUrl: { type: string }
+
+resources:
+  Provider: { type: ai_provider, properties: ... }
+
+  StackKnowledge:
+    type: knowledge_package
+    properties:
+      package: acme/ops-intelligence
+      version: { param: KnowledgeVersion }
+
+  ActionPolicy:
+    type: policy
+    properties:
+      kind: action_classes
+      document: { param: ActionClassesDoc }
+
+  ExternalTools:
+    type: tool
+    properties: { type: mcp, url: { param: ExternalMcpUrl } }
+
+  Analyst: { type: agent, properties: ... }
+  Operator:
+    type: agent
+    properties:
+      tools: [{ ref: ExternalTools }]
+      guardrail_policy_id: { ref: ActionPolicy }
+
+  DailyFlow:
+    type: orchestration
+    properties:
+      nodes: [..., { id: sign_off, type: approval, expires_in: 24h }]
+      edges: [...]
+
+  DailyCycle:
+    type: schedule
+    properties:
+      orchestration_id: { ref: DailyFlow }
+      cron: { param: DailyCycleCron }
+      overlap_policy: skip
+
+  AppWebhook:
+    type: webhook
+    properties:
+      url: https://app.example.com/hooks/soat
+      events: [approvals.created, approvals.expired, exceptions.created]
+```
+
+One formation deploy per project (template + project parameters) yields a
+stack that runs on schedule, executes safe actions autonomously, queues risky
+ones for approval, meters every LLM call, and learns from every human
+correction.
+
+## Suggested Build Order
+
+Ordered so that a read-only analysis cycle works end to end first (zero
+side-effect risk while the pipeline hardens):
+
+| Step | Scope                                                            | Unblocks                                                     |
+| ---- | ----------------------------------------------------------------- | ------------------------------------------------------------ |
+| 1    | G2 queue driver (Postgres) + idempotency keys, then G1 schedules   | A daily read-only cycle end to end, surviving restarts        |
+| 2    | G3 approval/exception queues + webhook events + activity feed      | Manage-by-exception surface; class C flow                     |
+| 3    | G4 action-class evaluator + G5 metering                            | Autonomous class-B actions with fail-closed guards; cost visibility from day 1 |
+| 4    | G7 knowledge packages + context assembler                          | Knowledge rollout without redeploys; full audit chain          |
+| 5    | G6 feedback loop                                                   | A promoted rule changes the next run                           |
+| 6    | Alternate queue driver (e.g. SQS) + load hardening                 | Deployments on managed-queue infrastructure                    |
+
+## Acceptance Criteria (cross-PRD)
+
+1. A formation deploy plus a schedule fires a run with no human action; the
+   run survives a worker restart mid-flight and completes (G1+G2).
+2. Many projects run cycles in parallel with zero cross-tenant reads —
+   existing tenancy tests extended over every new table.
+3. 100% of class-C tool calls are blocked without an approval record; expired
+   approvals never execute; guard-failing class-B calls abort and file
+   exceptions — all proven fail-closed by test (G3+G4).
+4. Rejecting an approval with a reason creates a candidate rule; promoting it
+   changes the assembled context of the next matching run (G6+G7).
+5. For any executed mutation, one query returns: agent, run, evidence,
+   knowledge package version, policy version, approver (G3+G4+G7).
+6. Replayed/retried nodes produce exactly one `UsageMeter` row per LLM call
+   (idempotency under at-least-once delivery) (G2+G5).
+
+## Risks & Mitigations
+
+- **API stability:** new resource types ship as beta until the full set lands;
+  existing module APIs are not broken by any of these PRDs.
+- **Scope creep toward a workflow engine:** durable execution stays scoped to
+  checkpoint-resume of DAG runs. Anything more waits for real demand.
+- **Guard expression language becomes a DSL swamp:** guards are capped at
+  JSON Logic (the evaluator orchestrations already use) plus named context
+  providers; anything else must be a code-side context provider, reviewed like
+  code.
+- **Knowledge confidentiality regression:** package content is encrypted at
+  rest, readable by the runtime at assembly time only, and covered by a
+  dedicated "knowledge never in logs/API/events" test suite (G7).
