@@ -316,11 +316,11 @@ describe('Discussions', () => {
             properties: { topic: { type: 'string' } },
             required: ['topic'],
           },
-          discussion: { discussion_id: created.body.id },
+          discussion_id: created.body.id,
         });
       expect(res.status).toBe(201);
       expect(res.body.type).toBe('discussion');
-      expect(res.body.discussion.discussion_id).toBe(created.body.id);
+      expect(res.body.discussion_id).toBe(created.body.id);
     });
 
     test('rejects a discussion tool referencing a missing discussion', async () => {
@@ -330,7 +330,7 @@ describe('Discussions', () => {
           project_id: projectId,
           name: 'bad-panel',
           type: 'discussion',
-          discussion: { discussion_id: 'disc_missing' },
+          discussion_id: 'disc_missing',
         });
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
@@ -488,7 +488,7 @@ describe('Discussions', () => {
         {
           name: 'ask',
           type: 'discussion',
-          discussion: { discussionId: created.body.id },
+          discussionId: created.body.id,
         },
         { topic: 'What should we do?' }
       )) as { outcome: string; run_id: string };
@@ -499,7 +499,7 @@ describe('Discussions', () => {
     test('throws when the discussion config is missing a discussionId', async () => {
       await expect(
         callDiscussionTool(
-          { name: 'ask', type: 'discussion', discussion: {} },
+          { name: 'ask', type: 'discussion' },
           {
             topic: 't',
           }
@@ -516,7 +516,7 @@ describe('Discussions', () => {
           {
             name: 'ask',
             type: 'discussion',
-            discussion: { discussionId: created.body.id },
+            discussionId: created.body.id,
           },
           {}
         )

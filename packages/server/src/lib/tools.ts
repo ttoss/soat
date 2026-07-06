@@ -72,7 +72,7 @@ export type MappedTool = {
   actions: string[] | null;
   presetParameters: object | null;
   pipeline: object | null;
-  discussion: object | null;
+  discussionId: string | null;
   outputMapping: object | null;
   createdAt: Date;
   updatedAt: Date;
@@ -101,7 +101,9 @@ const mapTool = (
     actions: tool.actions,
     presetParameters: tool.presetParameters,
     pipeline: tool.pipeline,
-    discussion: tool.discussion,
+    discussionId:
+      (tool.discussion as { discussionId?: string } | null)?.discussionId ??
+      null,
     outputMapping: tool.outputMapping,
     createdAt: tool.createdAt,
     updatedAt: tool.updatedAt,
@@ -121,7 +123,7 @@ const buildToolConfigFields = (args: CreateToolArgs) => {
     actions: args.actions ?? null,
     presetParameters: args.presetParameters ?? null,
     pipeline: args.pipeline ?? null,
-    discussion: args.discussion ?? null,
+    discussion: args.discussionId ? { discussionId: args.discussionId } : null,
     outputMapping: args.outputMapping ?? null,
   };
 };
@@ -153,22 +155,22 @@ const assertDiscussionToolValid = async (args: {
   definition: InlineToolDefinition;
   projectId: number;
 }): Promise<void> => {
-  const config = args.definition.discussion as
-    | { discussionId?: string }
-    | undefined;
-  if (!config?.discussionId) {
+  if (!args.definition.discussionId) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'A discussion tool requires a discussion configuration with a discussionId.'
+      'A discussion tool requires a discussion_id.'
     );
   }
   const discussion = await db.Discussion.findOne({
-    where: { publicId: config.discussionId, projectId: args.projectId },
+    where: {
+      publicId: args.definition.discussionId,
+      projectId: args.projectId,
+    },
   });
   if (!discussion) {
     throw new DomainError(
       'RESOURCE_NOT_FOUND',
-      `Discussion '${config.discussionId}' not found in the project.`
+      `Discussion '${args.definition.discussionId}' not found in the project.`
     );
   }
 };
@@ -288,11 +290,11 @@ const buildToolUpdates = (args: {
   actions?: string[] | null;
   presetParameters?: object | null;
   pipeline?: object | null;
-  discussion?: object | null;
+  discussionId?: string | null;
   outputMapping?: object | null;
 }): Record<string, unknown> => {
   const updates: Record<string, unknown> = {};
-  const fields = [
+  const scalarFields = [
     'type',
     'name',
     'description',
@@ -302,11 +304,15 @@ const buildToolUpdates = (args: {
     'actions',
     'presetParameters',
     'pipeline',
-    'discussion',
     'outputMapping',
   ] as const;
-  for (const field of fields) {
+  for (const field of scalarFields) {
     if (args[field] !== undefined) updates[field] = args[field];
+  }
+  if (args.discussionId !== undefined) {
+    updates.discussion = args.discussionId
+      ? { discussionId: args.discussionId }
+      : null;
   }
   return updates;
 };
@@ -323,7 +329,7 @@ type ToolUpdateArgs = {
   actions?: string[] | null;
   presetParameters?: object | null;
   pipeline?: object | null;
-  discussion?: object | null;
+  discussionId?: string | null;
   outputMapping?: object | null;
 };
 
@@ -333,12 +339,12 @@ const validateToolUpdate = async (params: {
   tool: InstanceType<typeof db.Tool>;
 }): Promise<void> => {
   const { args, tool } = params;
-  if (args.discussion !== undefined && args.discussion !== null) {
+  if (args.discussionId !== undefined && args.discussionId !== null) {
     await assertDiscussionToolValid({
       definition: {
         name: tool.name,
         type: 'discussion',
-        discussion: args.discussion,
+        discussionId: args.discussionId,
       },
       projectId: tool.projectId,
     });

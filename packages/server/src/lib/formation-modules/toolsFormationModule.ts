@@ -142,6 +142,7 @@ export const toolsFormationModule: FormationModule = {
       presetParameters:
         toNullableObject(properties.preset_parameters) ?? undefined,
       pipeline: toNullableObject(properties.pipeline) ?? undefined,
+      discussionId: toOptionalString(properties.discussion_id),
       outputMapping: toNullableObject(properties.output_mapping) ?? undefined,
     });
 
@@ -174,6 +175,7 @@ export const toolsFormationModule: FormationModule = {
       actions: toNullableArray<string>(properties.actions),
       presetParameters: toNullableObject(properties.preset_parameters),
       pipeline: toNullableObject(properties.pipeline),
+      discussionId: toNullableString(properties.discussion_id),
       outputMapping: toNullableObject(properties.output_mapping),
     });
   },
@@ -195,6 +197,7 @@ export const toolsFormationModule: FormationModule = {
         actions: tool.actions,
         preset_parameters: tool.presetParameters,
         pipeline: tool.pipeline,
+        discussion_id: tool.discussionId,
         output_mapping: tool.outputMapping,
       };
     } catch {
