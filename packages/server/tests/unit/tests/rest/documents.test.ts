@@ -15,7 +15,7 @@ describe('Documents', () => {
   let userId: string;
   let projectId: string;
   let policyId: string;
-  let _noPermToken: string;
+  let noPermToken: string;
 
   beforeAll(async () => {
     await testClient
@@ -66,7 +66,7 @@ describe('Documents', () => {
       .post('/api/v1/users')
       .send({ username: 'docsnoperm', password: 'nopassword' });
     expect(noPermRes.status).toBe(201);
-    _noPermToken = await loginAs('docsnoperm', 'nopassword');
+    noPermToken = await loginAs('docsnoperm', 'nopassword');
   });
 
   afterAll(() => {
@@ -114,6 +114,14 @@ describe('Documents', () => {
         .send({ project_id: projectId });
 
       expect(response.status).toBe(400);
+    });
+
+    test('user without CreateDocument permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .post('/api/v1/documents')
+        .send({ project_id: projectId, content: 'Forbidden content.' });
+
+      expect(response.status).toBe(403);
     });
   });
 
@@ -190,6 +198,14 @@ describe('Documents', () => {
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.data)).toBe(true);
     });
+
+    test('user without ListDocuments permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/documents?project_id=${projectId}`
+      );
+
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('GET /api/v1/documents/:id', () => {
@@ -228,6 +244,14 @@ describe('Documents', () => {
       );
 
       expect(response.status).toBe(404);
+    });
+
+    test('user without GetDocument permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/documents/${documentId}`
+      );
+
+      expect(response.status).toBe(403);
     });
   });
 
@@ -276,6 +300,19 @@ describe('Documents', () => {
       );
 
       expect(response.status).toBe(404);
+    });
+
+    test('user without DeleteDocument permission returns 403', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({ project_id: projectId, content: 'Protect me from delete.' });
+      const documentId = createRes.body.id;
+
+      const response = await authenticatedTestClient(noPermToken).delete(
+        `/api/v1/documents/${documentId}`
+      );
+
+      expect(response.status).toBe(403);
     });
   });
 
@@ -776,7 +813,7 @@ describe('Documents', () => {
     });
 
     test('returns 403 when user has no IngestDocument permission', async () => {
-      const response = await authenticatedTestClient(_noPermToken)
+      const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/documents/ingest')
         .send({ file_id: pdfFileId, project_id: projectId });
       expect(response.status).toBe(403);
@@ -1306,7 +1343,7 @@ describe('Documents', () => {
         .send({ file_id: fileId, project_id: projectId });
       const docId = ingestRes.body.id as string;
 
-      const res = await authenticatedTestClient(_noPermToken)
+      const res = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/documents/${docId}/ingest`)
         .send({});
       expect(res.status).toBe(403);

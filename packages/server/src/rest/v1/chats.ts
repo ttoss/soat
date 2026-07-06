@@ -1,16 +1,18 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import type { ChatMessage, ChatMessageInput } from 'src/lib/chats';
+import type { ChatMessage, ChatMessageInput, MappedChat } from 'src/lib/chats';
 import {
   createChat,
   createChatCompletion,
   createChatCompletionForChat,
   deleteChat,
+  findChat,
   getChat,
   listChats,
   streamChatCompletion,
   streamChatCompletionForChat,
 } from 'src/lib/chats';
+import { buildSrn } from 'src/lib/iam';
 
 import {
   checkAuth,
@@ -19,6 +21,32 @@ import {
 } from './helpers';
 
 export const chatsRouter = new Router<Context>();
+
+/**
+ * Checks whether the caller can perform `action` on `chat`.
+ * Sets ctx.status = 403 and returns false when not allowed.
+ */
+const checkChatPermission = async (
+  ctx: Context,
+  chat: MappedChat,
+  action: string
+): Promise<boolean> => {
+  const resource = buildSrn({
+    projectPublicId: chat.projectId,
+    resourceType: 'chat',
+    resourceId: chat.id,
+  });
+  const allowed = await ctx.authUser!.isAllowed({
+    projectPublicId: chat.projectId,
+    action,
+    resource,
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+  }
+  return allowed;
+};
 
 /**
  * Validates POST /chats request body
@@ -108,6 +136,8 @@ chatsRouter.get('/chats/:chat_id', async (ctx: Context) => {
 
   const chat = await getChat({ id: chatId });
 
+  if (!(await checkChatPermission(ctx, chat, 'chats:GetChat'))) return;
+
   ctx.body = chat;
 });
 
@@ -119,6 +149,10 @@ chatsRouter.delete('/chats/:chat_id', async (ctx: Context) => {
   }
 
   const { chat_id: chatId } = ctx.params;
+
+  const chat = await getChat({ id: chatId });
+
+  if (!(await checkChatPermission(ctx, chat, 'chats:DeleteChat'))) return;
 
   await deleteChat({ id: chatId });
 
@@ -183,6 +217,17 @@ chatsRouter.post('/chats/:chat_id/completions', async (ctx: Context) => {
   }
 
   const chatMessages = messages as ChatMessageInput[];
+
+  // An unknown chatId is left to createChatCompletionForChat / the streaming
+  // handler below, which already produce the established 400 / SSE-error
+  // behavior for a missing chat. Only a chat that exists is permission-checked.
+  const chat = await findChat({ id: chatId });
+  if (
+    chat &&
+    !(await checkChatPermission(ctx, chat, 'chats:CreateChatCompletionForChat'))
+  ) {
+    return;
+  }
 
   if (stream) {
     await handleStreamingCompletion({

@@ -114,17 +114,29 @@ export const createChat = async (args: {
   return mapChat(created as unknown as Parameters<typeof mapChat>[0]);
 };
 
-export const getChat = async (args: { id: string }): Promise<MappedChat> => {
+export const findChat = async (args: {
+  id: string;
+}): Promise<MappedChat | null> => {
   const chat = await db.Chat.findOne({
     where: { publicId: args.id },
     include: getChatIncludes(),
   });
 
   if (!chat) {
-    throw new DomainError('RESOURCE_NOT_FOUND', `Chat '${args.id}' not found.`);
+    return null;
   }
 
   return mapChat(chat as unknown as Parameters<typeof mapChat>[0]);
+};
+
+export const getChat = async (args: { id: string }): Promise<MappedChat> => {
+  const chat = await findChat(args);
+
+  if (!chat) {
+    throw new DomainError('RESOURCE_NOT_FOUND', `Chat '${args.id}' not found.`);
+  }
+
+  return chat;
 };
 
 export const listChats = async (args: {

@@ -178,6 +178,14 @@ describe('Files', () => {
 
       expect(response.status).toBe(404);
     });
+
+    test('user without GetFile permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/files/${fileId}`
+      );
+
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('GET /api/v1/files/:id/download', () => {
@@ -254,6 +262,14 @@ describe('Files', () => {
 
       expect(response.status).toBe(401);
     });
+
+    test('user without DownloadFile permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/files/${fileId}/download`
+      );
+
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('PATCH /api/v1/files/:id/metadata', () => {
@@ -297,6 +313,14 @@ describe('Files', () => {
         .send({ metadata: '{}' });
 
       expect(response.status).toBe(404);
+    });
+
+    test('user without UpdateFileMetadata permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .patch(`/api/v1/files/${fileId}/metadata`)
+        .send({ metadata: '{}' });
+
+      expect(response.status).toBe(403);
     });
   });
 
@@ -397,6 +421,24 @@ describe('Files', () => {
       );
 
       expect(response.status).toBe(404);
+    });
+
+    test('user without DeleteFile permission returns 403', async () => {
+      const fileContent = Buffer.from('Protect me from delete!');
+      const uploadRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', fileContent, {
+          filename: 'no-delete-perm.txt',
+          contentType: 'text/plain',
+        })
+        .field('project_id', projectId);
+      const fileId = uploadRes.body.id;
+
+      const response = await authenticatedTestClient(noPermToken).delete(
+        `/api/v1/files/${fileId}`
+      );
+
+      expect(response.status).toBe(403);
     });
   });
 
@@ -989,6 +1031,13 @@ describe('Files', () => {
       );
       expect(response.status).toBe(404);
     });
+
+    test('user without GetFile permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/files/${taggedFileId}/tags`
+      );
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('PUT /api/v1/files/:id/tags', () => {
@@ -1025,6 +1074,13 @@ describe('Files', () => {
         .put('/api/v1/files/nonexistent-file-id/tags')
         .send({ env: 'prod' });
       expect(response.status).toBe(404);
+    });
+
+    test('user without UpdateFileMetadata permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .put(`/api/v1/files/${taggedFileId}/tags`)
+        .send({ env: 'prod' });
+      expect(response.status).toBe(403);
     });
   });
 
@@ -1065,6 +1121,13 @@ describe('Files', () => {
         .patch('/api/v1/files/nonexistent-file-id/tags')
         .send({ version: '2' });
       expect(response.status).toBe(404);
+    });
+
+    test('user without UpdateFileMetadata permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .patch(`/api/v1/files/${taggedFileId}/tags`)
+        .send({ version: '3' });
+      expect(response.status).toBe(403);
     });
   });
 });
