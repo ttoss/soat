@@ -521,8 +521,8 @@ describe('Conversations', () => {
         `/api/v1/conversations/${conversationId}/messages`
       );
       expect(
-        listRes.body.data.some((m: { documentId: string }) => {
-          return m.documentId === secondDocumentId;
+        listRes.body.data.some((m: { document_id: string }) => {
+          return m.document_id === secondDocumentId;
         })
       ).toBe(false);
     });
