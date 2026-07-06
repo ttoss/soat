@@ -1,5 +1,12 @@
 # PRD: Schedules Module
 
+> **⚠️ Superseded.** This PRD is generalized by the **Triggers** module, which
+> covers cron schedules as one of three starter types (`manual` / `webhook` /
+> `schedule`) and can activate agents and tools in addition to orchestrations.
+> A cron trigger (`type: schedule`) is the direct successor to a schedule. See
+> the [Triggers module documentation](../packages/website/docs/modules/triggers.md)
+> for the shipped design. This document is retained for historical context only.
+
 > Part of [Agent Operations on Formations](./prd-agent-operations.md) (G1).
 > Depends on [prd-orchestration-queue.md](./prd-orchestration-queue.md) for
 > enqueueing fired runs; works degraded (direct `startOrchestrationRun`) until
