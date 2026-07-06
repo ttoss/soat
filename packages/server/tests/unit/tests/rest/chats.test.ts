@@ -554,9 +554,9 @@ describe('Chats', () => {
 
     test('non-streaming request reaches createChatCompletion (propagates AI error status)', async () => {
       // createChatCompletion runs its system/non-system message split before
-      // calling generateText. generateText throws because ollama falls back
-      // to OpenAI (no baseUrl set) and OpenAI returns 401 for the 'ollama'
-      // api key; Koa propagates that statusCode as the HTTP response status.
+      // calling generateText, which throws because this suite has no live
+      // Ollama server (only the smoke/tutorials CI jobs set one up) — the
+      // connection failure surfaces as an unhandled error, i.e. 500.
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chat/completions')
         .send({
@@ -567,7 +567,7 @@ describe('Chats', () => {
           ],
         });
 
-      expect(response.status).not.toBe(200);
+      expect(response.status).toBe(500);
     });
   });
 
@@ -600,17 +600,15 @@ describe('Chats', () => {
     });
 
     test('non-streaming completions with ollama provider (reaches generateText, propagates AI error status)', async () => {
-      // createChatCompletionForChat runs getChatSystemMessage + buildChatFinalMessages before
-      // calling generateText. generateText throws because ollama falls back to OpenAI
-      // (no baseUrl set), and OpenAI returns 401 for the 'ollama' api key. Koa propagates
-      // that statusCode as the HTTP response status.
+      // createChatCompletionForChat runs getChatSystemMessage +
+      // buildChatFinalMessages before calling generateText, which throws
+      // because this suite has no live Ollama server — same reasoning as
+      // the chat/completions test above.
       const res = await authenticatedTestClient(adminToken)
         .post(`/api/v1/chats/${realChatId}/completions`)
         .send({ messages: [{ role: 'user', content: 'Hello' }] });
 
-      // Not 200/201 — execution reached createChatCompletionForChat which then threw
-      expect(res.status).not.toBe(200);
-      expect(res.status).not.toBe(404);
+      expect(res.status).toBe(500);
     });
 
     test('openai provider exercises getProviderFactory openai branch and buildModel factory-true branch (streaming)', async () => {

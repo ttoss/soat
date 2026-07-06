@@ -1209,7 +1209,12 @@ describe('Agents', () => {
           tool_context: { user_id: 'u1', env: 'test' },
         });
 
-      expect(response.status).not.toBe(400);
+      // This suite doesn't run a real Ollama server (only the smoke/tutorials
+      // CI jobs do), so the generation call deterministically either
+      // succeeds (200, if a local Ollama happens to be reachable) or fails
+      // upstream (502 AI_PROVIDER_ERROR) — never 400, which is what this
+      // test actually cares about (toolContext was accepted as valid input).
+      expect([200, 502]).toContain(response.status);
     });
 
     test('user without CreateAgentGeneration permission returns 404 (no accessible projects)', async () => {
@@ -1242,9 +1247,11 @@ describe('Agents', () => {
         .post(`/api/v1/agents/${knowledgeAgentId}/generate`)
         .send({ messages: [{ role: 'user', content: 'Tell me something' }] });
 
-      // Generation runs (knowledge search executes as part of context building)
-      expect(genRes.status).not.toBe(400);
-      expect(genRes.status).not.toBe(404);
+      // Knowledge search (embeddings) is mocked and always succeeds; only the
+      // final Ollama generation call is real network I/O, which this suite
+      // never has a live server for — so this deterministically resolves to
+      // 200 or 502, matching the toolContext test's reasoning above.
+      expect([200, 502]).toContain(genRes.status);
     });
 
     test('agent with write_memory_id in knowledge_config includes write_memory tool', async () => {
@@ -1268,14 +1275,13 @@ describe('Agents', () => {
       expect(createRes.body.knowledge_config.write_memory_id).toBe(memoryId);
       const writeMemAgentId = createRes.body.id;
 
-      // Generation should succeed (write_memory tool is available but may not be called by the model)
+      // No live Ollama server in this suite — see the toolContext test above.
       const genRes = await authenticatedTestClient(userToken)
         .post(`/api/v1/agents/${writeMemAgentId}/generate`)
         .send({
           messages: [{ role: 'user', content: 'Hello' }],
         });
-      expect(genRes.status).not.toBe(400);
-      expect(genRes.status).not.toBe(404);
+      expect([200, 502]).toContain(genRes.status);
     });
 
     test('per-generation knowledge_config memory_ids is unioned with the agent stored config', async () => {
@@ -1303,8 +1309,8 @@ describe('Agents', () => {
           knowledge_config: { memory_ids: ['mem_per_generation'] },
         });
 
-      expect(genRes.status).not.toBe(400);
-      expect(genRes.status).not.toBe(404);
+      // No live Ollama server in this suite — see the toolContext test above.
+      expect([200, 502]).toContain(genRes.status);
       expect(mockSearchKnowledge).toHaveBeenCalledWith(
         expect.objectContaining({
           memoryIds: expect.arrayContaining([
@@ -1339,10 +1345,8 @@ describe('Agents', () => {
         .post(`/api/v1/agents/${structuredAgentId}/generate`)
         .send({ messages: [{ role: 'user', content: 'Summarize this.' }] });
 
-      // Generation dispatches (the underlying model call may still fail since
-      // no live provider is available in tests).
-      expect(genRes.status).not.toBe(400);
-      expect(genRes.status).not.toBe(404);
+      // No live Ollama server in this suite — see the toolContext test above.
+      expect([200, 502]).toContain(genRes.status);
     });
 
     test('agent with output_schema rejects stream:true with 400', async () => {

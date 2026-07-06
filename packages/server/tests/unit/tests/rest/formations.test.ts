@@ -2323,7 +2323,7 @@ resources:
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${discussionFormationId}`
       );
-      expect([200, 202, 204]).toContain(res.status);
+      expect(res.status).toBe(200);
     });
   });
 

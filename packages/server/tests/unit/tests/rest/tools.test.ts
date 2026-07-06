@@ -197,11 +197,13 @@ describe('Tools', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403 or 404', async () => {
+    // noPermToken has zero policies, so resolveProjectIds returns `[]` (not
+    // `null`) — the empty-array project filter simply matches no tool.
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/tools/${toolId}`
       );
-      expect([403, 404]).toContain(response.status);
+      expect(response.status).toBe(404);
     });
 
     test('non-existent tool returns 404', async () => {
@@ -229,11 +231,12 @@ describe('Tools', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403 or 404', async () => {
+    // Same empty-policy-array reasoning as the GET test above.
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/tools/${toolId}`)
         .send({ name: 'X' });
-      expect([403, 404]).toContain(response.status);
+      expect(response.status).toBe(404);
     });
 
     test('non-existent tool returns 404', async () => {
@@ -262,11 +265,12 @@ describe('Tools', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403 or 404', async () => {
+    // Same empty-policy-array reasoning as the GET test above.
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/tools/${toolId}`
       );
-      expect([403, 404]).toContain(response.status);
+      expect(response.status).toBe(404);
     });
 
     test('non-existent tool returns 404', async () => {
@@ -285,11 +289,12 @@ describe('Tools', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403 or 404', async () => {
+    // Same empty-policy-array reasoning as the GET test above.
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/tools/${soatToolId}/call`)
         .send({ action: 'list-tools' });
-      expect([403, 404]).toContain(response.status);
+      expect(response.status).toBe(404);
     });
 
     test('non-existent tool returns 404', async () => {
@@ -331,10 +336,12 @@ describe('Tools', () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/tools/${presetToolId}/call`)
         .send({});
-      // The action is extracted from presetParameters so it must NOT fail with
-      // the "operationId required" validation error (400). The internal SOAT HTTP
-      // call may fail in the test environment (500), which is expected.
-      expect(response.status).not.toBe(400);
+      // The action is extracted from presetParameters, so this must not hit
+      // the "operationId required" validation error (400). The SOAT tool's
+      // HTTP call targets this server's own base URL, which isn't actually
+      // listening in this in-process supertest harness (app.callback() has
+      // no bound port) — that self-call deterministically fails with 500.
+      expect(response.status).toBe(500);
     });
   });
 
@@ -590,11 +597,12 @@ describe('Tools', () => {
       expect(res.body.error.code).toBe('PIPELINE_INVALID_STEP');
     });
 
-    test('pipeline call without permission returns 403 or 404', async () => {
+    // Same empty-policy-array reasoning as the GET test above.
+    test('pipeline call without permission returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/tools/${pipelineToolId}/call`)
         .send({ input: {} });
-      expect([403, 404]).toContain(res.status);
+      expect(res.status).toBe(404);
     });
   });
 
