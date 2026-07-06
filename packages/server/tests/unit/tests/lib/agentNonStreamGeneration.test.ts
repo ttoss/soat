@@ -1,4 +1,5 @@
 import type { Tool } from 'ai';
+import type { PendingGeneration } from 'src/lib/agentGenerationHelpers';
 
 const loadNonStreamModule = async () => {
   return import('src/lib/agentNonStreamGeneration');
@@ -232,5 +233,146 @@ describe('agentNonStreamGeneration', () => {
         agentId: 'agt_3',
       })
     ).rejects.toThrow('provider unavailable');
+  });
+
+  const buildPending = (
+    overrides: Partial<PendingGeneration> = {}
+  ): PendingGeneration => {
+    return {
+      agentId: 'agt_test',
+      projectId: 1,
+      projectPublicId: 'prj_test',
+      traceId: 'trc_test',
+      parentTraceId: null,
+      rootTraceId: null,
+      generationId: 'gen_test',
+      initiatorGenerationId: null,
+      pendingToolCalls: [
+        { toolCallId: 'tc_1', toolName: 'send-reply', args: { message: 'Hi' } },
+      ],
+      messages: [{ role: 'user', content: 'hello' }],
+      steps: [],
+      resolvedModel: {} as never,
+      agentConfig: {
+        instructions: null,
+        maxSteps: 5,
+        toolChoice: 'auto',
+        stopConditions: null,
+        activeToolIds: null,
+        stepRules: null,
+        temperature: null,
+        outputSchema: null,
+      },
+      resolvedTools: {
+        'send-reply': { description: 'Send reply', inputSchema: {} } as never,
+      },
+      ...overrides,
+    };
+  };
+
+  test('runToolOutputsGeneration + resolveToolOutputsResult reports requires_action for a continuation tool call', async () => {
+    jest.doMock('ai', () => {
+      const actual = jest.requireActual('ai');
+      return {
+        ...actual,
+        generateText: jest.fn().mockResolvedValue({
+          text: 'I will send the reply.',
+          finishReason: 'tool-calls',
+          steps: [
+            {
+              toolCalls: [
+                {
+                  toolCallId: 'tc_new_1',
+                  toolName: 'send-reply',
+                  input: { message: 'Hello from bot' },
+                },
+              ],
+            },
+          ],
+          response: { modelId: 'mock-model', messages: [] },
+        }),
+      };
+    });
+
+    const { runToolOutputsGeneration, resolveToolOutputsResult } =
+      await loadNonStreamModule();
+
+    const pending = buildPending();
+
+    const generateResult = await runToolOutputsGeneration({
+      generationId: pending.generationId,
+      pending,
+      system: undefined,
+      nonSystemMessages: pending.messages,
+    });
+
+    const result = resolveToolOutputsResult({
+      generationId: pending.generationId,
+      agentId: pending.agentId,
+      pending,
+      allMessages: pending.messages,
+      result: generateResult as never,
+    });
+
+    expect(result).toMatchObject({
+      id: pending.generationId,
+      traceId: pending.traceId,
+      status: 'requires_action',
+      requiredAction: {
+        type: 'submit_tool_outputs',
+        toolCalls: [
+          expect.objectContaining({
+            toolName: 'send-reply',
+            id: 'tc_new_1',
+          }),
+        ],
+      },
+    });
+  });
+
+  test('runToolOutputsGeneration + resolveToolOutputsResult reports completed when no client tool calls remain', async () => {
+    jest.doMock('ai', () => {
+      const actual = jest.requireActual('ai');
+      return {
+        ...actual,
+        generateText: jest.fn().mockResolvedValue({
+          text: 'final answer',
+          finishReason: 'stop',
+          steps: [],
+          response: { modelId: 'mock-model' },
+        }),
+      };
+    });
+
+    const { runToolOutputsGeneration, resolveToolOutputsResult } =
+      await loadNonStreamModule();
+
+    const pending = buildPending({ resolvedTools: {} });
+
+    const generateResult = await runToolOutputsGeneration({
+      generationId: pending.generationId,
+      pending,
+      system: undefined,
+      nonSystemMessages: pending.messages,
+    });
+
+    const result = resolveToolOutputsResult({
+      generationId: pending.generationId,
+      agentId: pending.agentId,
+      pending,
+      allMessages: pending.messages,
+      result: generateResult as never,
+    });
+
+    expect(result).toMatchObject({
+      id: pending.generationId,
+      traceId: pending.traceId,
+      status: 'completed',
+      output: {
+        model: 'mock-model',
+        content: 'final answer',
+        finishReason: 'stop',
+      },
+    });
   });
 });

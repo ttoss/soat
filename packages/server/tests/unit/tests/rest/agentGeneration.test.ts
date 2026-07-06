@@ -217,6 +217,20 @@ describe('Agent Generation Routes', () => {
       expect(response.status).toBe(400);
     });
 
+    test('tool-outputs returns 404 for a generation that was never created', async () => {
+      // No mocking here — exercises submitToolOutputs' real not-found path:
+      // not in the in-memory pendingGenerations map and not recoverable
+      // from the DB because it never existed.
+      const response = await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/generate/gen_never_existed/tool-outputs`
+        )
+        .send({ toolOutputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('GENERATION_NOT_FOUND');
+    });
+
     test('tool-outputs returns 404 when generation is not found', async () => {
       jest
         .spyOn(agentsModule, 'submitToolOutputs')
