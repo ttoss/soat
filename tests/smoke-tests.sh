@@ -1948,7 +1948,9 @@ echo "Client tool generation completed after tool output: OK"
 
 # 34b. Trace checks (list traces + fetch current generation trace)
 echo "--- Verifying trace endpoints ---"
-TRACES_RESP=$($SOAT_CLI list-traces --project_id "$PROJECT_PUBLIC_ID")
+# Traces and generations carry the model's output content, which can contain
+# raw control characters; strip them so strict jq can parse the responses.
+TRACES_RESP=$($SOAT_CLI list-traces --project_id "$PROJECT_PUBLIC_ID" | sanitize_json)
 if ! printf '%s\n' "$TRACES_RESP" | jq -e '((type == "array") or (type == "object" and (.data | type == "array")))' >/dev/null 2>&1; then
   echo "ERROR: list-traces did not return a JSON array/data array" >&2
   echo "$TRACES_RESP" >&2
@@ -1957,7 +1959,7 @@ fi
 echo "Trace listing endpoint: OK"
 
 if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
-  TRACE_GET_RESP=$($SOAT_CLI get-trace --trace-id "$CLIENT_TRACE_ID")
+  TRACE_GET_RESP=$($SOAT_CLI get-trace --trace-id "$CLIENT_TRACE_ID" | sanitize_json)
   TRACE_RETURNED_ID=$(printf '%s\n' "$TRACE_GET_RESP" | jq -r '.id // empty')
   if [ "$TRACE_RETURNED_ID" != "$CLIENT_TRACE_ID" ]; then
     echo "ERROR: Trace endpoint returned mismatched id '$TRACE_RETURNED_ID' for '$CLIENT_TRACE_ID'" >&2
@@ -1966,7 +1968,7 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
   fi
   echo "Trace retrieval endpoint: OK"
 
-  TRACE_TREE_RESP=$($SOAT_CLI get-trace-tree --trace-id "$CLIENT_TRACE_ID")
+  TRACE_TREE_RESP=$($SOAT_CLI get-trace-tree --trace-id "$CLIENT_TRACE_ID" | sanitize_json)
   TRACE_TREE_ID=$(printf '%s\n' "$TRACE_TREE_RESP" | jq -r '.id // empty')
   if [ "$TRACE_TREE_ID" != "$CLIENT_TRACE_ID" ]; then
     echo "ERROR: Trace tree endpoint returned mismatched id '$TRACE_TREE_ID' for '$CLIENT_TRACE_ID'" >&2
@@ -1975,7 +1977,7 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
   fi
   echo "Trace tree endpoint: OK"
 
-  TRACE_GENS_RESP=$($SOAT_CLI list-generations --trace-id "$CLIENT_TRACE_ID")
+  TRACE_GENS_RESP=$($SOAT_CLI list-generations --trace-id "$CLIENT_TRACE_ID" | sanitize_json)
   FIRST_GENERATION_ID=$(printf '%s\n' "$TRACE_GENS_RESP" | jq -r '.data[0].id // empty')
   if [ -z "$FIRST_GENERATION_ID" ]; then
     echo "ERROR: list-generations returned no generations for trace '$CLIENT_TRACE_ID'" >&2
@@ -1984,7 +1986,7 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
   fi
   echo "List generations (by trace) endpoint: OK"
 
-  GENERATION_GET_RESP=$($SOAT_CLI get-generation --generation-id "$FIRST_GENERATION_ID")
+  GENERATION_GET_RESP=$($SOAT_CLI get-generation --generation-id "$FIRST_GENERATION_ID" | sanitize_json)
   GENERATION_RETURNED_ID=$(printf '%s\n' "$GENERATION_GET_RESP" | jq -r '.id // empty')
   GENERATION_RETURNED_STATUS=$(printf '%s\n' "$GENERATION_GET_RESP" | jq -r '.status // empty')
   if [ "$GENERATION_RETURNED_ID" != "$FIRST_GENERATION_ID" ] || [ -z "$GENERATION_RETURNED_STATUS" ]; then
@@ -2229,7 +2231,9 @@ echo "Conversation generate: OK (message document_id: $CONVO_GEN_MSG_ID)"
 
 # 48b. Verify the generated message is listed in conversation messages
 echo "--- Verifying generated message persisted ---"
-CONVO_MSGS_RESP=$($SOAT_CLI list-conversation-messages --conversation-id "$NAMED_CONVO_ID")
+# Persisted messages echo the model's output, which can contain raw control
+# characters; strip them so jq (strict since 1.7) can parse the response.
+CONVO_MSGS_RESP=$($SOAT_CLI list-conversation-messages --conversation-id "$NAMED_CONVO_ID" | sanitize_json)
 MSG_COUNT=$(echo "$CONVO_MSGS_RESP" | jq 'if type=="array" then length else (.data | length) end')
 if [ "$MSG_COUNT" -lt "2" ]; then
   echo "ERROR: Expected at least 2 conversation messages (user + generated), got $MSG_COUNT" >&2
