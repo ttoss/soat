@@ -22,16 +22,73 @@ Only fall back to running the full local suite (`pnpm --filter @soat/server test
 
 - Server unit tests live in `packages/server/tests/unit/tests/`
 - Tests are divided into two sub-folders:
-  - `rest/` — tests that call the REST API via supertest (e.g., `rest/projects.test.ts`). **Prefer this kind of test.** These cover HTTP concerns: status codes, response shapes, authentication, and authorization.
-  - `lib/` — tests that call lib functions directly (e.g., `lib/agents.test.ts`). Use only when the behavior cannot be adequately covered through the REST API (e.g., internal helpers, complex async coordination).
+  - `rest/` — tests that call the REST API via supertest (e.g., `rest/projects.test.ts`). **This is the default.** These cover HTTP concerns: status codes, response shapes, authentication, and authorization.
+  - `lib/` — tests that call lib functions directly (e.g., `lib/iam.test.ts`). Allowed **only** under the keep-list rule below.
 - Test file name must match the module: `<module>.test.ts` (e.g., `projects.test.ts`)
-- Every public lib function and every REST route must have at least one test
+- Every REST route must have at least one test. A public lib function is covered either through the entry point that reaches it, or — if it qualifies under the keep-list — by a direct `lib/` test.
+
+## Where the Test Boundary Lives
+
+Test through the **entry point** by default (REST via supertest, the MCP endpoint, the
+orchestration scheduler, or the event/async flow that triggers the code). The entry
+point is the contract: testing there is refactor-proof — internals can be restructured
+freely without touching the test. Because the MCP tool surface is auto-derived from the
+OpenAPI specs and shares handlers with REST, a REST handler test largely covers the MCP
+surface too.
+
+Write a direct **`lib/` test only** when one of these is true:
+
+1. **Pure algorithm with a large input space** that is expensive or low-resolution to
+   drive through HTTP — e.g. policy evaluation (`iam`), policy→SQL compilation
+   (`policyCompiler`), graph/DAG validation (`orchestrationValidation`), expression and
+   dependency resolution (`formationsHelpers`), `chunking`, `ingestionRuleMatching`.
+   Reaching a single branch of these through REST would require constructing a full
+   project + policy + user + resource per case, and the failure signal (a bare `403`)
+   hides which branch fired.
+2. **No entry point exists** — the function cannot be reached from REST, MCP, the
+   scheduler, or an event (e.g. `sessionOperations.sendSessionMessage`, trace/generation
+   record writers, `agentToolResolver` `execute` internals, internal async seams).
+
+If neither holds, **do not** add a `lib/` test — cover the behavior through the entry
+point. In particular:
+
+- **Do not** write a `lib/` test that duplicates coverage a `rest/` test already provides
+  (list/get/CRUD reachable through the API, re-exported functions).
+- **Do not** write a `lib/` test purely to cover a defensive branch that no entry point
+  can reach. If a branch is unreachable through every entry point, it is dead code —
+  delete the guard instead of testing it.
+
+### Keep-list decision, at a glance
+
+| Situation | Where to test |
+|---|---|
+| CRUD / auth / lifecycle reachable through a route | `rest/` (or MCP / scheduler) |
+| Pure algorithm, large input space, security- or correctness-critical | `lib/` (direct) |
+| Function has no entry point at all | `lib/` (real DB + external-I/O fake only) |
+| Behavior already covered by a `rest/` test | nowhere new — reuse the `rest/` test |
+| Defensive branch no entry point can reach | delete the branch; don't test it |
 
 ## Test Infrastructure
 
 Tests are integration tests that run against `app.callback()` via supertest. A real PostgreSQL instance is spun up via testcontainers, configured in `setupTestsAfterEnv.ts`. No mocking of the database layer is needed.
 
-## Mocking Philosophy — Minimize Mocks
+## Mocking Philosophy — Never Mock What You Own
+
+The dividing line is ownership, not convenience:
+
+- **Never mock anything you own** — the database, or any `src/**` module (lib functions,
+  handlers, the event bus, the DB layer). The real PostgreSQL testcontainer exists
+  precisely so you don't have to. A test that mocks the DB or an internal module tests a
+  **fiction**: it can pass while the real wiring is broken, and it duplicates coverage a
+  real-DB test already provides. This applies to `jest.mock`, `jest.doMock`, and
+  `jest.spyOn` alike — spying on an internal module to fake its return value is still
+  mocking something you own.
+- **Only mock external I/O you don't own and can't run in CI** — LLM/AI model calls
+  (`createGeneration`), embeddings, outbound HTTP, email. Even here, **prefer a local fake
+  server over a mock** where practical: `discussionCompletion.test.ts` and
+  `memoryExtractionCompletion.test.ts` run the real `generateText` against a local
+  `createServer` OpenAI-compatible stub and assert the outgoing request body — that
+  exercises real serialization, which a mock skips.
 
 **Keep mocks to the absolute minimum.** Excessive mocking makes tests brittle, hard to read, and easy to write incorrectly (the mock may not reflect real behavior).
 
@@ -39,13 +96,20 @@ Tests are integration tests that run against `app.callback()` via supertest. A r
 
 1. **Never mock the database.** Use the real PostgreSQL container. Set up state by calling the REST API in `beforeAll` / `beforeEach` — the same way a real client would.
 
-2. **Only mock external I/O that cannot run in CI**: AI model calls (`createGeneration`), external HTTP services, email providers. Use the shared spy `mockCreateGeneration` from `setupTestsAfterEnv.ts` for this.
+2. **Never mock an internal (`src/**`) module.** No `jest.mock`, `jest.doMock`, or
+   `jest.spyOn` of your own lib/handler/db modules to substitute their behavior. If you
+   feel you need to, the code is either reachable through an entry point (test it there)
+   or a pure function (test it directly with real inputs). The **only** sanctioned
+   internal spy is `mockCreateGeneration` from `setupTestsAfterEnv.ts`, which stands in
+   for the external LLM boundary.
 
-3. **Prefer `jest.spyOn` over `jest.mock`.** `jest.mock` with a factory creates a new object that is invisible to modules already loaded by `app.ts`. `jest.spyOn` mutates the live export, which all modules share.
+3. **Only mock external I/O that cannot run in CI**: AI model calls (`createGeneration`), external HTTP services, email providers. Use the shared spy `mockCreateGeneration` from `setupTestsAfterEnv.ts`, or a local fake server, for this. The one tolerated exception to "no `jest.mock`" is the `ai` package (`streamText`/`generateText` exports are non-configurable, so `spyOn` cannot wrap them) — document it inline at the mock site.
 
-4. **Do not use `jest.doMock` + `jest.resetModules()` in REST tests.** That pattern is only appropriate for testing pure lib functions that are not transitively imported by `app.ts`. For everything else, use `jest.spyOn`.
+4. **Prefer `jest.spyOn` over `jest.mock`.** `jest.mock` with a factory creates a new object that is invisible to modules already loaded by `app.ts`. `jest.spyOn` mutates the live export, which all modules share.
 
-5. **Set up DB state through the API, not through mocks.** If a test needs a conversation with specific messages, call `POST /api/v1/conversations` and `POST /api/v1/conversations/:id/messages` in `beforeAll`. The assertion then calls the endpoint under test with real data.
+5. **Do not use `jest.doMock` + `jest.resetModules()` in REST tests.** That pattern is only appropriate for testing pure lib functions that are not transitively imported by `app.ts`. For everything else, use `jest.spyOn`.
+
+6. **Set up DB state through the API, not through mocks.** If a test needs a conversation with specific messages, call `POST /api/v1/conversations` and `POST /api/v1/conversations/:id/messages` in `beforeAll`. The assertion then calls the endpoint under test with real data.
 
 ### Correct pattern (integration test with minimal mock)
 
