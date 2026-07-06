@@ -178,7 +178,11 @@ paths:
       tags:
         - Sessions
       summary: Delete a session
-      description: Deletes the session and its underlying conversation and actors.
+      description: >
+        Deletes the session and its underlying conversation and messages. The
+        session's actor is not deleted. Generations and traces produced by the
+        session are not deleted either, since they are not linked to the
+        session or conversation.
       operationId: deleteSession
       parameters:
         - $ref: '#/components/parameters/SessionId'

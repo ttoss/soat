@@ -67,7 +67,19 @@ An optional `idempotency_key` string can be included with either variant — see
 
 ### Lifecycle
 
-A session starts in `open` status. It can be updated to `closed` when the interaction is complete. If `inactivity_ttl_seconds` is configured, the status transitions to `expired` lazily when the session is next fetched or listed after the TTL elapses. Deleting a session cascades to the underlying conversation.
+A session starts in `open` status. It can be updated to `closed` when the interaction is complete. If `inactivity_ttl_seconds` is configured, the status transitions to `expired` lazily when the session is next fetched or listed after the TTL elapses. See [Deletion](#deletion) for what happens when a session is deleted.
+
+### Deletion
+
+`DELETE .../sessions/:session_id` removes the session row and its underlying [Conversation](./conversations.md) row in the same transaction. Deleting the conversation cascades at the database level to every [message](#message-within-a-session) in it.
+
+What deletion does **not** remove:
+
+- **The session's actor.** The [Actor](./actors.md) referenced by `actor_id` is left untouched and can still be looked up or reused by other sessions.
+- **Documents backing message content.** Each message's content is stored in a [Document](./documents.md) row; deleting the session does not delete these documents (or their underlying files), so they remain in place after the session and its messages are gone.
+- **Generations and traces.** A session's [generations and traces](./traces.md#debugging-joins-trace-generation-session) are not linked to the session or conversation record, so they are unaffected by session deletion and remain queryable via `GET /api/v1/traces/{trace_id}` after the session no longer exists.
+
+Delete these resources explicitly beforehand if you need a full cleanup.
 
 ### Auto-Generate
 
