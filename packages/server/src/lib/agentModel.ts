@@ -23,6 +23,15 @@ type BedrockSecret = {
   sessionToken?: string;
 };
 
+export type BedrockCredentials =
+  | { region: string; apiKey: string }
+  | {
+      region: string;
+      accessKeyId?: string;
+      secretAccessKey?: string;
+      sessionToken?: string;
+    };
+
 const parseBedrockSecret = (secretValue: string | null): BedrockSecret => {
   if (!secretValue) return {};
   try {
@@ -36,20 +45,34 @@ const parseBedrockSecret = (secretValue: string | null): BedrockSecret => {
   }
 };
 
-const buildBedrockModel = (args: BuildModelArgs): LanguageModel => {
+/**
+ * Resolves the Bedrock credential precedence: a secret-linked apiKey wins
+ * over `config.apiKey`, which wins over access-key/secret-key pairs. Pulled
+ * out of `buildBedrockModel` so the precedence rules can be asserted
+ * directly instead of only through the opaque model object they configure.
+ */
+export const resolveBedrockCredentials = (args: {
+  secretValue: string | null;
+  config?: Record<string, unknown>;
+}): BedrockCredentials => {
   const secret = parseBedrockSecret(args.secretValue);
   const region = (args.config?.region as string | undefined) ?? 'us-east-1';
   // config.apiKey is accepted as a credential fallback when no secret is linked
   const configApiKey = args.config?.apiKey as string | undefined;
   const resolvedApiKey = secret.apiKey ?? configApiKey;
-  const options = resolvedApiKey
-    ? { region, apiKey: resolvedApiKey }
-    : {
-        region,
-        accessKeyId: secret.accessKeyId,
-        secretAccessKey: secret.secretAccessKey,
-        sessionToken: secret.sessionToken,
-      };
+  if (resolvedApiKey) {
+    return { region, apiKey: resolvedApiKey };
+  }
+  return {
+    region,
+    accessKeyId: secret.accessKeyId,
+    secretAccessKey: secret.secretAccessKey,
+    sessionToken: secret.sessionToken,
+  };
+};
+
+const buildBedrockModel = (args: BuildModelArgs): LanguageModel => {
+  const options = resolveBedrockCredentials(args);
   return createAmazonBedrock(options)(args.model);
 };
 

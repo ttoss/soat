@@ -18,7 +18,6 @@ export type MappedOrchestrationCheckpoint = {
 
 export const cancelOrchestrationRun = async (args: {
   runPublicId: string;
-  orchestrationPublicId?: string;
   projectIds?: number[];
 }): Promise<MappedOrchestrationRun> => {
   log('cancelOrchestrationRun %o', { runPublicId: args.runPublicId });
@@ -31,14 +30,6 @@ export const cancelOrchestrationRun = async (args: {
     { model: db.Orchestration, as: 'orchestration' },
     nodeExecutionsInclude(),
   ];
-
-  if (args.orchestrationPublicId) {
-    include[1] = {
-      model: db.Orchestration,
-      as: 'orchestration',
-      where: { publicId: args.orchestrationPublicId },
-    };
-  }
 
   const run = await db.OrchestrationRun.findOne({ where, include });
   if (!run)
@@ -71,7 +62,6 @@ export const cancelOrchestrationRun = async (args: {
 
 export const submitHumanInput = async (args: {
   runPublicId: string;
-  orchestrationPublicId?: string;
   projectIds?: number[];
   nodeId: string;
   output: Record<string, unknown>;
@@ -86,13 +76,7 @@ export const submitHumanInput = async (args: {
 
   const include: object[] = [
     { model: db.Project, as: 'project' },
-    {
-      model: db.Orchestration,
-      as: 'orchestration',
-      ...(args.orchestrationPublicId
-        ? { where: { publicId: args.orchestrationPublicId } }
-        : {}),
-    },
+    { model: db.Orchestration, as: 'orchestration' },
   ];
 
   const run = await db.OrchestrationRun.findOne({ where, include });
@@ -124,7 +108,6 @@ export const submitHumanInput = async (args: {
 
 export const resumeOrchestrationRun = async (args: {
   runPublicId: string;
-  orchestrationPublicId?: string;
   projectIds?: number[];
 }): Promise<MappedOrchestrationRun> => {
   log('resumeOrchestrationRun %o', { runPublicId: args.runPublicId });
@@ -134,13 +117,7 @@ export const resumeOrchestrationRun = async (args: {
 
   const include: object[] = [
     { model: db.Project, as: 'project' },
-    {
-      model: db.Orchestration,
-      as: 'orchestration',
-      ...(args.orchestrationPublicId
-        ? { where: { publicId: args.orchestrationPublicId } }
-        : {}),
-    },
+    { model: db.Orchestration, as: 'orchestration' },
   ];
 
   const run = await db.OrchestrationRun.findOne({ where, include });

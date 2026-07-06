@@ -575,6 +575,19 @@ describe('Sessions', () => {
       expect(response.body).toEqual({});
     });
 
+    test('PATCH merges tags onto a session with no existing tags', async () => {
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'Merge Onto Empty Tags Test' });
+
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/sessions/${sessionRes.body.id}/tags`)
+        .send({ team: 'support' });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ team: 'support' });
+    });
+
     test('PUT replaces all tags', async () => {
       const response = await authenticatedTestClient(userToken)
         .put(`/api/v1/sessions/${sessionId}/tags`)

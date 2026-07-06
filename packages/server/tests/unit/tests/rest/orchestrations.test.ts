@@ -1295,6 +1295,14 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(409);
     });
 
+    test('cancelling a non-existent run returns 404', async () => {
+      const response = await authenticatedTestClient(userToken).post(
+        `/api/v1/orchestration-runs/run_nonexistent0000000/cancel`
+      );
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('ORCHESTRATION_RUN_NOT_FOUND');
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.post(
         `/api/v1/orchestration-runs/${cancelRunId}/cancel`
@@ -1357,6 +1365,14 @@ describe('Orchestrations', () => {
         .post(`/api/v1/orchestration-runs/${humanRunId}/human-input`)
         .send({ output: { choice: 'approve' } });
       expect(response.status).toBe(400);
+    });
+
+    test('submitting human input for a non-existent run returns 404', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestration-runs/run_nonexistent0000000/human-input`)
+        .send({ node_id: 'approval', output: {} });
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('ORCHESTRATION_RUN_NOT_FOUND');
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -1422,6 +1438,25 @@ describe('Orchestrations', () => {
         `/api/v1/orchestration-runs/someid/resume`
       );
       expect([403, 400]).toContain(response.status);
+    });
+
+    test('resuming an awaiting-input run succeeds', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({ ...humanNodeOrchestration, project_id: projectId });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('awaiting_input');
+
+      const resumeRes = await authenticatedTestClient(userToken).post(
+        `/api/v1/orchestration-runs/${runRes.body.id}/resume`
+      );
+      expect(resumeRes.status).toBe(200);
+      expect(resumeRes.body.id).toBe(runRes.body.id);
     });
 
     test('resuming a non-paused (completed) run returns 409', async () => {
