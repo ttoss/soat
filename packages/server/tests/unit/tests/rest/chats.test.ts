@@ -49,6 +49,7 @@ describe('Chats', () => {
                 'chats:GetChat',
                 'chats:DeleteChat',
                 'chats:CreateChatCompletion',
+                'chats:CreateChatCompletionForChat',
               ],
             },
           ],
@@ -201,6 +202,13 @@ describe('Chats', () => {
       expect(response.body.id).toBe(chatId);
       expect(response.body.ai_provider_id).toBe(aiProviderId);
     });
+
+    test('user without permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/chats/${chatId}`
+      );
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('DELETE /api/v1/chats/:chatId', () => {
@@ -223,6 +231,13 @@ describe('Chats', () => {
         '/api/v1/chats/cht_doesnotexist0000'
       );
       expect(response.status).toBe(404);
+    });
+
+    test('user without permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken).delete(
+        `/api/v1/chats/${chatId}`
+      );
+      expect(response.status).toBe(403);
     });
 
     test('authenticated user can delete a chat', async () => {
@@ -284,6 +299,19 @@ describe('Chats', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
+    });
+
+    test('user without permission returns 403', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats')
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
+      const chatId = res.body.id;
+
+      const response = await authenticatedTestClient(noPermToken)
+        .post(`/api/v1/chats/${chatId}/completions`)
+        .send({ messages: [{ role: 'user', content: 'Hello' }] });
+
+      expect(response.status).toBe(403);
     });
   });
 

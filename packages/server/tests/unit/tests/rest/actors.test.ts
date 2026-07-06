@@ -5,6 +5,7 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 describe('Actors', () => {
   let adminToken: string;
   let userToken: string;
+  let noPermToken: string;
   let userId: string;
   let projectId: string;
   let policyId: string;
@@ -51,6 +52,12 @@ describe('Actors', () => {
     await authenticatedTestClient(adminToken)
       .put(`/api/v1/users/${userId}/policies`)
       .send({ policy_ids: [policyId] });
+
+    const noPermRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'actorsnoperm', password: 'nopassword' });
+    expect(noPermRes.status).toBe(201);
+    noPermToken = await loginAs('actorsnoperm', 'nopassword');
   });
 
   describe('POST /api/v1/actors', () => {
@@ -154,6 +161,14 @@ describe('Actors', () => {
 
       expect(response.status).toBe(400);
     });
+
+    test('user without permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'Forbidden' });
+
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('GET /api/v1/actors', () => {
@@ -211,6 +226,14 @@ describe('Actors', () => {
       );
 
       expect(response.status).toBe(401);
+    });
+
+    test('user without permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/actors?project_id=${projectId}`
+      );
+
+      expect(response.status).toBe(403);
     });
 
     test('logs and returns 500 when router has an unhandled error', async () => {
@@ -273,6 +296,14 @@ describe('Actors', () => {
 
       expect(response.status).toBe(404);
     });
+
+    test('user without permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/actors/${actorId}`
+      );
+
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('DELETE /api/v1/actors/:id', () => {
@@ -312,6 +343,18 @@ describe('Actors', () => {
       );
 
       expect(response.status).toBe(404);
+    });
+
+    test('user without permission returns 403', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'ToDeleteForbidden' });
+
+      const response = await authenticatedTestClient(noPermToken).delete(
+        `/api/v1/actors/${createRes.body.id}`
+      );
+
+      expect(response.status).toBe(403);
     });
   });
 
@@ -358,6 +401,14 @@ describe('Actors', () => {
         .send({ name: 'Ghost' });
 
       expect(response.status).toBe(404);
+    });
+
+    test('user without permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .patch(`/api/v1/actors/${actorId}`)
+        .send({ name: 'ForbiddenUpdate' });
+
+      expect(response.status).toBe(403);
     });
   });
 
