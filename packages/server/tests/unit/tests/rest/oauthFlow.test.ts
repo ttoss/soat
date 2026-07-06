@@ -273,7 +273,9 @@ describe('OAuth authorization server (SPA consent)', () => {
         refresh_token: refreshToken,
         client_id: clientId,
       });
-      expect([400, 401]).toContain(res.status);
+      // The OAuth2 library rejects an expired refresh token with the
+      // standard invalid_grant error (400).
+      expect(res.status).toBe(400);
 
       const afterRow = await db.OauthRefreshToken.findOne({
         where: { id: row!.id as number },
