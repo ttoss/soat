@@ -16,7 +16,6 @@ import {
   resolveMcpTools,
   resolveSoatTools,
 } from 'src/lib/agentToolResolverExternalTools';
-import * as discussionCompletion from 'src/lib/discussionCompletion';
 import { soatTools } from 'src/lib/soatTools';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -700,10 +699,6 @@ describe('resolveAgentTools - discussion type', () => {
     discussionToolId = toolRes.body.id;
   });
 
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
-
   test('discussion tool is included in resolved tools', async () => {
     const tools = await resolveAgentTools({ toolIds: [discussionToolId] });
     expect(tools).toHaveProperty('review-theme');
@@ -714,21 +709,23 @@ describe('resolveAgentTools - discussion type', () => {
     expect('execute' in tools['review-theme']).toBe(true);
   });
 
-  test('discussion tool execute calls runDiscussion and returns outcome and run_id', async () => {
-    jest
-      .spyOn(discussionCompletion, 'runDiscussionCompletion')
-      .mockResolvedValue('Approved: proceed with the feature.');
-
+  test('discussion tool execute creates a real run and returns run_id', async () => {
+    // No mocks — the discussion has no participants so runDiscussionPipeline
+    // returns immediately (0 branches → no AI call) and the run is persisted
+    // in the real DB with status "failed" and an empty outcome.
     const tools = await resolveAgentTools({ toolIds: [discussionToolId] });
     const discTool = tools['review-theme'];
 
     let result: unknown;
     if ('execute' in discTool && typeof discTool.execute === 'function') {
-      result = await discTool.execute({ topic: 'Should we ship?' }, {} as never);
+      result = await discTool.execute(
+        { topic: 'Should we ship?' },
+        {} as never
+      );
     }
 
     expect(result).toMatchObject({
-      outcome: 'Approved: proceed with the feature.',
+      outcome: expect.any(String),
       run_id: expect.stringMatching(/^drn_/),
     });
   });
