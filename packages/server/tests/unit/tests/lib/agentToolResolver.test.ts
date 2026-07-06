@@ -651,15 +651,13 @@ describe('resolveAgentTools - discussion type', () => {
   let discussionToolId: string;
 
   beforeAll(async () => {
-    await testClient
-      .post('/api/v1/users/bootstrap')
-      .send({ username: 'discresolveradmin', password: 'supersecret' });
-
-    adminToken = await loginAs('discresolveradmin', 'supersecret');
+    // toolresolveradmin was bootstrapped by the first describe's beforeAll
+    adminToken = await loginAs('toolresolveradmin', 'supersecret');
 
     const projectRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/projects')
       .send({ name: 'Discussion Tool Resolver Project' });
+    expect(projectRes.status).toBe(201);
     projectId = projectRes.body.id;
 
     const aiProvRes = await authenticatedTestClient(adminToken)
@@ -670,6 +668,7 @@ describe('resolveAgentTools - discussion type', () => {
         provider: 'ollama',
         default_model: 'llama3.2',
       });
+    expect(aiProvRes.status).toBe(201);
 
     const discussionRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/discussions')
@@ -679,6 +678,7 @@ describe('resolveAgentTools - discussion type', () => {
         ai_provider_id: aiProvRes.body.id,
         participants: [],
       });
+    expect(discussionRes.status).toBe(201);
     discussionId = discussionRes.body.id;
 
     const toolRes = await authenticatedTestClient(adminToken)
@@ -697,6 +697,7 @@ describe('resolveAgentTools - discussion type', () => {
         },
         discussion_id: discussionId,
       });
+    expect(toolRes.status).toBe(201);
     discussionToolId = toolRes.body.id;
   });
 
