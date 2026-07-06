@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import {
   callTool,
   createTool,
@@ -145,9 +146,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
   try {
     jsonFields = coerceToolJsonFields(body);
   } catch {
-    ctx.status = 400;
-    ctx.body = { error: TOOL_JSON_FIELDS_ERROR };
-    return;
+    throw new DomainError('VALIDATION_FAILED', TOOL_JSON_FIELDS_ERROR);
   }
 
   const result = await createTool({
@@ -262,9 +261,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     parsedPipeline = coerceToJsonObject(pipeline);
     parsedOutputMapping = coerceToJsonObject(outputMapping);
   } catch {
-    ctx.status = 400;
-    ctx.body = { error: TOOL_JSON_FIELDS_ERROR };
-    return;
+    throw new DomainError('VALIDATION_FAILED', TOOL_JSON_FIELDS_ERROR);
   }
 
   const result = await updateTool({

@@ -242,7 +242,8 @@ describe('Files', () => {
       );
 
       expect(response.status).toBe(404);
-      expect(response.body.error).toBe('File not found');
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      expect(response.body.error.message).toMatch(/file not found/i);
     });
 
     test('a malformed token falls back to session auth and returns 401', async () => {
@@ -539,7 +540,10 @@ describe('Files', () => {
         .send({ content, filename: 'missing-project.txt' });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('projectId is required');
+      // Legacy plain-string body from the shared `resolveWriteProjectId`
+      // helper (rest/v1/helpers.ts), used across ~13 route files — not
+      // migrated to DomainError here to avoid a cross-cutting route change.
+      expect(response.body.error).toMatch(/projectId is required/i);
     });
 
     test('returns 403 when user has no upload permission', async () => {

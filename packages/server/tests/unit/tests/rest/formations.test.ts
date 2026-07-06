@@ -779,8 +779,8 @@ resources:
           });
 
         expect(res.status).toBe(400);
-        expect(res.body.error).toBe('Missing required parameters');
-        expect(Array.isArray(res.body.details)).toBe(true);
+        expect(res.body.error.code).toBe('FORMATION_MISSING_PARAMETERS');
+        expect(Array.isArray(res.body.error.meta.details)).toBe(true);
       });
 
       test('returns 400 when required parameter is provided as empty string', async () => {
@@ -797,10 +797,10 @@ resources:
           });
 
         expect(res.status).toBe(400);
-        expect(res.body.error).toBe('Missing required parameters');
-        expect(Array.isArray(res.body.details)).toBe(true);
+        expect(res.body.error.code).toBe('FORMATION_MISSING_PARAMETERS');
+        expect(Array.isArray(res.body.error.meta.details)).toBe(true);
         expect(
-          res.body.details.some((d: { message: string }) => {
+          res.body.error.meta.details.some((d: { message: string }) => {
             return d.message.includes('cannot be empty');
           })
         ).toBe(true);
@@ -820,9 +820,9 @@ resources:
           });
 
         expect(res.status).toBe(400);
-        expect(res.body.error).toBe('Missing required parameters');
+        expect(res.body.error.code).toBe('FORMATION_MISSING_PARAMETERS');
         expect(
-          res.body.details.some((d: { path: string }) => {
+          res.body.error.meta.details.some((d: { path: string }) => {
             return d.path === 'parameters.ApiKey';
           })
         ).toBe(true);
@@ -897,7 +897,7 @@ resources:
           });
 
         expect(res.status).toBe(400);
-        expect(res.body.error).toBe('Missing required parameters');
+        expect(res.body.error.code).toBe('FORMATION_MISSING_PARAMETERS');
       });
 
       test('returns 400 when required parameter is empty string on update', async () => {
@@ -912,9 +912,9 @@ resources:
           });
 
         expect(res.status).toBe(400);
-        expect(res.body.error).toBe('Missing required parameters');
+        expect(res.body.error.code).toBe('FORMATION_MISSING_PARAMETERS');
         expect(
-          res.body.details.some((d: { message: string }) => {
+          res.body.error.meta.details.some((d: { message: string }) => {
             return d.message.includes('cannot be empty');
           })
         ).toBe(true);
@@ -971,7 +971,7 @@ resources:
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toBe('Missing required parameters');
+      expect(res.body.error.code).toBe('FORMATION_MISSING_PARAMETERS');
     });
 
     test('creates the formation supplying the secret value', async () => {
@@ -1079,7 +1079,7 @@ resources:
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toBe('Missing required parameters');
+      expect(res.body.error.code).toBe('FORMATION_MISSING_PARAMETERS');
     });
 
     test('deletes the secret formation', async () => {
