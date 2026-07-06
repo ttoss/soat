@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import {
   createFormation,
   deleteFormation,
@@ -30,17 +31,19 @@ const missingParamsToErrors = (
   });
 };
 
-const buildMissingParamsError = (
+const assertNoMissingParams = (
   template: FormationTemplate,
   provided: Record<string, string> | undefined,
   forUpdate = false
-): { error: string; details: { path: string; message: string }[] } | null => {
+): void => {
   const missing = getMissingParams(template, provided, forUpdate);
-  if (missing.length === 0) return null;
-  return {
-    error: 'Missing required parameters',
-    details: missingParamsToErrors(missing),
-  };
+  if (missing.length === 0) return;
+  const details = missingParamsToErrors(missing);
+  throw new DomainError(
+    'FORMATION_MISSING_PARAMETERS',
+    `Missing required parameters: ${missing.join(', ')}`,
+    { details }
+  );
 };
 
 formationsRouter.post('/formations/validate', async (ctx: Context) => {
@@ -130,15 +133,7 @@ formationsRouter.post('/formations', async (ctx: Context) => {
     return;
   }
 
-  const missingParamsError = buildMissingParamsError(
-    parsedTemplate as FormationTemplate,
-    body.parameters
-  );
-  if (missingParamsError) {
-    ctx.status = 400;
-    ctx.body = missingParamsError;
-    return;
-  }
+  assertNoMissingParams(parsedTemplate as FormationTemplate, body.parameters);
 
   const result = await createFormation({
     projectId: Number(targetProjectId),
@@ -242,16 +237,11 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
       return;
     }
 
-    const missingParamsError = buildMissingParamsError(
+    assertNoMissingParams(
       parsedTemplate as FormationTemplate,
       body.parameters,
       true
     );
-    if (missingParamsError) {
-      ctx.status = 400;
-      ctx.body = missingParamsError;
-      return;
-    }
   }
 
   const updated = await updateFormation({

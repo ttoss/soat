@@ -123,7 +123,8 @@ describe('Agents', () => {
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toMatch(/JSON object/);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/JSON object/);
     });
 
     test('coerces JSON-encoded string parameters to an object', async () => {
@@ -589,7 +590,8 @@ describe('Agents', () => {
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toMatch(/tools/i);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/tools/i);
     });
   });
 

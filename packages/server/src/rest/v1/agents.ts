@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
+import { DomainError } from 'src/errors';
 import type { InlineToolDefinition } from 'src/lib/agents';
 import {
   createAgent,
@@ -84,6 +85,9 @@ const parseInlineToolDefinition = (
     return null;
   }
 };
+
+const INLINE_TOOLS_ERROR =
+  'tools must be an array of tool definition objects with a name';
 
 /**
  * Parses the `tools` array of inline tool definitions. Returns `undefined`
@@ -224,11 +228,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
 
   const tools = parseInlineTools(reqBody.tools);
   if (tools === 'invalid') {
-    ctx.status = 400;
-    ctx.body = {
-      error: 'tools must be an array of tool definition objects with a name',
-    };
-    return;
+    throw new DomainError('VALIDATION_FAILED', INLINE_TOOLS_ERROR);
   }
 
   const targetProjectId = await resolveAgentProjectId(
@@ -328,11 +328,7 @@ agentsRouter.put('/agents/:agent_id', async (ctx: Context) => {
 
   const tools = parseInlineTools(body.tools);
   if (tools === 'invalid') {
-    ctx.status = 400;
-    ctx.body = {
-      error: 'tools must be an array of tool definition objects with a name',
-    };
-    return;
+    throw new DomainError('VALIDATION_FAILED', INLINE_TOOLS_ERROR);
   }
 
   const result = await updateAgent({
@@ -366,11 +362,7 @@ agentsRouter.patch('/agents/:agent_id', async (ctx: Context) => {
 
   const tools = parseInlineTools(body.tools);
   if (tools === 'invalid') {
-    ctx.status = 400;
-    ctx.body = {
-      error: 'tools must be an array of tool definition objects with a name',
-    };
-    return;
+    throw new DomainError('VALIDATION_FAILED', INLINE_TOOLS_ERROR);
   }
 
   const result = await updateAgent({

@@ -493,7 +493,7 @@ describe('Webhooks', () => {
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('Invalid policy');
+      expect(response.body.error.code).toBe('POLICY_NOT_FOUND');
     });
 
     test('GET /webhooks without project access returns 403', async () => {
@@ -534,7 +534,7 @@ describe('Webhooks', () => {
         .send({ policy_id: 'pol_nonexistent' });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('Invalid policy');
+      expect(response.body.error.code).toBe('POLICY_NOT_FOUND');
     });
 
     test('DELETE /webhooks/:id returns 404 for a non-existent webhook', async () => {

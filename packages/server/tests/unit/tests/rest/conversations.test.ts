@@ -437,7 +437,8 @@ describe('Conversations', () => {
         });
 
       expect(response.status).toBe(404);
-      expect(response.body.error).toBe('Conversation or actor not found');
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      expect(response.body.error.message).toMatch(/conversation or actor/i);
     });
 
     test('stores metadata and returns it in the response', async () => {
@@ -549,7 +550,8 @@ describe('Conversations', () => {
       );
 
       expect(response.status).toBe(404);
-      expect(response.body.error).toBe('Conversation not found');
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      expect(response.body.error.message).toMatch(/conversation not found/i);
     });
 
     test('returns 403 for a user without conversation permission', async () => {

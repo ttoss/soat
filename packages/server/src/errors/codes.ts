@@ -27,6 +27,10 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'A referenced tool does not exist.',
   },
+  POLICY_NOT_FOUND: {
+    httpStatus: 400,
+    description: 'A referenced policy does not exist.',
+  },
   AI_PROVIDER_ERROR: {
     httpStatus: 502,
     description:
@@ -140,6 +144,11 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description:
       'The orchestration graph is invalid (e.g. a dangling edge, a node missing a required field, a cycle, or an input_mapping that references a state key no upstream node writes).',
+  },
+  FORMATION_MISSING_PARAMETERS: {
+    httpStatus: 400,
+    description:
+      'The formation template declares one or more required parameters (no default, not satisfied by use_previous_value) that were not supplied or were provided as an empty string.',
   },
   ORCHESTRATION_CYCLE_DETECTED: {
     httpStatus: 422,

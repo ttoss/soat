@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import { generateConversationMessage } from 'src/lib/conversationGeneration';
 import {
   addConversationMessage,
@@ -86,9 +87,7 @@ conversationSubResourcesRouter.post(
     });
 
     if (!conversation) {
-      ctx.status = 404;
-      ctx.body = { error: 'Conversation not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found.');
     }
 
     if (
@@ -113,9 +112,10 @@ conversationSubResourcesRouter.post(
     });
 
     if (!message) {
-      ctx.status = 404;
-      ctx.body = { error: 'Conversation or actor not found' };
-      return;
+      throw new DomainError(
+        'RESOURCE_NOT_FOUND',
+        'Conversation or actor not found.'
+      );
     }
 
     ctx.status = 201;
@@ -137,9 +137,7 @@ conversationSubResourcesRouter.delete(
     });
 
     if (!conversation) {
-      ctx.status = 404;
-      ctx.body = { error: 'Conversation not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found.');
     }
 
     if (
@@ -160,9 +158,7 @@ conversationSubResourcesRouter.delete(
     });
 
     if (!result) {
-      ctx.status = 404;
-      ctx.body = { error: 'Message not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Message not found.');
     }
 
     ctx.status = 204;

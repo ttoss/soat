@@ -18,13 +18,18 @@ import { checkAuth, resolveWriteProjectId } from './helpers';
 
 const resolvePolicyId = async (
   policyPublicId: string | undefined
-): Promise<{ id: number | null } | { error: string }> => {
-  if (!policyPublicId) return { id: null };
+): Promise<number | null> => {
+  if (!policyPublicId) return null;
   const policy = await db.Policy.findOne({
     where: { publicId: policyPublicId },
   });
-  if (!policy) return { error: 'Invalid policy' };
-  return { id: policy.id };
+  if (!policy) {
+    throw new DomainError(
+      'POLICY_NOT_FOUND',
+      `Policy '${policyPublicId}' not found.`
+    );
+  }
+  return policy.id;
 };
 
 const webhooksRouter = new Router<Context>();
@@ -79,16 +84,11 @@ webhooksRouter.post('/webhooks', async (ctx: Context) => {
     return;
   }
 
-  const policyResult = await resolvePolicyId(body.policyId);
-  if ('error' in policyResult) {
-    ctx.status = 400;
-    ctx.body = { error: policyResult.error };
-    return;
-  }
+  const policyId = await resolvePolicyId(body.policyId);
 
   const webhook = await createWebhook({
     projectId: Number(targetProjectId),
-    policyId: policyResult.id,
+    policyId,
     name: body.name,
     description: body.description,
     url: body.url,
@@ -161,13 +161,7 @@ webhooksRouter.put('/webhooks/:webhook_id', async (ctx: Context) => {
 
   let policyInternalId: number | null | undefined;
   if (body.policyId !== undefined) {
-    const policyResult = await resolvePolicyId(body.policyId ?? undefined);
-    if ('error' in policyResult) {
-      ctx.status = 400;
-      ctx.body = { error: policyResult.error };
-      return;
-    }
-    policyInternalId = policyResult.id;
+    policyInternalId = await resolvePolicyId(body.policyId ?? undefined);
   }
 
   const updated = await updateWebhook({

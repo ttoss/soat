@@ -1,5 +1,6 @@
 import type { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import {
   deleteFile,
   downloadFile,
@@ -36,9 +37,7 @@ const ensureAuthenticated = (args: { ctx: Context }): boolean => {
 const ensureFileExists = async (args: { ctx: Context }) => {
   const file = await getFile({ id: args.ctx.params.file_id });
   if (!file) {
-    args.ctx.status = 404;
-    args.ctx.body = { error: 'File not found' };
-    return null;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'File not found.');
   }
 
   return file;
@@ -78,7 +77,6 @@ const registerGetFileRoute = (args: { filesRouter: Router<Context> }) => {
     if (!ensureAuthenticated({ ctx })) return;
 
     const file = await ensureFileExists({ ctx });
-    if (!file) return;
 
     const allowed = await ensureAllowed({ ctx, action: 'files:GetFile', file });
     if (!allowed) return;
@@ -152,7 +150,6 @@ const ensureDownloadAuthorized = async (args: {
   if (!ensureAuthenticated({ ctx: args.ctx })) return null;
 
   const file = await ensureFileExists({ ctx: args.ctx });
-  if (!file) return null;
 
   const allowed = await ensureAllowed({
     ctx: args.ctx,
@@ -196,7 +193,6 @@ const registerDownloadRoutes = (args: { filesRouter: Router<Context> }) => {
       if (!ensureAuthenticated({ ctx })) return;
 
       const file = await ensureFileExists({ ctx });
-      if (!file) return;
 
       const allowed = await ensureAllowed({
         ctx,
@@ -228,7 +224,6 @@ const registerMetadataRoutes = (args: { filesRouter: Router<Context> }) => {
     if (!ensureAuthenticated({ ctx })) return;
 
     const file = await ensureFileExists({ ctx });
-    if (!file) return;
 
     const allowed = await ensureAllowed({
       ctx,
@@ -254,7 +249,6 @@ const registerMetadataRoutes = (args: { filesRouter: Router<Context> }) => {
     if (!ensureAuthenticated({ ctx })) return;
 
     const file = await ensureFileExists({ ctx });
-    if (!file) return;
 
     const allowed = await ensureAllowed({ ctx, action: 'files:GetFile', file });
     if (!allowed) return;
@@ -266,7 +260,6 @@ const registerMetadataRoutes = (args: { filesRouter: Router<Context> }) => {
     if (!ensureAuthenticated({ ctx })) return;
 
     const file = await ensureFileExists({ ctx });
-    if (!file) return;
 
     const allowed = await ensureAllowed({
       ctx,
@@ -287,7 +280,6 @@ const registerMetadataRoutes = (args: { filesRouter: Router<Context> }) => {
     if (!ensureAuthenticated({ ctx })) return;
 
     const file = await ensureFileExists({ ctx });
-    if (!file) return;
 
     const allowed = await ensureAllowed({
       ctx,
