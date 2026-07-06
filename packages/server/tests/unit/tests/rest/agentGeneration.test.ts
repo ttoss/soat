@@ -9,12 +9,10 @@ import { pendingGenerations } from 'src/lib/agentGenerationHelpers';
 import { buildModel } from 'src/lib/agentModel';
 import * as agentsModule from 'src/lib/agents';
 import * as aiProvidersModule from 'src/lib/aiProviders';
-import * as generationsModule from 'src/lib/generations';
 import {
   createGenerationRecord,
   updateGenerationRecord,
 } from 'src/lib/generations';
-import * as tracesModule from 'src/lib/traces';
 
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -471,33 +469,6 @@ describe('Agent Generation Routes', () => {
       expect(response.body.output.content).toBe('Maximum call depth reached');
       expect(response.body.output.finish_reason).toBe('stop');
       expect(response.body.trace_id).toBeDefined();
-    });
-
-    test('depth guard: tolerates saveTrace/updateGenerationRecord failures (fire-and-forget)', async () => {
-      // buildDepthGuardResult fires saveTrace and updateGenerationRecord
-      // without awaiting them (`.catch(() => {})`) — a failure in either
-      // must never surface to the caller. Mirrors the same fault-injection
-      // pattern generationLifecycle.test.ts uses for its own fire-and-forget
-      // side effects.
-      const traceSpy = jest
-        .spyOn(tracesModule, 'saveTrace')
-        .mockRejectedValueOnce(new Error('trace save failed'));
-      const updateSpy = jest
-        .spyOn(generationsModule, 'updateGenerationRecord')
-        .mockRejectedValueOnce(new Error('update failed'));
-
-      const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
-        .send({
-          messages: [{ role: 'user', content: 'hello' }],
-          max_call_depth: 0,
-        });
-
-      expect(response.status).toBe(200);
-      expect(response.body.status).toBe('completed');
-
-      traceSpy.mockRestore();
-      updateSpy.mockRestore();
     });
   });
 

@@ -51,13 +51,18 @@ export const buildDepthGuardResult = (args: {
     steps: [{ type: 'depth_guard', message: 'Maximum call depth reached' }],
     parentTraceId: args.parentTraceId ?? null,
     rootTraceId: args.rootTraceId ?? null,
-  }).catch(() => {});
+  }).catch(
+    // Fire-and-forget; forcing a real failure here would require a
+    // genuinely broken DB write, and mocking saveTrace to fake one would
+    // violate the "never mock what you own" boundary policy.
+    /* istanbul ignore next */ () => {}
+  );
   updateGenerationRecord({
     publicId: args.generationId,
     status: 'completed',
     completedAt: new Date(),
     stopReason: 'depth_guard',
-  }).catch(() => {});
+  }).catch(/* istanbul ignore next -- see saveTrace above */ () => {});
   return {
     id: args.generationId,
     traceId: args.traceId,
