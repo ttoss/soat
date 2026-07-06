@@ -676,7 +676,6 @@ describe('resolveAgentTools - discussion type', () => {
         project_id: projectId,
         name: 'review-panel',
         ai_provider_id: aiProvRes.body.id,
-        participants: [],
       });
     expect(discussionRes.status).toBe(201);
     discussionId = discussionRes.body.id;
