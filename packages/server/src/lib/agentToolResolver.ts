@@ -591,6 +591,7 @@ type AgentToolRow = {
     | string
     | null;
   mcp: { url: string; headers?: Record<string, string> } | null;
+  discussion: { discussionId: string } | null;
   actions: string[] | null;
   presetParameters: Record<string, unknown> | null;
   outputMapping: Record<string, unknown> | null;
@@ -731,6 +732,34 @@ const resolveToolByType = async (
         isSoatActionAllowedByBoundary,
         logToolCallingError,
       });
+    case 'discussion': {
+      const discussionId = typedTool.discussion?.discussionId;
+      if (!discussionId) return {};
+      const parameters =
+        typeof typedTool.parameters === 'string'
+          ? (JSON.parse(typedTool.parameters) as Record<string, unknown>)
+          : typedTool.parameters;
+      return {
+        [typedTool.name]: tool({
+          description: typedTool.description ?? undefined,
+          inputSchema: jsonSchema(
+            parameters ?? { type: 'object', properties: {} }
+          ),
+          execute: async (input: Record<string, unknown>) => {
+            const { runDiscussion } = await import('./discussionRuns');
+            const run = await runDiscussion({
+              discussionId,
+              topic: String(input.topic ?? ''),
+              initiatorGenerationId:
+                typeof input.initiatorGenerationId === 'string'
+                  ? input.initiatorGenerationId
+                  : undefined,
+            });
+            return { outcome: run.outcome, run_id: run.id };
+          },
+        }),
+      };
+    }
     default:
       return {};
   }
@@ -770,6 +799,9 @@ export const resolveEphemeralAgentTool = async (args: {
       null,
     execute: (args.definition.execute as AgentToolRow['execute']) ?? null,
     mcp: (args.definition.mcp as AgentToolRow['mcp']) ?? null,
+    discussion: args.definition.discussionId
+      ? { discussionId: args.definition.discussionId }
+      : null,
     actions: args.definition.actions ?? null,
     presetParameters:
       (args.definition.presetParameters as

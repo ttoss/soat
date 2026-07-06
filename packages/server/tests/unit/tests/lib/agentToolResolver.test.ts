@@ -16,6 +16,7 @@ import {
   resolveMcpTools,
   resolveSoatTools,
 } from 'src/lib/agentToolResolverExternalTools';
+import * as discussionCompletion from 'src/lib/discussionCompletion';
 import { soatTools } from 'src/lib/soatTools';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -640,6 +641,86 @@ describe('resolveAgentTools', () => {
       // still proves execution reached resolvePipelineTool's callTool bridge.
       await expect(pipelineTool.execute({}, {} as never)).rejects.toThrow();
     }
+  });
+});
+
+describe('resolveAgentTools - discussion type', () => {
+  let adminToken: string;
+  let projectId: string;
+  let discussionId: string;
+  let discussionToolId: string;
+
+  beforeAll(async () => {
+    await testClient
+      .post('/api/v1/users/bootstrap')
+      .send({ username: 'discresolveradmin', password: 'supersecret' });
+
+    adminToken = await loginAs('discresolveradmin', 'supersecret');
+
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'Discussion Tool Resolver Project' });
+    projectId = projectRes.body.id;
+
+    const discussionRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/discussions')
+      .send({
+        project_id: projectId,
+        name: 'review-panel',
+        participants: [],
+      });
+    discussionId = discussionRes.body.id;
+
+    const toolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'review-theme',
+        type: 'discussion',
+        description: 'Run a panel review for a given topic',
+        parameters: {
+          type: 'object',
+          required: ['topic'],
+          properties: {
+            topic: { type: 'string' },
+          },
+        },
+        discussion_id: discussionId,
+      });
+    discussionToolId = toolRes.body.id;
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('discussion tool is included in resolved tools', async () => {
+    const tools = await resolveAgentTools({ toolIds: [discussionToolId] });
+    expect(tools).toHaveProperty('review-theme');
+  });
+
+  test('discussion tool has an execute function', async () => {
+    const tools = await resolveAgentTools({ toolIds: [discussionToolId] });
+    expect('execute' in tools['review-theme']).toBe(true);
+  });
+
+  test('discussion tool execute calls runDiscussion and returns outcome and run_id', async () => {
+    jest
+      .spyOn(discussionCompletion, 'runDiscussionCompletion')
+      .mockResolvedValue('Approved: proceed with the feature.');
+
+    const tools = await resolveAgentTools({ toolIds: [discussionToolId] });
+    const discTool = tools['review-theme'];
+
+    let result: unknown;
+    if ('execute' in discTool && typeof discTool.execute === 'function') {
+      result = await discTool.execute({ topic: 'Should we ship?' }, {} as never);
+    }
+
+    expect(result).toMatchObject({
+      outcome: 'Approved: proceed with the feature.',
+      run_id: expect.stringMatching(/^drn_/),
+    });
   });
 });
 
