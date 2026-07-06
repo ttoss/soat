@@ -11,6 +11,7 @@ describe('Discussions', () => {
   let policyId: string;
   let aiProviderId: string;
   let noPermToken: string;
+  let scopedApiKey: string;
 
   beforeAll(async () => {
     await testClient
@@ -74,6 +75,17 @@ describe('Discussions', () => {
         default_model: 'llama3.2',
       });
     aiProviderId = aiProvRes.body.id;
+
+    // Project-scoped API key for implicit-project tests.
+    const keyRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/api-keys')
+      .send({
+        project_id: projectId,
+        policy_ids: [policyId],
+        name: 'Discussions scoped key',
+      });
+    expect(keyRes.status).toBe(201);
+    scopedApiKey = keyRes.body.key;
   });
 
   const createDiscussion = (overrides: Record<string, unknown> = {}) => {
@@ -102,6 +114,18 @@ describe('Discussions', () => {
       expect(res.body.participants).toHaveLength(2);
       expect(res.body.participants[0].id).toMatch(/^dpt_/);
       expect(res.body.participants[0].name).toBe('Advocate');
+    });
+
+    test('project-scoped API key resolves projectId automatically when omitted', async () => {
+      const res = await authenticatedTestClient(scopedApiKey)
+        .post('/api/v1/discussions')
+        .send({
+          name: 'Implicit project panel',
+          ai_provider_id: aiProviderId,
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.id).toMatch(/^disc_/);
+      expect(res.body.project_id).toBe(projectId);
     });
 
     test('unauthenticated request returns 401', async () => {

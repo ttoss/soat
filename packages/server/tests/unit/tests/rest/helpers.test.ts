@@ -4,7 +4,70 @@ import {
   checkResourcePermission,
   getTargetProjectId,
   resolveProjectIdsWithAction,
+  resolveWriteProjectId,
 } from 'src/rest/v1/helpers';
+
+describe('resolveWriteProjectId', () => {
+  const makeCtx = (authUser: Record<string, unknown>) => {
+    return { authUser } as never;
+  };
+
+  test('returns 401 when no authUser', async () => {
+    const ctx = { authUser: undefined } as never;
+    const result = await resolveWriteProjectId({ ctx, action: 'test:Create' });
+    expect(result).toBeNull();
+    expect((ctx as never as { status: number }).status).toBe(401);
+  });
+
+  test('uses explicit projectPublicId', async () => {
+    const ctx = makeCtx({
+      resolveProjectIds: jest.fn().mockResolvedValue([42]),
+    });
+    const result = await resolveWriteProjectId({
+      ctx,
+      projectPublicId: 'proj_explicit',
+      action: 'test:Create',
+    });
+    expect(result).toBe(42);
+  });
+
+  test('falls back to apiKeyProjectPublicId when no explicit projectId', async () => {
+    const ctx = makeCtx({
+      apiKeyProjectPublicId: 'proj_apikey',
+      resolveProjectIds: jest.fn().mockResolvedValue([7]),
+    });
+    const result = await resolveWriteProjectId({ ctx, action: 'test:Create' });
+    expect(result).toBe(7);
+  });
+
+  test('falls back to oauthProjectPublicId when no explicit projectId and no apiKey', async () => {
+    const ctx = makeCtx({
+      oauthProjectPublicId: 'proj_oauth',
+      resolveProjectIds: jest.fn().mockResolvedValue([9]),
+    });
+    const result = await resolveWriteProjectId({ ctx, action: 'test:Create' });
+    expect(result).toBe(9);
+  });
+
+  test('returns 400 when no projectId and no scoped token', async () => {
+    const ctx = makeCtx({
+      resolveProjectIds: jest.fn().mockResolvedValue([]),
+    });
+    const result = await resolveWriteProjectId({ ctx, action: 'test:Create' });
+    expect(result).toBeNull();
+    expect((ctx as never as { status: number }).status).toBe(400);
+  });
+
+  test('returns 403 when resolveProjectIds returns null', async () => {
+    const ctx = makeCtx({
+      apiKeyProjectPublicId: 'proj_apikey',
+      resolveProjectIds: jest.fn().mockResolvedValue(null),
+    });
+    const result = await resolveWriteProjectId({ ctx, action: 'test:Create' });
+    expect(result).toBeNull();
+    expect((ctx as never as { status: number }).status).toBe(403);
+  });
+});
 
 describe('checkAuth', () => {
   test('returns true when authUser is present', () => {

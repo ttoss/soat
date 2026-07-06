@@ -70,12 +70,13 @@ export const checkProjectId = (args: {
  * Resolves the numeric project id for a create/write operation.
  *
  * - An explicit `projectPublicId` is used as-is, subject to the permission check.
- * - When omitted, a project-scoped API key supplies its own project automatically
- *   (implicit project id).
- * - A project-scoped key with an explicit `projectPublicId` that does not match the
- *   key's project resolves to 403.
- * - When omitted without a scoped key (e.g. JWT auth), responds 400 — a write needs a
- *   concrete project and one is never inferred from a JWT user's accessible projects.
+ * - When omitted, a project-scoped API key or project-scoped OAuth token supplies its
+ *   own project automatically (implicit project id).
+ * - A scoped credential with an explicit `projectPublicId` that does not match the
+ *   credential's project resolves to 403.
+ * - When omitted without a scoped credential (e.g. plain JWT auth), responds 400 —
+ *   a write needs a concrete project and one is never inferred from a JWT user's
+ *   accessible projects.
  *
  * Returns the numeric project id, or `null` when a response (401/400/403) has already
  * been set on `ctx` and the caller should `return`.
@@ -92,9 +93,11 @@ export const resolveWriteProjectId = async (args: {
     return null;
   }
 
-  // Without an explicit project id, only a project-scoped API key supplies a default.
+  // Without an explicit project id, a project-scoped API key or OAuth token supplies a default.
   const projectPublicId =
-    args.projectPublicId ?? ctx.authUser.apiKeyProjectPublicId;
+    args.projectPublicId ??
+    ctx.authUser.apiKeyProjectPublicId ??
+    ctx.authUser.oauthProjectPublicId;
 
   if (!projectPublicId) {
     ctx.status = 400;
