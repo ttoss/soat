@@ -662,11 +662,21 @@ describe('resolveAgentTools - discussion type', () => {
       .send({ name: 'Discussion Tool Resolver Project' });
     projectId = projectRes.body.id;
 
+    const aiProvRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/ai-providers')
+      .send({
+        project_id: projectId,
+        name: 'Discussion Resolver Provider',
+        provider: 'ollama',
+        default_model: 'llama3.2',
+      });
+
     const discussionRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/discussions')
       .send({
         project_id: projectId,
         name: 'review-panel',
+        ai_provider_id: aiProvRes.body.id,
         participants: [],
       });
     discussionId = discussionRes.body.id;
