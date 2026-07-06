@@ -14,6 +14,22 @@ const listSessionMessages = async (token: string, sessionId: string) => {
   );
 };
 
+// The server runs in-process (supertest drives `app.callback()` directly), so
+// mocking `Date.now` here is visible to the inactivity-TTL check the route
+// handler reads. This lets TTL tests simulate elapsed time deterministically
+// instead of sleeping past the real TTL window.
+const withAdvancedClock = async <T>(
+  ms: number,
+  fn: () => Promise<T>
+): Promise<T> => {
+  const spy = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + ms);
+  try {
+    return await fn();
+  } finally {
+    spy.mockRestore();
+  }
+};
+
 describe('Sessions', () => {
   let adminToken: string;
   let userToken: string;
@@ -1778,24 +1794,24 @@ describe('Sessions', () => {
         .post(`/api/v1/sessions/${sessionId}/messages`)
         .send({ message: 'hello' });
 
-      // Wait for TTL to elapse
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 1500);
-      });
+      // Advance the clock past the 1-second TTL instead of sleeping.
+      const { genRes, msgRes } = await withAdvancedClock(1500, async () => {
+        // Generate should fail with SESSION_EXPIRED
+        const generate = await authenticatedTestClient(userToken)
+          .post(`/api/v1/sessions/${sessionId}/generate`)
+          .send({});
 
-      // Generate should fail with SESSION_EXPIRED
-      const genRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/sessions/${sessionId}/generate`)
-        .send({});
+        // Once marked expired in the DB, posting a message must also be
+        // rejected.
+        const message = await authenticatedTestClient(userToken)
+          .post(`/api/v1/sessions/${sessionId}/messages`)
+          .send({ message: 'still trying after expiry' });
+
+        return { genRes: generate, msgRes: message };
+      });
 
       expect(genRes.status).toBe(410);
       expect(genRes.body.error.code).toBe('SESSION_EXPIRED');
-
-      // Once marked expired in the DB, posting a message must also be rejected.
-      const msgRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/sessions/${sessionId}/messages`)
-        .send({ message: 'still trying after expiry' });
-
       expect(msgRes.status).toBe(410);
       expect(msgRes.body.error.code).toBe('SESSION_EXPIRED');
     });
@@ -1836,14 +1852,13 @@ describe('Sessions', () => {
       expect(sessionRes.status).toBe(201);
       const expiredId = sessionRes.body.id;
 
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 1500);
+      // Advance the clock past the 1-second TTL instead of sleeping, then
+      // trigger lazy expiry via GET.
+      const getRes = await withAdvancedClock(1500, () => {
+        return authenticatedTestClient(userToken).get(
+          `/api/v1/sessions/${expiredId}`
+        );
       });
-
-      // Trigger lazy expiry via GET
-      const getRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/sessions/${expiredId}`
-      );
       expect(getRes.status).toBe(200);
       expect(getRes.body.status).toBe('expired');
 
@@ -1875,14 +1890,13 @@ describe('Sessions', () => {
       expect(sessionRes.status).toBe(201);
       const lazyId = sessionRes.body.id;
 
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 1500);
+      // Advance the clock past the 1-second TTL instead of sleeping, then
+      // trigger expiry via list (no single GET).
+      const listRes = await withAdvancedClock(1500, () => {
+        return authenticatedTestClient(userToken).get(
+          `/api/v1/sessions?agent_id=${agentId}`
+        );
       });
-
-      // Trigger expiry via list (no single GET)
-      const listRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/sessions?agent_id=${agentId}`
-      );
       expect(listRes.status).toBe(200);
       const found = listRes.body.data.find((s: { id: string }) => {
         return s.id === lazyId;
@@ -1902,13 +1916,12 @@ describe('Sessions', () => {
         .post(`/api/v1/sessions/${sessionId}/messages`)
         .send({ message: 'hello' });
 
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 1500);
+      // Advance the clock past the 1-second TTL instead of sleeping.
+      const genRes = await withAdvancedClock(1500, () => {
+        return authenticatedTestClient(userToken).post(
+          `/api/v1/sessions/${sessionId}/generate`
+        );
       });
-
-      const genRes = await authenticatedTestClient(userToken).post(
-        `/api/v1/sessions/${sessionId}/generate`
-      );
       expect(genRes.status).toBe(410);
       expect(genRes.body.error.code).toBe('SESSION_EXPIRED');
 
@@ -1993,13 +2006,14 @@ describe('Sessions', () => {
         .patch(`/api/v1/sessions/${sessionId}`)
         .send({ inactivity_ttl_seconds: 0 });
 
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 1200);
+      // Advance the clock well past what would have been the TTL window
+      // instead of sleeping — ttl=0 must never expire regardless of elapsed
+      // time.
+      const getRes = await withAdvancedClock(1200, () => {
+        return authenticatedTestClient(userToken).get(
+          `/api/v1/sessions/${sessionId}`
+        );
       });
-
-      const getRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/sessions/${sessionId}`
-      );
       expect(getRes.status).toBe(200);
       expect(getRes.body.status).toBe('open');
     });
@@ -2092,13 +2106,12 @@ describe('Sessions', () => {
       expect(sess1.status).toBe(201);
       const expiredSessId = sess1.body.id;
 
-      // Wait for TTL to elapse and trigger lazy expiry via GET
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 1500);
+      // Advance the clock past the TTL and trigger lazy expiry via GET.
+      const getRes = await withAdvancedClock(1500, () => {
+        return authenticatedTestClient(userToken).get(
+          `/api/v1/sessions/${expiredSessId}`
+        );
       });
-      const getRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/sessions/${expiredSessId}`
-      );
       expect(getRes.body.status).toBe('expired');
 
       // New session for same actor should now succeed (expired != open)
@@ -2124,15 +2137,14 @@ describe('Sessions', () => {
         });
       expect(sess1.status).toBe(201);
 
-      // Wait for TTL to elapse — do NOT call GET to trigger lazy expiry
-      await new Promise((resolve) => {
-        return setTimeout(resolve, 1500);
+      // Advance the clock past the TTL instead of sleeping — do NOT call GET
+      // to trigger lazy expiry. createSession itself must expire the stale
+      // open session and succeed.
+      const sess2 = await withAdvancedClock(1500, () => {
+        return authenticatedTestClient(userToken)
+          .post('/api/v1/sessions')
+          .send({ agent_id: singleSessionAgentId, actor_id: lazyActorId });
       });
-
-      // createSession itself must expire the stale open session and succeed
-      const sess2 = await authenticatedTestClient(userToken)
-        .post('/api/v1/sessions')
-        .send({ agent_id: singleSessionAgentId, actor_id: lazyActorId });
       expect(sess2.status).toBe(201);
       expect(sess2.body.id).not.toBe(sess1.body.id);
     });

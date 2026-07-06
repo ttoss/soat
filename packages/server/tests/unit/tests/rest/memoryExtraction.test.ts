@@ -87,6 +87,43 @@ describe('Memory Extraction', () => {
     return entries;
   };
 
+  // `writeCandidates` processes every extracted candidate sequentially in one
+  // async chain, and `recordExtractionSummary` (writing generation.metadata.
+  // extraction) only runs once that whole chain finishes. Polling for it is a
+  // deterministic settle signal for "all candidates — including skipped
+  // duplicates — have been processed", replacing a fixed settling sleep.
+  const waitForExtractionSummary = async (
+    generationId: string,
+    timeoutMs = 8000
+  ) => {
+    const fetchSummary = async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/generations/${generationId}`
+      );
+      return res.body?.metadata?.extraction;
+    };
+
+    const startedAt = Date.now();
+    let summary = await fetchSummary();
+    while (summary === undefined && Date.now() - startedAt < timeoutMs) {
+      await sleep(50);
+      summary = await fetchSummary();
+    }
+    return summary;
+  };
+
+  // There is no positive completion signal for "extraction never ran" (no
+  // downstream write or summary is ever produced), so absence can only be
+  // confirmed by polling within a bounded window instead of an unconditional
+  // sleep — this still exits early if a call unexpectedly appears.
+  const waitForNoExtractionAttempt = async (maxWaitMs = 500) => {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < maxWaitMs) {
+      if (mockRunExtractionCompletion.mock.calls.length > 0) break;
+      await sleep(25);
+    }
+  };
+
   const completedGeneration = (id: string, content: string) => {
     return {
       id,
@@ -206,9 +243,9 @@ describe('Memory Extraction', () => {
         .send({ agent_id: agentId });
       expect(res.status).toBe(200);
 
-      await waitForEntries(memoryId, 1);
-      // Allow the second candidate's write to settle before asserting.
-      await sleep(300);
+      // Wait for the whole candidate batch (including the skipped duplicate)
+      // to finish processing before asserting.
+      await waitForExtractionSummary(res.body.generation_id);
       const settled = await listEntries(memoryId);
       expect(settled).toHaveLength(1);
       expect(settled[0].content).toBe('User timezone is EST');
@@ -231,7 +268,7 @@ describe('Memory Extraction', () => {
         .send({ agent_id: agentId });
       expect(res.status).toBe(200);
 
-      await sleep(400);
+      await waitForNoExtractionAttempt();
       expect(mockRunExtractionCompletion).not.toHaveBeenCalled();
       expect(await listEntries(memoryId)).toHaveLength(0);
     });
@@ -253,7 +290,7 @@ describe('Memory Extraction', () => {
         .send({ agent_id: agentId });
       expect(res.status).toBe(200);
 
-      await sleep(400);
+      await waitForNoExtractionAttempt();
       expect(mockRunExtractionCompletion).not.toHaveBeenCalled();
     });
 
@@ -277,7 +314,9 @@ describe('Memory Extraction', () => {
         .send({ agent_id: agentId });
       expect(res.status).toBe(200);
 
-      await sleep(400);
+      // Extraction still runs (and produces a zero-candidate summary) even
+      // though parsing yields nothing — wait for that summary to settle.
+      await waitForExtractionSummary(res.body.generation_id);
       expect(await listEntries(memoryId)).toHaveLength(0);
     });
   });
@@ -381,7 +420,7 @@ describe('Memory Extraction', () => {
         .send({ agent_id: agentId });
       expect(res.status).toBe(200);
 
-      await sleep(400);
+      await waitForNoExtractionAttempt();
       expect(mockRunExtractionCompletion).not.toHaveBeenCalled();
       expect(await listEntries(memoryId)).toHaveLength(0);
     });
