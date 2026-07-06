@@ -1,4 +1,9 @@
-import { emitEvent, onEvent, resolveProjectPublicId } from 'src/lib/eventBus';
+import {
+  emitEvent,
+  eventBus,
+  onEvent,
+  resolveProjectPublicId,
+} from 'src/lib/eventBus';
 
 describe('resolveProjectPublicId', () => {
   test('returns empty string when project does not exist', async () => {
@@ -12,22 +17,26 @@ describe('emitEvent / onEvent', () => {
     const handler = jest.fn();
     onEvent(handler);
 
-    emitEvent({
-      type: 'test.created',
-      projectId: 1,
-      projectPublicId: 'proj_test',
-      resourceType: 'test',
-      resourceId: 'res_1',
-      data: { key: 'value' },
-      timestamp: new Date().toISOString(),
-    });
-
-    expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler).toHaveBeenCalledWith(
-      expect.objectContaining({
+    try {
+      emitEvent({
         type: 'test.created',
+        projectId: 1,
         projectPublicId: 'proj_test',
-      })
-    );
+        resourceType: 'test',
+        resourceId: 'res_1',
+        data: { key: 'value' },
+        timestamp: new Date().toISOString(),
+      });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(handler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'test.created',
+          projectPublicId: 'proj_test',
+        })
+      );
+    } finally {
+      eventBus.off('soat:event', handler);
+    }
   });
 });
