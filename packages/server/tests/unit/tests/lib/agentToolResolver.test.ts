@@ -643,6 +643,94 @@ describe('resolveAgentTools', () => {
   });
 });
 
+describe('resolveAgentTools - discussion type', () => {
+  let adminToken: string;
+  let projectId: string;
+  let discussionId: string;
+  let discussionToolId: string;
+
+  beforeAll(async () => {
+    // toolresolveradmin was bootstrapped by the first describe's beforeAll
+    adminToken = await loginAs('toolresolveradmin', 'supersecret');
+
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'Discussion Tool Resolver Project' });
+    expect(projectRes.status).toBe(201);
+    projectId = projectRes.body.id;
+
+    const aiProvRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/ai-providers')
+      .send({
+        project_id: projectId,
+        name: 'Discussion Resolver Provider',
+        provider: 'ollama',
+        default_model: 'llama3.2',
+      });
+    expect(aiProvRes.status).toBe(201);
+
+    const discussionRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/discussions')
+      .send({
+        project_id: projectId,
+        name: 'review-panel',
+        ai_provider_id: aiProvRes.body.id,
+      });
+    expect(discussionRes.status).toBe(201);
+    discussionId = discussionRes.body.id;
+
+    const toolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'review-theme',
+        type: 'discussion',
+        description: 'Run a panel review for a given topic',
+        parameters: {
+          type: 'object',
+          required: ['topic'],
+          properties: {
+            topic: { type: 'string' },
+          },
+        },
+        discussion_id: discussionId,
+      });
+    expect(toolRes.status).toBe(201);
+    discussionToolId = toolRes.body.id;
+  });
+
+  test('discussion tool is included in resolved tools', async () => {
+    const tools = await resolveAgentTools({ toolIds: [discussionToolId] });
+    expect(tools).toHaveProperty('review-theme');
+  });
+
+  test('discussion tool has an execute function', async () => {
+    const tools = await resolveAgentTools({ toolIds: [discussionToolId] });
+    expect('execute' in tools['review-theme']).toBe(true);
+  });
+
+  test('discussion tool execute creates a real run and returns run_id', async () => {
+    // No mocks — the discussion has no participants so runDiscussionPipeline
+    // returns immediately (0 branches → no AI call) and the run is persisted
+    // in the real DB with status "failed" and an empty outcome.
+    const tools = await resolveAgentTools({ toolIds: [discussionToolId] });
+    const discTool = tools['review-theme'];
+
+    let result: unknown;
+    if ('execute' in discTool && typeof discTool.execute === 'function') {
+      result = await discTool.execute(
+        { topic: 'Should we ship?' },
+        {} as never
+      );
+    }
+
+    expect(result).toMatchObject({
+      outcome: expect.any(String),
+      run_id: expect.stringMatching(/^drn_/),
+    });
+  });
+});
+
 describe('resolveAgentTools - ephemeral tools', () => {
   let adminToken: string;
   let projectId: string;

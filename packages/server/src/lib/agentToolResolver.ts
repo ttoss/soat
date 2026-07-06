@@ -573,6 +573,65 @@ const resolveClientTool = (typedTool: {
   });
 };
 
+const resolveDiscussionTool = (typedTool: {
+  name: string;
+  description: string | null;
+  parameters: Record<string, unknown> | null;
+  discussion: { discussionId: string } | null;
+}): Tool => {
+  const discussionId = typedTool.discussion?.discussionId ?? '';
+  const parameters =
+    typeof typedTool.parameters === 'string'
+      ? (JSON.parse(typedTool.parameters) as Record<string, unknown>)
+      : typedTool.parameters;
+  return tool({
+    description: typedTool.description ?? undefined,
+    inputSchema: jsonSchema(parameters ?? { type: 'object', properties: {} }),
+    execute: async (input: Record<string, unknown>) => {
+      const { runDiscussion } = await import('./discussionRuns');
+      const run = await runDiscussion({
+        discussionId,
+        topic: String(input.topic ?? ''),
+        initiatorGenerationId:
+          typeof input.initiatorGenerationId === 'string'
+            ? input.initiatorGenerationId
+            : undefined,
+      });
+      return { outcome: run.outcome, run_id: run.id };
+    },
+  });
+};
+
+const resolveMcpToolEntry = async (
+  typedTool: AgentToolRow,
+  toolContext?: Record<string, string>
+): Promise<Record<string, Tool>> => {
+  if (!typedTool.mcp?.url) return {};
+  try {
+    // Resolve {{secret:...}} tokens right before connecting to the MCP
+    // server — the stored config keeps the reference.
+    const mcp = {
+      url: await resolveSecretRefsInString({
+        value: typedTool.mcp.url,
+        projectId: typedTool.projectId,
+      }),
+      headers: await resolveSecretRefsInRecord({
+        record: typedTool.mcp.headers,
+        projectId: typedTool.projectId,
+      }),
+    };
+    return await resolveMcpTools({
+      typedTool: { mcp },
+      toolContext,
+      buildContextHeaders,
+      logToolCallingError,
+    });
+  } catch {
+    // Network errors resolving MCP tools should not abort entire resolution
+    return {};
+  }
+};
+
 // ── Tool Resolution ───────────────────────────────────────────────────────
 
 type AgentToolRow = {
@@ -591,6 +650,7 @@ type AgentToolRow = {
     | string
     | null;
   mcp: { url: string; headers?: Record<string, string> } | null;
+  discussion: { discussionId: string } | null;
   actions: string[] | null;
   presetParameters: Record<string, unknown> | null;
   outputMapping: Record<string, unknown> | null;
@@ -691,32 +751,8 @@ const resolveToolByType = async (
           remainingDepth: args.remainingDepth,
         }),
       };
-    case 'mcp': {
-      if (!typedTool.mcp?.url) return {};
-      try {
-        // Resolve {{secret:...}} tokens right before connecting to the MCP
-        // server — the stored config keeps the reference.
-        const mcp = {
-          url: await resolveSecretRefsInString({
-            value: typedTool.mcp.url,
-            projectId: typedTool.projectId,
-          }),
-          headers: await resolveSecretRefsInRecord({
-            record: typedTool.mcp.headers,
-            projectId: typedTool.projectId,
-          }),
-        };
-        return await resolveMcpTools({
-          typedTool: { mcp },
-          toolContext: args.toolContext,
-          buildContextHeaders,
-          logToolCallingError,
-        });
-      } catch {
-        // Network errors resolving MCP tools should not abort entire resolution
-        return {};
-      }
-    }
+    case 'mcp':
+      return resolveMcpToolEntry(typedTool, args.toolContext);
     case 'soat':
       return resolveSoatTools({
         typedTool,
@@ -731,6 +767,9 @@ const resolveToolByType = async (
         isSoatActionAllowedByBoundary,
         logToolCallingError,
       });
+    case 'discussion':
+      if (!typedTool.discussion?.discussionId) return {};
+      return { [typedTool.name]: resolveDiscussionTool(typedTool) };
     default:
       return {};
   }
@@ -770,6 +809,9 @@ export const resolveEphemeralAgentTool = async (args: {
       null,
     execute: (args.definition.execute as AgentToolRow['execute']) ?? null,
     mcp: (args.definition.mcp as AgentToolRow['mcp']) ?? null,
+    discussion: args.definition.discussionId
+      ? { discussionId: args.definition.discussionId }
+      : null,
     actions: args.definition.actions ?? null,
     presetParameters:
       (args.definition.presetParameters as
