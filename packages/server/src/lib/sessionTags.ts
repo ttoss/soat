@@ -1,6 +1,10 @@
 import { db } from '../db';
-import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
+
+// Both functions are only ever called by the session-tags REST routes
+// (sessionSubResources.ts), which resolve the session's existence via
+// `checkSessionAccess` — and pass back that same session's own `agentId` —
+// before calling in. The session is therefore guaranteed to exist here.
 
 export const getSessionTags = async (args: {
   agentId: number;
@@ -10,11 +14,7 @@ export const getSessionTags = async (args: {
     where: { publicId: args.sessionId, agentId: args.agentId },
   });
 
-  if (!session) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
-  }
-
-  return session.tags ?? {};
+  return session!.tags ?? {};
 };
 
 export const updateSessionTags = async (args: {
@@ -23,13 +23,9 @@ export const updateSessionTags = async (args: {
   tags: Record<string, string>;
   merge?: boolean;
 }) => {
-  const session = await db.Session.findOne({
+  const session = (await db.Session.findOne({
     where: { publicId: args.sessionId, agentId: args.agentId },
-  });
-
-  if (!session) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
-  }
+  }))!;
 
   if (args.merge) {
     session.tags = { ...(session.tags ?? {}), ...args.tags };

@@ -1,3 +1,4 @@
+import { Op } from '@ttoss/postgresdb';
 import {
   compilePolicy,
   globToLike,
@@ -128,7 +129,7 @@ describe('compilePolicy', () => {
             {
               effect: 'Allow',
               action: ['test:Do'],
-              resource: ['srn:soat:testResource:prj_1:res_abc123'],
+              resource: ['soat:prj_1:testResource:res_abc123'],
             },
           ],
         },
@@ -138,7 +139,9 @@ describe('compilePolicy', () => {
       projectPublicId: 'prj_1',
     });
     expect(result.hasAccess).toBe(true);
-    expect(result.where).toBeDefined();
+    expect(result.where).toEqual({
+      [Op.and]: [{ [Op.or]: [{ [Op.and]: [{ publicId: 'res_abc123' }] }] }],
+    });
   });
 
   test('Allow glob resource builds LIKE where clause', () => {
@@ -149,7 +152,7 @@ describe('compilePolicy', () => {
             {
               effect: 'Allow',
               action: ['test:Do'],
-              resource: ['srn:soat:testResource:prj_1:res_*'],
+              resource: ['soat:prj_1:testResource:res_*'],
             },
           ],
         },
@@ -159,7 +162,13 @@ describe('compilePolicy', () => {
       projectPublicId: 'prj_1',
     });
     expect(result.hasAccess).toBe(true);
-    expect(result.where).toBeDefined();
+    expect(result.where).toEqual({
+      [Op.and]: [
+        {
+          [Op.or]: [{ [Op.and]: [{ publicId: { [Op.like]: 'res\\_%' } }] }],
+        },
+      ],
+    });
   });
 
   test('Allow with StringEquals tag condition builds where clause', () => {
@@ -184,7 +193,17 @@ describe('compilePolicy', () => {
       projectPublicId: 'prj_1',
     });
     expect(result.hasAccess).toBe(true);
-    expect(result.where).toBeDefined();
+    expect(result.where).toEqual({
+      [Op.and]: [
+        {
+          [Op.or]: [
+            {
+              [Op.and]: [{ tags: { [Op.contains]: { env: 'production' } } }],
+            },
+          ],
+        },
+      ],
+    });
   });
 
   test('Allow with StringNotEquals tag condition builds where clause', () => {
@@ -243,7 +262,7 @@ describe('compilePolicy', () => {
             {
               effect: 'Allow',
               action: ['test:Do'],
-              resource: ['srn:soat:testResource:prj_1:/docs/readme.txt'],
+              resource: ['soat:prj_1:testResource:/docs/readme.txt'],
             },
           ],
         },
@@ -253,7 +272,9 @@ describe('compilePolicy', () => {
       projectPublicId: 'prj_1',
     });
     expect(result.hasAccess).toBe(true);
-    expect(result.where).toBeDefined();
+    expect(result.where).toEqual({
+      [Op.and]: [{ [Op.or]: [{ [Op.and]: [{ path: '/docs/readme.txt' }] }] }],
+    });
   });
 
   test('Deny specific resource adds NOT condition', () => {
@@ -265,7 +286,7 @@ describe('compilePolicy', () => {
             {
               effect: 'Deny',
               action: ['test:Do'],
-              resource: ['srn:soat:testResource:prj_1:res_secret'],
+              resource: ['soat:prj_1:testResource:res_secret'],
             },
           ],
         },
@@ -276,7 +297,15 @@ describe('compilePolicy', () => {
       projectPublicId: 'prj_1',
     });
     expect(result.hasAccess).toBe(true);
-    expect(result.where).toBeDefined();
+    expect(result.where).toEqual({
+      [Op.and]: [
+        {
+          [Op.not]: {
+            [Op.or]: [{ [Op.and]: [{ publicId: 'res_secret' }] }],
+          },
+        },
+      ],
+    });
   });
 
   test('wildcard action (*) matches any action', () => {
@@ -300,8 +329,8 @@ describe('compilePolicy', () => {
               effect: 'Allow',
               action: ['test:Do'],
               resource: [
-                'srn:soat:testResource:prj_1:res_abc',
-                'srn:soat:testResource:prj_1:res_xyz',
+                'soat:prj_1:testResource:res_abc',
+                'soat:prj_1:testResource:res_xyz',
               ],
             },
           ],
@@ -313,7 +342,21 @@ describe('compilePolicy', () => {
       projectPublicId: 'prj_1',
     });
     expect(result.hasAccess).toBe(true);
-    expect(result.where).toBeDefined();
+    expect(result.where).toEqual({
+      [Op.and]: [
+        {
+          [Op.or]: [
+            {
+              [Op.and]: [
+                {
+                  [Op.or]: [{ publicId: 'res_abc' }, { publicId: 'res_xyz' }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
   });
 
   test('glob path resource builds LIKE where clause', () => {
@@ -324,7 +367,7 @@ describe('compilePolicy', () => {
             {
               effect: 'Allow',
               action: ['test:Do'],
-              resource: ['srn:soat:testResource:prj_1:/docs/*'],
+              resource: ['soat:prj_1:testResource:/docs/*'],
             },
           ],
         },
@@ -334,6 +377,12 @@ describe('compilePolicy', () => {
       projectPublicId: 'prj_1',
     });
     expect(result.hasAccess).toBe(true);
-    expect(result.where).toBeDefined();
+    expect(result.where).toEqual({
+      [Op.and]: [
+        {
+          [Op.or]: [{ [Op.and]: [{ path: { [Op.like]: '/docs/%' } }] }],
+        },
+      ],
+    });
   });
 });
