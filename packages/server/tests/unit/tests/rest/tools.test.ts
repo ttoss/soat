@@ -1,67 +1,35 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
+import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('Tools', () => {
   let adminToken: string;
   let userToken: string;
-  let userId: string;
   let projectId: string;
-  let policyId: string;
   let noPermToken: string;
   let toolId: string;
   let soatToolId: string;
   let clientToolId: string;
 
   beforeAll(async () => {
-    await testClient
-      .post('/api/v1/users/bootstrap')
-      .send({ username: 'toolsadmin', password: 'supersecret' });
+    const setup = await setupProjectWithUsers({
+      prefix: 'tools',
+      policyActions: [
+        'tools:CreateTool',
+        'tools:ListTools',
+        'tools:GetTool',
+        'tools:UpdateTool',
+        'tools:DeleteTool',
+        'tools:CallTool',
+      ],
+    });
 
-    adminToken = await loginAs('toolsadmin', 'supersecret');
-
-    const createUserRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'toolsuser', password: 'toolspass' });
-    userId = createUserRes.body.id;
-    userToken = await loginAs('toolsuser', 'toolspass');
-
-    const projectRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/projects')
-      .send({ name: 'Tools Test Project' });
-    projectId = projectRes.body.id;
-
-    const policyRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/policies')
-      .send({
-        document: {
-          statement: [
-            {
-              effect: 'Allow',
-              action: [
-                'tools:CreateTool',
-                'tools:ListTools',
-                'tools:GetTool',
-                'tools:UpdateTool',
-                'tools:DeleteTool',
-                'tools:CallTool',
-              ],
-            },
-          ],
-        },
-      });
-    policyId = policyRes.body.id;
-
-    await authenticatedTestClient(adminToken)
-      .put(`/api/v1/users/${userId}/policies`)
-      .send({ policy_ids: [policyId] });
-
-    const noPermRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'toolsnoperm', password: 'nopassword' });
-    expect(noPermRes.status).toBe(201);
-    noPermToken = await loginAs('toolsnoperm', 'nopassword');
+    adminToken = setup.adminToken;
+    userToken = setup.userToken;
+    projectId = setup.projectId;
+    noPermToken = setup.noPermToken as string;
 
     // Create a SOAT tool for call tests
     const soatToolRes = await authenticatedTestClient(adminToken)

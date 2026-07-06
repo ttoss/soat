@@ -1,12 +1,12 @@
 import * as discussionCompletion from 'src/lib/discussionCompletion';
 import { callDiscussionTool } from 'src/lib/toolsCall';
 
-import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
+import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('Discussions', () => {
   let adminToken: string;
   let userToken: string;
-  let userId: string;
   let projectId: string;
   let policyId: string;
   let aiProviderId: string;
@@ -14,57 +14,28 @@ describe('Discussions', () => {
   let scopedApiKey: string;
 
   beforeAll(async () => {
-    await testClient
-      .post('/api/v1/users/bootstrap')
-      .send({ username: 'discadmin', password: 'supersecret' });
-    adminToken = await loginAs('discadmin', 'supersecret');
+    const setup = await setupProjectWithUsers({
+      prefix: 'disc',
+      policyActions: [
+        'discussions:CreateDiscussion',
+        'discussions:ListDiscussions',
+        'discussions:GetDiscussion',
+        'discussions:UpdateDiscussion',
+        'discussions:DeleteDiscussion',
+        'discussions:CreateDiscussionRun',
+        'discussions:ListDiscussionRuns',
+        'discussions:GetDiscussionRun',
+        'tools:CreateTool',
+        'tools:GetTool',
+        'tools:DeleteTool',
+      ],
+    });
 
-    const createUserRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'discuser', password: 'discpass' });
-    userId = createUserRes.body.id;
-    userToken = await loginAs('discuser', 'discpass');
-
-    const projectRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/projects')
-      .send({ name: 'Discussions Test Project' });
-    projectId = projectRes.body.id;
-
-    const policyRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/policies')
-      .send({
-        document: {
-          statement: [
-            {
-              effect: 'Allow',
-              action: [
-                'discussions:CreateDiscussion',
-                'discussions:ListDiscussions',
-                'discussions:GetDiscussion',
-                'discussions:UpdateDiscussion',
-                'discussions:DeleteDiscussion',
-                'discussions:CreateDiscussionRun',
-                'discussions:ListDiscussionRuns',
-                'discussions:GetDiscussionRun',
-                'tools:CreateTool',
-                'tools:GetTool',
-                'tools:DeleteTool',
-              ],
-            },
-          ],
-        },
-      });
-    policyId = policyRes.body.id;
-
-    await authenticatedTestClient(adminToken)
-      .put(`/api/v1/users/${userId}/policies`)
-      .send({ policy_ids: [policyId] });
-
-    const noPermRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'discnoperm', password: 'nopassword' });
-    expect(noPermRes.status).toBe(201);
-    noPermToken = await loginAs('discnoperm', 'nopassword');
+    adminToken = setup.adminToken;
+    userToken = setup.userToken;
+    projectId = setup.projectId;
+    policyId = setup.policyId;
+    noPermToken = setup.noPermToken as string;
 
     const aiProvRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/ai-providers')

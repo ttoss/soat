@@ -1,68 +1,32 @@
-import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
+import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('AI Providers', () => {
   let adminToken: string;
   let userToken: string;
-  let userId: string;
   let projectId: string;
   let otherProjectId: string;
-  let policyId: string;
   let secretId: string;
   let noPermToken: string;
 
   beforeAll(async () => {
-    await testClient
-      .post('/api/v1/users/bootstrap')
-      .send({ username: 'aiprovadmin', password: 'supersecret' });
+    const setup = await setupProjectWithUsers({
+      prefix: 'aiprov',
+      policyActions: [
+        'aiProviders:ListAiProviders',
+        'aiProviders:GetAiProvider',
+        'aiProviders:CreateAiProvider',
+        'aiProviders:UpdateAiProvider',
+        'aiProviders:DeleteAiProvider',
+      ],
+      createOtherProject: true,
+    });
 
-    adminToken = await loginAs('aiprovadmin', 'supersecret');
-
-    const createUserRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'aiprovuser', password: 'aiprovpass' });
-
-    userId = createUserRes.body.id;
-    userToken = await loginAs('aiprovuser', 'aiprovpass');
-
-    const projectRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/projects')
-      .send({ name: 'AI Providers Test Project' });
-    projectId = projectRes.body.id;
-
-    const otherProjectRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/projects')
-      .send({ name: 'AI Providers Other Project' });
-    otherProjectId = otherProjectRes.body.id;
-
-    const policyRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/policies')
-      .send({
-        document: {
-          statement: [
-            {
-              effect: 'Allow',
-              action: [
-                'aiProviders:ListAiProviders',
-                'aiProviders:GetAiProvider',
-                'aiProviders:CreateAiProvider',
-                'aiProviders:UpdateAiProvider',
-                'aiProviders:DeleteAiProvider',
-              ],
-            },
-          ],
-        },
-      });
-    policyId = policyRes.body.id;
-
-    await authenticatedTestClient(adminToken)
-      .put(`/api/v1/users/${userId}/policies`)
-      .send({ policy_ids: [policyId] });
-
-    const noPermRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'aiprovnoperm', password: 'nopassword' });
-    expect(noPermRes.status).toBe(201);
-    noPermToken = await loginAs('aiprovnoperm', 'nopassword');
+    adminToken = setup.adminToken;
+    userToken = setup.userToken;
+    projectId = setup.projectId;
+    otherProjectId = setup.otherProjectId as string;
+    noPermToken = setup.noPermToken as string;
 
     const secretRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/secrets')

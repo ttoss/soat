@@ -5,6 +5,7 @@ import { db } from 'src/db';
 import * as pdfModule from 'src/lib/pdf';
 import { JWT_SECRET } from 'src/middleware/auth';
 
+import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { ONE_PAGE_PDF_BUFFER, THREE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
 import { storageDir } from '../../setupTests';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -12,61 +13,27 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 describe('Documents', () => {
   let adminToken: string;
   let userToken: string;
-  let userId: string;
   let projectId: string;
-  let policyId: string;
   let noPermToken: string;
 
   beforeAll(async () => {
-    await testClient
-      .post('/api/v1/users/bootstrap')
-      .send({ username: 'admin', password: 'supersecret' });
+    const setup = await setupProjectWithUsers({
+      prefix: 'docs',
+      policyActions: [
+        'documents:ListDocuments',
+        'documents:GetDocument',
+        'documents:CreateDocument',
+        'documents:DeleteDocument',
+        'documents:UpdateDocument',
+        'documents:IngestDocument',
+        'files:UploadFile',
+      ],
+    });
 
-    adminToken = await loginAs('admin', 'supersecret');
-
-    const createUserRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'docsuser', password: 'docspass' });
-
-    userId = createUserRes.body.id;
-    userToken = await loginAs('docsuser', 'docspass');
-
-    const projectRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/projects')
-      .send({ name: 'Docs Test Project' });
-    projectId = projectRes.body.id;
-
-    const policyRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/policies')
-      .send({
-        document: {
-          statement: [
-            {
-              effect: 'Allow',
-              action: [
-                'documents:ListDocuments',
-                'documents:GetDocument',
-                'documents:CreateDocument',
-                'documents:DeleteDocument',
-                'documents:UpdateDocument',
-                'documents:IngestDocument',
-                'files:UploadFile',
-              ],
-            },
-          ],
-        },
-      });
-    policyId = policyRes.body.id;
-
-    await authenticatedTestClient(adminToken)
-      .put(`/api/v1/users/${userId}/policies`)
-      .send({ policy_ids: [policyId] });
-
-    const noPermRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'docsnoperm', password: 'nopassword' });
-    expect(noPermRes.status).toBe(201);
-    noPermToken = await loginAs('docsnoperm', 'nopassword');
+    adminToken = setup.adminToken;
+    userToken = setup.userToken;
+    projectId = setup.projectId;
+    noPermToken = setup.noPermToken as string;
   });
 
   afterAll(() => {
@@ -152,7 +119,7 @@ describe('Documents', () => {
       // Simulate the OAuth token with a `prj` field — this is what the SOAT CLI issues
       // when an admin authenticates via OAuth with a project scope.
       const adminUser = await db.User.findOne({
-        where: { username: 'admin' },
+        where: { username: 'docsadmin' },
         attributes: ['publicId', 'role'],
       });
       // `scope: '*'` mirrors an "all permissions" consent. Consent is enforced

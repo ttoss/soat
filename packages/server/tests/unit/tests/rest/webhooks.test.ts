@@ -1,60 +1,33 @@
 import { db } from 'src/db';
 
+import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Webhooks', () => {
   let adminToken: string;
   let userToken: string;
-  let userId: string;
   let projectId: string;
-  let policyId: string;
 
   beforeAll(async () => {
-    await testClient
-      .post('/api/v1/users/bootstrap')
-      .send({ username: 'admin', password: 'supersecret' });
+    const setup = await setupProjectWithUsers({
+      prefix: 'webhooks',
+      policyActions: [
+        'webhooks:ListWebhooks',
+        'webhooks:CreateWebhook',
+        'webhooks:GetWebhook',
+        'webhooks:GetWebhookSecret',
+        'webhooks:UpdateWebhook',
+        'webhooks:DeleteWebhook',
+        'webhooks:RotateWebhookSecret',
+        'webhooks:ListWebhookDeliveries',
+        'webhooks:GetWebhookDelivery',
+      ],
+      createNoPermUser: false,
+    });
 
-    adminToken = await loginAs('admin', 'supersecret');
-
-    const createUserRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'webhooksuser', password: 'webhookspass' });
-
-    userId = createUserRes.body.id;
-    userToken = await loginAs('webhooksuser', 'webhookspass');
-
-    const projectRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/projects')
-      .send({ name: 'Webhooks Test Project' });
-    projectId = projectRes.body.id;
-
-    const policyRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/policies')
-      .send({
-        document: {
-          statement: [
-            {
-              effect: 'Allow',
-              action: [
-                'webhooks:ListWebhooks',
-                'webhooks:CreateWebhook',
-                'webhooks:GetWebhook',
-                'webhooks:GetWebhookSecret',
-                'webhooks:UpdateWebhook',
-                'webhooks:DeleteWebhook',
-                'webhooks:RotateWebhookSecret',
-                'webhooks:ListWebhookDeliveries',
-                'webhooks:GetWebhookDelivery',
-              ],
-            },
-          ],
-        },
-      });
-    policyId = policyRes.body.id;
-
-    await authenticatedTestClient(adminToken)
-      .put(`/api/v1/users/${userId}/policies`)
-      .send({ policy_ids: [policyId] });
+    adminToken = setup.adminToken;
+    userToken = setup.userToken;
+    projectId = setup.projectId;
   });
 
   describe('POST /api/v1/webhooks', () => {

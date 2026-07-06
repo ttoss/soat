@@ -2,77 +2,41 @@ import { db } from 'src/db';
 import * as knowledgeModule from 'src/lib/knowledge';
 import { saveTrace } from 'src/lib/traces';
 
-import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
+import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('Agents', () => {
   let adminToken: string;
   let userToken: string;
-  let userId: string;
   let projectId: string;
   let otherProjectId: string;
-  let policyId: string;
   let aiProviderId: string;
   let noPermToken: string;
 
   beforeAll(async () => {
-    await testClient
-      .post('/api/v1/users/bootstrap')
-      .send({ username: 'agentsadmin', password: 'supersecret' });
+    const setup = await setupProjectWithUsers({
+      prefix: 'agents',
+      policyActions: [
+        'agents:CreateAgent',
+        'agents:ListAgents',
+        'agents:GetAgent',
+        'agents:UpdateAgent',
+        'agents:DeleteAgent',
+        'agents:CreateAgentGeneration',
+        'tools:CreateTool',
+        'tools:ListTools',
+        'tools:GetTool',
+        'tools:UpdateTool',
+        'tools:DeleteTool',
+      ],
+      createOtherProject: true,
+    });
 
-    adminToken = await loginAs('agentsadmin', 'supersecret');
-
-    const createUserRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'agentsuser', password: 'agentspass' });
-
-    userId = createUserRes.body.id;
-    userToken = await loginAs('agentsuser', 'agentspass');
-
-    const projectRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/projects')
-      .send({ name: 'Agents Test Project' });
-    projectId = projectRes.body.id;
-
-    const otherProjectRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/projects')
-      .send({ name: 'Agents Other Project' });
-    otherProjectId = otherProjectRes.body.id;
-
-    const policyRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/policies')
-      .send({
-        document: {
-          statement: [
-            {
-              effect: 'Allow',
-              action: [
-                'agents:CreateAgent',
-                'agents:ListAgents',
-                'agents:GetAgent',
-                'agents:UpdateAgent',
-                'agents:DeleteAgent',
-                'agents:CreateAgentGeneration',
-                'tools:CreateTool',
-                'tools:ListTools',
-                'tools:GetTool',
-                'tools:UpdateTool',
-                'tools:DeleteTool',
-              ],
-            },
-          ],
-        },
-      });
-    policyId = policyRes.body.id;
-
-    await authenticatedTestClient(adminToken)
-      .put(`/api/v1/users/${userId}/policies`)
-      .send({ policy_ids: [policyId] });
-
-    const noPermRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'agentsnoperm', password: 'nopassword' });
-    expect(noPermRes.status).toBe(201);
-    noPermToken = await loginAs('agentsnoperm', 'nopassword');
+    adminToken = setup.adminToken;
+    userToken = setup.userToken;
+    projectId = setup.projectId;
+    otherProjectId = setup.otherProjectId as string;
+    noPermToken = setup.noPermToken as string;
 
     const aiProvRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/ai-providers')
