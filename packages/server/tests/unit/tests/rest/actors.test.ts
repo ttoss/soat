@@ -1,63 +1,30 @@
 import * as actorsLib from 'src/lib/actors';
 
-import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
+import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('Actors', () => {
   let adminToken: string;
   let userToken: string;
   let noPermToken: string;
-  let userId: string;
   let projectId: string;
-  let policyId: string;
 
   beforeAll(async () => {
-    await testClient
-      .post('/api/v1/users/bootstrap')
-      .send({ username: 'admin', password: 'supersecret' });
+    const setup = await setupProjectWithUsers({
+      prefix: 'actors',
+      policyActions: [
+        'actors:ListActors',
+        'actors:GetActor',
+        'actors:CreateActor',
+        'actors:DeleteActor',
+        'actors:UpdateActor',
+      ],
+    });
 
-    adminToken = await loginAs('admin', 'supersecret');
-
-    const createUserRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'actorsuser', password: 'actorspass' });
-
-    userId = createUserRes.body.id;
-    userToken = await loginAs('actorsuser', 'actorspass');
-
-    const projectRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/projects')
-      .send({ name: 'Actors Test Project' });
-    projectId = projectRes.body.id;
-
-    const policyRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/policies')
-      .send({
-        document: {
-          statement: [
-            {
-              effect: 'Allow',
-              action: [
-                'actors:ListActors',
-                'actors:GetActor',
-                'actors:CreateActor',
-                'actors:DeleteActor',
-                'actors:UpdateActor',
-              ],
-            },
-          ],
-        },
-      });
-    policyId = policyRes.body.id;
-
-    await authenticatedTestClient(adminToken)
-      .put(`/api/v1/users/${userId}/policies`)
-      .send({ policy_ids: [policyId] });
-
-    const noPermRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'actorsnoperm', password: 'nopassword' });
-    expect(noPermRes.status).toBe(201);
-    noPermToken = await loginAs('actorsnoperm', 'nopassword');
+    adminToken = setup.adminToken;
+    userToken = setup.userToken;
+    projectId = setup.projectId;
+    noPermToken = setup.noPermToken as string;
   });
 
   describe('POST /api/v1/actors', () => {

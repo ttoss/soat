@@ -169,6 +169,27 @@ jest.doMock('src/lib/eventBus', () => ({ emitEvent: jest.fn()... }));
 
 For API key authentication, pass the raw `sk_`-prefixed key directly to `authenticatedTestClient`.
 
+### Shared bootstrap fixture (from `tests/unit/fixtures/bootstrap.ts`)
+
+Most REST test files need the same admin→user→project→policy→noPerm sequence in
+`beforeAll`. Use `setupProjectWithUsers()` instead of writing it out by hand:
+
+```ts
+import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+
+const setup = await setupProjectWithUsers({
+  prefix: 'secrets', // keeps usernames/project names unique per test file
+  policyActions: ['secrets:ListSecrets', 'secrets:GetSecret', ...],
+  createOtherProject: true, // opt-in: adds `otherProjectId` for cross-project isolation tests
+  createNoPermUser: true, // default true; pass false when the file has no unprivileged-user tests
+});
+// => { adminToken, userToken, userId, projectId, otherProjectId?, policyId, noPermToken? }
+```
+
+Module-specific tail setup (e.g. creating a secret, AI provider, or extra tool
+fixtures needed only by that file) stays in the file's own `beforeAll`, called
+after `setupProjectWithUsers()`.
+
 ## Writing Unit Tests
 
 ### Structure

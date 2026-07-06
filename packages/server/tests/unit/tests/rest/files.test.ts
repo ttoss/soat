@@ -3,66 +3,35 @@ import fs from 'node:fs';
 import { db } from 'src/db';
 import { signFileDownloadToken } from 'src/lib/fileDownloadToken';
 
+import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { storageDir } from '../../setupTests';
-import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
+import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('Files', () => {
   let adminToken: string;
   let userToken: string;
   let userId: string;
   let projectId: string;
-  let policyId: string;
   let noPermToken: string;
 
   beforeAll(async () => {
-    await testClient
-      .post('/api/v1/users/bootstrap')
-      .send({ username: 'admin', password: 'supersecret' });
+    const setup = await setupProjectWithUsers({
+      prefix: 'files',
+      policyActions: [
+        'files:UploadFile',
+        'files:GetFile',
+        'files:DownloadFile',
+        'files:UpdateFileMetadata',
+        'files:DeleteFile',
+        'files:CreateFile',
+      ],
+    });
 
-    adminToken = await loginAs('admin', 'supersecret');
-
-    const createUserRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'filesuser', password: 'filespass' });
-
-    userId = createUserRes.body.id;
-    userToken = await loginAs('filesuser', 'filespass');
-
-    const projectRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/projects')
-      .send({ name: 'Files Test Project' });
-    projectId = projectRes.body.id;
-
-    const policyRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/policies')
-      .send({
-        document: {
-          statement: [
-            {
-              effect: 'Allow',
-              action: [
-                'files:UploadFile',
-                'files:GetFile',
-                'files:DownloadFile',
-                'files:UpdateFileMetadata',
-                'files:DeleteFile',
-                'files:CreateFile',
-              ],
-            },
-          ],
-        },
-      });
-    policyId = policyRes.body.id;
-
-    await authenticatedTestClient(adminToken)
-      .put(`/api/v1/users/${userId}/policies`)
-      .send({ policy_ids: [policyId] });
-
-    const noPermRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'filesnoperm', password: 'nopassword' });
-    expect(noPermRes.status).toBe(201);
-    noPermToken = await loginAs('filesnoperm', 'nopassword');
+    adminToken = setup.adminToken;
+    userToken = setup.userToken;
+    userId = setup.userId;
+    projectId = setup.projectId;
+    noPermToken = setup.noPermToken as string;
   });
 
   afterAll(() => {

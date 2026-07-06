@@ -1,72 +1,34 @@
-import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
+import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('Memories', () => {
-  let adminToken: string;
   let userToken: string;
-  let userId: string;
   let projectId: string;
   let otherProjectId: string;
-  let policyId: string;
   let noPermToken: string;
 
   beforeAll(async () => {
-    await testClient
-      .post('/api/v1/users/bootstrap')
-      .send({ username: 'memoriesadmin', password: 'supersecret' });
+    const setup = await setupProjectWithUsers({
+      prefix: 'memories',
+      policyActions: [
+        'memories:ListMemories',
+        'memories:CreateMemory',
+        'memories:GetMemory',
+        'memories:UpdateMemory',
+        'memories:DeleteMemory',
+        'memories:ListMemoryEntries',
+        'memories:CreateMemoryEntry',
+        'memories:GetMemoryEntry',
+        'memories:UpdateMemoryEntry',
+        'memories:DeleteMemoryEntry',
+      ],
+      createOtherProject: true,
+    });
 
-    adminToken = await loginAs('memoriesadmin', 'supersecret');
-
-    const createUserRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'memoriesuser', password: 'memoriespass' });
-
-    userId = createUserRes.body.id;
-    userToken = await loginAs('memoriesuser', 'memoriespass');
-
-    const projectRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/projects')
-      .send({ name: 'Memories Test Project' });
-    projectId = projectRes.body.id;
-
-    const otherProjectRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/projects')
-      .send({ name: 'Memories Other Project' });
-    otherProjectId = otherProjectRes.body.id;
-
-    const policyRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/policies')
-      .send({
-        document: {
-          statement: [
-            {
-              effect: 'Allow',
-              action: [
-                'memories:ListMemories',
-                'memories:CreateMemory',
-                'memories:GetMemory',
-                'memories:UpdateMemory',
-                'memories:DeleteMemory',
-                'memories:ListMemoryEntries',
-                'memories:CreateMemoryEntry',
-                'memories:GetMemoryEntry',
-                'memories:UpdateMemoryEntry',
-                'memories:DeleteMemoryEntry',
-              ],
-            },
-          ],
-        },
-      });
-    policyId = policyRes.body.id;
-
-    await authenticatedTestClient(adminToken)
-      .put(`/api/v1/users/${userId}/policies`)
-      .send({ policy_ids: [policyId] });
-
-    const noPermRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'memoriesnoperm', password: 'nopassword' });
-    expect(noPermRes.status).toBe(201);
-    noPermToken = await loginAs('memoriesnoperm', 'nopassword');
+    userToken = setup.userToken;
+    projectId = setup.projectId;
+    otherProjectId = setup.otherProjectId as string;
+    noPermToken = setup.noPermToken as string;
   });
 
   describe('POST /api/v1/memories', () => {

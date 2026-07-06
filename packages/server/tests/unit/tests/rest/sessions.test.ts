@@ -1,4 +1,5 @@
 import * as agentsModule from '../../../../src/lib/agents';
+import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -33,60 +34,32 @@ const withAdvancedClock = async <T>(
 describe('Sessions', () => {
   let adminToken: string;
   let userToken: string;
-  let userId: string;
   let projectId: string;
-  let policyId: string;
   let aiProviderId: string;
   let agentId: string;
 
   beforeAll(async () => {
-    await testClient
-      .post('/api/v1/users/bootstrap')
-      .send({ username: 'sessadmin', password: 'supersecret' });
+    const setup = await setupProjectWithUsers({
+      prefix: 'sess',
+      policyActions: [
+        'agents:CreateAgent',
+        'agents:CreateSession',
+        'agents:ListSessions',
+        'agents:GetSession',
+        'agents:UpdateSession',
+        'agents:DeleteSession',
+        'agents:SendSessionMessage',
+        'agents:SubmitSessionToolOutputs',
+        'conversations:GetConversation',
+        'conversations:UpdateConversation',
+        'documents:GetDocument',
+      ],
+      createNoPermUser: false,
+    });
 
-    adminToken = await loginAs('sessadmin', 'supersecret');
-
-    const createUserRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'sessuser', password: 'sesspass' });
-
-    userId = createUserRes.body.id;
-    userToken = await loginAs('sessuser', 'sesspass');
-
-    const projectRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/projects')
-      .send({ name: 'Sessions Test Project' });
-    projectId = projectRes.body.id;
-
-    const policyRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/policies')
-      .send({
-        document: {
-          statement: [
-            {
-              effect: 'Allow',
-              action: [
-                'agents:CreateAgent',
-                'agents:CreateSession',
-                'agents:ListSessions',
-                'agents:GetSession',
-                'agents:UpdateSession',
-                'agents:DeleteSession',
-                'agents:SendSessionMessage',
-                'agents:SubmitSessionToolOutputs',
-                'conversations:GetConversation',
-                'conversations:UpdateConversation',
-                'documents:GetDocument',
-              ],
-            },
-          ],
-        },
-      });
-    policyId = policyRes.body.id;
-
-    await authenticatedTestClient(adminToken)
-      .put(`/api/v1/users/${userId}/policies`)
-      .send({ policy_ids: [policyId] });
+    adminToken = setup.adminToken;
+    userToken = setup.userToken;
+    projectId = setup.projectId;
 
     const aiProvRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/ai-providers')

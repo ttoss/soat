@@ -6,14 +6,13 @@ import { eventBus } from 'src/lib/eventBus';
 import { reapOrphanedRuns, wakeDueRuns } from 'src/lib/orchestrationScheduler';
 import * as toolsModule from 'src/lib/tools';
 
-import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
+import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('Orchestrations', () => {
   let adminToken: string;
   let userToken: string;
-  let userId: string;
   let projectId: string;
-  let policyId: string;
   let noPermToken: string;
   let orchestrationId: string;
 
@@ -94,58 +93,27 @@ describe('Orchestrations', () => {
   };
 
   beforeAll(async () => {
-    await testClient
-      .post('/api/v1/users/bootstrap')
-      .send({ username: 'orchadmin', password: 'supersecret' });
+    const setup = await setupProjectWithUsers({
+      prefix: 'orch',
+      policyActions: [
+        'orchestrations:CreateOrchestration',
+        'orchestrations:ListOrchestrations',
+        'orchestrations:GetOrchestration',
+        'orchestrations:UpdateOrchestration',
+        'orchestrations:DeleteOrchestration',
+        'orchestrations:StartRun',
+        'orchestrations:ListRuns',
+        'orchestrations:GetRun',
+        'orchestrations:CancelRun',
+        'orchestrations:SubmitHumanInput',
+        'orchestrations:ResumeRun',
+      ],
+    });
 
-    adminToken = await loginAs('orchadmin', 'supersecret');
-
-    const createUserRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'orchuser', password: 'orchpass' });
-    userId = createUserRes.body.id;
-    userToken = await loginAs('orchuser', 'orchpass');
-
-    const projectRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/projects')
-      .send({ name: 'Orchestrations Test Project' });
-    projectId = projectRes.body.id;
-
-    const policyRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/policies')
-      .send({
-        document: {
-          statement: [
-            {
-              effect: 'Allow',
-              action: [
-                'orchestrations:CreateOrchestration',
-                'orchestrations:ListOrchestrations',
-                'orchestrations:GetOrchestration',
-                'orchestrations:UpdateOrchestration',
-                'orchestrations:DeleteOrchestration',
-                'orchestrations:StartRun',
-                'orchestrations:ListRuns',
-                'orchestrations:GetRun',
-                'orchestrations:CancelRun',
-                'orchestrations:SubmitHumanInput',
-                'orchestrations:ResumeRun',
-              ],
-            },
-          ],
-        },
-      });
-    policyId = policyRes.body.id;
-
-    await authenticatedTestClient(adminToken)
-      .put(`/api/v1/users/${userId}/policies`)
-      .send({ policy_ids: [policyId] });
-
-    const noPermRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/users')
-      .send({ username: 'orchnoperm', password: 'nopassword' });
-    expect(noPermRes.status).toBe(201);
-    noPermToken = await loginAs('orchnoperm', 'nopassword');
+    adminToken = setup.adminToken;
+    userToken = setup.userToken;
+    projectId = setup.projectId;
+    noPermToken = setup.noPermToken as string;
   });
 
   describe('POST /api/v1/orchestrations', () => {
