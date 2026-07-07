@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.15.0](https://github.com/ttoss/soat/compare/v0.14.0...v0.15.0) (2026-07-07)
+
+### Bug Fixes
+
+* include discussion-type tools in LLM tool list during agent generation ([#423](https://github.com/ttoss/soat/issues/423)) ([142b011](https://github.com/ttoss/soat/commit/142b0117f5b397b90ecc326bf2cc5e627d8ccde0))
+
+### Features
+
+* **server:** implement S3 file storage provider ([#472](https://github.com/ttoss/soat/issues/472)) ([b90e721](https://github.com/ttoss/soat/commit/b90e721cb6835e0d994e7500a35aabd68638415f))
+* **server:** resolve projectId from token scope + flatten discussion_id tool field ([#422](https://github.com/ttoss/soat/issues/422)) ([dc1e7b5](https://github.com/ttoss/soat/commit/dc1e7b5c9d66baa40a5306c2b73e11ec7c7e27c3))
+* **server:** support OpenAI and Bedrock embedding providers ([#473](https://github.com/ttoss/soat/issues/473)) ([b5d7fcf](https://github.com/ttoss/soat/commit/b5d7fcf41804e160b46d1cbe16f4453f87f34836))
+* **triggers:** cron scheduler for schedule triggers (S6) ([#462](https://github.com/ttoss/soat/issues/462)) ([840708b](https://github.com/ttoss/soat/commit/840708bb00e47bec7eb4f98d1aee0192a9b9e3c6))
+* **triggers:** formation support for triggers (S8) ([#468](https://github.com/ttoss/soat/issues/468)) ([dcd8f14](https://github.com/ttoss/soat/commit/dcd8f14c477fe582dc028ddaccc1e60b55e7bd29))
+* **triggers:** inbound webhook endpoint (S5) ([#460](https://github.com/ttoss/soat/issues/460)) ([b0d43f7](https://github.com/ttoss/soat/commit/b0d43f7d9e95476ae1e47fceb5c6985db9ea31e5))
+
 # [0.14.0](https://github.com/ttoss/soat/compare/v0.13.20...v0.14.0) (2026-07-05)
 
 ### Features
