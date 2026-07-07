@@ -13,6 +13,8 @@ Six tool types are supported: `http` (calls an external HTTP endpoint), `client`
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+To invoke a tool automatically — on a cron schedule, from an inbound webhook, or on demand — bind it to a [Trigger](./triggers.md) with `target_type: tool`.
+
 ## Related Tutorials
 
 - [Agent SOAT Tools and Preset Parameters - Step 6 (Create soat tools)](/docs/tutorials/agent-soat-tools#step-6--create-soat-tools)

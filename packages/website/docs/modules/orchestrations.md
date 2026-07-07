@@ -15,6 +15,8 @@ Use orchestrations when you know the exact steps in advance and want determinist
 
 An orchestration can also be declared as a [Formation](./formations.md) resource, letting you deploy a team of agents together with the flow that coordinates them as a single stack — see the [Agent Squad example](#agent-squad).
 
+To run an orchestration automatically — on a cron schedule, in response to an inbound webhook, or on demand — bind it to a [Trigger](./triggers.md) with `target_type: orchestration`.
+
 ## Related Tutorials
 
 - [Orchestration Control Flow: Delay, Poll, and Loop](/docs/tutorials/orchestration-control-flow) — the `delay`, `poll`, `loop`, and `condition` nodes in one deterministic run, with a reference table for every node type

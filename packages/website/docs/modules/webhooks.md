@@ -9,6 +9,8 @@ HTTP callbacks that deliver signed event notifications when project resources ch
 
 A webhook is scoped to a project. When you create a webhook you specify a URL and a list of event patterns to subscribe to. The server dispatches matching events automatically, retrying up to three times for failed deliveries. Every delivery is signed with HMAC-SHA256 so receivers can verify authenticity.
 
+Webhooks are **outbound** — SOAT calls your endpoint when events occur. For the **inbound** direction — an external system calling SOAT to activate an orchestration, agent, or tool — see [Triggers](./triggers.md), whose `webhook` starter verifies an incoming HMAC signature the same way.
+
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Related Tutorials
