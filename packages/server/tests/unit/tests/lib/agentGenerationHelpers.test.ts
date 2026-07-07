@@ -1,3 +1,16 @@
+// Boundary note (PRD test-quality Appendix A — the sanctioned exception).
+// These helpers exist purely to orchestrate the LLM call (`ai`'s
+// `streamText`/`generateText`, which are non-configurable and can only be
+// substituted via `jest.mock` in an isolated module registry). Their only
+// observable side effects are `traces.saveTrace` and
+// `generations.updateGenerationRecord`, which fire-and-forget behind
+// `.catch()` guards and would otherwise require a full
+// project → aiProvider → agent → trace → generation fixture chain plus a
+// forced DB failure to drive each defensive branch. Per Appendix A this file
+// is the one file kept-and-documented rather than rewritten onto the real DB:
+// `saveTrace`/`updateGenerationRecord` are stubbed as companions to the
+// sanctioned `ai` mock so the helpers' own logic (message assembly, result
+// shape, prepareStep rules, rejection-swallowing) can be asserted in isolation.
 import {
   buildAllMessages,
   buildCompletedGenerationResult,

@@ -1,3 +1,10 @@
+import type { ToolDefinition } from 'src/lib/soatToolsHelpers';
+
+// `soatTools` loads OpenAPI specs from disk at import time. Only the external
+// I/O it depends on — `node:fs` and `js-yaml` — is mocked here; the real
+// `processPath`/`processOperation` pipeline runs against the fake specs, so the
+// assertions exercise genuine tool derivation (no internal-module mock).
+
 describe('soatTools', () => {
   beforeEach(() => {
     jest.resetModules();
@@ -8,8 +15,14 @@ describe('soatTools', () => {
     jest.clearAllMocks();
     jest.unmock('node:fs');
     jest.unmock('js-yaml');
-    jest.unmock('src/lib/soatToolsHelpers');
   });
+
+  const loadSoatTools = (): ToolDefinition[] => {
+    const { soatTools } = jest.requireActual('src/lib/soatTools') as {
+      soatTools: ToolDefinition[];
+    };
+    return soatTools;
+  };
 
   test('returns empty list when OpenAPI spec directory does not exist', async () => {
     jest.doMock('node:fs', () => {
@@ -22,24 +35,10 @@ describe('soatTools', () => {
       };
     });
 
-    const { soatTools } = jest.requireActual('src/lib/soatTools') as {
-      soatTools: unknown[];
-    };
-
-    expect(soatTools).toEqual([]);
+    expect(loadSoatTools()).toEqual([]);
   });
 
   test('loads only yaml files, sorts filenames, and flattens path tools', async () => {
-    const processPath = jest.fn(
-      ({ pathTemplate }: { pathTemplate: string }): Array<{ id: string }> => {
-        return [{ id: `tool:${pathTemplate}` }];
-      }
-    );
-
-    jest.doMock('src/lib/soatToolsHelpers', () => {
-      return { processPath };
-    });
-
     jest.doMock('node:fs', () => {
       return {
         existsSync: jest.fn(() => {
@@ -60,40 +59,26 @@ describe('soatTools', () => {
         default: {
           load: jest.fn((content: string) => {
             if (content.includes('a.yaml')) {
-              return { paths: { '/a': { get: {} } } };
+              return { paths: { '/a': { get: { operationId: 'getAThing' } } } };
             }
-            return { paths: { '/b': { post: {} } } };
+            return {
+              paths: { '/b': { post: { operationId: 'createBThing' } } },
+            };
           }),
         },
       };
     });
 
-    const { soatTools } = jest.requireActual('src/lib/soatTools') as {
-      soatTools: unknown[];
-    };
-
-    expect(soatTools).toEqual([{ id: 'tool:/a' }, { id: 'tool:/b' }]);
-    expect(processPath).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ pathTemplate: '/a' })
-    );
-    expect(processPath).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ pathTemplate: '/b' })
-    );
+    // The real processPath/processOperation pipeline turns each operation into
+    // a tool named after its operationId (camelCase → kebab-case). `ignore.json`
+    // is not a `.yaml` file, so it is never read; `a.yaml` sorts before `b.yaml`.
+    const names = loadSoatTools().map((tool) => {
+      return tool.name;
+    });
+    expect(names).toEqual(['get-a-thing', 'create-b-thing']);
   });
 
   test('ignores a malformed yaml file and continues with other files', async () => {
-    const processPath = jest.fn(
-      ({ pathTemplate }: { pathTemplate: string }): Array<{ id: string }> => {
-        return [{ id: `tool:${pathTemplate}` }];
-      }
-    );
-
-    jest.doMock('src/lib/soatToolsHelpers', () => {
-      return { processPath };
-    });
-
     jest.doMock('node:fs', () => {
       return {
         existsSync: jest.fn(() => {
@@ -116,20 +101,15 @@ describe('soatTools', () => {
             if (content.includes('broken.yaml')) {
               throw new Error('bad yaml');
             }
-            return { paths: { '/ok': { get: {} } } };
+            return { paths: { '/ok': { get: { operationId: 'getOk' } } } };
           }),
         },
       };
     });
 
-    const { soatTools } = jest.requireActual('src/lib/soatTools') as {
-      soatTools: unknown[];
-    };
-
-    expect(soatTools).toEqual([{ id: 'tool:/ok' }]);
-    expect(processPath).toHaveBeenCalledTimes(1);
-    expect(processPath).toHaveBeenCalledWith(
-      expect.objectContaining({ pathTemplate: '/ok' })
-    );
+    const names = loadSoatTools().map((tool) => {
+      return tool.name;
+    });
+    expect(names).toEqual(['get-ok']);
   });
 });
