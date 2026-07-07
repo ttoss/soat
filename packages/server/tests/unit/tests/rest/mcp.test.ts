@@ -829,6 +829,156 @@ describe('MCP tools - happy path', () => {
     });
   });
 
+  // ── Triggers ───────────────────────────────────────────────────────────────
+
+  describe('Triggers tools', () => {
+    let triggerOrchestrationId: string;
+    let manualTriggerId: string;
+    let createTriggerResult: {
+      id: string;
+      type: string;
+      targetType: string;
+      secret?: string;
+      [key: string]: unknown;
+    };
+
+    beforeAll(async () => {
+      // Orchestration target — a single transform node runs synchronously, so a
+      // manual fire reaches a terminal state without an LLM/external boundary.
+      triggerOrchestrationId = (
+        await authenticatedTestClient(adminToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            project_id: projectId,
+            name: 'MCP Trigger Orchestration',
+            nodes: [
+              {
+                id: 'start',
+                type: 'transform',
+                expression: { var: '' },
+                output_mapping: { output: 'state.result' },
+              },
+            ],
+            edges: [],
+          })
+      ).body.id;
+
+      const res = await mcpCall('create-trigger', {
+        projectId,
+        name: 'MCP Manual Trigger',
+        type: 'manual',
+        targetType: 'orchestration',
+        targetId: triggerOrchestrationId,
+        input: { foo: 'bar' },
+      });
+      createTriggerResult = parseResult(res);
+      manualTriggerId = createTriggerResult.id;
+    });
+
+    test('create-trigger creates a trigger', () => {
+      expect(createTriggerResult.id).toMatch(/^trg_/);
+      expect(createTriggerResult.type).toBe('manual');
+      expect(createTriggerResult.targetType).toBe('orchestration');
+      // Manual triggers have no signing secret.
+      expect(createTriggerResult.secret).toBeUndefined();
+    });
+
+    test('list-triggers returns results', async () => {
+      const res = await mcpCall('list-triggers', { projectId });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(Array.isArray(result)).toBe(true);
+      expect(result.length).toBeGreaterThan(0);
+    });
+
+    test('get-trigger returns the trigger', async () => {
+      const res = await mcpCall('get-trigger', { triggerId: manualTriggerId });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.id).toBe(manualTriggerId);
+      expect(result.name).toBe('MCP Manual Trigger');
+    });
+
+    test('fire-trigger runs the target and records a terminal firing', async () => {
+      const res = await mcpCall('fire-trigger', {
+        triggerId: manualTriggerId,
+        input: { extra: 'value' },
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.id).toMatch(/^trg_fire_/);
+      expect(result.source).toBe('manual');
+      expect(['succeeded', 'failed']).toContain(result.status);
+    });
+
+    test('list-trigger-firings returns results', async () => {
+      const res = await mcpCall('list-trigger-firings', {
+        triggerId: manualTriggerId,
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data.length).toBeGreaterThan(0);
+    });
+
+    test('get-trigger-firing returns the firing', async () => {
+      const list = parseResult(
+        await mcpCall('list-trigger-firings', { triggerId: manualTriggerId })
+      );
+      const firingId = list.data[0].id;
+      const res = await mcpCall('get-trigger-firing', { firingId });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.id).toBe(firingId);
+      expect(result.triggerId).toBe(manualTriggerId);
+    });
+
+    test('update-trigger updates the trigger', async () => {
+      const res = await mcpCall('update-trigger', {
+        triggerId: manualTriggerId,
+        name: 'MCP Manual Trigger Updated',
+        active: false,
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.name).toBe('MCP Manual Trigger Updated');
+      expect(result.active).toBe(false);
+    });
+
+    test('get-trigger-secret and rotate-trigger-secret work for a webhook trigger', async () => {
+      const created = parseResult(
+        await mcpCall('create-trigger', {
+          projectId,
+          name: 'MCP Webhook Trigger',
+          type: 'webhook',
+          targetType: 'orchestration',
+          targetId: triggerOrchestrationId,
+        })
+      );
+      const webhookTriggerId = created.id;
+      // Webhook triggers return a secret on create.
+      expect(created.secret).toBeDefined();
+
+      const secret = parseResult(
+        await mcpCall('get-trigger-secret', { triggerId: webhookTriggerId })
+      );
+      expect(secret.secret).toBeDefined();
+
+      const rotated = parseResult(
+        await mcpCall('rotate-trigger-secret', { triggerId: webhookTriggerId })
+      );
+      expect(rotated.secret).toBeDefined();
+      expect(rotated.secret).not.toBe(secret.secret);
+    });
+
+    test('delete-trigger deletes the trigger', async () => {
+      const res = await mcpCall('delete-trigger', {
+        triggerId: manualTriggerId,
+      });
+      expect(res.status).toBe(200);
+    });
+  });
+
   // ── Sessions ─────────────────────────────────────────────────────────────
 
   describe('Sessions tools', () => {
