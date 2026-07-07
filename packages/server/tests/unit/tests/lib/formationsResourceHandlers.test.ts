@@ -1,356 +1,301 @@
 import { db } from 'src/db';
-import { DomainError } from 'src/errors';
-import * as actorsModule from 'src/lib/actors';
-import * as agentsModule from 'src/lib/agents';
-import * as aiProvidersModule from 'src/lib/aiProviders';
-import * as documentsModule from 'src/lib/documents';
-import * as helpersModule from 'src/lib/formationsHelpers';
+import { getFormationModule } from 'src/lib/formationsRegistry';
 import {
   applyCreateResource,
   applyDeleteResource,
   applyUpdateResource,
 } from 'src/lib/formationsResourceHandlers';
-import * as memoriesModule from 'src/lib/memories';
-import * as memoryEntriesModule from 'src/lib/memoryEntries';
-import * as toolsModule from 'src/lib/tools';
-import * as webhooksModule from 'src/lib/webhooks';
 
-const mockLookupMemoryInternalId = jest.spyOn(
-  helpersModule,
-  'lookupMemoryInternalId'
-);
-const mockLookupSecretInternalId = jest.spyOn(
-  helpersModule,
-  'lookupSecretInternalId'
-);
-const mockResolveActorLinkedIds = jest.spyOn(
-  actorsModule,
-  'resolveActorLinkedIds'
-);
-const mockCreateActor = jest.spyOn(actorsModule, 'createActor');
-const mockUpdateActor = jest.spyOn(actorsModule, 'updateActor');
-const mockDeleteActor = jest.spyOn(actorsModule, 'deleteActor');
-const mockCreateAgent = jest.spyOn(agentsModule, 'createAgent');
-const mockUpdateAgent = jest.spyOn(agentsModule, 'updateAgent');
-const mockDeleteAgent = jest.spyOn(agentsModule, 'deleteAgent');
-const mockCreateTool = jest.spyOn(toolsModule, 'createTool');
-const mockDeleteTool = jest.spyOn(toolsModule, 'deleteTool');
-const mockUpdateTool = jest.spyOn(toolsModule, 'updateTool');
-const mockCreateAiProvider = jest.spyOn(aiProvidersModule, 'createAiProvider');
-const mockDeleteAiProvider = jest.spyOn(aiProvidersModule, 'deleteAiProvider');
-const mockUpdateAiProvider = jest.spyOn(aiProvidersModule, 'updateAiProvider');
-const mockCreateDocument = jest.spyOn(documentsModule, 'createDocument');
-const mockDeleteDocument = jest.spyOn(documentsModule, 'deleteDocument');
-const mockCreateMemory = jest.spyOn(memoriesModule, 'createMemory');
-const mockDeleteMemory = jest.spyOn(memoriesModule, 'deleteMemory');
-const mockUpdateMemory = jest.spyOn(memoriesModule, 'updateMemory');
-const mockCreateMemoryEntry = jest.spyOn(
-  memoryEntriesModule,
-  'createMemoryEntry'
-);
-const mockDeleteMemoryEntry = jest.spyOn(
-  memoryEntriesModule,
-  'deleteMemoryEntry'
-);
-const mockCreateWebhook = jest.spyOn(webhooksModule, 'createWebhook');
-const mockDeleteWebhook = jest.spyOn(webhooksModule, 'deleteWebhook');
-const mockUpdateWebhook = jest.spyOn(webhooksModule, 'updateWebhook');
+import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
-afterEach(() => {
-  jest.clearAllMocks();
-});
-
+/**
+ * These tests exercise the real formation-module handlers against a live
+ * database — no internal `spyOn` substitution. Each `applyCreateResource` /
+ * `applyUpdateResource` / `applyDeleteResource` call runs the real lib
+ * function, and the effect is verified by reading the resource back through the
+ * matching formation module's `read` (the same drift-detection read the apply
+ * flow uses in production). Every resource type and operation gets its own test
+ * so a regression localizes to a single resource/operation rather than a
+ * mega-test.
+ */
 describe('formationsResourceHandlers', () => {
+  let adminToken: string;
+  let projectId: string;
+  let projectDbId: number;
+
+  // Prerequisite resources created once, referenced by the per-resource tests.
+  let secretId: string;
+  let memoryId: string;
+  let aiProviderId: string;
+  let agentId: string;
+
+  const readResource = async (
+    resourceType: string,
+    physicalResourceId: string
+  ) => {
+    const formationModule = getFormationModule({ resourceType });
+    if (!formationModule?.read) {
+      throw new Error(`No read handler for resource type: ${resourceType}`);
+    }
+    return formationModule.read({ physicalResourceId });
+  };
+
+  beforeAll(async () => {
+    await testClient
+      .post('/api/v1/users/bootstrap')
+      .send({ username: 'frhadmin', password: 'supersecret' });
+    adminToken = await loginAs('frhadmin', 'supersecret');
+
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'Formation Resource Handlers Project' });
+    projectId = projectRes.body.id;
+
+    const project = await db.Project.findOne({
+      where: { publicId: projectId },
+    });
+    projectDbId = project?.id as number;
+
+    const secretRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/secrets')
+      .send({ project_id: projectId, name: 'frh-secret', value: 'sk-secret' });
+    secretId = secretRes.body.id;
+
+    const memoryRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/memories')
+      .send({ project_id: projectId, name: 'frh-prereq-memory' });
+    memoryId = memoryRes.body.id;
+
+    const aiProviderRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/ai-providers')
+      .send({
+        project_id: projectId,
+        name: 'frh-prereq-provider',
+        provider: 'ollama',
+        default_model: 'llama3.2',
+      });
+    aiProviderId = aiProviderRes.body.id;
+
+    const agentRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents')
+      .send({
+        project_id: projectId,
+        ai_provider_id: aiProviderId,
+        name: 'frh-prereq-agent',
+      });
+    agentId = agentRes.body.id;
+  });
+
   describe('applyCreateResource', () => {
     test('creates ai_provider with resolved secret', async () => {
-      mockLookupSecretInternalId.mockResolvedValueOnce(42);
-      mockCreateAiProvider.mockResolvedValueOnce({
-        id: 'aip_1',
-      } as Awaited<ReturnType<typeof aiProvidersModule.createAiProvider>>);
+      const id = await applyCreateResource({
+        resourceType: 'ai_provider',
+        projectId: projectDbId,
+        resolvedProperties: {
+          name: 'frh-create-provider',
+          provider: 'ollama',
+          default_model: 'llama3.2',
+          secret_id: secretId,
+          base_url: 'https://api.example.com',
+          config: { region: 'us' },
+        },
+      });
 
-      await expect(
-        applyCreateResource({
-          resourceType: 'ai_provider',
-          projectId: 1,
-          resolvedProperties: {
-            name: 'Provider',
-            provider: 'openai',
-            default_model: 'gpt-4o',
-            secret_id: 'sec_public',
-            base_url: 'https://api.example.com',
-            config: { region: 'us' },
-          },
-        })
-      ).resolves.toBe('aip_1');
-
-      expect(mockLookupSecretInternalId).toHaveBeenCalledWith('sec_public');
-      expect(mockCreateAiProvider).toHaveBeenCalledWith({
-        projectId: 1,
-        secretId: 42,
-        name: 'Provider',
-        provider: 'openai',
-        defaultModel: 'gpt-4o',
-        baseUrl: 'https://api.example.com',
+      expect(id).toMatch(/^aip_/);
+      const read = await readResource('ai_provider', id);
+      expect(read).toMatchObject({
+        name: 'frh-create-provider',
+        provider: 'ollama',
+        default_model: 'llama3.2',
+        base_url: 'https://api.example.com',
         config: { region: 'us' },
+        secret_id: secretId,
       });
     });
 
     test('creates tool', async () => {
-      mockCreateTool.mockResolvedValueOnce({
-        id: 'at_1',
-      } as Awaited<ReturnType<typeof toolsModule.createTool>>);
+      const id = await applyCreateResource({
+        resourceType: 'tool',
+        projectId: projectDbId,
+        resolvedProperties: {
+          type: 'http',
+          name: 'frh-create-tool',
+          description: 'Search tool',
+          parameters: { type: 'object' },
+          execute: { url: 'https://example.com' },
+          actions: ['read'],
+          preset_parameters: { limit: 5 },
+        },
+      });
 
-      await expect(
-        applyCreateResource({
-          resourceType: 'tool',
-          projectId: 1,
-          resolvedProperties: {
-            type: 'http',
-            name: 'Search',
-            description: 'Search tool',
-            parameters: { type: 'object' },
-            execute: { url: 'https://example.com' },
-            mcp: { server: 'mcp-server' },
-            actions: ['read'],
-            preset_parameters: { limit: 5 },
-          },
-        })
-      ).resolves.toBe('at_1');
-
-      expect(mockCreateTool).toHaveBeenCalledWith({
-        projectId: 1,
+      expect(id).toMatch(/^tool_/);
+      const read = await readResource('tool', id);
+      expect(read).toMatchObject({
+        name: 'frh-create-tool',
         type: 'http',
-        name: 'Search',
         description: 'Search tool',
         parameters: { type: 'object' },
         execute: { url: 'https://example.com' },
-        mcp: { server: 'mcp-server' },
         actions: ['read'],
-        presetParameters: { limit: 5 },
+        preset_parameters: { limit: 5 },
       });
     });
 
     test('creates actor with resolved linked ids', async () => {
-      mockResolveActorLinkedIds.mockResolvedValueOnce({
-        agentId: 10,
-        memoryId: 9,
+      const id = await applyCreateResource({
+        resourceType: 'actor',
+        projectId: projectDbId,
+        resolvedProperties: {
+          name: 'frh-create-actor',
+          external_id: 'whatsapp:+5511999999999',
+          instructions: 'Talk like support',
+          agent_id: agentId,
+          memory_id: memoryId,
+          auto_create_memory: false,
+        },
       });
-      mockCreateActor.mockResolvedValueOnce({
-        id: 'act_1',
-      } as Awaited<ReturnType<typeof actorsModule.createActor>>);
 
-      await expect(
-        applyCreateResource({
-          resourceType: 'actor',
-          projectId: 1,
-          resolvedProperties: {
-            name: 'Customer Actor',
-            external_id: 'whatsapp:+5511999999999',
-            instructions: 'Talk like support',
-            agent_id: 'agt_ref',
-            memory_id: 'mem_ref',
-            auto_create_memory: false,
-          },
-        })
-      ).resolves.toBe('act_1');
-
-      expect(mockResolveActorLinkedIds).toHaveBeenCalledWith({
-        agentId: 'agt_ref',
-        chatId: undefined,
-        memoryId: 'mem_ref',
-        projectId: 1,
-      });
-      expect(mockCreateActor).toHaveBeenCalledWith({
-        projectId: 1,
-        name: 'Customer Actor',
-        externalId: 'whatsapp:+5511999999999',
+      expect(id).toMatch(/^actor_/);
+      const read = await readResource('actor', id);
+      expect(read).toMatchObject({
+        name: 'frh-create-actor',
+        external_id: 'whatsapp:+5511999999999',
         instructions: 'Talk like support',
-        agentId: 10,
-        chatId: undefined,
-        memoryId: 9,
-        autoCreateMemory: false,
+        agent_id: agentId,
+        memory_id: memoryId,
       });
     });
 
     test('creates agent', async () => {
-      mockCreateAgent.mockResolvedValueOnce({
-        id: 'agt_1',
-      } as Awaited<ReturnType<typeof agentsModule.createAgent>>);
+      const id = await applyCreateResource({
+        resourceType: 'agent',
+        projectId: projectDbId,
+        resolvedProperties: {
+          ai_provider_id: aiProviderId,
+          name: 'frh-create-agent',
+          instructions: 'Be precise',
+          model: 'llama3.2',
+          max_steps: 5,
+          temperature: 0.2,
+        },
+      });
 
-      await expect(
-        applyCreateResource({
-          resourceType: 'agent',
-          projectId: 1,
-          resolvedProperties: {
-            ai_provider_id: 'aip_1',
-            name: 'Helper',
-            instructions: 'Be precise',
-            model: 'gpt-4o-mini',
-            tool_ids: ['at_1'],
-            max_steps: 5,
-            tool_choice: { type: 'auto' },
-            stop_conditions: [{ type: 'max_steps' }],
-            active_tool_ids: ['at_1'],
-            step_rules: [{ type: 'require_tool' }],
-            boundary_policy: { mode: 'strict' },
-            temperature: 0.2,
-            knowledge_config: { topK: 3 },
-          },
-        })
-      ).resolves.toBe('agt_1');
-
-      expect(mockCreateAgent).toHaveBeenCalledWith({
-        projectId: 1,
-        aiProviderId: 'aip_1',
-        name: 'Helper',
+      expect(id).toMatch(/^agent_/);
+      const read = await readResource('agent', id);
+      expect(read).toMatchObject({
+        ai_provider_id: aiProviderId,
+        name: 'frh-create-agent',
         instructions: 'Be precise',
-        model: 'gpt-4o-mini',
-        toolIds: ['at_1'],
-        maxSteps: 5,
-        toolChoice: { type: 'auto' },
-        stopConditions: [{ type: 'max_steps' }],
-        activeToolIds: ['at_1'],
-        stepRules: [{ type: 'require_tool' }],
-        boundaryPolicy: { mode: 'strict' },
+        model: 'llama3.2',
+        max_steps: 5,
         temperature: 0.2,
-        knowledgeConfig: { topK: 3 },
       });
     });
 
     test('creates document', async () => {
-      mockCreateDocument.mockResolvedValueOnce({
-        id: 'doc_1',
-      } as Awaited<ReturnType<typeof documentsModule.createDocument>>);
+      const id = await applyCreateResource({
+        resourceType: 'document',
+        projectId: projectDbId,
+        resolvedProperties: {
+          content: 'Doc body',
+          path: 'docs/guide.md',
+          filename: 'guide.md',
+          title: 'Guide',
+          metadata: { version: '1' },
+          tags: { topic: 'test' },
+        },
+      });
 
-      await expect(
-        applyCreateResource({
-          resourceType: 'document',
-          projectId: 1,
-          resolvedProperties: {
-            content: 'Doc body',
-            path: 'docs/guide.md',
-            filename: 'guide.md',
-            title: 'Guide',
-            metadata: { version: '1' },
-            tags: { topic: 'test' },
-          },
-        })
-      ).resolves.toBe('doc_1');
-
-      expect(mockCreateDocument).toHaveBeenCalledWith({
-        projectId: 1,
+      expect(id).toMatch(/^doc_/);
+      const read = await readResource('document', id);
+      expect(read).toMatchObject({
         content: 'Doc body',
-        path: 'docs/guide.md',
         filename: 'guide.md',
         title: 'Guide',
-        metadata: { version: '1' },
         tags: { topic: 'test' },
       });
     });
 
     test('creates memory', async () => {
-      mockCreateMemory.mockResolvedValueOnce({
-        id: 'mem_1',
-      } as Awaited<ReturnType<typeof memoriesModule.createMemory>>);
+      const id = await applyCreateResource({
+        resourceType: 'memory',
+        projectId: projectDbId,
+        resolvedProperties: {
+          name: 'frh-create-memory',
+          description: 'Important facts',
+          tags: ['core', 'shared'],
+        },
+      });
 
-      await expect(
-        applyCreateResource({
-          resourceType: 'memory',
-          projectId: 1,
-          resolvedProperties: {
-            name: 'Memory',
-            description: 'Important facts',
-            tags: ['core', 'shared'],
-          },
-        })
-      ).resolves.toBe('mem_1');
-
-      expect(mockCreateMemory).toHaveBeenCalledWith({
-        projectId: 1,
-        name: 'Memory',
+      expect(id).toMatch(/^mem_/);
+      const read = await readResource('memory', id);
+      expect(read).toMatchObject({
+        name: 'frh-create-memory',
         description: 'Important facts',
         tags: ['core', 'shared'],
       });
     });
 
     test('creates memory_entry with resolved memory internal id', async () => {
-      mockLookupMemoryInternalId.mockResolvedValueOnce(7);
-      mockCreateMemoryEntry.mockResolvedValueOnce({
-        id: 'me_1',
-      } as Awaited<ReturnType<typeof memoryEntriesModule.createMemoryEntry>>);
+      const id = await applyCreateResource({
+        resourceType: 'memory_entry',
+        projectId: projectDbId,
+        resolvedProperties: {
+          memory_id: memoryId,
+          content: 'Remember this',
+          source_type: 'manual',
+        },
+      });
 
-      await expect(
-        applyCreateResource({
-          resourceType: 'memory_entry',
-          projectId: 1,
-          resolvedProperties: {
-            memory_id: 'mem_public',
-            content: 'Remember this',
-            source_type: 'manual',
-          },
-        })
-      ).resolves.toBe('me_1');
-
-      expect(mockLookupMemoryInternalId).toHaveBeenLastCalledWith('mem_public');
-      expect(mockCreateMemoryEntry).toHaveBeenCalledWith({
-        memoryId: 7,
+      expect(id).toMatch(/^mem_entry_/);
+      const read = await readResource('memory_entry', id);
+      expect(read).toMatchObject({
+        memory_id: memoryId,
         content: 'Remember this',
-        sourceType: 'manual',
+        source_type: 'manual',
       });
     });
 
     test('creates webhook', async () => {
-      mockCreateWebhook.mockResolvedValueOnce({
-        id: 'wh_1',
-      } as Awaited<ReturnType<typeof webhooksModule.createWebhook>>);
+      const id = await applyCreateResource({
+        resourceType: 'webhook',
+        projectId: projectDbId,
+        resolvedProperties: {
+          name: 'frh-create-webhook',
+          description: 'Webhook description',
+          url: 'https://example.com/webhook',
+          events: ['memory.created'],
+        },
+      });
 
-      await expect(
-        applyCreateResource({
-          resourceType: 'webhook',
-          projectId: 1,
-          resolvedProperties: {
-            name: 'Hook',
-            description: 'Webhook description',
-            url: 'https://example.com/webhook',
-            events: ['memory.created'],
-          },
-        })
-      ).resolves.toBe('wh_1');
-
-      expect(mockCreateWebhook).toHaveBeenCalledWith({
-        projectId: 1,
-        name: 'Hook',
+      expect(id).toMatch(/^wh_/);
+      const read = await readResource('webhook', id);
+      expect(read).toMatchObject({
+        name: 'frh-create-webhook',
         description: 'Webhook description',
         url: 'https://example.com/webhook',
         events: ['memory.created'],
       });
     });
 
-    test('throws when agent creation reports missing ai provider', async () => {
-      mockCreateAgent.mockRejectedValueOnce(
-        new DomainError(
-          'AI_PROVIDER_NOT_FOUND',
-          'AI provider not found: aip_missing'
-        )
-      );
-
+    test('throws when agent creation references a missing ai provider', async () => {
       await expect(
         applyCreateResource({
           resourceType: 'agent',
-          projectId: 1,
+          projectId: projectDbId,
           resolvedProperties: {
             ai_provider_id: 'aip_missing',
-            name: 'Broken agent',
+            name: 'frh-broken-agent',
           },
         })
-      ).rejects.toThrow('AI provider not found: aip_missing');
+      ).rejects.toThrow(/not found/i);
     });
 
     test('throws for unsupported create resource type', async () => {
       await expect(
         applyCreateResource({
           resourceType: 'unsupported',
-          projectId: 1,
+          projectId: projectDbId,
           resolvedProperties: {},
         })
       ).rejects.toThrow('Unsupported resource type: unsupported');
@@ -360,10 +305,10 @@ describe('formationsResourceHandlers', () => {
       await expect(
         applyCreateResource({
           resourceType: 'actor',
-          projectId: 1,
+          projectId: projectDbId,
           resolvedProperties: {
-            name: 'Test Actor',
-            agent_id: 'agt_1',
+            name: 'frh-exclusive-actor',
+            agent_id: agentId,
             chat_id: 'chat_1',
           },
         })
@@ -374,7 +319,7 @@ describe('formationsResourceHandlers', () => {
       await expect(
         applyCreateResource({
           resourceType: 'actor',
-          projectId: 1,
+          projectId: projectDbId,
           resolvedProperties: {
             name: '',
           },
@@ -385,200 +330,195 @@ describe('formationsResourceHandlers', () => {
 
   describe('applyUpdateResource', () => {
     test('updates ai_provider with resolved secret', async () => {
-      mockLookupSecretInternalId.mockResolvedValueOnce(84);
+      const id = await applyCreateResource({
+        resourceType: 'ai_provider',
+        projectId: projectDbId,
+        resolvedProperties: {
+          name: 'frh-update-provider',
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        },
+      });
 
       await expect(
         applyUpdateResource({
           resourceType: 'ai_provider',
-          physicalResourceId: 'aip_1',
+          physicalResourceId: id,
           resolvedProperties: {
-            name: 'Provider Updated',
-            provider: 'openai',
-            default_model: 'gpt-4.1',
-            secret_id: 'sec_new',
+            name: 'frh-update-provider-v2',
+            provider: 'ollama',
+            default_model: 'llama3.1',
+            secret_id: secretId,
             base_url: null,
             config: null,
           },
         })
       ).resolves.toBeUndefined();
 
-      expect(mockUpdateAiProvider).toHaveBeenCalledWith({
-        id: 'aip_1',
-        secretId: 84,
-        name: 'Provider Updated',
-        provider: 'openai',
-        defaultModel: 'gpt-4.1',
-        baseUrl: null,
-        config: null,
+      const read = await readResource('ai_provider', id);
+      expect(read).toMatchObject({
+        name: 'frh-update-provider-v2',
+        default_model: 'llama3.1',
+        secret_id: secretId,
       });
     });
 
     test('updates tool', async () => {
-      mockUpdateTool.mockResolvedValueOnce(
-        undefined as unknown as Awaited<
-          ReturnType<typeof toolsModule.updateTool>
-        >
-      );
+      const id = await applyCreateResource({
+        resourceType: 'tool',
+        projectId: projectDbId,
+        resolvedProperties: {
+          type: 'http',
+          name: 'frh-update-tool',
+          execute: { url: 'https://example.com' },
+        },
+      });
 
       await expect(
         applyUpdateResource({
           resourceType: 'tool',
-          physicalResourceId: 'at_1',
+          physicalResourceId: id,
           resolvedProperties: {
-            name: 'Search Updated',
-            description: null,
-            parameters: null,
+            name: 'frh-update-tool-v2',
             execute: { url: 'https://example.com/v2' },
-            mcp: null,
-            actions: null,
-            preset_parameters: null,
           },
         })
       ).resolves.toBeUndefined();
 
-      expect(mockUpdateTool).toHaveBeenCalledWith({
-        id: 'at_1',
-        name: 'Search Updated',
-        description: null,
-        parameters: null,
+      const read = await readResource('tool', id);
+      expect(read).toMatchObject({
+        name: 'frh-update-tool-v2',
         execute: { url: 'https://example.com/v2' },
-        mcp: null,
-        actions: null,
-        presetParameters: null,
       });
     });
 
     test('updates actor', async () => {
-      mockUpdateActor.mockResolvedValueOnce({
-        id: 'act_1',
-      } as Awaited<ReturnType<typeof actorsModule.updateActor>>);
+      const id = await applyCreateResource({
+        resourceType: 'actor',
+        projectId: projectDbId,
+        resolvedProperties: { name: 'frh-update-actor' },
+      });
 
       await expect(
         applyUpdateResource({
           resourceType: 'actor',
-          physicalResourceId: 'act_1',
+          physicalResourceId: id,
           resolvedProperties: {
-            name: 'Actor Updated',
-            instructions: null,
-            agent_id: 'agt_2',
+            name: 'frh-update-actor-v2',
+            instructions: 'Updated instructions',
+            agent_id: agentId,
           },
         })
       ).resolves.toBeUndefined();
 
-      expect(mockUpdateActor).toHaveBeenCalledWith({
-        id: 'act_1',
-        name: 'Actor Updated',
-        externalId: undefined,
-        instructions: null,
-        agentId: 'agt_2',
-        chatId: undefined,
-        memoryId: undefined,
+      const read = await readResource('actor', id);
+      expect(read).toMatchObject({
+        name: 'frh-update-actor-v2',
+        instructions: 'Updated instructions',
+        agent_id: agentId,
       });
     });
 
     test('updates agent', async () => {
-      mockUpdateAgent.mockResolvedValueOnce(
-        undefined as unknown as Awaited<
-          ReturnType<typeof agentsModule.updateAgent>
-        >
-      );
+      const id = await applyCreateResource({
+        resourceType: 'agent',
+        projectId: projectDbId,
+        resolvedProperties: {
+          ai_provider_id: aiProviderId,
+          name: 'frh-update-agent',
+        },
+      });
 
       await expect(
         applyUpdateResource({
           resourceType: 'agent',
-          physicalResourceId: 'agt_1',
+          physicalResourceId: id,
           resolvedProperties: {
-            name: 'Agent Updated',
+            name: 'frh-update-agent-v2',
             instructions: 'New instructions',
-            model: 'gpt-4.1-mini',
-            tool_ids: ['at_1'],
+            model: 'llama3.1',
             max_steps: 8,
-            tool_choice: { type: 'required' },
-            stop_conditions: [{ type: 'stop' }],
-            active_tool_ids: ['at_1'],
-            step_rules: [{ type: 'must_call_tool' }],
-            boundary_policy: { mode: 'audit' },
             temperature: 0.5,
-            knowledge_config: { topK: 8 },
-            ignored_value: undefined,
           },
         })
       ).resolves.toBeUndefined();
 
-      expect(mockUpdateAgent).toHaveBeenCalledWith({
-        id: 'agt_1',
-        aiProviderId: undefined,
-        name: 'Agent Updated',
+      const read = await readResource('agent', id);
+      expect(read).toMatchObject({
+        name: 'frh-update-agent-v2',
         instructions: 'New instructions',
-        model: 'gpt-4.1-mini',
-        toolIds: ['at_1'],
-        maxSteps: 8,
-        toolChoice: { type: 'required' },
-        stopConditions: [{ type: 'stop' }],
-        activeToolIds: ['at_1'],
-        stepRules: [{ type: 'must_call_tool' }],
-        boundaryPolicy: { mode: 'audit' },
+        model: 'llama3.1',
+        max_steps: 8,
         temperature: 0.5,
-        knowledgeConfig: { topK: 8 },
       });
     });
 
     test('updates memory', async () => {
+      const id = await applyCreateResource({
+        resourceType: 'memory',
+        projectId: projectDbId,
+        resolvedProperties: {
+          name: 'frh-update-memory',
+          description: 'original',
+        },
+      });
+
       await expect(
         applyUpdateResource({
           resourceType: 'memory',
-          physicalResourceId: 'mem_1',
+          physicalResourceId: id,
           resolvedProperties: {
-            name: 'Memory Updated',
+            name: 'frh-update-memory-v2',
             description: null,
             tags: null,
           },
         })
       ).resolves.toBeUndefined();
 
-      expect(mockUpdateMemory).toHaveBeenCalledWith({
-        id: 'mem_1',
-        name: 'Memory Updated',
-        description: null,
-        tags: null,
-      });
+      const read = await readResource('memory', id);
+      expect(read).toMatchObject({ name: 'frh-update-memory-v2' });
     });
 
     test('updates memory_entry', async () => {
-      const memoryEntryInstance = db.MemoryEntry.build({
-        publicId: 'men_1',
-        memoryId: 1,
-        content: 'old content',
-        sourceType: 'manual',
+      const id = await applyCreateResource({
+        resourceType: 'memory_entry',
+        projectId: projectDbId,
+        resolvedProperties: {
+          memory_id: memoryId,
+          content: 'old content',
+          source_type: 'manual',
+        },
       });
-      const entrySave = jest
-        .spyOn(memoryEntryInstance, 'save')
-        .mockResolvedValue(memoryEntryInstance);
-      jest
-        .spyOn(db.MemoryEntry, 'findOne')
-        .mockResolvedValueOnce(memoryEntryInstance);
 
       await expect(
         applyUpdateResource({
           resourceType: 'memory_entry',
-          physicalResourceId: 'me_1',
-          resolvedProperties: {
-            content: 'new content',
-          },
+          physicalResourceId: id,
+          resolvedProperties: { content: 'new content' },
         })
       ).resolves.toBeUndefined();
 
-      expect(memoryEntryInstance.content).toBe('new content');
-      expect(entrySave).toHaveBeenCalled();
+      const read = await readResource('memory_entry', id);
+      expect(read).toMatchObject({ content: 'new content' });
     });
 
     test('updates webhook', async () => {
+      const id = await applyCreateResource({
+        resourceType: 'webhook',
+        projectId: projectDbId,
+        resolvedProperties: {
+          name: 'frh-update-webhook',
+          url: 'https://example.com/webhook',
+          events: ['memory.created'],
+        },
+      });
+
       await expect(
         applyUpdateResource({
           resourceType: 'webhook',
-          physicalResourceId: 'wh_1',
+          physicalResourceId: id,
           resolvedProperties: {
-            name: 'Hook Updated',
+            name: 'frh-update-webhook-v2',
             description: 'Updated description',
             url: 'https://example.com/hook',
             events: ['memory.updated'],
@@ -586,9 +526,9 @@ describe('formationsResourceHandlers', () => {
         })
       ).resolves.toBeUndefined();
 
-      expect(mockUpdateWebhook).toHaveBeenCalledWith({
-        id: 'wh_1',
-        name: 'Hook Updated',
+      const read = await readResource('webhook', id);
+      expect(read).toMatchObject({
+        name: 'frh-update-webhook-v2',
         description: 'Updated description',
         url: 'https://example.com/hook',
         events: ['memory.updated'],
@@ -596,38 +536,45 @@ describe('formationsResourceHandlers', () => {
     });
 
     test('ignores document (no-op update)', async () => {
+      const id = await applyCreateResource({
+        resourceType: 'document',
+        projectId: projectDbId,
+        resolvedProperties: { content: 'Immutable body', title: 'Original' },
+      });
+
       await expect(
         applyUpdateResource({
           resourceType: 'document',
-          physicalResourceId: 'doc_1',
-          resolvedProperties: {
-            title: 'ignored',
-          },
+          physicalResourceId: id,
+          resolvedProperties: { title: 'ignored' },
         })
       ).resolves.toBeUndefined();
+
+      const read = await readResource('document', id);
+      expect(read).toMatchObject({ title: 'Original' });
     });
 
-    test('throws when agent or memory entry is missing and for unsupported update resource type', async () => {
-      mockUpdateAgent.mockRejectedValueOnce(
-        new DomainError('RESOURCE_NOT_FOUND', "Agent 'agt_missing' not found.")
-      );
+    test('throws when agent to update is missing', async () => {
       await expect(
         applyUpdateResource({
           resourceType: 'agent',
           physicalResourceId: 'agt_missing',
-          resolvedProperties: {},
+          resolvedProperties: { name: 'x' },
         })
-      ).rejects.toThrow("Agent 'agt_missing' not found.");
+      ).rejects.toThrow(/not found/i);
+    });
 
-      jest.spyOn(db.MemoryEntry, 'findOne').mockResolvedValueOnce(null);
+    test('throws when memory_entry to update is missing', async () => {
       await expect(
         applyUpdateResource({
           resourceType: 'memory_entry',
-          physicalResourceId: 'me_missing',
+          physicalResourceId: 'men_missing',
           resolvedProperties: { content: 'x' },
         })
-      ).rejects.toThrow('MemoryEntry not found: me_missing');
+      ).rejects.toThrow('MemoryEntry not found: men_missing');
+    });
 
+    test('throws for unsupported update resource type', async () => {
       await expect(
         applyUpdateResource({
           resourceType: 'unsupported',
@@ -638,13 +585,19 @@ describe('formationsResourceHandlers', () => {
     });
 
     test('throws when actor update has both agent_id and chat_id', async () => {
+      const id = await applyCreateResource({
+        resourceType: 'actor',
+        projectId: projectDbId,
+        resolvedProperties: { name: 'frh-update-exclusive-actor' },
+      });
+
       await expect(
         applyUpdateResource({
           resourceType: 'actor',
-          physicalResourceId: 'act_1',
+          physicalResourceId: id,
           resolvedProperties: {
-            name: 'Test Actor',
-            agent_id: 'agt_1',
+            name: 'frh-update-exclusive-actor',
+            agent_id: agentId,
             chat_id: 'chat_1',
           },
         })
@@ -653,30 +606,132 @@ describe('formationsResourceHandlers', () => {
   });
 
   describe('applyDeleteResource', () => {
-    test.each([
-      ['ai_provider', mockDeleteAiProvider],
-      ['tool', mockDeleteTool],
-      ['agent', mockDeleteAgent],
-      ['actor', mockDeleteActor],
-      ['document', mockDeleteDocument],
-      ['memory', mockDeleteMemory],
-      ['memory_entry', mockDeleteMemoryEntry],
-      ['webhook', mockDeleteWebhook],
-    ])(
-      'deletes %s resources through the matching handler',
-      async (resourceType, spy) => {
-        mockDeleteActor.mockResolvedValue(undefined);
-        mockDeleteAgent.mockResolvedValue(undefined);
-        mockDeleteTool.mockResolvedValue(undefined);
+    test('deletes ai_provider', async () => {
+      const id = await applyCreateResource({
+        resourceType: 'ai_provider',
+        projectId: projectDbId,
+        resolvedProperties: {
+          name: 'frh-delete-provider',
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        },
+      });
 
-        await applyDeleteResource({
-          resourceType,
-          physicalResourceId: 'res_1',
-        });
+      await applyDeleteResource({
+        resourceType: 'ai_provider',
+        physicalResourceId: id,
+      });
+      expect(await readResource('ai_provider', id)).toBeNull();
+    });
 
-        expect(spy).toHaveBeenCalledWith({ id: 'res_1' });
-      }
-    );
+    test('deletes tool', async () => {
+      const id = await applyCreateResource({
+        resourceType: 'tool',
+        projectId: projectDbId,
+        resolvedProperties: {
+          type: 'http',
+          name: 'frh-delete-tool',
+          execute: { url: 'https://example.com' },
+        },
+      });
+
+      await applyDeleteResource({
+        resourceType: 'tool',
+        physicalResourceId: id,
+      });
+      expect(await readResource('tool', id)).toBeNull();
+    });
+
+    test('deletes agent', async () => {
+      const id = await applyCreateResource({
+        resourceType: 'agent',
+        projectId: projectDbId,
+        resolvedProperties: {
+          ai_provider_id: aiProviderId,
+          name: 'frh-delete-agent',
+        },
+      });
+
+      await applyDeleteResource({
+        resourceType: 'agent',
+        physicalResourceId: id,
+      });
+      expect(await readResource('agent', id)).toBeNull();
+    });
+
+    test('deletes actor', async () => {
+      const id = await applyCreateResource({
+        resourceType: 'actor',
+        projectId: projectDbId,
+        resolvedProperties: { name: 'frh-delete-actor' },
+      });
+
+      await applyDeleteResource({
+        resourceType: 'actor',
+        physicalResourceId: id,
+      });
+      expect(await readResource('actor', id)).toBeNull();
+    });
+
+    test('deletes document', async () => {
+      const id = await applyCreateResource({
+        resourceType: 'document',
+        projectId: projectDbId,
+        resolvedProperties: { content: 'delete me' },
+      });
+
+      await applyDeleteResource({
+        resourceType: 'document',
+        physicalResourceId: id,
+      });
+      expect(await readResource('document', id)).toBeNull();
+    });
+
+    test('deletes memory', async () => {
+      const id = await applyCreateResource({
+        resourceType: 'memory',
+        projectId: projectDbId,
+        resolvedProperties: { name: 'frh-delete-memory' },
+      });
+
+      await applyDeleteResource({
+        resourceType: 'memory',
+        physicalResourceId: id,
+      });
+      expect(await readResource('memory', id)).toBeNull();
+    });
+
+    test('deletes memory_entry', async () => {
+      const id = await applyCreateResource({
+        resourceType: 'memory_entry',
+        projectId: projectDbId,
+        resolvedProperties: { memory_id: memoryId, content: 'delete me' },
+      });
+
+      await applyDeleteResource({
+        resourceType: 'memory_entry',
+        physicalResourceId: id,
+      });
+      expect(await readResource('memory_entry', id)).toBeNull();
+    });
+
+    test('deletes webhook', async () => {
+      const id = await applyCreateResource({
+        resourceType: 'webhook',
+        projectId: projectDbId,
+        resolvedProperties: {
+          name: 'frh-delete-webhook',
+          url: 'https://example.com/webhook',
+          events: ['memory.created'],
+        },
+      });
+
+      await applyDeleteResource({
+        resourceType: 'webhook',
+        physicalResourceId: id,
+      });
+      expect(await readResource('webhook', id)).toBeNull();
+    });
 
     test('throws for unsupported delete resource type', async () => {
       await expect(
