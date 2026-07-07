@@ -326,6 +326,14 @@ export const ERROR_CODES = {
     description:
       'A trigger-scoped credential cannot fire a trigger, preventing unbounded trigger→trigger loops.',
   },
+  HOOK_PAYLOAD_TOO_LARGE: {
+    httpStatus: 413,
+    description: 'The inbound hook request body exceeds the 1 MiB limit.',
+  },
+  HOOK_INVALID_JSON: {
+    httpStatus: 400,
+    description: 'The inbound hook request body is not valid JSON.',
+  },
 } as const satisfies Record<
   string,
   { httpStatus: number; description: string }

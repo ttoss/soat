@@ -9,7 +9,9 @@ import { initializeDispatcher } from './lib/webhookDispatcher';
 import { setupMcpMiddleware } from './mcp/server';
 import { authMiddleware } from './middleware/auth';
 import { errorLoggerMiddleware } from './middleware/errorLogger';
+import { hookRawBodyMiddleware } from './middleware/hookRawBody';
 import { oauthAuthorizationServer } from './oauth/server';
+import { hooksRouter } from './rest/hooks';
 import { restRouter } from './rest/router';
 
 const app = new App();
@@ -20,6 +22,9 @@ initializeDispatcher();
 
 app.use(errorLoggerMiddleware);
 app.use(cors());
+// Capture the raw body for public inbound hook paths before the JSON body
+// parser runs, so signatures can be verified over the exact bytes.
+app.use(hookRawBodyMiddleware);
 app.use(bodyParser());
 app.use(authMiddleware);
 
@@ -27,6 +32,10 @@ app.use(authMiddleware);
 // and discovery metadata. Public — the routes do their own validation. The
 // consent UI itself lives in the app (SPA); /authorize redirects to it.
 app.use(oauthAuthorizationServer.routes());
+
+// Public inbound hook receiver — outside /api/v1: HMAC-authenticated, no case
+// transform, excluded from the generated SDK/CLI/MCP surface.
+app.use(hooksRouter.routes());
 
 app.use(restRouter.routes());
 app.use(restRouter.allowedMethods());

@@ -35,8 +35,9 @@ const firingIncludes = () => {
 };
 
 /**
- * Creates a firing record in the `running` state with the effective input
- * snapshot. Returns the raw instance so the dispatcher can finalize it.
+ * Creates a firing record in the `pending` state with the effective input
+ * snapshot. The dispatcher transitions it to `running` and then a terminal
+ * state. Returns the raw instance so the dispatcher can finalize it.
  */
 export const createFiringRecord = async (args: {
   triggerId: number;
@@ -48,11 +49,11 @@ export const createFiringRecord = async (args: {
     triggerId: args.triggerId,
     projectId: args.projectId,
     source: args.source,
-    status: 'running',
+    status: 'pending',
     input: args.input,
     result: null,
     error: null,
-    startedAt: new Date(),
+    startedAt: null,
     completedAt: null,
   });
   log('createFiringRecord: id=%s source=%s', firing.publicId, args.source);

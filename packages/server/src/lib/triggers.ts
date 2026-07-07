@@ -139,6 +139,22 @@ export const getTrigger = async (args: { id: string }) => {
 };
 
 /**
+ * Loads the minimal context needed to authenticate and dispatch an inbound
+ * hook delivery: the trigger's public id, active flag, and signing secret.
+ * Returns `null` for an unknown trigger *or* a non-webhook trigger, so the
+ * inbound endpoint can respond `404` without leaking which case it was.
+ */
+export const findWebhookTriggerForDelivery = async (args: { id: string }) => {
+  const trigger = await db.Trigger.findOne({ where: { publicId: args.id } });
+  if (!trigger || trigger.type !== 'webhook') return null;
+  return {
+    id: trigger.publicId as string,
+    active: trigger.active as boolean,
+    secret: trigger.secret as string,
+  };
+};
+
+/**
  * Returns a webhook trigger's signing secret. Throws `RESOURCE_NOT_FOUND` when
  * the trigger does not exist, and `TRIGGER_ACTION_NOT_ALLOWED` when it is not a
  * webhook trigger (only webhook triggers have a secret).

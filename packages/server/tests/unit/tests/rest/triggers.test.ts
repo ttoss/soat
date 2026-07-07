@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+
 import { signTriggerToken } from 'src/lib/triggerToken';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -1192,6 +1194,175 @@ describe('Triggers', () => {
         `/api/v1/trigger-firings?trigger_id=${firedTriggerId}`
       );
       expect(res.status).toBe(403);
+    });
+  });
+
+  describe('POST /hooks/triggers/:trigger_id (inbound)', () => {
+    let hookTriggerId: string;
+    let hookSecret: string;
+
+    const sign = (secret: string, body: string) => {
+      return `sha256=${crypto
+        .createHmac('sha256', secret)
+        .update(body)
+        .digest('hex')}`;
+    };
+
+    const pollFiring = async (firingId: string) => {
+      for (let i = 0; i < 20; i++) {
+        const res = await authenticatedTestClient(userToken).get(
+          `/api/v1/trigger-firings/${firingId}`
+        );
+        if (
+          res.status === 200 &&
+          ['succeeded', 'failed'].includes(res.body.status)
+        ) {
+          return res.body;
+        }
+        await new Promise((r) => {
+          setTimeout(r, 50);
+        });
+      }
+      throw new Error('firing did not reach a terminal state');
+    };
+
+    beforeAll(async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'inbound-hook',
+          type: 'webhook',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+        });
+      hookTriggerId = created.body.id;
+      hookSecret = created.body.secret;
+    });
+
+    test('accepts a validly-signed delivery with 202 and audits the firing', async () => {
+      const body = JSON.stringify({ event: 'push', ref: 'main' });
+      const res = await testClient
+        .post(`/hooks/triggers/${hookTriggerId}`)
+        .set('Content-Type', 'application/json')
+        .set('X-Soat-Signature', sign(hookSecret, body))
+        .send(body);
+
+      expect(res.status).toBe(202);
+      expect(res.body.firing_id).toMatch(/^trg_fire_/);
+      expect(res.body.trigger_id).toBe(hookTriggerId);
+      expect(res.body.status).toBe('pending');
+
+      const firing = await pollFiring(res.body.firing_id);
+      expect(firing.source).toBe('webhook');
+      expect(firing.status).toBe('succeeded');
+      expect(firing.input).toEqual({ event: 'push', ref: 'main' });
+    });
+
+    test('wraps a non-object JSON body as { payload }', async () => {
+      const body = '42';
+      const res = await testClient
+        .post(`/hooks/triggers/${hookTriggerId}`)
+        .set('Content-Type', 'application/json')
+        .set('X-Soat-Signature', sign(hookSecret, body))
+        .send(body);
+
+      expect(res.status).toBe(202);
+      const firing = await pollFiring(res.body.firing_id);
+      expect(firing.input).toEqual({ payload: 42 });
+    });
+
+    test('missing signature returns 401', async () => {
+      const body = JSON.stringify({ a: 1 });
+      const res = await testClient
+        .post(`/hooks/triggers/${hookTriggerId}`)
+        .set('Content-Type', 'application/json')
+        .send(body);
+      expect(res.status).toBe(401);
+    });
+
+    test('bad signature returns 401', async () => {
+      const body = JSON.stringify({ a: 1 });
+      const res = await testClient
+        .post(`/hooks/triggers/${hookTriggerId}`)
+        .set('Content-Type', 'application/json')
+        .set('X-Soat-Signature', sign('wrong-secret', body))
+        .send(body);
+      expect(res.status).toBe(401);
+    });
+
+    test('unknown trigger returns 404', async () => {
+      const body = JSON.stringify({ a: 1 });
+      const res = await testClient
+        .post('/hooks/triggers/trg_missing')
+        .set('Content-Type', 'application/json')
+        .set('X-Soat-Signature', sign(hookSecret, body))
+        .send(body);
+      expect(res.status).toBe(404);
+    });
+
+    test('non-webhook trigger returns 404 (existence not leaked)', async () => {
+      const manual = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'inbound-manual',
+          type: 'manual',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+        });
+      const body = JSON.stringify({ a: 1 });
+      const res = await testClient
+        .post(`/hooks/triggers/${manual.body.id}`)
+        .set('Content-Type', 'application/json')
+        .set('X-Soat-Signature', sign(hookSecret, body))
+        .send(body);
+      expect(res.status).toBe(404);
+    });
+
+    test('inactive trigger returns 409 (only after a valid signature)', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'inbound-inactive',
+          type: 'webhook',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+        });
+      await authenticatedTestClient(userToken)
+        .patch(`/api/v1/triggers/${created.body.id}`)
+        .send({ active: false });
+
+      const body = JSON.stringify({ a: 1 });
+      const res = await testClient
+        .post(`/hooks/triggers/${created.body.id}`)
+        .set('Content-Type', 'application/json')
+        .set('X-Soat-Signature', sign(created.body.secret, body))
+        .send(body);
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('TRIGGER_NOT_ACTIVE');
+    });
+
+    test('invalid JSON body returns 400', async () => {
+      const body = 'not-json{';
+      const res = await testClient
+        .post(`/hooks/triggers/${hookTriggerId}`)
+        .set('Content-Type', 'application/json')
+        .set('X-Soat-Signature', sign(hookSecret, body))
+        .send(body);
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('HOOK_INVALID_JSON');
+    });
+
+    test('a body over 1 MiB returns 413', async () => {
+      const body = JSON.stringify({ big: 'x'.repeat(1024 * 1024 + 10) });
+      const res = await testClient
+        .post(`/hooks/triggers/${hookTriggerId}`)
+        .set('Content-Type', 'application/json')
+        .set('X-Soat-Signature', sign(hookSecret, body))
+        .send(body);
+      expect(res.status).toBe(413);
     });
   });
 
