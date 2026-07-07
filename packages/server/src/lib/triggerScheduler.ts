@@ -2,47 +2,10 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { createScheduler, createSweep } from './scheduler';
 import { computeNextFireAt } from './triggerValidation';
 
 const log = createDebug('soat:triggers');
-
-const DEFAULT_INTERVAL_MS = 30000;
-const BATCH_LIMIT = 20;
-
-// Guards against the same trigger being fired twice within a single process if
-// a tick fires again before an in-flight fire finishes.
-const inFlight = new Set<number>();
-
-/**
- * Fires a claimed schedule trigger in the background. `prepareFiring` /
- * `runFiringDispatch` are imported lazily (not statically) so this scheduler —
- * started from `server.ts` — stays off the orchestrations↔engine import cycle,
- * matching the inbound `/hooks` router. Failures are logged; a firing that
- * reaches the target records its own outcome.
- */
-const fireScheduledTrigger = async (args: {
-  triggerPublicId: string;
-  internalId: number;
-}): Promise<void> => {
-  try {
-    const { prepareFiring, runFiringDispatch } =
-      await import('./triggerDispatch');
-    const prepared = await prepareFiring({
-      triggerPublicId: args.triggerPublicId,
-      source: 'schedule',
-      fireInput: null,
-    });
-    await runFiringDispatch(prepared);
-  } catch (error) {
-    log(
-      'fireDueTriggers: scheduled fire failed trigger=%s %o',
-      args.triggerPublicId,
-      error
-    );
-  } finally {
-    inFlight.delete(args.internalId);
-  }
-};
 
 /**
  * Finds active schedule triggers whose fire is due (`type='schedule'`,
@@ -58,35 +21,28 @@ const fireScheduledTrigger = async (args: {
  *
  * Returns the number of triggers claimed for firing this tick.
  */
-export const fireDueTriggers = async (args?: {
-  now?: Date;
-}): Promise<number> => {
-  const now = args?.now ?? new Date();
-
-  let due: InstanceType<typeof db.Trigger>[];
-  try {
-    due = await db.Trigger.findAll({
+export const fireDueTriggers = createSweep({
+  log,
+  name: 'fireDueTriggers',
+  inFlight: new Set<number>(),
+  findDue: ({ now, limit }) => {
+    return db.Trigger.findAll({
       where: {
         type: 'schedule',
         active: true,
         nextFireAt: { [Op.lte]: now },
       },
       order: [['nextFireAt', 'ASC']],
-      limit: BATCH_LIMIT,
+      limit,
     });
-  } catch (error) {
-    log('fireDueTriggers: query failed %o', error);
-    return 0;
-  }
-
-  let claimedCount = 0;
-  for (const trigger of due) {
-    const internalId = trigger.id as number;
-    if (inFlight.has(internalId)) continue;
-
+  },
+  idOf: (trigger) => {
+    return trigger.id as number;
+  },
+  claim: async ({ row: trigger, now }) => {
     const cron = trigger.cron as string | null;
     const dueAt = trigger.nextFireAt as Date | null;
-    if (!cron || !dueAt) continue;
+    if (!cron || !dueAt) return false;
 
     let nextFireAt: Date | null;
     try {
@@ -97,29 +53,39 @@ export const fireDueTriggers = async (args?: {
         trigger.publicId,
         error
       );
-      continue;
+      return false;
     }
 
     // Atomic claim: advance nextFireAt only if it still equals the value we
     // read, so a single worker fires each due occurrence.
     const [claimed] = await db.Trigger.update(
       { nextFireAt },
-      { where: { id: internalId, nextFireAt: dueAt } }
+      { where: { id: trigger.id as number, nextFireAt: dueAt } }
     );
-    if (!claimed) continue;
-
-    inFlight.add(internalId);
-    claimedCount += 1;
-    void fireScheduledTrigger({
+    return claimed > 0;
+  },
+  // `prepareFiring` / `runFiringDispatch` are imported lazily (not statically)
+  // so this scheduler — started from `server.ts` — stays off the
+  // orchestrations↔engine import cycle, matching the inbound `/hooks` router.
+  handle: async ({ row: trigger }) => {
+    const { prepareFiring, runFiringDispatch } =
+      await import('./triggerDispatch');
+    const prepared = await prepareFiring({
       triggerPublicId: trigger.publicId as string,
-      internalId,
+      source: 'schedule',
+      fireInput: null,
     });
-  }
+    await runFiringDispatch(prepared);
+  },
+});
 
-  return claimedCount;
-};
-
-let timer: ReturnType<typeof setInterval> | null = null;
+const scheduler = createScheduler({
+  log,
+  defaultIntervalMs: 30000,
+  envVar: 'SOAT_TRIGGER_SCHEDULER_INTERVAL_MS',
+  disabledEnvVar: 'SOAT_TRIGGER_SCHEDULER_DISABLED',
+  sweeps: [fireDueTriggers],
+});
 
 /**
  * Starts the background trigger scheduler loop. Called once from `server.ts` at
@@ -129,34 +95,10 @@ let timer: ReturnType<typeof setInterval> | null = null;
  * `SOAT_TRIGGER_SCHEDULER_INTERVAL_MS` (default 30s). The timer is unref'd so it
  * never keeps the process alive, and repeated calls are a no-op.
  */
-export const startTriggerScheduler = (args?: { intervalMs?: number }): void => {
-  if (timer) return;
-  if (process.env.SOAT_TRIGGER_SCHEDULER_DISABLED === 'true') {
-    log('startTriggerScheduler: disabled via SOAT_TRIGGER_SCHEDULER_DISABLED');
-    return;
-  }
-
-  const intervalMs =
-    args?.intervalMs ?? Number(process.env.SOAT_TRIGGER_SCHEDULER_INTERVAL_MS);
-  const resolvedInterval =
-    Number.isFinite(intervalMs) && intervalMs > 0
-      ? intervalMs
-      : DEFAULT_INTERVAL_MS;
-
-  log('startTriggerScheduler: interval=%dms', resolvedInterval);
-  timer = setInterval(() => {
-    void fireDueTriggers();
-  }, resolvedInterval);
-  timer.unref?.();
-};
+export const startTriggerScheduler = scheduler.start;
 
 /**
  * Stops the background trigger scheduler loop if it is running. Used for
  * graceful shutdown and to tear the timer down in tests.
  */
-export const stopTriggerScheduler = (): void => {
-  if (timer) {
-    clearInterval(timer);
-    timer = null;
-  }
-};
+export const stopTriggerScheduler = scheduler.stop;
