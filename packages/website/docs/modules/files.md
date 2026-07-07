@@ -36,28 +36,33 @@ You address a file with two write fields, mirroring an S3 object: a **`prefix`**
 
 ## Key Concepts
 
-### Storage Layout
+### Storage Backends
 
-With the local filesystem backend, files are organized in a project-scoped directory structure on disk:
+The physical location of a file's bytes is handled by a **storage provider**, selected at runtime with `FILES_STORAGE_PROVIDER` (default `local`). The backend is transparent to the API: the same endpoints, records, and download flow work identically regardless of where the bytes live. Each file records which backend stored it, so reads and deletes always route back to the correct provider even if the active backend is later changed.
+
+| Provider | `FILES_STORAGE_PROVIDER` | Where bytes live |
+| -------- | ------------------------ | ---------------- |
+| Local filesystem | `local` (default) | A project-scoped directory tree under `FILES_STORAGE_DIR` |
+| S3 / S3-compatible | `s3` | Objects in the bucket named by `FILES_S3_BUCKET` |
+
+Both backends use the same logical object layout, `{projectPublicId}/{category}/{fileId}{ext}`:
+
+| Segment           | Description                                                                                        |
+| ----------------- | -------------------------------------------------------------------------------------------------- |
+| `projectPublicId` | Public project ID (e.g. `proj_ABC`) — isolates files by project                                    |
+| `category`        | Derived from the first segment of the file's logical `path` (e.g., `/traces/foo.json` → `traces/`) |
+| `fileId`          | The file's public ID                                                                               |
+| `ext`             | File extension from the original filename                                                          |
+
+If a file has no `path`, the category defaults to `files/`. For the local backend this becomes a path under `FILES_STORAGE_DIR`; for S3 it becomes the object key (optionally namespaced by `FILES_S3_KEY_PREFIX`):
 
 ```
-{FILES_STORAGE_DIR}/{projectPublicId}/{category}/{fileId}{ext}
-```
-
-| Segment             | Description                                                                                        |
-| ------------------- | -------------------------------------------------------------------------------------------------- |
-| `FILES_STORAGE_DIR` | Root directory from the environment variable                                                       |
-| `projectPublicId`   | Public project ID (e.g. `proj_ABC`) — isolates files by project                                    |
-| `category`          | Derived from the first segment of the file's logical `path` (e.g., `/traces/foo.json` → `traces/`) |
-| `fileId`            | The file's public ID                                                                               |
-| `ext`               | File extension from the original filename                                                          |
-
-If a file has no `path`, the category defaults to `files/`. Examples:
-
-```
+# local:   {FILES_STORAGE_DIR}/{projectPublicId}/{category}/{fileId}{ext}
 /data/files/proj_1a123a/traces/trace_abc123.json
 /data/files/proj_1a123a/documents/doc_xyz.md
-/data/files/proj_1a123a/files/file_plain123.png
+
+# s3:      s3://{FILES_S3_BUCKET}/{FILES_S3_KEY_PREFIX}/{projectPublicId}/{category}/{fileId}{ext}
+s3://my-bucket/proj_1a123a/traces/trace_abc123.json
 ```
 
 Traces persist their raw step payloads as files in the `traces/` category; see it end to end in [Debug Session, Generation, and Trace History - Step 6 (Download raw trace steps)](/docs/tutorials/debug-session-generation-trace-history#step-6---download-raw-trace-steps-using-file_id).
@@ -105,10 +110,18 @@ curl -F "file=@/path/to/large-report.pdf" "$BASE_URL/api/v1/files/upload/upt_xxx
 
 | Environment Variable | Required | Description                                                                                             |
 | -------------------- | -------- | ------------------------------------------------------------------------------------------------------- |
-| `FILES_STORAGE_DIR`  | Yes      | Absolute path to the directory where uploaded files are stored. Must be writable by the server process. |
+| `FILES_STORAGE_PROVIDER` | No   | Storage backend: `local` (default) or `s3`. Selects where new files are written. |
+| `FILES_STORAGE_DIR`  | For `local` | Absolute path to the directory where uploaded files are stored. Must be writable by the server process. Required when the provider is `local`. |
+| `FILES_S3_BUCKET`    | For `s3` | Name of the S3 bucket that stores file objects. Required when the provider is `s3`. |
+| `FILES_S3_REGION`    | No       | AWS region of the bucket. Falls back to `AWS_REGION` if unset. |
+| `FILES_S3_KEY_PREFIX` | No      | Key prefix prepended to every object, to namespace files within a shared bucket (e.g. `soat/`). |
+| `FILES_S3_ENDPOINT`  | No       | Custom endpoint URL for S3-compatible stores (e.g. MinIO, Cloudflare R2). Omit for AWS S3. |
+| `FILES_S3_FORCE_PATH_STYLE` | No | Set to `true` to use path-style bucket addressing (required by some S3-compatible stores). |
 | `SOAT_BASE_URL`      | No       | Public base URL of the server (e.g. `https://api.example.com`). When set, the presigned-URL flow returns an absolute `upload_url`; otherwise the URL is relative. A trailing slash is trimmed. |
 
-When running via Docker, mount a volume at this path to persist files across container restarts:
+AWS credentials for the `s3` backend are resolved through the standard AWS SDK credential chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`, a shared profile, or an instance/task role).
+
+When running the `local` backend via Docker, mount a volume at `FILES_STORAGE_DIR` to persist files across container restarts:
 
 ```yaml
 services:
@@ -121,6 +134,18 @@ services:
 
 volumes:
   files-data:
+```
+
+To use S3 instead, set the provider and bucket (no volume needed):
+
+```yaml
+services:
+  server:
+    image: soat-server
+    environment:
+      FILES_STORAGE_PROVIDER: s3
+      FILES_S3_BUCKET: my-soat-files
+      FILES_S3_REGION: us-east-1
 ```
 
 ## Examples
