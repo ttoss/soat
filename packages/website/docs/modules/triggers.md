@@ -17,7 +17,7 @@ target:
 | Starter ↓ / Target → | Orchestration | Agent | Tool |
 | -------------------- | ------------- | ----- | ---- |
 | **Manual** — `POST /api/v1/triggers/{id}/fire` | ✅ | ✅ | ✅ |
-| **Webhook** — signed `POST /hooks/{trigger_id}` | ✅ | ✅ | ✅ |
+| **Webhook** — signed `POST /hooks/triggers/{trigger_id}` | ✅ | ✅ | ✅ |
 | **Schedule** — 5-field cron (UTC) | ✅ | ✅ | ✅ |
 
 Firings execute in-process: a manual fire is **synchronous** and returns the
@@ -72,7 +72,7 @@ firing record is the source of truth for the outcome.
 | Type       | Started by                                    | Notes                                                     |
 | ---------- | --------------------------------------------- | --------------------------------------------------------- |
 | `manual`   | `POST /api/v1/triggers/{id}/fire`             | Synchronous; the response is the terminal firing          |
-| `webhook`  | Signed `POST /hooks/{trigger_id}` (see below) | Has a `secret`; verified with HMAC-SHA256                 |
+| `webhook`  | Signed `POST /hooks/triggers/{trigger_id}` (see below) | Has a `secret`; verified with HMAC-SHA256                 |
 | `schedule` | The built-in scheduler on a cron cadence      | Requires `cron`; `next_fire_at` is server-computed in UTC |
 
 The `type` is fixed at creation. To change how a trigger starts, create a new
@@ -143,7 +143,7 @@ A `webhook` trigger is fired by an external caller through a public endpoint tha
 lives **outside `/api/v1`**:
 
 ```
-POST /hooks/{trigger_id}
+POST /hooks/triggers/{trigger_id}
 ```
 
 This endpoint takes no bearer token, applies no snake→camel case transform to the
@@ -192,14 +192,6 @@ Firings that were missed while the server was down **coalesce into at most one**
 catch-up firing on restart, and then the normal schedule resumes — there is no
 unbounded catch-up storm.
 
-The scheduler can be tuned with environment variables:
-
-| Variable                             | Default | Description                          |
-| ------------------------------------ | ------- | ------------------------------------ |
-| `SOAT_TRIGGER_SCHEDULER_INTERVAL_MS` | `30000` | Poll interval in milliseconds        |
-| `SOAT_TRIGGER_SCHEDULER_DISABLED`    | unset   | Set to `true` to disable the poller  |
-| `SOAT_TRIGGER_TOKEN_TTL`             | `1h`    | TTL of the minted run-as token       |
-
 ### Formation Support
 
 Triggers can be declared in a [Formation](./formations.md) template as the
@@ -229,6 +221,14 @@ with `ref_attr`:
   }
 }
 ```
+
+## Configuration
+
+| Environment Variable                 | Required | Description                                                  |
+| ------------------------------------ | -------- | ------------------------------------------------------------ |
+| `SOAT_TRIGGER_SCHEDULER_INTERVAL_MS` | No       | Scheduler poll interval in milliseconds (default `30000`)    |
+| `SOAT_TRIGGER_SCHEDULER_DISABLED`    | No       | Set to `true` to disable the schedule poller                 |
+| `SOAT_TRIGGER_TOKEN_TTL`             | No       | TTL of the minted run-as token (default `1h`)                |
 
 ## Examples
 
@@ -328,7 +328,7 @@ curl -X POST https://api.example.com/api/v1/triggers/trg_ABC/fire \
 BODY='{"event":"push","ref":"main"}'
 SIG="sha256=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $2}')"
 
-curl -X POST https://api.example.com/hooks/trg_ABC \
+curl -X POST https://api.example.com/hooks/triggers/trg_ABC \
   -H "Content-Type: application/json" \
   -H "X-Soat-Signature: $SIG" \
   -d "$BODY"
