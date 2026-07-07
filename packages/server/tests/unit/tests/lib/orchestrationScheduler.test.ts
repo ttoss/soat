@@ -14,7 +14,9 @@ import {
   stopOrchestrationScheduler,
   wakeDueRuns,
 } from 'src/lib/orchestrationScheduler';
-import * as startRunModule from 'src/lib/orchestrationStartRun';
+
+import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { authenticatedTestClient } from '../../testClient';
 
 const fakeRun: MappedOrchestrationRun = {
   id: 'orch_run_fake',
@@ -36,11 +38,180 @@ const fakeRun: MappedOrchestrationRun = {
   updatedAt: new Date(),
 };
 
+// Kept per the scheduler's timer-free design: after wakeDueRuns/reapOrphanedRuns
+// return, the actual wake/redrive runs as a detached `void` promise. Flushing a
+// setImmediate lets that fire-and-forget work start before assertions.
 const flush = () => {
   return new Promise<void>((resolve) => {
     return setImmediate(resolve);
   });
 };
+
+// ── Real-DB fixtures ──────────────────────────────────────────────────────
+//
+// The scheduler is a real entry point, so these tests drive it against the real
+// database rather than stubbing `db.*`. A project and two orchestrations are set
+// up once; individual runs are created directly as DB rows to model the parked /
+// orphaned states the scheduler reclaims.
+
+let userToken: string;
+let projectPublicId: string;
+let projectPk: number;
+let transformOrchPublicId: string;
+let transformOrchPk: number;
+let delayOrchPk: number;
+
+let ephemeralOrchSeq = 0;
+
+const createOrchestration = async (
+  body: Record<string, unknown>
+): Promise<string> => {
+  const res = await authenticatedTestClient(userToken)
+    .post('/api/v1/orchestrations')
+    .send({ ...body, project_id: projectPublicId });
+  expect(res.status).toBe(201);
+  return res.body.id as string;
+};
+
+const orchPk = async (publicId: string): Promise<number> => {
+  const orch = await db.Orchestration.findOne({ where: { publicId } });
+  return orch?.id as number;
+};
+
+// A sleeping run parked on a `delay` node whose wake is already due — the shape
+// wakeDueRuns claims and hands to the waker.
+const createDueSleepingRun = (args?: { wakeAt?: Date }) => {
+  return db.OrchestrationRun.create({
+    orchestrationId: delayOrchPk,
+    projectId: projectPk,
+    status: 'sleeping',
+    state: {},
+    activeNodes: ['delay'],
+    artifacts: {},
+    input: {},
+    startedAt: new Date(),
+    wakeAt: args?.wakeAt ?? new Date(Date.now() - 1000),
+    wakeContext: {
+      nodeId: 'delay',
+      resume: { kind: 'delay', artifact: { waited: '1s' } },
+    },
+  });
+};
+
+// A `running` run whose lease already expired — its driver crashed mid-flight,
+// so the reaper must reclaim and re-drive it.
+const createOrphanedRun = () => {
+  return db.OrchestrationRun.create({
+    orchestrationId: transformOrchPk,
+    projectId: projectPk,
+    status: 'running',
+    state: {},
+    activeNodes: [],
+    artifacts: {},
+    input: {},
+    startedAt: new Date(),
+    leaseExpiresAt: new Date(Date.now() - 60_000),
+  });
+};
+
+// Creates a run whose orchestration is then deleted. The FK cascades and removes
+// the run row, but the in-memory instance survives — modelling the (real, if
+// rare) state where the scheduler wakes a run whose orchestration is gone.
+const createRunWithMissingOrchestration = async (
+  overrides: Record<string, unknown>
+) => {
+  ephemeralOrchSeq += 1;
+  const pub = await createOrchestration({
+    name: `Ephemeral ${ephemeralOrchSeq}`,
+    nodes: [{ id: 'start', type: 'transform', expression: 'x' }],
+    edges: [],
+  });
+  const pk = await orchPk(pub);
+  const run = await db.OrchestrationRun.create({
+    orchestrationId: pk,
+    projectId: projectPk,
+    state: {},
+    activeNodes: [],
+    artifacts: {},
+    input: {},
+    ...overrides,
+  });
+  await db.Orchestration.destroy({ where: { id: pk } });
+  return run;
+};
+
+// Polls a run row until it reaches one of `statuses`. Uses no timer APIs so it
+// works under both real and fake timers; each real DB round-trip yields to the
+// event loop, letting the scheduler's detached wake/redrive work progress.
+const waitForRunStatus = async (
+  runId: number,
+  statuses: string[]
+): Promise<InstanceType<typeof db.OrchestrationRun>> => {
+  for (let i = 0; i < 3000; i += 1) {
+    const run = await db.OrchestrationRun.findByPk(runId);
+    if (run && statuses.includes(run.status)) return run;
+  }
+  throw new Error(`run ${runId} never reached ${statuses.join('/')}`);
+};
+
+beforeAll(async () => {
+  const setup = await setupProjectWithUsers({
+    prefix: 'orchsched',
+    policyActions: [
+      'orchestrations:CreateOrchestration',
+      'orchestrations:StartRun',
+      'orchestrations:GetRun',
+      'orchestrations:ListRuns',
+    ],
+    createNoPermUser: false,
+  });
+  userToken = setup.userToken;
+  projectPublicId = setup.projectId;
+  const project = await db.Project.findOne({
+    where: { publicId: projectPublicId },
+  });
+  projectPk = project?.id as number;
+
+  transformOrchPublicId = await createOrchestration({
+    name: 'Sched Transform',
+    nodes: [
+      {
+        id: 'start',
+        type: 'transform',
+        expression: 'hello',
+        output_mapping: { result: 'state.msg' },
+      },
+      {
+        id: 'after',
+        type: 'transform',
+        expression: 'done',
+        output_mapping: { result: 'state.after' },
+      },
+    ],
+    edges: [{ from: 'start', to: 'after' }],
+  });
+  transformOrchPk = await orchPk(transformOrchPublicId);
+
+  const delayPublicId = await createOrchestration({
+    name: 'Sched Delay',
+    nodes: [
+      {
+        id: 'delay',
+        type: 'delay',
+        duration: '1s',
+        output_mapping: { waited: 'state.waited' },
+      },
+      {
+        id: 'after',
+        type: 'transform',
+        expression: 'done',
+        output_mapping: { result: 'state.after' },
+      },
+    ],
+    edges: [{ from: 'delay', to: 'after' }],
+  });
+  delayOrchPk = await orchPk(delayPublicId);
+});
 
 describe('orchestrationEvents', () => {
   afterEach(() => {
@@ -58,29 +229,41 @@ describe('orchestrationEvents', () => {
   });
 
   test('emitRunLifecycleEvent emits a webhook event on success', async () => {
-    jest
-      .spyOn(eventBusModule, 'resolveProjectPublicId')
-      .mockResolvedValueOnce('prj_1');
     const events: eventBusModule.SoatEvent[] = [];
     const listener = (e: eventBusModule.SoatEvent) => {
       events.push(e);
     };
     eventBusModule.eventBus.on('soat:event', listener);
     try {
-      emitRunLifecycleEvent({ event: 'succeeded', projectId: 1, run: fakeRun });
-      await flush();
-      const match = events.find((e) => {
-        return e.type === 'orchestration_runs.succeeded';
+      // Real project id → resolveProjectPublicId reads the actual public id.
+      emitRunLifecycleEvent({
+        event: 'succeeded',
+        projectId: projectPk,
+        run: fakeRun,
       });
+      const match = await (async () => {
+        for (let i = 0; i < 3000; i += 1) {
+          const found = events.find((e) => {
+            return e.type === 'orchestration_runs.succeeded';
+          });
+          if (found) return found;
+          await flush();
+        }
+        return undefined;
+      })();
       expect(match).toBeDefined();
       expect(match?.resourceType).toBe('orchestration_run');
       expect(match?.resourceId).toBe('orch_run_fake');
+      expect(match?.projectPublicId).toBe(projectPublicId);
     } finally {
       eventBusModule.eventBus.off('soat:event', listener);
     }
   });
 
   test('emitRunLifecycleEvent swallows a project-lookup failure', async () => {
+    // resolveProjectPublicId never rejects against a live DB (a missing project
+    // resolves to ''), so the best-effort catch is exercised by forcing a
+    // rejection at the eventBus boundary — not a `db.*` stub.
     jest
       .spyOn(eventBusModule, 'resolveProjectPublicId')
       .mockRejectedValueOnce(new Error('lookup failed'));
@@ -99,137 +282,121 @@ describe('orchestrationScheduler', () => {
 
   describe('wakeDueRuns', () => {
     test('returns 0 when no runs are due', async () => {
+      // Nothing has a wakeAt at or before the epoch, so nothing is claimed.
       const count = await wakeDueRuns({ now: new Date(0) });
       expect(count).toBe(0);
     });
 
     test('returns 0 and swallows a query failure', async () => {
-      jest
-        .spyOn(db.OrchestrationRun, 'findAll')
-        .mockRejectedValueOnce(new Error('db unavailable'));
-      const count = await wakeDueRuns();
+      // An invalid `now` makes the real `wakeAt <= now` query fail at the DB,
+      // exercising the defensive catch without stubbing `db.*`.
+      const count = await wakeDueRuns({ now: new Date('not-a-date') });
       expect(count).toBe(0);
     });
 
-    test('claims a due sleeping run and hands it to the waker', async () => {
-      const run = { id: 987654 } as InstanceType<typeof db.OrchestrationRun>;
-      jest.spyOn(db.OrchestrationRun, 'findAll').mockResolvedValueOnce([run]);
-      const updateSpy = jest
-        .spyOn(db.OrchestrationRun, 'update')
-        .mockResolvedValueOnce([1]);
-      const wakeSpy = jest
-        .spyOn(engineModule, 'wakeRun')
-        .mockResolvedValueOnce(undefined);
+    test('claims a due sleeping run and drives it to completion', async () => {
+      const run = await createDueSleepingRun();
 
       const count = await wakeDueRuns({ now: new Date() });
+      expect(count).toBeGreaterThanOrEqual(1);
 
-      expect(count).toBe(1);
-      expect(updateSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          status: 'running',
-          wakeAt: null,
-          leaseExpiresAt: expect.any(Date),
-        }),
-        expect.objectContaining({
-          where: expect.objectContaining({ id: 987654 }),
-        })
-      );
       await flush();
-      expect(wakeSpy).toHaveBeenCalledTimes(1);
+      const settled = await waitForRunStatus(run.id as number, ['succeeded']);
+      expect((settled.state as Record<string, unknown>).after).toBe('done');
     });
 
-    test('skips a run it fails to claim', async () => {
-      const run = { id: 111222 } as InstanceType<typeof db.OrchestrationRun>;
-      jest.spyOn(db.OrchestrationRun, 'findAll').mockResolvedValueOnce([run]);
-      jest.spyOn(db.OrchestrationRun, 'update').mockResolvedValueOnce([0]);
-      const wakeSpy = jest.spyOn(engineModule, 'wakeRun');
+    test('does not double-claim a run across overlapping ticks', async () => {
+      const run = await createDueSleepingRun();
 
-      const count = await wakeDueRuns({ now: new Date() });
+      // Two overlapping sweeps race for the same run; the atomic claim (guarded
+      // on wakeAt still being set) plus the in-flight guard let exactly one win.
+      const [a, b] = await Promise.all([
+        wakeDueRuns({ now: new Date() }),
+        wakeDueRuns({ now: new Date() }),
+      ]);
+      expect(a + b).toBe(1);
 
-      expect(count).toBe(0);
-      expect(wakeSpy).not.toHaveBeenCalled();
+      await flush();
+      await waitForRunStatus(run.id as number, ['succeeded']);
     });
 
     test('swallows a waker failure without rejecting', async () => {
-      const run = { id: 333444 } as InstanceType<typeof db.OrchestrationRun>;
-      jest.spyOn(db.OrchestrationRun, 'findAll').mockResolvedValueOnce([run]);
-      jest.spyOn(db.OrchestrationRun, 'update').mockResolvedValueOnce([1]);
+      const run = await createDueSleepingRun();
+      // The wake itself failing must not surface out of wakeDueRuns. Spying the
+      // engine boundary (not `db.*`) is the only way to force that rejection.
       const wakeSpy = jest
         .spyOn(engineModule, 'wakeRun')
         .mockRejectedValueOnce(new Error('wake blew up'));
 
       const count = await wakeDueRuns({ now: new Date() });
-
       expect(count).toBe(1);
+
       // The rejection is caught internally; flushing must not surface it.
       await flush();
       expect(wakeSpy).toHaveBeenCalledTimes(1);
+      // The run was claimed (flipped to running) even though the wake failed.
+      const claimed = await db.OrchestrationRun.findByPk(run.id as number);
+      expect(claimed?.status).toBe('running');
     });
   });
 
   describe('reapOrphanedRuns', () => {
     test('returns 0 when no runs are orphaned', async () => {
-      jest.spyOn(db.OrchestrationRun, 'findAll').mockResolvedValueOnce([]);
-      const count = await reapOrphanedRuns({ now: new Date() });
+      // No running run has a lease that expired before the epoch.
+      const count = await reapOrphanedRuns({ now: new Date(0) });
       expect(count).toBe(0);
     });
 
     test('returns 0 and swallows a query failure', async () => {
-      jest
-        .spyOn(db.OrchestrationRun, 'findAll')
-        .mockRejectedValueOnce(new Error('db unavailable'));
-      const count = await reapOrphanedRuns();
+      // An invalid `now` makes the real `leaseExpiresAt < now` query fail at the
+      // DB, exercising the defensive catch without stubbing `db.*`.
+      const count = await reapOrphanedRuns({ now: new Date('not-a-date') });
       expect(count).toBe(0);
     });
 
-    test('claims an orphaned running run and hands it to the redriver', async () => {
-      const run = { id: 424242 } as InstanceType<typeof db.OrchestrationRun>;
-      jest.spyOn(db.OrchestrationRun, 'findAll').mockResolvedValueOnce([run]);
-      const updateSpy = jest
-        .spyOn(db.OrchestrationRun, 'update')
-        .mockResolvedValueOnce([1]);
-      const redriveSpy = jest
-        .spyOn(engineModule, 'redriveRun')
-        .mockResolvedValueOnce(undefined);
+    test('claims an orphaned running run and drives it to completion', async () => {
+      const orphan = await createOrphanedRun();
 
       const count = await reapOrphanedRuns({ now: new Date() });
+      expect(count).toBeGreaterThanOrEqual(1);
 
-      expect(count).toBe(1);
-      // The claim extends the lease guarded on the run still being running with
-      // an expired lease, so a single reaper reclaims it.
-      expect(updateSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ leaseExpiresAt: expect.any(Date) }),
-        expect.objectContaining({
-          where: expect.objectContaining({ id: 424242, status: 'running' }),
-        })
-      );
       await flush();
-      expect(redriveSpy).toHaveBeenCalledTimes(1);
+      const settled = await waitForRunStatus(orphan.id as number, [
+        'succeeded',
+      ]);
+      expect((settled.state as Record<string, unknown>).msg).toBe('hello');
+      expect((settled.state as Record<string, unknown>).after).toBe('done');
     });
 
-    test('skips a run it fails to claim', async () => {
-      const run = { id: 555666 } as InstanceType<typeof db.OrchestrationRun>;
-      jest.spyOn(db.OrchestrationRun, 'findAll').mockResolvedValueOnce([run]);
-      jest.spyOn(db.OrchestrationRun, 'update').mockResolvedValueOnce([0]);
-      const redriveSpy = jest.spyOn(engineModule, 'redriveRun');
+    test('does not reclaim a running run whose lease is still fresh', async () => {
+      const healthy = await db.OrchestrationRun.create({
+        orchestrationId: transformOrchPk,
+        projectId: projectPk,
+        status: 'running',
+        state: {},
+        activeNodes: [],
+        artifacts: {},
+        input: {},
+        startedAt: new Date(),
+        // Lease still valid → a live driver is holding it.
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+      });
 
-      const count = await reapOrphanedRuns({ now: new Date() });
+      await reapOrphanedRuns({ now: new Date() });
 
-      expect(count).toBe(0);
-      expect(redriveSpy).not.toHaveBeenCalled();
+      const after = await db.OrchestrationRun.findByPk(healthy.id as number);
+      expect(after?.status).toBe('running');
     });
 
     test('swallows a redrive failure without rejecting', async () => {
-      const run = { id: 777888 } as InstanceType<typeof db.OrchestrationRun>;
-      jest.spyOn(db.OrchestrationRun, 'findAll').mockResolvedValueOnce([run]);
-      jest.spyOn(db.OrchestrationRun, 'update').mockResolvedValueOnce([1]);
+      await createOrphanedRun();
       const redriveSpy = jest
         .spyOn(engineModule, 'redriveRun')
         .mockRejectedValueOnce(new Error('redrive blew up'));
 
       const count = await reapOrphanedRuns({ now: new Date() });
-
       expect(count).toBe(1);
+
       await flush();
       expect(redriveSpy).toHaveBeenCalledTimes(1);
     });
@@ -247,37 +414,45 @@ describe('orchestrationScheduler', () => {
       jest.useRealTimers();
     });
 
-    // Each tick runs both sweeps (wakeDueRuns + reapOrphanedRuns), so findAll is
-    // queried twice per tick.
-    test('drives the sweeps on each interval tick and is idempotent', async () => {
-      const findAllSpy = jest
-        .spyOn(db.OrchestrationRun, 'findAll')
-        .mockResolvedValue([]);
+    test('drives both sweeps on each interval tick and is idempotent', async () => {
+      const sleeping = await createDueSleepingRun();
+      const orphan = await createOrphanedRun();
 
       startOrchestrationScheduler({ intervalMs: 5000 });
       // Second call short-circuits because a timer already exists.
       startOrchestrationScheduler({ intervalMs: 5000 });
 
       await jest.advanceTimersByTimeAsync(5000);
-      expect(findAllSpy).toHaveBeenCalledTimes(2);
 
+      // wakeDueRuns claimed the sleeping run and reapOrphanedRuns re-drove the
+      // orphan — both sweeps fired on the single tick.
+      await waitForRunStatus(sleeping.id as number, ['running', 'succeeded']);
+      await waitForRunStatus(orphan.id as number, ['succeeded']);
+
+      // Once stopped, no leaked timer keeps ticking: a freshly-due run is left
+      // untouched even after another interval elapses.
+      stopOrchestrationScheduler();
+      const afterStop = await createDueSleepingRun();
       await jest.advanceTimersByTimeAsync(5000);
-      expect(findAllSpy).toHaveBeenCalledTimes(4);
+      const stillParked = await db.OrchestrationRun.findByPk(
+        afterStop.id as number
+      );
+      expect(stillParked?.status).toBe('sleeping');
     });
 
     test('falls back to the default interval for an invalid override', async () => {
-      const findAllSpy = jest
-        .spyOn(db.OrchestrationRun, 'findAll')
-        .mockResolvedValue([]);
+      const sleeping = await createDueSleepingRun();
 
       startOrchestrationScheduler({ intervalMs: 0 });
 
       // Nothing fires before the default 5s interval elapses.
       await jest.advanceTimersByTimeAsync(4999);
-      expect(findAllSpy).not.toHaveBeenCalled();
-      // One tick → both sweeps query once each.
+      const parked = await db.OrchestrationRun.findByPk(sleeping.id as number);
+      expect(parked?.status).toBe('sleeping');
+
+      // One tick past the default interval → the sweep claims the run.
       await jest.advanceTimersByTimeAsync(1);
-      expect(findAllSpy).toHaveBeenCalledTimes(2);
+      await waitForRunStatus(sleeping.id as number, ['running', 'succeeded']);
     });
   });
 });
@@ -288,31 +463,37 @@ describe('wakeRun (branch coverage)', () => {
   });
 
   test('no-ops when the run has no wake context', async () => {
-    const run = {
-      id: 1,
+    const run = await db.OrchestrationRun.create({
+      orchestrationId: transformOrchPk,
+      projectId: projectPk,
+      status: 'running',
+      state: {},
+      activeNodes: [],
+      artifacts: {},
+      input: {},
       wakeContext: null,
-    } as unknown as InstanceType<typeof db.OrchestrationRun>;
+    });
     await expect(engineModule.wakeRun({ run })).resolves.toBeUndefined();
+    const after = await db.OrchestrationRun.findByPk(run.id as number);
+    expect(after?.status).toBe('running');
   });
 
   test('marks the run failed when its orchestration no longer exists', async () => {
-    const update = jest.fn().mockResolvedValue(undefined);
-    const run = {
-      id: 2,
-      orchestrationId: 42,
+    const run = await createRunWithMissingOrchestration({
+      status: 'sleeping',
+      wakeAt: new Date(Date.now() - 1000),
       wakeContext: {
         nodeId: 'delay',
         resume: { kind: 'delay', artifact: {} },
       },
-      update,
-    } as unknown as InstanceType<typeof db.OrchestrationRun>;
-    jest.spyOn(db.Orchestration, 'findOne').mockResolvedValueOnce(null);
+    });
 
     await engineModule.wakeRun({ run });
 
-    expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'failed', wakeAt: null })
-    );
+    // The row was cascade-deleted with its orchestration, but the guard still
+    // marks the in-memory instance failed and clears the wake.
+    expect(run.status).toBe('failed');
+    expect(run.wakeAt).toBeNull();
   });
 });
 
@@ -322,22 +503,15 @@ describe('redriveRun (branch coverage)', () => {
   });
 
   test('marks the run failed and clears the lease when its orchestration is gone', async () => {
-    const update = jest.fn().mockResolvedValue(undefined);
-    const run = {
-      id: 9,
-      orchestrationId: 77,
-      update,
-    } as unknown as InstanceType<typeof db.OrchestrationRun>;
-    jest.spyOn(db.Orchestration, 'findOne').mockResolvedValueOnce(null);
+    const run = await createRunWithMissingOrchestration({
+      status: 'running',
+      leaseExpiresAt: new Date(Date.now() - 60_000),
+    });
 
     await engineModule.redriveRun({ run });
 
-    expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: 'failed',
-        leaseExpiresAt: null,
-      })
-    );
+    expect(run.status).toBe('failed');
+    expect(run.leaseExpiresAt).toBeNull();
   });
 });
 
@@ -403,11 +577,9 @@ describe('resumeOrchestrationRunExecution (branch coverage)', () => {
   });
 
   test('throws when the orchestration is missing', async () => {
-    jest.spyOn(db.Orchestration, 'findOne').mockResolvedValueOnce(null);
-    const run = {
-      id: 3,
-      orchestrationId: 99,
-    } as unknown as InstanceType<typeof db.OrchestrationRun>;
+    const run = await createRunWithMissingOrchestration({
+      status: 'awaiting_input',
+    });
     await expect(
       engineModule.resumeOrchestrationRunExecution({ run })
     ).rejects.toBeInstanceOf(DomainError);
@@ -420,35 +592,22 @@ describe('startOrchestrationRun background error handling', () => {
   });
 
   test('swallows an error thrown by the async background drive', async () => {
-    const fakeOrch = {
-      id: 1,
-      projectId: 1,
-      nodes: [],
-      edges: [],
-    } as unknown as InstanceType<typeof db.Orchestration>;
-    jest
-      .spyOn(startRunModule, 'findOrchestrationForStartRun')
-      .mockResolvedValue(fakeOrch);
-    const runRecord = {
-      id: 5,
-      traceId: null,
-      projectId: 1,
-      update: jest.fn().mockResolvedValue(undefined),
-    } as unknown as InstanceType<typeof db.OrchestrationRun>;
-    jest.spyOn(db.OrchestrationRun, 'create').mockResolvedValue(runRecord);
+    // Real orchestration + real run row; only the run-mapping boundary is
+    // stubbed (not `db.*`): it resolves for the initial return, then rejects
+    // during the background settle so the detached drive's catch is exercised.
     jest
       .spyOn(runHelpersModule, 'mapRunWithIncludes')
       .mockResolvedValueOnce(fakeRun)
       .mockRejectedValueOnce(new Error('map failed during settle'));
 
     const result = await engineModule.startOrchestrationRun({
-      orchestrationPublicId: 'orch_x',
+      orchestrationPublicId: transformOrchPublicId,
     });
 
     // Returns the initial run immediately; the background failure is swallowed.
     expect(result).toBe(fakeRun);
     await new Promise<void>((resolve) => {
-      return setTimeout(resolve, 100);
+      return setImmediate(resolve);
     });
   });
 });
