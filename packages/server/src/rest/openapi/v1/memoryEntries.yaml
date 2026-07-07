@@ -133,7 +133,7 @@ paths:
           required: true
           schema:
             type: string
-            example: me_V1StGXR8Z5jdHi6B
+            example: mem_entry_V1StGXR8Z5jdHi6B
       responses:
         '200':
           description: Memory entry found
@@ -162,7 +162,7 @@ paths:
           required: true
           schema:
             type: string
-            example: me_V1StGXR8Z5jdHi6B
+            example: mem_entry_V1StGXR8Z5jdHi6B
       requestBody:
         required: true
         content:
@@ -201,7 +201,7 @@ paths:
           required: true
           schema:
             type: string
-            example: me_V1StGXR8Z5jdHi6B
+            example: mem_entry_V1StGXR8Z5jdHi6B
       responses:
         '204':
           description: Memory entry deleted
@@ -225,7 +225,7 @@ components:
       properties:
         id:
           type: string
-          example: me_V1StGXR8Z5jdHi6B
+          example: mem_entry_V1StGXR8Z5jdHi6B
         memory_id:
           x-soat-ref: memories
           type: string

@@ -27,7 +27,7 @@ Both endpoints support SSE streaming via `stream: true`. To see a completion dri
 
 | Field            | Type     | Description                                                      |
 | ---------------- | -------- | ---------------------------------------------------------------- |
-| `id`             | string   | Public ID prefixed with `cht_`                                   |
+| `id`             | string   | Public ID prefixed with `chat_`                                  |
 | `project_id`     | string   | Public ID of the owning project                                  |
 | `ai_provider_id` | string   | Public ID of the AI provider used for completions                |
 | `name`           | string   | Optional human-readable name                                     |
@@ -60,9 +60,9 @@ For per-chat completions the AI provider is taken from the Chat record. For stat
 
 Set `stream: true` in the request body to receive an SSE stream. Each event contains a JSON object with a `choices[0].delta.content` chunk. The stream ends with `data: [DONE]`.
 
-### Tool Output Selection
+### Document-Backed Messages
 
-For `document_id`-based messages, the server fetches the document and uses its `content` field as the message body. For tool-output selection with jq expressions (the `output_path` behavior), use [Agents](./agents.md#tool-output-message-content) directly — that feature is not part of the Chats message schema.
+A message may carry a `document_id` instead of inline `content`. The server fetches that document and uses its `content` field as the message body. jq-based selection of tool output (the `output_path` behavior) is handled by [Agents](./agents.md#tool-output-message-content).
 
 ## Examples
 
@@ -109,6 +109,47 @@ curl -X POST https://api.example.com/api/v1/chats \
     "ai_provider_id": "aip_abc123",
     "name": "Support Assistant",
     "system_message": "You are a helpful support assistant."
+  }'
+```
+
+</TabItem>
+</Tabs>
+
+### Run a per-chat completion
+
+Once a Chat is stored, run completions against it by passing only the `messages` array — the AI provider, system message, and model come from the Chat record.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-chat-completion-for-chat \
+  --chat-id chat_01 \
+  --messages '[{"role":"user","content":"What can you help me with?"}]'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.chats.createChatCompletionForChat({
+  path: { chat_id: 'chat_01' },
+  body: {
+    messages: [{ role: 'user', content: 'What can you help me with?' }],
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/chats/chat_01/completions \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [{ "role": "user", "content": "What can you help me with?" }]
   }'
 ```
 

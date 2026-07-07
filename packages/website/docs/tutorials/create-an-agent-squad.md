@@ -152,7 +152,7 @@ The squad has three [agents](/docs/modules/agents) plus a human checkpoint, wire
 
 ## Step 4 — Write the formation template
 
-A [formation template](/docs/modules/formations#formation-template) is a JSON object with a `resources` map and an `outputs` map. `ContentSquad`'s nodes reference `Researcher`, `Writer`, and `Reviewer` with `{ "ref": "LogicalId" }` — SOAT resolves each to its physical `agt_...` ID before creating the orchestration, in dependency order. See [Ref Expressions](/docs/modules/formations#ref-expressions).
+A [formation template](/docs/modules/formations#formation-template) is a JSON object with a `resources` map and an `outputs` map. `ContentSquad`'s nodes reference `Researcher`, `Writer`, and `Reviewer` with `{ "ref": "LogicalId" }` — SOAT resolves each to its physical `agent_...` ID before creating the orchestration, in dependency order. See [Ref Expressions](/docs/modules/formations#ref-expressions).
 
 This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 

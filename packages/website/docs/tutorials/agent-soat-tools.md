@@ -860,7 +860,7 @@ The server merges `preset_parameters` into the call before dispatching — alice
 
 ## Next steps
 
-- Add more actions to the tools (e.g., `search-documents`) for richer agent workflows.
+- Add more actions to the tools (e.g., `search-knowledge`) for richer agent workflows.
 - Use [step rules](/docs/modules/agents#step-rules) to force the agent to call a specific tool first.
 - Explore [boundary policies](/docs/modules/agents#soat-action-permissions) to limit which actions agents can use at the agent level, independent of caller IAM policies.
 - Read the [agents module reference](/docs/modules/agents#examples) for the full list of soat actions and configuration options.

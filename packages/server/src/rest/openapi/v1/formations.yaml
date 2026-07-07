@@ -218,7 +218,7 @@ paths:
           required: true
           schema:
             type: string
-          example: af_V1StGXR8Z5jdHi6B
+          example: form_V1StGXR8Z5jdHi6B
       responses:
         '200':
           description: Formation details
@@ -248,7 +248,7 @@ paths:
           required: true
           schema:
             type: string
-          example: af_V1StGXR8Z5jdHi6B
+          example: form_V1StGXR8Z5jdHi6B
       requestBody:
         content:
           application/json:
@@ -303,7 +303,7 @@ paths:
           required: true
           schema:
             type: string
-          example: af_V1StGXR8Z5jdHi6B
+          example: form_V1StGXR8Z5jdHi6B
       responses:
         '200':
           description: Deleted
@@ -338,7 +338,7 @@ paths:
           required: true
           schema:
             type: string
-          example: af_V1StGXR8Z5jdHi6B
+          example: form_V1StGXR8Z5jdHi6B
       responses:
         '200':
           description: List of operations
@@ -1297,7 +1297,7 @@ components:
         id:
           type: string
           description: Public ID of the formation
-          example: af_V1StGXR8Z5jdHi6B
+          example: form_V1StGXR8Z5jdHi6B
         project_id:
           x-soat-ref: projects
           type: string

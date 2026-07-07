@@ -61,13 +61,16 @@ paths:
                       type: string
                     provider:
                       type: string
-                      enum: [openai, anthropic, google, cohere, mistral]
+                      enum: [openai, anthropic, google, xai, groq, ollama, azure, bedrock, gateway, custom]
                     default_model:
                       type: string
                     project_id:
                       x-soat-ref: projects
                       type: string
                     created_at:
+                      type: string
+                      format: date-time
+                    updated_at:
                       type: string
                       format: date-time
         '401':
@@ -104,7 +107,7 @@ paths:
                   example: OpenAI Production
                 provider:
                   type: string
-                  enum: [openai, anthropic, google, cohere, mistral]
+                  enum: [openai, anthropic, google, xai, groq, ollama, azure, bedrock, gateway, custom]
                   description: LLM provider
                   example: openai
                 default_model:
@@ -115,7 +118,7 @@ paths:
                   x-soat-ref: secrets
                   type: string
                   description: Secret ID containing API credentials
-                  example: secret_V1StGXR8Z5jdHi6B
+                  example: sec_V1StGXR8Z5jdHi6B
                 base_url:
                   type: string
                   description: Custom base URL for the provider
@@ -144,6 +147,9 @@ paths:
                   created_at:
                     type: string
                     format: date-time
+                  updated_at:
+                    type: string
+                    format: date-time
         '400':
           description: Bad request (invalid provider or missing fields)
         '401':
@@ -166,7 +172,7 @@ paths:
           description: AI Provider ID
           schema:
             type: string
-            example: provider_V1StGXR8Z5jdHi6B
+            example: aip_V1StGXR8Z5jdHi6B
       responses:
         '200':
           description: AI provider details
@@ -194,6 +200,9 @@ paths:
                   config:
                     type: object
                   created_at:
+                    type: string
+                    format: date-time
+                  updated_at:
                     type: string
                     format: date-time
         '401':
@@ -226,7 +235,7 @@ paths:
                   type: string
                 provider:
                   type: string
-                  enum: [openai, anthropic, google, cohere, mistral]
+                  enum: [openai, anthropic, google, xai, groq, ollama, azure, bedrock, gateway, custom]
                   description: LLM provider
                   example: openai
                 default_model:

@@ -7,7 +7,7 @@ The Actors module represents entities — people, bots, or other participants �
 
 ## Overview
 
-An Actor belongs to a project and has a display name, an optional `external_id`, and optional links to an [Agent](./agents.md) or [Chat](./chats.md). Actors are identified by a public `id` prefixed with `act_`. The internal database primary key is never returned.
+An Actor belongs to a project and has a display name, an optional `external_id`, and optional links to an [Agent](./agents.md) or [Chat](./chats.md). Actors are identified by a public `id` prefixed with `actor_`. The internal database primary key is never returned.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -23,12 +23,12 @@ The module covers:
 
 | Field          | Type           | Required | Description                                                                                                       |
 | -------------- | -------------- | -------- | ----------------------------------------------------------------------------------------------------------------- |
-| `id`           | string         | —        | Public identifier prefixed with `act_`                                                                            |
+| `id`           | string         | —        | Public identifier prefixed with `actor_`                                                                          |
 | `project_id`   | string         | —        | Public ID of the owning project (`proj_` prefix)                                                                  |
 | `name`         | string         | Yes      | Display name of the actor                                                                                         |
 | `external_id`  | string         | No       | External identifier (e.g. WhatsApp phone number). Unique per project; `null` is never unique                      |
 | `instructions` | string \| null | No       | Persona-specific instructions composed into the effective system prompt for generate calls                        |
-| `agent_id`     | string \| null | No       | Public ID of the linked [Agent](./agents.md) (`agt_` prefix). Mutually exclusive with `chat_id`                   |
+| `agent_id`     | string \| null | No       | Public ID of the linked [Agent](./agents.md) (`agent_` prefix). Mutually exclusive with `chat_id`                 |
 | `chat_id`      | string \| null | No       | Public ID of the linked [Chat](./chats.md) (`chat_` prefix). Mutually exclusive with `agent_id`                   |
 | `memory_id`    | string \| null | No       | Public ID of the linked [Memory](./memories.md) container (`mem_` prefix). Stores persistent facts for this actor |
 | `tags`         | object         | No       | Key-value string pairs used for ABAC conditions (see [Tags](#tags))                                               |
@@ -46,7 +46,7 @@ The module covers:
 When `external_id` is supplied to `POST /actors`, the endpoint uses **find-or-create** semantics:
 
 - If no actor with that `external_id` exists in the project, a new actor is created and `201 Created` is returned.
-- If an actor with that `external_id` already exists, the existing actor is returned as-is with `200 OK`. None of the other request fields (name, type, instructions, etc.) are applied to the existing actor.
+- If an actor with that `external_id` already exists, the existing actor is returned as-is with `200 OK`. None of the other request fields (name, instructions, etc.) are applied to the existing actor.
 
 This makes actor creation safe to call repeatedly from event-driven pipelines (e.g. a new inbound WhatsApp message) without risk of duplicate actors or errors.
 
@@ -128,7 +128,7 @@ Pass `null` to `PATCH /actors/:id` to clear the instructions.
 | Parameter     | Description                                                                  |
 | ------------- | ---------------------------------------------------------------------------- |
 | `project_id`  | Limit results to a specific project (required for JWT callers in most cases) |
-| `external_id` | Exact match — use to resolve an external identifier to an `act_` ID          |
+| `external_id` | Exact match — use to resolve an external identifier to an `actor_` ID        |
 | `name`        | Partial, case-insensitive match against the actor's display name             |
 | `limit`       | Maximum number of results to return (default: `50`)                          |
 | `offset`      | Number of results to skip for pagination (default: `0`)                      |
@@ -181,7 +181,7 @@ Actors use the `actor` resource type in SRNs:
 soat:<project_id>:actor:<actor_id>
 ```
 
-Example: `soat:proj_ABC:actor:act_123`
+Example: `soat:proj_ABC:actor:actor_123`
 
 Use SRN patterns in policy `resource` fields to scope permissions to specific actors or all actors in a project:
 
@@ -204,8 +204,7 @@ Use SRN patterns in policy `resource` fields to scope permissions to specific ac
 soat create-actor \
   --project-id proj_ABC \
   --name Alice \
-  --external-id +15551234567 \
-  --type customer
+  --external-id +15551234567
 ```
 
 </TabItem>
@@ -224,7 +223,6 @@ const { data, error } = await soat.actors.createActor({
     project_id: 'proj_ABC',
     name: 'Alice',
     external_id: '+15551234567',
-    type: 'customer',
   },
 });
 if (error) throw new Error(JSON.stringify(error));
@@ -240,8 +238,7 @@ curl -X POST https://api.example.com/api/v1/actors \
   -d '{
     "project_id": "proj_ABC",
     "name": "Alice",
-    "external_id": "+15551234567",
-    "type": "customer"
+    "external_id": "+15551234567"
   }'
 ```
 
@@ -256,7 +253,7 @@ Safe to call on every inbound message — creates the actor on first contact, re
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-actor --name Bob --external-id +15559876543 --type customer
+soat create-actor --name Bob --external-id +15559876543
 ```
 
 </TabItem>
@@ -265,7 +262,7 @@ soat create-actor --name Bob --external-id +15559876543 --type customer
 ```ts
 // SDK — identical call; 201 on create, 200 when the actor already exists
 const { data, error } = await soat.actors.createActor({
-  body: { name: 'Bob', external_id: '+15559876543', type: 'customer' },
+  body: { name: 'Bob', external_id: '+15559876543' },
 });
 if (error) throw new Error(JSON.stringify(error));
 ```
@@ -279,8 +276,7 @@ curl -X POST https://api.example.com/api/v1/actors \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Bob",
-    "external_id": "+15559876543",
-    "type": "customer"
+    "external_id": "+15559876543"
   }'
 ```
 

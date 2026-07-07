@@ -40,7 +40,7 @@ Memory entries are the individual knowledge items stored inside a memory. When a
 
 | Field        | Type     | Description                                             |
 | ------------ | -------- | ------------------------------------------------------- |
-| `id`         | `string` | Public ID (`me_` prefix)                                |
+| `id`         | `string` | Public ID (`mem_entry_` prefix)                         |
 | `memory_id`  | `string` | ID of the parent memory                                 |
 | `content`    | `string` | Text content of the entry                               |
 | `source_type` | `string` | How the entry was created: `manual` (default), `agent`, or `extraction` |

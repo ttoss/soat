@@ -21,7 +21,7 @@ soat configure --profile prod
 # Base URL: https://api.example.com
 # Token (hidden): sk_...
 
-soat --profile prod list-actors --project-id prj_01
+soat --profile prod list-actors --project-id proj_01
 ```
 
 ## List All Commands
@@ -49,30 +49,30 @@ soat create-project --name "My Project"
 soat list-projects
 
 # Get a specific project
-soat get-project --project-id prj_01
+soat get-project --project-id proj_01
 ```
 
 ## Actors
 
 ```bash
 # List actors for a project
-soat list-actors --project-id prj_01
+soat list-actors --project-id proj_01
 
 # Create an actor
-soat create-actor --name "Support Bot" --type ai --project-id prj_01
+soat create-actor --name "Support Bot" --project-id proj_01
 
 # Get a specific actor
-soat get-actor --actor-id act_01
+soat get-actor --actor-id actor_01
 
 # Delete an actor
-soat delete-actor --actor-id act_01
+soat delete-actor --actor-id actor_01
 ```
 
 ## Files
 
 ```bash
 # List files in a project
-soat list-files --project-id prj_01
+soat list-files --project-id proj_01
 
 # Get a specific file
 soat get-file --file-id file_01
@@ -86,8 +86,8 @@ soat delete-file --file-id file_01
 All request body fields are passed as `--flag value` arguments. Field names follow the REST API contract but are exposed in kebab-case, and path parameters keep their resource-specific names:
 
 ```bash
-soat create-actor --name "My Bot" --type ai --project-id prj_01
-soat update-actor --actor-id act_01 --name "Renamed Bot"
+soat create-actor --name "My Bot" --project-id proj_01
+soat update-actor --actor-id actor_01 --name "Renamed Bot"
 ```
 
 ## JSON Output
@@ -95,9 +95,9 @@ soat update-actor --actor-id act_01 --name "Renamed Bot"
 Every command prints the API response as formatted JSON:
 
 ```bash
-soat get-actor --actor-id act_01
+soat get-actor --actor-id actor_01
 # {
-#   "id": "act_01",
+#   "id": "actor_01",
 #   "name": "Support Bot",
 #   "type": "ai",
 #   ...
@@ -107,5 +107,5 @@ soat get-actor --actor-id act_01
 Pipe to `jq` for filtering:
 
 ```bash
-soat list-actors --project-id prj_01 | jq '.[].name'
+soat list-actors --project-id proj_01 | jq '.[].name'
 ```

@@ -34,7 +34,7 @@ Conversations are identified by an `id` prefixed with `conv_`. The internal data
 | `created_at` | string | ISO 8601 creation timestamp                                        |
 | `updated_at` | string | ISO 8601 last-updated timestamp                                    |
 
-`actor_id` identifies the **owner** of the conversation — typically the external contact who initiated the thread (e.g. a WhatsApp contact). This is a direct ownership reference set at creation time and is distinct from message authorship: multiple actors can still participate by sending messages. Use `GET /conversations/:id/actors` to list all distinct message participants.
+`actor_id` identifies the **owner** of the conversation — typically the external contact who initiated the thread (e.g. a WhatsApp contact). This is a direct ownership reference set at creation time and is distinct from message authorship: multiple actors can still participate by sending messages. To list all distinct message participants, filter the [Actors](./actors.md) listing by conversation: `GET /actors?conversation_id=...`.
 
 ### Conversation Message
 
@@ -56,7 +56,7 @@ The pair `(conversation_id, position)` is uniquely indexed. See [Message orderin
 
 `Actor`, `Agent`, and `Chat` are independent resources. See [Actors](./actors.md), [Agents](./agents.md), and [Chats](./chats.md) for their full data models.
 
-- An **Actor** is a stable participant identity (name, type, `instructions`, tags). Always project-scoped.
+- An **Actor** is a stable participant identity (name, `instructions`, tags). Always project-scoped.
 - An **Agent** / **Chat** is an AI configuration (provider, model, base instructions, tools).
 - An Actor **may** reference an `Agent` **or** a `Chat` (mutually exclusive) via `agent_id` / `chat_id`. Actors without either are plain human/external participants.
 
@@ -67,9 +67,9 @@ Actors are used to track _who_ wrote a message (authorship). Generation is trigg
 - Deleting an `Agent` or `Chat` sets `agent_id` / `chat_id` on referencing actors to `null`. The actor and its historical messages are preserved.
 - Deleting an `Actor` is **blocked** if any conversation message references it. Remove the actor's messages (or delete the containing conversations) first.
 
-#### Convenience endpoints
+#### Associating an actor with an agent or chat
 
-`POST /agents/:id/actors` and `POST /chats/:id/actors` create a pre-linked actor in a single call. These require the `actors:CreateActor` permission on the agent/chat's project — no new permission is introduced.
+To pre-link an actor to an Agent or a Chat, create the actor with `agent_id` or `chat_id` set (they are mutually exclusive). See [Agent and Chat Linking](./actors.md#agent-and-chat-linking) on the Actors page for the full flow.
 
 ### Messages
 
@@ -93,7 +93,7 @@ Any [Agent](./agents.md) can generate the next message from the conversation his
 
 ```
 POST /api/v1/conversations/:id/generate
-{ "agent_id": "agt_...", "stream": false }
+{ "agent_id": "agent_...", "stream": false }
 ```
 
 Flow:
@@ -109,13 +109,10 @@ Flow:
    - `model` — the model name used for this generation.
 
    ```ts
-   const { data } = await soat.POST(
-     '/api/v1/conversations/{conversation_id}/generate',
-     {
-       params: { path: { conversation_id } },
-       body: { agent_id: agentId },
-     }
-   );
+   const { data } = await soat.conversations.generateConversationMessage({
+     path: { conversation_id },
+     body: { agent_id: agentId },
+   });
    // data.content is always the AI-generated text when data.status === 'completed'
    const responseText = data?.content;
    ```
@@ -136,9 +133,9 @@ With `"stream": true`, the response is a `text/event-stream` emitting incrementa
 
 ```json
 {
-  "agent_id": "agt_...",
+  "agent_id": "agent_...",
   "tool_context": {
-    "user_id": "usr_abc123",
+    "user_id": "user_abc123",
     "tenant_id": "tenant_xyz"
   }
 }
@@ -147,13 +144,6 @@ With `"stream": true`, the response is a `text/event-stream` emitting incrementa
 ### Filtering by Actor
 
 Use `GET /conversations?actor_id=...` to list conversations in which the given actor has authored at least one message. This is evaluated via an `EXISTS` join on `conversation_messages` and is more expensive than the default listing.
-
-### Future Extensions
-
-The following are not implemented in v1 but the data model leaves room for them:
-
-- **Auto-reply**: a per-conversation `auto_respond_actor_id` that triggers `POST /conversations/:id/generate` automatically whenever a message from a different actor is added. Intended for WhatsApp-style bot flows.
-- **Structured personas**: richer persona metadata (voice, language, tone) on the Actor. For now, put these in `tags` and render them into `instructions` at the application layer.
 
 ### Status
 
@@ -221,7 +211,7 @@ curl -X POST https://api.example.com/api/v1/conversations/conv_01/messages \
 ```bash
 soat generate-conversation-message \
   --conversation-id conv_01 \
-  --agent-id agt_01
+  --agent-id agent_01
 ```
 
 </TabItem>
@@ -231,7 +221,7 @@ soat generate-conversation-message \
 // SDK
 const { data: reply } = await soat.conversations.generateConversationMessage({
   path: { conversation_id: 'conv_01' },
-  body: { agent_id: 'agt_01' },
+  body: { agent_id: 'agent_01' },
 });
 ```
 
@@ -242,7 +232,7 @@ const { data: reply } = await soat.conversations.generateConversationMessage({
 curl -X POST https://api.example.com/api/v1/conversations/conv_01/generate \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"agent_id": "agt_01"}'
+  -d '{"agent_id": "agent_01"}'
 ```
 
 </TabItem>

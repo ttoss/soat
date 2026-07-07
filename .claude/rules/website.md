@@ -97,6 +97,15 @@ When a new permission action is added to the server:
 
 `iam.md` explains the `resource:Action` format and wildcards but does **not** list individual actions — it links to the Permissions Reference page instead.
 
+## Drift Guardrails
+
+Two automated checks enforce doc/spec ↔ runtime consistency and run in CI. Keep docs passing both:
+
+1. **`scripts/docs-lint.mjs`** (`pnpm docs-lint`, wired into `pr.yml`) scans `packages/website/docs` for: forbidden casts (`as any` / `as unknown`), camelCase path params (`:paramName` — use snake_case `{param_name}`), and a stale-term/wrong-prefix denylist. When a renamed term is legitimately reintroduced, remove its entry from the denylist in that script — do not work around the check.
+2. **`packages/server/tests/unit/tests/lib/openapiExamplePrefixes.test.ts`** asserts every id-shaped `example:` value in `packages/server/src/rest/openapi/v1/*.yaml` starts with a prefix the runtime actually generates.
+
+The single source of truth for public-ID prefixes is `PUBLIC_ID_PREFIXES` in `packages/postgresdb/src/utils/publicId.ts`. Every ID example in docs and OpenAPI specs must use those prefixes (e.g. `agent_`, `actor_`, `trace_`, `mem_entry_`, not `agt_`, `act_`, `trc_`, `me_`). Docs must never document an action, endpoint, field, or behavior that does not exist in a router, OpenAPI spec, or permissions JSON.
+
 ## Technical Requirements
 
 - **API Documentation**: When generating or updating API documentation, ensure it is comprehensive and follows the standards outlined in the website package.

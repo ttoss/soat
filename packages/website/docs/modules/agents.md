@@ -24,7 +24,7 @@ Agents differ from [Chats](./chats.md) in that they can call tools, observe resu
 
 | Field                      | Type          | Description                                                                                                                      |
 | -------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                       | string        | Unique identifier (`agt_` prefix)                                                                                                |
+| `id`                       | string        | Unique identifier (`agent_` prefix)                                                                                              |
 | `project_id`               | string        | Project the agent belongs to                                                                                                     |
 | `ai_provider_id`           | string        | AI provider used for the model                                                                                                   |
 | `name`                     | string        | Display name                                                                                                                     |
@@ -52,7 +52,7 @@ A generation is a persisted lifecycle record for a single agent execution. While
 
 | Field                     | Type        | Description                                             |
 | ------------------------- | ----------- | ------------------------------------------------------- |
-| `id`                      | string      | Public identifier (`agt_gen_` prefix)                   |
+| `id`                      | string      | Public identifier (`gen_` prefix)                       |
 | `project_id`              | string      | Project the generation belongs to                       |
 | `agent_id`                | string      | Agent that was executed                                 |
 | `trace_id`                | string      | Associated trace ID — see [Traces](./traces.md)         |
@@ -324,13 +324,13 @@ Customer prefers email over phone calls.
 </knowledge>
 ```
 
-### Deep Thinking (moved to Discussions)
+### Deep Thinking (via Discussions)
 
-Orchestrated thinking is no longer configured on the agent. The `reasoning` config (provider-native effort **and** the reasoning-step pipeline) has been removed — creating or updating an agent with a `reasoning` field, or passing it as a per-generation override, is rejected with a `400` (it is no longer a recognized field).
+Orchestrated thinking lives in the [Discussions](./discussions.md) module, not on the agent record. `reasoning` is not a recognized agent field: creating or updating an agent with a `reasoning` field, or passing it as a per-generation override, is rejected with a `400`.
 
-Deep thinking now lives in the [Discussions](./discussions.md) module. An agent that needs to think before acting attaches a **`discussion`-type [tool](./tools.md)** referencing a `Discussion` config and calls it mid-loop with a `topic`; the synthesized outcome is returned as the tool result. Provider-native reasoning effort moves there too, as a per-participant/synthesis `effort` knob.
+An agent that needs to think before acting attaches a **`discussion`-type [tool](./tools.md)** referencing a `Discussion` config and calls it mid-loop with a `topic`; the synthesized outcome is returned as the tool result. Provider-native reasoning effort is configured there, as a per-participant/synthesis `effort` knob.
 
-See the [Discussions module](./discussions.md) for the data model and the [migration guide](./discussions.md#migrating-from-agent-reasoning) for how each former reasoning recipe (reflect / debate / best-of-N) maps to a discussion.
+See the [Discussions module](./discussions.md) for the data model. **Migration note:** if you previously used the agent `reasoning` config, the [migration guide](./discussions.md#migrating-from-agent-reasoning) maps each former reasoning recipe (reflect / debate / best-of-N) to a discussion.
 
 ### Structured Output
 
@@ -390,7 +390,7 @@ Example — agent restricted to reading and searching documents regardless of ca
     "statement": [
       {
         "effect": "Allow",
-        "action": ["documents:GetDocument", "documents:SearchDocuments"],
+        "action": ["documents:GetDocument", "knowledge:SearchKnowledge"],
         "resource": ["*"]
       }
     ]
@@ -405,28 +405,6 @@ An agent can invoke another agent through a `soat` tool action (`create-agent-ge
 For observability, every generation creates its own **trace** linked to the parent via `parent_trace_id` and the shared `root_trace_id`. The child's `trace_id` appears in the parent's step data, making the full call graph reconstructable. See [Traces](./traces.md#trace-ancestry-model) for the ancestry model, invariants, and tree traversal.
 
 See it end to end in [Multi-Agent Sonnet with Nested Agent Calls — Step 6 (Create stanza agents)](/docs/tutorials/multi-agent-orchestration#step-6--create-the-four-stanza-agents), which wires an orchestrator to four worker agents via `create-agent-generation` tools.
-
-### Generation Endpoints
-
-#### List Generations
-
-```
-GET /api/v1/agents/generations?project_id=proj_ABC&agent_id=agt_01&status=in_progress&limit=20&offset=0
-```
-
-Query parameters: `project_id`, `agent_id`, `status`, `limit` (default: 50), `offset` (default: 0).
-
-#### Get Generation
-
-```
-GET /api/v1/agents/generations/{generation_id}
-```
-
-#### Monitoring Running Generations
-
-```
-GET /api/v1/agents/generations?status=in_progress&project_id=proj_ABC
-```
 
 ### Deletion
 
@@ -490,7 +468,7 @@ curl -X POST https://api.example.com/api/v1/agents \
 
 ```bash
 soat create-agent-generation \
-  --agent-id agt_01 \
+  --agent-id agent_01 \
   --prompt "What is the capital of France?"
 ```
 
@@ -499,7 +477,7 @@ soat create-agent-generation \
 
 ```ts
 const { data, error } = await soat.agents.createAgentGeneration({
-  path: { agent_id: 'agt_01' },
+  path: { agent_id: 'agent_01' },
   body: { prompt: 'What is the capital of France?' },
 });
 if (error) throw new Error(JSON.stringify(error));
@@ -509,7 +487,7 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X POST https://api.example.com/api/v1/agents/agt_01/generate \
+curl -X POST https://api.example.com/api/v1/agents/agent_01/generate \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"prompt": "What is the capital of France?"}'
@@ -622,4 +600,4 @@ When the model calls the `client` tool, the generation suspends with `status: "r
 }
 ```
 
-`tool_s2d7p4qx` is a `soat` tool with `"name": "docs"` and `"actions": ["search-documents", "get-document"]`. The model sees `docs_search-documents` and `docs_get-document` as tool names. See [soat tools](./tools.md#soat) and [preset parameters](./tools.md#preset-parameters).
+`tool_s2d7p4qx` is a `soat` tool with `"name": "docs"` and `"actions": ["search-knowledge", "get-document"]`. The model sees `docs_search-knowledge` and `docs_get-document` as tool names. See [soat tools](./tools.md#soat) and [preset parameters](./tools.md#preset-parameters).

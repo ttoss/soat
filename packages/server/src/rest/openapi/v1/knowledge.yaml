@@ -38,7 +38,7 @@ paths:
                   x-soat-ref: projects
                   type: string
                   description: Limit search to a specific project
-                  example: 'prj_V1StGXR8Z5jdHi6B'
+                  example: 'proj_V1StGXR8Z5jdHi6B'
                 query:
                   type: string
                   description: Semantic search query text
@@ -161,12 +161,12 @@ components:
           x-soat-ref: files
           type: string
           description: Public ID of the underlying file
-          example: 'fil_V1StGXR8Z5jdHi6B'
+          example: 'file_V1StGXR8Z5jdHi6B'
         project_id:
           x-soat-ref: projects
           type: string
           description: Public ID of the project the document belongs to
-          example: 'prj_V1StGXR8Z5jdHi6B'
+          example: 'proj_V1StGXR8Z5jdHi6B'
         path:
           type: string
           description: Logical path of the file within the project
@@ -236,7 +236,7 @@ components:
         entry_id:
           type: string
           description: Public ID of the memory entry
-          example: 'me_V1StGXR8Z5jdHi6B'
+          example: 'mem_entry_V1StGXR8Z5jdHi6B'
         memory_id:
           x-soat-ref: memories
           type: string

@@ -52,7 +52,7 @@ A `KnowledgeResult` is a discriminated union on `source_type`. All results share
 
 | Field         | Type     | Description                                    |
 | ------------- | -------- | ---------------------------------------------- |
-| `entry_id`    | `string` | Public memory entry ID (`me_` prefix)          |
+| `entry_id`    | `string` | Public memory entry ID (`mem_entry_` prefix)   |
 | `memory_id`   | `string` | Public ID of the parent memory (`mem_` prefix) |
 | `memory_name` | `string` | Human-readable name of the parent memory       |
 
@@ -72,13 +72,13 @@ The `POST /knowledge/search` endpoint accepts the following filters. At least on
 
 When `query` is set, results include a `similarity_score` field and are ordered by descending relevance. `min_score` and `limit` apply additional controls. For a walkthrough that passes both `memory_ids` and `document_paths` and inspects the interleaved, scored results, see [Agent with Persistent Memory — Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly).
 
-`memory_ids` and `memory_tags` can be combined — the search includes entries from memories matching **either** (union semantics).
+Which sources a request searches follows from which filters it carries, and the single endpoint can span both at once. Document results are included whenever you pass a `query`, `document_paths`, or `document_ids`; memory entries are included whenever you pass `memory_ids` or `memory_tags`. To search both sources simultaneously and get the interleaved, source-tagged list described in the [Overview](#overview), pass a `query` **together with** `memory_ids` or `memory_tags` — the two source sets are then merged and, when `query` is set, ranked together by descending similarity before `limit` is applied.
 
-If neither `memory_ids` nor `memory_tags` is provided, the search does **not** include memory entries (only documents). Similarly, if neither `document_paths` nor `document_ids` is provided and no `query` is given alone, only memories are searched. This lets callers control exactly which sources to include.
+`memory_ids` and `memory_tags` can be combined — the search includes entries from memories matching **either** (union semantics).
 
 ### Project Scoping
 
-`project_id` is optional. When omitted, the server resolves accessible projects from the caller's identity (API key project scope, admin wildcard, or explicit project memberships).
+`project_id` is optional. When omitted, the server resolves accessible projects from the caller's identity (API key project scope, admin wildcard, or the projects granted by the caller's policies).
 
 ## Configuration
 
@@ -158,6 +158,27 @@ soat search-knowledge \
 ```
 
 </TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
+
+const { data, error } = await soat.knowledge.searchKnowledge({
+  body: {
+    project_id: 'proj_ABC',
+    query: 'customer communication',
+    memory_tags: ['customer*'],
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+console.log(data.results);
+```
+
+</TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
@@ -183,6 +204,7 @@ curl -X POST https://api.example.com/api/v1/knowledge/search \
 soat search-knowledge \
   --project-id proj_ABC \
   --query "quarterly revenue" \
+  --document-ids doc_xyz \
   --limit 5
 ```
 
@@ -197,7 +219,12 @@ const soat = new SoatClient({
 });
 
 const { data, error } = await soat.knowledge.searchKnowledge({
-  body: { project_id: 'proj_ABC', query: 'quarterly revenue', limit: 5 },
+  body: {
+    project_id: 'proj_ABC',
+    query: 'quarterly revenue',
+    document_ids: ['doc_xyz'],
+    limit: 5,
+  },
 });
 if (error) throw new Error(JSON.stringify(error));
 console.log(data.results);
@@ -213,6 +240,7 @@ curl -X POST https://api.example.com/api/v1/knowledge/search \
   -d '{
     "project_id": "proj_ABC",
     "query": "quarterly revenue",
+    "document_ids": ["doc_xyz"],
     "limit": 5
   }'
 ```
@@ -229,6 +257,26 @@ curl -X POST https://api.example.com/api/v1/knowledge/search \
 soat search-knowledge \
   --project-id proj_ABC \
   --document-paths /docs/products/
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
+
+const { data, error } = await soat.knowledge.searchKnowledge({
+  body: {
+    project_id: 'proj_ABC',
+    document_paths: ['/docs/products/'],
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+console.log(data.results);
 ```
 
 </TabItem>

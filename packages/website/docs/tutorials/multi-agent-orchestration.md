@@ -792,7 +792,7 @@ Expected status output:
 ```json
 {
   "status": "succeeded",
-  "trace_id": "agt_trace_ypo8g0yO3563AfuC"
+  "trace_id": "trace_ypo8g0yO3563AfuC"
 }
 ```
 
@@ -930,9 +930,9 @@ Expected metadata output:
 
 ```json
 {
-  "id": "agt_trace_ypo8g0yO3563AfuC",
+  "id": "trace_ypo8g0yO3563AfuC",
   "project_id": "proj_abc123",
-  "agent_id": "agt_nCjF0owWdtPt3Osq",
+  "agent_id": "agent_nCjF0owWdtPt3Osq",
   "file_id": "file_xyz789",
   "step_count": 2,
   "parent_trace_id": null,
@@ -1003,18 +1003,18 @@ Expected output structure:
 
 ```json
 {
-  "id": "agt_trace_ypo8g0yO3563AfuC",
-  "agent_id": "agt_nCjF0owWdtPt3Osq",
+  "id": "trace_ypo8g0yO3563AfuC",
+  "agent_id": "agent_nCjF0owWdtPt3Osq",
   "step_count": 2,
   "parent_trace_id": null,
   "root_trace_id": null,
   "children": [
     {
-      "id": "agt_trace_ZBfVXbQaDkC0nOu",
-      "agent_id": "agt_LhYajzCuJSY0SFqI",
+      "id": "trace_ZBfVXbQaDkC0nOu",
+      "agent_id": "agent_LhYajzCuJSY0SFqI",
       "step_count": 4,
-      "parent_trace_id": "agt_trace_ypo8g0yO3563AfuC",
-      "root_trace_id": "agt_trace_ypo8g0yO3563AfuC",
+      "parent_trace_id": "trace_ypo8g0yO3563AfuC",
+      "root_trace_id": "trace_ypo8g0yO3563AfuC",
       "children": []
     }
   ]
@@ -1062,8 +1062,8 @@ soat list-traces --project-id "$PROJECT_ID" | jq '.data[] | {id, agent_id, step_
 Expected output (one entry per agent that ran):
 
 ```json
-{ "id": "agt_trace_ypo8g0yO3563AfuC", "agent_id": "agt_nCjF0owWdtPt3Osq", "step_count": 2, "parent_trace_id": null }
-{ "id": "agt_trace_ZBfVXbQaDkC0nOu",  "agent_id": "agt_LhYajzCuJSY0SFqI", "step_count": 4, "parent_trace_id": "agt_trace_ypo8g0yO3563AfuC" }
+{ "id": "trace_ypo8g0yO3563AfuC", "agent_id": "agent_nCjF0owWdtPt3Osq", "step_count": 2, "parent_trace_id": null }
+{ "id": "trace_ZBfVXbQaDkC0nOu",  "agent_id": "agent_LhYajzCuJSY0SFqI", "step_count": 4, "parent_trace_id": "trace_ypo8g0yO3563AfuC" }
 ```
 
 The first entry is the orchestrator (`parent_trace_id: null`); the second is the stanza-1 worker (4 steps: LLM decision + poem-read + LLM decision + poem-write).

@@ -1062,7 +1062,7 @@ Expected output:
 ```json
 {
   "status": "completed",
-  "trace_id": "agt_trace_xxxxxxxxxxxx"
+  "trace_id": "trace_xxxxxxxxxxxx"
 }
 ```
 
@@ -1177,7 +1177,7 @@ Expected output — the orchestrator at the root with 4 stanza workers as childr
 
 ```json
 {
-  "id": "agt_trace_xxxxxxxxxxxx",
+  "id": "trace_xxxxxxxxxxxx",
   "step_count": 5,
   "children_count": 4
 }

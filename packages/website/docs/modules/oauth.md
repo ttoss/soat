@@ -1,3 +1,6 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # OAuth
 
 SOAT is a first-party **OAuth 2.1 Authorization Server** for its MCP endpoint.
@@ -10,6 +13,8 @@ The protocol mechanics (discovery, Dynamic Client Registration, PKCE, token
 grants) are provided by [`@ttoss/http-server-auth`](https://ttoss.dev) and
 [`@ttoss/auth-core`](https://ttoss.dev). SOAT owns three hooks — token minting,
 consent, and refresh validation — plus the consent screen.
+
+> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Flow
 
@@ -115,32 +120,40 @@ above. The cost is not justified unless a single agent session must act across
 projects without re-authorizing — a need the per-project token model already
 covers for the common case.
 
-## Endpoints
-
-REST (the backend the app renders the screen against; bearer auth):
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/v1/oauth/consent-info` | Projects the caller can grant + the permission catalog |
-| `POST` | `/api/v1/oauth/consent` | Resolve a selection into scopes + a project-scoped policy. When `authorize_query` is supplied, also stores a single-use consent grant, sets the consent cookie, and returns `authorize_url` for the app to navigate back to |
-
-App (SPA) route:
-
-| Path | Description |
-|---|---|
-| `/app/oauth/consent` | The consent screen; `/authorize` redirects here, carrying the original authorize query string |
-
-Authorization-server protocol endpoints (`/authorize`, `/token`, `/register`,
-`/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource`)
-are provided by `@ttoss/http-server-auth`.
-
 ## Data model
 
-| Concept | Storage | Notes |
-|---|---|---|
-| Registered clients | in-memory (`createMemoryClientStore`) | Dynamic Client Registration; swap for a durable store in production |
-| Authorization codes | in-memory (`createMemoryAuthCodeStore`) | Short-lived, single-use, PKCE-bound |
-| Consent grants | in-memory, cookie-keyed | Single-use, 10-minute TTL |
+OAuth is not a CRUD resource — it exposes two bearer-authenticated JSON
+operations that back the consent screen. Their API-facing fields are below.
+
+### Consent info (response)
+
+Data used to render the consent screen.
+
+| Field      | Type     | Description                                                        |
+|------------|----------|--------------------------------------------------------------------|
+| `projects` | object[] | Projects the caller can grant access to (`id`, `name` each)        |
+| `modules`  | object[] | Permission catalog — modules and their granular actions           |
+
+### Consent decision (request)
+
+| Field             | Type   | Required | Description                                                                 |
+|-------------------|--------|----------|-----------------------------------------------------------------------------|
+| `project_id`      | string | Yes      | The single project the grant is scoped to                                   |
+| `selection`       | object | Yes      | Chosen permissions: `{ kind: "all" }`, `{ kind: "modules", modules }`, or `{ kind: "actions", actions }` |
+| `authorize_query` | string | No       | The original OAuth `/authorize` query string; when present, completes the flow |
+
+### Consent decision (response)
+
+| Field           | Type     | Description                                                                    |
+|-----------------|----------|--------------------------------------------------------------------------------|
+| `project_id`    | string   | The project the grant is scoped to                                             |
+| `scopes`        | string[] | Granted permission scopes                                                      |
+| `policy`        | object   | The project-scoped IAM [policy document](./policies.md) the token would carry  |
+| `authorize_url` | string   | Present only when `authorize_query` was supplied — URL for the app to navigate back to |
+
+Registered clients, authorization codes, and consent grants are held in
+single-use, short-lived server-side stores backing the protocol flow above; they
+are not exposed through the API.
 
 ## Access token
 
@@ -157,3 +170,65 @@ The access token is an HS256 JWT (`@ttoss/auth-core` `signJwt`) carrying:
 |---|---|---|
 | `SOAT_BASE_URL` | `http://localhost:<PORT>` | OAuth issuer / resource identifier advertised in discovery metadata |
 | `JWT_SECRET` | `dev-secret` | HS256 signing secret for issued access tokens |
+
+## Examples
+
+The OAuth flow is driven by MCP clients and the in-app consent screen, so its
+JSON operations are **not exposed through the CLI or SDK**. They are called with
+a user bearer token; the examples below use `curl`.
+
+### Fetch consent-screen data
+
+Returns the projects the caller can grant and the permission catalog.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+No CLI command — the consent screen is rendered by the app, not the CLI.
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+No SDK method — this endpoint backs the app consent screen and is not part of the generated SDK surface.
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl https://api.example.com/api/v1/oauth/consent-info \
+  -H "Authorization: Bearer <user-token>"
+```
+
+</TabItem>
+</Tabs>
+
+### Record a consent decision
+
+Resolves a project + permission selection into scopes and a project-scoped IAM
+policy. Include `authorize_query` to complete an in-flight `/authorize` request.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+No CLI command — consent is submitted by the app on the user's behalf.
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+No SDK method — consent is submitted by the app on the user's behalf.
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/oauth/consent \
+  -H "Authorization: Bearer <user-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "selection": { "kind": "modules", "modules": ["agents", "sessions"] }
+  }'
+```
+
+</TabItem>
+</Tabs>

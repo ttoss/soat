@@ -117,7 +117,7 @@ paths:
           description: User ID
           schema:
             type: string
-            example: usr_V1StGXR8Z5jdHi6B
+            example: user_V1StGXR8Z5jdHi6B
       responses:
         '200':
           description: User found
@@ -150,7 +150,7 @@ paths:
           description: User ID
           schema:
             type: string
-            example: usr_V1StGXR8Z5jdHi6B
+            example: user_V1StGXR8Z5jdHi6B
       responses:
         '204':
           description: User deleted successfully
@@ -265,10 +265,10 @@ paths:
         - name: user_id
           in: path
           required: true
-          description: User public ID (usr_ prefix)
+          description: User public ID (user_ prefix)
           schema:
             type: string
-            example: usr_V1StGXR8Z5jdHi6B
+            example: user_V1StGXR8Z5jdHi6B
       requestBody:
         required: true
         content:
@@ -312,8 +312,8 @@ components:
       properties:
         id:
           type: string
-          description: Public user ID (usr_ prefix)
-          example: usr_V1StGXR8Z5jdHi6B
+          description: Public user ID (user_ prefix)
+          example: user_V1StGXR8Z5jdHi6B
         username:
           type: string
           example: johndoe
@@ -334,8 +334,8 @@ components:
       properties:
         id:
           type: string
-          description: Public user ID (usr_ prefix)
-          example: usr_V1StGXR8Z5jdHi6B
+          description: Public user ID (user_ prefix)
+          example: user_V1StGXR8Z5jdHi6B
         username:
           type: string
           example: admin

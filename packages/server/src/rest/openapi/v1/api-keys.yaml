@@ -225,7 +225,7 @@ components:
           x-soat-ref: users
           type: string
           description: Owner user public ID
-          example: usr_V1StGXR8Z5jdHi6B
+          example: user_V1StGXR8Z5jdHi6B
         project_id:
           x-soat-ref: projects
           type: string

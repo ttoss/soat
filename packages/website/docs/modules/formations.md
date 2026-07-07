@@ -47,6 +47,8 @@ Instead of making a dozen separate API calls to create an AI provider, memory, a
 
 SOAT detects that `MyAgent` depends on `MyProvider` and `MyMemory` through the `ref` expressions, creates them first, then creates the agent with the resolved physical IDs. See a 14-resource stack deployed in one call in [Deploy a Multi-Agent App with Agent Formation — Step 6 (Deploy the formation)](/docs/tutorials/formations#step-6--deploy-the-formation).
 
+> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
+
 ## Related Tutorials
 
 - [Deploy a Multi-Agent App with Agent Formation - Step 3 (Write the formation template)](/docs/tutorials/formations#step-3--write-the-formation-template)
@@ -60,7 +62,7 @@ SOAT detects that `MyAgent` depends on `MyProvider` and `MyMemory` through the `
 
 | Field        | Type     | Description                                                                    |
 | ------------ | -------- | ------------------------------------------------------------------------------ |
-| `id`         | string   | Public ID (`af_` prefix)                                                       |
+| `id`         | string   | Public ID (`form_` prefix)                                                       |
 | `project_id` | string   | Project public ID                                                              |
 | `name`       | string   | Formation name (unique per project)                                            |
 | `template`   | object   | The last applied template                                                      |
@@ -75,7 +77,7 @@ SOAT detects that `MyAgent` depends on `MyProvider` and `MyMemory` through the `
 
 | Field                  | Type   | Description                                                         |
 | ---------------------- | ------ | ------------------------------------------------------------------- |
-| `id`                   | string | Public ID (`afr_` prefix)                                           |
+| `id`                   | string | Public ID (`form_res_` prefix)                                           |
 | `logical_id`           | string | Logical ID from the template                                        |
 | `resource_type`        | string | Resource type (`agent`, `tool`, `memory`, etc.)                     |
 | `physical_resource_id` | string | Public ID of the physical SOAT resource                             |
@@ -85,7 +87,7 @@ SOAT detects that `MyAgent` depends on `MyProvider` and `MyMemory` through the `
 
 | Field            | Type   | Description                                           |
 | ---------------- | ------ | ----------------------------------------------------- |
-| `id`             | string | Public ID (`afo_` prefix)                             |
+| `id`             | string | Public ID (`form_op_` prefix)                             |
 | `operation_type` | string | `create` \| `update` \| `delete`                      |
 | `status`         | string | `pending` \| `running` \| `succeeded` \| `failed`     |
 | `plan`           | object | Planned changes computed before execution             |
@@ -226,7 +228,7 @@ APP_URL=https://www.example.com
 
 ```bash
 soat update-formation \
-  --formation-id af_6sBFq1eBsCwB16dM \
+  --formation-id form_6sBFq1eBsCwB16dM \
   --template-file formation.yaml \
   --env-file .env \
   --parameter AppUrl=@APP_URL \
@@ -238,7 +240,7 @@ Or using the bare-key syntax (parameter name must match the env var name exactly
 
 ```bash
 soat update-formation \
-  --formation-id af_6sBFq1eBsCwB16dM \
+  --formation-id form_6sBFq1eBsCwB16dM \
   --template-file formation.yaml \
   --env-file .env \
   --parameter APP_URL \
@@ -268,14 +270,14 @@ resources:
 
 ```bash
 # First deploy — supply the value (create has no previous value to reuse)
-soat create-formation --project-id prj_xxx --name my-stack \
+soat create-formation --project-id proj_xxx --name my-stack \
   --template-file formation.yaml --parameter XaiApiKey=@XAI_API_KEY
 
 # Later deploys — omit it; the stored value is reused
-soat update-formation --formation-id af_xxx --template-file formation.yaml
+soat update-formation --formation-id form_xxx --template-file formation.yaml
 
 # Rotate it — supply a value; it overrides use_previous_value
-soat update-formation --formation-id af_xxx --template-file formation.yaml \
+soat update-formation --formation-id form_xxx --template-file formation.yaml \
   --parameter XaiApiKey=@XAI_API_KEY
 ```
 
@@ -486,7 +488,7 @@ curl -X POST https://api.example.com/api/v1/formations \
 
 ```bash
 soat update-formation \
-  --formation-id af_01 \
+  --formation-id form_01 \
   --template-file formation.json \
   --parameter AppUrl=https://staging.example.com
 ```
@@ -496,7 +498,7 @@ soat update-formation \
 
 ```ts
 const { data, error } = await soat.formations.updateFormation({
-  path: { formation_id: 'af_01' },
+  path: { formation_id: 'form_01' },
   body: {
     template: { /* updated template */ },
     parameters: { AppUrl: 'https://staging.example.com' },
@@ -509,7 +511,7 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X PUT https://api.example.com/api/v1/formations/af_01 \
+curl -X PUT https://api.example.com/api/v1/formations/form_01 \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{

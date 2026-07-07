@@ -40,7 +40,7 @@ paths:
           description: Filter by actor ID
           schema:
             type: string
-            example: 'act_V1StGXR8Z5jdHi6B'
+            example: 'actor_V1StGXR8Z5jdHi6B'
         - name: limit
           in: query
           required: false
@@ -117,7 +117,7 @@ paths:
                   type: string
                   nullable: true
                   description: Actor ID to associate with this conversation
-                  example: 'act_V1StGXR8Z5jdHi6B'
+                  example: 'actor_V1StGXR8Z5jdHi6B'
       responses:
         '201':
           description: Conversation created
@@ -381,7 +381,7 @@ paths:
                   type: string
                   nullable: true
                   description: Optional actor ID to associate with this message (user identity)
-                  example: 'act_V1StGXR8Z5jdHi6B'
+                  example: 'actor_V1StGXR8Z5jdHi6B'
                 position:
                   type: integer
                   description: Zero-based position. Defaults to MAX+1 (append).
@@ -728,7 +728,7 @@ components:
           type: string
           nullable: true
           description: Actor ID associated with this conversation
-          example: 'act_V1StGXR8Z5jdHi6B'
+          example: 'actor_V1StGXR8Z5jdHi6B'
     ConversationMessageRecord:
       type: object
       properties:
@@ -747,13 +747,13 @@ components:
           type: string
           nullable: true
           description: Optional actor ID associated with this message
-          example: 'act_V1StGXR8Z5jdHi6B'
+          example: 'actor_V1StGXR8Z5jdHi6B'
         agent_id:
           x-soat-ref: agents
           type: string
           nullable: true
           description: Optional agent ID that generated this message (set for assistant messages produced by generate)
-          example: 'agt_V1StGXR8Z5jdHi6B'
+          example: 'agent_V1StGXR8Z5jdHi6B'
         position:
           type: integer
           description: Zero-based position in the conversation
@@ -795,7 +795,7 @@ components:
           x-soat-ref: traces
           type: string
           description: Trace ID for observability.
-          example: 'trc_V1StGXR8Z5jdHi6B'
+          example: 'trace_V1StGXR8Z5jdHi6B'
         model:
           type: string
           description: Model used for generation.
@@ -819,7 +819,7 @@ components:
           x-soat-ref: traces
           type: string
           description: Trace ID for observability.
-          example: 'trc_V1StGXR8Z5jdHi6B'
+          example: 'trace_V1StGXR8Z5jdHi6B'
         required_action:
           type: object
           description: Tool-call information the client must resolve.

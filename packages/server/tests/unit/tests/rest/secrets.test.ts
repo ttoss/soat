@@ -146,6 +146,10 @@ describe('Secrets', () => {
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(secretId);
       expect(response.body.project_id).toBe(projectId);
+      expect(response.body.name).toBe('Get Test Secret');
+      // The get response exposes has_value/updated_at, never the decrypted value.
+      expect(response.body.has_value).toBe(true);
+      expect(response.body.updated_at).toBeDefined();
       expect(response.body.value).toBeUndefined();
     });
 

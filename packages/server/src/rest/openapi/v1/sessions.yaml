@@ -75,7 +75,7 @@ paths:
           description: Filter by agent public ID
           schema:
             type: string
-            example: agt_V1StGXR8Z5jdHi6B
+            example: agent_V1StGXR8Z5jdHi6B
         - name: actor_id
           in: query
           required: false
@@ -487,7 +487,7 @@ components:
           x-soat-ref: agents
           type: string
           description: Agent public ID
-          example: agt_V1StGXR8Z5jdHi6B
+          example: agent_V1StGXR8Z5jdHi6B
         conversation_id:
           x-soat-ref: conversations
           type: string
@@ -506,7 +506,7 @@ components:
           type: string
           nullable: true
           description: Public ID of the user actor
-          example: actr_V1StGXR8Z5jdHi6B
+          example: actor_V1StGXR8Z5jdHi6B
         tags:
           type: object
           additionalProperties:
@@ -560,7 +560,7 @@ components:
           x-soat-ref: agents
           type: string
           description: Agent this session belongs to
-          example: agt_V1StGXR8Z5jdHi6B
+          example: agent_V1StGXR8Z5jdHi6B
         name:
           type: string
           description: Optional session name
@@ -569,7 +569,7 @@ components:
           x-soat-ref: actors
           type: string
           description: Optional public ID of an existing actor to use as the user actor
-          example: actr_V1StGXR8Z5jdHi6B
+          example: actor_V1StGXR8Z5jdHi6B
         auto_generate:
           type: boolean
           default: false

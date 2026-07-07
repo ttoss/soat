@@ -331,7 +331,7 @@ components:
         id:
           type: string
           description: Public ID of the chat
-          example: cht_V1StGXR8Z5jdHi6B
+          example: chat_V1StGXR8Z5jdHi6B
         project_id:
           x-soat-ref: projects
           type: string

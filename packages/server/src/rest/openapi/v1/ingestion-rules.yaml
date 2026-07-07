@@ -93,12 +93,12 @@ paths:
                   x-soat-ref: tools
                   type: string
                   description: Converter tool id (mutually exclusive with agent_id)
-                  example: tol_V1StGXR8Z5jdHi6B
+                  example: tool_V1StGXR8Z5jdHi6B
                 agent_id:
                   x-soat-ref: agents
                   type: string
                   description: Converter agent id (mutually exclusive with tool_id)
-                  example: agt_V1StGXR8Z5jdHi6B
+                  example: agent_V1StGXR8Z5jdHi6B
                 action:
                   type: string
                   description: Operation id, required for soat/mcp tool converters
