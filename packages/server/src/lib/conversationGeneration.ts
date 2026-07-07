@@ -1,10 +1,9 @@
-import fs from 'node:fs';
-
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { createGeneration, type GenerationResult } from './agents';
 import { addConversationMessage } from './conversationMessages';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { readFileBuffer } from './fileStorage';
 import { fireMemoryExtraction } from './memoryExtraction';
 
 type ConversationMessage = InstanceType<(typeof db)['ConversationMessage']> & {
@@ -21,25 +20,24 @@ type GenerationContext = {
   snapshotPosition: number;
 };
 
-const readMessageContent = (msg: ConversationMessage): string => {
-  const storagePath = msg.document?.file?.storagePath;
-  if (!storagePath) {
+const readMessageContent = async (
+  msg: ConversationMessage
+): Promise<string> => {
+  const file = msg.document?.file;
+  if (!file?.storagePath) {
     return '';
   }
-  try {
-    if (fs.existsSync(storagePath)) {
-      return fs.readFileSync(storagePath, 'utf-8');
-    }
-  } catch {
-    // Ignore read errors
-  }
-  return '';
+  const buffer = await readFileBuffer({
+    storageType: file.storageType,
+    storagePath: file.storagePath,
+  });
+  return buffer ? buffer.toString('utf-8') : '';
 };
 
-const buildMessageEntry = (args: {
+const buildMessageEntry = async (args: {
   msg: ConversationMessage;
-}): { role: string; content: string } => {
-  const content = readMessageContent(args.msg);
+}): Promise<{ role: string; content: string }> => {
+  const content = await readMessageContent(args.msg);
   if (args.msg.role === 'assistant') {
     return { role: 'assistant', content };
   }
@@ -63,20 +61,23 @@ const buildMessageEntry = (args: {
   };
 };
 
-const buildConversationHistory = (args: {
+const buildConversationHistory = async (args: {
   messages: Array<ConversationMessage>;
-}): Array<{ role: string; content: unknown }> => {
-  return args.messages.flatMap((msg) => {
-    const meta = (msg as { metadata?: Record<string, unknown> | null })
-      .metadata;
-    const responseMessages = meta?.responseMessages;
-    // Expand stored AI SDK response messages (tool calls, tool results, final text)
-    // so the LLM sees the full tool-use chain on subsequent turns.
-    if (Array.isArray(responseMessages) && responseMessages.length > 0) {
-      return responseMessages as Array<{ role: string; content: unknown }>;
-    }
-    return [buildMessageEntry({ msg })];
-  });
+}): Promise<Array<{ role: string; content: unknown }>> => {
+  const entries = await Promise.all(
+    args.messages.map(async (msg) => {
+      const meta = (msg as { metadata?: Record<string, unknown> | null })
+        .metadata;
+      const responseMessages = meta?.responseMessages;
+      // Expand stored AI SDK response messages (tool calls, tool results, final
+      // text) so the LLM sees the full tool-use chain on subsequent turns.
+      if (Array.isArray(responseMessages) && responseMessages.length > 0) {
+        return responseMessages as Array<{ role: string; content: unknown }>;
+      }
+      return [await buildMessageEntry({ msg })];
+    })
+  );
+  return entries.flat();
 };
 
 type InternalGenerationResult =
@@ -283,7 +284,7 @@ export const generateConversationMessage = async (args: {
 
   const { conversation, generatingAgent, messages, snapshotPosition } = ctx;
 
-  const history = buildConversationHistory({ messages });
+  const history = await buildConversationHistory({ messages });
   const personaSystem = buildPersonaSystem(generatingAgent);
   const messagesForModel: Array<{ role: string; content: unknown }> = [
     { role: 'system', content: personaSystem },

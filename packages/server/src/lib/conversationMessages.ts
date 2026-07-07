@@ -1,21 +1,20 @@
-import fs from 'node:fs';
-
 import { db } from '../db';
 import { createDocument, deleteDocument } from './documents';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { readFileBuffer } from './fileStorage';
 
-const readStoredFileContent = (storagePath: string): string | null => {
-  try {
-    if (fs.existsSync(storagePath)) {
-      return fs.readFileSync(storagePath, 'utf-8');
-    }
-  } catch {
-    // Ignore read errors
-  }
-  return null;
+const readStoredFileContent = async (
+  file?: InstanceType<(typeof db)['File']>
+): Promise<string | null> => {
+  if (!file?.storagePath) return null;
+  const buffer = await readFileBuffer({
+    storageType: file.storageType,
+    storagePath: file.storagePath,
+  });
+  return buffer ? buffer.toString('utf-8') : null;
 };
 
-export const mapMessage = (
+export const mapMessage = async (
   message: InstanceType<(typeof db)['ConversationMessage']> & {
     document?: InstanceType<(typeof db)['Document']> & {
       file?: InstanceType<(typeof db)['File']>;
@@ -24,14 +23,13 @@ export const mapMessage = (
     agent?: InstanceType<(typeof db)['Agent']> | null;
   }
 ) => {
-  const storagePath = message.document?.file?.storagePath;
   return {
     role: message.role,
     documentId: message.document?.publicId,
     actorId: message.actor?.publicId ?? null,
     agentId: message.agent?.publicId ?? null,
     position: message.position,
-    content: storagePath ? readStoredFileContent(storagePath) : null,
+    content: await readStoredFileContent(message.document?.file),
     metadata: message.metadata ?? null,
   };
 };
@@ -131,7 +129,7 @@ const findIdempotentMessage = async (args: {
     ],
   });
   return existing
-    ? { ...mapMessage(existing), idempotent: true as const }
+    ? { ...(await mapMessage(existing)), idempotent: true as const }
     : null;
 };
 
@@ -205,7 +203,7 @@ export const addConversationMessage = async (args: {
     ],
   });
 
-  const mapped = mapMessage(messageWithAssociations!);
+  const mapped = await mapMessage(messageWithAssociations!);
 
   resolveProjectPublicId({ projectId: conversation.projectId }).then(
     (projectPublicId) => {
@@ -286,7 +284,7 @@ export const addConversationDocumentMessage = async (args: {
     ],
   });
 
-  const mapped = mapMessage(messageWithAssociations!);
+  const mapped = await mapMessage(messageWithAssociations!);
 
   resolveProjectPublicId({ projectId: conversation.projectId }).then(
     (projectPublicId) => {
