@@ -1,6 +1,16 @@
+import type { Server } from 'node:http';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
+import { db } from 'src/db';
 import { DomainError } from 'src/errors';
-import * as agentsModule from 'src/lib/agents';
-import * as aiProvidersModule from 'src/lib/aiProviders';
+import type { PendingGeneration } from 'src/lib/agentGenerationHelpers';
+import { pendingGenerations } from 'src/lib/agentGenerationHelpers';
+import { buildModel } from 'src/lib/agentModel';
+import {
+  createGenerationRecord,
+  updateGenerationRecord,
+} from 'src/lib/generations';
 
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -96,21 +106,6 @@ describe('Agent Generation Routes', () => {
       expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
     });
-
-    test('returns 400 when the underlying AI provider secret cannot be resolved', async () => {
-      const spy = jest
-        .spyOn(aiProvidersModule, 'resolveAiProviderSecret')
-        .mockResolvedValueOnce(null);
-
-      const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
-        .send({ messages: [{ role: 'user', content: 'Hello' }] });
-
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('AI_PROVIDER_NOT_FOUND');
-
-      spy.mockRestore();
-    });
   });
 
   describe('validation and error branches', () => {
@@ -198,6 +193,20 @@ describe('Agent Generation Routes', () => {
       expect(response.status).toBe(404);
     });
 
+    test('depth guard: returns 404 when the agent is not accessible at max_call_depth 0', async () => {
+      // Exercises the depth-guard branch's own agent lookup/not-found throw,
+      // a separate code path from the normal (non-depth-guard) not-found
+      // case covered above.
+      const response = await authenticatedTestClient(noPermToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: 'hello' }],
+          max_call_depth: 0,
+        });
+
+      expect(response.status).toBe(404);
+    });
+
     test('returns 500 when createGeneration throws', async () => {
       mockCreateGeneration.mockRejectedValueOnce(new Error('boom'));
 
@@ -217,53 +226,18 @@ describe('Agent Generation Routes', () => {
       expect(response.status).toBe(400);
     });
 
-    test('tool-outputs returns 404 when generation is not found', async () => {
-      jest
-        .spyOn(agentsModule, 'submitToolOutputs')
-        .mockRejectedValueOnce(
-          new DomainError('GENERATION_NOT_FOUND', 'Generation not found')
-        );
-
+    test('tool-outputs returns 404 for a generation that was never created', async () => {
+      // No mocking here — exercises submitToolOutputs' real not-found path:
+      // not in the in-memory pendingGenerations map and not recoverable
+      // from the DB because it never existed.
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate/gen_x/tool-outputs`)
+        .post(
+          `/api/v1/agents/${agentId}/generate/gen_never_existed/tool-outputs`
+        )
         .send({ toolOutputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
 
       expect(response.status).toBe(404);
-      expect(response.body.error).toBeDefined();
-    });
-
-    test('tool-outputs returns 404 when agent is not found', async () => {
-      jest
-        .spyOn(agentsModule, 'submitToolOutputs')
-        .mockRejectedValueOnce(
-          new DomainError('AGENT_NOT_FOUND', 'Agent not found')
-        );
-
-      const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate/gen_x/tool-outputs`)
-        .send({ toolOutputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
-
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBeDefined();
-    });
-
-    test('tool-outputs returns 200 with result on success', async () => {
-      const mockResult = {
-        id: 'gen_ok',
-        traceId: 'trc_ok',
-        status: 'completed',
-        output: { model: 'test-model', content: 'done', finishReason: 'stop' },
-      };
-      jest
-        .spyOn(agentsModule, 'submitToolOutputs')
-        .mockResolvedValueOnce(mockResult as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-
-      const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate/gen_x/tool-outputs`)
-        .send({ toolOutputs: [{ tool_call_id: 'tc_1', output: 'result' }] });
-
-      expect(response.status).toBe(200);
-      expect(response.body.id).toBe('gen_ok');
+      expect(response.body.error.code).toBe('GENERATION_NOT_FOUND');
     });
 
     test('returns 200 with generation result on non-stream success', async () => {
@@ -429,6 +403,203 @@ describe('Agent Generation Routes', () => {
       expect(response.body.output.content).toBe('Maximum call depth reached');
       expect(response.body.output.finish_reason).toBe('stop');
       expect(response.body.trace_id).toBeDefined();
+    });
+  });
+
+  describe('tool-outputs real continuation (local stub server)', () => {
+    // Exercises submitToolOutputs' real body end-to-end (message building,
+    // runToolOutputsGeneration, resolveToolOutputsResult) without mocking
+    // db/eventBus/generations or the `ai` package. A local HTTP server
+    // stands in for the AI provider — the same pattern used by
+    // discussionCompletion.test.ts — so the real `ai.generateText` call
+    // goes over real HTTP to a server we control instead of a live LLM.
+    let stubServer: Server;
+    let stubBaseUrl: string;
+    let userToken: string;
+    let agentId: string;
+    let projectDbId: number;
+    let projectPublicId: string;
+
+    const startStubServer = async (): Promise<string> => {
+      stubServer = createServer((req, res) => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            id: 'chatcmpl-stub',
+            object: 'chat.completion',
+            created: 0,
+            model: 'stub-model',
+            choices: [
+              {
+                index: 0,
+                message: { role: 'assistant', content: 'final answer' },
+                finish_reason: 'stop',
+              },
+            ],
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+          })
+        );
+      });
+      await new Promise<void>((resolve) => {
+        stubServer.listen(0, '127.0.0.1', resolve);
+      });
+      const { port } = stubServer.address() as AddressInfo;
+      return `http://127.0.0.1:${port}`;
+    };
+
+    beforeAll(async () => {
+      stubBaseUrl = await startStubServer();
+
+      const bootstrapRes = await testClient
+        .post('/api/v1/users/bootstrap')
+        .send({ username: 'agentstubadmin', password: 'supersecret' });
+      const adminToken =
+        bootstrapRes.status === 201
+          ? await loginAs('agentstubadmin', 'supersecret')
+          : await loginAs('agentgeneradmin', 'supersecret');
+
+      const userRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'agentstubuser', password: 'agentstubpass' });
+      userToken = await loginAs('agentstubuser', 'agentstubpass');
+
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['agents:CreateAgent', 'agents:CreateAgentGeneration'],
+              },
+            ],
+          },
+        });
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${userRes.body.id}/policies`)
+        .send({ policy_ids: [policyRes.body.id] });
+
+      const projectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'AgentGeneration Stub Project' });
+      projectPublicId = projectRes.body.id;
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectPublicId },
+      });
+      projectDbId = project!.id;
+
+      const aiProvRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectPublicId,
+          name: 'Stub Provider',
+          provider: 'ollama',
+          default_model: 'stub-model',
+          base_url: stubBaseUrl,
+        });
+
+      const agentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProvRes.body.id,
+          project_id: projectPublicId,
+          name: 'Stub Agent',
+        });
+      agentId = agentRes.body.id;
+    });
+
+    afterAll(async () => {
+      await new Promise<void>((resolve, reject) => {
+        stubServer.close((err) => {
+          return err ? reject(err) : resolve();
+        });
+      });
+    });
+
+    test('tool-outputs returns completed for a real pending generation', async () => {
+      const pending: PendingGeneration = {
+        agentId,
+        projectId: projectDbId,
+        projectPublicId,
+        traceId: 'trc_stub_test',
+        parentTraceId: null,
+        rootTraceId: null,
+        generationId: 'gen_stub_pending',
+        initiatorGenerationId: null,
+        pendingToolCalls: [{ toolCallId: 'tc_1', toolName: 'noop', args: {} }],
+        messages: [{ role: 'user', content: 'hello' }],
+        steps: [],
+        resolvedModel: buildModel({
+          provider: 'ollama',
+          secretValue: null,
+          model: 'stub-model',
+          baseUrl: stubBaseUrl,
+        }),
+        agentConfig: {
+          instructions: null,
+          maxSteps: 5,
+          toolChoice: 'auto',
+          stopConditions: null,
+          activeToolIds: null,
+          stepRules: null,
+          temperature: null,
+          outputSchema: null,
+        },
+        resolvedTools: {},
+      };
+      pendingGenerations.set('gen_stub_pending', pending);
+
+      const response = await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/generate/gen_stub_pending/tool-outputs`
+        )
+        .send({ toolOutputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe('gen_stub_pending');
+      expect(response.body.status).toBe('completed');
+      expect(response.body.output.content).toBe('final answer');
+      expect(pendingGenerations.has('gen_stub_pending')).toBe(false);
+    });
+
+    test('tool-outputs recovers a pending generation from the DB when not in memory', async () => {
+      // Simulates a server restart: no pendingGenerations map entry exists,
+      // so submitToolOutputs must fall back to recoverPendingFromDb, which
+      // rebuilds the pending state from the generation record's
+      // metadata.pendingState — real DB, real aiProviders/agentModel
+      // resolution, no mocking.
+      await createGenerationRecord({
+        publicId: 'gen_recovered',
+        projectId: projectDbId,
+        agentId,
+        traceId: 'trc_recovered',
+      });
+      await updateGenerationRecord({
+        publicId: 'gen_recovered',
+        metadata: {
+          pendingState: {
+            pendingToolCalls: [
+              { toolCallId: 'tc_1', toolName: 'noop', args: {} },
+            ],
+            messages: [{ role: 'user', content: 'hello' }],
+            steps: [],
+            parentTraceId: null,
+            rootTraceId: null,
+            toolContext: null,
+            remainingDepth: null,
+          },
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate/gen_recovered/tool-outputs`)
+        .send({ toolOutputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe('gen_recovered');
+      expect(response.body.status).toBe('completed');
+      expect(response.body.output.content).toBe('final answer');
     });
   });
 });

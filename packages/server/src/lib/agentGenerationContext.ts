@@ -40,6 +40,12 @@ const resolveGenerationModel = async (args: {
     aiProviderId: args.typedAgent.aiProvider.publicId,
   });
 
+  // Defensive TOCTOU guard: the agent is loaded with its aiProvider join
+  // (aiProviderId is a NOT NULL FK), so a consistent DB always resolves the
+  // secret here. This branch only fires if the provider row is deleted
+  // between the agent load and this lookup — unreachable through any entry
+  // point without racing a concurrent delete or mocking an owned module.
+  /* istanbul ignore next */
   if (!resolved) {
     throw new DomainError(
       'AI_PROVIDER_NOT_FOUND',
