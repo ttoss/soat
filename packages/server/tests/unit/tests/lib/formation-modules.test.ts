@@ -1030,6 +1030,25 @@ describe('webhooksFormationModule', () => {
     expect(typeof attrs?.secret).toBe('string');
     expect(attrs?.secret.length).toBeGreaterThan(0);
   });
+
+  test('validateProperties normalizes camelCase keys before field validation', () => {
+    // A camelCase key (e.g. `webhookUrl`, as the caseTransform middleware stores
+    // it) is normalized to snake_case (`webhook_url`) before the unknown-field
+    // check runs, so it is reported as an unknown field.
+    const errors = readModule('webhook').validateProperties?.({
+      properties: {
+        webhookUrl: 'http://example.com',
+        events: ['*'],
+        name: 't',
+      },
+      basePath: 'resources.MyWebhook.properties',
+    });
+    expect(
+      errors?.some((error) => {
+        return error.message.includes('webhook_url');
+      })
+    ).toBe(true);
+  });
 });
 
 // ── orchestration node/edge key conversion ──────────────────────────────────
@@ -1137,6 +1156,33 @@ describe('orchestrationsFormationModule', () => {
     expect(read).toMatchObject({
       name: 'Renamed Squad',
       description: 'writer then reviewer',
+    });
+  });
+
+  test('update replaces nodes and edges, converting their keys to camelCase', async () => {
+    const orchId = await applyCreateResource({
+      resourceType: 'orchestration',
+      projectId: internalProjectId,
+      resolvedProperties: orchestrationProperties(),
+    });
+
+    await applyUpdateResource({
+      resourceType: 'orchestration',
+      physicalResourceId: orchId,
+      resolvedProperties: {
+        name: 'Rewired Squad',
+        nodes: [{ id: 'only', type: 'agent', agent_id: agentId }],
+        edges: [],
+      },
+    });
+
+    const read = await readModule('orchestration').read?.({
+      physicalResourceId: orchId,
+    });
+    expect(read).toMatchObject({
+      name: 'Rewired Squad',
+      nodes: [{ id: 'only', type: 'agent', agent_id: agentId }],
+      edges: [],
     });
   });
 
