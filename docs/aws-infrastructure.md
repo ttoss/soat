@@ -93,6 +93,10 @@ Component summary:
 - **Optional hardening**: AWS WAF on the ALB (rate limiting, common rule
   sets); CloudFront in front for TLS termination at edge and static asset
   caching of the `/app` bundle.
+- **Cost note**: private subnets + NAT + interface endpoints are the
+  standard-tier posture. The budget tier (§14) legitimately runs tasks in
+  public subnets with strict security groups (inbound from the ALB only)
+  and no NAT — equally secure in practice at small scale, ~$70/month less.
 
 ## 4. Compute — ECS Cluster on EC2 Capacity
 
@@ -405,19 +409,53 @@ this directly.
 
 ## 14. Sizing and Rough Monthly Cost (us-east-1, on-demand, order of magnitude)
 
-| Item | Starting size | ~USD/month |
-| --- | --- | --- |
-| EC2 container instances | 2 × m6i.large | ~140 |
-| ALB | 1 | ~25 + LCU |
-| NAT gateway | 1 (single-AZ to start) | ~35 + data |
-| Aurora Serverless v2 | 0.5–4 ACU + reader | ~90–350 |
-| S3 + VPC endpoints + Secrets + CloudWatch | — | ~20–50 |
-| **Total (small production)** | | **~300–600** |
+Three tiers. The difference between them is almost entirely **how much
+high availability you pay for** — the architecture (ECS + ALB + Postgres +
+S3) is the same shape in all three, so moving up a tier is resizing, not
+re-architecting.
 
-Levers as scale grows: Compute Savings Plans on the EC2 fleet (the main
-reason EC2 capacity was chosen), provisioned Aurora once load is steady,
-NAT-per-AZ only when the availability requirement justifies it, RDS Proxy
-when task count × pool size approaches connection limits.
+### Budget tier — single-AZ, no redundancy (~$50–90)
+
+For a launch with low traffic where a short outage is acceptable.
+
+| Item | Size | ~USD/month | HA sacrificed |
+| --- | --- | --- | --- |
+| EC2 container instance | 1 × t4g.medium (2 vCPU, 4 GiB) | ~25 | Instance failure = downtime until ASG replaces it (minutes) |
+| RDS PostgreSQL | db.t4g.micro, single-AZ, 20 GB gp3 | ~14 | AZ/instance failure = restore from backup (minutes–hours) |
+| ALB | 1 | ~25 | — (kept: TLS, health checks, zero-downtime deploys) |
+| NAT gateway | **none** — tasks in public subnets with public IPs, SG locked to ALB-only inbound | 0 | None; equally secure if SGs are strict |
+| Interface VPC endpoints | **none** — traffic egresses via public IPs | 0 | None at this scale |
+| S3, Secrets Manager, CloudWatch | minimal | ~5 | — |
+| **Total** | | **~$70** | |
+
+Notes: Graviton (`t4g`) is ~20% cheaper than x86 and the image is plain
+Node — build the image multi-arch. Burstable instances fit the workload
+(the server idles between LLM calls). Dropping the ALB too (Elastic IP +
+host-level TLS) saves another $25 but gives up health-checked rolling
+deploys — not recommended.
+
+### Standard tier — multi-AZ HA (~$300–600, the original estimate)
+
+What §§3–6 describe: 2 × m6i.large across AZs (~$140), Aurora Serverless
+v2 writer + reader (~$90–350 — the 0.5 ACU floor alone is ~$44/instance
+24/7), ALB (~$25), NAT gateway (~$35), endpoints/secrets/logs (~$20–50).
+The premium over the budget tier buys: no single point of failure,
+<30s DB failover, and private-subnet isolation.
+
+### The middle path (~$120–180)
+
+Budget tier plus the two cheapest HA upgrades: second t4g instance in a
+second AZ (+$25) and RDS Multi-AZ on db.t4g.small (~$47 total for the
+pair). Keeps: no NAT (public subnets), no Aurora, no endpoints.
+
+### Levers as scale grows
+
+Compute Savings Plans on the EC2 fleet (the main reason EC2 capacity was
+chosen), provisioned Aurora only once load justifies it, NAT-per-AZ only
+when the availability requirement justifies it, RDS Proxy when task count
+× pool size approaches connection limits. A `fck-nat` instance
+(t4g.nano, ~$3/mo) is a community-standard NAT replacement if private
+subnets are wanted without the $35 managed NAT.
 
 ## 15. Phased Rollout
 
