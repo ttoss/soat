@@ -39,7 +39,9 @@ after its evidence goes stale.
   server-side at resolution *and* execution time — an expired item returns
   `409` on approve and is never executed late
 - Approve / reject (reason **required**) / edit-then-approve (the edited args
-  replace the proposal; the diff is preserved on the item)
+  replace the proposal; the diff is preserved on the item; edited args are
+  re-validated and re-classified — see
+  [Edited Args Are Re-Validated](#edited-args-are-re-validated-and-re-classified))
 - REST CRUD/resolution endpoints, OpenAPI, permissions, SDK/CLI regeneration,
   module docs
 
@@ -84,6 +86,17 @@ stays auditable.
 **Unlocks:** The "what did the agents do today" surface — thin clients render
 the feed directly from REST/MCP.
 
+### Phase 4 — Approver Targeting & Assignment ❌ Future
+
+**Goal:** Route specific items to specific humans, on top of the v1
+any-resolver model (see [Who May Resolve (v1)](#who-may-resolve-v1)).
+
+**Sketch (not committed):** optional `approver_policy` (a policy the resolver
+must additionally satisfy) or an `assignees` list on the `approval` node,
+snapshotted onto the item at emit time and enforced server-side at
+resolution; `approvals.created` webhook payload gains the target so receivers
+can notify the right person.
+
 ## Overview
 
 Orchestrations can already pause on a `human` node, but the pause is only run
@@ -117,6 +130,87 @@ never execute an expired action.
 Rejecting requires a reason; editing-then-approving preserves the diff. Both
 are capture hooks for [candidate rules](./prd-learned-rules.md) — the feedback
 loop starts here.
+
+### The `approval` Node — Template Schema
+
+The node's template-facing `properties` (snake_case, consistent with existing
+orchestration node fields):
+
+| Property           | Type            | Description                                                                 |
+| ------------------ | --------------- | ---------------------------------------------------------------------------- |
+| `tool_id`          | string          | The tool the proposed action would invoke (`{ ref: ... }` in formations)      |
+| `arguments`        | object          | JSON Logic mappings over run state; resolved at emit time into `proposed_action.arguments` |
+| `expires_in`       | integer         | Seconds until expiry; `expires_at = emitted_at + expires_in`. Decision: an integer of seconds (not a duration string) — matches `grace_seconds` on schedules and needs no parser |
+| `instructions`     | string \| null  | Optional guidance shown to the approver; stored on the item                   |
+| `reasoning`        | object \| null  | Optional JSON Logic mapping resolved into the item's `reasoning`              |
+| `evidence`         | object \| null  | Optional JSON Logic mapping resolved into the item's `evidence`               |
+| `predicted_impact` | object \| null  | Optional JSON Logic mapping resolved into the item's `predicted_impact`       |
+
+**Snapshot semantics:** all mappings are resolved against the run state and
+frozen onto the `ApprovalItem` at emit time, together with provenance
+(`run_id`, `node_id`, `agent_id`, `knowledge_version`, `policy_version`)
+stamped by the platform. The item is self-contained — later run-state changes
+never alter what the approver sees. Decision: snapshot-at-emit, because the
+approver must decide on exactly the evidence the agent had, not on state that
+drifted while the item sat in the queue.
+
+**`on_expired` edge semantics:** edges leaving an `approval` node may carry
+`condition: "approved" | "rejected" | "expired"` — the same label-matching
+mechanism `condition` nodes already use for branch routing. An unlabeled edge
+follows only on `approved` (decision: the happy path is the common case;
+rejection and expiry paths must be modeled explicitly). If the decision is
+`rejected` or `expired` and no edge matches its label, the run ends at the
+node; `expired` additionally files an `approval_expired` `ExceptionItem`
+(the Phase 1 default).
+
+### Decision Output
+
+The node completes with a decision artifact — the shape downstream nodes
+consume via `input_mapping` (snake_case, like every run/REST payload):
+
+```json
+{
+  "decision": "approved",
+  "approval_id": "apr_x1y2z3a4b5c6d7e8",
+  "resolved_by": "user_a1b2c3d4e5f6g7h8",
+  "edited_args": { "amount": 450 },
+  "reason": null,
+  "result": { "status": "ok" }
+}
+```
+
+- `decision` — `approved` \| `rejected` \| `expired`
+- `resolved_by` — resolving user's public ID; `null` on `expired`
+- `edited_args` — `null` unless edit-then-approve
+- `reason` — required (non-null) on `rejected`; optional otherwise
+- `result` — on `approved`, the node re-checks expiry and executes the
+  proposed action (edited args if present), and `result` carries the tool
+  output; `null` on `rejected`/`expired`
+
+### Edited Args Are Re-Validated and Re-Classified
+
+On edit-then-approve, the edited arguments are (1) re-validated against the
+tool's input schema and (2) re-classified by the guardrail policy
+([prd-guardrails.md](./prd-guardrails.md)) exactly as a fresh proposal would
+be. If the edited args classify to a **higher** action class than the original
+proposal, the item cannot be resolved as-is — the resolve returns `409` and a
+**new** approval item is created for the edited proposal. Rationale: without
+re-classification, editing an open item would be an approval-time privilege
+escalation path around the classifier.
+
+### Who May Resolve (v1)
+
+Decision: in v1, **any principal with `approvals:ResolveApproval` in the
+project** may resolve any of the project's items — there is no per-item
+targeting or assignment. This is deliberate: the guardrail policy decides
+*what* needs a human, and the existing project policy layer decides *who*
+counts as one — no new authorization concept until real demand.
+
+Targeting/assignment is a listed future phase
+([Phase 4](#phase-4--approver-targeting--assignment--future)): an optional
+`approver_policy` (policy ref that the resolver must additionally satisfy) or
+an `assignees` list on the `approval` node, stamped onto the item at emit
+time and enforced at resolution.
 
 ## Data Model
 
@@ -176,10 +270,10 @@ Indexes: `(project_id, status, expires_at)` on ApprovalItem;
 | Permission                        | Endpoint                                          |
 | --------------------------------- | -------------------------------------------------- |
 | `approvals:ListApprovals`         | `GET /api/v1/approvals`                            |
-| `approvals:GetApproval`           | `GET /api/v1/approvals/:approvalId`                |
-| `approvals:ResolveApproval`       | `POST /api/v1/approvals/:approvalId/approve` and `/reject` |
+| `approvals:GetApproval`           | `GET /api/v1/approvals/{approval_id}`                |
+| `approvals:ResolveApproval`       | `POST /api/v1/approvals/{approval_id}/approve` and `/reject` |
 | `exceptions:ListExceptions`       | `GET /api/v1/exceptions`                           |
-| `exceptions:ResolveException`     | `POST /api/v1/exceptions/:exceptionId/resolve`     |
+| `exceptions:ResolveException`     | `POST /api/v1/exceptions/{exception_id}/resolve`     |
 | `activity:ListActivity`           | `GET /api/v1/activity`                             |
 
 Approval items are created by the platform (approval nodes, guardrail
@@ -190,11 +284,11 @@ routing), not via a public create endpoint.
 | Method | Path                                       | Description                                          |
 | ------ | ------------------------------------------ | ---------------------------------------------------- |
 | GET    | `/api/v1/approvals`                        | List/filter (`status`, `project_id`, `expires_before`) |
-| GET    | `/api/v1/approvals/:approvalId`            | Get one item with full evidence                       |
-| POST   | `/api/v1/approvals/:approvalId/approve`    | Approve; optional `arguments` for edit-then-approve   |
-| POST   | `/api/v1/approvals/:approvalId/reject`     | Reject; `reason` required                             |
+| GET    | `/api/v1/approvals/{approval_id}`            | Get one item with full evidence                       |
+| POST   | `/api/v1/approvals/{approval_id}/approve`    | Approve; optional `arguments` for edit-then-approve (re-validated + re-classified) |
+| POST   | `/api/v1/approvals/{approval_id}/reject`     | Reject; `reason` required                             |
 | GET    | `/api/v1/exceptions`                       | List/filter (`status`, `severity`)                    |
-| POST   | `/api/v1/exceptions/:exceptionId/resolve`  | Acknowledge/resolve with a note                       |
+| POST   | `/api/v1/exceptions/{exception_id}/resolve`  | Acknowledge/resolve with a note                       |
 | GET    | `/api/v1/activity`                         | Project activity feed, cursor-paginated               |
 
 MCP tools (`list-approvals`, `approve-approval`, `reject-approval`,
