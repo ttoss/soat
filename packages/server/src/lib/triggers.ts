@@ -138,12 +138,6 @@ export const getTrigger = async (args: { id: string }) => {
   return trigger;
 };
 
-export const findTriggerSecret = async (args: { id: string }) => {
-  const trigger = await db.Trigger.findOne({ where: { publicId: args.id } });
-  if (!trigger || !trigger.secret) return null;
-  return { secret: trigger.secret as string };
-};
-
 /**
  * Returns a webhook trigger's signing secret. Throws `RESOURCE_NOT_FOUND` when
  * the trigger does not exist, and `TRIGGER_ACTION_NOT_ALLOWED` when it is not a
