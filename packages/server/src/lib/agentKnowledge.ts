@@ -202,9 +202,7 @@ export const buildKnowledgeTools = (args: {
   resolvedTools: Record<string, unknown>;
 }): void => {
   const knowledgeConfig = args.typedAgent.knowledgeConfig as
-    | { writeMemoryId?: string }
-    | null
-    | undefined;
+    { writeMemoryId?: string } | null | undefined;
   if (knowledgeConfig?.writeMemoryId) {
     args.resolvedTools['write_memory'] = buildWriteMemoryTool({
       writeMemoryId: knowledgeConfig.writeMemoryId,

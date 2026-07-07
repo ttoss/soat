@@ -374,8 +374,7 @@ export const resolveToolOutputsResult = (args: {
       content: args.result.text,
       finishReason: args.result.finishReason,
       responseMessages: args.result.response?.messages as
-        | Array<unknown>
-        | undefined,
+        Array<unknown> | undefined,
       ...(args.pending.agentConfig.outputSchema
         ? { object: args.result.output }
         : {}),

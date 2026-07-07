@@ -95,9 +95,4 @@ export type ModuleInfo = {
 
 export type JsonObject = { [key: string]: JsonValue };
 export type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | JsonObject;
+  string | number | boolean | null | JsonValue[] | JsonObject;

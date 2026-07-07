@@ -1,4 +1,4 @@
-import yaml from 'js-yaml';
+import { load } from 'js-yaml';
 
 import {
   buildDependencyGraph,
@@ -28,7 +28,7 @@ import { SUPPORTED_RESOURCE_TYPES } from './formationsTypes';
 export const parseFormationTemplateInput = (input: unknown): unknown => {
   if (typeof input !== 'string') return input;
   try {
-    return yaml.load(input);
+    return load(input);
   } catch {
     // Return the raw string so validateFormationTemplate reports a useful error
     return input;

@@ -89,7 +89,7 @@ const MonoCard = ({
     : formatValue(fieldKey, value);
   return (
     <SectionCard label={humanizeKey(fieldKey)}>
-      <pre className="whitespace-pre-wrap break-words rounded-md border bg-muted/30 p-3 font-mono text-sm leading-relaxed">
+      <pre className="whitespace-pre-wrap wrap-break-word rounded-md border bg-muted/30 p-3 font-mono text-sm leading-relaxed">
         {display}
       </pre>
     </SectionCard>

@@ -1,9 +1,7 @@
 export type Effect = 'Allow' | 'Deny';
 
 export type ConditionOperator =
-  | 'StringEquals'
-  | 'StringNotEquals'
-  | 'StringLike';
+  'StringEquals' | 'StringNotEquals' | 'StringLike';
 
 export type Condition = {
   [operator in ConditionOperator]?: Record<string, string>;

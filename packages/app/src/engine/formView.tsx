@@ -41,8 +41,7 @@ const getRequestSchema = (
 };
 
 type SubmitResult =
-  | { ok: true; data: JsonObject }
-  | { ok: false; error: string };
+  { ok: true; data: JsonObject } | { ok: false; error: string };
 
 const submitForm = async (args: {
   op: ModuleOp;

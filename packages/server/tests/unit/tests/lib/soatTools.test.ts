@@ -55,17 +55,14 @@ describe('soatTools', () => {
 
     jest.doMock('js-yaml', () => {
       return {
-        __esModule: true,
-        default: {
-          load: jest.fn((content: string) => {
-            if (content.includes('a.yaml')) {
-              return { paths: { '/a': { get: { operationId: 'getAThing' } } } };
-            }
-            return {
-              paths: { '/b': { post: { operationId: 'createBThing' } } },
-            };
-          }),
-        },
+        load: jest.fn((content: string) => {
+          if (content.includes('a.yaml')) {
+            return { paths: { '/a': { get: { operationId: 'getAThing' } } } };
+          }
+          return {
+            paths: { '/b': { post: { operationId: 'createBThing' } } },
+          };
+        }),
       };
     });
 
@@ -95,15 +92,12 @@ describe('soatTools', () => {
 
     jest.doMock('js-yaml', () => {
       return {
-        __esModule: true,
-        default: {
-          load: jest.fn((content: string) => {
-            if (content.includes('broken.yaml')) {
-              throw new Error('bad yaml');
-            }
-            return { paths: { '/ok': { get: { operationId: 'getOk' } } } };
-          }),
-        },
+        load: jest.fn((content: string) => {
+          if (content.includes('broken.yaml')) {
+            throw new Error('bad yaml');
+          }
+          return { paths: { '/ok': { get: { operationId: 'getOk' } } } };
+        }),
       };
     });
 

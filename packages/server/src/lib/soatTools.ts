@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import * as url from 'node:url';
 
 import createDebug from 'debug';
-import yaml from 'js-yaml';
+import { load } from 'js-yaml';
 
 import type {
   OpenApiSpec,
@@ -41,7 +41,7 @@ const loadToolDefinitions = (): ToolDefinition[] => {
   for (const file of files) {
     try {
       const filePath = path.join(specDir, file);
-      const spec = yaml.load(fs.readFileSync(filePath, 'utf-8')) as OpenApiSpec;
+      const spec = load(fs.readFileSync(filePath, 'utf-8')) as OpenApiSpec;
       const paths = spec.paths || {};
 
       for (const [pathTemplate, pathItem] of Object.entries(paths)) {

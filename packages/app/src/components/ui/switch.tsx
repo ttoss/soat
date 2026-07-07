@@ -39,7 +39,7 @@ export const Switch = ({
       disabled={disabled}
       onClick={handleClick}
       className={cn(
-        'relative inline-flex h-[22px] w-10 flex-shrink-0 items-center rounded-full border transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+        'relative inline-flex h-[22px] w-10 shrink-0 items-center rounded-full border transition-all focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
         checked
           ? 'border-transparent bg-galaxy-gradient shadow-glow-cyan-sm'
           : 'border-border bg-muted'
@@ -47,7 +47,7 @@ export const Switch = ({
     >
       <span
         className={cn(
-          'pointer-events-none absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all',
+          'pointer-events-none absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-xs transition-all',
           checked ? 'left-5' : 'left-0.5'
         )}
       />

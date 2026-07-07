@@ -158,14 +158,11 @@ export const aiProvidersFormationModule: FormationModule = {
       secretId,
       name: toOptionalString(properties.name),
       provider: toOptionalString(properties.provider) as
-        | AiProviderSlug
-        | undefined,
+        AiProviderSlug | undefined,
       defaultModel: toOptionalString(properties.default_model),
       baseUrl: toNullableString(properties.base_url),
       config: toNullableObject(properties.config) as
-        | Record<string, unknown>
-        | null
-        | undefined,
+        Record<string, unknown> | null | undefined,
     });
 
     log(

@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 
-import yaml from 'js-yaml';
+import { load } from 'js-yaml';
 
 import type { Wrapper } from '../types.js';
 
@@ -78,7 +78,7 @@ const readTemplateFromPath = (args: { templatePath: string }): unknown => {
   }
 
   try {
-    return yaml.load(trimmed);
+    return load(trimmed);
   } catch {
     throw new Error(
       `Template file must contain valid JSON or YAML: ${templatePath}`

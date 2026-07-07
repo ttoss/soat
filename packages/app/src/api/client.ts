@@ -13,8 +13,7 @@ export const apiBaseUrl = (): string | undefined => {
 };
 
 export type ApiResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; status: number; error: ApiError };
+  { ok: true; data: T } | { ok: false; status: number; error: ApiError };
 
 const extractError = (errorBody: unknown, status: number): ApiError => {
   if (typeof errorBody === 'object' && errorBody !== null) {
@@ -76,13 +75,7 @@ export const apiFetch = async <T>(args: {
   });
 
   type Method =
-    | 'GET'
-    | 'POST'
-    | 'PUT'
-    | 'PATCH'
-    | 'DELETE'
-    | 'HEAD'
-    | 'OPTIONS';
+    'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
   const result = await client.request({
     url: args.url,
     method: (args.method ?? 'GET') as Method,

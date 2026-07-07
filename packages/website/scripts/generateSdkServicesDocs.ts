@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import * as url from 'node:url';
 
 import camelCase from 'camelcase';
-import yaml from 'js-yaml';
+import { load } from 'js-yaml';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
@@ -60,7 +60,7 @@ const loadModules = (): ModuleConfig[] => {
     .sort()
     .map((f) => {
       const file = f.replace(/\.yaml$/, '');
-      const spec = yaml.load(
+      const spec = load(
         fs.readFileSync(path.join(SPECS_DIR, f), 'utf-8')
       ) as OpenApiSpec;
       const label = camelCase(spec.tags?.[0]?.name ?? file);
@@ -75,7 +75,7 @@ const loadMethods = (moduleName: string): ServiceMethod[] => {
   const specPath = path.join(SPECS_DIR, `${moduleName}.yaml`);
   if (!fs.existsSync(specPath)) return [];
 
-  const spec = yaml.load(fs.readFileSync(specPath, 'utf-8')) as OpenApiSpec;
+  const spec = load(fs.readFileSync(specPath, 'utf-8')) as OpenApiSpec;
   const methods: ServiceMethod[] = [];
 
   for (const [specPath, pathItem] of Object.entries(spec.paths ?? {})) {

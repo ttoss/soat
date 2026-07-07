@@ -13,19 +13,18 @@
     "@inquirer/input": "^5.1.2",
     "@inquirer/password": "^5.1.1",
     "@soat/sdk": "workspace:*",
-    "@ttoss/logger": "^0.8.16",
+    "@ttoss/logger": "^0.8.19",
     "commander": "^15.0.0",
-    "js-yaml": "^4.2.0"
+    "js-yaml": "^5.2.1"
   },
   "devDependencies": {
-    "@ttoss/config": "^1.37.15",
-    "@ttoss/test-utils": "^4.2.15",
+    "@ttoss/config": "^1.37.17",
+    "@ttoss/test-utils": "^4.2.18",
     "@types/jest": "^30.0.0",
-    "@types/js-yaml": "^4.0.9",
-    "@types/node": "^24",
+    "@types/node": "^24.13.2",
     "jest": "^30.4.2",
-    "tsdown": "^0.22.1",
-    "tsx": "^4.22.4"
+    "tsdown": "^0.22.3",
+    "tsx": "^4.23.0"
   },
   "files": [
     "dist",

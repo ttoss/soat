@@ -103,12 +103,9 @@ describe('openapiSpec', () => {
 
     jest.doMock('js-yaml', () => {
       return {
-        __esModule: true,
-        default: {
-          load: jest.fn(() => {
-            return { openapi: '3.0.0' };
-          }),
-        },
+        load: jest.fn(() => {
+          return { openapi: '3.0.0' };
+        }),
       };
     });
 
@@ -139,15 +136,12 @@ describe('openapiSpec', () => {
 
     jest.doMock('js-yaml', () => {
       return {
-        __esModule: true,
-        default: {
-          load: jest.fn(() => {
-            return {
-              paths: { '/test': { get: {} } },
-              components: { schemas: { Foo: { type: 'object' } } },
-            };
-          }),
-        },
+        load: jest.fn(() => {
+          return {
+            paths: { '/test': { get: {} } },
+            components: { schemas: { Foo: { type: 'object' } } },
+          };
+        }),
       };
     });
 
@@ -178,12 +172,9 @@ describe('openapiSpec', () => {
 
     jest.doMock('js-yaml', () => {
       return {
-        __esModule: true,
-        default: {
-          load: jest.fn(() => {
-            return { paths: { '/cached': {} } };
-          }),
-        },
+        load: jest.fn(() => {
+          return { paths: { '/cached': {} } };
+        }),
       };
     });
 

@@ -174,10 +174,8 @@ export const runStreamGeneration = (args: {
         : undefined,
     toolChoice:
       (args.typedAgent.toolChoice as
-        | 'auto'
-        | 'required'
-        | { type: 'tool'; toolName: string }
-        | undefined) ?? undefined,
+        'auto' | 'required' | { type: 'tool'; toolName: string } | undefined) ??
+      undefined,
     prepareStep,
     stopWhen: isStepCount((args.typedAgent.maxSteps as number) ?? 20),
     temperature: (args.typedAgent.temperature as number) ?? undefined,

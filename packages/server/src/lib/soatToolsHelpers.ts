@@ -121,13 +121,7 @@ export const operationIdToToolName = (operationId: string): string => {
 export const getJsonSchemaType = (
   schemaType: string | undefined
 ):
-  | 'string'
-  | 'number'
-  | 'boolean'
-  | 'array'
-  | 'integer'
-  | 'object'
-  | 'null' => {
+  'string' | 'number' | 'boolean' | 'array' | 'integer' | 'object' | 'null' => {
   if (schemaType === 'integer' || schemaType === 'number') return 'number';
   if (schemaType === 'boolean') return 'boolean';
   if (schemaType === 'array') return 'array';

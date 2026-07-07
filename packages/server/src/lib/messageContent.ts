@@ -25,9 +25,7 @@ export type DocumentMessageContent = {
 };
 
 export type ResolvableMessageContent =
-  | string
-  | ToolOutputMessageContent
-  | DocumentMessageContent;
+  string | ToolOutputMessageContent | DocumentMessageContent;
 
 export const isDocumentMessageContent = (
   value: unknown

@@ -9,7 +9,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as url from 'node:url';
 
-import yaml from 'js-yaml';
+import { load } from 'js-yaml';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
@@ -267,7 +267,7 @@ const loadModules = (): ModuleConfig[] => {
     .sort()
     .map((f) => {
       const file = f.replace(/\.yaml$/, '');
-      const spec = yaml.load(
+      const spec = load(
         fs.readFileSync(path.join(SPECS_DIR, f), 'utf-8')
       ) as OpenApiSpec;
       const label = spec.tags?.[0]?.name ?? toTitleCase(file);

@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 import { API_KEY_RAW_PREFIX, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
-import yaml from 'js-yaml';
+import { load } from 'js-yaml';
 
 /**
  * WS7 drift guardrail — pure validation with no REST entry point.
@@ -54,7 +54,7 @@ const loadExamples = (): { file: string; value: string }[] => {
 
   const examples: { file: string; value: string }[] = [];
   for (const file of files) {
-    const spec = yaml.load(fs.readFileSync(path.join(SPEC_DIR, file), 'utf-8'));
+    const spec = load(fs.readFileSync(path.join(SPEC_DIR, file), 'utf-8'));
     const values: string[] = [];
     collectExampleStrings(spec, values);
     for (const value of values) examples.push({ file, value });

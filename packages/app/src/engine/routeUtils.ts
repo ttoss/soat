@@ -50,8 +50,7 @@ const findPathTemplate = (
       const raw = pathItem[method] as Record<string, unknown> | undefined;
       if (!raw) continue;
       const opId = (raw['operationId'] ?? raw['operation_id']) as
-        | string
-        | undefined;
+        string | undefined;
       if (opId === operationId) return template;
     }
   }
