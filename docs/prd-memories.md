@@ -321,17 +321,35 @@ periodically.
 - Retrieval-time scoring blend for memory results — similarity × recency decay × importance —
   owned by the knowledge module's ranking layer (see
   [prd-knowledge.md Phase 5](./prd-knowledge.md#phase-5--hybrid-retrieval-and-ranking--future))
-- Optional per-memory retention policy: `max_entries` and/or `ttl_days` on the Memory container;
-  eviction prefers invalidated, low-importance, least-recently-accessed entries first
+- Optional per-memory retention policy: `max_entries` and/or `ttl_days` on the Memory container.
+  **Eviction order — deterministic total order.** When the valid-entry count exceeds
+  `max_entries`, entries are evicted lowest-ranked first, ranked by this sequence (each level a
+  tiebreak for the previous):
+  1. invalidated entries first (`invalidatedAt` set), oldest `invalidatedAt` first
+  2. then lowest `importance` (`null` sorts as the neutral 0.5)
+  3. then lowest `accessCount` (fewest retrievals)
+  4. then oldest `lastAccessedAt` (`null` = never accessed, sorts before any timestamp)
+  5. tiebreak: oldest `createdAt`
+
+  Eviction enforcement runs fire-and-forget after any write that leaves the memory above
+  `max_entries` (no LLM call — a cheap ORDER BY delete), evicting until the count is back at the
+  cap. `ttl_days` expiry is enforced by the daily sweep below.
 - Compaction: `POST /api/v1/memories/:memoryId/compact` clusters near-duplicate valid entries and
-  merges each cluster through the v2 arbitration path (manual/scheduled trigger; never automatic
-  inside a write)
+  merges each cluster through the v2 arbitration path. **Trigger cadence:** (a) manual via the
+  endpoint, (b) enqueued fire-and-forget when a write leaves the memory's valid-entry count above
+  the `max_entries` watermark, and (c) a daily scheduled sweep over memories with a retention
+  policy. Compaction never runs on the write request path itself (it makes LLM calls; write
+  latency must stay embedding-bound) — the on-write trigger only enqueues async work.
+  *Rationale:* cap breaches are detected exactly at write time so compaction reacts without
+  polling, while the daily sweep catches TTL expiry and memories that degrade without new writes.
 
 **Unlocks:** Memories that stay useful at 10,000 entries, not just at 100.
 
 ---
 
 ### Phase 9 — Profile Memory (Always-Injected Blocks) ❌ Not started
+
+> **Sketch** — to be expanded into concrete requirements before implementation begins.
 
 **Goal:** Add the second memory kind production assistants need: a small, bounded **profile**
 that is always in context, alongside the existing retrieved fact store. Top-k retrieval is
@@ -351,6 +369,64 @@ block always injected and lets the agent edit it.
 
 **Out of scope for now:** procedural memory (learned instructions/skills) — a future direction
 once profile memory validates the always-injected path.
+
+---
+
+## Acceptance Criteria (Interim)
+
+Memory **quality** gates (retrieval precision/recall, contradiction-handling accuracy,
+long-horizon recall) land with the knowledge module's evaluation harness — see
+[prd-knowledge.md Phase 7](./prd-knowledge.md#phase-7--evaluation-harness-and-observability--future).
+Until that harness exists, each remaining phase is accepted against the following
+harness-independent, checkable criteria (verified with unit/REST tests per
+`.claude/rules/tests.md`):
+
+**Phase 5 — Write algorithm v2:**
+
+- A write whose top match scores ≥ `duplicate_threshold` returns `action: "skipped"` without
+  making an arbitration LLM call.
+- A write with an empty shortlist (no candidate ≥ `shortlist_threshold`) creates an entry without
+  making an arbitration LLM call.
+- A supersede sets `invalidated_at` and `superseded_by_entry_id` on the old entry, creates the
+  replacement, and returns `action: "superseded"`; the superseded entry no longer appears in
+  knowledge search or default entry listing, and reappears with `include_invalidated=true`.
+- If the arbitration LLM call fails, the write still completes under v1 fallback semantics — a
+  failed arbitration never loses a write.
+- Agent- and extraction-written entries carry `source_generation_id` (and
+  `source_conversation_id` where applicable); manual entries carry neither.
+
+**Phase 6 — Entity graph:**
+
+- A create/update write returns before entity extraction runs (write latency is never LLM-bound);
+  a failed extraction leaves the entry intact with no edges.
+- "Pedro owns Company X and Maria owns Company Y" in a single entry yields exactly two edges with
+  correct subject/object pairing.
+- The same entity (same name and type) written via entries in two different memories of one
+  project resolves to a single `mey_` entity.
+- Superseding or deleting an entry invalidates/removes exactly the edges that entry asserted.
+
+**Phase 7 — Extraction coverage:**
+
+- A completed streaming generation with `extraction` + `write_memory_id` produces exactly one
+  extraction, recorded on `metadata.extraction`.
+- A `requires_action` turn triggers extraction once, only after its terminal `completed` state —
+  never once per tool-output round-trip.
+- Retries or repeated requests for the same generation never produce a second extraction
+  (idempotency marker holds).
+
+**Phase 8 — Forgetting:**
+
+- A memory at `max_entries` accepts a new entry, and after eviction settles the valid-entry count
+  never exceeds the cap.
+- Eviction selects superseded (invalidated) entries before any active entry, and follows the
+  deterministic total order defined in Phase 8 exactly (verifiable by constructing entries that
+  differ in one ranking field at a time).
+- An entry returned by knowledge search gets `lastAccessedAt`/`accessCount` updated
+  fire-and-forget, without adding latency to the search response.
+- Compaction never executes an LLM call on the write request path.
+
+**Phase 9 — Profile memory:** no acceptance criteria yet — the phase is an explicit sketch;
+criteria are defined when it is expanded into concrete requirements.
 
 ---
 

@@ -60,6 +60,9 @@ Appendix A maps every current `lib/` file to keep / delete / rewrite.
 Priorities: **P0** = correctness of the tests themselves (a passing test is lying);
 **P1** = coverage & reliability gaps; **P2** = maintainability & consistency.
 
+Effort tags (XS/S/M/L) were sized without baseline runtime or churn metrics — treat them as
+relative ordering guidance between items, not calibrated estimates.
+
 ---
 
 ### P0-1 — Fix the vacuous "message deleted" assertion
@@ -266,6 +269,13 @@ the `lib/` files that violate the boundary policy by mocking things the codebase
   `formations.test.ts`; document any residual).
 - No net loss of behavioral coverage (entry-point counterparts assert the same properties).
 
+**Measured end-state (2026-07-07).** Baselines for the soft targets above, taken from the repo:
+`tests/unit/tests/lib/` holds **62** test files and `tests/unit/tests/rest/` **39**;
+`as any`/`as unknown` stands at **97** occurrences in `lib/` and **2** in `rest/` (99 total,
+down from the ~125 counted at review time). "Reduced substantially" and "where feasible" are
+therefore anchored at these numbers: subsequent rewrite PRs must not regress above them, and each
+Appendix A rewrite should move `lib/` further down (with `formations.test.ts` at zero).
+
 **Effort:** L (largest item; split per-file across PRs — one file per PR is fine).
 
 ---
@@ -393,7 +403,8 @@ the production behavior is broken — proving it isn't just re-asserting a mock.
 - 0 `jest.doMock`/`jest.mock`/`jest.spyOn` substituting an internal (`src/**`) module,
   and 0 `jest.spyOn(db.*)` DB stubs — the single documented `ai`-package mock aside.
 - Every retained `lib/` file satisfies the keep-list rule (pure algorithm or no entry point).
-- `as any`/`as unknown` in tests reduced from ~125 toward zero in the `formations` cluster.
+- `as any`/`as unknown` in tests reduced from ~125 toward zero in the `formations` cluster
+  (measured 2026-07-07: 99 total — 97 in `lib/`, 2 in `rest/`).
 - Suite passes under randomized order; no fixed real-time settling sleeps.
 
 ## Appendix A — `lib/` file disposition under the boundary policy
