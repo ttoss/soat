@@ -257,6 +257,9 @@ importers:
       '@ai-sdk/xai':
         specifier: ^4.0.7
         version: 4.0.7(zod@4.4.3)
+      '@aws-sdk/client-s3':
+        specifier: ^3.1029.0
+        version: 3.1079.0
       '@soat/postgresdb':
         specifier: workspace:*
         version: link:../postgresdb
