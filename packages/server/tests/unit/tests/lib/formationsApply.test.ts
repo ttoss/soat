@@ -1,5 +1,4 @@
 import { db } from 'src/db';
-import { DomainError } from 'src/errors';
 import {
   buildDeleteOrder,
   handleOrphanedDeletes,
@@ -7,32 +6,82 @@ import {
   processResourceChange,
   resolveFormationOutputs,
 } from 'src/lib/formationsApply';
-import * as resourceHandlers from 'src/lib/formationsResourceHandlers';
 import type {
   FormationEvent,
   FormationTemplate,
 } from 'src/lib/formationsTypes';
+import { createMemory } from 'src/lib/memories';
 
+// These tests drive the real formation-apply helpers against the real database
+// and the real resource handlers — no `db.*` stubbing and no internal-module
+// mocks. Each branch is exercised by choosing inputs that trigger it for real:
+//   - a real physical resource (a Memory)        → clean delete / update / create
+//   - a nonexistent agent id                      → `deleteAgent` throws
+//                                                    RESOURCE_NOT_FOUND (already-gone)
+//   - an unsupported resource type                → `applyDeleteResource` throws a
+//                                                    plain Error (generic failure)
+
+let projectId: number;
+let formationId: number;
+let memoryCounter = 0;
+
+const uniqueName = (prefix: string) => {
+  memoryCounter += 1;
+  return `${prefix}-${memoryCounter}`;
+};
+
+const createMemoryResource = async (deletionPolicy = 'delete') => {
+  const memory = await createMemory({
+    projectId,
+    name: uniqueName('formations-apply-mem'),
+  });
+  const row = await db.FormationResource.create({
+    formationId,
+    logicalId: uniqueName('mem-logical'),
+    resourceType: 'memory',
+    physicalResourceId: memory.id,
+    status: 'active',
+    deletionPolicy,
+  });
+  return { memory, row };
+};
+
+const memoryExists = async (id: string): Promise<boolean> => {
+  const found = await db.Memory.findOne({ where: { publicId: id } });
+  return found !== null;
+};
+
+// A lightweight in-memory row for the pure `buildDeleteOrder` test (no DB write
+// needed — the function only reads `logicalId`).
 const buildResource = (args: {
   logicalId: string;
   resourceType: string;
   physicalResourceId: string | null;
-  deletionPolicy?: string;
 }) => {
   return db.FormationResource.build({
     publicId: `fmr_${args.logicalId}`,
-    formationId: 1,
+    formationId,
     logicalId: args.logicalId,
     resourceType: args.resourceType,
     physicalResourceId: args.physicalResourceId,
     status: 'active',
-    deletionPolicy: args.deletionPolicy ?? 'delete',
+    deletionPolicy: 'delete',
   });
 };
 
 describe('formationsApply', () => {
-  afterEach(() => {
-    jest.restoreAllMocks();
+  beforeAll(async () => {
+    const project = await db.Project.create({
+      name: 'Formations Apply Test Project',
+    });
+    projectId = project.id as number;
+
+    const formation = await db.Formation.create({
+      projectId,
+      name: 'formations-apply-test',
+      status: 'creating',
+    });
+    formationId = formation.id as number;
   });
 
   test('resolveFormationOutputs resolves valid refs and skips unresolvable values', async () => {
@@ -119,132 +168,118 @@ describe('formationsApply', () => {
   });
 
   test('performResourceDeletions skips missing ids and records both success and failure events', async () => {
-    const skipped = buildResource({
-      logicalId: 'skip',
+    const skipped = await db.FormationResource.create({
+      formationId,
+      logicalId: uniqueName('skip'),
       resourceType: 'document',
       physicalResourceId: null,
+      status: 'active',
+      deletionPolicy: 'delete',
     });
-    const success = buildResource({
-      logicalId: 'ok',
-      resourceType: 'webhook',
-      physicalResourceId: 'whk_1',
+    const { memory, row: success } = await createMemoryResource();
+    // An unsupported resource type makes `applyDeleteResource` throw a plain
+    // Error (not a RESOURCE_NOT_FOUND DomainError), driving the failure branch.
+    const failure = await db.FormationResource.create({
+      formationId,
+      logicalId: uniqueName('fail'),
+      resourceType: 'unsupported_type',
+      physicalResourceId: 'phys_unsupported',
+      status: 'active',
+      deletionPolicy: 'delete',
     });
-    const failure = buildResource({
-      logicalId: 'fail',
-      resourceType: 'memory',
-      physicalResourceId: 'mem_1',
-    });
-
-    const successUpdate = jest
-      .spyOn(success, 'update')
-      .mockResolvedValue(success);
-    const failureUpdate = jest
-      .spyOn(failure, 'update')
-      .mockResolvedValue(failure);
-
-    jest
-      .spyOn(resourceHandlers, 'applyDeleteResource')
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error('delete failed'));
 
     const result = await performResourceDeletions([skipped, success, failure]);
 
-    expect(successUpdate).toHaveBeenCalledWith({ status: 'deleted' });
-    expect(failureUpdate).not.toHaveBeenCalled();
-    expect(result.hasError).toBe(true);
     expect(
       result.events.map((event) => {
         return event.status;
       })
     ).toEqual(['succeeded', 'failed']);
+    expect(result.hasError).toBe(true);
+
+    // The successful delete really removed the memory and marked its row deleted.
+    expect(await memoryExists(memory.id)).toBe(false);
+    await success.reload();
+    expect(success.status).toBe('deleted');
+    // The failed delete did not mark its row deleted.
+    await failure.reload();
+    expect(failure.status).not.toBe('deleted');
   });
 
   test('performResourceDeletions skips physical deletion for retain resources', async () => {
-    const retained = buildResource({
-      logicalId: 'keep',
-      resourceType: 'memory',
-      physicalResourceId: 'mem_1',
-      deletionPolicy: 'retain',
-    });
-
-    const retainedUpdate = jest
-      .spyOn(retained, 'update')
-      .mockResolvedValue(retained);
-    const applyDeleteSpy = jest.spyOn(resourceHandlers, 'applyDeleteResource');
+    const { memory, row: retained } = await createMemoryResource('retain');
 
     const result = await performResourceDeletions([retained]);
 
-    expect(applyDeleteSpy).not.toHaveBeenCalled();
-    expect(retainedUpdate).toHaveBeenCalledWith({ status: 'deleted' });
+    // The physical memory is preserved, but the tracking row is marked deleted.
+    expect(await memoryExists(memory.id)).toBe(true);
+    await retained.reload();
+    expect(retained.status).toBe('deleted');
     expect(result.hasError).toBe(false);
     expect(result.events).toHaveLength(1);
     expect(result.events[0].status).toBe('succeeded');
-    expect(result.events[0].physicalResourceId).toBe('mem_1');
+    expect(result.events[0].physicalResourceId).toBe(memory.id);
   });
 
   test('performResourceDeletions treats an already-gone resource as deleted', async () => {
-    const alreadyGone = buildResource({
-      logicalId: 'gone',
+    // `deleteAgent` throws RESOURCE_NOT_FOUND for a nonexistent agent id, which
+    // the helper treats as an idempotent success.
+    const alreadyGone = await db.FormationResource.create({
+      formationId,
+      logicalId: uniqueName('gone'),
       resourceType: 'agent',
-      physicalResourceId: 'agt_1',
+      physicalResourceId: 'agt_does_not_exist',
+      status: 'active',
+      deletionPolicy: 'delete',
     });
-
-    const update = jest
-      .spyOn(alreadyGone, 'update')
-      .mockResolvedValue(alreadyGone);
-    jest
-      .spyOn(resourceHandlers, 'applyDeleteResource')
-      .mockRejectedValueOnce(
-        new DomainError('RESOURCE_NOT_FOUND', "Agent 'agt_1' not found.")
-      );
 
     const result = await performResourceDeletions([alreadyGone]);
 
-    expect(update).toHaveBeenCalledWith({ status: 'deleted' });
+    await alreadyGone.reload();
+    expect(alreadyGone.status).toBe('deleted');
     expect(result.hasError).toBe(false);
     expect(result.events).toHaveLength(1);
     expect(result.events[0].status).toBe('succeeded');
   });
 
   test('handleOrphanedDeletes records delete success and failure events', async () => {
-    const retained = buildResource({
-      logicalId: 'keep',
+    const keepLogicalId = uniqueName('keep');
+    const retained = await db.FormationResource.create({
+      formationId,
+      logicalId: keepLogicalId,
       resourceType: 'agent',
-      physicalResourceId: 'agt_1',
+      physicalResourceId: 'agt_keep',
+      status: 'active',
+      deletionPolicy: 'delete',
     });
-    const deleted = buildResource({
-      logicalId: 'remove-ok',
-      resourceType: 'memory',
-      physicalResourceId: 'mem_1',
+    const { memory, row: deleted } = await createMemoryResource();
+    const failed = await db.FormationResource.create({
+      formationId,
+      logicalId: uniqueName('remove-fail'),
+      resourceType: 'unsupported_type',
+      physicalResourceId: 'phys_unsupported',
+      status: 'active',
+      deletionPolicy: 'delete',
     });
-    const failed = buildResource({
-      logicalId: 'remove-fail',
-      resourceType: 'webhook',
-      physicalResourceId: 'whk_1',
-    });
-    const deleteUpdate = jest
-      .spyOn(deleted, 'update')
-      .mockResolvedValue(deleted);
-    const failedUpdate = jest.spyOn(failed, 'update').mockResolvedValue(failed);
     const events: FormationEvent[] = [];
 
-    jest
-      .spyOn(resourceHandlers, 'applyDeleteResource')
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error('cannot delete'));
-
     await handleOrphanedDeletes({
+      // `retained` stays in the template, so it is not orphaned; the other two
+      // are absent and therefore deleted.
       template: {
         resources: {
-          keep: { type: 'agent', properties: {} },
+          [keepLogicalId]: { type: 'agent', properties: {} },
         },
       },
       existingResources: [retained, deleted, failed],
       events,
     });
 
-    expect(deleteUpdate).toHaveBeenCalledWith({ status: 'deleted' });
-    expect(failedUpdate).not.toHaveBeenCalled();
+    expect(await memoryExists(memory.id)).toBe(false);
+    await deleted.reload();
+    expect(deleted.status).toBe('deleted');
+    await retained.reload();
+    expect(retained.status).not.toBe('deleted');
     expect(
       events.map((event) => {
         return event.status;
@@ -253,16 +288,8 @@ describe('formationsApply', () => {
   });
 
   test('handleOrphanedDeletes skips physical deletion for retain resources', async () => {
-    const retainedOrphan = buildResource({
-      logicalId: 'orphan',
-      resourceType: 'memory',
-      physicalResourceId: 'mem_1',
-      deletionPolicy: 'retain',
-    });
-    const retainedOrphanUpdate = jest
-      .spyOn(retainedOrphan, 'update')
-      .mockResolvedValue(retainedOrphan);
-    const applyDeleteSpy = jest.spyOn(resourceHandlers, 'applyDeleteResource');
+    const { memory, row: retainedOrphan } =
+      await createMemoryResource('retain');
     const events: FormationEvent[] = [];
 
     await handleOrphanedDeletes({
@@ -271,27 +298,23 @@ describe('formationsApply', () => {
       events,
     });
 
-    expect(applyDeleteSpy).not.toHaveBeenCalled();
-    expect(retainedOrphanUpdate).toHaveBeenCalledWith({ status: 'deleted' });
+    expect(await memoryExists(memory.id)).toBe(true);
+    await retainedOrphan.reload();
+    expect(retainedOrphan.status).toBe('deleted');
     expect(events).toHaveLength(1);
     expect(events[0].status).toBe('succeeded');
-    expect(events[0].physicalResourceId).toBe('mem_1');
+    expect(events[0].physicalResourceId).toBe(memory.id);
   });
 
   test('handleOrphanedDeletes treats an already-gone orphan as deleted', async () => {
-    const alreadyGoneOrphan = buildResource({
-      logicalId: 'orphan',
+    const alreadyGoneOrphan = await db.FormationResource.create({
+      formationId,
+      logicalId: uniqueName('orphan'),
       resourceType: 'agent',
-      physicalResourceId: 'agt_1',
+      physicalResourceId: 'agt_does_not_exist',
+      status: 'active',
+      deletionPolicy: 'delete',
     });
-    const update = jest
-      .spyOn(alreadyGoneOrphan, 'update')
-      .mockResolvedValue(alreadyGoneOrphan);
-    jest
-      .spyOn(resourceHandlers, 'applyDeleteResource')
-      .mockRejectedValueOnce(
-        new DomainError('RESOURCE_NOT_FOUND', "Agent 'agt_1' not found.")
-      );
     const events: FormationEvent[] = [];
 
     await handleOrphanedDeletes({
@@ -300,91 +323,71 @@ describe('formationsApply', () => {
       events,
     });
 
-    expect(update).toHaveBeenCalledWith({ status: 'deleted' });
+    await alreadyGoneOrphan.reload();
+    expect(alreadyGoneOrphan.status).toBe('deleted');
     expect(events).toHaveLength(1);
     expect(events[0].status).toBe('succeeded');
   });
 
   test('processResourceChange marks resource as failed when create handler throws', async () => {
-    const resourceRow = db.FormationResource.build({
-      publicId: 'fmr_failure',
-      formationId: 1,
-      logicalId: 'xaiProvider',
-      resourceType: 'ai_provider',
-      status: 'pending',
-      physicalResourceId: null,
-      lastAppliedProperties: null,
-    });
-    const updateSpy = jest
-      .spyOn(resourceRow, 'update')
-      .mockResolvedValue(resourceRow);
-    jest
-      .spyOn(db.FormationResource, 'create')
-      .mockResolvedValue(resourceRow as never);
-    jest
-      .spyOn(resourceHandlers, 'applyCreateResource')
-      .mockRejectedValueOnce(new Error('Secret not found'));
+    const logicalId = uniqueName('CreateFails');
 
+    // A memory declaration with no `name` fails validation inside the real
+    // memories formation module, so `applyCreateResource` throws.
     await expect(
       processResourceChange({
-        logicalId: 'xaiProvider',
+        logicalId,
         decl: {
-          type: 'ai_provider',
-          properties: {
-            name: 'xai',
-            provider: 'xai',
-            secret_id: 'sec_missing',
-            default_model: 'grok-4',
-          },
+          type: 'memory',
+          properties: {},
         },
         existing: undefined,
         resolvedIds: new Map<string, string>(),
         events: [],
-        projectId: 1,
-        formationId: 1,
+        projectId,
+        formationId,
       })
-    ).rejects.toThrow('Secret not found');
+    ).rejects.toThrow();
 
-    expect(updateSpy).toHaveBeenCalledWith({ status: 'failed' });
+    const row = await db.FormationResource.findOne({
+      where: { formationId, logicalId },
+    });
+    expect(row).not.toBeNull();
+    expect(row!.status).toBe('failed');
   });
 
   test('processResourceChange treats a deleted logical id as a fresh create, not an update', async () => {
-    const resourceRow = db.FormationResource.build({
-      publicId: 'fmr_theme',
-      formationId: 1,
-      logicalId: 'CreateTheme',
+    const logicalId = uniqueName('CreateTheme');
+    // A previously-deleted row with a stale physical id must be re-created, not
+    // diffed as an update against the gone resource.
+    const existing = await db.FormationResource.create({
+      formationId,
+      logicalId,
       resourceType: 'memory',
       status: 'deleted',
       physicalResourceId: 'mem_stale',
-      lastAppliedProperties: null,
+      deletionPolicy: 'delete',
     });
-    jest.spyOn(resourceRow, 'update').mockResolvedValue(resourceRow);
-
-    const createSpy = jest
-      .spyOn(resourceHandlers, 'applyCreateResource')
-      .mockResolvedValue('mem_new');
-    const updateResourceSpy = jest.spyOn(
-      resourceHandlers,
-      'applyUpdateResource'
-    );
 
     const events: FormationEvent[] = [];
 
     await processResourceChange({
-      logicalId: 'CreateTheme',
+      logicalId,
       decl: {
         type: 'memory',
-        properties: { name: 'theme' },
+        properties: { name: uniqueName('theme') },
       },
-      existing: resourceRow,
+      existing,
       resolvedIds: new Map<string, string>(),
       events,
-      projectId: 1,
-      formationId: 1,
+      projectId,
+      formationId,
     });
 
-    expect(createSpy).toHaveBeenCalled();
-    expect(updateResourceSpy).not.toHaveBeenCalled();
     expect(events[0].action).toBe('create');
+    // A brand-new memory was created, replacing the stale physical id.
+    expect(existing.physicalResourceId).not.toBe('mem_stale');
+    expect(existing.physicalResourceId).toMatch(/^mem_/);
+    expect(await memoryExists(existing.physicalResourceId!)).toBe(true);
   });
 });

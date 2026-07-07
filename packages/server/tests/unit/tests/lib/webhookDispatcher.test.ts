@@ -1,4 +1,3 @@
-import { db } from 'src/db';
 import { emitEvent } from 'src/lib/eventBus';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -457,19 +456,21 @@ describe('webhookDispatcher', () => {
       project_id: projectId,
       name: 'Delivery Create Failure Webhook',
       url: 'https://example.com/hook-delivery-create-fails',
-      events: ['files.created'],
+      // Subscribes only to the over-long event below (via prefix match), not to
+      // the well-formed `files.created` sync event that follows.
+      events: ['files.created.*'],
     });
 
-    // Only the sentinel webhook and the one created above match
-    // 'files.created' at this point (every other test's webhook is deleted
-    // in `afterEach`), so exactly 2 `create()` calls are expected.
-    const createSpy = jest
-      .spyOn(db.WebhookDelivery, 'create')
-      .mockRejectedValue(new Error('db unavailable'));
-    const baselineCreateCalls = createSpy.mock.calls.length;
-
+    // `WebhookDelivery.eventType` is a VARCHAR(255) column, so an event whose
+    // type exceeds that length makes the real `WebhookDelivery.create` insert
+    // reject with a genuine DB error. This drives `deliverWebhook`'s failure
+    // path against the real database (no `db` mock). Both the sentinel (`*`) and
+    // the webhook above (`files.created.*`) match this event, so both
+    // delivery-record inserts fail; their rejections must be swallowed by
+    // `handleEvent`'s `.catch()`.
+    const overLongType = `files.created.${'x'.repeat(300)}`;
     emitEvent({
-      type: 'files.created',
+      type: overLongType,
       projectId: projectInternalId ?? 1,
       projectPublicId: projectId,
       resourceType: 'file',
@@ -478,17 +479,29 @@ describe('webhookDispatcher', () => {
       timestamp: new Date().toISOString(),
     });
 
-    // The rejection is swallowed by handleEvent's .catch(); wait for both
-    // matching webhooks (sentinel + this test's) to have attempted it.
-    await waitFor(() => {
-      return createSpy.mock.calls.length >= baselineCreateCalls + 2;
+    // A well-formed event emitted afterwards must still be delivered to the
+    // sentinel — proving the create failure above did not crash the dispatch
+    // loop and dispatch keeps working.
+    const baseline = callsToUrl(SENTINEL_URL).length;
+    emitEvent({
+      type: 'files.created',
+      projectId: projectInternalId ?? 1,
+      projectPublicId: projectId,
+      resourceType: 'file',
+      resourceId: 'fil_after_create_failure',
+      data: {},
+      timestamp: new Date().toISOString(),
     });
 
-    // fetch is never reached since the delivery record couldn't be created.
+    await waitFor(() => {
+      return callsToUrl(SENTINEL_URL).length > baseline;
+    });
+    expect(callsToUrl(SENTINEL_URL).length).toBeGreaterThan(baseline);
+
+    // The over-long event never produced a fetch, since its delivery record
+    // could not be created.
     expect(
       callsToUrl('https://example.com/hook-delivery-create-fails')
     ).toHaveLength(0);
-
-    createSpy.mockRestore();
   });
 });
