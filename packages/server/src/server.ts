@@ -6,6 +6,7 @@ import pkg from '../package.json' assert { type: 'json' };
 import { app } from './app';
 import { initializeDatabase } from './db';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
+import { startTriggerScheduler } from './lib/triggerScheduler';
 import { createFirstAdminUser } from './lib/users';
 
 const log = createDebug('soat:server');
@@ -23,6 +24,9 @@ const startServer = async () => {
     // it can wake sleeping runs whose delay/poll waits are due (including runs
     // that were parked before a restart).
     startOrchestrationScheduler();
+    // Start the trigger scheduler so due schedule triggers fire (including
+    // occurrences whose next_fire_at elapsed while the server was down).
+    startTriggerScheduler();
   } catch (error) {
     log('startServer: failed to connect to database error=%o', error);
     process.exit(1);
