@@ -176,6 +176,18 @@ export const getTriggerSecret = async (args: { id: string }) => {
   return { secret: trigger.secret as string };
 };
 
+/**
+ * Returns a webhook trigger's signing secret, or `null` when the trigger does
+ * not exist or is not a webhook trigger. The null-safe counterpart to
+ * {@link getTriggerSecret}, used by the formation module's `getAttributes` to
+ * resolve `ref_attr` secret outputs without throwing on non-webhook triggers.
+ */
+export const findTriggerSecret = async (args: { id: string }) => {
+  const trigger = await db.Trigger.findOne({ where: { publicId: args.id } });
+  if (!trigger || trigger.type !== 'webhook') return null;
+  return { secret: trigger.secret as string };
+};
+
 type CreateTriggerArgs = {
   projectId: number;
   createdByUserId?: number | null;

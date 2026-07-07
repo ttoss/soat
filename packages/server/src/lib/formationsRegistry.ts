@@ -15,6 +15,7 @@ import { policiesFormationModule } from './formation-modules/policiesFormationMo
 import { secretsFormationModule } from './formation-modules/secretsFormationModule';
 import { sessionsFormationModule } from './formation-modules/sessionsFormationModule';
 import { toolsFormationModule } from './formation-modules/toolsFormationModule';
+import { triggersFormationModule } from './formation-modules/triggersFormationModule';
 import { webhooksFormationModule } from './formation-modules/webhooksFormationModule';
 import type { FormationModule } from './formationsTypes';
 
@@ -49,6 +50,7 @@ registerFormationModule({ module: policiesFormationModule });
 registerFormationModule({ module: secretsFormationModule });
 registerFormationModule({ module: sessionsFormationModule });
 registerFormationModule({ module: orchestrationsFormationModule });
+registerFormationModule({ module: triggersFormationModule });
 
 export const getFormationModule = (args: {
   resourceType: string;

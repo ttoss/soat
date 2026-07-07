@@ -138,6 +138,7 @@ describe('formationsRegistry', () => {
 const NON_OBJECT: Array<[string, string]> = [
   ['api_key', 'API key `properties` must be an object'],
   ['webhook', 'Webhook `properties` must be an object'],
+  ['trigger', 'Trigger `properties` must be an object'],
   ['memory_entry', 'MemoryEntry `properties` must be an object'],
   ['chat', 'Chat `properties` must be an object'],
   ['conversation', 'Conversation `properties` must be an object'],
@@ -476,6 +477,30 @@ const CASES: RoundTripCase[] = [
       };
     },
   },
+  {
+    resourceType: 'trigger',
+    build: (seed) => {
+      return {
+        create: {
+          name: `Trigger ${seed}`,
+          type: 'manual',
+          target_type: 'agent',
+          target_id: agentId,
+          input: { foo: 'bar' },
+        },
+        expectRead: {
+          name: `Trigger ${seed}`,
+          type: 'manual',
+          target_type: 'agent',
+          target_id: agentId,
+          input: { foo: 'bar' },
+          active: true,
+        },
+        update: { name: `Trigger ${seed} updated`, active: false },
+        expectAfterUpdate: { name: `Trigger ${seed} updated`, active: false },
+      };
+    },
+  },
 ];
 
 let seedCounter = 0;
@@ -681,6 +706,137 @@ describe('apiKeysFormationModule', () => {
       physicalResourceId: keyId,
     });
     expect((read as { policy_ids: string[] }).policy_ids).toEqual([policyB]);
+  });
+});
+
+// ── trigger starter/target + secret + shape rules ───────────────────────────
+
+describe('triggersFormationModule', () => {
+  test('webhook trigger exposes its signing secret via getAttributes', async () => {
+    const id = await applyCreateResource({
+      resourceType: 'trigger',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        name: 'FM Webhook Trigger',
+        type: 'webhook',
+        target_type: 'agent',
+        target_id: agentId,
+      },
+    });
+
+    const attrs = await readModule('trigger').getAttributes?.({
+      physicalResourceId: id,
+    });
+    expect(typeof attrs?.secret).toBe('string');
+    expect(attrs?.secret.length).toBeGreaterThan(0);
+  });
+
+  test('a non-webhook trigger exposes no secret attribute', async () => {
+    const id = await applyCreateResource({
+      resourceType: 'trigger',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        name: 'FM Manual Trigger NoSecret',
+        type: 'manual',
+        target_type: 'agent',
+        target_id: agentId,
+      },
+    });
+
+    const attrs = await readModule('trigger').getAttributes?.({
+      physicalResourceId: id,
+    });
+    expect(attrs).toEqual({});
+  });
+
+  test('schedule trigger create computes next_fire_at and reads back cron', async () => {
+    const id = await applyCreateResource({
+      resourceType: 'trigger',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        name: 'FM Schedule Trigger',
+        type: 'schedule',
+        target_type: 'agent',
+        target_id: agentId,
+        cron: '0 8 * * *',
+      },
+    });
+
+    const read = await readModule('trigger').read?.({ physicalResourceId: id });
+    expect(read).toMatchObject({ type: 'schedule', cron: '0 8 * * *' });
+  });
+
+  test('create resolves a policy_id boundary and read returns it', async () => {
+    const policyId = (
+      await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              { effect: 'Allow', action: ['agents:CreateAgentGeneration'] },
+            ],
+          },
+        })
+    ).body.id;
+
+    const id = await applyCreateResource({
+      resourceType: 'trigger',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        name: 'FM Policy Trigger',
+        type: 'manual',
+        target_type: 'agent',
+        target_id: agentId,
+        policy_id: policyId,
+      },
+    });
+
+    const read = await readModule('trigger').read?.({ physicalResourceId: id });
+    expect(read).toMatchObject({ policy_id: policyId });
+  });
+
+  test('validateProperties rejects cron on a non-schedule trigger', () => {
+    const errors = readModule('trigger').validateProperties?.({
+      properties: {
+        name: 'Bad',
+        type: 'manual',
+        target_type: 'agent',
+        target_id: agentId,
+        cron: '0 8 * * *',
+      },
+      basePath: 'resources.<trigger>.properties',
+    });
+    expect(errors?.length).toBeGreaterThan(0);
+    expect(errors?.[0].message).toMatch(/cron is only valid for schedule/i);
+  });
+
+  test('validateProperties rejects an unparseable cron on a schedule trigger', () => {
+    const errors = readModule('trigger').validateProperties?.({
+      properties: {
+        name: 'Bad',
+        type: 'schedule',
+        target_type: 'agent',
+        target_id: agentId,
+        cron: 'not a cron',
+      },
+      basePath: 'resources.<trigger>.properties',
+    });
+    expect(errors?.length).toBeGreaterThan(0);
+  });
+
+  test('validateProperties rejects an action on a non-tool target', () => {
+    const errors = readModule('trigger').validateProperties?.({
+      properties: {
+        name: 'Bad',
+        type: 'manual',
+        target_type: 'agent',
+        target_id: agentId,
+        action: 'do-thing',
+      },
+      basePath: 'resources.<trigger>.properties',
+    });
+    expect(errors?.length).toBeGreaterThan(0);
+    expect(errors?.[0].message).toMatch(/action is only valid for tool/i);
   });
 });
 
