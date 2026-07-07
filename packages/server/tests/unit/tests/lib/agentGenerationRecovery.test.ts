@@ -1,359 +1,225 @@
-const loadRecoveryModule = async () => {
-  return import('src/lib/agentGenerationRecovery');
-};
+import { db } from 'src/db';
+import { recoverPendingFromDb } from 'src/lib/agentGenerationRecovery';
+import {
+  createGenerationRecord,
+  updateGenerationRecord,
+} from 'src/lib/generations';
 
-describe('recoverPendingFromDb', () => {
-  afterEach(() => {
-    jest.resetModules();
-    jest.clearAllMocks();
-  });
+import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { authenticatedTestClient } from '../../testClient';
 
-  test('returns undefined when generation is not found', async () => {
-    jest.doMock('src/lib/generations', () => {
-      return {
-        getGeneration: jest.fn().mockResolvedValue(null),
-        updateGenerationRecord: jest.fn(),
-        createGenerationRecord: jest.fn(),
-      };
-    });
+// `recoverPendingFromDb` rebuilds the in-memory `PendingGeneration` from a
+// generation record's `metadata.pendingState` after a server restart, when the
+// pending map is empty. Its happy path is exercised end-to-end through the REST
+// tool-outputs route in `rest/agentGeneration.test.ts`; every failure branch,
+// however, collapses to an indistinguishable `GENERATION_NOT_FOUND` (404) at
+// that boundary. These tests drive the recovery function directly on the real
+// DB so each branch is asserted individually and the rebuilt shape
+// (resolvedModel / resolvedTools / agentConfig) — which the REST layer never
+// exposes — is verified. No internal (`src/**`) module is mocked.
+describe('recoverPendingFromDb (real DB)', () => {
+  let adminToken: string;
+  let projectPublicId: string;
+  let projectDbId: number;
+  let agentWithToolsId: string;
+  let agentNoToolsId: string;
 
-    const { recoverPendingFromDb } = await loadRecoveryModule();
-    const result = await recoverPendingFromDb({
-      generationId: 'gen_missing',
-      agentId: 'agt_test',
-    });
-
-    expect(result).toBeUndefined();
-  });
-
-  test('returns undefined when pendingState is missing from metadata', async () => {
-    jest.doMock('src/lib/generations', () => {
-      return {
-        getGeneration: jest.fn().mockResolvedValue({
-          publicId: 'gen_1',
-          agentId: 'agt_test',
-          traceId: 'trc_1',
-          metadata: {},
-        }),
-        updateGenerationRecord: jest.fn(),
-        createGenerationRecord: jest.fn(),
-      };
-    });
-
-    const { recoverPendingFromDb } = await loadRecoveryModule();
-    const result = await recoverPendingFromDb({
-      generationId: 'gen_1',
-      agentId: 'agt_test',
-    });
-
-    expect(result).toBeUndefined();
-  });
-
-  test('returns undefined when agentId does not match generation', async () => {
-    jest.doMock('src/lib/generations', () => {
-      return {
-        getGeneration: jest.fn().mockResolvedValue({
-          publicId: 'gen_1',
-          agentId: 'agt_other',
-          traceId: 'trc_1',
-          metadata: {
-            pendingState: {
-              pendingToolCalls: [],
-              messages: [],
-              parentTraceId: null,
-              rootTraceId: null,
-              toolContext: null,
-              remainingDepth: null,
-            },
-          },
-        }),
-        updateGenerationRecord: jest.fn(),
-        createGenerationRecord: jest.fn(),
-      };
-    });
-
-    const { recoverPendingFromDb } = await loadRecoveryModule();
-    const result = await recoverPendingFromDb({
-      generationId: 'gen_1',
-      agentId: 'agt_test',
-    });
-
-    expect(result).toBeUndefined();
-  });
-
-  test('returns undefined when typedAgent is not found', async () => {
-    jest.doMock('src/lib/generations', () => {
-      return {
-        getGeneration: jest.fn().mockResolvedValue({
-          publicId: 'gen_1',
-          agentId: 'agt_test',
-          traceId: 'trc_1',
-          metadata: {
-            pendingState: {
-              pendingToolCalls: [],
-              messages: [{ role: 'user', content: 'hi' }],
-              parentTraceId: null,
-              rootTraceId: null,
-              toolContext: null,
-              remainingDepth: null,
-            },
-          },
-        }),
-        updateGenerationRecord: jest.fn(),
-        createGenerationRecord: jest.fn(),
-      };
-    });
-    jest.doMock('src/db', () => {
-      return {
-        db: {
-          Agent: { findOne: jest.fn().mockResolvedValue(null) },
-          Project: {},
-          AiProvider: {},
-        },
-        models: {},
-      };
-    });
-
-    const { recoverPendingFromDb } = await loadRecoveryModule();
-    const result = await recoverPendingFromDb({
-      generationId: 'gen_1',
-      agentId: 'agt_test',
-    });
-
-    expect(result).toBeUndefined();
-  });
-
-  test('returns undefined when AI provider secret cannot be resolved', async () => {
-    jest.doMock('src/lib/generations', () => {
-      return {
-        getGeneration: jest.fn().mockResolvedValue({
-          publicId: 'gen_2',
-          agentId: 'agt_test',
-          traceId: 'trc_2',
-          metadata: {
-            pendingState: {
-              pendingToolCalls: [],
-              messages: [{ role: 'user', content: 'hi' }],
-              parentTraceId: null,
-              rootTraceId: null,
-              toolContext: null,
-              remainingDepth: null,
-            },
-          },
-        }),
-        updateGenerationRecord: jest.fn(),
-        createGenerationRecord: jest.fn(),
-      };
-    });
-    jest.doMock('src/db', () => {
-      return {
-        db: {
-          Agent: {
-            findOne: jest.fn().mockResolvedValue({
-              publicId: 'agt_test',
-              model: 'gpt-4',
-              toolIds: null,
-              maxSteps: 5,
-              toolChoice: 'auto',
-              stopConditions: null,
-              activeToolIds: null,
-              stepRules: null,
-              temperature: null,
-              boundaryPolicy: null,
-              instructions: null,
-              project: { id: 1, publicId: 'prj_test' },
-              aiProvider: { publicId: 'aip_test' },
-            }),
-          },
-          Project: {},
-          AiProvider: {},
-        },
-        models: {},
-      };
-    });
-    jest.doMock('src/lib/aiProviders', () => {
-      return {
-        resolveAiProviderSecret: jest.fn().mockResolvedValue(null),
-      };
-    });
-
-    const { recoverPendingFromDb } = await loadRecoveryModule();
-    const result = await recoverPendingFromDb({
-      generationId: 'gen_2',
-      agentId: 'agt_test',
-    });
-
-    expect(result).toBeUndefined();
-  });
-
-  test('returns PendingGeneration when toolIds is null', async () => {
-    const pendingState = {
+  const buildPendingState = () => {
+    return {
       pendingToolCalls: [
-        { toolCallId: 'tc_1', toolName: 'myTool', args: { x: 1 } },
+        { toolCallId: 'tc_1', toolName: 'clientTool', args: { x: 1 } },
       ],
       messages: [{ role: 'user', content: 'hello' }],
+      steps: [],
       parentTraceId: 'trc_parent',
       rootTraceId: 'trc_root',
       toolContext: null,
       remainingDepth: null,
     };
-    const mockModel = { modelId: 'mock-model' };
+  };
 
-    jest.doMock('src/lib/generations', () => {
-      return {
-        getGeneration: jest.fn().mockResolvedValue({
-          publicId: 'gen_3',
-          agentId: 'agt_test',
-          traceId: 'trc_3',
-          metadata: { pendingState },
-        }),
-        updateGenerationRecord: jest.fn(),
-        createGenerationRecord: jest.fn(),
-      };
+  beforeAll(async () => {
+    const setup = await setupProjectWithUsers({
+      prefix: 'genrecovery',
+      policyActions: ['agents:CreateAgent', 'agents:CreateAgentGeneration'],
+      createNoPermUser: false,
     });
-    jest.doMock('src/db', () => {
-      return {
-        db: {
-          Agent: {
-            findOne: jest.fn().mockResolvedValue({
-              publicId: 'agt_test',
-              model: null,
-              toolIds: null,
-              maxSteps: 10,
-              toolChoice: 'auto',
-              stopConditions: null,
-              activeToolIds: null,
-              stepRules: null,
-              temperature: null,
-              boundaryPolicy: null,
-              instructions: 'Be helpful',
-              project: { id: 1, publicId: 'prj_test' },
-              aiProvider: { publicId: 'aip_test' },
-            }),
-          },
-          Project: {},
-          AiProvider: {},
-        },
-        models: {},
-      };
-    });
-    jest.doMock('src/lib/aiProviders', () => {
-      return {
-        resolveAiProviderSecret: jest.fn().mockResolvedValue({
-          provider: 'openai',
-          secretValue: 'sk-test',
-          defaultModel: 'gpt-4o',
-          baseUrl: undefined,
-          config: undefined,
-        }),
-      };
-    });
-    jest.doMock('src/lib/agentModel', () => {
-      return {
-        buildModel: jest.fn().mockReturnValue(mockModel),
-      };
-    });
+    adminToken = setup.adminToken;
+    projectPublicId = setup.projectId;
 
-    const { recoverPendingFromDb } = await loadRecoveryModule();
-    const result = await recoverPendingFromDb({
-      generationId: 'gen_3',
-      agentId: 'agt_test',
+    const project = await db.Project.findOne({
+      where: { publicId: projectPublicId },
     });
+    projectDbId = project!.id;
 
-    expect(result).toBeDefined();
-    expect(result!.agentId).toBe('agt_test');
-    expect(result!.traceId).toBe('trc_3');
-    expect(result!.parentTraceId).toBe('trc_parent');
-    expect(result!.rootTraceId).toBe('trc_root');
-    expect(result!.generationId).toBe('gen_3');
-    expect(result!.pendingToolCalls).toHaveLength(1);
-    expect(result!.pendingToolCalls[0].toolCallId).toBe('tc_1');
-    expect(result!.resolvedModel).toBe(mockModel);
-    expect(result!.resolvedTools).toEqual({});
-    expect(result!.agentConfig.instructions).toBe('Be helpful');
+    const aiProvRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/ai-providers')
+      .send({
+        project_id: projectPublicId,
+        name: 'Recovery Provider',
+        provider: 'openai',
+        default_model: 'gpt-4o',
+      });
+
+    const toolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        name: 'clientTool',
+        type: 'client',
+        project_id: projectPublicId,
+        parameters: { type: 'object', properties: {} },
+      });
+
+    const agentWithToolsRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents')
+      .send({
+        project_id: projectPublicId,
+        ai_provider_id: aiProvRes.body.id,
+        name: 'Recovery Agent With Tools',
+        instructions: 'Be helpful',
+        model: 'gpt-4o',
+        tool_ids: [toolRes.body.id],
+        temperature: 0.7,
+      });
+    agentWithToolsId = agentWithToolsRes.body.id;
+
+    const agentNoToolsRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents')
+      .send({
+        project_id: projectPublicId,
+        ai_provider_id: aiProvRes.body.id,
+        name: 'Recovery Agent No Tools',
+      });
+    agentNoToolsId = agentNoToolsRes.body.id;
   });
 
-  test('returns PendingGeneration with resolved tools when toolIds are set', async () => {
-    const pendingState = {
-      pendingToolCalls: [],
-      messages: [{ role: 'user', content: 'hello' }],
-      parentTraceId: null,
-      rootTraceId: null,
-      toolContext: { key: 'value' },
-      remainingDepth: 3,
-    };
-    const mockModel = { modelId: 'mock-model' };
-    const mockTools = { toolA: {}, toolB: {} };
+  const seedGeneration = async (args: {
+    publicId: string;
+    agentId: string;
+    traceId: string;
+    withPendingState: boolean;
+  }): Promise<void> => {
+    await createGenerationRecord({
+      publicId: args.publicId,
+      projectId: projectDbId,
+      agentId: args.agentId,
+      traceId: args.traceId,
+    });
+    if (args.withPendingState) {
+      await updateGenerationRecord({
+        publicId: args.publicId,
+        metadata: { pendingState: buildPendingState() },
+      });
+    }
+  };
 
-    jest.doMock('src/lib/generations', () => {
-      return {
-        getGeneration: jest.fn().mockResolvedValue({
-          publicId: 'gen_4',
-          agentId: 'agt_test',
-          traceId: 'trc_4',
-          metadata: { pendingState },
-        }),
-        updateGenerationRecord: jest.fn(),
-        createGenerationRecord: jest.fn(),
-      };
-    });
-    jest.doMock('src/db', () => {
-      return {
-        db: {
-          Agent: {
-            findOne: jest.fn().mockResolvedValue({
-              publicId: 'agt_test',
-              model: 'claude-3',
-              toolIds: ['tool-a', 'tool-b'],
-              maxSteps: 5,
-              toolChoice: 'required',
-              stopConditions: null,
-              activeToolIds: null,
-              stepRules: null,
-              temperature: 0.7,
-              boundaryPolicy: null,
-              instructions: null,
-              project: { id: 2, publicId: 'prj_test2' },
-              aiProvider: { publicId: 'aip_test2' },
-            }),
-          },
-          Project: {},
-          AiProvider: {},
-        },
-        models: {},
-      };
-    });
-    jest.doMock('src/lib/aiProviders', () => {
-      return {
-        resolveAiProviderSecret: jest.fn().mockResolvedValue({
-          provider: 'anthropic',
-          secretValue: 'sk-ant-test',
-          defaultModel: 'claude-3-opus',
-          baseUrl: undefined,
-          config: undefined,
-        }),
-      };
-    });
-    jest.doMock('src/lib/agentModel', () => {
-      return {
-        buildModel: jest.fn().mockReturnValue(mockModel),
-      };
-    });
-    jest.doMock('src/lib/agentToolResolver', () => {
-      return {
-        resolveAgentTools: jest.fn().mockResolvedValue(mockTools),
-      };
+  test('rebuilds the full pending generation, resolving model and tools', async () => {
+    await seedGeneration({
+      publicId: 'gen_recover_tools',
+      agentId: agentWithToolsId,
+      traceId: 'trc_recover_tools',
+      withPendingState: true,
     });
 
-    const { recoverPendingFromDb } = await loadRecoveryModule();
     const result = await recoverPendingFromDb({
-      generationId: 'gen_4',
-      agentId: 'agt_test',
-      authHeader: 'Bearer token',
+      generationId: 'gen_recover_tools',
+      agentId: agentWithToolsId,
     });
 
     expect(result).toBeDefined();
-    expect(result!.resolvedTools).toBe(mockTools);
+    expect(result!.agentId).toBe(agentWithToolsId);
+    expect(result!.projectId).toBe(projectDbId);
+    expect(result!.projectPublicId).toBe(projectPublicId);
+    expect(result!.traceId).toBe('trc_recover_tools');
+    expect(result!.parentTraceId).toBe('trc_parent');
+    expect(result!.rootTraceId).toBe('trc_root');
+    expect(result!.generationId).toBe('gen_recover_tools');
+    expect(result!.pendingToolCalls).toHaveLength(1);
+    expect(result!.pendingToolCalls[0].toolCallId).toBe('tc_1');
+    expect(result!.pendingToolCalls[0].toolName).toBe('clientTool');
+    expect(result!.resolvedModel).toBeDefined();
+    // The client tool referenced by tool_ids is resolved from the real DB.
+    expect(Object.keys(result!.resolvedTools)).toContain('clientTool');
+    expect(result!.agentConfig.instructions).toBe('Be helpful');
     expect(result!.agentConfig.temperature).toBe(0.7);
+  });
+
+  test('resolves an empty tool set for an agent without tools', async () => {
+    await seedGeneration({
+      publicId: 'gen_recover_notools',
+      agentId: agentNoToolsId,
+      traceId: 'trc_recover_notools',
+      withPendingState: true,
+    });
+
+    const result = await recoverPendingFromDb({
+      generationId: 'gen_recover_notools',
+      agentId: agentNoToolsId,
+    });
+
+    expect(result).toBeDefined();
+    expect(result!.resolvedTools).toEqual({});
+    expect(result!.agentConfig.instructions).toBeNull();
+  });
+
+  test('returns undefined when the generation record does not exist', async () => {
+    const result = await recoverPendingFromDb({
+      generationId: 'gen_does_not_exist',
+      agentId: agentWithToolsId,
+    });
+
+    expect(result).toBeUndefined();
+  });
+
+  test('returns undefined when the generation has no pendingState', async () => {
+    await seedGeneration({
+      publicId: 'gen_no_pending',
+      agentId: agentWithToolsId,
+      traceId: 'trc_no_pending',
+      withPendingState: false,
+    });
+
+    const result = await recoverPendingFromDb({
+      generationId: 'gen_no_pending',
+      agentId: agentWithToolsId,
+    });
+
+    expect(result).toBeUndefined();
+  });
+
+  test('returns undefined when the agentId does not match the record', async () => {
+    await seedGeneration({
+      publicId: 'gen_agent_mismatch',
+      agentId: agentWithToolsId,
+      traceId: 'trc_agent_mismatch',
+      withPendingState: true,
+    });
+
+    const result = await recoverPendingFromDb({
+      generationId: 'gen_agent_mismatch',
+      agentId: agentNoToolsId,
+    });
+
+    expect(result).toBeUndefined();
+  });
+
+  test('returns undefined when the agent is out of the requested project scope', async () => {
+    await seedGeneration({
+      publicId: 'gen_scope_miss',
+      agentId: agentWithToolsId,
+      traceId: 'trc_scope_miss',
+      withPendingState: true,
+    });
+
+    // The record and agentId match, but scoping the agent lookup to a project
+    // the agent does not belong to makes `resolveAgentForGeneration` return
+    // null — a distinct branch from the "record missing" case above.
+    const result = await recoverPendingFromDb({
+      generationId: 'gen_scope_miss',
+      agentId: agentWithToolsId,
+      projectIds: [projectDbId + 100000],
+    });
+
+    expect(result).toBeUndefined();
   });
 });
