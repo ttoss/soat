@@ -73,7 +73,7 @@ observable without polling.
 
 **Deliverables:**
 
-- `POST /schedules/:id/pause` and `/resume` (kill switch per project — e.g.
+- `POST /schedules/{schedule_id}/pause` and `/resume` (kill switch per project — e.g.
   during onboarding — without deleting the formation)
 - Formation resource type `schedule` (`schedulesFormationModule.ts`,
   `ScheduleResourceProperties` in `formations.yaml`); cron as a template
@@ -136,6 +136,32 @@ time may be and still fire (default: one cadence interval, capped); anything
 older is skipped with a `schedules.skipped` event. Catch-up never fires more
 than once per schedule.
 
+### Updates Recompute `next_fire_at` From Now
+
+When a `PUT /api/v1/schedules/{schedule_id}` changes `cron` or `timezone`,
+`next_fire_at` is recomputed **immediately** as the next occurrence of the new
+expression **relative to `now()`** — never relative to `last_fired_at`.
+Decision: relative-to-now, because an update is a statement about future
+cadence; computing from `last_fired_at` could make a past-due occurrence of
+the new expression fire retroactively the instant the update lands.
+
+- Updating a **paused** schedule (`enabled = false`) stores the new
+  `cron`/`timezone` but does not wake it: `next_fire_at` stays `null` and is
+  recomputed from the stored (new) expression only on `resume` — pause remains
+  a strict kill switch.
+- Updating `input`, `overlap_policy`, or `grace_seconds` alone does **not**
+  touch `next_fire_at`.
+
+**Mid-tick interaction (advisory lock):** the update's recompute takes the
+same per-schedule Postgres advisory lock the scheduler tick uses to claim due
+schedules, so an update and a fire serialize — they never interleave. If the
+update wins the lock, the tick re-reads the recomputed `next_fire_at`
+(typically no longer due) and does not fire. If the tick wins, the in-flight
+fire completes with the pre-update `cron`/`input` — an update never aborts a
+fire that has already been claimed — and the update then overwrites the
+tick's advanced `next_fire_at` with the value computed from the new
+expression.
+
 ## Data Model
 
 ### Schedule
@@ -166,11 +192,11 @@ Indexes: `(next_fire_at) WHERE enabled`, `(project_id)`, unique `(publicId)`.
 | --------------------------- | ---------------------------------------- |
 | `schedules:CreateSchedule`  | `POST /api/v1/schedules`                 |
 | `schedules:ListSchedules`   | `GET /api/v1/schedules`                  |
-| `schedules:GetSchedule`     | `GET /api/v1/schedules/:scheduleId`      |
-| `schedules:UpdateSchedule`  | `PUT /api/v1/schedules/:scheduleId`      |
-| `schedules:DeleteSchedule`  | `DELETE /api/v1/schedules/:scheduleId`   |
-| `schedules:PauseSchedule`   | `POST /api/v1/schedules/:scheduleId/pause` |
-| `schedules:ResumeSchedule`  | `POST /api/v1/schedules/:scheduleId/resume` |
+| `schedules:GetSchedule`     | `GET /api/v1/schedules/{schedule_id}`      |
+| `schedules:UpdateSchedule`  | `PUT /api/v1/schedules/{schedule_id}`      |
+| `schedules:DeleteSchedule`  | `DELETE /api/v1/schedules/{schedule_id}`   |
+| `schedules:PauseSchedule`   | `POST /api/v1/schedules/{schedule_id}/pause` |
+| `schedules:ResumeSchedule`  | `POST /api/v1/schedules/{schedule_id}/resume` |
 
 ## REST API
 
@@ -182,8 +208,8 @@ spec via `soatTools.ts`.
 | ------ | -------------------------------------- | ------------------------------------ |
 | POST   | `/api/v1/schedules`                    | Create a schedule                    |
 | GET    | `/api/v1/schedules`                    | List schedules (filter by project)   |
-| GET    | `/api/v1/schedules/:scheduleId`        | Get a schedule                       |
-| PUT    | `/api/v1/schedules/:scheduleId`        | Update cron/timezone/input/policies  |
-| DELETE | `/api/v1/schedules/:scheduleId`        | Delete a schedule                    |
-| POST   | `/api/v1/schedules/:scheduleId/pause`  | Disable firing, keep state           |
-| POST   | `/api/v1/schedules/:scheduleId/resume` | Re-enable and recompute `next_fire_at` |
+| GET    | `/api/v1/schedules/{schedule_id}`        | Get a schedule                       |
+| PUT    | `/api/v1/schedules/{schedule_id}`        | Update cron/timezone/input/policies (see [Updates](#updates-recompute-next_fire_at-from-now)) |
+| DELETE | `/api/v1/schedules/{schedule_id}`        | Delete a schedule                    |
+| POST   | `/api/v1/schedules/{schedule_id}/pause`  | Disable firing, keep state           |
+| POST   | `/api/v1/schedules/{schedule_id}/resume` | Re-enable and recompute `next_fire_at` |

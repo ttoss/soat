@@ -50,6 +50,18 @@ someone rereading the queue.
 - Clustering pass on the scheduler tick (nightly): nearest-neighbor search of
   new candidates against existing candidates and promoted rules, reusing the
   memory module's similarity machinery
+- **Similarity metric (decision):** embedding-based **cosine similarity** via
+  pgvector — the platform already has pgvector and the embeddings module, so
+  no new machinery. The embedded text is the candidate's `text` field verbatim
+  (rejection reason, edit diff summary, or manual correction), compared
+  against other candidates' `text` embeddings and promoted rules' `text`
+  embeddings (both tables carry an `embedding` column)
+- **Threshold (decision):** two texts belong to the same cluster when cosine
+  similarity ≥ **0.85** (default), configurable per deployment via
+  `LEARNED_RULES_SIMILARITY_THRESHOLD`. Rationale: 0.85 sits between the
+  memories module's `duplicate_threshold` (0.95 — too strict, misses
+  paraphrased corrections) and its `shortlist_threshold` (0.60 — too loose,
+  merges unrelated corrections)
 - Similar candidates merge into a cluster (`occurrences` counter, exemplar
   text); `occurrences >= N` (configurable, default 3) sets
   `promotion_suggested = true`
@@ -71,7 +83,9 @@ queryable fact.
   `promoted_from`/`promoted_by`
 - Scopes: `global` (all projects) and `project` (one project). Rules are
   versioned per scope; updating a rule creates a new version, never mutates
-  history
+  history — the prior document is archived to `LearnedRuleVersion`
+  (see [Data Model](#learnedruleversion)), the same pattern the guardrails
+  PRD uses for `PolicyVersion`
 - Candidate lifecycle: `open → promotion_suggested → promoted | dismissed`
   (dismissal takes a reason)
 - **Cross-project isolation:** candidates and project-scoped rules never
@@ -139,12 +153,37 @@ the judgment.
 | `id`            | string         | Public ID (`lrl_` prefix)                            |
 | `scope`         | string         | `global` \| `project`                                |
 | `project_id`    | string \| null | Required when scope is `project`                     |
-| `version`       | integer        | Incremented per update; history preserved            |
+| `version`       | integer        | Incremented per update; prior versions archived to `LearnedRuleVersion` |
 | `text`          | string         | The rule as injected                                 |
-| `active`        | boolean        | Inactive rules stay for audit, stop injecting        |
+| `embedding`     | vector         | Embedding of `text`, refreshed on every version write (for candidate auto-linking) |
+| `status`        | string         | `active` \| `inactive` \| `archived` — non-active rules stay for audit, stop injecting |
 | `promoted_from` | string \| null | Source candidate                                     |
 | `promoted_by`   | string         | Curating user                                        |
 | `created_at` / `updated_at` | string |                                                     |
+
+### LearnedRuleVersion
+
+Archival table mirroring the guardrails `PolicyVersion` pattern: every write
+to a `LearnedRule` (any `PUT` that changes `text`, `scope`, or `status`, and
+the archive operation) increments `version` on the live row and first copies
+the **prior** document into `LearnedRuleVersion`. The current version always
+lives on the `LearnedRule` row; history is append-only and never mutated.
+
+| Column          | Type      | Constraints                                          |
+| --------------- | --------- | ----------------------------------------------------- |
+| `publicId`      | VARCHAR   | Public ID (`lrlv_` prefix, registered in `publicId.ts`) |
+| `learnedRuleId` | FK        | → LearnedRule, NOT NULL                               |
+| `version`       | INTEGER   | Unique with `learnedRuleId`                           |
+| `text`          | TEXT      | Rule text as of this version                          |
+| `scope`         | VARCHAR   | Scope snapshot as of this version                     |
+| `projectId`     | FK \| NULL | Project snapshot as of this version                  |
+| `status`        | VARCHAR   | Status snapshot as of this version                    |
+| `updatedBy`     | FK        | User who superseded this version                      |
+| `createdAt`     | TIMESTAMP | Immutable                                             |
+
+Exposed read-only via `GET /api/v1/learned-rules/{rule_id}/versions` (fields
+snake_case per the REST contract); versions are never written directly
+through the API.
 
 ## Permissions
 
@@ -152,10 +191,13 @@ the judgment.
 | ----------------------------------- | -------------------------------------------------- |
 | `learned-rules:CreateCandidateRule` | `POST /api/v1/candidate-rules`                     |
 | `learned-rules:ListCandidateRules`  | `GET /api/v1/candidate-rules`                      |
-| `learned-rules:PromoteCandidateRule`| `POST /api/v1/candidate-rules/:id/promote`         |
-| `learned-rules:DismissCandidateRule`| `POST /api/v1/candidate-rules/:id/dismiss`         |
+| `learned-rules:GetCandidateRule`    | `GET /api/v1/candidate-rules/{candidate_id}`       |
+| `learned-rules:PromoteCandidateRule`| `POST /api/v1/candidate-rules/{candidate_id}/promote` |
+| `learned-rules:DismissCandidateRule`| `POST /api/v1/candidate-rules/{candidate_id}/dismiss` |
 | `learned-rules:ListLearnedRules`    | `GET /api/v1/learned-rules`                        |
-| `learned-rules:UpdateLearnedRule`   | `PUT /api/v1/learned-rules/:ruleId`                |
+| `learned-rules:GetLearnedRule`      | `GET /api/v1/learned-rules/{rule_id}` (and `/versions`) |
+| `learned-rules:UpdateLearnedRule`   | `PUT /api/v1/learned-rules/{rule_id}`              |
+| `learned-rules:ArchiveLearnedRule`  | `DELETE /api/v1/learned-rules/{rule_id}`           |
 
 Promotion to `global` scope requires admin.
 
@@ -164,8 +206,22 @@ Promotion to `global` scope requires admin.
 | Method | Path                                        | Description                                  |
 | ------ | -------------------------------------------- | -------------------------------------------- |
 | POST   | `/api/v1/candidate-rules`                    | Explicit correction capture                   |
-| GET    | `/api/v1/candidate-rules`                    | List/filter (`status`, `project_id`)          |
-| POST   | `/api/v1/candidate-rules/:id/promote`        | Promote with final text + scope               |
-| POST   | `/api/v1/candidate-rules/:id/dismiss`        | Dismiss with reason                           |
-| GET    | `/api/v1/learned-rules`                      | List rules (scope/project filters)            |
-| PUT    | `/api/v1/learned-rules/:ruleId`              | New version / activate / deactivate           |
+| GET    | `/api/v1/candidate-rules`                    | List/filter (`status`, `project_id`); paginated |
+| GET    | `/api/v1/candidate-rules/{candidate_id}`     | Get one candidate with provenance             |
+| POST   | `/api/v1/candidate-rules/{candidate_id}/promote` | Promote with final text + scope           |
+| POST   | `/api/v1/candidate-rules/{candidate_id}/dismiss` | Dismiss with reason                       |
+| GET    | `/api/v1/learned-rules`                      | List rules (scope/project/`status` filters); paginated |
+| GET    | `/api/v1/learned-rules/{rule_id}`            | Get one rule (current version)                |
+| GET    | `/api/v1/learned-rules/{rule_id}/versions`   | List archived versions; paginated             |
+| PUT    | `/api/v1/learned-rules/{rule_id}`            | New version / activate / deactivate           |
+| DELETE | `/api/v1/learned-rules/{rule_id}`            | Archive (soft delete — see below)             |
+
+Both list endpoints (and `/versions`) paginate with `limit` (default 20,
+max 100) and `offset` query parameters, consistent with the rest of the API.
+
+**Delete is archive, not hard delete (decision):** `DELETE` sets
+`status: archived` rather than removing the row. Rationale: rules are audit
+artifacts — candidates reference them via `promoted_rule_id` and past runs'
+assembled contexts cite them, so hard deletion would break the provenance
+chain the module exists to preserve. Archived rules stop injecting
+immediately and are excluded from lists unless `status=archived` is passed.

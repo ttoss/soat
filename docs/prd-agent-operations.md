@@ -82,17 +82,36 @@ deliveries, and Formations as the declarative deploy layer.
 ## End State: One Template, One Operating Stack
 
 With all seven PRDs shipped, a single template expresses an operating stack.
-Illustrative sketch (resource properties abbreviated):
+Canonical end-state example (node and resource properties follow the child
+PRDs: the `approval` node schema from
+[prd-approvals.md](./prd-approvals.md#the-approval-node--template-schema), the
+`schedule` resource from [prd-schedules.md](./prd-schedules.md), the
+`action_classes` policy from [prd-guardrails.md](./prd-guardrails.md), and the
+`knowledge_package` resource from
+[prd-knowledge-packages.md](./prd-knowledge-packages.md)):
 
 ```yaml
 parameters:
+  OpenAiApiKey: { type: string, use_previous_value: true }
   KnowledgeVersion: { type: string }
   ActionClassesDoc: { type: string }
   DailyCycleCron: { type: string, default: '0 8 * * *' }
   ExternalMcpUrl: { type: string }
 
 resources:
-  Provider: { type: ai_provider, properties: ... }
+  ProviderKey:
+    type: secret
+    properties:
+      name: openai-api-key
+      value: { param: OpenAiApiKey }
+
+  Provider:
+    type: ai_provider
+    properties:
+      name: openai
+      provider: openai
+      default_model: gpt-4o
+      secret_id: { ref: ProviderKey }
 
   StackKnowledge:
     type: knowledge_package
@@ -103,38 +122,99 @@ resources:
   ActionPolicy:
     type: policy
     properties:
+      name: ops-action-classes
       kind: action_classes
       document: { param: ActionClassesDoc }
 
   ExternalTools:
     type: tool
-    properties: { type: mcp, url: { param: ExternalMcpUrl } }
+    properties:
+      name: external-ops
+      type: mcp
+      mcp:
+        url: { param: ExternalMcpUrl }
 
-  Analyst: { type: agent, properties: ... }
+  Analyst:
+    type: agent
+    properties:
+      name: analyst
+      ai_provider_id: { ref: Provider }
+      instructions: >-
+        Analyze the project's daily data and produce findings with
+        supporting evidence.
+      knowledge_package_id: { ref: StackKnowledge }
+
   Operator:
     type: agent
     properties:
-      tools: [{ ref: ExternalTools }]
+      name: operator
+      ai_provider_id: { ref: Provider }
+      instructions: >-
+        Turn findings into one concrete proposed action against the
+        external system, with predicted impact.
+      tool_ids: [{ ref: ExternalTools }]
       guardrail_policy_id: { ref: ActionPolicy }
+      knowledge_package_id: { ref: StackKnowledge }
 
   DailyFlow:
     type: orchestration
     properties:
-      nodes: [..., { id: sign_off, type: approval, expires_in: 24h }]
-      edges: [...]
+      name: daily-cycle
+      nodes:
+        - id: analyze
+          type: agent
+          agent_id: { ref: Analyst }
+          input_mapping: { prompt: { var: 'cycle' } }
+          output_mapping: { content: state.findings }
+        - id: propose
+          type: agent
+          agent_id: { ref: Operator }
+          input_mapping: { prompt: { var: 'findings' } }
+          output_mapping: { content: state.proposal }
+        - id: sign_off
+          type: approval
+          tool_id: { ref: ExternalTools }
+          arguments: { action: { var: 'proposal' } }
+          expires_in: 86400 # seconds
+          instructions: Review the proposed external change before it executes.
+          reasoning: { var: 'findings' }
+          output_mapping: { result: state.executed }
+        - id: report
+          type: agent
+          agent_id: { ref: Analyst }
+          input_mapping: { prompt: { var: 'executed' } }
+          output_mapping: { content: state.report }
+      edges:
+        - { from: analyze, to: propose }
+        - { from: propose, to: sign_off }
+        - { from: sign_off, to: report, condition: approved }
+        # no `rejected`/`expired` edge: the run ends there; expiry files an
+        # `approval_expired` exception (the approval node's default routing)
 
   DailyCycle:
     type: schedule
     properties:
+      name: daily-cycle
       orchestration_id: { ref: DailyFlow }
       cron: { param: DailyCycleCron }
+      timezone: America/Sao_Paulo
       overlap_policy: skip
+      input: { cycle: daily }
 
   AppWebhook:
     type: webhook
     properties:
+      name: app-events
       url: https://app.example.com/hooks/soat
-      events: [approvals.created, approvals.expired, exceptions.created]
+      events:
+        - approvals.created
+        - approvals.expired
+        - exceptions.created
+        - usage.threshold_crossed
+
+outputs:
+  orchestration_id: { ref: DailyFlow }
+  schedule_id: { ref: DailyCycle }
 ```
 
 One formation deploy per project (template + project parameters) yields a
@@ -185,3 +265,30 @@ side-effect risk while the pipeline hardens):
 - **Knowledge confidentiality regression:** package content is encrypted at
   rest, readable by the runtime at assembly time only, and covered by a
   dedicated "knowledge never in logs/API/events" test suite (G7).
+
+### Operational Risks
+
+- **Queue-table migration on live deployments (G2):** cutting
+  `startOrchestrationRun` over to enqueue-only while runs are in flight risks
+  stranded or double-driven runs. Mitigation: the `run_tasks` table ships as
+  an additive migration (no backfill needed — pre-cutover runs keep their
+  checkpoints and are finished by the existing lease/reaper machinery); new
+  runs enqueue behind a feature flag, and only after the last pre-cutover run
+  terminates is in-process driving removed. Rollback = flip the flag; the
+  table is inert when unused.
+- **Scheduler load as schedule count grows (G1):** a naive tick that scans and
+  fires every due schedule inline can blow the tick budget and delay
+  sleeping-run wakes. Mitigation: the due-scan is a single indexed query
+  (`next_fire_at <= now() AND enabled`), fires are claimed in batches with a
+  per-tick cap (overflow is picked up next tick — safe because due-ness is
+  re-evaluated, not remembered), and firing enqueues the run rather than
+  executing it, so tick time stays O(claims), not O(run work). Queue depth and
+  fire latency are exposed on the metrics endpoint so saturation is visible
+  before it hurts.
+- **Webhook fan-out amplification from metering events (G5):** metering is
+  per-LLM-call; naively emitting a webhook per meter row would multiply every
+  agent step into deliveries and melt receivers. Mitigation: raw `UsageMeter`
+  rows never emit webhooks — only the aggregated `usage.threshold_crossed`
+  event fires, at most once per project/threshold/window, and delivery reuses
+  the existing webhooks module's retry/backoff so a slow receiver cannot back
+  up the metering write path.

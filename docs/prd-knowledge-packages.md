@@ -31,9 +31,9 @@ formations pin — the knowledge source repo itself is never readable by SOAT.
   item content **encrypted at rest** (same envelope approach as the secrets
   module)
 - `POST /api/v1/knowledge-packages` — publish a tarball + manifest;
-  authenticated with a **publish-scoped** API key (separate from admin keys);
-  a `(name, version)` pair is immutable — re-publishing an existing version
-  is a `409`
+  authenticated with a **publish-scoped** project API key (separate from
+  admin keys); a `(name, version)` pair is immutable within its project —
+  re-publishing an existing version is a `409`
 - Manifest declares items with a `kind` (free-form, e.g. `constitution`,
   `playbook`, `overlay`), an optional `role` filter, and the package's layer
   order (see [Key Concepts](#layer-order-is-package-defined))
@@ -131,6 +131,90 @@ The manifest declares the package's layers (ordered, each mapping to item
 guarantees the **mechanics**: fixed order, per-layer budgets, bottom-first
 truncation, learned rules and RAG appended after the package layers.
 
+### Example Manifest
+
+A complete manifest for a package with three layers:
+
+```yaml
+name: acme/ops-intelligence
+version: 1.4.0
+layers:
+  - name: constitution
+    kinds: [constitution]
+    budget_share: 0.15
+  - name: playbooks
+    kinds: [playbook]
+    budget_share: 0.55
+  - name: vertical-overlays
+    kinds: [overlay]
+    budget_share: 0.30
+items:
+  - path: constitution/core.md
+    kind: constitution
+  - path: playbooks/budget-review.md
+    kind: playbook
+    role: analyst
+  - path: playbooks/escalation.md
+    kind: playbook
+  - path: overlays/healthcare.md
+    kind: overlay
+    role: healthcare-ops
+```
+
+| Field                  | Required | Description                                                                                     |
+| ---------------------- | -------- | ------------------------------------------------------------------------------------------------ |
+| `name`                 | yes      | Package name, unique with `version` within the project                                            |
+| `version`              | yes      | Semver string; a published `(name, version)` is immutable                                         |
+| `layers[]`             | yes      | Ordered — assembly order is exactly this order, broadest doctrine first                           |
+| `layers[].name`        | yes      | Free-form label; used in audit records and assembler errors                                       |
+| `layers[].kinds`       | yes      | Item `kind`s this layer includes; a `kind` may appear in at most one layer                        |
+| `layers[].budget_share`| yes      | Fraction (0, 1] of the package's total token budget; shares must sum to ≤ 1.0 (validated on publish) |
+| `items[]`              | yes      | Every file in the tarball; order within a layer is priority order (earlier = higher)              |
+| `items[].path`         | yes      | Path within the tarball, unique per package                                                       |
+| `items[].kind`         | yes      | Must match a `kind` declared by some layer (validated on publish)                                 |
+| `items[].role`         | no       | Item included only for agents with this role; omitted = all roles                                 |
+
+Publish-time validation failures (shares out of range or summing above 1.0,
+an item `kind` no layer declares, duplicate paths) reject the publish with a
+`400` — a package that validated never fails structurally at assembly time.
+
+### Token Budget Accounting
+
+**Tokenizer (decision):** budgets are computed with a **model-agnostic
+estimator** (a bundled `cl100k_base`-class tokenizer applied uniformly to
+every item), not the target provider's tokenizer. Rationale: the assembler is
+a pure, deterministic function — the same package must assemble identically
+regardless of which provider/model the agent runs on, and provider tokenizers
+would make assembly non-deterministic across models. Tradeoff: estimates can
+drift ~10–20% from a given provider's true count, so layer budgets are
+targets, not hard provider limits; the assembler applies a 10% safety margin
+against the overall context budget.
+
+Item token counts are computed once at publish and stored on the item, so
+assembly never re-tokenizes content.
+
+**Overflow (decision):** when a layer's content exceeds its
+`budget_share × budget`, the assembler drops **whole items from the end of
+the layer's manifest order** (manifest order = priority; later items drop
+first) until the layer fits. Items are never split mid-content — a truncated
+playbook is worse than an absent one. If even the first item of the first
+(top doctrine) layer does not fit, assembly **fails with an error** rather
+than injecting truncated doctrine. Cross-layer truncation is unchanged:
+bottom layers (RAG first) shed before upper ones, never the top layer.
+
+### Tenancy (Project-Scoped)
+
+**Decision:** knowledge packages are **project-scoped**, like every other
+SOAT resource: `KnowledgePackage` carries a `project_id` FK, `(name,
+version)` uniqueness is per project, and all permission actions are scoped by
+project policy. Rationale: consistency — every resource in the platform is
+project-scoped and the policy engine already expresses per-project grants; a
+global registry would require a new cross-project grant mechanism for no
+current need. A team shipping the same package to several projects publishes
+it to each from CI (the publish-scoped key is a project key, so this falls
+out naturally). List/get/pin never cross project boundaries; a formation can
+only pin packages in its own project.
+
 ### Confidentiality Boundary
 
 SOAT stores ciphertext and serves the runtime. The source repo is never
@@ -144,8 +228,9 @@ API. The publish credential is scoped to publishing only.
 | Field        | Type   | Description                              |
 | ------------ | ------ | ----------------------------------------- |
 | `id`         | string | Public ID (`kpk_` prefix)                 |
+| `project_id` | string | Owning project — packages are project-scoped (see [Tenancy](#tenancy-project-scoped)) |
 | `name`       | string | e.g. `acme/ops-intelligence`              |
-| `version`    | string | Semver string; unique with `name`         |
+| `version`    | string | Semver string; unique with `(project_id, name)` |
 | `manifest`   | object | Layers, items, budget shares              |
 | `checksum`   | string | SHA-256 of the published tarball          |
 | `created_at` | string | Immutable — no `updated_at`               |
@@ -159,6 +244,7 @@ API. The publish credential is scoped to publishing only.
 | kind       | VARCHAR     | Manifest-declared kind                        |
 | role       | VARCHAR     | NULL = applies to all roles                   |
 | content    | BYTEA       | Encrypted at rest (`SECRETS_ENCRYPTION_KEY` envelope) |
+| tokenCount | INTEGER     | Estimator token count, computed once at publish (see [Token Budget Accounting](#token-budget-accounting)) |
 | createdAt  | TIMESTAMP   | Immutable                                     |
 
 Agent gains `knowledgePackageId` (nullable FK) exposed as
@@ -168,18 +254,19 @@ Agent gains `knowledgePackageId` (nullable FK) exposed as
 
 | Permission                                   | Endpoint                                  |
 | -------------------------------------------- | ------------------------------------------ |
-| `knowledge-packages:PublishKnowledgePackage` | `POST /api/v1/knowledge-packages` (publish-scoped key) |
+| `knowledge-packages:PublishKnowledgePackage` | `POST /api/v1/knowledge-packages` (publish-scoped project key) |
 | `knowledge-packages:ListKnowledgePackages`   | `GET /api/v1/knowledge-packages`           |
-| `knowledge-packages:GetKnowledgePackage`     | `GET /api/v1/knowledge-packages/:id` (metadata only) |
-| `knowledge-packages:DeleteKnowledgePackage`  | `DELETE /api/v1/knowledge-packages/:id` (admin; blocked while pinned) |
+| `knowledge-packages:GetKnowledgePackage`     | `GET /api/v1/knowledge-packages/{package_id}` (metadata only) |
+| `knowledge-packages:DeleteKnowledgePackage`  | `DELETE /api/v1/knowledge-packages/{package_id}` (admin; blocked while pinned) |
 
-There is deliberately no permission that returns item content.
+All actions are scoped by project policy, like every other module. There is
+deliberately no permission that returns item content.
 
 ## REST API
 
-| Method | Path                                  | Description                                    |
-| ------ | -------------------------------------- | ---------------------------------------------- |
-| POST   | `/api/v1/knowledge-packages`           | Publish (tarball + manifest); immutable per version |
-| GET    | `/api/v1/knowledge-packages`           | List packages/versions (metadata only)          |
-| GET    | `/api/v1/knowledge-packages/:id`       | Get manifest + checksum (metadata only)         |
-| DELETE | `/api/v1/knowledge-packages/:id`       | Remove an unpinned version (admin)              |
+| Method | Path                                         | Description                                    |
+| ------ | --------------------------------------------- | ---------------------------------------------- |
+| POST   | `/api/v1/knowledge-packages`                  | Publish (tarball + manifest); immutable per version |
+| GET    | `/api/v1/knowledge-packages`                  | List packages/versions within the project (metadata only) |
+| GET    | `/api/v1/knowledge-packages/{package_id}`     | Get manifest + checksum (metadata only)         |
+| DELETE | `/api/v1/knowledge-packages/{package_id}`     | Remove an unpinned version (admin)              |

@@ -1,5 +1,17 @@
 # PRD: Knowledge Module
 
+## Problem
+
+Agents need **one retrieval surface** across all knowledge sources. SOAT stores knowledge in two data modules — documents (chunked, embedded files) and memories (written/extracted facts) — and without a unified layer, every consumer that wants "relevant context" must reimplement the same retrieval stack itself: which sources to query, how to run the vector search per source, how to score and merge heterogeneous results, and how to apply filters and thresholds. That logic gets duplicated — and drifts — across every consumer, and each new source (entity graph, lexical search) multiplies the duplication.
+
+The Knowledge module is that single retrieval surface: one endpoint, one source-selection and filtering vocabulary, one ranking/merge policy. Who needs it:
+
+- **Agent authors** — declare retrieval scope once via `knowledge_config` on the agent; context assembly calls unified search on every generation, no per-agent retrieval code.
+- **API consumers** — call `POST /api/v1/knowledge/search` instead of stitching together per-module search endpoints and merging results client-side.
+- **Agents at runtime (soat-tools)** — the auto-generated `search-knowledge` tool gives the model a single self-retrieval call that spans all sources.
+
+Because the module owns no data, adding a source or improving ranking (hybrid lexical+vector, RRF, reranking — Phase 5) is a change inside this module, invisible to every consumer.
+
 ## Implementation Status
 
 | Component                          | Status         | Notes                                                                                            |
@@ -142,7 +154,7 @@ All entity parameters are optional and compose with existing vector/memory/docum
 
 **Deliverables (as implemented — see prd-memories.md Phase 4 for full details):**
 
-- ✅ Fire-and-forget extraction trigger after completed turns — non-blocking; fired from `conversationGeneration.ts` (covers conversations and sessions) and the direct `POST /agents/:id/generate` route. *(Design deviation: the trigger lives at the post-completion call sites instead of inside `createGeneration()`, keeping the generation pipeline extraction-free and the trigger covered by REST integration tests.)*
+- ✅ Fire-and-forget extraction trigger after completed turns — non-blocking; fired from `conversationGeneration.ts` (covers conversations and sessions) and the direct `POST /agents/{agent_id}/generate` route. *(Design deviation: the trigger lives at the post-completion call sites instead of inside `createGeneration()`, keeping the generation pipeline extraction-free and the trigger covered by REST integration tests.)*
 - ✅ Trigger condition: **opt-in** — agent's `knowledgeConfig` has `extraction: true` and a `write_memory_id` (the write target). *(Design deviation: opt-in rather than opt-out, so enabling memory retrieval never silently adds LLM extraction cost.)*
 - ✅ `runMemoryExtraction()` in `memoryExtraction.ts` — runs the extraction completion (`memoryExtractionCompletion.ts`, plain completion on the agent's own provider/model), then `writeMemoryEntry()` for each candidate with `source: 'extraction'`
 - ✅ Extraction result (`{ candidates, created, updated, skipped }`) stored on the generation record's `metadata.extraction`
@@ -186,6 +198,16 @@ across sources by raw score. Three problems:
 - `min_score` semantics re-documented against the fused score; defaults recalibrated
 - Every ranking change lands with before/after numbers from the Phase 7 golden set
 
+**Acceptance criteria:**
+
+- [ ] **Lexical recall:** a search for an exact rare token (e.g. `"SKU-4711"`) returns the chunk/entry containing it even when its cosine similarity alone would miss the cut — implemented via `websearch_to_tsquery` `tsvector` queries over `DocumentChunk.content` and `MemoryEntry.content`, run in parallel with the pgvector queries.
+- [ ] **RRF fusion pinned:** merged `score` is computed as `Σ 1 / (k + rank_i)` over the ranked lists a result appears in, with **`k = 60` as the default** (the literature default), configurable (e.g. an `rrf_k` request field or server-level default). A result appearing in more lists ranks higher, all else equal.
+- [ ] **Four fusion inputs** when both signals and both sources apply: document-vector, document-lexical, memory-vector, memory-lexical. Raw cosine is still returned per result as `similarity` for debugging; `score` is the fused value.
+- [ ] **Rerank API shape:** `rerank: true` re-scores the top fused candidates before the final cut. Input: the query plus the candidate list — `{ query: string, candidates: [{ id, content }] }` (top-N fused, default N = 20, configurable). Output: reordered ids with scores — `[{ id, score }]`, descending. Off by default; the added latency/cost is documented, and a rerank-stage failure degrades to the fused order instead of failing the request.
+- [ ] **Recency/importance blend (memory only):** memory results' fused score is blended with an `updated_at` recency decay (configurable half-life, sane default documented) and — once prd-memories.md Phase 8 lands — entry `importance`. Document results are unaffected.
+- [ ] **No API break:** same endpoint; all new parameters additive and optional. `min_score` documented against the fused score with recalibrated defaults.
+- [ ] **Regression gate:** the change lands with before/after Phase 7 golden-set numbers (recall@k, MRR) showing no regression at recall@10.
+
 **Unlocks:** Materially better retrieval for both RAG and memory recall with no API break — same
 endpoint, better ranking.
 
@@ -214,6 +236,23 @@ system-level authority in **future** generations — a persistent prompt-injecti
 - Memory threat model documented: extraction already runs tool-less (no side effects); retrieved
   memory content must be treated as untrusted in downstream tool authorization
 
+**Acceptance criteria:**
+
+- [ ] **No system-role laundering:** a regression test asserts that no message produced by
+      `buildKnowledgeMessages()` is emitted with `role: "system"`, covering every injection path
+      (agent `knowledge_config`, per-generation `knowledge_config`, conversations and sessions).
+- [ ] **Delimited block format pinned:** retrieved content is wrapped in explicit delimiters with a
+      fixed preamble stating the enclosed content is reference information, not instructions; the
+      exact delimiter/preamble text is documented in the module docs so it is testable and stable.
+- [ ] **Provenance preserved:** source tags survive inside the block — `[Memory: <name>]` with the
+      entry ID, `[Document: <path>]` with page where available — verified by test.
+- [ ] **Single system author:** a generation configured with both agent `instructions` and retrieved
+      knowledge produces exactly one system-authored message containing only the instructions.
+- [ ] **Threat model documented** in the module docs: extraction runs tool-less; retrieved memory
+      content is untrusted input for downstream tool authorization.
+- [ ] **No quality regression:** Phase 7 golden-set numbers before/after the injection change show
+      no material retrieval/answer regression.
+
 **Unlocks:** Memory and RAG that don't widen the prompt-injection blast radius.
 
 ---
@@ -235,6 +274,24 @@ defines success metrics today, and ranking changes (Phase 5) need a regression g
   answerable from the traces module
 - Baseline numbers published in the module docs; Phase 5 ranking changes must show wins on the
   golden set before landing
+
+**Acceptance criteria:**
+
+- [ ] **Golden set size:** **≥ 50 query/expected-result pairs**, seeded from real module docs
+      (`packages/website/docs/modules/*.md` ingested as fixture documents) plus curated memory
+      entries; labels stored in-repo and versioned alongside the harness.
+- [ ] **Metrics reported:** **recall@k** (at minimum k = 5 and k = 10) and **MRR** on every run;
+      nDCG additionally where graded relevance labels exist.
+- [ ] **Runnable locally and in CI** with a single command; deterministic across runs (pinned
+      embedding model or fixture embeddings).
+- [ ] **Memory-pipeline evals:** at least one scenario each for multi-session fact recall,
+      contradiction/update handling, and temporal reasoning over superseded facts — exercised
+      end-to-end through extraction → write → search.
+- [ ] **Injected-context observability:** each generation's trace records what
+      `buildKnowledgeMessages()` injected — source IDs, scores, byte size — queryable via the
+      traces module.
+- [ ] **Regression gate wired:** baseline numbers published in the module docs; a Phase 5 ranking
+      change cannot land without before/after golden-set numbers and no recall@10 regression.
 
 **Unlocks:** Retrieval quality becomes a regression-tested property instead of a vibe.
 
