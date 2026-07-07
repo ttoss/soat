@@ -23,7 +23,7 @@ Users can have [Policies](./policies.md) attached to them, which control what re
 
 | Field        | Type   | Description                                         |
 | ------------ | ------ | --------------------------------------------------- |
-| `id`         | string | Public identifier prefixed with `usr_`              |
+| `id`         | string | Public identifier prefixed with `user_`              |
 | `username`   | string | Unique login name                                   |
 | `role`       | string | `"admin"` or `"user"` — see [Roles](#roles)         |
 | `created_at` | string | ISO 8601 creation timestamp                         |
@@ -59,7 +59,7 @@ Users authenticate via `POST /api/v1/users/login` with username and password. On
 
 ### Policy Attachment
 
-Policies are attached to a user via `PUT /api/v1/users/:userId/policies`. This replaces the user's full policy list. User management operations (create, update, delete) require the `admin` role and are not governed by the policy engine.
+Policies are attached to a user through the user-policies endpoint, which replaces the user's full policy list. User management operations (create, delete) require the `admin` role and are not governed by the policy engine.
 
 ## Examples
 

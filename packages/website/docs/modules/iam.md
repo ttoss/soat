@@ -29,7 +29,7 @@ Users authenticate via `POST /api/v1/users/login` with username and password. Th
 
 ### API Keys
 
-API keys are prefixed with `sk_` and identified by a `key_`-prefixed public ID. They can optionally be scoped to a single project and/or have their own policy list. When an API key has policies attached, authorization applies **intersection semantics**: both the owning user's policies _and_ the key's own policies must independently allow the action. This ensures API keys can never exceed the permissions of the user who created them. See [API Keys](./api-keys.md) for details, or watch intersection semantics block an escalation attempt in [Permissions in Practice - Step 7 (Verify permissions)](/docs/tutorials/permissions#step-7--verify-permissions).
+API keys are prefixed with `sk_` and identified by a `key_`-prefixed public ID. They are always scoped to a single project via `project_id` and may optionally have their own policy list. When an API key has policies attached, authorization applies **intersection semantics**: both the owning user's policies _and_ the key's own policies must independently allow the action. This ensures API keys can never exceed the permissions of the user who created them. See [API Keys](./api-keys.md) for details, or watch intersection semantics block an escalation attempt in [Permissions in Practice - Step 7 (Verify permissions)](/docs/tutorials/permissions#step-7--verify-permissions).
 
 ## Policy Documents
 
@@ -78,7 +78,7 @@ Examples:
 | `soat:proj_ABC:document:doc_XYZ` | A specific document        |
 | `soat:proj_ABC:document:*`       | All documents in a project |
 | `soat:proj_ABC:file:*`           | All files in a project     |
-| `soat:proj_ABC:actor:act_123`    | A specific actor           |
+| `soat:proj_ABC:actor:actor_123`  | A specific actor           |
 | `soat:*:*:*`                     | Everything (admin-level)   |
 
 ### Project Segment and Policy Scoping
@@ -101,7 +101,7 @@ To give a **user** (JWT) access to a specific project, create a policy with `res
 | -------------- | ---------------- | ------------- |
 | `document`     | `doc_`           | Documents     |
 | `file`         | `file_`          | Files         |
-| `actor`        | `act_`           | Actors        |
+| `actor`        | `actor_`         | Actors        |
 | `conversation` | `conv_`          | Conversations |
 | `project`      | `proj_`          | Projects      |
 | `policy`       | `pol_`           | Policies      |
@@ -285,14 +285,13 @@ Grants read access to documents, files, actors, and conversations across all pro
 
 ```json
 {
-  "version": "2025-01-01",
   "statement": [
     {
       "effect": "Allow",
       "action": [
         "documents:GetDocument",
         "documents:ListDocuments",
-        "documents:SearchDocuments",
+        "knowledge:SearchKnowledge",
         "files:GetFile",
         "files:DownloadFile",
         "actors:ListActors",
@@ -310,7 +309,6 @@ Grants read access to documents, files, actors, and conversations across all pro
 
 ```json
 {
-  "version": "2025-01-01",
   "statement": [
     {
       "effect": "Allow",
@@ -332,7 +330,6 @@ Allow only actors tagged `"internal"`:
 
 ```json
 {
-  "version": "2025-01-01",
   "statement": [
     {
       "effect": "Allow",

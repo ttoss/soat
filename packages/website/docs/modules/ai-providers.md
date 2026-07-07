@@ -75,7 +75,7 @@ The `bedrock` provider supports two authentication modes, determined by the shap
 { "apiKey": "ABSK..." }
 ```
 
-> **Important:** The secret value **must be stored as a JSON object** (shown above), not as a plain string. If you store a raw `ABSK…` string without the JSON wrapper the server attempts to parse it as JSON first, and if that fails it detects the `ABSK` prefix and uses it directly — so plain strings work as a convenience, but the JSON form is preferred.
+> **Important:** Store the secret value as a **JSON object** (shown above) — this is the canonical form and the only one that supports IAM credentials. As a convenience, a bare `ABSK…` string (with no JSON wrapper) is also accepted: the server tries to parse the value as JSON first, and if that fails but the value starts with `ABSK` it is treated as `{ "apiKey": "<value>" }`. IAM credentials (`accessKeyId` / `secretAccessKey`) must always use the JSON object form.
 
 If neither field is present the default AWS credential chain (environment variables, instance profile, etc.) is used. The `region` field in the provider's `config` object defaults to `us-east-1`.
 

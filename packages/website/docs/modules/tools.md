@@ -38,10 +38,10 @@ Six tool types are supported: `http` (calls an external HTTP endpoint), `client`
 | `mcp`               | `object \| null`                                | MCP server config (`url`, `headers`). Required for `mcp` type.                                                    |
 | `mcp.url`           | `string`                                        | URL of the MCP server (SSE or Streamable HTTP transport).                                                         |
 | `mcp.headers`       | `object`                                        | Additional headers sent when connecting to the MCP server.                                                        |
-| `actions`           | `string[] \| null`                              | SOAT platform actions to expose (e.g. `["search-documents"]`). Required for `soat` type.                         |
+| `actions`           | `string[] \| null`                              | SOAT platform actions to expose (e.g. `["search-knowledge"]`). Required for `soat` type.                         |
 | `preset_parameters` | `object \| null`                                | Fixed parameter values merged into every call. Keys are hidden from the model and injected automatically.         |
 | `pipeline`          | `object \| null`                                | Pipeline definition (`steps`, optional `output`). Required for `pipeline` type. See [pipeline](#pipeline).         |
-| `discussion`        | `object \| null`                                | Discussion config (`{ discussion_id }`). Required for `discussion` type. See [discussion](#discussion).            |
+| `discussion_id`     | `string \| null`                                | ID of the discussion to invoke. Required for `discussion` type. See [discussion](#discussion).                    |
 | `output_mapping`    | `object \| null`                                | JSON Logic mapping applied to the tool's raw result, for every tool type. See [output mapping](#output-mapping).   |
 | `created_at`        | `string`                                        | ISO 8601 creation timestamp                                                                                       |
 | `updated_at`        | `string`                                        | ISO 8601 last-updated timestamp                                                                                   |
@@ -63,7 +63,7 @@ A **tool name** is the name the AI model sees at runtime (e.g., `"search"`). For
 | `http`    | `{name}`               | `search`                                             |
 | `client`  | `{name}`               | `read_local_file`                                    |
 | `mcp`     | `{name}_{mcpToolName}` | `github_create_issue`, `github_list_repos`           |
-| `soat`    | `{name}_{action}`      | `platform_get_document`, `platform_search_documents` |
+| `soat`    | `{name}_{action}`      | `platform_get-document`, `platform_search-knowledge` |
 
 For `http` and `client`, the `name` field maps directly to the tool name the model calls.
 
@@ -202,7 +202,7 @@ Example response when a client tool is called:
 ```json
 {
   "status": "requires_action",
-  "generation_id": "agt_gen_abc123",
+  "generation_id": "gen_abc123",
   "required_action": {
     "type": "submit_tool_outputs",
     "tool_calls": [
@@ -243,7 +243,7 @@ The SOAT server acts as a proxy: it receives the model's tool call, forwards it 
 
 ### soat
 
-A `soat` tool exposes actions from the SOAT platform itself (documents, conversations, files, secrets, etc.). Instead of pointing to an external endpoint, you list the platform actions the agent is allowed to use via the `actions` array. Each action name corresponds to an MCP tool registered on the platform (e.g., `get-document`, `search-documents`, `create-file`) — **not** the REST operationId (e.g. use `search-knowledge`, not `searchKnowledge`). The server executes these actions in-process, applying the same permission checks as the REST API. For a worked example of a fixed `soat` write tool, see [Orchestrate a Sonnet - Step 4 (Create the fixed write tool)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool).
+A `soat` tool exposes actions from the SOAT platform itself (documents, conversations, files, secrets, etc.). Instead of pointing to an external endpoint, you list the platform actions the agent is allowed to use via the `actions` array. Each action name corresponds to an MCP tool registered on the platform (e.g., `get-document`, `search-knowledge`, `create-file`) — **not** the REST operationId (e.g. use `search-knowledge`, not `searchKnowledge`). The server executes these actions in-process, applying the same permission checks as the REST API. For a worked example of a fixed `soat` write tool, see [Orchestrate a Sonnet - Step 4 (Create the fixed write tool)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool).
 
 Creating or updating a `soat` tool validates every entry in `actions` against the platform's action registry. An unrecognized action name returns `400 VALIDATION_FAILED` immediately; if the name looks like an operationId (camelCase) that matches a known action once converted to kebab-case, the error message includes a suggestion (e.g. `"searchKnowledge" (did you mean "search-knowledge"?)`).
 
@@ -295,7 +295,7 @@ A `discussion` tool invokes a [Discussion](./discussions.md) — the way an agen
     "properties": { "topic": { "type": "string" } },
     "required": ["topic"]
   },
-  "discussion": { "discussion_id": "disc_V1StGXR8Z5jdHi6B" }
+  "discussion_id": "disc_V1StGXR8Z5jdHi6B"
 }
 ```
 
@@ -444,7 +444,7 @@ soat create-tool \
   --name "docs-search" \
   --type soat \
   --description "Searches the project knowledge base" \
-  --actions '["search-documents"]'
+  --actions '["search-knowledge"]'
 ```
 
 </TabItem>
@@ -457,7 +457,7 @@ const { data, error } = await soat.tools.createTool({
     name: 'docs-search',
     type: 'soat',
     description: 'Searches the project knowledge base',
-    actions: ['search-documents'],
+    actions: ['search-knowledge'],
   },
 });
 if (error) throw new Error(JSON.stringify(error));
@@ -475,7 +475,7 @@ curl -X POST https://api.example.com/api/v1/tools \
     "name": "docs-search",
     "type": "soat",
     "description": "Searches the project knowledge base",
-    "actions": ["search-documents"]
+    "actions": ["search-knowledge"]
   }'
 ```
 

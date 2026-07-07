@@ -30,7 +30,7 @@ A Project is a top-level container that scopes all resources. Users access proje
 
 ### Project Access via Policies
 
-Users no longer need to be explicitly added to a project as members. Access is granted by attaching a [Policy](./policies.md) to the user (or their API key) that contains an `Allow` statement covering the relevant project's SRN pattern:
+Project access is entirely policy-driven; there is no membership list to maintain. Access is granted by attaching a [Policy](./policies.md) to the user (or their API key) that contains an `Allow` statement covering the relevant project's SRN pattern:
 
 ```json
 {
@@ -60,7 +60,7 @@ To grant a user access to all projects, use a wildcard project segment:
 
 ### Authorization Model
 
-Authorization is policy-only — there is no Layer 1 membership gate. All access decisions are evaluated through the policy engine against the requested action and the resource SRN. See [IAM](./iam.md) for details.
+Authorization is policy-only. All access decisions are evaluated through the policy engine against the requested action and the resource SRN. See [IAM](./iam.md) for details.
 
 To grant a user access to a single project, attach a [Policy](./policies.md) scoped to that project's SRN. A project-scoped grant is honored by every project endpoint, including `GET /projects/{id}`:
 

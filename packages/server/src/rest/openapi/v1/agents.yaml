@@ -458,7 +458,7 @@ components:
         id:
           type: string
           description: Public ID of the agent
-          example: agt_V1StGXR8Z5jdHi6B
+          example: agent_V1StGXR8Z5jdHi6B
         project_id:
           type: string
           description: Public ID of the owning project
@@ -1000,7 +1000,7 @@ components:
         id:
           type: string
           description: Public ID of the generation
-          example: agt_gen_V1StGXR8Z5jdHi6B
+          example: gen_V1StGXR8Z5jdHi6B
         status:
           type: string
           enum:

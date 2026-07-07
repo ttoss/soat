@@ -45,7 +45,7 @@ An orchestration can also be declared as a [Formation](./formations.md) resource
 
 | Field              | Type           | Description                                                       |
 | ------------------ | -------------- | ----------------------------------------------------------------- |
-| `id`               | string         | Public ID (`run_` prefix)                                         |
+| `id`               | string         | Public ID (`orch_run_` prefix)                                    |
 | `orchestration_id` | string         | Parent orchestration                                              |
 | `project_id`       | string         | Owning project                                                    |
 | `status`           | string         | `queued` \| `running` \| `sleeping` \| `awaiting_input` \| `succeeded` \| `failed` \| `cancelled` \| `expired` |
@@ -86,18 +86,18 @@ Each entry in a run's `node_executions` array records a single node execution, i
 
 | Type           | Description                                                                                                                         |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `agent`        | Invokes a SOAT [Agent](./agents.md) with a prompt. Uses `agentId` and `prompt`.                                                    |
-| `tool`         | Calls a SOAT [Tool](./tools.md). Uses `toolId` and `inputMapping`.                                                                 |
+| `agent`        | Invokes a SOAT [Agent](./agents.md) with a prompt. Uses `agent_id` and `prompt`.                                                    |
+| `tool`         | Calls a SOAT [Tool](./tools.md). Uses `tool_id` and `input_mapping`.                                                                 |
 | `transform`    | Evaluates a [JSON Logic](https://jsonlogic.com) rule against the current state. Uses `expression`.                                  |
-| `knowledge`    | Searches a knowledge source via the [Knowledge](./knowledge.md) module. Uses `inputMapping` with `query` and optional `memoryIds`. |
-| `memory_write` | Writes a [Memory](./memories.md) entry. Uses `memoryId` and `inputMapping` with `content`.                                        |
+| `knowledge`    | Searches a knowledge source via the [Knowledge](./knowledge.md) module. Uses `input_mapping` with `query` and optional `memory_ids`. |
+| `memory_write` | Writes a [Memory](./memories.md) entry. Uses `memory_id` and `input_mapping` with `content`.                                        |
 | `condition`    | Evaluates a JSON Logic rule and emits a string label. Downstream edges use `condition: "<label>"` to select the active branch.      |
-| `human`        | Pauses the run and waits for external input. The run enters `awaiting_input` status with `requiredAction`.                          |
-| `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `orchestrationId`, `collection`, `itemVariable`, and `parallelism`. See [Loops](#loops-collection-iteration). |
-| `poll`         | Calls a tool on an interval until a JSON Logic exit condition on the response holds. Uses `toolId`, `exitCondition`, and `interval`. See [Polling](#polling). |
+| `human`        | Pauses the run and waits for external input. The run enters `awaiting_input` status with `required_action`.                         |
+| `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `orchestration_id`, `collection`, `item_variable`, and `parallelism`. See [Loops](#loops-collection-iteration). |
+| `poll`         | Calls a tool on an interval until a JSON Logic exit condition on the response holds. Uses `tool_id`, `exit_condition`, and `interval`. See [Polling](#polling). |
 | `delay`        | Waits for a fixed `duration`, then continues. Accepts `5s`/`5m`/`2h`/`500ms` or ISO 8601 (`PT5S`).                                   |
-| `webhook`      | Emits an HTTP POST (`mode: "emit"`, `webhookUrl`) or pauses awaiting a callback (`mode: "receive"`). `emit` is fire-and-forget: the POST is not awaited, and delivery success or failure is not tracked or retried — the node completes immediately with `{ emitted: true }` regardless of the outcome. |
-| `sub_orchestration` | Runs another orchestration as a single step. Uses `orchestrationId`. The node's artifact is the **child run's `output`** — i.e. `{ terminalNodeId: terminalArtifact }`, the same shape used for `output` on [OrchestrationRun](#orchestrationrun) and for each item in a [`loop`](#loops-collection-iteration) node's `results` array — not a flattened value. `output_mapping`'s artifact key is a flat property lookup (it does not traverse dots), so `{"childNode": "state.x"}` copies the whole `{ terminalNodeId: terminalArtifact }` object into `state.x`; pull out a deeper field with a following `transform` node reading `{"var": "x.terminalNodeId.someField"}`. |
+| `webhook`      | Emits an HTTP POST (`mode: "emit"`, `webhook_url`) or pauses awaiting a callback (`mode: "receive"`). `emit` is fire-and-forget: the POST is not awaited, and delivery success or failure is not tracked or retried — the node completes immediately with `{ emitted: true }` regardless of the outcome. |
+| `sub_orchestration` | Runs another orchestration as a single step. Uses `orchestration_id`. The node's artifact is the **child run's `output`** — i.e. `{ terminalNodeId: terminalArtifact }`, the same shape used for `output` on [OrchestrationRun](#orchestrationrun) and for each item in a [`loop`](#loops-collection-iteration) node's `results` array — not a flattened value. `output_mapping`'s artifact key is a flat property lookup (it does not traverse dots), so `{"childNode": "state.x"}` copies the whole `{ terminalNodeId: terminalArtifact }` object into `state.x`; pull out a deeper field with a following `transform` node reading `{"var": "x.terminalNodeId.someField"}`. |
 
 ### Loops (collection iteration)
 
@@ -105,9 +105,9 @@ A `loop` node iterates an array in the run state and runs a **sub-orchestration 
 
 | Field | Default | Purpose |
 | --- | --- | --- |
-| `orchestrationId` | — (required) | Public ID of the orchestration to run for each item (same field the `sub_orchestration` node uses) |
+| `orchestration_id` | — (required) | Public ID of the orchestration to run for each item (same field the `sub_orchestration` node uses) |
 | `collection` | `state.items` | State path to the array to iterate; a path without the `state.` prefix is normalised to one. A missing or non-array value yields zero iterations |
-| `itemVariable` | `item` | Each element is passed as the sub-run's **input** under this key, so the sub-graph reads it with `{"var": "item"}` |
+| `item_variable` | `item` | Each element is passed as the sub-run's **input** under this key, so the sub-graph reads it with `{"var": "item"}` |
 | `parallelism` | `5` | Items are processed in batches of this size |
 
 The node completes with an artifact `{ results: [...] }` — one entry per item, in order, holding that sub-run's `output`. A graph containing a `loop` node is exempt from [cycle detection](#static-validation) (loops introduce intentional cycles).
@@ -212,14 +212,14 @@ The scheduler tick — which both wakes due `sleeping` runs and reaps orphaned `
 
 Each node can define:
 
-- **`inputMapping`** — Maps node input keys to values resolved against the run state before execution. Each value is [JSON Logic](https://jsonlogic.com) (see [Input Mapping](#input-mapping-json-logic)).
-- **`outputMapping`** — Maps node outputs back to state paths after execution. Each value should be a string starting with the literal `state.` prefix (e.g. `"state.summary"`); a value without the prefix (e.g. `"summary"`) is normalized to be state-relative, the same convention `loop.collection` already uses. Prefer the explicit `state.`-prefixed form shown in the examples throughout this page.
+- **`input_mapping`** — Maps node input keys to values resolved against the run state before execution. Each value is [JSON Logic](https://jsonlogic.com) (see [Input Mapping](#input-mapping-json-logic)).
+- **`output_mapping`** — Maps node outputs back to state paths after execution. Each value should be a string starting with the literal `state.` prefix (e.g. `"state.summary"`); a value without the prefix (e.g. `"summary"`) is normalized to be state-relative, the same convention `loop.collection` already uses. Prefer the explicit `state.`-prefixed form shown in the examples throughout this page.
 
 The root state is available to every node. Transforms and conditions receive the full state object.
 
 #### Input Mapping (JSON Logic)
 
-Each `inputMapping` value is evaluated as [JSON Logic](https://jsonlogic.com) against the run state — the same evaluator used by `transform` and `condition` nodes. This gives one expression language across the whole platform: pass literals, read state, or compute derived values inline, without a dedicated `transform` node.
+Each `input_mapping` value is evaluated as [JSON Logic](https://jsonlogic.com) against the run state — the same evaluator used by `transform` and `condition` nodes. This gives one expression language across the whole platform: pass literals, read state, or compute derived values inline, without a dedicated `transform` node.
 
 | Value | Behaviour |
 | ----- | --------- |
@@ -242,7 +242,7 @@ Values passed to [`start-orchestration-run`](#examples) via `input` become the i
 
 To pass a literal object that happens to look like a JSON Logic expression — e.g. the JSON Logic object `{"var": "x"}` itself, as data rather than an expression to evaluate — wrap it in `preserve`, which returns its argument unevaluated: `{"preserve": {"var": "x"}}`.
 
-> **Breaking change:** `inputMapping` values are no longer `state.<key>` path strings. A bare string is now a literal; use `{"var": "key"}` to read from state.
+> **Note:** an `input_mapping` bare string is a literal value; use `{"var": "key"}` to read `state.key`. (Earlier releases treated a bare `state.<key>` string as a state path — migrate those to `{"var": "key"}`.)
 
 ### Parallel Execution
 
@@ -302,7 +302,7 @@ When a run completes, nodes that were never reached (because they were on an un-
 ```json
 {
   "status": "failed",
-  "error": { "code": "ORCHESTRATION_NODE_FAILED", "message": "Agent 'agt_x' not found." },
+  "error": { "code": "ORCHESTRATION_NODE_FAILED", "message": "Agent 'agent_x' not found." },
   "node_executions": [
     {
       "node_id": "fetch",
@@ -317,7 +317,7 @@ When a run completes, nodes that were never reached (because they were on an un-
       "status": "failed",
       "input": { "prompt": "..." },
       "output": null,
-      "error": { "code": "ORCHESTRATION_NODE_FAILED", "message": "Agent 'agt_x' not found." }
+      "error": { "code": "ORCHESTRATION_NODE_FAILED", "message": "Agent 'agent_x' not found." }
     }
   ]
 }
@@ -354,7 +354,7 @@ soat create-orchestration \
   --name "fetch-and-summarize" \
   --nodes '[
     {"id":"fetch","type":"tool","tool_id":"tool_abc","output_mapping":{"result":"state.raw"}},
-    {"id":"summarise","type":"agent","agent_id":"agt_xyz","input_mapping":{"prompt":{"var":"raw"}},"output_mapping":{"content":"state.summary"}}
+    {"id":"summarise","type":"agent","agent_id":"agent_xyz","input_mapping":{"prompt":{"var":"raw"}},"output_mapping":{"content":"state.summary"}}
   ]' \
   --edges '[{"from":"fetch","to":"summarise"}]'
 ```
@@ -380,7 +380,7 @@ const { data, error } = await soat.orchestrations.createOrchestration({
       {
         id: 'summarise',
         type: 'agent',
-        agent_id: 'agt_xyz',
+        agent_id: 'agent_xyz',
         input_mapping: { prompt: { var: 'raw' } },
         output_mapping: { content: 'state.summary' },
       },
@@ -411,7 +411,7 @@ curl -X POST https://api.example.com/api/v1/orchestrations \
       {
         "id": "summarise",
         "type": "agent",
-        "agent_id": "agt_xyz",
+        "agent_id": "agent_xyz",
         "input_mapping": {"prompt": {"var": "raw"}},
         "output_mapping": {"content": "state.summary"}
       }
@@ -475,8 +475,8 @@ Both `branch_a` and `branch_b` run concurrently after `start` completes:
 {
   "nodes": [
     { "id": "start", "type": "transform", "expression": { "var": "query" } },
-    { "id": "branch_a", "type": "agent", "agent_id": "agt_a", "output_mapping": { "content": "state.a" } },
-    { "id": "branch_b", "type": "agent", "agent_id": "agt_b", "output_mapping": { "content": "state.b" } }
+    { "id": "branch_a", "type": "agent", "agent_id": "agent_a", "output_mapping": { "content": "state.a" } },
+    { "id": "branch_b", "type": "agent", "agent_id": "agent_b", "output_mapping": { "content": "state.b" } }
   ],
   "edges": [
     { "from": "start", "to": "branch_a" },
@@ -510,8 +510,8 @@ A `condition` node emits a string label; edges carry `condition: "<label>"` to s
       "type": "condition",
       "expression": { "if": [{ ">": [{ "var": "score" }, 0.8] }, "high", "low"] }
     },
-    { "id": "high_path", "type": "agent", "agent_id": "agt_high" },
-    { "id": "low_path", "type": "agent", "agent_id": "agt_low" }
+    { "id": "high_path", "type": "agent", "agent_id": "agent_high" },
+    { "id": "low_path", "type": "agent", "agent_id": "agent_low" }
   ],
   "edges": [
     { "from": "check", "to": "high_path", "condition": "high" },
@@ -522,7 +522,7 @@ A `condition` node emits a string label; edges carry `condition: "<label>"` to s
 
 ### Agent Squad
 
-A team of agents plus the flow that coordinates them can deploy as a single [Formation](./formations.md) stack, because an orchestration is itself a formation resource type. A node's `agent_id` uses a [`ref` expression](./formations.md#ref-expressions) to bind to an agent created in the same template; SOAT resolves it to the physical `agt_...` ID before the orchestration is created. Node fields are written in snake_case (`agent_id`, `input_mapping`, `output_mapping`), exactly as in this module's REST contract. For a full step-by-step build, see [Create an Agent Squad](/docs/tutorials/create-an-agent-squad).
+A team of agents plus the flow that coordinates them can deploy as a single [Formation](./formations.md) stack, because an orchestration is itself a formation resource type. A node's `agent_id` uses a [`ref` expression](./formations.md#ref-expressions) to bind to an agent created in the same template; SOAT resolves it to the physical `agent_...` ID before the orchestration is created. Node fields are written in snake_case (`agent_id`, `input_mapping`, `output_mapping`), exactly as in this module's REST contract. For a full step-by-step build, see [Create an Agent Squad](/docs/tutorials/create-an-agent-squad).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

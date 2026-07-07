@@ -671,7 +671,7 @@ Expected status output:
 ```json
 {
   "status": "succeeded",
-  "trace_id": "agt_trace_example",
+  "trace_id": "trace_example",
   "output": {
     "persist-poem": {
       "id": "doc_example"

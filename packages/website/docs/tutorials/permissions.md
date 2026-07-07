@@ -128,7 +128,7 @@ echo "alice: $ALICE_ID"
 echo "bob  : $BOB_ID"
 ```
 
-Note the `id` field (`usr_…`) for each user — you will need them when attaching policies.
+Note the `id` field (`user_…`) for each user — you will need them when attaching policies.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -146,8 +146,8 @@ const { data: bob, error: bobErr } = await adminSoat.users.createUser({
 
 if (bobErr) throw new Error(JSON.stringify(bobErr));
 
-console.log('alice id:', alice.id); // usr_…
-console.log('bob id  :', bob.id); // usr_…
+console.log('alice id:', alice.id); // user_…
+console.log('bob id  :', bob.id); // user_…
 ```
 
 </TabItem>

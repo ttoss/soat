@@ -454,9 +454,14 @@ describe('MCP tools - happy path', () => {
       expect(result.status).toBe('ready');
     });
 
-    test('search-documents returns results', async () => {
-      const res = await mcpCall('search-documents', { query: 'mcp test' });
+    test('search-knowledge returns results', async () => {
+      const res = await mcpCall('search-knowledge', {
+        projectId,
+        query: 'mcp test',
+      });
       expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result).toBeDefined();
     });
 
     test('delete-document deletes the document', async () => {

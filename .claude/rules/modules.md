@@ -18,6 +18,7 @@ A module is a named resource (e.g., `files`, `users`) that is exposed through th
 - [ ] Permission actions updated in `packages/server/src/permissions/<module>.json`
 - [ ] Permissions Reference page regenerated: `pnpm --filter @soat/website generate-permissions-page`
 - [ ] Module docs updated in `packages/website/docs/modules/<module>.md`
+- [ ] ID examples use runtime prefixes (`packages/postgresdb/src/utils/publicId.ts`)
 - [ ] Tests updated in `packages/server/tests/unit/tests/<module>.test.ts`
 - [ ] Formation schema synced if the module has a formation resource type (see [Formations Sync](#formations-sync))
 

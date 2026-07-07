@@ -6,13 +6,13 @@ One-line summary: bring the 27 shipped module pages, their OpenAPI specs, and th
 
 | Workstream | Status |
 | --- | --- |
-| WS1 — OpenAPI spec corrections (code-facing) | Not started |
-| WS2 — Public-ID prefix alignment | Not started |
-| WS3 — Stale feature-rename sweep | Not started |
-| WS4 — Phantom API surface removal | Not started |
-| WS5 — Doc-standard compliance | Not started |
-| WS6 — Example-block discipline | Not started |
-| WS7 — Drift guardrails (automation) | Not started |
+| WS1 — OpenAPI spec corrections (code-facing) | Done |
+| WS2 — Public-ID prefix alignment | Done |
+| WS3 — Stale feature-rename sweep | Done |
+| WS4 — Phantom API surface removal | Done |
+| WS5 — Doc-standard compliance | Done |
+| WS6 — Example-block discipline | Done |
+| WS7 — Drift guardrails (automation) | Done |
 
 ## Problem
 

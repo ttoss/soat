@@ -1,3 +1,6 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Generations
 
 Generation records track individual LLM generation runs started by agents, including their lifecycle status and any failure details.
@@ -18,7 +21,7 @@ Generations can be listed via `GET /generations` (filter by `agent_id`, `trace_i
 | `project_id`                | string         | Project the generation belongs to                                                                    |
 | `agent_id`                  | string         | Agent that ran the generation                                                                        |
 | `trace_id`                  | string         | Trace this generation belongs to                                                                     |
-| `initiator_generation_id`   | string \| null | Generation that triggered this one. Set for pipeline step children and sub-agent invocations alike; `null` for top-level generations |
+| `initiator_generation_id`   | string \| null | Generation that triggered this one. Set only for sub-agent invocations; `null` for top-level generations |
 | `started_by_principal_type` | string \| null | Type of the principal that started the generation                                                    |
 | `started_by_principal_id`   | string \| null | ID of the principal that started the generation                                                      |
 | `status`                    | string         | Lifecycle status: `in_progress`, `requires_action`, `completed`, or `failed`                         |
@@ -109,6 +112,76 @@ When an agent is configured with `knowledge_config.extraction` and `write_memory
 
 See [Knowledge](./knowledge.md) for how `write_memory_id` and `extraction` are configured on an agent.
 
-#### Discussion child generations
+### Sub-agent invocations
 
-Deep thinking moved out of agents into the [Discussions](./discussions.md) module, so agents no longer write a `metadata.reasoning` summary and no longer spawn reasoning-pipeline child generations. A [discussion run](./discussions.md) records its deliberation as a Conversation transcript and its outcome as a Document, referenced from the run — not as `metadata` on the calling generation.
+`initiator_generation_id` is populated only when an agent calls another agent via a SOAT tool: the child generation records the calling generation's ID, while top-level generations leave it `null`. This is the sole case in which the field is set.
+
+Deep reasoning lives in the [Discussions](./discussions.md) module. A discussion run records its deliberation as a Conversation transcript and its outcome as a Document referenced from the run, so it does not appear as `metadata` on, or as a child generation of, the calling generation.
+
+## Examples
+
+### List generations
+
+Filter by `agent_id`, `trace_id`, `initiator_generation_id`, or `status`.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-generations --trace-id trace_abc123 --status failed
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
+
+const { data, error } = await soat.generations.listGenerations({
+  query: { trace_id: 'trace_abc123', status: 'failed' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl "https://api.example.com/api/v1/generations?trace_id=trace_abc123&status=failed" \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+### Get a generation
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat get-generation --generation-id gen_abc123
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.generations.getGeneration({
+  path: { generation_id: 'gen_abc123' },
+});
+if (error) throw new Error(JSON.stringify(error));
+// data.status is "in_progress", "requires_action", "completed", or "failed"
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl https://api.example.com/api/v1/generations/gen_abc123 \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>

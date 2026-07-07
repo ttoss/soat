@@ -80,6 +80,32 @@ describe('AI Providers', () => {
       expect(response.body.provider).toBe('openai');
       expect(response.body.default_model).toBe('gpt-4o');
       expect(response.body.secret_id).toBeNull();
+      expect(response.body.updated_at).toBeDefined();
+    });
+
+    test.each([
+      'openai',
+      'anthropic',
+      'google',
+      'xai',
+      'groq',
+      'ollama',
+      'azure',
+      'bedrock',
+      'gateway',
+      'custom',
+    ])('can create an AI provider with runtime slug %s', async (provider) => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: `Provider ${provider}`,
+          provider,
+          default_model: 'model-x',
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.provider).toBe(provider);
     });
 
     test('can create AI provider linked to a secret', async () => {

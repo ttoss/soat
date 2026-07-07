@@ -85,7 +85,7 @@ openssl rand -hex 32
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-secret --project-id proj_ABC --name "OpenAI Key"
+soat create-secret --project-id proj_ABC --name "OpenAI Key" --value "sk-abc123..."
 ```
 
 </TabItem>
@@ -96,7 +96,7 @@ import { SoatClient } from '@soat/sdk';
 const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
 
 const { data, error } = await soat.secrets.createSecret({
-  body: { project_id: 'proj_ABC', name: 'OpenAI Key' },
+  body: { project_id: 'proj_ABC', name: 'OpenAI Key', value: 'sk-abc123...' },
 });
 if (error) throw new Error(JSON.stringify(error));
 ```
@@ -108,7 +108,7 @@ if (error) throw new Error(JSON.stringify(error));
 curl -X POST https://api.example.com/api/v1/secrets \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"project_id": "proj_ABC", "name": "OpenAI Key"}'
+  -d '{"project_id": "proj_ABC", "name": "OpenAI Key", "value": "sk-abc123..."}'
 ```
 
 </TabItem>

@@ -204,7 +204,7 @@ paths:
           description: Actor ID
           schema:
             type: string
-            example: 'act_V1StGXR8Z5jdHi6B'
+            example: 'actor_V1StGXR8Z5jdHi6B'
       responses:
         '200':
           description: Actor found
@@ -243,7 +243,7 @@ paths:
           description: Actor ID
           schema:
             type: string
-            example: 'act_V1StGXR8Z5jdHi6B'
+            example: 'actor_V1StGXR8Z5jdHi6B'
       responses:
         '204':
           description: Actor deleted
@@ -278,7 +278,7 @@ paths:
           description: Actor ID
           schema:
             type: string
-            example: 'act_V1StGXR8Z5jdHi6B'
+            example: 'actor_V1StGXR8Z5jdHi6B'
       requestBody:
         required: true
         content:
@@ -355,7 +355,7 @@ paths:
           description: Actor ID
           schema:
             type: string
-            example: 'act_V1StGXR8Z5jdHi6B'
+            example: 'actor_V1StGXR8Z5jdHi6B'
       responses:
         '200':
           description: Actor tags
@@ -396,7 +396,7 @@ paths:
           description: Actor ID
           schema:
             type: string
-            example: 'act_V1StGXR8Z5jdHi6B'
+            example: 'actor_V1StGXR8Z5jdHi6B'
       requestBody:
         required: true
         content:
@@ -448,7 +448,7 @@ paths:
           description: Actor ID
           schema:
             type: string
-            example: 'act_V1StGXR8Z5jdHi6B'
+            example: 'actor_V1StGXR8Z5jdHi6B'
       requestBody:
         required: true
         content:
@@ -499,7 +499,7 @@ components:
         id:
           type: string
           description: Actor ID
-          example: 'act_V1StGXR8Z5jdHi6B'
+          example: 'actor_V1StGXR8Z5jdHi6B'
         project_id:
           x-soat-ref: projects
           type: string

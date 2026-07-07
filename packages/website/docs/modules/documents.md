@@ -171,17 +171,17 @@ See the [IAM Reference](iam.md) for full SRN syntax and policy authoring guidanc
 
 ### Project ID Resolution
 
-For endpoints that accept `project_id`, the field is optional. When omitted, the server resolves accessible projects based on the caller's identity:
+For endpoints that accept `project_id`, the field is optional. When omitted, the server resolves the set of accessible projects from the caller's effective policies:
 
 | Caller type | Behavior when `project_id` is omitted                                        |
 | ----------- | ---------------------------------------------------------------------------- |
-| project key | Infers the project from the key's own scope (single project)                 |
-| JWT admin   | No project filter — returns results across all projects                      |
-| JWT user    | Enumerates all projects the user is a member of with the required permission |
+| project key | Scoped to the single project the key belongs to                              |
+| JWT admin   | Holds a wildcard policy — no project filter, returns results across all projects |
+| JWT user    | The projects named by the user's attached policies for the required action   |
 
-Regular users can only access documents in projects they are members of. Even if a user's policy contains `resource: ["*"]`, the server checks project membership **before** evaluating policies — access is limited to the user's own projects. See [IAM — Authorization Model](iam.md#authorization-model) for the full evaluation flow.
+Authorization is policy-only. The server derives the accessible projects from the project SRNs in the caller's policies (`srn:soat:project/...`) and applies them as the filter — there is no separate project-access check outside the policy layer. A user reaches exactly the projects their policies grant, and a policy scoped to `resource: ["*"]` within a granted project covers every document in it. See [IAM — Authorization Model](iam.md#authorization-model) for the full evaluation flow.
 
-If `project_id` is supplied but the caller lacks permission for that project, the request returns `403 Forbidden`.
+If `project_id` is supplied but the caller's policies do not grant the required action on it, the request returns `403 Forbidden`.
 
 ## Configuration
 
@@ -322,8 +322,18 @@ while (doc.status === 'pending' || doc.status === 'processing') {
   const { data: polled } = await soat.documents.getDocument({ path: { document_id: doc.id } });
   doc = polled!;
 }
-if (doc.status === 'failed') throw new Error(`Ingestion failed: ${(doc.metadata as any)?.failure_reason}`);
-console.log(`Ready — ${(doc.metadata as any)?.chunk_count} chunks`);
+if (doc.status === 'failed') {
+  const reason =
+    doc.metadata && 'failure_reason' in doc.metadata
+      ? doc.metadata.failure_reason
+      : 'unknown';
+  throw new Error(`Ingestion failed: ${String(reason)}`);
+}
+const chunkCount =
+  doc.metadata && 'chunk_count' in doc.metadata
+    ? doc.metadata.chunk_count
+    : undefined;
+console.log(`Ready — ${String(chunkCount)} chunks`);
 ```
 
 </TabItem>

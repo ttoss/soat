@@ -9,7 +9,7 @@ Reusable deliberation configs whose invocations are runs — a panel of particip
 
 A **Discussion** is the home of deep thinking in SOAT. It is a reusable configuration (who deliberates and how); each invocation is a **DiscussionRun** (what was deliberated and what came out) — the same split as an [Agent](./agents.md) and its generations. Author a discussion once, then invoke it many times: standalone (brainstorming, red-teaming, expert review) or, more commonly, from an agent mid-loop via a `discussion`-type [tool](./tools.md#discussion).
 
-Deep thinking used to be a `reasoning` config on the agent; it now lives here entirely. See [Migrating from agent reasoning](#migrating-from-agent-reasoning).
+Deep thinking lives entirely in Discussions rather than in a per-agent `reasoning` config. If you are porting a `reasoning` recipe, see [Migrating from agent reasoning](#migrating-from-agent-reasoning).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -99,7 +99,9 @@ The full transcript and outcome persist on the run (Conversation + Document); th
 
 ### Migrating from agent reasoning
 
-The agent `reasoning` config (provider-native effort **and** the reasoning-step pipeline) has been removed. The `reasoning` field no longer exists in the agent schema, so agent create/update and per-generation overrides that include it are rejected with a `400` (unknown field). Map each former recipe to a discussion:
+> **Migration note.** Earlier versions exposed a `reasoning` config on the agent (provider-native effort **and** a reasoning-step pipeline). Discussions replace it.
+
+The agent schema has no `reasoning` field: agent create/update and per-generation overrides that include it are rejected with a `400` (unknown field). Map each reasoning recipe to a discussion:
 
 | Former agent `reasoning`                    | Discussion equivalent                                                             |
 | ------------------------------------------- | --------------------------------------------------------------------------------- |
@@ -122,7 +124,8 @@ soat create-discussion \
   --project-id proj_ABC \
   --name "Design review panel" \
   --ai-provider-id aip_01 \
-  --max-rounds 2
+  --max-rounds 2 \
+  --participants '[{"name":"Advocate","prompt":"Steelman the proposal."},{"name":"Skeptic","prompt":"Attack the strongest claim."}]'
 ```
 
 </TabItem>

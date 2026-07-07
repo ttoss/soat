@@ -392,7 +392,7 @@ paths:
           description: File ID
           schema:
             type: string
-            example: 'fil_abc123'
+            example: 'file_abc123'
       responses:
         '200':
           description: File content
@@ -425,7 +425,7 @@ paths:
           description: File ID
           schema:
             type: string
-            example: 'fil_abc123'
+            example: 'file_abc123'
       requestBody:
         required: true
         content:

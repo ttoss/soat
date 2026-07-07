@@ -106,9 +106,9 @@ The following properties hold for every trace returned by the API:
 Consider a three-level chain: Agent A (top level) calls Agent B via a tool, and Agent B calls Agent C:
 
 ```
-trc_A   (root)
-└── trc_B   (child of A)
-    └── trc_C   (child of B)
+trace_A   (root)
+└── trace_B   (child of A)
+    └── trace_C   (child of B)
 ```
 
 The three trace records look like this:
@@ -116,26 +116,26 @@ The three trace records look like this:
 ```json
 [
   {
-    "id": "trc_A",
-    "agent_id": "agt_orchestrator",
+    "id": "trace_A",
+    "agent_id": "agent_orchestrator",
     "parent_trace_id": null,
     "root_trace_id": null,
     "step_count": 3,
     "created_at": "2025-01-15T10:30:00Z"
   },
   {
-    "id": "trc_B",
-    "agent_id": "agt_researcher",
-    "parent_trace_id": "trc_A",
-    "root_trace_id": "trc_A",
+    "id": "trace_B",
+    "agent_id": "agent_researcher",
+    "parent_trace_id": "trace_A",
+    "root_trace_id": "trace_A",
     "step_count": 5,
     "created_at": "2025-01-15T10:30:02Z"
   },
   {
-    "id": "trc_C",
-    "agent_id": "agt_summarizer",
-    "parent_trace_id": "trc_B",
-    "root_trace_id": "trc_A",
+    "id": "trace_C",
+    "agent_id": "agent_summarizer",
+    "parent_trace_id": "trace_B",
+    "root_trace_id": "trace_A",
     "step_count": 2,
     "created_at": "2025-01-15T10:30:08Z"
   }
@@ -144,9 +144,9 @@ The three trace records look like this:
 
 Key observations:
 
-- `trc_A` is the root: both `parent_trace_id` and `root_trace_id` are `null`.
-- `trc_B` is a depth-1 child: `parent_trace_id === root_trace_id === "trc_A"`.
-- `trc_C` is a depth-2 child: `parent_trace_id` points to its immediate parent (`trc_B`), while `root_trace_id` still points to the top-level root (`trc_A`).
+- `trace_A` is the root: both `parent_trace_id` and `root_trace_id` are `null`.
+- `trace_B` is a depth-1 child: `parent_trace_id === root_trace_id === "trace_A"`.
+- `trace_C` is a depth-2 child: `parent_trace_id` points to its immediate parent (`trace_B`), while `root_trace_id` still points to the top-level root (`trace_A`).
 
 ### Reconstructing the Tree from API Results
 
@@ -162,19 +162,19 @@ Response shape:
 
 ```json
 {
-  "id": "trc_A",
+  "id": "trace_A",
   "parent_trace_id": null,
   "root_trace_id": null,
   "children": [
     {
-      "id": "trc_B",
-      "parent_trace_id": "trc_A",
-      "root_trace_id": "trc_A",
+      "id": "trace_B",
+      "parent_trace_id": "trace_A",
+      "root_trace_id": "trace_A",
       "children": [
         {
-          "id": "trc_C",
-          "parent_trace_id": "trc_B",
-          "root_trace_id": "trc_A",
+          "id": "trace_C",
+          "parent_trace_id": "trace_B",
+          "root_trace_id": "trace_A",
           "children": []
         }
       ]
@@ -210,49 +210,96 @@ Each step in a parent trace that triggered a child generation contains the child
 
 ## Examples
 
-<Tabs>
-<TabItem value="cli" label="CLI">
+### List traces
 
-List traces for a project:
-
-```bash
-soat list-traces --project_id proj_abc123
-```
-
-Fetch a single trace:
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-trace --trace-id trc_abc123
-```
-
-Fetch the full trace tree (includes nested sub-agent traces):
-
-```bash
-soat get-trace-tree --trace-id trc_abc123
+soat list-traces --project-id proj_abc123
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-import { createSoatClient } from '@soat/sdk';
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
 
-const client = createSoatClient({ apiKey: process.env.SOAT_TOKEN });
-
-// List traces
-const { data: traces } = await client.GET('/api/v1/traces', {
-  params: { query: { project_id: 'proj_abc123' } },
+const { data, error } = await soat.traces.listTraces({
+  query: { project_id: 'proj_abc123' },
 });
+if (error) throw new Error(JSON.stringify(error));
+```
 
-// Get a single trace
-const trace = await client.GET('/api/v1/traces/{trace_id}', {
-  params: { path: { trace_id: 'trc_abc123' } },
-});
+</TabItem>
+<TabItem value="curl" label="curl">
 
-// Get the full trace tree
-const tree = await client.GET('/api/v1/traces/{trace_id}/tree', {
-  params: { path: { trace_id: 'trc_abc123' } },
+```bash
+curl "https://api.example.com/api/v1/traces?project_id=proj_abc123" \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+### Get a single trace
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat get-trace --trace-id trace_abc123
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.traces.getTrace({
+  path: { trace_id: 'trace_abc123' },
 });
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl https://api.example.com/api/v1/traces/trace_abc123 \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+### Get the full trace tree
+
+Includes nested sub-agent traces under `children`.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat get-trace-tree --trace-id trace_abc123
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.traces.getTraceTree({
+  path: { trace_id: 'trace_abc123' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl https://api.example.com/api/v1/traces/trace_abc123/tree \
+  -H "Authorization: Bearer <token>"
 ```
 
 </TabItem>

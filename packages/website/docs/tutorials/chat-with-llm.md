@@ -220,7 +220,7 @@ AGENT_ID=$(soat create-agent \
   --instructions "You are a concise assistant running on a local Ollama model. Keep answers short (max 20 words), clear, and practical." \
   | jq -r '.id')
 echo "AGENT_ID: $AGENT_ID"
-# AGENT_ID: agt_KO5nAMmsSOVBWLlN
+# AGENT_ID: agent_KO5nAMmsSOVBWLlN
 ```
 
 </TabItem>
@@ -239,7 +239,7 @@ const { data: agent, error } = await adminSoat.agents.createAgent({
 
 if (error) throw new Error(JSON.stringify(error));
 
-const AGENT_ID = agent.id; // agt_…
+const AGENT_ID = agent.id; // agent_…
 ```
 
 </TabItem>
@@ -334,8 +334,8 @@ Example output:
     "content": "The capital of France is Paris.",
     "model": "qwen2.5:0.5b"
   },
-  "generation_id": "agt_gen_mznGfHSV4YAGiBXy",
-  "trace_id": "agt_trace_8rcvif0n29WE37NL"
+  "generation_id": "gen_mznGfHSV4YAGiBXy",
+  "trace_id": "trace_8rcvif0n29WE37NL"
 }
 ```
 

@@ -25,7 +25,7 @@ A webhook is scoped to a project. When you create a webhook you specify a URL an
 | ------------- | -------------- | ------------------------------------------- |
 | `id`          | string         | Public identifier                           |
 | `project_id`  | string         | ID of the owning project                    |
-| `policy_id`   | string \| null | Optional project policy that gates delivery |
+| `policy_id`   | string \| null | Optional [policy](./policies.md) that gates delivery |
 | `name`        | string         | Human-readable name                         |
 | `description` | string \| null | Optional description                        |
 | `url`         | string         | HTTPS endpoint that receives deliveries     |
@@ -97,7 +97,7 @@ const isValid = (secret, body, signature) => {
 
 ### Policy Gating
 
-Attach a project policy to a webhook to filter deliveries without changing your event subscriptions. When a policy is set, the event is only delivered if the policy evaluates to _allow_ for the event context.
+Attach a [policy](./policies.md) to a webhook to filter deliveries without changing your event subscriptions. Policies are global resources (not scoped to any project); when one is set on a webhook, the event is only delivered if the policy evaluates to _allow_ for the event context.
 
 ### Formation Support
 
@@ -169,6 +169,36 @@ curl -X POST https://api.example.com/api/v1/webhooks \
     "url": "https://example.com/hook",
     "events": ["sessions.*"]
   }'
+```
+
+</TabItem>
+</Tabs>
+
+### List webhooks
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-webhooks --project-id proj_ABC
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.webhooks.listWebhooks({
+  query: { project_id: 'proj_ABC' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl https://api.example.com/api/v1/webhooks?project_id=proj_ABC \
+  -H "Authorization: Bearer <token>"
 ```
 
 </TabItem>

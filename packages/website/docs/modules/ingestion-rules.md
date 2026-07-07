@@ -28,8 +28,8 @@ Rules are per-project. SOAT does not perform OCR or transcription itself — the
 | `id` | string | Public identifier prefixed with `igr_` |
 | `project_id` | string | ID of the owning project |
 | `content_type_glob` | string | Glob matched against the file's `content_type` (`image/*`, `image/png`, `audio/mpeg`, `application/pdf`) |
-| `tool_id` | string \| null | Converter tool (`tol_…`). Must be a server-callable type: `http`, `mcp`, `soat`, or `pipeline`. `client` tools are rejected. Mutually exclusive with `agent_id`. |
-| `agent_id` | string \| null | Converter agent (`agt_…`). The file is sent to the agent as multimodal input and its text output becomes the document content. Mutually exclusive with `tool_id`. |
+| `tool_id` | string \| null | Converter tool (`tool_…`). Must be a server-callable type: `http`, `mcp`, `soat`, or `pipeline`. `client` tools are rejected. Mutually exclusive with `agent_id`. |
+| `agent_id` | string \| null | Converter agent (`agent_…`). The file is sent to the agent as multimodal input and its text output becomes the document content. Mutually exclusive with `tool_id`. |
 | `action` | string \| null | Operation id, required for `soat`/`mcp` tool converters |
 | `preset_parameters` | object \| null | Merged into the tool input before invocation (tool converters only). Cannot contain the reserved keys `file` or `callback`, which ingestion injects. |
 | `native_extraction` | string | For PDFs: `first` (default) converts only when native extraction yields no text; `skip` bypasses native extraction and converts every matching PDF. Ignored for non-native types. |
@@ -89,7 +89,7 @@ Since the [Converter Tool Contract](#converter-tool-contract) accepts a bare str
   "steps": [
     {
       "id": "call",
-      "tool_id": "tol_stt_http",
+      "tool_id": "tool_stt_http",
       "input": { "file": { "var": "input.file" } }
     }
   ],
@@ -103,19 +103,19 @@ Not every third-party API accepts JSON. Many audio (speech-to-text) and speciali
 
 ### Converter Tool Contract
 
-A **tool** converter is called via the same server-side path as any other tool call, with a fixed input shape, and must return one of three output shapes.
+A **tool** converter is called via the same server-side path as every other tool call, with a fixed input shape, and must return one of three output shapes.
 
 **Input** built by ingestion:
 
 ```jsonc
 {
   "file": {
-    "id": "fl_01",
+    "id": "file_01",
     "filename": "scan.png",
     "content_type": "image/png",
     "size": 20480,
     "data_base64": "iVBORw0KGgo…",        // when file_delivery = base64
-    "download_url": "https://…/files/fl_01/download?token=…" // when file_delivery = download_url
+    "download_url": "https://…/files/file_01/download?token=…" // when file_delivery = download_url
   },
   "callback": {                            // lets long-running tools defer their result
     "url": "https://…/api/v1/documents/doc_01/ingestion-callback",
@@ -148,14 +148,9 @@ Any other shape fails the document with `CONVERTER_OUTPUT_INVALID`; a tool error
 
 A converter tool that returns text (or `{ pages }`) directly is **synchronous** — ingestion continues to chunk and embed inline. An agent converter is always synchronous: its generation is awaited inline and it has no deferral path.
 
-A tool that returns `{ status: "pending" }` is **asynchronous** — but only when the document is being ingested in the default async mode (`POST /documents/ingest` without `?async=false`). The document stays in `processing` while the external job runs, then the tool (or the service it wires) posts the result to:
+A tool that returns `{ status: "pending" }` is **asynchronous** — but only when the document is being ingested in the default async mode (`POST /documents/ingest` without `?async=false`). The document stays in `processing` while the external job runs, then the tool (or the service it wires) delivers the result to the Documents module's ingestion-callback endpoint — see [Deliver an async converter result](/docs/api/documents/complete-ingestion-callback) in the API reference for its path, query token, and request schema.
 
-```
-POST /api/v1/documents/{document_id}/ingestion-callback?token={token}
-{ "text": "..." }                                      // or { "pages": [...] }
-```
-
-`{document_id}` and `token` come from the `callback` block ingestion injected into the tool's input (see [Converter Tool Contract](#converter-tool-contract)); the request body uses the same output contract as a synchronous converter, adapted for a JSON body (a single page is `{ "text": "..." }` rather than a bare string, since a top-level JSON string is not a valid HTTP JSON body).
+The callback's document ID and token come from the `callback` block ingestion injected into the tool's input (see [Converter Tool Contract](#converter-tool-contract)); its body uses the same output contract as a synchronous converter, adapted for a JSON body (a single page is `{ "text": "..." }` rather than a bare string, since a top-level JSON string is not a valid HTTP JSON body).
 
 The callback is authorized by a single-use, signed token scoped to that document and ingestion attempt — not by an IAM action, since the external converter is not a SOAT user. It is accepted (`204`) only while that attempt is still `processing`; a replayed callback, a callback for a superseded attempt (after re-ingest), or one that arrives after the stall timeout already failed the document is rejected with `409 INGESTION_CALLBACK_CONFLICT`. An invalid or mismatched token is rejected with `401 INGESTION_CALLBACK_INVALID_TOKEN`. Once a valid result arrives, ingestion runs the normal chunk + embed tail and marks the document `ready`.
 
@@ -190,7 +185,7 @@ Converter-related `failure_reason` values that can appear on a failed document (
 soat create-ingestion-rule \
   --project-id proj_ABC \
   --content-type-glob "image/*" \
-  --tool-id tol_ocr \
+  --tool-id tool_ocr \
   --file-delivery base64 \
   --chunk-strategy whole
 ```
@@ -206,7 +201,7 @@ const { data, error } = await soat.ingestionRules.createIngestionRule({
   body: {
     project_id: 'proj_ABC',
     content_type_glob: 'image/*',
-    tool_id: 'tol_ocr',
+    tool_id: 'tool_ocr',
     file_delivery: 'base64',
     chunk_strategy: 'whole',
   },
@@ -224,7 +219,7 @@ curl -X POST https://api.example.com/api/v1/ingestion-rules \
   -d '{
     "project_id": "proj_ABC",
     "content_type_glob": "image/*",
-    "tool_id": "tol_ocr",
+    "tool_id": "tool_ocr",
     "file_delivery": "base64",
     "chunk_strategy": "whole"
   }'
@@ -244,7 +239,7 @@ A rule matching `application/pdf` fires only when the native extractor returns n
 soat create-ingestion-rule \
   --project-id proj_ABC \
   --content-type-glob "application/pdf" \
-  --agent-id agt_vision \
+  --agent-id agent_vision \
   --chunk-strategy whole
 ```
 
@@ -256,7 +251,7 @@ await soat.ingestionRules.createIngestionRule({
   body: {
     project_id: 'proj_ABC',
     content_type_glob: 'application/pdf',
-    agent_id: 'agt_vision',
+    agent_id: 'agent_vision',
     chunk_strategy: 'whole',
   },
 });
@@ -272,7 +267,7 @@ curl -X POST https://api.example.com/api/v1/ingestion-rules \
   -d '{
     "project_id": "proj_ABC",
     "content_type_glob": "application/pdf",
-    "agent_id": "agt_vision",
+    "agent_id": "agent_vision",
     "chunk_strategy": "whole"
   }'
 ```

@@ -30,7 +30,7 @@ Sessions are a top-level resource at `/sessions`. Each session belongs to an [Ag
 | `conversation_id`        | string          | Public ID of the underlying conversation                                                                       |
 | `status`                 | string          | `open` (default), `closed`, or `expired`                                                                       |
 | `name`                   | string          | Optional display name                                                                                          |
-| `actor_id`               | string \| null  | Optional public ID of the [Actor](./actors.md) associated with this session (`actr_` prefix)                   |
+| `actor_id`               | string \| null  | Optional public ID of the [Actor](./actors.md) associated with this session (`actor_` prefix)                  |
 | `tags`                   | object          | Free-form key-value metadata                                                                                   |
 | `auto_generate`          | boolean         | When `true`, saving a message automatically triggers LLM generation (default: `false`)                         |
 | `message_delay_seconds`  | integer \| null | Debounce delay in seconds before the LLM is called after a user message. `null` means no delay (default).      |
@@ -106,7 +106,7 @@ When `message_delay_seconds` is set, `POST .../messages` does **not** trigger LL
 POST /sessions
 Content-Type: application/json
 
-{ "agent_id": "agt_01", "auto_generate": true, "message_delay_seconds": 3 }
+{ "agent_id": "agent_01", "auto_generate": true, "message_delay_seconds": 3 }
 ```
 
 With the above:
@@ -192,7 +192,7 @@ Each call to `POST .../generate` returns `generation_id` and `trace_id`. Store t
 {
   "session_id": "sess_...",
   "generation_id": "gen_...",
-  "trace_id": "trc_...",
+  "trace_id": "trace_...",
   "created_at": "2026-06-01T12:34:56.000Z"
 }
 ```
@@ -226,7 +226,7 @@ All events include `session_id`. Generation events additionally include `generat
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-session --agent-id agt_01 --name "My Session"
+soat create-session --agent-id agent_01 --name "My Session"
 soat add-session-message --session-id sess_01 --message "Hello!"
 soat generate-session-response --session-id sess_01
 ```
@@ -239,7 +239,7 @@ import { SoatClient } from '@soat/sdk';
 const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
 
 const { data: session } = await soat.sessions.createSession({
-  body: { agent_id: 'agt_01', name: 'My Session' },
+  body: { agent_id: 'agent_01', name: 'My Session' },
 });
 
 await soat.sessions.addSessionMessage({
@@ -259,7 +259,7 @@ const { data: reply } = await soat.sessions.generateSessionResponse({
 curl -X POST https://api.example.com/api/v1/sessions \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"agent_id": "agt_01", "name": "My Session"}'
+  -d '{"agent_id": "agent_01", "name": "My Session"}'
 
 curl -X POST https://api.example.com/api/v1/sessions/sess_01/messages \
   -H "Authorization: Bearer <token>" \
@@ -267,6 +267,37 @@ curl -X POST https://api.example.com/api/v1/sessions/sess_01/messages \
   -d '{"message": "Hello!"}'
 
 curl -X POST https://api.example.com/api/v1/sessions/sess_01/generate \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+### List sessions
+
+Filter by agent, actor, or status.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-sessions --agent-id agent_01 --status open
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: sessions } = await soat.sessions.listSessions({
+  query: { agent_id: 'agent_01', status: 'open' },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl "https://api.example.com/api/v1/sessions?agent_id=agent_01&status=open" \
   -H "Authorization: Bearer <token>"
 ```
 

@@ -7,7 +7,7 @@ The Policies module provides global, reusable IAM policy documents that can be a
 
 ## Overview
 
-A Policy is a named, reusable [policy document](./iam.md#policy-documents) stored globally — not scoped to any project. Policies are attached to **users** (via `PUT /users/:userId/policies`) and **API keys** (at creation or update time) to grant or restrict access. To list the policies attached to a user, use `GET /policies?user_id=`.
+A Policy is a named, reusable [policy document](./iam.md#policy-documents) stored globally — not scoped to any project. Policies are attached to **users** and **API keys** to grant or restrict access. The policies attached to a given user can be listed by filtering on that user.
 
 Policies are identified by an `id` prefixed with `pol_`.
 
@@ -52,19 +52,7 @@ See [IAM — Policy Documents](./iam.md#policy-documents) for the full format an
 
 ### Attaching Policies to Users
 
-Users accumulate permissions from all policies attached to their account. When a user makes a request, all their policies are loaded and evaluated together. See it end to end in [Permissions in Practice - Step 5 (Attach policies to users)](/docs/tutorials/permissions#step-5--attach-policies-to-users).
-
-```http
-PUT /api/v1/users/usr_abc123/policies
-Authorization: Bearer <admin-token>
-Content-Type: application/json
-
-{
-  "policy_ids": ["pol_V1StGXR8Z5jdHi6B", "pol_YkQ9pLmNxR2wE4s"]
-}
-```
-
-This operation **replaces** the user's full policy list.
+Users accumulate permissions from all policies attached to their account. When a user makes a request, all their policies are loaded and evaluated together. Attaching a policy set to a user **replaces** the user's full policy list. See it end to end in [Permissions in Practice - Step 5 (Attach policies to users)](/docs/tutorials/permissions#step-5--attach-policies-to-users), and the [Attach policies to a user](#attach-policies-to-a-user) example below.
 
 ### Attaching Policies to API Keys
 
@@ -152,7 +140,7 @@ curl -X POST https://api.example.com/api/v1/policies \
 
 ```bash
 soat attach-user-policies \
-  --user-id usr_01 \
+  --user-id user_01 \
   --policy-ids pol_V1StGXR8Z5jdHi6B
 ```
 
@@ -162,7 +150,7 @@ soat attach-user-policies \
 ```ts
 // SDK
 const { data, error } = await soat.users.attachUserPolicies({
-  path: { user_id: 'usr_01' },
+  path: { user_id: 'user_01' },
   body: { policy_ids: ['pol_V1StGXR8Z5jdHi6B'] },
 });
 if (error) throw new Error(JSON.stringify(error));
@@ -172,7 +160,7 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X PUT https://api.example.com/api/v1/users/usr_01/policies \
+curl -X PUT https://api.example.com/api/v1/users/user_01/policies \
   -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
   -d '{"policy_ids": ["pol_V1StGXR8Z5jdHi6B"]}'

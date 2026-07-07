@@ -3,11 +3,11 @@ import TabItem from '@theme/TabItem';
 
 # Files
 
-File upload, download, metadata management, and deletion using a local filesystem storage backend.
+File upload, download, metadata management, and deletion over a pluggable storage backend (local filesystem, S3, or GCS).
 
 ## Overview
 
-Files are associated with a project and stored on the server's local filesystem. Every file record exposes a public `id`; the internal database primary key is never returned. Files are organized in a project-scoped directory structure and tracked in PostgreSQL.
+Files are associated with a project and persisted through the configured storage backend — local filesystem, S3, or GCS. Every file record exposes a public `id`; the internal database primary key is never returned. File metadata is tracked in PostgreSQL, while the physical location and backend selection are system-managed and not exposed through the API (see [Configuration](#configuration)).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -38,7 +38,7 @@ You address a file with two write fields, mirroring an S3 object: a **`prefix`**
 
 ### Storage Layout
 
-Files are organized in a project-scoped directory structure on disk:
+With the local filesystem backend, files are organized in a project-scoped directory structure on disk:
 
 ```
 {FILES_STORAGE_DIR}/{projectPublicId}/{category}/{fileId}{ext}
@@ -55,7 +55,7 @@ Files are organized in a project-scoped directory structure on disk:
 If a file has no `path`, the category defaults to `files/`. Examples:
 
 ```
-/data/files/proj_1a123a/traces/agt_trace_abc123.json
+/data/files/proj_1a123a/traces/trace_abc123.json
 /data/files/proj_1a123a/documents/doc_xyz.md
 /data/files/proj_1a123a/files/file_plain123.png
 ```
@@ -79,7 +79,7 @@ The list endpoint applies policy filters at the SQL level — the database retur
 
 Upload tokens provide a two-step upload flow — the local-storage equivalent of an S3 presigned URL — usable from any client (SDK, CLI, curl, or an MCP agent):
 
-1. **Request a token** — `POST /api/v1/files/upload-token` returns a single-use `upload_token`, an `upload_url`, and an `expires_at` (15-minute lifetime). This step is authenticated and requires `files:UploadFile`. By default `upload_url` is **relative** (e.g. `/api/v1/files/upload/upt_xxx`); when the server is configured with `SOAT_BASE_URL`, it is returned as a **fully-qualified absolute URL** so clients and MCP agents can POST to it without knowing the server base URL in advance — see [Configuration](#configuration).
+1. **Request a token** — `POST /api/v1/files/presigned-url` returns a single-use `upload_token`, an `upload_url`, and an `expires_at` (15-minute lifetime). This step is authenticated and requires `files:UploadFile`. By default `upload_url` is **relative** (e.g. `/api/v1/files/upload/upt_xxx`); when the server is configured with `SOAT_BASE_URL`, it is returned as a **fully-qualified absolute URL** so clients and MCP agents can POST to it without knowing the server base URL in advance — see [Configuration](#configuration).
 2. **Upload the content** — `POST /api/v1/files/upload/{token}` writes the file and returns the standard file record. This endpoint requires **no bearer credential** — the token is the credential — and accepts either `multipart/form-data` (field `file`) or JSON with a base64 `content` field.
 
 Because the two steps are decoupled, the party that authorizes the upload (step 1) need not be the party that transfers the bytes (step 2) — the token can be handed to a browser, a worker, or a CLI to complete the upload directly over HTTP.
@@ -106,7 +106,7 @@ curl -F "file=@/path/to/large-report.pdf" "$BASE_URL/api/v1/files/upload/upt_xxx
 | Environment Variable | Required | Description                                                                                             |
 | -------------------- | -------- | ------------------------------------------------------------------------------------------------------- |
 | `FILES_STORAGE_DIR`  | Yes      | Absolute path to the directory where uploaded files are stored. Must be writable by the server process. |
-| `SOAT_BASE_URL`      | No       | Public base URL of the server (e.g. `https://api.example.com`). When set, the upload-token flow returns an absolute `upload_url`; otherwise the URL is relative. A trailing slash is trimmed. |
+| `SOAT_BASE_URL`      | No       | Public base URL of the server (e.g. `https://api.example.com`). When set, the presigned-URL flow returns an absolute `upload_url`; otherwise the URL is relative. A trailing slash is trimmed. |
 
 When running via Docker, mount a volume at this path to persist files across container restarts:
 
@@ -181,7 +181,7 @@ curl -X POST https://api.example.com/api/v1/files/upload-base64 \
 
 ```bash
 # Step 1 — request a single-use token
-TOKEN=$(soat create-upload-token \
+TOKEN=$(soat create-presigned-url \
   --project-id proj_ABC \
   --content-type application/pdf \
   --prefix /documents \
@@ -197,7 +197,7 @@ soat upload-file-with-token \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: token } = await soat.files.createUploadToken({
+const { data: token } = await soat.files.createPresignedUrl({
   body: {
     project_id: 'proj_ABC',
     content_type: 'application/pdf',
@@ -218,7 +218,7 @@ if (error) throw new Error(JSON.stringify(error));
 
 ```bash
 # Step 1 — request a token
-TOKEN=$(curl -s -X POST https://api.example.com/api/v1/files/upload-token \
+TOKEN=$(curl -s -X POST https://api.example.com/api/v1/files/presigned-url \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"project_id":"proj_ABC","prefix":"/documents","filename":"report.pdf"}' | jq -r .upload_token)

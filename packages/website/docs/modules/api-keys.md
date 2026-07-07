@@ -60,7 +60,7 @@ JWT auth is unchanged: a write that omits `project_id` still returns `400`, sinc
 
 ### Policy Attachment
 
-Policies listed in `policy_ids` are loaded from the global [Policies](./policies.md) store. The `policy_ids` list on a key stores integer internal IDs; the REST API accepts and returns the public `pol_`-prefixed IDs.
+Policies listed in `policy_ids` are loaded from the global [Policies](./policies.md) store. `policy_ids` is the list of policy public IDs (`pol_`-prefixed) attached to the key; the REST API accepts and returns these public IDs.
 
 ### Revoking a Key
 
@@ -120,3 +120,39 @@ curl -X POST https://api.example.com/api/v1/api-keys \
 </Tabs>
 
 Store the `key` value securely — it is never returned again.
+
+### List API keys
+
+The raw secret is never included in list or get responses — only the `key_prefix` is returned.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-api-keys
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
+
+const { data, error } = await soat.apiKeys.listApiKeys();
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl https://api.example.com/api/v1/api-keys \
+  -H "Authorization: Bearer <jwt-token>"
+```
+
+</TabItem>
+</Tabs>
