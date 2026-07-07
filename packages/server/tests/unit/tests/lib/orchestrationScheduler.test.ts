@@ -6,7 +6,6 @@ import {
   emitRunLifecycleEvent,
   lifecycleEventForStatus,
 } from 'src/lib/orchestrationEvents';
-import * as runHelpersModule from 'src/lib/orchestrationRunHelpers';
 import type { MappedOrchestrationRun } from 'src/lib/orchestrations';
 import {
   reapOrphanedRuns,
@@ -140,6 +139,31 @@ const createRunWithMissingOrchestration = async (
   return run;
 };
 
+// Creates a real run whose orchestration record is corrupt (`nodes` is not an
+// array), so the engine genuinely throws when it tries to drive it — a real way
+// to exercise the scheduler's fire-and-forget error handling without mocking the
+// wake/redrive functions.
+const createRunWithMalformedOrchestration = async (
+  overrides: Record<string, unknown>
+) => {
+  ephemeralOrchSeq += 1;
+  const badOrch = await db.Orchestration.create({
+    projectId: projectPk,
+    name: `Malformed ${ephemeralOrchSeq}`,
+    nodes: {},
+    edges: [],
+  });
+  return db.OrchestrationRun.create({
+    orchestrationId: badOrch.id as number,
+    projectId: projectPk,
+    state: {},
+    activeNodes: [],
+    artifacts: {},
+    input: {},
+    ...overrides,
+  });
+};
+
 // Polls a run row until it reaches one of `statuses`. Uses no timer APIs so it
 // works under both real and fake timers; each real DB round-trip yields to the
 // event loop, letting the scheduler's detached wake/redrive work progress.
@@ -261,14 +285,14 @@ describe('orchestrationEvents', () => {
   });
 
   test('emitRunLifecycleEvent swallows a project-lookup failure', async () => {
-    // resolveProjectPublicId never rejects against a live DB (a missing project
-    // resolves to ''), so the best-effort catch is exercised by forcing a
-    // rejection at the eventBus boundary — not a `db.*` stub.
-    jest
-      .spyOn(eventBusModule, 'resolveProjectPublicId')
-      .mockRejectedValueOnce(new Error('lookup failed'));
+    // A NaN projectId makes the real project lookup fail at the DB, exercising
+    // the best-effort catch — no `db.*` or internal-module stub.
     expect(() => {
-      emitRunLifecycleEvent({ event: 'failed', projectId: 1, run: fakeRun });
+      emitRunLifecycleEvent({
+        event: 'failed',
+        projectId: Number.NaN,
+        run: fakeRun,
+      });
     }).not.toThrow();
     await flush();
   });
@@ -321,19 +345,22 @@ describe('orchestrationScheduler', () => {
     });
 
     test('swallows a waker failure without rejecting', async () => {
-      const run = await createDueSleepingRun();
-      // The wake itself failing must not surface out of wakeDueRuns. Spying the
-      // engine boundary (not `db.*`) is the only way to force that rejection.
-      const wakeSpy = jest
-        .spyOn(engineModule, 'wakeRun')
-        .mockRejectedValueOnce(new Error('wake blew up'));
+      // The run points at a corrupt orchestration, so the real wakeRun throws
+      // while driving it. wakeDueRuns must claim it yet not surface the rejection.
+      const run = await createRunWithMalformedOrchestration({
+        status: 'sleeping',
+        wakeAt: new Date(Date.now() - 1000),
+        wakeContext: {
+          nodeId: 'delay',
+          resume: { kind: 'delay', artifact: {} },
+        },
+      });
 
       const count = await wakeDueRuns({ now: new Date() });
       expect(count).toBe(1);
 
       // The rejection is caught internally; flushing must not surface it.
       await flush();
-      expect(wakeSpy).toHaveBeenCalledTimes(1);
       // The run was claimed (flipped to running) even though the wake failed.
       const claimed = await db.OrchestrationRun.findByPk(run.id as number);
       expect(claimed?.status).toBe('running');
@@ -389,16 +416,20 @@ describe('orchestrationScheduler', () => {
     });
 
     test('swallows a redrive failure without rejecting', async () => {
-      await createOrphanedRun();
-      const redriveSpy = jest
-        .spyOn(engineModule, 'redriveRun')
-        .mockRejectedValueOnce(new Error('redrive blew up'));
+      // The orphan points at a corrupt orchestration, so the real redriveRun
+      // throws while re-driving it. The reaper must claim it without rejecting.
+      const orphan = await createRunWithMalformedOrchestration({
+        status: 'running',
+        leaseExpiresAt: new Date(Date.now() - 60_000),
+      });
 
       const count = await reapOrphanedRuns({ now: new Date() });
       expect(count).toBe(1);
 
+      // The rejection is caught internally; flushing must not surface it.
       await flush();
-      expect(redriveSpy).toHaveBeenCalledTimes(1);
+      const claimed = await db.OrchestrationRun.findByPk(orphan.id as number);
+      expect(claimed?.status).toBe('running');
     });
   });
 
@@ -592,20 +623,23 @@ describe('startOrchestrationRun background error handling', () => {
   });
 
   test('swallows an error thrown by the async background drive', async () => {
-    // Real orchestration + real run row; only the run-mapping boundary is
-    // stubbed (not `db.*`): it resolves for the initial return, then rejects
-    // during the background settle so the detached drive's catch is exercised.
-    jest
-      .spyOn(runHelpersModule, 'mapRunWithIncludes')
-      .mockResolvedValueOnce(fakeRun)
-      .mockRejectedValueOnce(new Error('map failed during settle'));
+    // A corrupt orchestration makes the detached background drive throw. The
+    // call still returns the initial run synchronously and the drive's catch
+    // swallows the failure — driven entirely through real records, no stubs.
+    const badOrch = await db.Orchestration.create({
+      projectId: projectPk,
+      name: 'Background Drive Failure',
+      nodes: {},
+      edges: [],
+    });
 
     const result = await engineModule.startOrchestrationRun({
-      orchestrationPublicId: transformOrchPublicId,
+      orchestrationPublicId: badOrch.publicId as string,
     });
 
     // Returns the initial run immediately; the background failure is swallowed.
-    expect(result).toBe(fakeRun);
+    expect(result.status).toBe('running');
+    expect(result.id).toBeDefined();
     await new Promise<void>((resolve) => {
       return setImmediate(resolve);
     });
