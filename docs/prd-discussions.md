@@ -24,6 +24,192 @@
 | **Remove `reasoning` from agents (entirely)** | ✅ Implemented | The whole `reasoning` config is removed from agents: the field no longer exists in the agent schema, so it is rejected on write and per-generate override with a `400` (unknown field); the `reasoningConfig` column read path, the `applyReasoningPipeline` hook, and the OpenAPI `ReasoningConfig`/`ReasoningStep`/`ReasoningBranch` schemas are gone. Provider-native `effort` moved into Discussions as a participant/synthesis knob. See Phase 5. |
 | Discussions resource module                 | ✅ Implemented (thin MVP) | Synchronous `pending → running → completed/failed` runs, `round_robin` turns, transcript persisted as a Conversation with Actor authorship + outcome Document. Async/poll, human-in-the-loop, `organizer_selects`, and real-Agent participants remain deferred. See Phase 4. |
 
+## Current Contract (shipped surface)
+
+> **This section documents the shipped reality** — the API surface an implementer or integrator
+> codes against today. Sourced from `packages/server/src/rest/openapi/v1/discussions.yaml`,
+> `packages/server/src/permissions/discussions.json`, and the `Discussion` /
+> `DiscussionParticipant` / `DiscussionRun` models in `packages/postgresdb/src/models/`.
+> The phase sections below preserve the motivation and decision history; when in doubt about
+> the current contract, this section and the OpenAPI spec win.
+
+### REST endpoints
+
+All body fields snake_case; path params `{like_this}`. Auth: JWT or `sk_` project key (bearer).
+
+| Method | Path                                          | operationId          | Permission action                 |
+| ------ | --------------------------------------------- | -------------------- | --------------------------------- |
+| GET    | `/api/v1/discussions`                         | `listDiscussions`    | `discussions:ListDiscussions`     |
+| POST   | `/api/v1/discussions`                         | `createDiscussion`   | `discussions:CreateDiscussion`    |
+| GET    | `/api/v1/discussions/{discussion_id}`         | `getDiscussion`      | `discussions:GetDiscussion`       |
+| PATCH  | `/api/v1/discussions/{discussion_id}`         | `updateDiscussion`   | `discussions:UpdateDiscussion`    |
+| DELETE | `/api/v1/discussions/{discussion_id}`         | `deleteDiscussion`   | `discussions:DeleteDiscussion`    |
+| POST   | `/api/v1/discussions/{discussion_id}/runs`    | `createDiscussionRun`| `discussions:CreateDiscussionRun` |
+| GET    | `/api/v1/discussions/{discussion_id}/runs`    | `listDiscussionRuns` | `discussions:ListDiscussionRuns`  |
+| GET    | `/api/v1/discussions/runs/{run_id}`           | `getDiscussionRun`   | `discussions:GetDiscussionRun`    |
+
+Contract notes:
+
+- List endpoints take `limit` (default 50) / `offset` (default 0) query params and return
+  `{ data, total, limit, offset }`; `listDiscussions` also accepts an optional `project_id` filter.
+- `POST /discussions`: project keys infer the project from the key's scope; JWT callers must send
+  `project_id`. Required fields: `name`, `ai_provider_id`.
+- `PATCH /discussions/{discussion_id}`: providing `participants` **replaces the full set** (not merged).
+- `POST /discussions/{discussion_id}/runs` is **synchronous** — the `201` response is the completed
+  (or failed) run with the synthesized `outcome` text inlined; the transcript is persisted as a
+  Conversation and the outcome as a Document.
+- `DELETE` returns `204` and cascade-deletes the discussion's participants.
+- The SOAT MCP/CLI tool surface is auto-derived from these operations
+  (`create-discussion`, `create-discussion-run`, `get-discussion-run`, …); the designed agent path
+  is the `discussion` tool type (see Phase 4).
+
+### Data model
+
+#### `Discussion` (`disc_`) — table `discussions`
+
+| Field (API, snake_case) | Type                | Notes                                                                                        |
+| ----------------------- | ------------------- | -------------------------------------------------------------------------------------------- |
+| `id`                    | string              | Public ID `disc_…` (internal PK never exposed)                                                |
+| `project_id`            | string              | `proj_…`; NOT NULL                                                                            |
+| `name`                  | string              | Required                                                                                      |
+| `description`           | string \| null      |                                                                                               |
+| `max_rounds`            | integer             | 1–3, default 1                                                                                |
+| `ai_provider_id`        | string              | `aip_…`; **required on create** — default provider participants and synthesis fall back to    |
+| `model`                 | string \| null      | Default model; falls back to the provider's `default_model`                                   |
+| `synthesis`             | object \| null      | `{ ai_provider_id?, model?, prompt?, effort? }`; `prompt` supports `{steps.deliberation}` and `{topic}`; `effort` ∈ `low\|medium\|high` |
+| `tags`                  | object              | string → string map, default `{}`                                                             |
+| `participants`          | ParticipantRecord[] | Max 5; cascade-deleted with the discussion                                                    |
+| `created_at`            | date-time           |                                                                                               |
+| `updated_at`            | date-time           |                                                                                               |
+
+#### `DiscussionParticipant` (`dpt_`) — table `discussion_participants`
+
+Nested under the discussion record (no standalone endpoints); written via the `participants` array
+on create/update.
+
+| Field (API, snake_case) | Type           | Notes                                                                     |
+| ----------------------- | -------------- | -------------------------------------------------------------------------- |
+| `id`                    | string         | Public ID `dpt_…`                                                           |
+| `name`                  | string \| null | Display label used for transcript attribution                              |
+| `prompt`                | string \| null | Persona prompt                                                              |
+| `position`              | integer        | Turn order; defaults to array index (DB default 0)                          |
+| `actor_id`              | string \| null | `actor_…` — durable Actor identity for transcript authorship; `SET NULL` on actor delete |
+| `ai_provider_id`        | string \| null | Per-participant provider override; `SET NULL` on provider delete            |
+| `model`                 | string \| null | Per-participant model override                                              |
+| `temperature`           | number \| null |                                                                             |
+| `effort`                | string \| null | `low` \| `medium` \| `high` — provider-native reasoning effort for this participant's turns |
+| `created_at` / `updated_at` | date-time  |                                                                             |
+
+#### `DiscussionRun` (`drn_`) — table `discussion_runs`
+
+| Field (API, snake_case)   | Type             | Notes                                                                     |
+| ------------------------- | ---------------- | --------------------------------------------------------------------------- |
+| `id`                      | string           | Public ID `drn_…`                                                            |
+| `discussion_id`           | string           | `disc_…`; run rows cascade-delete with the discussion                        |
+| `project_id`              | string           | Denormalized from the discussion; NOT NULL                                   |
+| `topic`                   | string           | The invocation argument; required                                            |
+| `status`                  | string           | `pending` \| `running` \| `completed` \| `failed` (sync runs return terminal states) |
+| `outcome`                 | string \| null   | The synthesized outcome text inlined — the tool-result contract              |
+| `conversation_id`         | string \| null   | `conv_…` — the persisted transcript Conversation                             |
+| `outcome_document_id`     | string \| null   | `doc_…` — the durable outcome Document                                       |
+| `started_by`              | object \| null   | Free-form principal record, e.g. `{ "user_id": "user_…", "username": "…" }`  |
+| `initiator_generation_id` | string \| null   | `gen_…` — set when an agent invoked the run mid-loop via a `discussion` tool |
+| `trace_id`                | string \| null   | `trace_…` — per-turn observability lives in the trace tree                   |
+| `completed_at`            | date-time \| null|                                                                              |
+| `created_at` / `updated_at` | date-time      |                                                                              |
+
+### Example — create a discussion, then invoke it
+
+`POST /api/v1/discussions` (JWT caller):
+
+```json
+{
+  "project_id": "proj_V1StGXR8Z5jdHi6B",
+  "name": "Design review panel",
+  "description": "Red-team big design decisions before committing.",
+  "ai_provider_id": "aip_V1StGXR8Z5jdHi6B",
+  "max_rounds": 2,
+  "synthesis": {
+    "prompt": "Weigh the arguments; commit to a single recommendation with rationale:\n{steps.deliberation}"
+  },
+  "participants": [
+    { "name": "Skeptic", "prompt": "Attack the strongest claim and surface hidden assumptions.", "position": 0 },
+    { "name": "Advocate", "prompt": "Steelman the proposal with concrete evidence.", "position": 1, "model": "gpt-4o-mini" }
+  ]
+}
+```
+
+`201` response (`DiscussionRecord`):
+
+```json
+{
+  "id": "disc_9xKw3RtY7mQpLa2Z",
+  "project_id": "proj_V1StGXR8Z5jdHi6B",
+  "name": "Design review panel",
+  "description": "Red-team big design decisions before committing.",
+  "max_rounds": 2,
+  "ai_provider_id": "aip_V1StGXR8Z5jdHi6B",
+  "model": null,
+  "synthesis": {
+    "prompt": "Weigh the arguments; commit to a single recommendation with rationale:\n{steps.deliberation}"
+  },
+  "tags": {},
+  "participants": [
+    {
+      "id": "dpt_4hNs8VbC1eXrTq6M",
+      "name": "Skeptic",
+      "prompt": "Attack the strongest claim and surface hidden assumptions.",
+      "position": 0,
+      "actor_id": null,
+      "ai_provider_id": null,
+      "model": null,
+      "temperature": null,
+      "effort": null
+    },
+    {
+      "id": "dpt_7pDf2GjK5wYzMn3B",
+      "name": "Advocate",
+      "prompt": "Steelman the proposal with concrete evidence.",
+      "position": 1,
+      "actor_id": null,
+      "ai_provider_id": null,
+      "model": "gpt-4o-mini",
+      "temperature": null,
+      "effort": null
+    }
+  ],
+  "created_at": "2026-07-07T12:00:00.000Z",
+  "updated_at": "2026-07-07T12:00:00.000Z"
+}
+```
+
+`POST /api/v1/discussions/disc_9xKw3RtY7mQpLa2Z/runs`:
+
+```json
+{ "topic": "Should we migrate the queue to Kafka?" }
+```
+
+`201` response (`DiscussionRunRecord` — synchronous, outcome inlined):
+
+```json
+{
+  "id": "drn_2cVb6HnM9kQwRt4X",
+  "discussion_id": "disc_9xKw3RtY7mQpLa2Z",
+  "project_id": "proj_V1StGXR8Z5jdHi6B",
+  "topic": "Should we migrate the queue to Kafka?",
+  "status": "completed",
+  "outcome": "Recommendation: stay on the current queue for now. The strongest objection ...",
+  "conversation_id": "conv_5tGh8JkL2mNp7Qw1",
+  "outcome_document_id": "doc_8wRt3YuI6oPa1Sd9",
+  "started_by": { "user_id": "user_V1StGXR8Z5jdHi6B", "username": "alice" },
+  "initiator_generation_id": null,
+  "trace_id": "trace_6yUj9KlO3pAs8Df2",
+  "completed_at": "2026-07-07T12:01:42.000Z",
+  "created_at": "2026-07-07T12:01:03.000Z",
+  "updated_at": "2026-07-07T12:01:42.000Z"
+}
+```
+
 ## Implementation Phases
 
 ### Phase 0 — Provider-Native Reasoning Passthrough ✅ Complete
@@ -113,6 +299,20 @@
 - ❌ **Async generate** (`?async=true` parity with sessions) returning `in_progress` + poll, for pipeline generations — deferred (larger; depends on the session async mechanism).
 - ❌ Optional **`reasoning.budget` guard** (max total completions per generation) — deferred.
 
+**Acceptance criteria (remaining deferred slice):**
+
+> Since Phase 5 removed the agent-side pipeline, both deferred items now apply to **Discussion
+> runs**, not agent generations (they overlap with the "async run" item deferred from Phase 4).
+
+- [ ] **Async run:** `POST /discussions/{discussion_id}/runs?async=true` returns `202` immediately
+      with the run in `status: "pending"` (or `running`); `GET /discussions/runs/{run_id}` polls it
+      to a terminal `completed`/`failed` state carrying the same inlined `outcome` as the
+      synchronous path. Synchronous behavior unchanged when the flag is absent.
+- [ ] **Budget guard:** an optional `budget` (max total completions per run) on the Discussion
+      config, validated at write time to be ≤ the engine cap (`MAX_TOTAL_COMPLETIONS = 24`);
+      a run that would exceed it stops deliberating and synthesizes from the turns taken so far
+      (degrade, never fail). Consumed-completion count recorded on the run's trace metadata.
+
 **Unlocks:** The deliberation engine's cost and health are now measurable per generation, and silent fallbacks surface on webhooks instead of being invisible.
 
 ---
@@ -170,6 +370,29 @@ When that bar is met, build a **thin MVP** that *delegates deliberation to the e
 - **`organizer_selects` turn policy** + organizer decision protocol (continue/end, next speaker) — prompt-based JSON with lenient parsing.
 - **Real Agents with tools as participants** — the resource surface likely wants real Agents; the engine deliberately avoids tools. The Actor→participant seam makes this a later swap.
 - **Orchestration `discussion` node type**; webhooks; cancellation/pause lifecycle states.
+
+**Acceptance criteria (for the deferred slice, when picked up):**
+
+- [ ] **Async run:** `POST /discussions/{discussion_id}/runs?async=true` returns `202` with a
+      pollable run; `GET /discussions/runs/{run_id}` reaches `completed` with the same `outcome`
+      contract as the synchronous path; the `discussion` tool type gains a non-blocking variant
+      only after the agent-side async/poll mechanism exists (until then the tool stays synchronous).
+- [ ] **Human participants:** a run with a human participant pauses in a `paused` status exposing a
+      `required_action` payload (mirroring orchestration `executeHumanNode`); submitting the human
+      turn resumes the round-robin; the human turn is persisted to the transcript Conversation
+      attributed to the participant's Actor.
+- [ ] **`organizer_selects` turn policy:** a `turn_policy` field on the Discussion config
+      (`round_robin` default); with `organizer_selects`, an organizer completion returns
+      prompt-based JSON (leniently parsed) choosing `{ next: <participant> }` or `{ end: true }`;
+      malformed organizer output degrades to round-robin for that turn rather than failing the run.
+- [ ] **Real-Agent participants:** a participant may reference an `agent_id` instead of an inline
+      persona; its turns run through the agent (tools included) while transcript attribution stays
+      Actor-based; the tool-less engine-branch path remains the default.
+- [ ] **Orchestration `discussion` node:** an orchestration node type that invokes a discussion and
+      exposes `outcome` (and run id) to downstream nodes via the existing `inputMapping` JSON Logic
+      seam.
+- [ ] Every shipped slice lands with the full module surface per `.claude/rules/modules.md`:
+      OpenAPI + SDK/CLI regen, permissions, formation schema sync, docs, unit + MCP + smoke tests.
 
 > Original Phase 4 design (organizer agent, full async-first lifecycle, human-in-the-loop, formation, orchestration node) is preserved in the git history of this file and folded into the "deferred" list above.
 
